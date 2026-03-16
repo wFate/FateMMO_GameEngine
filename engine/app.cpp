@@ -1,6 +1,8 @@
 #include "engine/app.h"
 #include "engine/render/gl_loader.h"
 #include "engine/core/logger.h"
+#include "engine/editor/undo.h"
+#include "engine/editor/log_viewer.h"
 #include <SDL.h>
 
 namespace fate {
@@ -72,6 +74,11 @@ bool App::init(const AppConfig& config) {
 
     // Initialize editor (Dear ImGui)
     Editor::instance().init(window_, glContext_);
+
+    // Hook log viewer into logger
+    Logger::instance().setLogCallback([](const std::string& msg, int level) {
+        LogViewer::instance().addMessage(msg, level);
+    });
 
     onInit();
 
@@ -146,7 +153,6 @@ void App::processEvents() {
             case SDL_KEYDOWN:
                 if (event.key.keysym.scancode == SDL_SCANCODE_F3) {
                     Editor::instance().toggle();
-                    // Auto-pause when editor opens, auto-resume when it closes
                     Editor::instance().setPaused(Editor::instance().isOpen());
                     LOG_INFO("App", "Editor: %s", Editor::instance().isOpen() ? "OPEN (paused)" : "CLOSED (resumed)");
                 }
@@ -157,13 +163,11 @@ void App::processEvents() {
                         running_ = false;
                     }
                 }
-                // Delete selected entity
-                if (event.key.keysym.scancode == SDL_SCANCODE_DELETE &&
-                    Editor::instance().isOpen() && Editor::instance().selectedEntity()) {
+                // Forward all keyboard shortcuts to editor
+                if (Editor::instance().isOpen()) {
                     auto* scene = SceneManager::instance().currentScene();
                     if (scene) {
-                        scene->world().destroyEntity(Editor::instance().selectedEntity()->id());
-                        Editor::instance().clearSelection();
+                        Editor::instance().handleKeyShortcuts(&scene->world(), event);
                     }
                 }
                 break;
@@ -175,23 +179,32 @@ void App::processEvents() {
                     if (event.wheel.y > 0) zoom *= 1.15f;  // scroll up = zoom in
                     else if (event.wheel.y < 0) zoom *= 0.87f; // scroll down = zoom out
                     // Clamp zoom range
-                    if (zoom < 0.25f) zoom = 0.25f;
-                    if (zoom > 4.0f) zoom = 4.0f;
+                    if (zoom < 0.05f) zoom = 0.05f;  // can see ~19,200x10,800px = 600x337 tiles
+                    if (zoom > 8.0f) zoom = 8.0f;    // zoomed in to ~120x67px view
                     camera_.setZoom(zoom);
                 }
                 break;
 
             case SDL_MOUSEBUTTONDOWN:
-                // Scene interaction: click in viewport when editor is open
                 if (event.button.button == SDL_BUTTON_LEFT &&
                     Editor::instance().isOpen() &&
                     !Editor::instance().wantsMouse()) {
                     auto* scene = SceneManager::instance().currentScene();
                     if (scene) {
                         Vec2 screenPos = {(float)event.button.x, (float)event.button.y};
-                        Editor::instance().handleSceneClick(
-                            &scene->world(), &camera_,
-                            screenPos, config_.windowWidth, config_.windowHeight);
+                        if (Editor::instance().isTilePaintMode()) {
+                            Editor::instance().paintTileAt(
+                                &scene->world(), &camera_,
+                                screenPos, config_.windowWidth, config_.windowHeight);
+                        } else if (Editor::instance().isEraseMode()) {
+                            Editor::instance().eraseTileAt(
+                                &scene->world(), &camera_,
+                                screenPos, config_.windowWidth, config_.windowHeight);
+                        } else {
+                            Editor::instance().handleSceneClick(
+                                &scene->world(), &camera_,
+                                screenPos, config_.windowWidth, config_.windowHeight);
+                        }
                     }
                 }
                 break;
@@ -208,12 +221,30 @@ void App::processEvents() {
                         };
                         camera_.setPosition(camera_.position() + panDelta);
                     }
-                    // Left-click drag: move selected entity
+                    // Left-click drag: paint tiles or move entity
                     else if (event.motion.state & SDL_BUTTON_LMASK) {
-                        Vec2 screenPos = {(float)event.motion.x, (float)event.motion.y};
-                        Editor::instance().handleSceneDrag(
-                            &camera_, screenPos,
-                            config_.windowWidth, config_.windowHeight);
+                        if (Editor::instance().isTilePaintMode()) {
+                            auto* scene = SceneManager::instance().currentScene();
+                            if (scene) {
+                                Vec2 screenPos = {(float)event.motion.x, (float)event.motion.y};
+                                Editor::instance().paintTileAt(
+                                    &scene->world(), &camera_,
+                                    screenPos, config_.windowWidth, config_.windowHeight);
+                            }
+                        } else if (Editor::instance().isEraseMode()) {
+                            auto* scene = SceneManager::instance().currentScene();
+                            if (scene) {
+                                Vec2 screenPos = {(float)event.motion.x, (float)event.motion.y};
+                                Editor::instance().eraseTileAt(
+                                    &scene->world(), &camera_,
+                                    screenPos, config_.windowWidth, config_.windowHeight);
+                            }
+                        } else {
+                            Vec2 screenPos = {(float)event.motion.x, (float)event.motion.y};
+                            Editor::instance().handleSceneDrag(
+                                &camera_, screenPos,
+                                config_.windowWidth, config_.windowHeight);
+                        }
                     }
                 }
                 break;
@@ -230,7 +261,13 @@ void App::processEvents() {
 void App::update() {
     onUpdate(deltaTime_);
 
-    // Skip game updates if editor is paused
+    // Always process destroy queue (so editor delete works while paused)
+    auto* activeScene = SceneManager::instance().currentScene();
+    if (activeScene) {
+        activeScene->world().processDestroyQueue();
+    }
+
+    // Skip game logic if editor is paused
     if (Editor::instance().isPaused()) return;
 
     fixedTimeAccumulator_ += deltaTime_;

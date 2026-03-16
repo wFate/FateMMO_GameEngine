@@ -15,7 +15,10 @@ Entity* World::createEntity(const std::string& name) {
     auto entity = std::make_unique<Entity>(id, name);
     Entity* ptr = entity.get();
     entities_.push_back(std::move(entity));
-    LOG_DEBUG("World", "Created entity '%s' (id=%u)", name.c_str(), id);
+    // Only log non-tile entities to avoid flooding console with 640 tile messages
+    if (name != "Tile") {
+        LOG_DEBUG("World", "Created entity '%s' (id=%u)", name.c_str(), id);
+    }
     return ptr;
 }
 

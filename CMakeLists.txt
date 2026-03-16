@@ -108,6 +108,11 @@ target_link_libraries(FateEngine PRIVATE
     SDL2::SDL2main
 )
 
+# Pass source directory to code so saves go to the right place
+target_compile_definitions(FateEngine PRIVATE
+    FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
 # Copy assets to build directory on every build
 add_custom_command(TARGET FateEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

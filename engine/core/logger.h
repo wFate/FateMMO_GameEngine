@@ -5,6 +5,7 @@
 #include <fstream>
 #include <mutex>
 #include <chrono>
+#include <functional>
 
 namespace fate {
 
@@ -75,7 +76,16 @@ public:
             logFile_ << fullMsg;
             logFile_.flush();
         }
+
+        // Forward to log viewer callback if set
+        if (logCallback_) {
+            logCallback_(fullMsg, (int)level);
+        }
     }
+
+    // Set callback for log viewer integration
+    using LogCallback = std::function<void(const std::string&, int)>;
+    void setLogCallback(LogCallback cb) { logCallback_ = std::move(cb); }
 
 private:
     Logger() = default;
@@ -83,6 +93,7 @@ private:
     std::recursive_mutex mutex_;
     LogLevel minLevel_ = LogLevel::Debug;
     bool initialized_ = false;
+    LogCallback logCallback_;
 };
 
 // Convenience macros - category is always the first arg
