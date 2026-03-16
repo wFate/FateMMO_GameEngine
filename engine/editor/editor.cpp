@@ -15,6 +15,7 @@
 #include "game/components/animator.h"
 #include "game/components/zone_component.h"
 #include "game/components/game_components.h"
+#include "game/systems/spawn_system.h"
 #include "engine/ecs/prefab.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/editor/undo.h"
@@ -198,15 +199,29 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
     if (selectedEntity_) {
         auto* t = selectedEntity_->getComponent<Transform>();
         auto* s = selectedEntity_->getComponent<SpriteComponent>();
-        if (t && s) {
-            float hw = s->size.x * 0.5f + 2.0f;
-            float hh = s->size.y * 0.5f + 2.0f;
+
+        // Spawn zones use config.size instead of sprite size
+        auto* szComp = selectedEntity_->getComponent<SpawnZoneComponent>();
+        float hw, hh;
+        if (szComp && t) {
+            hw = szComp->config.size.x * 0.5f + 2.0f;
+            hh = szComp->config.size.y * 0.5f + 2.0f;
+        } else if (s) {
+            hw = s->size.x * 0.5f + 2.0f;
+            hh = s->size.y * 0.5f + 2.0f;
+        } else {
+            hw = hh = 0.0f;
+        }
+
+        if (t && (s || szComp)) {
             // Resize handles only in Resize tool mode (E key)
-            float minDim = s->size.x < s->size.y ? s->size.x : s->size.y;
+            float minDim = (hw < hh ? hw : hh) * 2.0f;
             bool allowResize = (currentTool_ == EditorTool::Resize);
-            float handleZone = 6.0f / camera->zoom(); // fixed screen-space grab zone
+            // Spawn zones always allow resize (they're invisible, no sprite to click on)
+            if (szComp) allowResize = true;
+            float handleZone = 6.0f / camera->zoom();
             float distToCenter = worldPos.distance(t->position);
-            float edgeThreshold = (minDim * 0.5f) * 0.6f; // must be in outer 40% of entity
+            float edgeThreshold = szComp ? 0.0f : (minDim * 0.5f) * 0.6f;
 
             if (allowResize && distToCenter > edgeThreshold) {
                 Vec2 handles[8] = {
@@ -227,7 +242,8 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
                         resizeHandle_ = i;
                         dragStartWorldPos_ = worldPos;
                         dragStartEntityPos_ = t->position;
-                        dragStartEntitySize_ = s->size;
+                        if (szComp) dragStartEntitySize_ = szComp->config.size;
+                        else if (s) dragStartEntitySize_ = s->size;
                         return;
                     }
                 }
@@ -240,10 +256,27 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
                 isResizingEntity_ = false;
                 dragStartWorldPos_ = worldPos;
                 dragStartEntityPos_ = t->position;
-                dragStartEntitySize_ = s->size;
+                if (szComp) dragStartEntitySize_ = szComp->config.size;
+                else if (s) dragStartEntitySize_ = s->size;
                 return;
             }
         }
+    }
+
+    // Also check spawn zones (no sprite, but have bounds)
+    if (!best) {
+        world->forEach<Transform, SpawnZoneComponent>(
+            [&](Entity* entity, Transform* t, SpawnZoneComponent* sz) {
+                Rect bounds = sz->getBounds(t->position);
+                if (bounds.contains(worldPos)) {
+                    // Prefer spawn zones at lower depth (they're background objects)
+                    if (!best || t->depth > bestDepth) {
+                        best = entity;
+                        bestDepth = t->depth;
+                    }
+                }
+            }
+        );
     }
 
     // Click was outside the selected entity — select a new one
@@ -255,7 +288,9 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
         dragStartWorldPos_ = worldPos;
         dragStartEntityPos_ = t->position;
         auto* s = best->getComponent<SpriteComponent>();
-        if (s) dragStartEntitySize_ = s->size;
+        auto* szBest = best->getComponent<SpawnZoneComponent>();
+        if (szBest) dragStartEntitySize_ = szBest->config.size;
+        else if (s) dragStartEntitySize_ = s->size;
     } else {
         selectedEntity_ = nullptr;
         isDraggingEntity_ = false;
@@ -271,9 +306,6 @@ void Editor::handleSceneDrag(Camera* camera, const Vec2& screenPos,
 
     // Resize mode
     if (isResizingEntity_) {
-        auto* s = selectedEntity_->getComponent<SpriteComponent>();
-        if (!s) return;
-
         Vec2 newSize = dragStartEntitySize_;
         // 0-3: corners (TL,TR,BL,BR), 4-7: edges (T,B,L,R)
         switch (resizeHandle_) {
@@ -281,14 +313,22 @@ void Editor::handleSceneDrag(Camera* camera, const Vec2& screenPos,
             case 1: newSize.x += delta.x; newSize.y += delta.y; break; // TR
             case 2: newSize.x -= delta.x; newSize.y -= delta.y; break; // BL
             case 3: newSize.x += delta.x; newSize.y -= delta.y; break; // BR
-            case 4: newSize.y += delta.y; break; // Top edge (height only)
-            case 5: newSize.y -= delta.y; break; // Bottom edge (height only)
-            case 6: newSize.x -= delta.x; break; // Left edge (width only)
-            case 7: newSize.x += delta.x; break; // Right edge (width only)
+            case 4: newSize.y += delta.y; break; // Top edge
+            case 5: newSize.y -= delta.y; break; // Bottom edge
+            case 6: newSize.x -= delta.x; break; // Left edge
+            case 7: newSize.x += delta.x; break; // Right edge
         }
         if (newSize.x < 4.0f) newSize.x = 4.0f;
         if (newSize.y < 4.0f) newSize.y = 4.0f;
-        s->size = newSize;
+
+        // Apply to spawn zone or sprite
+        auto* szComp = selectedEntity_->getComponent<SpawnZoneComponent>();
+        if (szComp) {
+            szComp->config.size = newSize;
+        } else {
+            auto* s = selectedEntity_->getComponent<SpriteComponent>();
+            if (s) s->size = newSize;
+        }
         return;
     }
 
@@ -324,12 +364,17 @@ void Editor::handleMouseUp() {
             }
         }
         if (isResizingEntity_) {
+            Vec2 currentSize;
+            auto* szComp = selectedEntity_->getComponent<SpawnZoneComponent>();
             auto* s = selectedEntity_->getComponent<SpriteComponent>();
-            if (s && s->size != dragStartEntitySize_) {
+            if (szComp) currentSize = szComp->config.size;
+            else if (s) currentSize = s->size;
+
+            if (currentSize != dragStartEntitySize_) {
                 auto cmd = std::make_unique<ResizeCommand>();
                 cmd->entityId = selectedEntity_->id();
                 cmd->oldSize = dragStartEntitySize_;
-                cmd->newSize = s->size;
+                cmd->newSize = currentSize;
                 UndoSystem::instance().push(std::move(cmd));
             }
         }
@@ -873,9 +918,19 @@ void Editor::drawSceneGrid(SpriteBatch* batch, Camera* camera) {
     if (selectedEntity_) {
         auto* t = selectedEntity_->getComponent<Transform>();
         auto* s = selectedEntity_->getComponent<SpriteComponent>();
-        if (t && s) {
-            float hw = s->size.x * 0.5f + 2.0f;
-            float hh = s->size.y * 0.5f + 2.0f;
+        auto* szSel = selectedEntity_->getComponent<SpawnZoneComponent>();
+
+        // Determine bounds from sprite OR spawn zone
+        float hw = 0, hh = 0;
+        if (szSel) {
+            hw = szSel->config.size.x * 0.5f + 2.0f;
+            hh = szSel->config.size.y * 0.5f + 2.0f;
+        } else if (s) {
+            hw = s->size.x * 0.5f + 2.0f;
+            hh = s->size.y * 0.5f + 2.0f;
+        }
+
+        if (t && (s || szSel) && hw > 0) {
             Color sel(0.2f, 0.6f, 1.0f, 0.6f);
 
             // Border
@@ -1224,92 +1279,7 @@ void Editor::drawHUD(World* world) {
 // ============================================================================
 
 void Editor::drawMenuBar(World* world) {
-    if (ImGui::BeginMainMenuBar()) {
-        if (ImGui::BeginMenu("File")) {
-            // Save Scene - with name input
-            if (ImGui::BeginMenu("Save Scene")) {
-                static char saveNameBuf[64] = "scene";
-                ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
-                if (ImGui::Button("Save")) {
-                    std::string path = std::string("assets/scenes/") + saveNameBuf + ".json";
-                    saveScene(world, path);
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::EndMenu();
-            }
-
-            // Load Scene - lists all .json files in assets/scenes/
-            if (ImGui::BeginMenu("Load Scene")) {
-                std::string scenesDir = "assets/scenes";
-                if (fs::exists(scenesDir)) {
-                    for (auto& entry : fs::directory_iterator(scenesDir)) {
-                        if (!entry.is_regular_file()) continue;
-                        if (entry.path().extension() != ".json") continue;
-                        std::string name = entry.path().stem().string();
-                        if (ImGui::MenuItem(name.c_str())) {
-                            loadScene(world, entry.path().string());
-                        }
-                    }
-                }
-                if (ImGui::MenuItem("(none found)", nullptr, false, false)) {}
-                ImGui::EndMenu();
-            }
-
-            // New Scene - clears everything
-            if (ImGui::MenuItem("New Scene")) {
-                if (world) {
-                    world->forEachEntity([&](Entity* e) {
-                        world->destroyEntity(e->id());
-                    });
-                    world->processDestroyQueue();
-                    selectedEntity_ = nullptr;
-                    LOG_INFO("Editor", "Cleared scene");
-                }
-            }
-
-            ImGui::Separator();
-            if (ImGui::MenuItem("Close Editor", "F3")) {
-                open_ = false;
-            }
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("View")) {
-            ImGui::MenuItem("Grid Snap", nullptr, &gridSnap_);
-            ImGui::DragFloat("Grid Size", &gridSize_, 1.0f, 8.0f, 128.0f);
-            ImGui::Separator();
-            ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow_);
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("Entity")) {
-            if (ImGui::MenuItem("Create Empty")) {
-                if (world) {
-                    auto* e = world->createEntity("New Entity");
-                    e->addComponent<Transform>();
-                    selectedEntity_ = e;
-                }
-            }
-            if (ImGui::MenuItem("Duplicate Selected", "Ctrl+D", false, selectedEntity_ != nullptr)) {
-                if (world && selectedEntity_) {
-                    auto json = PrefabLibrary::entityToJson(selectedEntity_);
-                    Entity* copy = PrefabLibrary::jsonToEntity(json, *world);
-                    auto* t = copy->getComponent<Transform>();
-                    if (t) t->position += Vec2(32.0f, 0.0f); // offset so it's visible
-                    selectedEntity_ = copy;
-                }
-            }
-            if (ImGui::MenuItem("Save as Prefab", nullptr, false, selectedEntity_ != nullptr)) {
-                openSavePrefab_ = true;
-            }
-            if (ImGui::MenuItem("Delete Selected", "Delete", false, selectedEntity_ != nullptr)) {
-                if (world && selectedEntity_) {
-                    world->destroyEntity(selectedEntity_->id());
-                    selectedEntity_ = nullptr;
-                }
-            }
-            ImGui::EndMenu();
-        }
-        ImGui::EndMainMenuBar();
-    }
+    // Menu bar content is now integrated into the toolbar — this just handles the prefab popup
 
     if (openSavePrefab_) {
         ImGui::OpenPopup("SavePrefabPopup");
@@ -1344,7 +1314,7 @@ void Editor::drawMenuBar(World* world) {
 // ============================================================================
 
 void Editor::drawToolbar(World* world) {
-    ImGui::SetNextWindowPos(ImVec2(0, 20), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(0, 26), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x, 36), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
@@ -1354,6 +1324,91 @@ void Editor::drawToolbar(World* world) {
                              ImGuiWindowFlags_NoCollapse;
 
     if (ImGui::Begin("##Toolbar", nullptr, flags)) {
+        // File / View / Entity dropdown menus (inline as buttons with popups)
+        if (ImGui::Button("File")) ImGui::OpenPopup("##FileMenu");
+        if (ImGui::BeginPopup("##FileMenu")) {
+            if (ImGui::BeginMenu("Save Scene")) {
+                static char saveNameBuf[64] = "scene";
+                ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
+                if (ImGui::Button("Save")) {
+                    std::string path = std::string("assets/scenes/") + saveNameBuf + ".json";
+                    saveScene(world, path);
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Load Scene")) {
+                std::string scenesDir = "assets/scenes";
+                if (fs::exists(scenesDir)) {
+                    for (auto& entry : fs::directory_iterator(scenesDir)) {
+                        if (!entry.is_regular_file()) continue;
+                        if (entry.path().extension() != ".json") continue;
+                        std::string name = entry.path().stem().string();
+                        if (ImGui::MenuItem(name.c_str())) {
+                            loadScene(world, entry.path().string());
+                        }
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::MenuItem("New Scene")) {
+                if (world) {
+                    world->forEachEntity([&](Entity* e) {
+                        world->destroyEntity(e->id());
+                    });
+                    world->processDestroyQueue();
+                    selectedEntity_ = nullptr;
+                    LOG_INFO("Editor", "Cleared scene");
+                }
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Close Editor", "F3")) { open_ = false; }
+            ImGui::EndPopup();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("View")) ImGui::OpenPopup("##ViewMenu");
+        if (ImGui::BeginPopup("##ViewMenu")) {
+            ImGui::MenuItem("Grid Snap", nullptr, &gridSnap_);
+            ImGui::DragFloat("Grid Size", &gridSize_, 1.0f, 8.0f, 128.0f);
+            ImGui::Separator();
+            ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow_);
+            ImGui::EndPopup();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Entity")) ImGui::OpenPopup("##EntityMenu");
+        if (ImGui::BeginPopup("##EntityMenu")) {
+            if (ImGui::MenuItem("Create Empty")) {
+                if (world) {
+                    auto* e = world->createEntity("New Entity");
+                    e->addComponent<Transform>();
+                    selectedEntity_ = e;
+                }
+            }
+            if (ImGui::MenuItem("Duplicate Selected", "Ctrl+D", false, selectedEntity_ != nullptr)) {
+                if (world && selectedEntity_) {
+                    auto json = PrefabLibrary::entityToJson(selectedEntity_);
+                    Entity* copy = PrefabLibrary::jsonToEntity(json, *world);
+                    auto* t = copy->getComponent<Transform>();
+                    if (t) t->position += Vec2(32.0f, 0.0f);
+                    selectedEntity_ = copy;
+                }
+            }
+            if (ImGui::MenuItem("Save as Prefab", nullptr, false, selectedEntity_ != nullptr)) {
+                openSavePrefab_ = true;
+            }
+            if (ImGui::MenuItem("Delete Selected", "Delete", false, selectedEntity_ != nullptr)) {
+                if (world && selectedEntity_) {
+                    world->destroyEntity(selectedEntity_->id());
+                    selectedEntity_ = nullptr;
+                }
+            }
+            ImGui::EndPopup();
+        }
+
+        ImGui::SameLine(); ImGui::Text("|"); ImGui::SameLine();
+
         // Play/Pause
         if (paused_) {
             if (ImGui::Button("PLAY")) { paused_ = false; }
@@ -1419,7 +1474,7 @@ void Editor::drawToolbar(World* world) {
 // ============================================================================
 
 void Editor::drawHierarchy(World* world) {
-    ImGui::SetNextWindowPos(ImVec2(0, 56), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(0, 64), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(280, 400), ImGuiCond_FirstUseEver);
 
     if (ImGui::Begin("Hierarchy")) {
@@ -1817,7 +1872,57 @@ void Editor::drawInspector() {
                 auto& s = cs->stats;
                 char nameBuf[64]; strncpy(nameBuf, s.characterName.c_str(), sizeof(nameBuf)-1); nameBuf[sizeof(nameBuf)-1]=0;
                 if (ImGui::InputText("Char Name##cs", nameBuf, sizeof(nameBuf))) s.characterName = nameBuf;
+
+                // Class selector - reconfigures ClassDefinition on change
+                const char* classNames[] = {"Warrior", "Mage", "Archer"};
+                int classIdx = (int)s.classDef.classType;
+                if (ImGui::Combo("Class##cs", &classIdx, classNames, 3)) {
+                    auto& cd = s.classDef;
+                    cd.classType = (ClassType)classIdx;
+                    switch (cd.classType) {
+                        case ClassType::Warrior:
+                            cd.displayName = "Warrior"; s.className = "Warrior";
+                            cd.baseMaxHP = 70; cd.baseMaxMP = 30;
+                            cd.baseStrength = 14; cd.baseVitality = 12;
+                            cd.baseIntelligence = 5; cd.baseDexterity = 8; cd.baseWisdom = 5;
+                            cd.baseHitRate = 4.0f; cd.attackRange = 1.0f;
+                            cd.primaryResource = ResourceType::Fury;
+                            cd.hpPerLevel = 7.0f; cd.mpPerLevel = 2.0f;
+                            cd.strPerLevel = 0.25f; cd.vitPerLevel = 0.25f;
+                            cd.intPerLevel = 0.0f; cd.dexPerLevel = 0.0f; cd.wisPerLevel = 0.0f;
+                            break;
+                        case ClassType::Mage:
+                            cd.displayName = "Mage"; s.className = "Mage";
+                            cd.baseMaxHP = 50; cd.baseMaxMP = 150;
+                            cd.baseStrength = 4; cd.baseVitality = 6;
+                            cd.baseIntelligence = 16; cd.baseDexterity = 6; cd.baseWisdom = 14;
+                            cd.baseHitRate = 0.0f; cd.attackRange = 7.0f;
+                            cd.primaryResource = ResourceType::Mana;
+                            cd.hpPerLevel = 5.0f; cd.mpPerLevel = 10.0f;
+                            cd.strPerLevel = 0.0f; cd.vitPerLevel = 0.25f;
+                            cd.intPerLevel = 0.25f; cd.dexPerLevel = 0.0f; cd.wisPerLevel = 0.25f;
+                            break;
+                        case ClassType::Archer:
+                            cd.displayName = "Archer"; s.className = "Archer";
+                            cd.baseMaxHP = 50; cd.baseMaxMP = 40;
+                            cd.baseStrength = 8; cd.baseVitality = 9;
+                            cd.baseIntelligence = 7; cd.baseDexterity = 18; cd.baseWisdom = 8;
+                            cd.baseHitRate = 4.0f; cd.attackRange = 7.0f;
+                            cd.primaryResource = ResourceType::Fury;
+                            cd.hpPerLevel = 5.0f; cd.mpPerLevel = 2.0f;
+                            cd.strPerLevel = 0.0f; cd.vitPerLevel = 0.25f;
+                            cd.intPerLevel = 0.0f; cd.dexPerLevel = 0.25f; cd.wisPerLevel = 0.5f;
+                            break;
+                    }
+                    s.recalculateStats();
+                    s.recalculateXPRequirement();
+                    s.currentHP = s.maxHP;
+                    s.currentMP = s.maxMP;
+                    s.currentFury = 0.0f;
+                }
+
                 ImGui::DragInt("Level##cs", &s.level, 0.1f, 1, 70);
+                if (ImGui::IsItemDeactivatedAfterEdit()) { s.recalculateStats(); s.recalculateXPRequirement(); s.currentHP = s.maxHP; s.currentMP = s.maxMP; }
                 ImGui::DragInt("Current HP##cs", &s.currentHP, 1.0f, 0, 999999);
                 ImGui::DragInt("Max HP##cs", &s.maxHP, 1.0f, 1, 999999);
                 ImGui::DragInt("Current MP##cs", &s.currentMP, 1.0f, 0, 999999);
@@ -1832,9 +1937,16 @@ void Editor::drawInspector() {
                 int pkIdx = (int)s.pkStatus;
                 if (ImGui::Combo("PK Status##cs", &pkIdx, pkNames, 4)) s.pkStatus = (PKStatus)pkIdx;
                 ImGui::Separator();
+                ImGui::Text("Class: %s  Resource: %s", s.classDef.displayName.c_str(), s.classDef.usesFury() ? "Fury" : "Mana");
+                ImGui::Text("Base: HP:%d MP:%d STR:%d VIT:%d INT:%d DEX:%d WIS:%d",
+                    s.classDef.baseMaxHP, s.classDef.baseMaxMP, s.classDef.baseStrength,
+                    s.classDef.baseVitality, s.classDef.baseIntelligence, s.classDef.baseDexterity, s.classDef.baseWisdom);
                 ImGui::Text("Computed: STR:%d VIT:%d INT:%d DEX:%d WIS:%d", s.getStrength(), s.getVitality(), s.getIntelligence(), s.getDexterity(), s.getWisdom());
                 ImGui::Text("Armor:%d MR:%d HR:%.1f Crit:%.0f%% Spd:%.2f", s.getArmor(), s.getMagicResist(), s.getHitRate(), s.getCritRate()*100, s.getSpeed());
+                ImGui::Text("Atk Range: %.0f tiles  DmgMult: %.2f", s.classDef.attackRange, s.getDamageMultiplier());
                 if (ImGui::Button("Recalc Stats##cs")) { s.recalculateStats(); s.recalculateXPRequirement(); }
+                ImGui::SameLine();
+                if (ImGui::Button("Full Heal##cs")) { s.currentHP = s.maxHP; s.currentMP = s.maxMP; s.isDead = false; }
             }
         }
 
@@ -1884,8 +1996,8 @@ void Editor::drawInspector() {
                 const char* mN[] = {"Idle","Roam","Chase","ChaseMem","Attack","ReturnHome"};
                 const char* dN[] = {"None","Up","Down","Left","Right"};
                 ImGui::Text("Mode: %s  Facing: %s", mN[(int)a.getMode()], dN[(int)a.getFacingDirection()]);
-                ImGui::DragFloat("Acquire Radius##ai", &a.acquireRadius, 1.0f, 0.0f, 1000.0f);
-                ImGui::DragFloat("Contact Radius##ai", &a.contactRadius, 1.0f, 0.0f, 1000.0f);
+                ImGui::DragFloat("Aggro Radius##ai", &a.acquireRadius, 1.0f, 0.0f, 1000.0f);
+                ImGui::DragFloat("Leash Radius##ai", &a.contactRadius, 1.0f, 0.0f, 1000.0f);
                 ImGui::DragFloat("Attack Range##ai", &a.attackRange, 1.0f, 0.0f, 500.0f);
                 ImGui::DragFloat("Roam Radius##ai", &a.roamRadius, 1.0f, 0.0f, 500.0f);
                 ImGui::DragFloat("Chase Speed##ai", &a.baseChaseSpeed, 1.0f, 0.0f, 500.0f);
@@ -1894,6 +2006,11 @@ void Editor::drawInspector() {
                 ImGui::DragFloat("Attack CD##ai", &a.attackCooldown, 0.05f, 0.1f, 10.0f, "%.2fs");
                 ImGui::DragFloat("Think Interval##ai", &a.serverTickInterval, 0.01f, 0.05f, 1.0f, "%.2fs");
                 ImGui::Checkbox("Passive##ai", &a.isPassive);
+                ImGui::Checkbox("Can Roam##ai", &a.canRoam);
+                ImGui::SameLine();
+                ImGui::Checkbox("Can Chase##ai", &a.canChase);
+                ImGui::Checkbox("Roam While Idle##ai", &a.roamWhileIdle);
+                ImGui::Checkbox("Show Aggro Radius##ai", &a.showAggroRadius);
             }
         }
 
@@ -1906,8 +2023,7 @@ void Editor::drawInspector() {
             }
             if (open && selectedEntity_->hasComponent<CombatControllerComponent>()) {
                 ImGui::DragFloat("Base Cooldown##cc", &cc->baseAttackCooldown, 0.05f, 0.1f, 5.0f, "%.2fs");
-                ImGui::Checkbox("Auto Attack##cc", &cc->autoAttackEnabled);
-                ImGui::Text("Target: %u  CD Remaining: %.2f", cc->targetEntityId, cc->attackCooldownRemaining);
+                ImGui::Text("CD Remaining: %.2f", cc->attackCooldownRemaining);
             }
         }
 
@@ -1976,6 +2092,8 @@ void Editor::drawInspector() {
                 char npName[64]; strncpy(npName, np->displayName.c_str(), sizeof(npName)-1); npName[sizeof(npName)-1]=0;
                 if (ImGui::InputText("Name##np", npName, sizeof(npName))) np->displayName = npName;
                 ImGui::DragInt("Level##np", &np->displayLevel, 0.1f, 1, 70);
+                ImGui::Checkbox("Show Level##np", &np->showLevel);
+                ImGui::DragFloat("Font Size##np", &np->fontSize, 0.02f, 0.3f, 2.0f, "%.2f");
                 ImGui::Checkbox("Visible##np", &np->visible);
             }
         }
@@ -1994,6 +2112,8 @@ void Editor::drawInspector() {
                 ImGui::Checkbox("Boss##mnp", &mnp->isBoss);
                 ImGui::SameLine();
                 ImGui::Checkbox("Elite##mnp", &mnp->isElite);
+                ImGui::Checkbox("Show Level##mnp", &mnp->showLevel);
+                ImGui::DragFloat("Font Size##mnp", &mnp->fontSize, 0.02f, 0.3f, 2.0f, "%.2f");
                 ImGui::Checkbox("Visible##mnp", &mnp->visible);
             }
         }
@@ -2066,6 +2186,66 @@ void Editor::drawInspector() {
             }
         }
 
+        // Spawn Zone
+        if (auto* szComp = selectedEntity_->getComponent<SpawnZoneComponent>()) {
+            bool open = ImGui::CollapsingHeader("Spawn Zone");
+            if (ImGui::BeginPopupContextItem("##rmSpawnZone")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<SpawnZoneComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<SpawnZoneComponent>()) {
+                auto& cfg = szComp->config;
+
+                char znBuf[64]; strncpy(znBuf, cfg.zoneName.c_str(), sizeof(znBuf)-1); znBuf[sizeof(znBuf)-1]=0;
+                if (ImGui::InputText("Zone Name##sz", znBuf, sizeof(znBuf))) cfg.zoneName = znBuf;
+
+                ImGui::TextColored(ImVec4(0.6f,0.6f,0.6f,1), "(Move zone via Transform position)");
+                ImGui::DragFloat2("Zone Size##sz", &cfg.size.x, 4.0f, 32.0f, 5000.0f);
+                ImGui::DragFloat("Min Spawn Dist##sz", &cfg.minSpawnDistance, 0.5f, 0.0f, 500.0f);
+                ImGui::DragFloat("Tick Interval##sz", &cfg.serverTickInterval, 0.01f, 0.05f, 5.0f, "%.2fs");
+                ImGui::Checkbox("Show Bounds##sz", &szComp->showBounds);
+
+                ImGui::Text("Tracked mobs: %zu  Rules: %zu", szComp->trackedMobs.size(), cfg.rules.size());
+                ImGui::Separator();
+
+                int removeIdx = -1;
+                for (int ri = 0; ri < (int)cfg.rules.size(); ++ri) {
+                    auto& rule = cfg.rules[ri];
+                    ImGui::PushID(ri);
+
+                    char ruleLabel[64]; std::snprintf(ruleLabel, sizeof(ruleLabel), "Rule %d: %s", ri, rule.enemyId.c_str());
+                    if (ImGui::TreeNode(ruleLabel)) {
+                        char eidBuf[64]; strncpy(eidBuf, rule.enemyId.c_str(), sizeof(eidBuf)-1); eidBuf[sizeof(eidBuf)-1]=0;
+                        if (ImGui::InputText("Enemy ID##r", eidBuf, sizeof(eidBuf))) rule.enemyId = eidBuf;
+
+                        ImGui::DragInt("Target Count##r", &rule.targetCount, 0.1f, 0, 100);
+                        ImGui::DragInt("Min Level##r", &rule.minLevel, 0.1f, 1, 70);
+                        ImGui::DragInt("Max Level##r", &rule.maxLevel, 0.1f, 1, 70);
+                        ImGui::DragInt("Base HP##r", &rule.baseHP, 1.0f, 1, 999999);
+                        ImGui::DragInt("Base Damage##r", &rule.baseDamage, 1.0f, 0, 99999);
+                        ImGui::DragFloat("Respawn Time##r", &rule.respawnSeconds, 0.5f, 1.0f, 600.0f, "%.1fs");
+                        ImGui::Checkbox("Aggressive##r", &rule.isAggressive);
+                        ImGui::SameLine();
+                        ImGui::Checkbox("Boss##r", &rule.isBoss);
+
+                        if (ImGui::Button("Remove Rule##r")) removeIdx = ri;
+
+                        ImGui::TreePop();
+                    }
+
+                    ImGui::PopID();
+                }
+
+                if (removeIdx >= 0 && removeIdx < (int)cfg.rules.size()) {
+                    cfg.rules.erase(cfg.rules.begin() + removeIdx);
+                }
+
+                if (ImGui::Button("+ Add Rule##sz")) {
+                    cfg.rules.push_back(MobSpawnRule{});
+                }
+            }
+        }
+
         endInspectorComponents:;
 
         // Add Component
@@ -2126,6 +2306,8 @@ void Editor::drawInspector() {
                 selectedEntity_->addComponent<NameplateComponent>();
             if (!selectedEntity_->hasComponent<MobNameplateComponent>() && ImGui::MenuItem("Mob Nameplate"))
                 selectedEntity_->addComponent<MobNameplateComponent>();
+            if (!selectedEntity_->hasComponent<SpawnZoneComponent>() && ImGui::MenuItem("Spawn Zone"))
+                selectedEntity_->addComponent<SpawnZoneComponent>();
 
             ImGui::Separator();
             ImGui::TextColored(ImVec4(0.6f,0.8f,1.0f,1.0f), "-- Social --");
