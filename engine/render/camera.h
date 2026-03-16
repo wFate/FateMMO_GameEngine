@@ -9,8 +9,10 @@ namespace fate {
 class Camera {
 public:
     // Virtual resolution (game world coordinates visible on screen)
-    static constexpr float VIRTUAL_WIDTH = 960.0f;
-    static constexpr float VIRTUAL_HEIGHT = 540.0f;
+    // 480x270 = pixel art sweet spot. Each art pixel = ~2.67 screen pixels at 1280x720.
+    // Shows ~15 tiles across, ~8 tiles tall. Matches TWOM proportions.
+    static constexpr float VIRTUAL_WIDTH = 480.0f;
+    static constexpr float VIRTUAL_HEIGHT = 270.0f;
 
     Camera();
 

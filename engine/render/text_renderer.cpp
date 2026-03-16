@@ -224,8 +224,48 @@ void TextRenderer::drawWorld(SpriteBatch& batch, const std::string& text,
             params.sourceRect = {g->u0, g->v0, g->u1 - g->u0, g->v1 - g->v0};
             params.color = color;
             params.depth = depth;
-            // No flipY - the screen-space projection (Y-down) + GL texture layout
-            // (row 0 at bottom) naturally produces correct orientation
+
+            batch.drawTexturedQuad(font->atlasTextureId(), params);
+        }
+
+        cursorX += g->xadvance * scale;
+    }
+}
+
+void TextRenderer::drawWorldYUp(SpriteBatch& batch, const std::string& text,
+                                const Vec2& position, const Color& color,
+                                float scale, float depth) {
+    if (!defaultFont_) return;
+
+    Font* font = defaultFont_.get();
+    float cursorX = position.x;
+    float cursorY = position.y;
+
+    for (char c : text) {
+        if (c == '\n') {
+            cursorX = position.x;
+            cursorY -= font->lineHeight() * scale; // Y-up: newline goes DOWN
+            continue;
+        }
+
+        const GlyphInfo* g = font->getGlyph(c);
+        if (!g) continue;
+
+        float w = (float)g->width * scale;
+        float h = (float)g->height * scale;
+
+        if (g->width > 0 && g->height > 0) {
+            SpriteDrawParams params;
+            // In Y-up world space, negate yoff so "above baseline" goes UP
+            params.position = {
+                cursorX + (g->xoff + g->width * 0.5f) * scale,
+                cursorY - (g->yoff + g->height * 0.5f) * scale
+            };
+            params.size = {w, h};
+            params.sourceRect = {g->u0, g->v0, g->u1 - g->u0, g->v1 - g->v0};
+            params.color = color;
+            params.depth = depth;
+            params.flipY = true; // Flip glyph texture for Y-up coordinate system
 
             batch.drawTexturedQuad(font->atlasTextureId(), params);
         }

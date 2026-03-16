@@ -52,10 +52,15 @@ public:
               float defaultSize = 16.0f);
     void shutdown();
 
-    // Draw text in world space (affected by camera)
+    // Draw text in screen space (Y-down, used by HUD — origin top-left)
     void drawWorld(SpriteBatch& batch, const std::string& text,
                    const Vec2& position, const Color& color = Color::white(),
                    float scale = 1.0f, float depth = 50.0f);
+
+    // Draw text in world/camera space (Y-up — for floating damage text, nameplates)
+    void drawWorldYUp(SpriteBatch& batch, const std::string& text,
+                      const Vec2& position, const Color& color = Color::white(),
+                      float scale = 1.0f, float depth = 50.0f);
 
     // Draw text in screen space (fixed on screen, not affected by camera)
     // Call between batch.begin(screenProjection) and batch.end()

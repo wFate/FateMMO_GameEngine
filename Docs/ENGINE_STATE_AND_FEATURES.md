@@ -1,0 +1,659 @@
+# FateEngine - State & Features
+
+## Engine Overview
+
+Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landscape gameplay with a built-in Unity-style editor for scene building, tile painting, and rapid iteration. All game systems from the Unity/C# prototype have been ported to C++ as server-authoritative logic.
+
+**Tech Stack:** C++23, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), nlohmann/json, stb_image, stb_truetype
+
+**Build System:** CMake with FetchContent (auto-downloads all dependencies)
+
+**Target:** Windows (development), iOS/Android (future), Linux server (future)
+
+---
+
+## Current Features
+
+### Core Engine
+| Feature | Status | Notes |
+|---------|--------|-------|
+| SDL2 Window | Done | 1280x720 default, resizable |
+| OpenGL 3.3 Rendering | Done | Custom function loader, no GLAD dependency |
+| Batched Sprite Renderer | Done | Sorts by depth + texture, 10k sprite capacity, raw texture ID support |
+| 2D Orthographic Camera | Done | 480x270 virtual resolution (pixel art scale), 0.05x-8x zoom |
+| Custom ECS | Done | Entity/Component/System with typed queries, forEachEntity |
+| Input System | Done | Keyboard, mouse, touch, cardinal direction helper |
+| Structured Logging | Done | Timestamped, categorized, console + file output |
+| Text Rendering | Done | stb_truetype, TTF font atlas, screen-space drawing |
+| Tilemap System | Done | Tiled JSON loader, frustum-culled, collision layers |
+| Coordinate System | Done | Tile-based coords (32px grid), pixel-to-tile conversion |
+
+### Editor (Dear ImGui)
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Toggle with F3 | Done | Auto-pauses game when opened |
+| Entity Hierarchy | Done | Grouped by name+tag (collapsible), color-coded (player/ground/obstacle/mob/boss), error badges |
+| Inspector Panel | Done | Edit all engine + game component properties live, sprite preview thumbnail |
+| Project Browser | Done | Tabs: Sprites, Scripts, Scenes, Shaders, Prefabs |
+| Right-Click Context Menus | Done | Open in VS Code, Show in Explorer, Copy Path, Delete |
+| Asset Placement | Done | Click sprite thumbnail, click scene to stamp entities |
+| Tile Palette | Done | Collapsible panel, load tilesets, scrollable tile grid, paint/drag to place |
+| Scene Interaction | Done | Click to select (depth-priority, closest-center), drag to move, sticky selection |
+| Grid Overlay | Done | Tile-edge aligned (tiles sit inside grid cells), toggleable |
+| Grid Snapping | Done | Ground tiles snap to grid, other entities move freely |
+| Camera Pan | Done | Right-click drag to pan scene |
+| Camera Zoom | Done | Mouse scroll wheel, 0.05x to 8x range |
+| Play/Pause | Done | Toolbar button, auto-pause on editor open |
+| Create/Delete Entities | Done | Menu + Delete key, works while paused |
+| Duplicate Entity | Done | Full deep copy via JSON serialization, offset by 32px |
+| Add Components | Done | Popup with engine, game systems, and social component sections |
+| Collision Debug | Done | F2 toggle, green=static, yellow=dynamic, cyan=polygon |
+| Scene Save | Done | File > Save Scene with custom name, saves to source + build dirs |
+| Scene Load | Done | File > Load Scene lists all .json scenes, click to load |
+| New Scene | Done | File > New Scene clears all entities |
+| Save as Prefab | Done | Entity menu, modal dialog with name input |
+| Remove Components | Done | Right-click any component header to remove it (all 24+ component types) |
+| Resize Handles | Done | 8 drag handles (4 corners + 4 edges), E key for resize tool mode |
+| Source Rect Editor | Done | UV region editing in Sprite inspector for tileset splicing |
+| Undo/Redo | Done | Ctrl+Z/Ctrl+Y, 200 action history, tracks move/resize/delete/duplicate |
+| Tool Modes | Done | W=Move, E=Resize, B=Paint, X=Erase. Active tool highlighted in toolbar |
+| Keyboard Shortcuts | Done | Ctrl+Z undo, Ctrl+Y redo, Ctrl+S save, Ctrl+D duplicate, Ctrl+A select all, Delete |
+| Eraser Tool | Done | X key, click/drag to delete ground tiles with undo support |
+| Layer Visibility | Done | Gnd/Obj toggles in toolbar to show/hide entity layers |
+| Log Viewer | Done | In-editor log panel with level filters (DBG/INF/WRN/ERR), text search, color-coded |
+| Command Console | Done | Type commands: help, list, count, find, delete, spawn, tp. Results in log viewer |
+| Error Badges | Done | Red [!] in hierarchy for entities with missing textures |
+| Panel Persistence | Done | ImGui saves window layout to imgui.ini, panels don't steal focus |
+
+### Zone/Portal System
+| Feature | Status | Notes |
+|---------|--------|-------|
+| ZoneComponent | Done | Named region with size, level range, PvP flag, zone type (town/zone/dungeon) |
+| PortalComponent | Done | Trigger area, target scene/zone/spawn pos, fade transition |
+| ZoneSystem | Done | Detects player in zones, triggers portal transitions, fade overlay |
+| Zone Debug Rendering | Done | Blue outlines for zones, yellow for portals (F2 debug) |
+| Same-Scene Portals | Done | Teleport + fade within one scene (e.g., Lighthouse floors) |
+| Cross-Scene Portals | Done | targetScene field for map-to-map transitions |
+| Editor Integration | Done | Zone + Portal in Add Component, full inspector editing, scene save/load |
+
+### Components (Engine)
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Transform | Done | Position (px), scale, rotation, depth; tile coord display |
+| SpriteComponent | Done | Texture, sourceRect (tileset support), spritesheet frames, tint, flip |
+| Animator | Done | State machine, frame-based animation |
+| PlayerController | Done | Cardinal movement, speed, facing, isLocalPlayer flag |
+| BoxCollider | Done | AABB with offset, trigger/static flags, "Fit to Sprite" button |
+| PolygonCollider | Done | SAT collision, vertex editing, make box/circle presets (auto-sized to sprite) |
+
+### Components (Game — attached to player/mob entities)
+| Component | Status | Notes |
+|-----------|--------|-------|
+| CharacterStatsComponent | Done | Wraps CharacterStats (HP/MP/XP/level/stats/fury/death/respawn) |
+| CombatControllerComponent | Done | Target tracking, auto-attack state, attack cooldown |
+| DamageableComponent | Done | Marker for entities that can receive damage |
+| InventoryComponent | Done | Wraps Inventory (15 slots, equipment, gold) |
+| SkillManagerComponent | Done | Wraps SkillManager (learning, cooldowns, 4x5 bar) |
+| StatusEffectComponent | Done | Wraps StatusEffectManager (buffs, debuffs, DoTs, shields) |
+| CrowdControlComponent | Done | Wraps CrowdControlSystem (stun/freeze/root/taunt) |
+| TargetingComponent | Done | Selected target ID, target type, max range |
+| ChatComponent | Done | Wraps ChatManager (7-channel chat) |
+| GuildComponent | Done | Wraps GuildManager (ranks, symbols, XP) |
+| PartyComponent | Done | Wraps PartyManager (3-player, invites, loot mode) |
+| FriendsComponent | Done | Wraps FriendsManager (50 friends, 100 blocks) |
+| MarketComponent | Done | Wraps MarketManager (listings, jackpot) |
+| TradeComponent | Done | Wraps TradeManager (two-step security) |
+| NameplateComponent | Done | Display name, level, PK color, guild info |
+| EnemyStatsComponent | Done | Wraps EnemyStats (mob HP, threat table, scaling) |
+| MobAIComponent | Done | Wraps MobAI (TWOM cardinal AI, L-shaped chase) |
+| MobNameplateComponent | Done | Mob display name, level, boss/elite flags |
+
+### Systems
+| System | Status | Notes |
+|--------|--------|-------|
+| MovementSystem | Done | WASD input (local player only), Box+Polygon collision (all combos) |
+| AnimationSystem | Done | Timer-based frame updates |
+| CameraFollowSystem | Done | Locked to local player, smooth (no pixel-snap jitter) |
+| SpriteRenderSystem | Done | Frustum culled, depth sorted |
+| GameplaySystem | Done | Ticks StatusEffects, CrowdControl, HP/MP regen, PK decay, respawn, nameplates |
+| MobAISystem | Done | Ticks MobAI for all mobs, scans for players, applies movement, fires attacks |
+| CombatActionSystem | Done | TWOM Option B targeting, player attacks, damage text, mob death/XP/respawn |
+
+### Entity Factory
+| Feature | Status | Notes |
+|---------|--------|-------|
+| createPlayer() | Done | Assembles player with all 17+ components matching Unity prefab structure |
+| createMob() | Done | Assembles mob with EnemyStats, MobAI, StatusEffects, nameplate, placeholder sprite |
+| Class Configuration | Done | Warrior/Mage/Archer stats from CLAUDE.md class table (HP, STR, per-level gains) |
+| Test Mob Spawning | Done | 5 test mobs: Slime, Goblin, Wolf, Mushroom (passive), Forest Golem (boss) |
+
+### Prefab System
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Save Entity as Prefab | Done | JSON to assets/prefabs/, saves to both source + build dirs |
+| Spawn from Prefab | Done | Click in Prefabs tab, click scene to place |
+| Prefab Library | Done | Auto-loads all .json from prefab directory on startup |
+| Editor Integration | Done | Prefabs tab, right-click to place/delete, tooltip shows components |
+| Duplicate Entity | Done | Uses prefab serialization for deep copy |
+
+### Tile Painting
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Tileset Loading | Done | Dropdown lists PNGs from assets/tiles/, auto-detects grid |
+| Tile Selection | Done | Click tile in palette grid, highlights selected |
+| Paint Mode | Done | Click or drag in scene to stamp tiles, auto-snaps to grid |
+| Overwrite Detection | Done | Painting over existing ground tile updates it instead of stacking |
+| Tileset Persistence | Done | sourceRect saved/loaded in scene JSON, tiles round-trip correctly |
+
+---
+
+## Game Systems (Ported from Unity Prototype)
+
+All 20 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`. Total: **38 files, 6,464 lines**, all compile with zero errors. Systems marked with **(needs net/DB)** have full game logic implemented but contain detailed TODO block comments at the top of each `.cpp` specifying the exact ENet networking and libpqxx database integration points needed.
+
+### Core Gameplay (Fully Ported — Logic Identical to C#)
+| System | Files | Lines | C# Source | Notes |
+|--------|-------|-------|-----------|-------|
+| Game Types & Enums | `game_types.h` | 372 | ItemEnums, ClassDefinition, constants | All enums, ClassDefinition struct, rarity/mob colors, all constants |
+| Character Stats | `character_stats.h/.cpp` | 463 | NetworkCharacterStats (3,284L) | HP/MP/XP/level, stat calc with VIT multiplier, damage formulas, death/respawn, fury/mana |
+| Enemy Stats | `enemy_stats.h/.cpp` | 268 | NetworkEnemyStats (1,036L) | Mob HP, threat table (damage attribution), scaling, death events |
+| Combat System | `combat_system.h/.cpp` | 373 | CombatHitRateConfig + System (961L) | Hit rate with coverage, spell resist, block, armor reduction, PvP, class advantage |
+| Mob AI | `mob_ai.h/.cpp` | 572 | ServerZoneMobAI (1,349L) | TWOM cardinal-only movement, L-shaped chase, axis locking, wiggle unstuck, roam/idle phases |
+| Status Effects | `status_effects.h/.cpp` | 436 | StatusEffectManager (741L) | DoTs (bleed/burn/poison), buffs, shields, invuln, transform, bewitch, stacking |
+| Crowd Control | `crowd_control.h/.cpp` | 218 | CrowdControlSystem (433L) | Stun/freeze/root/taunt with priority hierarchy, immunity checks |
+| XP Calculator | `xp_calculator.h` | 49 | XPCalculator (158L) | Gray-through-red level scaling, 0%-130% XP multipliers |
+| Honor System | `honor_system.h/.cpp` | 145 | HonorSystem (329L) | PvP honor gain/loss tables, 5-kills/hour tracking per player pair |
+| Enchantment | `enchant_system.h` | 224 | EnchantmentSystem (601L) | +1 to +12 with success rates, protection scrolls, secret bonuses, stone tiers |
+| Item Instance | `item_instance.h` | 121 | ItemInstance (403L) | Item data with rolled stats, sockets, enchant, soulbound |
+| Item Stat Roller | `item_stat_roller.h/.cpp` | 340 | ItemStatRoller (399L) | Weighted stat rolling, exponential decay distribution, JSON serialization |
+
+### Game Systems (Ported — Needs Networking & Database Wiring)
+| System | Files | Lines | C# Source | Notes |
+|--------|-------|-------|-----------|-------|
+| Inventory | `inventory.h/.cpp` | 410 | NetworkInventory | 15 slots, equipment map, gold, trade slot locking, stack/swap **(needs net/DB)** |
+| Skill Manager | `skill_manager.h/.cpp` | 340 | PlayerSkillManager (2,079L) | Skill learning (skillbook + points), cooldowns, 4x5 skill bar **(needs net/DB)** |
+| Party Manager | `party_manager.h/.cpp` | 410 | NetworkPartyManager | 3-player parties, +10%/member XP bonus, loot mode, invites **(needs net/DB)** |
+| Guild Manager | `guild_manager.h/.cpp` | 280 | NetworkGuildManager | TWOM guilds, ranks, 16x16 pixel symbols, XP contribution **(needs net/DB)** |
+| Friends Manager | `friends_manager.h/.cpp` | 377 | NetworkFriendsManager | 50 friends, 100 blocks, profile inspection, online status **(needs net/DB)** |
+| Chat Manager | `chat_manager.h/.cpp` | 120 | NetworkChatManager | 7 channels (Map/Global/Trade/Party/Guild/Private/System) **(needs net/DB)** |
+| Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(needs net/DB)** |
+| Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(needs net/DB)** |
+| Gauntlet | `gauntlet.h/.cpp` | 425 | GauntletConfig + GauntletInstance | Wave survival PvPvE, team scoring, tiebreaker elimination **(needs net/DB)** |
+
+### Key Formulas Preserved (Exact Match to C# Prototype)
+```
+// XP to next level
+xpRequired = max(100, round(0.35 * level^5.1))
+
+// HP with vitality multiplier
+baseHP = round(baseMaxHP + hpPerLevel * (level - 1))
+maxHP = round(baseHP * (1.0 + bonusVitality * 0.01)) + equipBonusHP
+
+// Armor mitigation
+reduction% = min(75, armor * 0.5)
+finalDamage = max(1, round(rawDamage * (1 - reduction/100)))
+
+// Damage multiplier (class-specific primary stat)
+Warrior: 1.0 + bonusSTR * 0.02
+Mage:    1.0 + bonusINT * 0.02
+Archer:  1.0 + bonusDEX * 0.02
+
+// Hit rate (coverage system)
+coverage = hitRate / 2.0  (levels covered)
+Within coverage: 90%, 85%, 80%, 75%, 70%... (-5% per level)
+Beyond coverage: 50%, 30%, 15%, 5%, 0% (steep dropoff)
+
+// Crit rate
+critRate = 0.05 + (isArcher ? bonusDEX * 0.005 : 0) + equipCritRate
+
+// Fury generation
+normalHit: +0.5 fury, critHit: +1.0 fury
+maxFury = 3 + floor(level / 10)
+
+// Enchant weapon damage
+multiplier = 1 + (enchantLevel * 0.125)
++11 secret: *1.05, +12 secret: *1.10 (stacks)
++12 max damage bonus: +30%
+
+// Enchant success rates
++1 to +8: 100%, +9: 40%, +10: 15%, +11: 10%, +12: 5%
+
+// PvP damage multiplier
+pvpDamage = baseDamage * 0.05
+```
+
+---
+
+## Changelog
+
+### March 16, 2026 - Editor Inspector Overhaul & Combat Polish
+
+**All 18 game components now fully editable in the inspector:**
+- Character Stats: editable name, level, HP/MP, fury, honor, PK status dropdown, dead checkbox, "Recalc Stats" button
+- Enemy Stats: editable name, type, level, HP, damage, armor, MR, hit rate, crit, attack/move speed, XP/honor rewards, aggressive/magic/alive checkboxes, "Clear Threat" button
+- Mob AI: editable acquire/contact/attack radii, chase/return/roam speeds, attack cooldown, think interval, passive checkbox, live mode/facing display
+- Combat Controller: editable base cooldown, auto-attack toggle
+- Nameplate/Mob Nameplate: editable name, level, boss/elite/visible
+- Targeting: editable max range, "Clear Target" button
+- Status Effects: live display with "Clear All Effects" button
+- Crowd Control: live CC state with "Clear CC" button
+- All components removable via right-click context menu
+
+**Add Component popup expanded with 3 sections:**
+- Engine: Transform, Sprite, Box/Polygon Collider, Player Controller, Animator, Zone, Portal
+- Game Systems: Character Stats, Enemy Stats, Mob AI, Combat Controller, Damageable, Inventory, Skill Manager, Status Effects, Crowd Control, Targeting, Nameplate, Mob Nameplate
+- Social: Chat, Party, Guild, Friends, Trade, Market
+
+**Mob AI rewrite — now matches C# ServerZoneMobAI exactly:**
+- L-shaped pathfinding via `calculateCardinalChaseTarget()` returns intermediate target position (not direction)
+- `driveMovement()` replaces old process methods, matching C# `DriveMovement()` switch structure
+- Attack mode: mobs continue chasing while attacking if outside stopDistance (80% of range)
+- Wiggle system: random initial perpendicular direction, then alternates (matches C# StartWiggle)
+- All distance thresholds scaled to pixels (5px aligned, 6px arrival)
+- Mob speeds reduced: chase 1.5 tiles/s (48px/s), roam 0.8 tiles/s (25.6px/s)
+
+**Text rendering fixes:**
+- Added `drawWorldYUp()` for Y-up camera space (floating damage text)
+- Original `drawWorld()` preserved for Y-down screen space (HUD)
+- Floating text now renders right-side-up and floats upward correctly
+
+**Target selection marker:**
+- Pulsing red border around targeted mob (4 rectangles, sin-wave alpha)
+
+### March 16, 2026 - Player Attack System (Core Gameplay Loop)
+
+**TWOM-style Option B combat fully implemented:**
+
+The core gameplay loop is now complete: walk → aggro → fight → kill → XP → level up → repeat.
+
+**New file:** `game/systems/combat_action_system.h` (561L)
+
+**TWOM Option B targeting (matching Unity prototype):**
+- Space with no target → auto-selects nearest mob within 10 tiles (NO attack)
+- Space with target (Warrior/Archer) → enables auto-attack (continuous on cooldown)
+- Space with target (Mage) → fires one spell per press (no auto-attack)
+- Escape → clears target, stops auto-attack
+- Auto-attack stops when: target dies, target out of range, player presses Escape
+
+**Attack resolution using ported combat formulas:**
+- Warriors/Archers: hit rate roll (CombatSystem::rollToHit) → Miss or Hit → damage via calculateDamage
+- Mages: spell resist roll (CombatSystem::rollSpellResist) → Resist or Land → damage
+- Fury generation: +0.5 per normal hit, +1.0 per crit (Warriors/Archers only)
+- Attack cooldown: weaponAttackSpeed * (1 - equipBonusAttackSpeed), clamped 0.2-2.0s
+- Range check: melee 1 tile (Warriors), ranged 7 tiles (Archers/Mages)
+
+**Floating damage text:**
+- Numbers float upward at 30px/s and fade out over 1.2s
+- White = normal hit, Orange = crit (1.3x scale), Gray = "Miss", Purple = "Resist"
+- Yellow "+X XP" on mob kill, Gold "LEVEL UP!" on level up (1.3x scale)
+
+**Mob death and respawn:**
+- XP awarded via XPCalculator with level-difference scaling (gray 0% through red 130%)
+- Honor awarded for bosses/elites
+- Mob sprite hidden on death, respawns at home position after 10s (configurable)
+- Threat table cleared on respawn, HP fully restored
+
+**HUD updates:**
+- Target info displayed: name, level, HP/maxHP (red tint)
+- Controls hint: "WASD:Move Space:Attack F1:HUD F2:Colliders F3:Editor"
+
+### March 16, 2026 - Zone/Portal System
+
+**Zone regions and portal transitions for multi-zone scenes:**
+- ZoneComponent: named regions with size, level range, PvP flag, zone type
+- PortalComponent: trigger area with target scene/zone, spawn position, fade transition
+- ZoneSystem: detects player entering zones, triggers portal teleport + fade-to-black overlay
+- Same-scene portals for dungeons (Lighthouse F1→F2→F3 within one scene)
+- Cross-scene portals for map transitions (Whispering Woods → Town)
+- Debug rendering: blue zone outlines, yellow portal markers with direction arrows (F2)
+- Full editor integration: Add Component → Zone/Portal, inspector editing, scene save/load
+- Fade overlay renders as full-screen black with configurable alpha/duration
+
+### March 16, 2026 - Editor QoL: Undo/Redo, Tool Modes, Console, Hierarchy Grouping
+
+**Undo/Redo system:**
+- Command pattern with 200 action history
+- Tracks move, resize, delete, duplicate operations
+- Ctrl+Z undo, Ctrl+Y redo, toolbar buttons
+
+**Tool modes (W/E/B/X):**
+- W = Move tool (drag entities)
+- E = Resize tool (drag corner/edge handles)
+- B = Paint tool (tile painting from palette)
+- X = Erase tool (click/drag to delete ground tiles)
+- Active tool highlighted blue in toolbar
+
+**Keyboard shortcuts:**
+- Ctrl+Z/Y undo/redo, Ctrl+S save, Ctrl+D duplicate, Ctrl+A select all, Delete key
+
+**Hierarchy grouping:**
+- Entities with same name+tag grouped into collapsible tree nodes (e.g., "Tile (ground) x640")
+- Unique entities shown as flat items
+- Color-coded: blue=player, green=ground, orange=obstacle, red=mob, purple=boss
+- Error badges [!] in red for missing textures
+
+**Log Viewer panel:**
+- Shows all engine log messages in editor
+- Filter by level (DBG/INF/WRN/ERR) and text search
+- Color-coded by severity, auto-scroll, clear button
+- Starts collapsed, doesn't steal focus
+
+**Command Console panel:**
+- Commands: help, list (grouped output), count, find, delete, spawn, tp
+- `list` groups duplicate entities (e.g., "Tile (ground) x640")
+- Tile entity creation no longer floods the log
+
+**Eraser tool:**
+- X key activates, click/drag to delete nearest ground tile
+- Undo support for deleted tiles
+
+**Panel focus fix:**
+- Log and Command panels start collapsed with NoFocusOnAppearing
+- Inspector and Hierarchy drawn last for priority focus
+- ImGui ini persistence saves window layout between sessions
+
+### March 16, 2026 - Game Systems ECS Integration
+
+**All ported game systems now connected to the engine's Entity-Component-System:**
+
+Game logic classes from `game/shared/` are now wrapped in ECS components and ticked by ECS systems every frame. Player and mob entities are created via `EntityFactory` with the full component set matching the Unity PlayerScene2 prefab (24 MonoBehaviours → 18 ECS components).
+
+**New files created:**
+- `game/components/game_components.h` (147L) — 18 ECS component wrappers (CharacterStatsComponent, CombatControllerComponent, InventoryComponent, SkillManagerComponent, StatusEffectComponent, CrowdControlComponent, TargetingComponent, ChatComponent, GuildComponent, PartyComponent, FriendsComponent, MarketComponent, TradeComponent, NameplateComponent, EnemyStatsComponent, MobAIComponent, MobNameplateComponent, DamageableComponent)
+- `game/systems/gameplay_system.h` (200L) — Ticks all game logic: StatusEffects, CrowdControl, HP/MP regen (10s/5s intervals), PK status decay (Purple 60s, Red 1800s, Black 600s), respawn countdowns, nameplate sync
+- `game/systems/mob_ai_system.h` (134L) — Ticks MobAI for all mob entities: brute-force player scanning, cardinal movement application, attack callback wiring with real damage formulas (armor reduction via CombatSystem)
+- `game/entity_factory.h` (223L) — `EntityFactory::createPlayer()` builds a player with all 17+ components and class-specific stat configuration (Warrior/Mage/Archer from CLAUDE.md tables); `EntityFactory::createMob()` builds mobs with EnemyStats, MobAI, placeholder sprites
+
+**Updated files:**
+- `game/game_app.h` — Added GameplaySystem and MobAISystem pointers, spawnTestMobs() method
+- `game/game_app.cpp` — Uses EntityFactory for player creation, registers GameplaySystem + MobAISystem, spawns 5 test mobs (Slime Lv1, Goblin Lv2, Wolf Lv3, Mushroom Lv1 passive, Forest Golem Lv5 boss), HUD shows live player stats (HP/MP/Level/Class/XP/Fury)
+
+**What runs at startup:**
+- Level 1 Warrior player with real stats (70 HP, 30 MP, 14 STR, 12 VIT)
+- 5 mobs that roam, aggro, chase (cardinal-only), and attack using ported combat formulas
+- HP/MP regeneration ticking every 10s/5s
+- Status effects and crowd control processing every frame
+- HUD displaying live character stats
+
+**Bug fixes during code review:**
+- Fixed spell resist formula: mob MR now subtracts from effective INT (not flat % bonus)
+- Fixed block counter stat: uses max(STR, DEX) instead of sum (matches C# exactly)
+- Fixed hit chance cap: clamped to 0.97 (not 1.0) matching C#'s intentional 97% max
+
+### March 16, 2026 - Editor Polish, Collision Upgrade, Pixel Art Scaling
+
+**Virtual resolution changed from 960x540 to 480x270:**
+- Everything renders 2x larger, matching pixel art proportions
+- Player sprites (trimmed 20x33) look correct relative to 32px tiles
+- Camera follow removed pixel-snapping to eliminate movement jitter at new resolution
+
+**Collision system upgraded:**
+- MovementSystem now checks all 4 collision combos: Box vs Box, Box vs Polygon, Polygon vs Box, Polygon vs Polygon
+- Polygon colliders use SAT (Separating Axis Theorem) for accurate convex collision
+- Polygon debug rendering uses dotted lines that handle any angle correctly
+
+**Editor improvements:**
+- Remove Components: right-click any component header to delete it
+- Resize handles: 8 drag handles (4 corners + 4 edges) on selected entity for visual resizing
+- Sticky selection: clicking inside a selected entity drags it instead of switching to a neighbor
+- Box Collider "Fit to Sprite" button auto-sizes to match sprite dimensions
+- Polygon Collider Box/Circle presets auto-size to sprite dimensions
+- Source Rect UV editor in Sprite inspector for manual tileset region editing
+- Tile Palette starts collapsed, scrollable grid, auto-sizes tiles to panel width, crash-proofed
+- Scene save/load with file picker (File > Save Scene with name, File > Load Scene lists all scenes)
+- New Scene command to clear canvas
+- Real sprite asset loading (player.png from Aseprite, trimmed to 20x33)
+
+**First real sprite asset:**
+- Player sprite (Sprite-00065.png) trimmed in Aseprite to 20x33 pixels
+- Renders at native size in 480x270 viewport, correct proportions
+- Tileset (customWhisperingTileset.png 128x128, 4x4 grid) working with tile palette
+
+### March 16, 2026 - Game Systems Port (C# to C++)
+
+**All 20 game systems from the Unity/C# prototype converted to C++:**
+
+Ported 38 files (6,464 lines) to `game/shared/`, all compiling with zero errors. Every formula, constant, and game rule from the Unity prototype is preserved exactly in the C++ versions.
+
+**Core gameplay systems (pure logic, no dependencies):**
+- CharacterStats: Full stat calculation with class-specific scaling, equipment bonuses, vitality HP multiplier, damage formulas, death/respawn, XP/leveling
+- EnemyStats: Mob stats with threat table (damage attribution), level scaling, death events
+- CombatSystem: Complete hit rate with coverage/beyond-coverage, spell resist with INT coverage, block system, armor reduction, PvP class advantage, magic damage reduction
+- MobAI: TWOM-style cardinal-only movement with L-shaped pathfinding, axis locking, roam/idle alternation, wiggle unstuck, aggro memory, leash radius
+- StatusEffects: 16 effect types (DoTs, buffs, shields, invuln, transform, bewitch), stacking (ArmorShred x3), tick-based processing
+- CrowdControl: Stun/freeze/root/taunt with priority hierarchy, immunity checks, freeze-break-on-damage
+- XPCalculator: Level-difference scaling (gray 0% through red 130%)
+- HonorSystem: PvP honor with PK-status-based gain tables, 5-kill/hour tracking
+- EnchantSystem: +1 to +12 with tiered success rates, protection scrolls, secret bonuses, stone tier validation
+- ItemInstance + ItemStatRoller: Item data structures with weighted stat rolling
+
+**Social/economy systems (logic complete, networking/DB integration pending):**
+- Inventory: 15-slot system with equipment map, gold management, trade slot locking
+- SkillManager: Skill learning via skillbooks + skill points, cooldown tracking, 4x5 skill bar
+- PartyManager: 3-player parties with +10%/member XP bonus, loot distribution modes
+- GuildManager: TWOM-style guilds with ranks, 16x16 pixel symbols, XP contribution
+- FriendsManager: Friends list (50 max), block list (100 max), profile inspection
+- ChatManager: 7-channel chat system (Map/Global/Trade/Party/Guild/Private/System)
+- TradeManager: Two-step security trading (Lock -> Confirm -> Execute), 8 item slots + gold
+- MarketManager: Marketplace with 2% tax jackpot system, merchant pass, listing filters
+- Gauntlet: Wave survival PvPvE instance with team scoring, tiebreaker elimination
+
+Each networking-dependent `.cpp` has a detailed `NOTE: Networking & Database Integration Pending` block comment specifying exact ENet and libpqxx integration points.
+
+### March 15, 2026 - Initial Engine Build
+
+**Core engine created from scratch:**
+- SDL2 + OpenGL 3.3 window and rendering pipeline
+- Custom OpenGL function loader (no GLAD, uses SDL_GL_GetProcAddress)
+- Batched sprite renderer with depth sorting and texture batching
+- 2D orthographic camera with 960x540 virtual resolution
+- Custom Entity-Component-System with typed component queries
+- Input system (keyboard, mouse, touch) with cardinal direction helper
+- Scene management with factory pattern and JSON loading
+- Structured logging system (console + file, timestamped, categorized)
+
+### March 15, 2026 - Editor & Scene Building
+
+**Dear ImGui editor built with:**
+- Entity hierarchy with search filter and tag color-coding
+- Inspector panel for live editing of all component properties with sprite thumbnails
+- Project browser with tabs (Sprites, Scripts, Scenes, Shaders, Prefabs)
+- Right-click context menus (Open in VS Code, Explorer, Copy Path, Delete)
+- Scene interaction: click-to-select (depth priority, closest center), drag-to-move
+- Grid overlay aligned to tile edges with smart snapping (ground=grid, objects=free)
+- Camera pan (right-click drag) and zoom (scroll wheel, 0.05x-8x)
+- Play/Pause with auto-pause on editor open
+- Entity create/delete/duplicate with Delete key support while paused
+- Scene save/load with file picker (lists all scenes in assets/scenes/)
+- New Scene command to clear canvas
+
+### March 15, 2026 - Tile Palette & Painting
+
+**Tileset-based tile painting system:**
+- Tile Palette panel with tileset dropdown (scans assets/tiles/)
+- Visual tile grid with 2x scaled clickable tiles from tileset
+- Paint mode: click or drag to stamp tiles, auto-snaps to grid centers
+- Smart overwrite: painting on existing ground tiles updates sourceRect instead of creating duplicates
+- sourceRect serialization in scene JSON so painted tiles survive save/load
+
+### March 15, 2026 - Prefab System
+
+**Entity template system:**
+- Save any entity as a reusable JSON prefab (Entity > Save as Prefab)
+- Spawn copies from Prefabs tab in Project browser
+- Prefabs persist to both source and build directories
+- Entity duplication via deep JSON copy
+- isLocalPlayer flag on PlayerController prevents prefab copies from responding to input
+
+### March 15, 2026 - Collision System
+
+- BoxCollider with AABB detection and offset
+- PolygonCollider with Separating Axis Theorem (SAT) for convex polygons
+- Debug visualization (F2): colored overlays for all collider types
+- Inspector vertex editing for polygon colliders with Make Box/Circle presets
+
+### March 15, 2026 - Text Rendering
+
+- stb_truetype integration for TTF fonts (Consolas from Windows)
+- Glyph atlas baking at multiple sizes (16px, 24px)
+- Screen-space HUD text drawing
+- Coordinate display HUD (tile coordinates, always visible)
+
+---
+
+## Architecture Notes
+
+### Scene/Zone Design
+- Each game area (Whispering Woods, Town, Lighthouse) = one scene file
+- Zones within a scene are logical regions (e.g., Lighthouse F1, F2, F3 are zones in one scene)
+- Zone transitions within a scene = camera teleport + fade effect (no loading)
+- Scene transitions between areas = actual load/unload with loading screen
+- All entities in a scene are always loaded (players can see across zones)
+
+### Coordinate System
+- World coordinates in pixels, tile coordinates derived via `Coords::toTile()`
+- Tile size: 32x32 pixels
+- Grid lines at tile edges (0, 32, 64...), tile centers at half-grid (16, 48, 80...)
+- Origin (0,0) is at a tile corner, not a tile center
+
+### Entity Ownership
+- `isLocalPlayer = true` on exactly ONE entity = responds to keyboard input + camera follows
+- Prefab templates save `isLocalPlayer = false` by default
+- Server/network will set this flag at runtime when players connect
+
+### Game Systems Architecture
+```
+game/
+├── shared/                      # Pure game logic (no engine deps)
+│   ├── game_types.h             # All enums, constants, ClassDefinition
+│   ├── character_stats.h/.cpp   # Player stats, damage, death
+│   ├── enemy_stats.h/.cpp       # Mob stats, threat table
+│   ├── combat_system.h/.cpp     # Hit rate, resist, block, armor
+│   ├── mob_ai.h/.cpp            # TWOM cardinal AI
+│   ├── (16 more systems...)     # Inventory, skills, social, etc.
+│   └── gauntlet.h/.cpp          # Wave PvPvE instance
+│
+├── components/                  # ECS component wrappers
+│   ├── transform.h              # Position, scale, rotation
+│   ├── sprite_component.h       # Texture, animation frames
+│   ├── player_controller.h      # Movement input
+│   ├── box_collider.h           # AABB collision
+│   ├── polygon_collider.h       # SAT collision
+│   ├── animator.h               # Animation state machine
+│   └── game_components.h        # 18 game logic wrappers
+│
+├── systems/                     # ECS systems (tick logic per frame)
+│   ├── movement_system.h        # WASD input + collision
+│   ├── render_system.h          # Sprite rendering
+│   ├── gameplay_system.h        # StatusEffects, CC, regen, PK, respawn
+│   ├── mob_ai_system.h          # Mob AI ticking + player scanning
+│   └── combat_action_system.h   # TWOM Option B attacks, damage text, XP, respawn
+│
+├── entity_factory.h             # Creates player/mob entities with all components
+├── game_app.h/.cpp              # Main game loop, scene setup, HUD
+└── main.cpp                     # Entry point
+```
+
+**Integration pattern:**
+- `game/shared/` classes are standalone logic (pure C++, no engine deps)
+- `game/components/game_components.h` wraps each logic class in an ECS Component struct
+- `game/systems/` contain ECS Systems that iterate entities and tick the wrapped logic classes
+- `EntityFactory` creates entities with all components attached (mirrors Unity prefab structure)
+- Game logic uses `std::function` callbacks; ECS systems wire these to engine actions
+- RNG uses `thread_local std::mt19937` seeded from `std::random_device`
+- Networking-dependent `.cpp` files have `NOTE: Networking & Database Integration Pending` blocks
+- All formulas are exact 1:1 matches with the C# prototype (verified line-by-line)
+
+---
+
+## Future Implementation Plan
+
+### Near-Term (Engine Foundation)
+- [ ] Audio system (SDL_mixer - music per zone, SFX for combat/UI)
+- [ ] Sprite animation testing with real spritesheets
+- [ ] Scene transitions with loading screen and zone portals
+- [ ] Undo/Redo in editor
+- [ ] Multi-select and bulk operations in editor
+- [ ] Eraser tool for tile painting
+- [ ] Auto-load last scene on startup (once real sprites replace procedural)
+
+### Game Systems (Port from Unity Prototype)
+- [x] CharacterStats (HP, MP, XP, level, stats, fury, death, respawn)
+- [x] EnemyStats (mob HP, threat table, XP/loot distribution on death)
+- [x] CombatSystem (hit rate, damage formulas, crit, armor mitigation)
+- [x] MobAI (idle, roam, aggro, chase, attack, return home - cardinal movement)
+- [x] SkillManager (skill execution, cooldowns, effects, skill bar)
+- [x] StatusEffects (buffs, debuffs, DoTs)
+- [x] CrowdControl (stun, freeze, root, taunt)
+- [x] Inventory (slots, equipment, gold, item usage)
+- [x] ItemStatRoller (drop tables, stat rolling)
+- [x] XPCalculator (level scaling, party bonus, damage-based distribution)
+- [x] HonorSystem (PvP kills, PK status colors)
+- [x] EnchantSystem (+1 to +12 enhancement)
+- [x] PartyManager (3-player, cross-scene XP bonus)
+- [x] GuildManager (ranks, 16x16 pixel symbols, leveling)
+- [x] FriendsManager (friends/block lists, profile inspection)
+- [x] ChatManager (Map, Global, Trade, Party, Guild, Private channels)
+- [x] TradeManager (two-step security trading)
+- [x] MarketManager (listings, tax, merchant pass, jackpot)
+- [x] Gauntlet (wave survival PvPvE instance)
+- [ ] SpawnSystem (spawn zones, respawn timers, death persistence)
+
+### ECS Integration
+- [x] Component wrappers for all 20 game systems (game_components.h)
+- [x] GameplaySystem (tick StatusEffects, CC, regen, PK decay, respawn)
+- [x] MobAISystem (tick MobAI, player scanning, attack wiring)
+- [x] CombatActionSystem (TWOM Option B attacks, damage/XP/respawn)
+- [x] EntityFactory (createPlayer with all 17+ components, createMob)
+- [x] Game loop integration (systems registered, test mobs spawning)
+- [x] HUD showing live player stats (HP/MP/Level/Class/XP/Fury)
+- [x] HUD target info (name, level, HP when target selected)
+- [x] Core gameplay loop (walk → aggro → fight → kill → XP → level up)
+- [ ] Spatial hash grid for efficient mob-player range queries (currently brute-force)
+- [ ] Event bus for cross-system communication (loot drops, party XP sharing)
+- [ ] Timer/scheduler utility for periodic game events
+
+### UI Systems
+- [x] HUD text (HP/MP/XP/Level/Class/Fury stats display + target info)
+- [x] Floating Damage Text (white=normal, orange=crit, gray=miss, purple=resist, yellow=XP, gold=level up)
+- [ ] HUD bars (HP/MP/XP graphical bars, fury gauge)
+- [ ] Inventory UI (grid, equipment panel, tooltips, drag-and-drop)
+- [ ] Skill Bar UI (5 slots x 4 pages, drag-to-assign)
+- [ ] Chat System UI (channel tabs, scrolling text buffer)
+- [ ] Mob Nameplates (level-colored by difficulty)
+- [ ] Player Nameplates (guild symbol + name + PK color)
+
+### Networking (Custom Proprietary)
+- [ ] ENet UDP transport layer
+- [ ] Custom replication system (dirty-flag sync, delta serialization)
+- [ ] Client-server message protocol (binary, not JSON)
+- [ ] Server-authoritative game logic
+- [ ] Zone-based interest management
+- [ ] Client-side prediction and server reconciliation
+- [ ] Authentication and session management
+- [ ] Wire up all game/shared/ systems to networking layer
+
+### Database Integration
+- [ ] PostgreSQL via libpqxx (same schema as Unity prototype)
+- [ ] Connection pooling
+- [ ] Definition caches (mob, item, skill, loot table)
+- [ ] Character persistence (save/load)
+- [ ] Async queries for non-critical operations
+- [ ] Wire up all game/shared/ systems to database layer
+
+### Mobile & Platform
+- [ ] iOS build (SDL2 + Xcode)
+- [ ] Android build (SDL2 + NDK)
+- [ ] Touch input (D-Pad, action button, tap-to-target)
+- [ ] Safe area handling (notch, navigation bar)
+- [ ] Battery/memory optimization
+- [ ] 30 FPS cap on mobile, 60 on PC
+
+### Advanced Engine
+- [ ] Particle system (spell effects, death, level up)
+- [ ] Shader effects (water, fog, screen flash)
+- [ ] Spatial hash grid for efficient entity queries
+- [ ] Object pooling for frequently spawned entities
+- [ ] Hot-reload for data files (JSON, prefabs)
+- [ ] Built-in profiler (frame time breakdown by system)
+- [ ] Console command system for runtime debugging
