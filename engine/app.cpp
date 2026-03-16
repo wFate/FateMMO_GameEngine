@@ -159,9 +159,9 @@ void App::processEvents() {
                 if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
                     if (Editor::instance().isOpen()) {
                         Editor::instance().cancelPlacement();
-                    } else {
-                        running_ = false;
                     }
+                    // Escape no longer quits — use window close (X) button instead.
+                    // Game systems (combat targeting) use Escape for gameplay actions.
                 }
                 // Forward all keyboard shortcuts to editor
                 if (Editor::instance().isOpen()) {

@@ -430,8 +430,81 @@ void InventoryUI::drawStatsTab(World* world, Entity* player) {
 // ============================================================================
 
 void InventoryUI::drawSkillsTab(World* world, Entity* player) {
-    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1), "Skill system UI coming soon");
-    ImGui::Text("Skill points and skill bar will be displayed here.");
+    auto* skillComp = player->getComponent<SkillManagerComponent>();
+    if (!skillComp) {
+        ImGui::Text("No skill manager");
+        return;
+    }
+
+    auto& skills = skillComp->skills;
+
+    // Skill points summary
+    ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Skill Points: %d available",
+                       skills.availablePoints());
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "(%d earned, %d spent)",
+                       skills.earnedPoints(), skills.spentPoints());
+    ImGui::Separator();
+
+    // Learned skills list
+    auto& learned = skills.getLearnedSkills();
+    if (learned.empty()) {
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1), "No skills learned yet.");
+        ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1), "Use skillbooks to learn skills.");
+        return;
+    }
+
+    ImGui::Text("Learned Skills:");
+    ImGui::Spacing();
+
+    for (auto& ls : learned) {
+        ImGui::PushID(ls.skillId.c_str());
+
+        // Skill row: name, rank, activate button
+        bool onCD = skills.isOnCooldown(ls.skillId);
+        ImVec4 nameColor = onCD ? ImVec4(0.5f, 0.5f, 0.5f, 1.0f) : ImVec4(0.8f, 0.8f, 1.0f, 1.0f);
+
+        ImGui::TextColored(nameColor, "%s", ls.skillId.c_str());
+        ImGui::SameLine(180);
+
+        // Rank display with color
+        ImVec4 rankColor = (ls.activatedRank > 0) ? ImVec4(0.3f, 1.0f, 0.3f, 1.0f)
+                                                   : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+        ImGui::TextColored(rankColor, "%d/%d", ls.activatedRank, ls.unlockedRank);
+
+        // Activate rank button (spend skill point)
+        if (ls.activatedRank < ls.unlockedRank && skills.availablePoints() > 0) {
+            ImGui::SameLine(240);
+            char btnLabel[32];
+            snprintf(btnLabel, sizeof(btnLabel), "+##act_%s", ls.skillId.c_str());
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.4f, 0.15f, 1.0f));
+            if (ImGui::SmallButton(btnLabel)) {
+                skills.activateSkillRank(ls.skillId);
+            }
+            ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Spend 1 skill point to activate rank %d", ls.activatedRank + 1);
+            }
+        }
+
+        // Cooldown indicator
+        if (onCD) {
+            ImGui::SameLine(270);
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "CD:%.1fs",
+                              skills.getRemainingCooldown(ls.skillId));
+        }
+
+        // Drag source: drag this skill to assign to skill bar
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+            ImGui::SetDragDropPayload("SKILL_ASSIGN", ls.skillId.c_str(), ls.skillId.size() + 1);
+            ImGui::Text("Assign: %s", ls.skillId.c_str());
+            ImGui::EndDragDropSource();
+        }
+
+        ImGui::PopID();
+    }
+
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1), "Drag skills to the Skill Bar ->");
 }
 
 // ============================================================================

@@ -30,14 +30,10 @@ struct CharacterStatsComponent : public Component {
 struct CombatControllerComponent : public Component {
     FATE_COMPONENT(CombatControllerComponent)
 
-    uint32_t targetEntityId = 0;    // Currently targeted entity (mob or player)
-    bool autoAttackEnabled = false;
-    float attackCooldownRemaining = 0.0f;
     float baseAttackCooldown = 1.5f;  // Seconds between attacks
-    bool isAttacking = false;
-
-    void clearTarget() { targetEntityId = 0; autoAttackEnabled = false; }
-    bool hasTarget() const { return targetEntityId != 0; }
+    float attackCooldownRemaining = 0.0f;
+    // Note: targeting and auto-attack state are managed by CombatActionSystem,
+    // not stored here. This component holds per-entity combat config only.
 };
 
 struct DamageableComponent : public Component {
@@ -116,6 +112,8 @@ struct NameplateComponent : public Component {
     bool showGuildSymbol = false;
     std::string guildName;
     bool visible = true;
+    bool showLevel = true;              // Toggle level display on/off
+    float fontSize = 0.7f;              // Scale for nameplate text (0.3 - 2.0)
 };
 
 // ============================================================================
@@ -141,6 +139,8 @@ struct MobNameplateComponent : public Component {
     bool isBoss = false;
     bool isElite = false;
     bool visible = true;
+    bool showLevel = true;              // Toggle level display on/off
+    float fontSize = 0.6f;              // Scale for mob nameplate text (0.3 - 2.0)
     // Color is computed per-viewer based on level difference (MobLevelColors)
 };
 

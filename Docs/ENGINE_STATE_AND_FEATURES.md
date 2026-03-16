@@ -27,6 +27,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Text Rendering | Done | stb_truetype, TTF font atlas, screen-space drawing |
 | Tilemap System | Done | Tiled JSON loader, frustum-culled, collision layers |
 | Coordinate System | Done | Tile-based coords (32px grid), pixel-to-tile conversion |
+| Spatial Hash Grid | Done | 128px cells, O(1) range/nearest/point queries, used by MobAI + Combat systems |
 
 ### Editor (Dear ImGui)
 | Feature | Status | Notes |
@@ -64,6 +65,25 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Command Console | Done | Type commands: help, list, count, find, delete, spawn, tp. Results in log viewer |
 | Error Badges | Done | Red [!] in hierarchy for entities with missing textures |
 | Panel Persistence | Done | ImGui saves window layout to imgui.ini, panels don't steal focus |
+
+### Game UI (ImGui-based, in-game panels)
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Inventory Panel | Done | I key toggle, 15-slot grid with drag-and-drop, 10 equipment slots |
+| Item Tooltips | Done | Hover shows name, rarity, rolled stats, enchant, socket, soulbound |
+| Equipment Drag/Drop | Done | Drag between inventory and equipment slots, double-click to equip/unequip |
+| Rarity Colors | Done | White/green/blue/purple/orange borders on item slots |
+| Gold Display | Done | Formatted with K/M/B suffixes |
+| Stats Tab | Done | HP/MP/XP bars, primary stats, derived stats, fury, honor, PvP |
+| Skills Tab | Done | Learned skills list, drag-to-assign to skill bar, activate rank with skill points |
+| Community Tab | Stub | Placeholder |
+| Settings Tab | Stub | Placeholder |
+| Skill Bar UI | Done | 5 slots x 4 pages (20 total) on right side, K toggle, [/] page switch, drag-to-assign, cooldown overlay, right-click clear |
+| HUD Bars | Done | HP (green, top-left) / MP (blue, top-right) / XP (gold, bottom-center), positions adjustable in F3 editor HUD Layout panel |
+| Debug Info Panel | Done | FPS, pos, entities, player stats — shown only in F3 editor (moved out of F1 HUD) |
+| D-Pad | Planned | Mobile touch control, bottom-left |
+| Action Buttons | Planned | Attack + skill circular buttons, bottom-right |
+| Chat UI | Planned | Text input + channel tabs + scrolling messages |
 
 ### Zone/Portal System
 | Feature | Status | Notes |
@@ -117,7 +137,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | SpriteRenderSystem | Done | Frustum culled, depth sorted |
 | GameplaySystem | Done | Ticks StatusEffects, CrowdControl, HP/MP regen, PK decay, respawn, nameplates |
 | MobAISystem | Done | Ticks MobAI for all mobs, scans for players, applies movement, fires attacks |
-| CombatActionSystem | Done | TWOM Option B targeting, player attacks, damage text, mob death/XP/respawn |
+| CombatActionSystem | Done | TWOM Option B targeting, click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP |
+| SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment |
 
 ### Entity Factory
 | Feature | Status | Notes |
@@ -226,6 +247,166 @@ pvpDamage = baseDamage * 0.05
 
 ## Changelog
 
+### March 16, 2026 - Spawn Zone System
+
+**Region-based mob spawning with visual editor controls:**
+
+Spawn zones are spatial entities you place and resize in the scene editor. Mobs spawn within the zone bounds, roam constrained to the zone, and return to the zone after leashing.
+
+**New files:** `game/shared/spawn_zone.h`, `game/systems/spawn_system.h`
+
+**Spawn zone features:**
+- SpawnZoneComponent attached to an entity with Transform — drag to reposition, resize handles to adjust zone bounds
+- Green rectangle outline shows zone boundary (toggleable "Show Bounds" checkbox)
+- Multiple MobSpawnRule entries per zone: enemy ID, target count, level range, HP/damage, respawn time, aggressive/boss flags
+- SpawnSystem ticks every 0.5s: detects deaths, processes respawn timers, tops up missing mobs
+- Random spawn positions with minimum distance between mobs (adaptive spacing)
+
+**Mob containment:**
+- Mob roamRadius auto-scales to 40% of zone's smaller dimension
+- constrainMobsToZone() clamps mob home positions back inside zone after leash returns
+- Mobs return to zone when player exits leash radius, then resume roaming within zone bounds
+
+**Inspector controls:**
+- Zone Name, Zone Size (draggable), Min Spawn Distance, Tick Interval, Show Bounds toggle
+- Per-rule tree nodes: enemy ID, target count, level range, base HP/damage, respawn seconds, aggressive/boss checkboxes
+- "+ Add Rule" and "Remove Rule" buttons
+- All rules editable at runtime — changes take effect on next tick
+
+**Editor integration:**
+- Spawn zone entities selectable and draggable in scene (W:Move)
+- Resize handles on corners and edges (E:Size tool, or always for spawn zones)
+- Undo/Redo support for move and resize
+- Added to "+ Add Component" popup under Game Systems
+
+**Mob behavior flags (per-mob in Mob AI inspector):**
+- Can Roam: whether mob wanders when idle
+- Can Chase: whether mob pursues targets
+- Roam While Idle: alternates roam/idle phases vs standing still until aggro
+- Non-aggressive rules automatically set canRoam=false, canChase=false, roamWhileIdle=false
+
+**Replaced manual mob spawning:**
+- Test scene now creates a "Whispering Woods" spawn zone entity with 5 rules (Slime x3, Goblin x2, Wolf x2, Mushroom x2, Forest Golem x1 boss)
+- CombatActionSystem no longer handles respawns — SpawnSystem manages all mob lifecycle
+
+### March 16, 2026 - Spatial Hash Grid
+
+**New file:** `game/shared/spatial_hash.h` — grid-based spatial index for O(1) range queries
+
+**How it works:**
+- World divided into 128x128px cells (4x4 tiles)
+- Entities inserted into cells by position, rebuilt each frame
+- Range queries only check entities in nearby cells instead of iterating all entities
+- Supports: `findNearest()` with filter, `queryRadius()`, `findAtPoint()` for click/touch targeting
+
+**Integrated into:**
+- **MobAISystem**: builds a player grid each frame, mobs find nearest player via spatial hash instead of brute-force forEach. Scales from O(N*P) to O(N+P)
+- **CombatActionSystem**: builds a mob grid each frame, used by Space-to-target (`findNearestMob`), click/touch targeting (`findAtPoint`), and any future mob queries
+
+**Performance:** With 5 mobs and 1 player, difference is negligible. With 100+ mobs and multiple players (multiplayer), this avoids the quadratic blowup of brute-force distance checks every frame.
+
+### March 16, 2026 - Targeting, HUD Polish, Mob AI Cardinal Fix
+
+**Click/touch-to-target system:**
+- Left-click or tap on a mob to target it (replaces current target)
+- Left-click or tap on empty space to deselect current target
+- Touch and mouse both supported — ImGui panels correctly block targeting when UI is open
+- Target auto-clears when mob leaves the camera's visible bounds (logged)
+- Escape key also clears target (no longer quits app — use window X or Alt+F4)
+
+**HUD bars redesigned to match Unity prototype layout:**
+- HP bar (green): top-left — matches TWOM style
+- MP bar (blue): top-right
+- XP bar (gold): bottom-center
+- Bars drawn directly to foreground draw list (no ImGui window), positions adjustable via F3 editor HUD Layout panel
+- F1 HUD stripped to controls hint only — debug info (FPS, pos, entities, stats) moved to F3 Debug Info panel
+
+**Mob AI roaming cardinal fix:**
+- Roam movement now uses `calculateCardinalChaseTarget()` (L-shaped pathing), same as chase mode
+- Previously, `setCardinalVelocity` on raw delta could flip axes frame-to-frame near 45-degree angles, creating diagonal drift
+- Mobs now strictly move one axis at a time during roaming, as intended by the cardinal movement system
+
+### March 16, 2026 - Class Selector & Inspector Polish
+
+**Class switching in Character Stats inspector:**
+- Dropdown selector: Warrior / Mage / Archer
+- Switching class instantly reconfigures all ClassDefinition values (base stats, per-level gains, resource type, hit rate, attack range)
+- Stats recalculated, HP/MP restored to new max, fury reset on class change
+- Level drag auto-recalculates stats + XP on release
+- "Full Heal" button: restores HP/MP and clears dead flag
+- Inspector shows: class name, resource type, base stats, attack range, damage multiplier
+
+**Nameplate inspector controls:**
+- "Show Level" checkbox: toggle level display (Lv1) on/off for both player and mob nameplates
+- "Font Size" slider (0.3 - 2.0): resize nameplate text live
+- Nameplates now properly centered above sprites using Font::measureText()
+
+**Combat Controller cleanup:**
+- Removed unused autoAttackEnabled and targetEntityId fields (auto-attack state managed by CombatActionSystem)
+- Only shows Base Cooldown (editable) and CD Remaining (read-only)
+
+**HUD maxFury fix:**
+- Fury display reads s.maxFury directly instead of recomputing from formula
+- Inspector changes to maxFury properly reflected in HUD
+
+### March 16, 2026 - Skill Bar UI & HUD Bars
+
+**Skill Bar UI (right side of screen):**
+- 5 visible slots per page, 4 pages (20 total), matching SkillManager's 4x5 layout
+- Page navigation: up/down arrows in panel, [ and ] keyboard shortcuts
+- K key toggles skill bar visibility
+- Drag skills from Inventory Skills tab to assign to slots
+- Right-click any slot to clear it
+- Cooldown overlay: dark sweep fills slot + countdown timer when skill is on CD
+- Tooltips show skill ID, rank, cooldown remaining
+- Semi-transparent dark panel, color-coded borders (blue=assigned, red=on CD, gray=empty)
+
+**New files:** `game/ui/skill_bar_ui.h` (52L), `game/ui/skill_bar_ui.cpp` (208L)
+
+**Graphical HUD Bars (TWOM layout):**
+- HP bar (green, top-left), MP bar (blue, top-right), XP bar (gold, bottom-center)
+- Drawn to foreground draw list — no ImGui window, no input stealing
+- Positions/sizes adjustable via F3 editor HUD Layout panel with Reset to Defaults button
+- Text shadow for readability, syncs with F1 toggle
+
+**New files:** `game/ui/hud_bars_ui.h`, `game/ui/hud_bars_ui.cpp`
+
+**Inventory Skills tab upgraded:**
+- Shows available/earned/spent skill points
+- Lists all learned skills with rank display (activated/unlocked)
+- "+" button to spend skill points and activate next rank
+- Cooldown indicator on skills currently on CD
+- Each skill is a drag source — drag to Skill Bar slots to assign
+- Hint text: "Drag skills to the Skill Bar ->"
+
+**Controls updated:**
+- HUD hint line: "WASD:Move Space:Attack I:Inv K:Skills []:Pages F1:HUD F3:Editor"
+
+### March 16, 2026 - Nameplates, Gold Drops, Death System
+
+**World-space nameplates above all entities:**
+- Player nameplates: "Name Lv1" in PK status color, guild name in green below if in guild
+- Mob nameplates: colored by TWOM level-difference system (gray/green/white/blue/purple/orange/red)
+- Boss mobs show "[Boss] Name Lv5" prefix
+- Mob HP bars appear below nameplate when damaged (green >50%, red <50%, dark red background)
+- Dead mob nameplates and HP bars hidden automatically
+
+**Gold drops on mob kill:**
+- Mobs drop gold on death: minGold = level*2, maxGold = level*5, 100% drop chance
+- Gold added directly to player's Inventory component
+- "+X Gold" floating text in gold color
+- HUD shows "Gold: X" below XP/Fury line
+
+**Death system visual feedback:**
+- Setting isDead (via inspector or HP reaching 0) grays out player sprite (0.3 tint, 60% alpha)
+- 5-second respawn countdown starts automatically
+- Sprite tint restored to white on respawn, HP fully restored
+- Movement blocked while dead (existing check in movement system)
+
+**HUD maxFury fix:**
+- Fury display now reads s.maxFury directly instead of recomputing from classDef formula
+- Inspector changes to maxFury properly reflected in HUD
+
 ### March 16, 2026 - Editor Inspector Overhaul & Combat Polish
 
 **All 18 game components now fully editable in the inspector:**
@@ -296,6 +477,19 @@ The core gameplay loop is now complete: walk → aggro → fight → kill → XP
 **HUD updates:**
 - Target info displayed: name, level, HP/maxHP (red tint)
 - Controls hint: "WASD:Move Space:Attack F1:HUD F2:Colliders F3:Editor"
+
+### March 16, 2026 - Inventory UI
+
+**Complete TWOM-style inventory panel with tabs:**
+- Toggle with I key during gameplay
+- Inventory tab: 15-slot grid (5x3) with drag-and-drop, 10 equipment slots (Hat, Armor, Gloves, Shoes, Belt, Cloak, Weapon, Shield, Ring, Necklace)
+- Drag items between inventory and equipment slots, double-click to equip/unequip
+- Item tooltips: name, rarity, rolled stats, enchant level, socket, soulbound/protected flags
+- Rarity-colored borders (Common white, Uncommon green, Rare blue, Epic purple, Legendary orange)
+- Gold display with K/M/B formatting, trade-locked slot indicators
+- Stats tab: HP/MP/XP progress bars, primary stats (STR/VIT/INT/DEX/WIS), derived stats (armor, crit, speed), fury/honor/PvP
+- Skills/Community/Settings tabs stubbed for future implementation
+- Reads directly from InventoryComponent and CharacterStatsComponent on the player entity
 
 ### March 16, 2026 - Zone/Portal System
 
@@ -597,7 +791,7 @@ game/
 - [x] TradeManager (two-step security trading)
 - [x] MarketManager (listings, tax, merchant pass, jackpot)
 - [x] Gauntlet (wave survival PvPvE instance)
-- [ ] SpawnSystem (spawn zones, respawn timers, death persistence)
+- [x] SpawnSystem (spawn zones with visual editor, respawn timers, zone containment)
 
 ### ECS Integration
 - [x] Component wrappers for all 20 game systems (game_components.h)
@@ -609,19 +803,21 @@ game/
 - [x] HUD showing live player stats (HP/MP/Level/Class/XP/Fury)
 - [x] HUD target info (name, level, HP when target selected)
 - [x] Core gameplay loop (walk → aggro → fight → kill → XP → level up)
-- [ ] Spatial hash grid for efficient mob-player range queries (currently brute-force)
+- [x] Spatial hash grid for efficient mob-player range queries (128px cells, used by MobAI + Combat)
 - [ ] Event bus for cross-system communication (loot drops, party XP sharing)
 - [ ] Timer/scheduler utility for periodic game events
 
 ### UI Systems
 - [x] HUD text (HP/MP/XP/Level/Class/Fury stats display + target info)
 - [x] Floating Damage Text (white=normal, orange=crit, gray=miss, purple=resist, yellow=XP, gold=level up)
-- [ ] HUD bars (HP/MP/XP graphical bars, fury gauge)
-- [ ] Inventory UI (grid, equipment panel, tooltips, drag-and-drop)
-- [ ] Skill Bar UI (5 slots x 4 pages, drag-to-assign)
+- [x] HUD bars (HP/MP/XP graphical bars at top-center, text shadow, highlight, F1 toggle sync)
+- [x] Inventory UI (grid, equipment panel, tooltips, drag-and-drop, stats tab)
+- [x] Skill Bar UI (5 slots x 4 pages on right side, K toggle, [/] pages, drag-to-assign, cooldown overlay)
+- [x] Skills Tab (learned skills list, drag-to-assign to bar, activate rank with skill points)
 - [ ] Chat System UI (channel tabs, scrolling text buffer)
-- [ ] Mob Nameplates (level-colored by difficulty)
-- [ ] Player Nameplates (guild symbol + name + PK color)
+- [x] Mob Nameplates (level-colored by difficulty, HP bars when damaged)
+- [x] Player Nameplates (name + level + PK color + guild name)
+- [x] Gold drops on mob kill (floating text + inventory integration)
 
 ### Networking (Custom Proprietary)
 - [ ] ENet UDP transport layer
