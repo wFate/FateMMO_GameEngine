@@ -57,6 +57,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
+# Find OpenGL (cross-platform)
+if(WIN32)
+    set(OPENGL_LIB opengl32)
+else()
+    find_library(OPENGL_LIB GL PATHS /usr/lib/x86_64-linux-gnu /usr/lib)
+    if(NOT OPENGL_LIB)
+        set(OPENGL_LIB GL)
+    endif()
+endif()
+
 # ImGui is not a cmake project - build it as a static library
 add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
@@ -71,7 +81,7 @@ target_include_directories(imgui_lib PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
 )
-target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static opengl32)
+target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static ${OPENGL_LIB})
 # No loader define = ImGui uses its own minimal GL loader
 
 # =============================================================================
@@ -91,7 +101,7 @@ target_link_libraries(fate_engine PUBLIC
     nlohmann_json::nlohmann_json
     stb_image
     imgui_lib
-    opengl32
+    ${OPENGL_LIB}
 )
 
 # =============================================================================
