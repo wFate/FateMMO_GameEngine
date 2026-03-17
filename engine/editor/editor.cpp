@@ -4,6 +4,7 @@
 #include "engine/input/input.h"
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 
@@ -62,6 +63,7 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
 }
 
 void Editor::shutdown() {
+    viewportFbo_.destroy();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
@@ -88,35 +90,178 @@ void Editor::beginFrame() {
 // Render
 // ============================================================================
 
-void Editor::render(World* world, Camera* camera, SpriteBatch* batch) {
+void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
+    // Called while FBO is bound — draw in-viewport overlays via SpriteBatch
+    if (!open_ || !batch || !camera) return;
+
+    if (showGrid_) {
+        drawSceneGrid(batch, camera);
+    }
+}
+
+void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch) {
     if (!frameStarted_) return;
 
-    // HUD always visible
-    drawHUD(world);
+    // HUD always visible (when editor is closed, this is the only thing drawn)
+    if (!open_) {
+        drawHUD(world);
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        return;
+    }
 
-    if (open_) {
-        drawMenuBar(world);
-        drawToolbar(world);
-        // Draw background panels first (lower priority)
-        drawConsole(world);
-        LogViewer::instance().draw();
-        drawTilePalette(world, camera);
-        drawAssetBrowser(world, camera);
-        // Draw main panels last (higher focus priority)
-        drawHierarchy(world);
-        drawInspector();
+    // Full editor UI
+    drawDockSpace();
+    drawMenuBar(world);
+    drawToolbar(world);
+    drawSceneViewport();
+    drawViewportHUD(world);
+    drawHierarchy(world);
+    drawInspector();
+    drawConsole(world);
+    LogViewer::instance().draw();
+    drawTilePalette(world, camera);
+    drawAssetBrowser(world, camera);
+    drawDebugInfoPanel(world);
 
-        if (gridSnap_ && batch && camera) {
-            drawSceneGrid(batch, camera);
-        }
-
-        if (showDemoWindow_) {
-            ImGui::ShowDemoWindow(&showDemoWindow_);
-        }
+    if (showDemoWindow_) {
+        ImGui::ShowDemoWindow(&showDemoWindow_);
     }
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void Editor::drawDockSpace() {
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImGui::SetNextWindowViewport(viewport->ID);
+
+    ImGuiWindowFlags hostFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+                                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+                                  ImGuiWindowFlags_NoBackground;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
+    ImGui::Begin("##DockSpaceHost", nullptr, hostFlags);
+    ImGui::PopStyleVar(3);
+
+    ImGuiID dockspaceId = ImGui::GetID("EditorDockSpace");
+
+    if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr) {
+        ImGui::DockBuilderRemoveNode(dockspaceId);
+        ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_None);
+        ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->WorkSize);
+
+        ImGuiID dockMain = dockspaceId;
+        ImGuiID dockLeft = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.17f, nullptr, &dockMain);
+        ImGuiID dockRight = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.23f, nullptr, &dockMain);
+        ImGuiID dockBottom = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.25f, nullptr, &dockMain);
+
+        ImGui::DockBuilderDockWindow("Hierarchy", dockLeft);
+        ImGui::DockBuilderDockWindow("Scene", dockMain);
+        ImGui::DockBuilderDockWindow("Inspector", dockRight);
+        ImGui::DockBuilderDockWindow("Project", dockBottom);
+        ImGui::DockBuilderDockWindow("Console", dockBottom);
+        ImGui::DockBuilderDockWindow("Log", dockBottom);
+        ImGui::DockBuilderDockWindow("Debug Info", dockBottom);
+        ImGui::DockBuilderDockWindow("Tile Palette", dockRight);
+
+        ImGui::DockBuilderFinish(dockspaceId);
+    }
+
+    ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+    ImGui::End();
+}
+
+void Editor::drawSceneViewport() {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    if (ImGui::Begin("Scene")) {
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        viewportSize_ = {avail.x, avail.y};
+
+        ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+        viewportPos_ = {cursorPos.x, cursorPos.y};
+        viewportHovered_ = ImGui::IsWindowHovered();
+
+        int fbW = (int)avail.x;
+        int fbH = (int)avail.y;
+        if (fbW > 0 && fbH > 0) {
+            viewportFbo_.resize(fbW, fbH);
+
+            if (viewportFbo_.isValid()) {
+                ImGui::Image(
+                    (ImTextureID)(intptr_t)viewportFbo_.textureId(),
+                    avail,
+                    ImVec2(0, 1), ImVec2(1, 0)
+                );
+            }
+        }
+    } else {
+        viewportSize_ = {0, 0};
+        viewportHovered_ = false;
+    }
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
+void Editor::drawViewportHUD(World* world) {
+    if (!world || viewportSize_.x <= 0 || viewportSize_.y <= 0) return;
+
+    Entity* player = world->findByTag("player");
+    if (!player) return;
+
+    auto* t = player->getComponent<Transform>();
+    if (!t) return;
+
+    char buf[64];
+    snprintf(buf, sizeof(buf), "(%d, %d)", Coords::tileX(t->position.x), Coords::tileY(t->position.y));
+
+    ImVec2 textSize = ImGui::CalcTextSize(buf);
+    ImVec2 padding(12.0f, 6.0f);
+    float winWidth = textSize.x + padding.x * 2.0f;
+    float x = viewportPos_.x + (viewportSize_.x - winWidth) * 0.5f;
+    float y = viewportPos_.y + 6.0f;
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                             ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |
+                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing;
+
+    ImGui::SetNextWindowPos(ImVec2(x, y));
+    ImGui::SetNextWindowBgAlpha(0.5f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+    ImGui::Begin("##HUD_Viewport", nullptr, flags);
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "%s", buf);
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+}
+
+void Editor::drawDebugInfoPanel(World* world) {
+    if (ImGui::Begin("Debug Info")) {
+        ImGuiIO& io = ImGui::GetIO();
+        ImGui::Text("FPS: %.1f (%.2f ms)", io.Framerate, 1000.0f / io.Framerate);
+        ImGui::Separator();
+
+        if (world) {
+            ImGui::Text("Entities: %zu", world->entityCount());
+        }
+
+        ImGui::Separator();
+        ImGui::Text("Viewport: %dx%d", (int)viewportSize_.x, (int)viewportSize_.y);
+        ImGui::Text("FBO: %dx%d", viewportFbo_.width(), viewportFbo_.height());
+
+        ImGui::Separator();
+        ImGui::Text("Paused: %s", paused_ ? "Yes" : "No");
+        ImGui::Text("Tool: %s", currentTool_ == EditorTool::Move ? "Move" :
+                                 currentTool_ == EditorTool::Resize ? "Resize" :
+                                 currentTool_ == EditorTool::Paint ? "Paint" : "Erase");
+    }
+    ImGui::End();
 }
 
 // ============================================================================
@@ -357,7 +502,7 @@ void Editor::handleMouseUp() {
             auto* t = selectedEntity_->getComponent<Transform>();
             if (t && t->position != dragStartEntityPos_) {
                 auto cmd = std::make_unique<MoveCommand>();
-                cmd->entityId = selectedEntity_->id();
+                cmd->entityHandle = selectedEntity_->handle();
                 cmd->oldPos = dragStartEntityPos_;
                 cmd->newPos = t->position;
                 UndoSystem::instance().push(std::move(cmd));
@@ -372,7 +517,7 @@ void Editor::handleMouseUp() {
 
             if (currentSize != dragStartEntitySize_) {
                 auto cmd = std::make_unique<ResizeCommand>();
-                cmd->entityId = selectedEntity_->id();
+                cmd->entityHandle = selectedEntity_->handle();
                 cmd->oldSize = dragStartEntitySize_;
                 cmd->newSize = currentSize;
                 UndoSystem::instance().push(std::move(cmd));
@@ -433,9 +578,6 @@ void Editor::scanAssets() {
 }
 
 void Editor::drawAssetBrowser(World* world, Camera* camera) {
-    ImGui::SetNextWindowPos(ImVec2(0, ImGui::GetIO().DisplaySize.y - 220), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x, 220), ImGuiCond_FirstUseEver);
-
     if (ImGui::Begin("Project")) {
         if (ImGui::Button("Refresh")) scanAssets();
         ImGui::SameLine();
@@ -765,13 +907,6 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
 }
 
 void Editor::drawTilePalette(World* world, Camera* camera) {
-    // Docked at bottom-right, collapsible
-    ImGuiIO& io = ImGui::GetIO();
-    float panelW = 250.0f;
-    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - panelW - 330, 56), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(panelW, 300), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
-
     if (!ImGui::Begin("Tile Palette", nullptr, ImGuiWindowFlags_None)) {
         ImGui::End();
         return; // collapsed
@@ -1104,7 +1239,7 @@ void Editor::loadScene(World* world, const std::string& path) {
 
     // Clear existing entities
     world->forEachEntity([&](Entity* entity) {
-        world->destroyEntity(entity->id());
+        world->destroyEntity(entity->handle());
     });
     world->processDestroyQueue();
 
@@ -1314,13 +1449,7 @@ void Editor::drawMenuBar(World* world) {
 // ============================================================================
 
 void Editor::drawToolbar(World* world) {
-    ImGui::SetNextWindowPos(ImVec2(0, 26), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x, 36), ImGuiCond_Always);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(0, 0));
-
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
                              ImGuiWindowFlags_NoCollapse;
 
     if (ImGui::Begin("##Toolbar", nullptr, flags)) {
@@ -1354,7 +1483,7 @@ void Editor::drawToolbar(World* world) {
             if (ImGui::MenuItem("New Scene")) {
                 if (world) {
                     world->forEachEntity([&](Entity* e) {
-                        world->destroyEntity(e->id());
+                        world->destroyEntity(e->handle());
                     });
                     world->processDestroyQueue();
                     selectedEntity_ = nullptr;
@@ -1400,7 +1529,7 @@ void Editor::drawToolbar(World* world) {
             }
             if (ImGui::MenuItem("Delete Selected", "Delete", false, selectedEntity_ != nullptr)) {
                 if (world && selectedEntity_) {
-                    world->destroyEntity(selectedEntity_->id());
+                    world->destroyEntity(selectedEntity_->handle());
                     selectedEntity_ = nullptr;
                 }
             }
@@ -1449,8 +1578,12 @@ void Editor::drawToolbar(World* world) {
         ImGui::Text("|");
         ImGui::SameLine();
 
-        // Grid + Layer toggles
-        ImGui::Checkbox("Grid", &gridSnap_);
+        // Grid + Debug toggles
+        ImGui::Checkbox("Grid", &showGrid_);
+        ImGui::SameLine();
+        ImGui::Checkbox("Snap", &gridSnap_);
+        ImGui::SameLine();
+        ImGui::Checkbox("Colliders", &showCollisionDebug_);
         ImGui::SameLine();
         ImGui::Checkbox("Gnd", &showGroundLayer_);
         ImGui::SameLine();
@@ -1466,7 +1599,6 @@ void Editor::drawToolbar(World* world) {
         }
     }
     ImGui::End();
-    ImGui::PopStyleVar(2);
 }
 
 // ============================================================================
@@ -1474,9 +1606,6 @@ void Editor::drawToolbar(World* world) {
 // ============================================================================
 
 void Editor::drawHierarchy(World* world) {
-    ImGui::SetNextWindowPos(ImVec2(0, 64), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(280, 400), ImGuiCond_FirstUseEver);
-
     if (ImGui::Begin("Hierarchy")) {
         if (!world) {
             ImGui::Text("No active scene");
@@ -1590,9 +1719,6 @@ void Editor::drawHierarchy(World* world) {
 // ============================================================================
 
 void Editor::drawInspector() {
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 320, 56), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(320, 500), ImGuiCond_FirstUseEver);
-
     if (ImGui::Begin("Inspector")) {
         if (!selectedEntity_) {
             ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Select an entity");
@@ -2359,10 +2485,10 @@ void Editor::eraseTileAt(World* world, Camera* camera, const Vec2& screenPos,
         // Record for undo
         auto cmd = std::make_unique<DeleteCommand>();
         cmd->entityData = PrefabLibrary::entityToJson(nearest);
-        cmd->deletedId = nearest->id();
+        cmd->deletedHandle = nearest->handle();
         UndoSystem::instance().push(std::move(cmd));
 
-        world->destroyEntity(nearest->id());
+        world->destroyEntity(nearest->handle());
     }
 }
 
@@ -2511,7 +2637,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
 
             auto cmd = std::make_unique<CreateCommand>();
             cmd->entityData = PrefabLibrary::entityToJson(copy);
-            cmd->createdId = copy->id();
+            cmd->createdHandle = copy->handle();
             UndoSystem::instance().push(std::move(cmd));
         }
     }
@@ -2519,7 +2645,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     if (ctrl && scancode == SDL_SCANCODE_A) {
         selectedEntities_.clear();
         world->forEachEntity([&](Entity* e) {
-            selectedEntities_.insert(e->id());
+            selectedEntities_.insert(e->handle());
         });
         LOG_INFO("Editor", "Selected all (%zu entities)", selectedEntities_.size());
     }
@@ -2532,10 +2658,10 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     if (scancode == SDL_SCANCODE_DELETE && selectedEntity_) {
         auto cmd = std::make_unique<DeleteCommand>();
         cmd->entityData = PrefabLibrary::entityToJson(selectedEntity_);
-        cmd->deletedId = selectedEntity_->id();
+        cmd->deletedHandle = selectedEntity_->handle();
         UndoSystem::instance().push(std::move(cmd));
 
-        world->destroyEntity(selectedEntity_->id());
+        world->destroyEntity(selectedEntity_->handle());
         selectedEntity_ = nullptr;
     }
     // W = Move tool
