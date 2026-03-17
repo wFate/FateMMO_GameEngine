@@ -681,6 +681,7 @@ void GameApp::onUpdate(float deltaTime) {
 }
 
 void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
+    LOG_INFO("GAME_RENDER", "tilemap");
     // Tilemap (behind everything)
     if (tilemap_) {
         Mat4 vp = camera.getViewProjection();
@@ -689,15 +690,18 @@ void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
         batch.end();
     }
 
+    LOG_INFO("GAME_RENDER", "sprites");
     // Entity sprites
     if (renderSystem_) {
         renderSystem_->update(0.0f);
     }
 
+    LOG_INFO("GAME_RENDER", "floatingTexts");
     // Floating damage/XP text (rendered in world space)
     if (combatSystem_) {
         combatSystem_->renderFloatingTexts(batch, camera);
     }
+    LOG_INFO("GAME_RENDER", "floatingTexts done");
 
     // Debug overlays — only in editor/pause mode
     if (Editor::instance().isPaused()) {
