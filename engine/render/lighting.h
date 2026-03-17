@@ -14,7 +14,7 @@ struct PointLight {
 };
 
 struct LightingConfig {
-    Color ambientColor = {0.15f, 0.12f, 0.2f, 1.0f};
+    Color ambientColor = {1.0f, 1.0f, 1.0f, 1.0f};
     float ambientIntensity = 1.0f;
     bool enabled = true;
 };
