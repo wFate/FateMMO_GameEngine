@@ -4,6 +4,9 @@
 #include "engine/scene/scene_manager.h"
 #include "engine/editor/editor.h"
 #include "engine/input/input.h"
+#include "engine/asset/file_watcher.h"
+#include "engine/asset/asset_registry.h"
+#include "engine/asset/loaders.h"
 #include "engine/memory/arena.h"
 #include <SDL.h>
 #include <string>
@@ -18,6 +21,7 @@ struct AppConfig {
     bool vsync = true;
     int targetFPS = 60;
     float fixedTimestep = 1.0f / 30.0f; // 30Hz fixed update
+    std::string assetsDir;  // absolute path to assets/ directory (set by game)
 };
 
 // Base application class - game inherits from this
@@ -62,6 +66,9 @@ private:
     float fps_ = 0.0f;
     float fixedTimeAccumulator_ = 0.0f;
     FrameArena frameArena_;
+    FileWatcher fileWatcher_;
+    float elapsedTime_ = 0.0f;  // for reload debounce timestamps
+    std::string assetsDir_;     // cached from config
 
     void processEvents();
     void update();
