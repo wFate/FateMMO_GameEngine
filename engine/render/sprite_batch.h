@@ -12,6 +12,7 @@ struct SpriteVertex {
     float x, y;       // position
     float u, v;       // texcoord
     float r, g, b, a; // color tint
+    float renderType; // 0.0=sprite, 1.0=normal text, 2.0=outlined, 3.0=glow, 4.0=shadow
 };
 
 // Parameters for drawing a sprite
@@ -45,7 +46,7 @@ public:
     void drawRect(const Vec2& position, const Vec2& size, const Color& color, float depth = 0.0f);
 
     // Draw a quad with a raw GL texture ID (for font atlas, custom textures)
-    void drawTexturedQuad(unsigned int glTexId, const SpriteDrawParams& params);
+    void drawTexturedQuad(unsigned int glTexId, const SpriteDrawParams& params, float renderType = 0.0f);
 
     int drawCallCount() const { return drawCallCount_; }
     int spriteCount() const { return spriteCount_; }
@@ -59,6 +60,7 @@ private:
         std::shared_ptr<Texture> texture;
         unsigned int rawTexId = 0; // for font atlas / raw GL textures
         SpriteDrawParams params;
+        float renderType = 0.0f;
     };
 
     Shader shader_;
