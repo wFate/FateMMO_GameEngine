@@ -17,7 +17,7 @@ struct AnimationDef {
 
 // Animator component - handles sprite animation state
 struct Animator : public Component {
-    FATE_COMPONENT(Animator)
+    FATE_LEGACY_COMPONENT(Animator)
 
     std::unordered_map<std::string, AnimationDef> animations;
     std::string currentAnimation;

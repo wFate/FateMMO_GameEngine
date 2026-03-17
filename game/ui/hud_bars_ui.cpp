@@ -12,14 +12,11 @@ namespace fate {
 // ============================================================================
 
 void HudBarsUI::initDefaultLayout() {
-    ImGuiIO& io = ImGui::GetIO();
-    float sw = io.DisplaySize.x;
-    float sh = io.DisplaySize.y;
-    float margin = 6.0f;
-
-    hpBar = { margin, margin, sw * 0.30f, 18.0f };
-    mpBar = { sw - sw * 0.30f - margin, margin, sw * 0.30f, 18.0f };
-    xpBar = { (sw - sw * 0.30f) * 0.5f, sh - 14.0f - margin, sw * 0.30f, 14.0f };
+    // Normalized positions (0-1 range relative to viewport)
+    // These get mapped to the actual viewport rect in drawBarAt()
+    hpBar = { 0.01f, 0.01f, 0.30f, 0.04f };
+    mpBar = { 0.69f, 0.01f, 0.30f, 0.04f };
+    xpBar = { 0.35f, 0.96f, 0.30f, 0.03f };
 
     layoutInitialized_ = true;
 }
@@ -80,7 +77,7 @@ void HudBarsUI::draw(World* world) {
 // ============================================================================
 
 void HudBarsUI::drawSettings() {
-    if (!ImGui::Begin("HUD Layout", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (!ImGui::Begin("HUD Layout")) {
         ImGui::End();
         return;
     }
@@ -91,26 +88,25 @@ void HudBarsUI::drawSettings() {
 
     ImGui::Separator();
 
-    if (ImGui::CollapsingHeader("HP Bar", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("HP X", &hpBar.x, 1.0f, 0, 2000);
-        ImGui::DragFloat("HP Y", &hpBar.y, 1.0f, 0, 2000);
-        ImGui::DragFloat("HP Width", &hpBar.width, 1.0f, 20, 1000);
-        ImGui::DragFloat("HP Height", &hpBar.height, 0.5f, 6, 60);
-    }
+    ImGui::Text("Viewport: %.0fx%.0f", vpW_, vpH_);
+    ImGui::Separator();
 
-    if (ImGui::CollapsingHeader("MP Bar", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("MP X", &mpBar.x, 1.0f, 0, 2000);
-        ImGui::DragFloat("MP Y", &mpBar.y, 1.0f, 0, 2000);
-        ImGui::DragFloat("MP Width", &mpBar.width, 1.0f, 20, 1000);
-        ImGui::DragFloat("MP Height", &mpBar.height, 0.5f, 6, 60);
-    }
-
-    if (ImGui::CollapsingHeader("XP Bar", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat("XP X", &xpBar.x, 1.0f, 0, 2000);
-        ImGui::DragFloat("XP Y", &xpBar.y, 1.0f, 0, 2000);
-        ImGui::DragFloat("XP Width", &xpBar.width, 1.0f, 20, 1000);
-        ImGui::DragFloat("XP Height", &xpBar.height, 0.5f, 6, 60);
-    }
+    auto barEditor = [](const char* label, BarConfig& bar) {
+        if (ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen)) {
+            char id[32];
+            snprintf(id, sizeof(id), "%s X", label);
+            ImGui::DragFloat(id, &bar.x, 0.005f, 0.0f, 1.0f, "%.3f");
+            snprintf(id, sizeof(id), "%s Y", label);
+            ImGui::DragFloat(id, &bar.y, 0.005f, 0.0f, 1.0f, "%.3f");
+            snprintf(id, sizeof(id), "%s W", label);
+            ImGui::DragFloat(id, &bar.width, 0.005f, 0.01f, 1.0f, "%.3f");
+            snprintf(id, sizeof(id), "%s H", label);
+            ImGui::DragFloat(id, &bar.height, 0.002f, 0.005f, 0.2f, "%.3f");
+        }
+    };
+    barEditor("HP Bar", hpBar);
+    barEditor("MP Bar", mpBar);
+    barEditor("XP Bar", xpBar);
 
     ImGui::End();
 }
@@ -136,8 +132,14 @@ Entity* HudBarsUI::findPlayer(World* world) {
 void HudBarsUI::drawBarAt(ImDrawList* dl, const BarConfig& cfg,
                            float fillPct, ImU32 fillColor, ImU32 bgColor,
                            const char* text) {
-    ImVec2 pos(cfg.x, cfg.y);
-    ImVec2 br(cfg.x + cfg.width, cfg.y + cfg.height);
+    // Map normalized coords (0-1) to viewport screen pixels
+    float px = vpX_ + cfg.x * vpW_;
+    float py = vpY_ + cfg.y * vpH_;
+    float pw = cfg.width * vpW_;
+    float ph = cfg.height * vpH_;
+
+    ImVec2 pos(px, py);
+    ImVec2 br(px + pw, py + ph);
     float rounding = 2.0f;
 
     // Background
@@ -146,7 +148,7 @@ void HudBarsUI::drawBarAt(ImDrawList* dl, const BarConfig& cfg,
     // Fill
     if (fillPct > 0.0f) {
         dl->AddRectFilled(pos,
-            ImVec2(pos.x + cfg.width * fillPct, br.y),
+            ImVec2(pos.x + pw * fillPct, br.y),
             fillColor, rounding);
     }
 
@@ -155,8 +157,8 @@ void HudBarsUI::drawBarAt(ImDrawList* dl, const BarConfig& cfg,
 
     // Centered text with shadow
     ImVec2 textSize = ImGui::CalcTextSize(text);
-    float tx = pos.x + (cfg.width - textSize.x) * 0.5f;
-    float ty = pos.y + (cfg.height - textSize.y) * 0.5f;
+    float tx = pos.x + (pw - textSize.x) * 0.5f;
+    float ty = pos.y + (ph - textSize.y) * 0.5f;
     dl->AddText(ImVec2(tx + 1, ty + 1), IM_COL32(0, 0, 0, 200), text);
     dl->AddText(ImVec2(tx, ty), IM_COL32(255, 255, 255, 240), text);
 }

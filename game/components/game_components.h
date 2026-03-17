@@ -23,12 +23,12 @@ namespace fate {
 // ============================================================================
 
 struct CharacterStatsComponent : public Component {
-    FATE_COMPONENT(CharacterStatsComponent)
+    FATE_LEGACY_COMPONENT(CharacterStatsComponent)
     CharacterStats stats;
 };
 
 struct CombatControllerComponent : public Component {
-    FATE_COMPONENT(CombatControllerComponent)
+    FATE_LEGACY_COMPONENT(CombatControllerComponent)
 
     float baseAttackCooldown = 1.5f;  // Seconds between attacks
     float attackCooldownRemaining = 0.0f;
@@ -37,33 +37,33 @@ struct CombatControllerComponent : public Component {
 };
 
 struct DamageableComponent : public Component {
-    FATE_COMPONENT(DamageableComponent)
+    FATE_LEGACY_COMPONENT(DamageableComponent)
     // Marker component - entity can receive damage
     // Used by targeting system to identify valid targets
 };
 
 struct InventoryComponent : public Component {
-    FATE_COMPONENT(InventoryComponent)
+    FATE_LEGACY_COMPONENT(InventoryComponent)
     Inventory inventory;
 };
 
 struct SkillManagerComponent : public Component {
-    FATE_COMPONENT(SkillManagerComponent)
+    FATE_LEGACY_COMPONENT(SkillManagerComponent)
     SkillManager skills;
 };
 
 struct StatusEffectComponent : public Component {
-    FATE_COMPONENT(StatusEffectComponent)
+    FATE_LEGACY_COMPONENT(StatusEffectComponent)
     StatusEffectManager effects;
 };
 
 struct CrowdControlComponent : public Component {
-    FATE_COMPONENT(CrowdControlComponent)
+    FATE_LEGACY_COMPONENT(CrowdControlComponent)
     CrowdControlSystem cc;
 };
 
 struct TargetingComponent : public Component {
-    FATE_COMPONENT(TargetingComponent)
+    FATE_LEGACY_COMPONENT(TargetingComponent)
 
     uint32_t selectedTargetId = 0;  // Entity ID of selected target
     TargetType targetType = TargetType::None;
@@ -74,37 +74,37 @@ struct TargetingComponent : public Component {
 };
 
 struct ChatComponent : public Component {
-    FATE_COMPONENT(ChatComponent)
+    FATE_LEGACY_COMPONENT(ChatComponent)
     ChatManager chat;
 };
 
 struct GuildComponent : public Component {
-    FATE_COMPONENT(GuildComponent)
+    FATE_LEGACY_COMPONENT(GuildComponent)
     GuildManager guild;
 };
 
 struct PartyComponent : public Component {
-    FATE_COMPONENT(PartyComponent)
+    FATE_LEGACY_COMPONENT(PartyComponent)
     PartyManager party;
 };
 
 struct FriendsComponent : public Component {
-    FATE_COMPONENT(FriendsComponent)
+    FATE_LEGACY_COMPONENT(FriendsComponent)
     FriendsManager friends;
 };
 
 struct MarketComponent : public Component {
-    FATE_COMPONENT(MarketComponent)
+    FATE_LEGACY_COMPONENT(MarketComponent)
     MarketManager market;
 };
 
 struct TradeComponent : public Component {
-    FATE_COMPONENT(TradeComponent)
+    FATE_LEGACY_COMPONENT(TradeComponent)
     TradeManager trade;
 };
 
 struct NameplateComponent : public Component {
-    FATE_COMPONENT(NameplateComponent)
+    FATE_LEGACY_COMPONENT(NameplateComponent)
 
     std::string displayName;
     int displayLevel = 1;
@@ -121,19 +121,19 @@ struct NameplateComponent : public Component {
 // ============================================================================
 
 struct EnemyStatsComponent : public Component {
-    FATE_COMPONENT(EnemyStatsComponent)
+    FATE_LEGACY_COMPONENT(EnemyStatsComponent)
     EnemyStats stats;
 };
 
 struct MobAIComponent : public Component {
-    FATE_COMPONENT(MobAIComponent)
+    FATE_LEGACY_COMPONENT(MobAIComponent)
     MobAI ai;
     float tickAccumulator = 0.0f;  // DEAR: time since last AI tick
 };
 
 // Mob nameplate (separate from player nameplate for different rendering)
 struct MobNameplateComponent : public Component {
-    FATE_COMPONENT(MobNameplateComponent)
+    FATE_LEGACY_COMPONENT(MobNameplateComponent)
 
     std::string displayName;
     int level = 1;

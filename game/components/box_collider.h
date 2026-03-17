@@ -8,7 +8,7 @@ namespace fate {
 // offset is relative to the entity's Transform position (center-based)
 // size is the full width/height of the collision box
 struct BoxCollider : public Component {
-    FATE_COMPONENT(BoxCollider)
+    FATE_LEGACY_COMPONENT(BoxCollider)
 
     Vec2 offset;                   // offset from transform center
     Vec2 size = {32.0f, 32.0f};   // collision box size

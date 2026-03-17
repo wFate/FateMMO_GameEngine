@@ -1,4 +1,5 @@
 #pragma once
+#include "engine/ecs/component_registry.h"
 #include <cstdint>
 #include <string>
 #include <typeinfo>
@@ -6,7 +7,7 @@
 
 namespace fate {
 
-// Component type ID - each component class gets a unique ID at compile time
+// Legacy component type ID — still used by entity.h during migration
 using ComponentTypeId = std::type_index;
 
 template<typename T>
@@ -14,18 +15,16 @@ ComponentTypeId getComponentTypeId() {
     return std::type_index(typeid(T));
 }
 
-// Base component - all game components inherit from this
-// Components are pure data containers. Logic lives in Systems.
+// Legacy base component — kept during migration
 struct Component {
     virtual ~Component() = default;
     virtual const char* typeName() const = 0;
     virtual ComponentTypeId typeId() const = 0;
-
     bool enabled = true;
 };
 
-// Macro to reduce boilerplate when defining components
-#define FATE_COMPONENT(ClassName) \
+// Legacy macro — game code uses this during migration period
+#define FATE_LEGACY_COMPONENT(ClassName) \
     const char* typeName() const override { return #ClassName; } \
     ComponentTypeId typeId() const override { return fate::getComponentTypeId<ClassName>(); }
 

@@ -10,7 +10,7 @@ namespace fate {
 // Used for: camera bounds, zone transitions, PvP flags, spawn areas
 // Place as an entity with Transform (position = center) + ZoneComponent
 struct ZoneComponent : public Component {
-    FATE_COMPONENT(ZoneComponent)
+    FATE_LEGACY_COMPONENT(ZoneComponent)
 
     std::string zoneName;          // e.g., "Lighthouse_F1", "Town_Market"
     Vec2 size = {480.0f, 270.0f};  // width/height of the zone region
@@ -42,7 +42,7 @@ struct ZoneComponent : public Component {
 // Portal — triggers a transition when the player walks into it
 // Can transition within the same scene (zone-to-zone) or to a different scene
 struct PortalComponent : public Component {
-    FATE_COMPONENT(PortalComponent)
+    FATE_LEGACY_COMPONENT(PortalComponent)
 
     Vec2 triggerSize = {32.0f, 32.0f}; // collision area for the portal
 

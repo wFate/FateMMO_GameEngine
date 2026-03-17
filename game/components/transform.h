@@ -6,7 +6,7 @@ namespace fate {
 
 // Transform component - every visible entity needs this
 struct Transform : public Component {
-    FATE_COMPONENT(Transform)
+    FATE_LEGACY_COMPONENT(Transform)
 
     Vec2 position;
     Vec2 scale = Vec2::one();

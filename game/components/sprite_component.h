@@ -9,7 +9,7 @@ namespace fate {
 
 // Sprite component - renders a textured quad
 struct SpriteComponent : public Component {
-    FATE_COMPONENT(SpriteComponent)
+    FATE_LEGACY_COMPONENT(SpriteComponent)
 
     std::shared_ptr<Texture> texture;
     std::string texturePath; // for serialization/debugging

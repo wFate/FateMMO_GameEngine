@@ -9,7 +9,7 @@ namespace fate {
 // Vertices are relative to the entity's Transform position
 // Supports convex polygons for SAT collision detection
 struct PolygonCollider : public Component {
-    FATE_COMPONENT(PolygonCollider)
+    FATE_LEGACY_COMPONENT(PolygonCollider)
 
     std::vector<Vec2> points;  // vertices in local space (relative to entity center)
     bool isTrigger = false;

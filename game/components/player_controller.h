@@ -9,7 +9,7 @@ namespace fate {
 // isLocalPlayer = false means this entity is controlled by server/AI (other players, NPCs)
 // Prefab templates should save isLocalPlayer = false — it gets set at runtime
 struct PlayerController : public Component {
-    FATE_COMPONENT(PlayerController)
+    FATE_LEGACY_COMPONENT(PlayerController)
 
     float moveSpeed = 96.0f; // pixels per second (3 tiles/sec at 32px/tile)
     Direction facing = Direction::Down;
