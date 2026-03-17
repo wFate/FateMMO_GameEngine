@@ -92,6 +92,12 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Skill Bar UI | Done | 5 slots x 4 pages (20 total) on right side, K toggle, [/] page switch, drag-to-assign, cooldown overlay, right-click clear |
 | HUD Bars | Done | HP (green, top-left) / MP (blue, top-right) / XP (gold, bottom-center), positions adjustable in F3 editor HUD Layout panel |
 | Debug Info Panel | Done | FPS, pos, entities, player stats — shown only in F3 editor (moved out of F1 HUD) |
+| NPC Dialogue UI | Done | Click NPC to open, greeting + role buttons, quest accept/decline/complete, branching story dialogue |
+| Shop UI | Done | Merchant buy/sell grid, gold display, buy checks player gold |
+| Quest Log UI | Done | L key toggle, active quests with objective progress, abandon button, completed section |
+| Skill Trainer UI | Done | Lists learnable skills, level/gold/SP requirements, greyed out if not met |
+| Bank Storage UI | Done | Deposit/withdraw items and gold, fee display |
+| Teleporter UI | Done | Destination list with costs and level requirements |
 | D-Pad | Planned | Mobile touch control, bottom-left |
 | Action Buttons | Planned | Attack + skill circular buttons, bottom-right |
 | Chat UI | Planned | Text input + channel tabs + scrolling messages |
@@ -127,17 +133,28 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | SkillManagerComponent | Done | Wraps SkillManager (learning, cooldowns, 4x5 bar) |
 | StatusEffectComponent | Done | Wraps StatusEffectManager (buffs, debuffs, DoTs, shields) |
 | CrowdControlComponent | Done | Wraps CrowdControlSystem (stun/freeze/root/taunt) |
-| TargetingComponent | Done | Selected target ID, target type, max range |
+| TargetingComponent | Done | Selected target ID, target type, max range, click consumed flag |
 | ChatComponent | Done | Wraps ChatManager (7-channel chat) |
 | GuildComponent | Done | Wraps GuildManager (ranks, symbols, XP) |
 | PartyComponent | Done | Wraps PartyManager (3-player, invites, loot mode) |
 | FriendsComponent | Done | Wraps FriendsManager (50 friends, 100 blocks) |
 | MarketComponent | Done | Wraps MarketManager (listings, jackpot) |
 | TradeComponent | Done | Wraps TradeManager (two-step security) |
-| NameplateComponent | Done | Display name, level, PK color, guild info |
+| NameplateComponent | Done | Display name, level, PK color, guild info, role subtitle for NPCs |
 | EnemyStatsComponent | Done | Wraps EnemyStats (mob HP, threat table, scaling) |
 | MobAIComponent | Done | Wraps MobAI (TWOM cardinal AI, L-shaped chase) |
 | MobNameplateComponent | Done | Mob display name, level, boss/elite flags |
+| NPCComponent | Done | NPC identity, greeting, interaction radius, face direction |
+| QuestGiverComponent | Done | List of quest IDs this NPC offers |
+| QuestMarkerComponent | Done | `?`/`!` marker state and tier for quest givers |
+| ShopComponent | Done | Shop name and item inventory with buy/sell prices |
+| SkillTrainerComponent | Done | Trainer class and learnable skill list |
+| BankerComponent | Done | Storage slots and deposit fee config |
+| GuildNPCComponent | Done | Guild creation cost and level requirement |
+| TeleporterComponent | Done | Destination list with costs and level gates |
+| StoryNPCComponent | Done | Branching dialogue tree with action/condition system |
+| QuestComponent | Done | Wraps QuestManager (quest progress, active/completed tracking) |
+| BankStorageComponent | Done | Wraps BankStorage (persistent bank item/gold storage) |
 
 ### Systems
 | System | Status | Notes |
@@ -150,12 +167,15 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | MobAISystem | Done | Ticks MobAI for all mobs, scans for players, applies movement, fires attacks |
 | CombatActionSystem | Done | TWOM Option B targeting, click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP |
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment |
+| NPCInteractionSystem | Done | Click-to-interact with NPCs, range check, dialogue open/close, click consumption (prevents combat targeting) |
+| QuestSystem | Done | Routes mob kills/item pickups/NPC talks to quest progress, event-driven quest marker updates on all NPCs |
 
 ### Entity Factory
 | Feature | Status | Notes |
 |---------|--------|-------|
-| createPlayer() | Done | Assembles player with all 17+ components matching Unity prefab structure |
+| createPlayer() | Done | Assembles player with all 19+ components (includes QuestComponent, BankStorageComponent) |
 | createMob() | Done | Assembles mob with EnemyStats, MobAI, StatusEffects, nameplate, placeholder sprite |
+| createNPC() | Done | Assembles NPC from NPCTemplate with composable role components (quest/shop/trainer/bank/guild/teleporter/story) |
 | Class Configuration | Done | Warrior/Mage/Archer stats from CLAUDE.md class table (HP, STR, per-level gains) |
 | Test Mob Spawning | Done | 5 test mobs: Slime, Goblin, Wolf, Mushroom (passive), Forest Golem (boss) |
 
@@ -198,6 +218,17 @@ All 20 game systems from the C#/Unity prototype have been converted to C++ and l
 | Enchantment | `enchant_system.h` | 224 | EnchantmentSystem (601L) | +1 to +12 with success rates, protection scrolls, secret bonuses, stone tiers |
 | Item Instance | `item_instance.h` | 121 | ItemInstance (403L) | Item data with rolled stats, sockets, enchant, soulbound |
 | Item Stat Roller | `item_stat_roller.h/.cpp` | 340 | ItemStatRoller (399L) | Weighted stat rolling, exponential decay distribution, JSON serialization |
+
+### NPC & Quest System (New — TWOM-Inspired)
+| System | Files | Notes |
+|--------|-------|-------|
+| Quest Manager | `quest_manager.h/.cpp` | Quest progress tracking, accept/abandon/turn-in, 5 objective types (Kill/Collect/Deliver/TalkTo/PvP), max 10 active quests, prerequisite chains |
+| Quest Data | `quest_data.h` | Hardcoded quest registry with 6 starter quests, 4 TWOM tiers (Starter/Novice/Apprentice/Adept) |
+| NPC Types | `npc_types.h` | NPCTemplate, ShopItem, TrainableSkill, TeleportDestination structs |
+| Dialogue Tree | `dialogue_tree.h` | Branching dialogue with enum-based actions (GiveItem/GiveXP/GiveGold/SetFlag/Heal) and conditions (HasFlag/MinLevel/HasItem/HasClass) |
+| Bank Storage | `bank_storage.h` | Persistent bank storage with item slots, gold deposit/withdraw, configurable fee |
+
+See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 
 ### Game Systems (Ported — Needs Networking & Database Wiring)
 | System | Files | Lines | C# Source | Notes |
