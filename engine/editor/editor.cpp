@@ -155,7 +155,7 @@ void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
     // Called while FBO is bound — draw in-viewport overlays via SpriteBatch
     if (!open_ || !batch || !camera) return;
 
-    if (showGrid_) {
+    if (showGrid_ && paused_) {
         drawSceneGrid(batch, camera);
     }
 }
