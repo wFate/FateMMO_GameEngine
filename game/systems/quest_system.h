@@ -3,6 +3,7 @@
 #include "game/components/game_components.h"
 #include "game/components/player_controller.h"
 #include "game/shared/quest_data.h"
+#include "engine/core/logger.h"
 
 #include <string>
 
@@ -16,6 +17,7 @@ public:
     const char* name() const override { return "QuestSystem"; }
 
     void update(float /*dt*/) override {
+        LOG_INFO("TICK", "QuestSystem::update");
         if (!world_) return;
 
         // On first frame, wire up callbacks for event-driven marker updates

@@ -50,6 +50,7 @@ public:
     const char* name() const override { return "SpawnSystem"; }
 
     void update(float dt) override {
+        LOG_INFO("TICK", "SpawnSystem::update");
         gameTime_ += dt;
 
         world_->forEach<Transform, SpawnZoneComponent>(

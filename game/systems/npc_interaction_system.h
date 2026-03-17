@@ -33,6 +33,7 @@ public:
     Entity* localPlayer = nullptr;
 
     void update(float dt) override {
+        LOG_INFO("TICK", "NPCInteractionSystem::update");
         if (!world_ || !camera) return;
 
         // Find local player if not cached

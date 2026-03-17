@@ -1,4 +1,5 @@
 #include "game/shared/status_effects.h"
+#include "engine/core/logger.h"
 #include <algorithm>
 #include <cmath>
 
@@ -162,6 +163,7 @@ void StatusEffectManager::removeEffect(EffectType type) {
         rebuildLookup();
         return;
     }
+    LOG_INFO("ERASE_DEBUG", "status_effects.cpp:165 — erasing from activeEffects_ (size=%zu, idx=%zu)", activeEffects_.size(), idx);
     activeEffects_.erase(activeEffects_.begin() + static_cast<ptrdiff_t>(idx));
     rebuildLookup();
 }
@@ -339,6 +341,7 @@ void StatusEffectManager::tick(float deltaTime) {
             if (it->type == EffectType::Shield) {
                 currentShieldAmount_ = 0.0f;
             }
+            LOG_INFO("ERASE_DEBUG", "status_effects.cpp:342 — erasing expired effect from activeEffects_ (size=%zu)", activeEffects_.size());
             it = activeEffects_.erase(it);
             needsRebuild = true;
         } else {

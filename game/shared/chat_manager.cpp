@@ -24,6 +24,7 @@
 
 #include "game/shared/chat_manager.h"
 #include "game/shared/faction.h"
+#include "engine/core/logger.h"
 
 #include <algorithm>
 
@@ -85,6 +86,7 @@ void ChatManager::addToHistory(const ChatMessage& msg) {
 
     // Cap at MAX_CHAT_HISTORY
     if (static_cast<int>(chatHistory.size()) > ChatConstants::MAX_CHAT_HISTORY) {
+        LOG_INFO("ERASE_DEBUG", "chat_manager.cpp:88 — erasing from chatHistory (size=%zu)", chatHistory.size());
         chatHistory.erase(chatHistory.begin());
     }
 

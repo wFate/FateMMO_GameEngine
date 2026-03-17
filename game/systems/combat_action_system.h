@@ -46,6 +46,7 @@ public:
     Camera* camera = nullptr;  // Set by GameApp for click-to-target
 
     void update(float dt) override {
+        LOG_INFO("TICK", "CombatActionSystem::update");
         gameTime_ += dt;
 
         // Rebuild mob spatial hash each frame
@@ -743,6 +744,7 @@ private:
         }
 
         // Remove expired texts
+        LOG_INFO("ERASE_DEBUG", "combat_action_system.h:746 — erase-remove on floatingTexts_ (size=%zu)", floatingTexts_.size());
         floatingTexts_.erase(
             std::remove_if(floatingTexts_.begin(), floatingTexts_.end(),
                 [](const FloatingText& ft) { return ft.elapsed >= ft.lifetime; }),
