@@ -9,6 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # =============================================================================
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
+# Allow older FetchContent packages with cmake_minimum_required < 3.5
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
 
 # SDL2
 FetchContent_Declare(
@@ -58,6 +60,26 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
+# doctest (header-only test framework)
+FetchContent_Declare(
+    doctest
+    GIT_REPOSITORY https://github.com/doctest/doctest.git
+    GIT_TAG        v2.4.11
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(doctest)
+
+# Tracy Profiler
+FetchContent_Declare(
+    tracy
+    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+    GIT_TAG        v0.11.1
+    GIT_SHALLOW    TRUE
+)
+option(TRACY_ENABLE "Enable Tracy profiler" ON)
+option(TRACY_ON_DEMAND "Enable Tracy on-demand mode" ON)
+FetchContent_MakeAvailable(tracy)
+
 # Find OpenGL (cross-platform)
 if(WIN32)
     set(OPENGL_LIB opengl32)
@@ -103,6 +125,7 @@ target_link_libraries(fate_engine PUBLIC
     stb_image
     imgui_lib
     ${OPENGL_LIB}
+    TracyClient
 )
 
 # =============================================================================
@@ -132,8 +155,25 @@ add_custom_command(TARGET FateEngine POST_BUILD
 )
 
 # =============================================================================
+# Test Executable
+# =============================================================================
+file(GLOB_RECURSE TEST_SOURCES tests/*.cpp)
+if(TEST_SOURCES)
+    add_executable(fate_tests ${TEST_SOURCES})
+    target_link_libraries(fate_tests PRIVATE fate_engine doctest::doctest)
+    target_include_directories(fate_tests PRIVATE ${CMAKE_SOURCE_DIR})
+endif()
+
+# =============================================================================
 # Compiler settings
 # =============================================================================
+# Sanitizer presets (use -DCMAKE_BUILD_TYPE=ASan)
+if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    set(CMAKE_CXX_FLAGS_ASAN "/fsanitize=address /Zi /Od" CACHE STRING "")
+    set(CMAKE_EXE_LINKER_FLAGS_ASAN "/DEBUG" CACHE STRING "")
+    # Note: MSVC does not support UBSan. Available via Clang-cl only.
+endif()
+
 if(MSVC)
     target_compile_definitions(fate_engine PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_definitions(FateEngine PRIVATE _CRT_SECURE_NO_WARNINGS)

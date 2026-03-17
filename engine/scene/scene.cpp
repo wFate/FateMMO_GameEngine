@@ -1,10 +1,14 @@
 #include "engine/scene/scene.h"
+#include "engine/memory/zone_snapshot.h"
 #include "engine/core/logger.h"
 #include <fstream>
 
 namespace fate {
 
-Scene::Scene(const std::string& name) : name_(name) {
+Scene::Scene(const std::string& name)
+    : name_(name),
+      zoneArena_(256 * 1024 * 1024)   // 256 MB reserved for zone data
+{
     metadata_.sceneId = name;
     metadata_.displayName = name;
 }
@@ -69,11 +73,32 @@ Entity* Scene::createEntityFromJson(const nlohmann::json& def) {
 }
 
 void Scene::onEnter() {
+    isLoading_ = true;
+    loadProgress_ = 0.0f;
+
     LOG_INFO("Scene", "Entering scene: %s (%s)", metadata_.displayName.c_str(), name_.c_str());
+
+    // Restore from snapshot if one exists
+    if (snapshot_ && snapshot_->hasData()) {
+        LOG_INFO("Scene", "Restoring zone snapshot for '%s' (%zu entities, %zu spawn zones)",
+                 name_.c_str(), snapshot_->entities.size(), snapshot_->spawnZones.size());
+        // TODO: actual deserialization — for now just acknowledge the snapshot exists
+    }
+
+    loadProgress_ = 1.0f;
+    isLoading_ = false;
 }
 
 void Scene::onExit() {
     LOG_INFO("Scene", "Exiting scene: %s", name_.c_str());
+
+    // Placeholder: save zone state to snapshot.
+    // Full implementation will serialize spawn/mob state into snapshot_.
+    // For now, just clear the world to release ECS resources.
+    // (World destructor handles cleanup when Scene is destroyed.)
+
+    // Reset the zone arena — all zone-level allocations are freed in O(1)
+    zoneArena_.reset();
 }
 
 } // namespace fate

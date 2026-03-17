@@ -20,6 +20,12 @@ public:
     void setVisible(bool v) { visible_ = v; }
     void toggle() { visible_ = !visible_; }
 
+    // Set the viewport rectangle for positioning bars inside the game viewport
+    // Call before draw() each frame. Bars will be positioned relative to this rect.
+    void setViewportRect(float x, float y, float w, float h) {
+        vpX_ = x; vpY_ = y; vpW_ = w; vpH_ = h;
+    }
+
     // Draw HUD bars (call every frame)
     void draw(World* world);
 
@@ -42,6 +48,9 @@ private:
 
     bool visible_ = true;
     bool layoutInitialized_ = false;
+
+    // Viewport rect (screen pixels) — bars are positioned/scaled relative to this
+    float vpX_ = 0, vpY_ = 0, vpW_ = 0, vpH_ = 0;
 
     void initDefaultLayout();
     Entity* findPlayer(World* world);

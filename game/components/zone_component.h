@@ -1,5 +1,5 @@
 #pragma once
-#include "engine/ecs/component.h"
+#include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
 #include <string>
 #include <vector>
@@ -9,7 +9,7 @@ namespace fate {
 // Zone region — defines a named area within a scene
 // Used for: camera bounds, zone transitions, PvP flags, spawn areas
 // Place as an entity with Transform (position = center) + ZoneComponent
-struct ZoneComponent : public Component {
+struct ZoneComponent {
     FATE_COMPONENT(ZoneComponent)
 
     std::string zoneName;          // e.g., "Lighthouse_F1", "Town_Market"
@@ -41,7 +41,7 @@ struct ZoneComponent : public Component {
 
 // Portal — triggers a transition when the player walks into it
 // Can transition within the same scene (zone-to-zone) or to a different scene
-struct PortalComponent : public Component {
+struct PortalComponent {
     FATE_COMPONENT(PortalComponent)
 
     Vec2 triggerSize = {32.0f, 32.0f}; // collision area for the portal

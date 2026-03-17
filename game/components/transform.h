@@ -1,11 +1,11 @@
 #pragma once
-#include "engine/ecs/component.h"
+#include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
 
 namespace fate {
 
 // Transform component - every visible entity needs this
-struct Transform : public Component {
+struct Transform {
     FATE_COMPONENT(Transform)
 
     Vec2 position;

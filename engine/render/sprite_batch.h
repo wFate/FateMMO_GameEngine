@@ -75,6 +75,11 @@ private:
     int spriteCount_ = 0;
     bool drawing_ = false;
 
+    // Dirty flag: skip sort when draw order is unchanged from last frame
+    bool sortDirty_ = true;
+    uint32_t prevSortHash_ = 0;
+    size_t prevEntryCount_ = 0;
+
     void flush();
     void createWhiteTexture();
 };

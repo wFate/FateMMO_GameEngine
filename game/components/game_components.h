@@ -1,5 +1,5 @@
 #pragma once
-#include "engine/ecs/component.h"
+#include "engine/ecs/component_registry.h"
 #include "game/shared/character_stats.h"
 #include "game/shared/enemy_stats.h"
 #include "game/shared/mob_ai.h"
@@ -22,12 +22,12 @@ namespace fate {
 // Player Components
 // ============================================================================
 
-struct CharacterStatsComponent : public Component {
+struct CharacterStatsComponent {
     FATE_COMPONENT(CharacterStatsComponent)
     CharacterStats stats;
 };
 
-struct CombatControllerComponent : public Component {
+struct CombatControllerComponent {
     FATE_COMPONENT(CombatControllerComponent)
 
     float baseAttackCooldown = 1.5f;  // Seconds between attacks
@@ -36,33 +36,33 @@ struct CombatControllerComponent : public Component {
     // not stored here. This component holds per-entity combat config only.
 };
 
-struct DamageableComponent : public Component {
+struct DamageableComponent {
     FATE_COMPONENT(DamageableComponent)
     // Marker component - entity can receive damage
     // Used by targeting system to identify valid targets
 };
 
-struct InventoryComponent : public Component {
-    FATE_COMPONENT(InventoryComponent)
+struct InventoryComponent {
+    FATE_COMPONENT_COLD(InventoryComponent)
     Inventory inventory;
 };
 
-struct SkillManagerComponent : public Component {
-    FATE_COMPONENT(SkillManagerComponent)
+struct SkillManagerComponent {
+    FATE_COMPONENT_COLD(SkillManagerComponent)
     SkillManager skills;
 };
 
-struct StatusEffectComponent : public Component {
-    FATE_COMPONENT(StatusEffectComponent)
+struct StatusEffectComponent {
+    FATE_COMPONENT_COLD(StatusEffectComponent)
     StatusEffectManager effects;
 };
 
-struct CrowdControlComponent : public Component {
-    FATE_COMPONENT(CrowdControlComponent)
+struct CrowdControlComponent {
+    FATE_COMPONENT_COLD(CrowdControlComponent)
     CrowdControlSystem cc;
 };
 
-struct TargetingComponent : public Component {
+struct TargetingComponent {
     FATE_COMPONENT(TargetingComponent)
 
     uint32_t selectedTargetId = 0;  // Entity ID of selected target
@@ -73,38 +73,38 @@ struct TargetingComponent : public Component {
     void clearTarget() { selectedTargetId = 0; targetType = TargetType::None; }
 };
 
-struct ChatComponent : public Component {
-    FATE_COMPONENT(ChatComponent)
+struct ChatComponent {
+    FATE_COMPONENT_COLD(ChatComponent)
     ChatManager chat;
 };
 
-struct GuildComponent : public Component {
-    FATE_COMPONENT(GuildComponent)
+struct GuildComponent {
+    FATE_COMPONENT_COLD(GuildComponent)
     GuildManager guild;
 };
 
-struct PartyComponent : public Component {
-    FATE_COMPONENT(PartyComponent)
+struct PartyComponent {
+    FATE_COMPONENT_COLD(PartyComponent)
     PartyManager party;
 };
 
-struct FriendsComponent : public Component {
-    FATE_COMPONENT(FriendsComponent)
+struct FriendsComponent {
+    FATE_COMPONENT_COLD(FriendsComponent)
     FriendsManager friends;
 };
 
-struct MarketComponent : public Component {
-    FATE_COMPONENT(MarketComponent)
+struct MarketComponent {
+    FATE_COMPONENT_COLD(MarketComponent)
     MarketManager market;
 };
 
-struct TradeComponent : public Component {
-    FATE_COMPONENT(TradeComponent)
+struct TradeComponent {
+    FATE_COMPONENT_COLD(TradeComponent)
     TradeManager trade;
 };
 
-struct NameplateComponent : public Component {
-    FATE_COMPONENT(NameplateComponent)
+struct NameplateComponent {
+    FATE_COMPONENT_COLD(NameplateComponent)
 
     std::string displayName;
     int displayLevel = 1;
@@ -120,19 +120,19 @@ struct NameplateComponent : public Component {
 // Mob/Enemy Components
 // ============================================================================
 
-struct EnemyStatsComponent : public Component {
+struct EnemyStatsComponent {
     FATE_COMPONENT(EnemyStatsComponent)
     EnemyStats stats;
 };
 
-struct MobAIComponent : public Component {
+struct MobAIComponent {
     FATE_COMPONENT(MobAIComponent)
     MobAI ai;
     float tickAccumulator = 0.0f;  // DEAR: time since last AI tick
 };
 
 // Mob nameplate (separate from player nameplate for different rendering)
-struct MobNameplateComponent : public Component {
+struct MobNameplateComponent {
     FATE_COMPONENT(MobNameplateComponent)
 
     std::string displayName;

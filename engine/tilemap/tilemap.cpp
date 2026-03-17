@@ -208,8 +208,9 @@ void ChunkManager::buildFromLayers(const std::vector<TilemapLayer>& layers,
                 cd.chunkX     = cx;
                 cd.chunkY     = cy;
                 cd.layerIndex = li;
-                cd.state      = ChunkState::Active;
-                cd.dirty      = false;
+                cd.state       = ChunkState::Active;
+                cd.ticketLevel = 4; // matches Active
+                cd.dirty       = false;
                 cd.tiles.resize(CHUNK_SIZE * CHUNK_SIZE, 0);
 
                 int tileStartX = cx * CHUNK_SIZE;

@@ -3,6 +3,7 @@
 #include "engine/core/logger.h"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace fate {
 
@@ -116,6 +117,7 @@ void SpriteBatch::begin(const Mat4& viewProjection) {
     drawCallCount_ = 0;
     spriteCount_ = 0;
     drawing_ = true;
+    sortDirty_ = true;
 }
 
 void SpriteBatch::draw(const std::shared_ptr<Texture>& texture, const SpriteDrawParams& params) {
@@ -144,20 +146,37 @@ void SpriteBatch::end() {
 
     if (entries_.empty()) return;
 
-    // Sort by depth (back to front), then by texture to minimize state changes
-    // Helper to get a sortable texture key
-    auto texKey = [](const BatchEntry& e) -> uintptr_t {
-        if (e.texture) return (uintptr_t)e.texture.get();
-        if (e.rawTexId) return (uintptr_t)e.rawTexId;
-        return 0;
-    };
+    // Compute FNV-1a hash over sort keys (texture id + depth) to detect order changes
+    uint32_t hash = 2166136261u;
+    for (const auto& entry : entries_) {
+        uint32_t texId = entry.texture ? entry.texture->id() : entry.rawTexId;
+        uint32_t depthBits;
+        std::memcpy(&depthBits, &entry.params.depth, sizeof(depthBits));
+        hash ^= texId;     hash *= 16777619u;
+        hash ^= depthBits; hash *= 16777619u;
+    }
 
-    std::sort(entries_.begin(), entries_.end(),
-        [&texKey](const BatchEntry& a, const BatchEntry& b) {
-            if (a.params.depth != b.params.depth)
-                return a.params.depth < b.params.depth;
-            return texKey(a) < texKey(b);
-        });
+    if (hash == prevSortHash_ && entries_.size() == prevEntryCount_ && !sortDirty_) {
+        // Skip sort — same order as last frame
+    } else {
+        // Sort by depth (back to front), then by texture to minimize state changes
+        auto texKey = [](const BatchEntry& e) -> uintptr_t {
+            if (e.texture) return (uintptr_t)e.texture.get();
+            if (e.rawTexId) return (uintptr_t)e.rawTexId;
+            return 0;
+        };
+
+        std::sort(entries_.begin(), entries_.end(),
+            [&texKey](const BatchEntry& a, const BatchEntry& b) {
+                if (a.params.depth != b.params.depth)
+                    return a.params.depth < b.params.depth;
+                return texKey(a) < texKey(b);
+            });
+
+        prevSortHash_ = hash;
+        prevEntryCount_ = entries_.size();
+        sortDirty_ = false;
+    }
 
     flush();
 }

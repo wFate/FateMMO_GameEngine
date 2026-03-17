@@ -1,5 +1,5 @@
 #pragma once
-#include "engine/ecs/component.h"
+#include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
 
 namespace fate {
@@ -7,7 +7,7 @@ namespace fate {
 // Axis-Aligned Bounding Box collider
 // offset is relative to the entity's Transform position (center-based)
 // size is the full width/height of the collision box
-struct BoxCollider : public Component {
+struct BoxCollider {
     FATE_COMPONENT(BoxCollider)
 
     Vec2 offset;                   // offset from transform center
