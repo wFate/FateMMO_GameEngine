@@ -148,8 +148,9 @@ private:
     bool wantsMouse_ = false;
     bool showDemoWindow_ = false;
 
-    // Cached world pointer for menu bar / viewport toolbar (set each frame in renderUI)
+    // Cached pointers for menu bar / viewport toolbar (set each frame in renderUI)
     World* dockWorld_ = nullptr;
+    Camera* dockCamera_ = nullptr;
 
     // Viewport FBO
     Framebuffer viewportFbo_;
@@ -165,6 +166,10 @@ private:
 
     // Display resolution preset (0 = Free Aspect, fills viewport)
     int displayPresetIdx_ = 0;
+
+    // Saved camera state — restored when returning to edit mode
+    Vec2 savedCamPos_ = {0, 0};
+    float savedCamZoom_ = 1.0f;
 
     bool openSavePrefab_ = false;
 
