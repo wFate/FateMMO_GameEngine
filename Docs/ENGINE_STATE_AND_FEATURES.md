@@ -159,6 +159,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | StoryNPCComponent | Done | Branching dialogue tree with action/condition system |
 | QuestComponent | Done | Wraps QuestManager (quest progress, active/completed tracking) |
 | BankStorageComponent | Done | Wraps BankStorage (persistent bank item/gold storage) |
+| FactionComponent | Done | Player faction (Xyros/Fenor/Zethos/Solis), permanent, set at creation |
+| PetComponent | Done | Equipped pet instance, auto-loot radius, hasPet() check |
 
 ### Systems
 | System | Status | Notes |
@@ -169,7 +171,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | SpriteRenderSystem | Done | Frustum culled, depth sorted |
 | GameplaySystem | Done | Ticks StatusEffects, CrowdControl, HP/MP regen, PK decay, respawn, nameplates |
 | MobAISystem | Done | Ticks MobAI for all mobs, scans for players, applies movement, fires attacks |
-| CombatActionSystem | Done | TWOM Option B targeting, click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP |
+| CombatActionSystem | Done | TWOM Option B targeting, click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP, same-faction PvP block |
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment |
 | NPCInteractionSystem | Done | Click-to-interact with NPCs, range check, dialogue open/close, click consumption (prevents combat targeting) |
 | QuestSystem | Done | Routes mob kills/item pickups/NPC talks to quest progress, event-driven quest marker updates on all NPCs |
@@ -177,7 +179,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 ### Entity Factory
 | Feature | Status | Notes |
 |---------|--------|-------|
-| createPlayer() | Done | Assembles player with all 19+ components (includes QuestComponent, BankStorageComponent) |
+| createPlayer() | Done | Assembles player with all 21+ components (includes FactionComponent, PetComponent), faction-based spawn position |
 | createMob() | Done | Assembles mob with EnemyStats, MobAI, StatusEffects, nameplate, placeholder sprite |
 | createNPC() | Done | Assembles NPC from NPCTemplate with composable role components (quest/shop/trainer/bank/guild/teleporter/story) |
 | Class Configuration | Done | Warrior/Mage/Archer stats from CLAUDE.md class table (HP, STR, per-level gains) |
@@ -244,10 +246,13 @@ See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 | Party Manager | `party_manager.h/.cpp` | 410 | NetworkPartyManager | 3-player parties, +10%/member XP bonus, loot mode, invites **(needs net/DB)** |
 | Guild Manager | `guild_manager.h/.cpp` | 280 | NetworkGuildManager | TWOM guilds, ranks, 16x16 pixel symbols, XP contribution **(needs net/DB)** |
 | Friends Manager | `friends_manager.h/.cpp` | 377 | NetworkFriendsManager | 50 friends, 100 blocks, profile inspection, online status **(needs net/DB)** |
-| Chat Manager | `chat_manager.h/.cpp` | 120 | NetworkChatManager | 7 channels (Map/Global/Trade/Party/Guild/Private/System) **(needs net/DB)** |
+| Chat Manager | `chat_manager.h/.cpp` | 120 | NetworkChatManager | 7 channels (Map/Global/Trade/Party/Guild/Private/System), cross-faction garbling on public channels **(needs net/DB)** |
 | Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(needs net/DB)** |
 | Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(needs net/DB)** |
 | Gauntlet | `gauntlet.h/.cpp` | 425 | GauntletConfig + GauntletInstance | Wave survival PvPvE, team scoring, tiebreaker elimination **(needs net/DB)** |
+| Faction System | `faction.h` | ~130 | FactionRegistry + FactionChatGarbler | 4 factions (Xyros/Fenor/Zethos/Solis), registry, deterministic chat garbling, same-faction checks |
+| Pet System | `pet_system.h/.cpp` | ~120 | PetDefinition + PetInstance + PetSystem | Leveling, rarity-tiered stats (HP/Crit/XP bonus), XP sharing (50%), player-level cap |
+| Stat Enchant System | `stat_enchant_system.h` | ~70 | StatEnchantSystem | Accessory enchanting (Belt/Ring/Necklace/Cloak), 6-tier roll table, HP/MP x10 scaling |
 
 ### Key Formulas Preserved (Exact Match to C# Prototype)
 ```
@@ -443,11 +448,34 @@ Spawn zones are spatial entities you place and resize in the scene editor. Mobs 
 - Shop UI, Quest Log UI, Skill Trainer UI, Bank Storage UI, Teleporter UI
 - 6 starter quests, NPC templates with composable roles
 
-**Additional game systems:**
-- Faction system with registry and chat garbler
-- Pet system with leveling and stat calculation
-- Stat enchant system for accessory enchanting
-- Mage double-cast mechanic with hidden instant-cast window
+**Faction system (4 factions: Xyros, Fenor, Zethos, Solis):**
+- FactionRegistry with definitions (color, home village, merchant NPC)
+- FactionComponent on all players, set permanently at character creation
+- Same-faction PvP block in CombatActionSystem (faction check before any attack)
+- Cross-faction chat garbling: public channels (Map/Global/Trade) garbled via deterministic FactionChatGarbler; Party/Guild/Whisper/System channels pass through
+- ChatManager.localFaction set at player creation for client-side garble routing
+- Faction-based spawn position (each faction starts at distinct map offset)
+
+**Pet system (leveling, rarity-tiered stats, auto-loot):**
+- PetDefinition (base stats + per-level growth, rarity determines stat quality)
+- PetInstance (level, XP, auto-loot toggle, tradable by default)
+- PetSystem static utility: effectiveHP/CritRate/ExpBonus, addXP with player-level cap (max 50)
+- PetComponent on all players (empty by default, equip pet to activate)
+- Pets gain 50% of player XP, cannot outlevel owner
+
+**Stat enchant system (accessory-only enchanting):**
+- StatEnchantSystem: 7 scroll types (STR/INT/DEX/VIT/WIS/HP/MP), Belt/Ring/Necklace/Cloak only
+- 6-tier outcome table: Fail 25%, +1 30%, +2 25%, +3 12%, +4 6%, +5 2%
+- Fail removes existing enchant (risk/reward), new enchant replaces previous, no item break
+- HP/MP scrolls use x10 scaling (+10/+20/+30/+40/+50)
+- statEnchantType/statEnchantValue fields on ItemInstance
+
+**Mage double-cast mechanic (hidden instant-cast window):**
+- SkillDefinition gains castTime, enablesDoubleCast, doubleCastWindow fields
+- Casting a double-cast-enabled spell opens a timed window (default 2s)
+- Next spell within window is instant cast (zero cast time), mana/cooldown still apply
+- No UI indicators — players discover through experimentation
+- Window expires on use, timeout, or CC (not frozen by stun/root)
 
 **Files: 56 changed, +7,831 lines across 21 commits**
 
@@ -890,6 +918,9 @@ game/
 │   ├── enemy_stats.h/.cpp       # Mob stats, threat table
 │   ├── combat_system.h/.cpp     # Hit rate, resist, block, armor
 │   ├── mob_ai.h/.cpp            # TWOM cardinal AI
+│   ├── faction.h                # Faction enum, FactionRegistry, FactionChatGarbler
+│   ├── pet_system.h/.cpp        # PetDefinition, PetInstance, PetSystem (leveling, stats)
+│   ├── stat_enchant_system.h    # StatEnchantSystem (accessory enchanting, 6-tier rolls)
 │   ├── (16 more systems...)     # Inventory, skills, social, etc.
 │   └── gauntlet.h/.cpp          # Wave PvPvE instance
 │
@@ -900,7 +931,9 @@ game/
 │   ├── box_collider.h           # AABB collision
 │   ├── polygon_collider.h       # SAT collision
 │   ├── animator.h               # Animation state machine
-│   └── game_components.h        # 18 game logic wrappers
+│   ├── game_components.h        # 18 game logic wrappers
+│   ├── faction_component.h      # FactionComponent (player faction)
+│   └── pet_component.h          # PetComponent (equipped pet, auto-loot)
 │
 ├── systems/                     # ECS systems (tick logic per frame)
 │   ├── movement_system.h        # WASD input + collision
@@ -958,6 +991,10 @@ game/
 - [x] MarketManager (listings, tax, merchant pass, jackpot)
 - [x] Gauntlet (wave survival PvPvE instance)
 - [x] SpawnSystem (spawn zones with visual editor, respawn timers, zone containment)
+- [x] FactionSystem (4 factions, registry, same-faction PvP block, chat garbling, faction spawn)
+- [x] PetSystem (leveling, rarity-tiered stats, XP sharing, auto-loot, tradable)
+- [x] StatEnchantSystem (accessory enchanting, 6-tier rolls, no break risk)
+- [x] Mage Double-Cast (hidden instant-cast window, castTime field on SkillDefinition)
 
 ### ECS Integration
 - [x] Component wrappers for all 20 game systems (game_components.h)
