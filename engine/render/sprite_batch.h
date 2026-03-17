@@ -7,6 +7,8 @@
 
 namespace fate {
 
+enum class BlendMode { Alpha, Additive };
+
 // A single sprite draw call's data
 struct SpriteVertex {
     float x, y;       // position
@@ -51,6 +53,8 @@ public:
     int drawCallCount() const { return drawCallCount_; }
     int spriteCount() const { return spriteCount_; }
 
+    void setBlendMode(BlendMode mode);
+
 private:
     static constexpr int MAX_SPRITES = 10000;
     static constexpr int MAX_VERTICES = MAX_SPRITES * 4;
@@ -81,6 +85,7 @@ private:
     bool sortDirty_ = true;
     uint32_t prevSortHash_ = 0;
     size_t prevEntryCount_ = 0;
+    BlendMode blendMode_ = BlendMode::Alpha;
 
     void flush();
     void createWhiteTexture();
