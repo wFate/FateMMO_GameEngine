@@ -36,6 +36,7 @@ void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
 
         bloomDS.bind();
         glClear(GL_COLOR_BUFFER_BIT);
+        glDisable(GL_BLEND);
 
         s_bloomExtractShader.bind();
         s_bloomExtractShader.setInt("u_scene", 0);
@@ -47,6 +48,7 @@ void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
         FullscreenQuad::instance().draw();
 
         s_bloomExtractShader.unbind();
+        glEnable(GL_BLEND);
         bloomDS.unbind();
     }});
 
@@ -62,6 +64,8 @@ void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
         auto& bloomDS = ctx.graph->getFBO("BloomDownsample", halfW, halfH);
         auto& blurH = ctx.graph->getFBO("BloomBlurH", halfW, halfH);
         auto& blurV = ctx.graph->getFBO("BloomBlurV", halfW, halfH);
+
+        glDisable(GL_BLEND);
 
         s_blurShader.bind();
         s_blurShader.setInt("u_texture", 0);
@@ -84,6 +88,8 @@ void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
         blurV.unbind();
 
         s_blurShader.unbind();
+
+        glEnable(GL_BLEND);
     }});
 
     // Pass: Post-Process Composite
@@ -100,6 +106,7 @@ void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
 
         postProcess.bind();
         glClear(GL_COLOR_BUFFER_BIT);
+        glDisable(GL_BLEND);
 
         s_postProcessShader.bind();
         s_postProcessShader.setInt("u_scene", 0);
@@ -120,6 +127,7 @@ void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
 
         glActiveTexture(GL_TEXTURE0); // reset active unit
         s_postProcessShader.unbind();
+        glEnable(GL_BLEND);
         postProcess.unbind();
     }});
 }
