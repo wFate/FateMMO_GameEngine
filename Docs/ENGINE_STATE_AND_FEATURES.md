@@ -36,9 +36,9 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Batched Sprite Renderer | Done | Sorts by depth + texture, 10k capacity, dirty-flag sort skip (hash-based) |
 | 2D Orthographic Camera | Done | 480x270 virtual resolution (pixel art scale), 0.05x-8x zoom |
 | Archetype ECS | Done | Contiguous SoA component storage, O(matching) forEach queries, generational handles, command buffer for deferred structural changes |
-| Input System | Done | Keyboard, mouse, touch, cardinal direction helper |
+| Action Map Input | Done | 23 logical ActionIds, hardcoded WASD+arrow bindings, Gameplay/Chat context switching, 6-frame input buffer for combat skill queuing |
 | Structured Logging | Done | Timestamped, categorized, console + file output |
-| Text Rendering | Done | stb_truetype, TTF font atlas, screen-space drawing |
+| SDF Text Rendering | Done | MTSDF uber-shader (normal/outlined/glow/shadow styles), runtime atlas generation from TTF, UTF-8 decode, resolution-independent at any zoom |
 | Tilemap System | Done | Tiled JSON loader, frustum-culled, collision layers |
 | Coordinate System | Done | Tile-based coords (32px grid), pixel-to-tile conversion |
 | Spatial Grid (Primary) | Done | Fixed power-of-two grid, bitshift cell lookup (zero hash computation), std::span query results, std::expected error handling |
@@ -416,6 +416,29 @@ Spawn zones are spatial entities you place and resize in the scene editor. Mobs 
 **HUD maxFury fix:**
 - Fury display reads s.maxFury directly instead of recomputing from formula
 - Inspector changes to maxFury properly reflected in HUD
+
+### March 17, 2026 - Input System & SDF Text Rendering
+
+**Action map input system:**
+- ActionId enum with 23 logical actions (movement, combat, skills, UI toggles, chat)
+- ActionMap translates SDL scancodes → actions with press/hold/release states
+- Primary + secondary key bindings (WASD + arrow keys for movement)
+- Gameplay/Chat context switching — Enter opens chat mode, suppresses gameplay actions
+- InputBuffer: 6-frame circular buffer queues combat inputs during GCD/animations
+- consumeBuffered() for responsive skill activation — no more missed inputs during cooldowns
+- All game systems migrated from raw SDL to action API (movement, combat, UI toggles)
+
+**SDF text rendering (replaces bitmap font):**
+- MTSDF uber-shader integrated into SpriteBatch via `renderType` vertex attribute
+- 5 render modes: sprite (0.0), normal text (1.0), outlined (2.0), glow (3.0), shadow (4.0)
+- Runtime font atlas generation from system TTF via stb_truetype (swappable with msdf-atlas-gen)
+- SDFText class: drawWorld() (Y-up), drawScreen() (Y-down), measure(), UTF-8 decode
+- Damage numbers: Shadow style for hits, Glow for crits, Outlined for XP
+- Nameplates: Outlined style with black border for readability over any background
+- Text scales perfectly at any zoom level — no pixelation
+- Old TextRenderer removed (380 lines deleted)
+
+**Files: 15 changed, +2,384/-445 lines across 4 commits (SDF) + 4 commits (Input)**
 
 ### March 17, 2026 - Reflection, Serialization & Game Systems
 
@@ -1048,7 +1071,7 @@ game/
 
 ### Networking (Custom Proprietary)
 - [ ] ENet UDP transport layer
-- [ ] Custom replication system (dirty-flag sync, delta serialization)
+- [x] Custom replication system (dirty-flag sync, delta serialization) — groundwork: AOI visibility sets, component dirty bits, ghost entity scaffold
 - [ ] Client-server message protocol (binary, not JSON)
 - [ ] Server-authoritative game logic
 - [x] Zone-based interest management (AOI data structures, visibility set diffs, hysteresis)
@@ -1087,4 +1110,18 @@ game/
 - [x] Compile-time component type system (CompId, Hot/Warm/Cold tiers, no RTTI)
 - [ ] SIMD intrinsics for spatial queries (future optimization)
 - [ ] C++20 coroutines for async chunk I/O (structured for future drop-in)
-- [x] Unit test suite (doctest, 32 test cases, 740 assertions)
+- [x] Unit test suite (doctest, 120 test cases, 1241 assertions)
+- [x] Action map input system (23 actions, input buffering, chat mode switching)
+- [x] SDF text rendering (uber-shader, outlined/glow/shadow effects, UTF-8, replaces bitmap font)
+- [x] Reflection system (FATE_REFLECT macro, auto-generated JSON serializers)
+- [x] Serialization registry (ComponentMetaRegistry, type-erased, forward-compat)
+- [x] Component traits (Serializable/Networked/Persistent flags per component)
+- [x] Registry-based prefab system (removed 164 lines of hardcoded type checks)
+- [x] Registry-based scene save/load (version headers, unknown component preservation)
+- [x] Generic reflection-driven inspector fallback
+- [ ] Asset hot-reload (file watching, generation-based invalidation)
+- [ ] Allocator visualization (ImGui panels for arena watermarks, pool heat maps)
+- [ ] Render graph (declarative pass system, FBO management, post-processing)
+- [ ] Editor polish (ImGuizmo gizmos, selection outlines, infinite grid shader)
+- [ ] Job system / parallel ECS (fiber/coroutine workers, lock-free work-stealing)
+- [ ] Platform abstraction (thin gfx:: wrapper for WebGPU portability)
