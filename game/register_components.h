@@ -14,6 +14,8 @@
 #include "game/components/polygon_collider.h"
 #include "game/components/zone_component.h"
 #include "game/components/game_components.h"
+#include "game/components/faction_component.h"
+#include "game/components/pet_component.h"
 #include "game/systems/spawn_system.h"  // SpawnZoneComponent
 
 #include <nlohmann/json.hpp>
@@ -83,6 +85,18 @@ template<> struct component_traits<MarketComponent> {
 };
 template<> struct component_traits<TradeComponent> {
     static constexpr ComponentFlags flags = ComponentFlags::None;
+};
+
+// --- FactionComponent: saved to DB, replicated ---
+template<> struct component_traits<FactionComponent> {
+    static constexpr ComponentFlags flags =
+        ComponentFlags::Serializable | ComponentFlags::Networked | ComponentFlags::Persistent;
+};
+
+// --- PetComponent: saved to DB, replicated ---
+template<> struct component_traits<PetComponent> {
+    static constexpr ComponentFlags flags =
+        ComponentFlags::Serializable | ComponentFlags::Networked | ComponentFlags::Persistent;
 };
 
 // --- CharacterStatsComponent: saved to DB, replicated ---
@@ -218,6 +232,10 @@ inline void registerAllComponents() {
     // ----- Player quest / bank -----
     reg.registerComponent<QuestComponent>();
     reg.registerComponent<BankStorageComponent>();
+
+    // ----- Faction & Pet components -----
+    reg.registerComponent<FactionComponent>();
+    reg.registerComponent<PetComponent>();
 
     // ----- Backward-compat aliases -----
     reg.registerAlias("Sprite", "SpriteComponent");

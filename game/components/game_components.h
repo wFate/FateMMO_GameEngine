@@ -19,6 +19,8 @@
 #include "game/shared/npc_types.h"
 #include "game/shared/quest_manager.h"
 #include "game/shared/bank_storage.h"
+#include "game/shared/faction.h"
+#include "game/shared/pet_system.h"
 
 namespace fate {
 

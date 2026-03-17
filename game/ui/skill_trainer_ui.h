@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/ecs/entity.h"
+#include "game/shared/game_types.h"
 
 namespace fate {
 

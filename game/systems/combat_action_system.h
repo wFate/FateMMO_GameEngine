@@ -14,6 +14,8 @@
 #include "game/shared/spatial_hash.h"
 #include "imgui.h"
 
+#include "game/systems/quest_system.h"
+
 #include <vector>
 #include <limits>
 #include <string>
@@ -599,6 +601,12 @@ private:
 
         CharacterStats& ps = statsComp->stats;
         EnemyStats&     es = enemyComp->stats;
+
+        // Notify quest system of mob death
+        auto* questSys = world_->getSystem<QuestSystem>();
+        if (questSys) {
+            questSys->onMobDeath(es.enemyName);
+        }
 
         // Calculate and award XP
         int xp = XPCalculator::calculateXPReward(es.xpReward, es.level, ps.level);

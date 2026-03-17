@@ -9,6 +9,7 @@
 #include "engine/core/logger.h"
 #include "imgui.h"
 
+#include "game/systems/quest_system.h"
 #include <cmath>
 
 namespace fate {
@@ -78,10 +79,11 @@ public:
 
         // Find NPC under click via sprite bounds check
         Entity* hitNPC = nullptr;
-        world_->forEach<NPCComponent, Transform, SpriteComponent>(
-            [&](Entity* e, NPCComponent* npc, Transform* t, SpriteComponent* spr) {
+        world_->forEach<NPCComponent, Transform>(
+            [&](Entity* e, NPCComponent* npc, Transform* t) {
                 if (hitNPC) return;  // already found one
-                if (!spr->enabled) return;
+                auto* spr = e->getComponent<SpriteComponent>();
+                if (!spr || !spr->enabled) return;
                 Vec2 half = spr->size * 0.5f;
                 if (worldClick.x >= t->position.x - half.x &&
                     worldClick.x <= t->position.x + half.x &&
@@ -128,6 +130,14 @@ public:
         auto* npcComp = npc->getComponent<NPCComponent>();
         LOG_INFO("NPC", "Opened dialogue with %s",
                  npcComp ? npcComp->displayName.c_str() : "unknown");
+
+        // Notify quest system for TalkTo objectives
+        if (npcComp && world_) {
+            auto* questSys = world_->getSystem<QuestSystem>();
+            if (questSys) {
+                questSys->onNPCInteraction(npcComp->npcId);
+            }
+        }
     }
 
     void closeDialogue() {

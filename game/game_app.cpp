@@ -20,9 +20,12 @@
 #include "game/systems/combat_action_system.h"
 #include "game/systems/zone_system.h"
 #include "game/systems/spawn_system.h"
+#include "game/systems/npc_interaction_system.h"
+#include "game/systems/quest_system.h"
 #include "game/ui/inventory_ui.h"
 #include "game/ui/skill_bar_ui.h"
 #include "game/ui/hud_bars_ui.h"
+#include "game/shared/npc_types.h"
 #include "imgui.h"
 #include <cstdio>
 #include <algorithm>
@@ -342,6 +345,7 @@ void GameApp::onInit() {
         createPlayer(scene.world());
         createTestEntities(scene.world());
         spawnTestMobs(scene.world());
+        spawnTestNPCs(scene.world());
     });
 
     SceneManager::instance().switchScene("TestScene");
@@ -359,8 +363,14 @@ void GameApp::onInit() {
 
         gameplaySystem_ = world.addSystem<GameplaySystem>();
         mobAISystem_ = world.addSystem<MobAISystem>();
+
+        npcInteractionSystem_ = world.addSystem<NPCInteractionSystem>();
+        npcInteractionSystem_->camera = &camera();
+
         combatSystem_ = world.addSystem<CombatActionSystem>();
         combatSystem_->camera = &camera();
+
+        questSystem_ = world.addSystem<QuestSystem>();
 
         zoneSystem_ = world.addSystem<ZoneSystem>();
         zoneSystem_->camera = &camera();
@@ -608,6 +618,33 @@ void GameApp::spawnTestMobs(World& world) {
              szComp->config.zoneName.c_str(), szComp->config.rules.size());
 }
 
+void GameApp::spawnTestNPCs(World& world) {
+    NPCTemplate testNPC;
+    testNPC.name = "Village Elder";
+    testNPC.npcId = 1;
+    testNPC.position = {256.0f, 256.0f};
+    testNPC.isQuestGiver = true;
+    testNPC.questIds = {1, 2, 3};
+    testNPC.dialogueGreeting = "Welcome, adventurer! I have tasks for you.";
+    EntityFactory::createNPC(world, testNPC);
+
+    NPCTemplate merchantNPC;
+    merchantNPC.name = "Potion Merchant";
+    merchantNPC.npcId = 2;
+    merchantNPC.position = {320.0f, 256.0f};
+    merchantNPC.isMerchant = true;
+    merchantNPC.shopName = "Potion Shop";
+    merchantNPC.shopItems = {
+        {"potion_hp_small", "Small HP Potion", 50, 12, 0},
+        {"potion_mp_small", "Small MP Potion", 50, 12, 0},
+        {"potion_hp_medium", "Medium HP Potion", 200, 50, 0}
+    };
+    merchantNPC.dialogueGreeting = "Welcome to my shop! Take a look around.";
+    EntityFactory::createNPC(world, merchantNPC);
+
+    LOG_INFO("Game", "Test NPCs created (Village Elder, Potion Merchant)");
+}
+
 void GameApp::onUpdate(float deltaTime) {
     // F1 HUD toggle removed — HUD is always on
     // F2 collision debug removed — now controlled via editor toolbar toggle
@@ -618,6 +655,10 @@ void GameApp::onUpdate(float deltaTime) {
     // K key toggles skill bar visibility
     if (Input::instance().isKeyPressed(SDL_SCANCODE_K) && !Editor::instance().wantsKeyboard()) {
         SkillBarUI::instance().toggle();
+    }
+    // L key toggles quest log
+    if (Input::instance().isKeyPressed(SDL_SCANCODE_L) && !Editor::instance().wantsKeyboard()) {
+        questLogUI_.toggle();
     }
     // [ and ] keys switch skill bar pages
     if (Input::instance().isKeyPressed(SDL_SCANCODE_LEFTBRACKET) && !Editor::instance().wantsKeyboard()) {
@@ -672,6 +713,21 @@ void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
             HudBarsUI::instance().draw(w);
             SkillBarUI::instance().draw(w);
             InventoryUI::instance().draw(w);
+
+            // NPC dialogue UI
+            if (npcInteractionSystem_ && npcInteractionSystem_->dialogueOpen
+                && npcInteractionSystem_->interactingNPC) {
+                npcDialogueUI_.render(
+                    npcInteractionSystem_->interactingNPC,
+                    npcInteractionSystem_->localPlayer,
+                    npcInteractionSystem_,
+                    questSystem_);
+            }
+
+            // Quest log UI
+            if (questLogUI_.isOpen && npcInteractionSystem_ && npcInteractionSystem_->localPlayer) {
+                questLogUI_.render(npcInteractionSystem_->localPlayer);
+            }
         }
     }
 

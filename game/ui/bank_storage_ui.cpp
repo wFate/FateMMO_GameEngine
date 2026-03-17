@@ -1,4 +1,5 @@
 #include "game/ui/bank_storage_ui.h"
+#include "engine/ecs/world.h"
 #include "game/components/game_components.h"
 #include "engine/core/logger.h"
 #include "imgui.h"
