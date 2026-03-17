@@ -67,6 +67,13 @@ public:
 
     const std::vector<StoredItem>& getItems() const { return items_; }
     bool isFull() const { return static_cast<uint16_t>(items_.size()) >= maxSlots_; }
+    uint16_t getMaxSlots() const { return maxSlots_; }
+
+    void setSerializedState(int64_t gold, uint16_t maxSlots, std::vector<StoredItem> items) {
+        storedGold_ = gold;
+        maxSlots_ = maxSlots;
+        items_ = std::move(items);
+    }
 
 private:
     std::vector<StoredItem> items_;

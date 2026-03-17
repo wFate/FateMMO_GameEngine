@@ -98,6 +98,13 @@ public:
     void onPvPKill();
     void onDeliverAttempt(const std::string& npcId, Inventory& inventory);
 
+    // ---- Serialization accessors -------------------------------------------
+    [[nodiscard]] const std::vector<uint32_t>& getCompletedQuestIds() const { return completedQuestIds_; }
+    void setSerializedState(std::vector<uint32_t> completed, std::vector<ActiveQuest> active) {
+        completedQuestIds_ = std::move(completed);
+        activeQuests_ = std::move(active);
+    }
+
     // ---- Callbacks ---------------------------------------------------------
     std::function<void(uint32_t questId)> onQuestAccepted;
     std::function<void(uint32_t questId)> onQuestCompleted;
