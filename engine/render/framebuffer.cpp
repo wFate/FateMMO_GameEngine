@@ -31,7 +31,7 @@ bool Framebuffer::create(int width, int height) {
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    LOG_INFO("Framebuffer", "Created FBO %u (%dx%d)", fbo_, width_, height_);
+    LOG_DEBUG("Framebuffer", "Created FBO %u (%dx%d)", fbo_, width_, height_);
     return true;
 }
 

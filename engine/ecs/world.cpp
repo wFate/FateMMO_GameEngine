@@ -59,10 +59,6 @@ EntityHandle World::createEntityH(const std::string& name) {
     entity->archetypeId_ = emptyArchetypeId_;
     entity->row_ = row;
 
-    if (name != "Tile") {
-        LOG_DEBUG("World", "Created entity '%s' (idx=%u, gen=%u)",
-                  name.c_str(), handle.index(), handle.generation());
-    }
     return handle;
 }
 
@@ -224,6 +220,7 @@ void World::forEachComponentOfEntity(Entity* entity, const std::function<void(vo
 // --- Cleanup ---
 
 void World::processDestroyQueue() {
+    size_t destroyedCount = 0;
     for (auto handle : destroyQueue_) {
         uint32_t idx = handle.index();
         if (idx >= static_cast<uint32_t>(slots_.size())) continue;
@@ -232,9 +229,6 @@ void World::processDestroyQueue() {
 
         Entity* entity = slot.entity;
         if (entity) {
-            LOG_DEBUG("World", "Destroyed entity '%s' (idx=%u, gen=%u)",
-                      entity->name().c_str(), idx, slot.generation);
-
             // Remove from archetype storage (swap-and-pop)
             if (entity->archetypeId_ != UINT32_MAX) {
                 ArchetypeId archId = entity->archetypeId_;
@@ -259,6 +253,7 @@ void World::processDestroyQueue() {
             }
 
             delete entity;
+            destroyedCount++;
         }
         slot.entity = nullptr;
         slot.alive = false;
@@ -266,6 +261,9 @@ void World::processDestroyQueue() {
         slot.generation = (slot.generation + 1) & EntityHandle::GEN_MASK;
         if (slot.generation == 0) slot.generation = 1; // skip 0
         freeSlots_.push_back(idx);
+    }
+    if (destroyedCount > 0) {
+        LOG_DEBUG("World", "Destroyed %zu entities", destroyedCount);
     }
     destroyQueue_.clear();
 }

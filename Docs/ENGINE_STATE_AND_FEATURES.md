@@ -10,6 +10,20 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 **Target:** Windows (development), iOS/Android (future), Linux server (future)
 
+### Build & Run
+
+**Visual Studio (recommended):**
+- Open the project folder in Visual Studio (CMake project)
+- Build: `Ctrl+Shift+B`
+- Run: `F5` (debug) or `Ctrl+F5` (no debugger)
+- Output: `out/build/x64-Debug/FateEngine.exe`
+- Log file: `out/build/x64-Debug/fate_engine.log`
+
+**Command Line (alternative):**
+- Old build dir: `build/Debug/` — may be stale if VS is used
+- VS build dir: `out/build/x64-Debug/` — always current when building from VS
+- Always run from the VS output directory when using Visual Studio
+
 ---
 
 ## Current Features
