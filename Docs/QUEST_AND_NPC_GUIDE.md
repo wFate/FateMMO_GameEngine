@@ -370,6 +370,37 @@ Player turns in quest
 
 ---
 
+## Editor & Persistence
+
+### Adding NPC Components in the Editor
+
+All NPC components are available in the editor's **Add Component** popup (right-click an entity in the inspector). They're listed under two sections:
+
+- **NPC** — NPCComponent, Quest Giver, Quest Marker, Shop, Skill Trainer, Banker, Guild NPC, Teleporter, Story NPC
+- **Player Quest/Bank** — QuestComponent, BankStorageComponent
+
+Components with simple fields (NPCComponent, BankerComponent, GuildNPCComponent) display editable fields in the generic reflected inspector. Complex components (shops, dialogue trees, etc.) are best configured in code via `NPCTemplate`.
+
+### Scene Save/Load
+
+NPC entities fully persist across scene save/load cycles. All component data is serialized via custom `toJson`/`fromJson` handlers:
+
+- Shop inventories (item IDs, names, prices, stock)
+- Skill trainer skill lists
+- Teleporter destinations with positions and costs
+- Dialogue trees with nested choices, actions, and conditions
+- Quest progress (active quests with objective counts, completed quest IDs)
+- Bank storage (gold, items, slot count)
+
+### Prefabs
+
+NPCs can be saved as prefabs and spawned anywhere. The workflow:
+1. Create an NPC entity in code or via the editor
+2. Right-click in hierarchy → Save as Prefab
+3. Spawn copies from the Prefabs tab in the project browser
+
+---
+
 ## Files Overview
 
 | File | What It Does |
@@ -390,3 +421,4 @@ Player turns in quest
 | `game/ui/skill_trainer_ui.h/.cpp` | Skill learning UI |
 | `game/ui/bank_storage_ui.h/.cpp` | Bank storage UI |
 | `game/ui/teleporter_ui.h/.cpp` | Teleport destination UI |
+| `game/register_components.h` | Component registration + custom serializers for all NPC/Quest types |

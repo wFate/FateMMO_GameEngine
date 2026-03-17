@@ -62,7 +62,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Play/Pause | Done | Toolbar button, auto-pause on editor open |
 | Create/Delete Entities | Done | Menu + Delete key, works while paused |
 | Duplicate Entity | Done | Full deep copy via JSON serialization, offset by 32px |
-| Add Components | Done | Popup with engine, game systems, and social component sections |
+| Add Components | Done | Popup with engine, game systems, social, NPC, and player quest/bank sections |
 | Collision Debug | Done | F2 toggle, green=static, yellow=dynamic, cyan=polygon |
 | Scene Save | Done | File > Save Scene with custom name, saves to source + build dirs |
 | Scene Load | Done | File > Load Scene lists all .json scenes, click to load |
@@ -235,6 +235,7 @@ All 20 game systems from the C#/Unity prototype have been converted to C++ and l
 | NPC Types | `npc_types.h` | NPCTemplate, ShopItem, TrainableSkill, TeleportDestination structs |
 | Dialogue Tree | `dialogue_tree.h` | Branching dialogue with enum-based actions (GiveItem/GiveXP/GiveGold/SetFlag/Heal) and conditions (HasFlag/MinLevel/HasItem/HasClass) |
 | Bank Storage | `bank_storage.h` | Persistent bank storage with item slots, gold deposit/withdraw, configurable fee |
+| Serialization | `register_components.h` | Custom toJson/fromJson for all complex NPC/Quest components (shops, skills, dialogue trees, quest progress, bank storage). NPC entities fully persist across scene save/load and prefab round-trips |
 
 See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 
