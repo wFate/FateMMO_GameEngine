@@ -1,6 +1,7 @@
 #include "engine/render/texture.h"
 #include "engine/render/gl_loader.h"
 #include "engine/core/logger.h"
+#include "engine/asset/asset_registry.h"
 #include "stb_image.h"
 
 namespace fate {
@@ -87,9 +88,13 @@ std::shared_ptr<Texture> TextureCache::load(const std::string& path) {
     auto it = cache_.find(path);
     if (it != cache_.end()) return it->second;
 
-    auto tex = std::make_shared<Texture>();
-    if (!tex->loadFromFile(path)) return nullptr;
+    // Delegate to AssetRegistry for actual loading
+    AssetHandle h = AssetRegistry::instance().load(path);
+    Texture* raw = AssetRegistry::instance().get<Texture>(h);
+    if (!raw) return nullptr;
 
+    // Non-owning shared_ptr — AssetRegistry owns the lifetime
+    auto tex = std::shared_ptr<Texture>(raw, [](Texture*){});
     cache_[path] = tex;
     return tex;
 }
