@@ -124,6 +124,20 @@ public:
         typeInfos_[cid] = info;
     }
 
+    // Register a component type by ID at runtime (for type-erased serialization).
+    // No destructor is registered — caller is responsible for trivial types only,
+    // or for calling destructors manually.
+    void registerTypeById(CompId cid, size_t size, size_t alignment) {
+        if (typeInfos_.find(cid) != typeInfos_.end()) return;
+
+        TypeInfo info;
+        info.id        = cid;
+        info.size      = size;
+        info.alignment = alignment;
+        info.destroyFn = nullptr; // unknown types treated as trivially destructible
+        typeInfos_[cid] = info;
+    }
+
     // -- Archetype lookup / creation ----------------------------------------
 
     ArchetypeId findOrCreateArchetype(std::vector<CompId> typeIds) {
@@ -266,6 +280,22 @@ public:
         size_t colIdx = arch.columnIndex(cid);
         if (colIdx == SIZE_MAX) return nullptr;
         return reinterpret_cast<T*>(arch.columns[colIdx].data);
+    }
+
+    // Type-erased column access by CompId (returns raw pointer to column start)
+    void* getColumnRaw(ArchetypeId archId, CompId cid) {
+        Archetype& arch = archetypes_[archId];
+        size_t colIdx = arch.columnIndex(cid);
+        if (colIdx == SIZE_MAX) return nullptr;
+        return arch.columns[colIdx].data;
+    }
+
+    // Get element size for a column (for pointer arithmetic)
+    size_t getColumnElemSize(ArchetypeId archId, CompId cid) const {
+        const Archetype& arch = archetypes_[archId];
+        size_t colIdx = arch.columnIndex(cid);
+        if (colIdx == SIZE_MAX) return 0;
+        return arch.columns[colIdx].elemSize;
     }
 
     EntityHandle* getHandles(ArchetypeId archId) {

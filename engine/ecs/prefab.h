@@ -1,7 +1,6 @@
 #pragma once
 #include "engine/ecs/entity.h"
 #include "engine/ecs/world.h"
-#include "engine/render/texture.h"
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>

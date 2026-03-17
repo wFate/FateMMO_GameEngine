@@ -1,7 +1,11 @@
 #include "engine/scene/scene.h"
+#include "engine/ecs/prefab.h"
 #include "engine/memory/zone_snapshot.h"
 #include "engine/core/logger.h"
 #include <fstream>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 namespace fate {
 
@@ -15,6 +19,36 @@ Scene::Scene(const std::string& name)
 
 Scene::~Scene() = default;
 
+// ============================================================================
+// Metadata helpers
+// ============================================================================
+
+nlohmann::json Scene::metadataToJson() const {
+    nlohmann::json meta;
+    meta["sceneId"]     = metadata_.sceneId;
+    meta["displayName"] = metadata_.displayName;
+    meta["sceneType"]   = metadata_.sceneType;
+    meta["minLevel"]    = metadata_.minLevel;
+    meta["maxLevel"]    = metadata_.maxLevel;
+    meta["pvpEnabled"]  = metadata_.pvpEnabled;
+    meta["isDungeon"]   = metadata_.isDungeon;
+    return meta;
+}
+
+void Scene::metadataFromJson(const nlohmann::json& meta) {
+    if (meta.contains("sceneId"))     metadata_.sceneId     = meta["sceneId"];
+    if (meta.contains("displayName")) metadata_.displayName = meta["displayName"];
+    if (meta.contains("sceneType"))   metadata_.sceneType   = meta["sceneType"];
+    if (meta.contains("minLevel"))    metadata_.minLevel    = meta["minLevel"];
+    if (meta.contains("maxLevel"))    metadata_.maxLevel    = meta["maxLevel"];
+    if (meta.contains("pvpEnabled"))  metadata_.pvpEnabled  = meta["pvpEnabled"];
+    if (meta.contains("isDungeon"))   metadata_.isDungeon   = meta["isDungeon"];
+}
+
+// ============================================================================
+// Load — registry-based deserialization with version header
+// ============================================================================
+
 bool Scene::loadFromFile(const std::string& path) {
     std::ifstream file(path);
     if (!file.is_open()) {
@@ -25,27 +59,33 @@ bool Scene::loadFromFile(const std::string& path) {
     try {
         nlohmann::json root = nlohmann::json::parse(file);
 
-        // Load metadata
-        if (root.contains("metadata")) {
-            auto& meta = root["metadata"];
-            if (meta.contains("sceneId"))     metadata_.sceneId = meta["sceneId"];
-            if (meta.contains("displayName")) metadata_.displayName = meta["displayName"];
-            if (meta.contains("sceneType"))   metadata_.sceneType = meta["sceneType"];
-            if (meta.contains("minLevel"))    metadata_.minLevel = meta["minLevel"];
-            if (meta.contains("maxLevel"))    metadata_.maxLevel = meta["maxLevel"];
-            if (meta.contains("pvpEnabled"))  metadata_.pvpEnabled = meta["pvpEnabled"];
-            if (meta.contains("isDungeon"))   metadata_.isDungeon = meta["isDungeon"];
+        // Read version (default to 1 for backward compat with pre-header files)
+        int version = root.value("version", 1);
+        if (version > SCENE_FORMAT_VERSION) {
+            LOG_ERROR("Scene", "Scene file version %d is newer than supported (%d): %s",
+                      version, SCENE_FORMAT_VERSION, path.c_str());
+            return false;
         }
 
-        // Load entities
+        // Scene name (optional override)
+        if (root.contains("name")) {
+            name_ = root["name"].get<std::string>();
+        }
+
+        // Load metadata
+        if (root.contains("metadata")) {
+            metadataFromJson(root["metadata"]);
+        }
+
+        // Load entities using registry-based deserialization
         if (root.contains("entities") && root["entities"].is_array()) {
             for (auto& entityDef : root["entities"]) {
-                createEntityFromJson(entityDef);
+                PrefabLibrary::jsonToEntity(entityDef, world_);
             }
         }
 
-        LOG_INFO("Scene", "Loaded scene '%s' from %s (%zu entities)",
-                 name_.c_str(), path.c_str(), world_.entityCount());
+        LOG_INFO("Scene", "Loaded scene '%s' v%d from %s (%zu entities)",
+                 name_.c_str(), version, path.c_str(), world_.entityCount());
         return true;
 
     } catch (const nlohmann::json::exception& e) {
@@ -54,23 +94,52 @@ bool Scene::loadFromFile(const std::string& path) {
     }
 }
 
-Entity* Scene::createEntityFromJson(const nlohmann::json& def) {
-    std::string name = def.value("name", "Entity");
-    std::string tag = def.value("tag", "");
+// ============================================================================
+// Save — registry-based serialization with version header
+// ============================================================================
 
-    Entity* entity = world_.createEntity(name);
-    if (!tag.empty()) entity->setTag(tag);
+bool Scene::saveToFile(const std::string& path) const {
+    nlohmann::json root;
+    root["version"]  = SCENE_FORMAT_VERSION;
+    root["name"]     = name_;
+    root["metadata"] = metadataToJson();
 
-    // Components are added by the game layer's component factory
-    // The scene stores the raw JSON so the factory can interpret it
-    // This keeps the engine layer generic and the game layer handles
-    // specific component types (Transform, Sprite, PlayerController, etc.)
+    nlohmann::json entitiesJson = nlohmann::json::array();
 
-    // For now, store component data as a simple marker that game code reads
-    // Game-specific scene loading happens in GameApp::onSceneLoaded()
+    // Use a const_cast here because forEachEntity and entityToJson need
+    // non-const access, but the save itself is logically const.
+    World& w = const_cast<World&>(world_);
+    w.forEachEntity([&](Entity* entity) {
+        // Skip transient entities (runtime-spawned mobs/bosses)
+        std::string tag = entity->tag();
+        if (tag == "mob" || tag == "boss") return;
 
-    return entity;
+        entitiesJson.push_back(PrefabLibrary::entityToJson(entity));
+    });
+
+    root["entities"] = entitiesJson;
+
+    // Ensure parent directory exists
+    auto parentDir = fs::path(path).parent_path();
+    if (!parentDir.empty() && !fs::exists(parentDir)) {
+        fs::create_directories(parentDir);
+    }
+
+    std::ofstream out(path);
+    if (!out.is_open()) {
+        LOG_ERROR("Scene", "Cannot write scene file: %s", path.c_str());
+        return false;
+    }
+
+    out << root.dump(2);
+    LOG_INFO("Scene", "Saved scene '%s' v%d to %s (%zu entities)",
+             name_.c_str(), SCENE_FORMAT_VERSION, path.c_str(), world_.entityCount());
+    return true;
 }
+
+// ============================================================================
+// Lifecycle
+// ============================================================================
 
 void Scene::onEnter() {
     isLoading_ = true;
