@@ -26,6 +26,9 @@ struct AssetSlot {
     bool loaded = false;
 };
 
+// Thread safety: queueReload() is safe to call from any thread.
+// All other methods (load, get, find, clear, processReloads) must be
+// called from the main thread only.
 class AssetRegistry {
 public:
     static AssetRegistry& instance();
