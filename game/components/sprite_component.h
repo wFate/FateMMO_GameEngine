@@ -1,5 +1,5 @@
 #pragma once
-#include "engine/ecs/component.h"
+#include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
 #include "engine/render/texture.h"
 #include <memory>
@@ -8,8 +8,8 @@
 namespace fate {
 
 // Sprite component - renders a textured quad
-struct SpriteComponent : public Component {
-    FATE_LEGACY_COMPONENT(SpriteComponent)
+struct SpriteComponent {
+    FATE_COMPONENT(SpriteComponent)
 
     std::shared_ptr<Texture> texture;
     std::string texturePath; // for serialization/debugging

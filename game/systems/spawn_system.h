@@ -20,8 +20,8 @@ namespace fate {
 // The entity's Transform provides the zone center position.
 // Size defines the rectangular bounds mobs spawn and roam within.
 // ============================================================================
-struct SpawnZoneComponent : public Component {
-    FATE_LEGACY_COMPONENT(SpawnZoneComponent)
+struct SpawnZoneComponent {
+    FATE_COMPONENT(SpawnZoneComponent)
     SpawnZoneConfig config;
     std::vector<TrackedMob> trackedMobs;
     float nextTickTime = 0.0f;

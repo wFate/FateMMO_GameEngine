@@ -137,8 +137,8 @@ public:
         return archetypes_.getArchetype(entity->archetypeId_).typeIds.size();
     }
 
-    // Iterate components of an entity (expensive, for editor)
-    void forEachComponentOfEntity(Entity* entity, const std::function<void(Component*)>& fn);
+    // Iterate components of an entity as type-erased pointers (expensive, for editor)
+    void forEachComponentOfEntity(Entity* entity, const std::function<void(void*, CompId)>& fn);
 
     // --- Query entities with specific components (archetype iteration) ---
     template<typename T>

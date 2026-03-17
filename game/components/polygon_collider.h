@@ -1,5 +1,5 @@
 #pragma once
-#include "engine/ecs/component.h"
+#include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
 #include <vector>
 
@@ -8,8 +8,8 @@ namespace fate {
 // Polygon collider — custom collision shape defined by a list of vertices
 // Vertices are relative to the entity's Transform position
 // Supports convex polygons for SAT collision detection
-struct PolygonCollider : public Component {
-    FATE_LEGACY_COMPONENT(PolygonCollider)
+struct PolygonCollider {
+    FATE_COMPONENT(PolygonCollider)
 
     std::vector<Vec2> points;  // vertices in local space (relative to entity center)
     bool isTrigger = false;

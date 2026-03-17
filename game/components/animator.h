@@ -1,5 +1,5 @@
 #pragma once
-#include "engine/ecs/component.h"
+#include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
 #include <string>
 #include <unordered_map>
@@ -16,8 +16,8 @@ struct AnimationDef {
 };
 
 // Animator component - handles sprite animation state
-struct Animator : public Component {
-    FATE_LEGACY_COMPONENT(Animator)
+struct Animator {
+    FATE_COMPONENT(Animator)
 
     std::unordered_map<std::string, AnimationDef> animations;
     std::string currentAnimation;

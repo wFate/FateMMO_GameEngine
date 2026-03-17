@@ -1,12 +1,11 @@
 #include <doctest/doctest.h>
 #include "engine/ecs/world.h"
 
-// Test components using the legacy Component base class (same pattern as game code)
-// Must be in namespace fate because FATE_LEGACY_COMPONENT uses unqualified ComponentTypeId
+// Test components using the new FATE_COMPONENT macro (archetype-compatible, no virtual dispatch)
 namespace fate {
 
-struct TestTransform : public Component {
-    FATE_LEGACY_COMPONENT(TestTransform)
+struct TestTransform {
+    FATE_COMPONENT(TestTransform)
     float x = 0.0f;
     float y = 0.0f;
 
@@ -14,8 +13,8 @@ struct TestTransform : public Component {
     TestTransform(float x, float y) : x(x), y(y) {}
 };
 
-struct TestHealth : public Component {
-    FATE_LEGACY_COMPONENT(TestHealth)
+struct TestHealth {
+    FATE_COMPONENT(TestHealth)
     float hp = 100.0f;
     float maxHp = 100.0f;
 
@@ -23,8 +22,8 @@ struct TestHealth : public Component {
     TestHealth(float startHp) : hp(startHp), maxHp(startHp) {}
 };
 
-struct TestVelocity : public Component {
-    FATE_LEGACY_COMPONENT(TestVelocity)
+struct TestVelocity {
+    FATE_COMPONENT(TestVelocity)
     float vx = 0.0f;
     float vy = 0.0f;
 };
