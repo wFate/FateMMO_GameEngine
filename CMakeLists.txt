@@ -52,13 +52,24 @@ add_library(stb_image STATIC
 target_include_directories(stb_image PUBLIC ${stb_SOURCE_DIR})
 
 # Dear ImGui (docking branch for dockable editor panels)
+# Pinned to v1.91.9b-docking: last docking release compatible with ImPlot v0.16.
+# The docking tip (1.92+) refactored ImFont and removed FontSize/FindGlyph fields
+# that ImPlot v0.16 depends on.
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        docking
+    GIT_TAG        v1.91.9b-docking
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(imgui)
+
+FetchContent_Declare(
+    implot
+    GIT_REPOSITORY https://github.com/epezent/implot.git
+    GIT_TAG        v0.16
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(implot)
 
 # doctest (header-only test framework)
 FetchContent_Declare(
@@ -78,6 +89,7 @@ FetchContent_Declare(
 )
 option(TRACY_ENABLE "Enable Tracy profiler" ON)
 option(TRACY_ON_DEMAND "Enable Tracy on-demand mode" ON)
+option(ENGINE_MEMORY_DEBUG "Enable allocator debug visualization panels" ON)
 FetchContent_MakeAvailable(tracy)
 
 # Find OpenGL (cross-platform)
@@ -99,10 +111,13 @@ add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+    ${implot_SOURCE_DIR}/implot.cpp
+    ${implot_SOURCE_DIR}/implot_items.cpp
 )
 target_include_directories(imgui_lib PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
+    ${implot_SOURCE_DIR}
 )
 target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static ${OPENGL_LIB})
 # No loader define = ImGui uses its own minimal GL loader
@@ -127,6 +142,10 @@ target_link_libraries(fate_engine PUBLIC
     ${OPENGL_LIB}
     TracyClient
 )
+
+if(ENGINE_MEMORY_DEBUG)
+    target_compile_definitions(fate_engine PUBLIC ENGINE_MEMORY_DEBUG)
+endif()
 
 # =============================================================================
 # Game Executable
