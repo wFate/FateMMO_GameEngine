@@ -341,7 +341,7 @@ void App::render() {
     glViewport(0, 0, config_.windowWidth, config_.windowHeight);
     glClearColor(0.12f, 0.12f, 0.15f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    editor.renderUI(world, &camera_, &spriteBatch_);
+    editor.renderUI(world, &camera_, &spriteBatch_, &frameArena_);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
     SDL_GL_SwapWindow(window_);

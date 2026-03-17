@@ -6,6 +6,10 @@
 #include "engine/render/sprite_batch.h"
 #include "engine/render/texture.h"
 #include "engine/render/framebuffer.h"
+#if defined(ENGINE_MEMORY_DEBUG)
+#include "engine/editor/memory_panel.h"
+#include <implot.h>
+#endif
 #include <SDL.h>
 #include <string>
 #include <vector>
@@ -68,7 +72,7 @@ public:
     void beginFrame();
     // Split render into scene (FBO-bound) and UI (ImGui panels)
     void renderScene(SpriteBatch* batch, Camera* camera);
-    void renderUI(World* world, Camera* camera, SpriteBatch* batch);
+    void renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameArena* frameArena = nullptr);
 
     // Viewport info (for input routing in App)
     Vec2 viewportPos() const { return viewportPos_; }
@@ -147,6 +151,9 @@ private:
     bool wantsKeyboard_ = false;
     bool wantsMouse_ = false;
     bool showDemoWindow_ = false;
+#if defined(ENGINE_MEMORY_DEBUG)
+    bool showMemoryPanel_ = false;
+#endif
 
     // Cached pointers for menu bar / viewport toolbar (set each frame in renderUI)
     World* dockWorld_ = nullptr;
