@@ -36,6 +36,9 @@ public:
     std::function<void(const ChatMessage&)> onMessageReceived;
     std::function<void(const std::string&)> onChatError;
 
+    // Faction (set after initialization from FactionComponent)
+    Faction localFaction = Faction::None;
+
     // Initialization
     void initialize(const std::string& charId, const std::string& charName);
 

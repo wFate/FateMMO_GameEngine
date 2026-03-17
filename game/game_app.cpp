@@ -411,11 +411,22 @@ void GameApp::onInit() {
 }
 
 void GameApp::createPlayer(World& world) {
-    Entity* player = EntityFactory::createPlayer(world, "Player", ClassType::Warrior, true);
+    // TODO: faction selection UI — hardcoded to Xyros for now
+    Faction playerFaction = Faction::Xyros;
+    Entity* player = EntityFactory::createPlayer(world, "Player", ClassType::Warrior, true, playerFaction);
 
+    // Spawn at faction's home village position
     auto* transform = player->getComponent<Transform>();
     if (transform) {
-        transform->position = {16.0f, 16.0f};
+        const auto* factionDef = FactionRegistry::get(playerFaction);
+        // Each faction gets a distinct spawn offset (will be replaced by zone system)
+        float spawnX = 16.0f;
+        float spawnY = 16.0f;
+        if (factionDef) {
+            // Spread factions across the map — 8 tile spacing per faction index
+            spawnX = 16.0f + static_cast<float>(static_cast<uint8_t>(playerFaction) - 1) * 8.0f * Coords::TILE_SIZE;
+        }
+        transform->position = {spawnX, spawnY};
     }
 
     // Create placeholder sprite if no texture was loaded by the factory

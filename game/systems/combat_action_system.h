@@ -15,6 +15,7 @@
 #include "imgui.h"
 
 #include "game/systems/quest_system.h"
+#include "game/components/faction_component.h"
 
 #include <vector>
 #include <limits>
@@ -491,6 +492,16 @@ private:
     // tryAttackTarget — resolve one attack (physical or spell)
     // ------------------------------------------------------------------
     void tryAttackTarget(Entity* player, Entity* target) {
+        // ---- Faction check: block same-faction PvP ----
+        auto* attackerFaction = player->getComponent<FactionComponent>();
+        auto* targetFaction   = target->getComponent<FactionComponent>();
+        if (attackerFaction && targetFaction) {
+            if (FactionRegistry::isSameFaction(attackerFaction->faction, targetFaction->faction)) {
+                LOG_DEBUG("Combat", "Cannot attack same-faction player");
+                return;
+            }
+        }
+
         auto* statsComp = player->getComponent<CharacterStatsComponent>();
         auto* enemyComp = target->getComponent<EnemyStatsComponent>();
         auto* playerT   = player->getComponent<Transform>();

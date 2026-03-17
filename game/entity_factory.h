@@ -122,6 +122,7 @@ public:
         // Social systems
         auto* chatComp = player->addComponent<ChatComponent>();
         chatComp->chat.initialize(name, name);
+        chatComp->chat.localFaction = faction;
 
         player->addComponent<GuildComponent>();
         player->addComponent<PartyComponent>();
