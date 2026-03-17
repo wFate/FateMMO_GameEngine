@@ -1,5 +1,6 @@
 #include "engine/app.h"
 #include "engine/render/gl_loader.h"
+#include "engine/render/shader.h"
 #include "engine/core/logger.h"
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
@@ -76,6 +77,9 @@ bool App::init(const AppConfig& config) {
         return false;
     }
 
+    // Initialize fullscreen quad (used by lighting + post-process passes)
+    FullscreenQuad::instance().init();
+
     // Initialize editor (Dear ImGui)
     Editor::instance().init(window_, glContext_);
 
@@ -84,7 +88,13 @@ bool App::init(const AppConfig& config) {
         LogViewer::instance().addMessage(msg, level);
     });
 
+    // Game registers its scene passes (tiles, entities, etc.) in onInit()
     onInit();
+
+    // Register engine render passes AFTER game passes, so the graph order is:
+    // [game scene passes] -> Lighting -> BloomExtract -> BloomBlur -> PostProcess
+    registerLightingPass(renderGraph_, lightingConfig_);
+    registerPostProcessPasses(renderGraph_, postProcessConfig_);
 
     assetsDir_ = config.assetsDir;
 
@@ -333,21 +343,54 @@ void App::render() {
     World* world = scene ? &scene->world() : nullptr;
     auto& editor = Editor::instance();
 
-    // Render game into viewport FBO
-    auto& fbo = editor.viewportFbo();
-    Vec2 vpSize = editor.viewportSize();
-    int fbW = (int)vpSize.x;
-    int fbH = (int)vpSize.y;
+    auto& editorFbo = editor.viewportFbo();
+    int vpW = editorFbo.width();
+    int vpH = editorFbo.height();
 
-    if (fbW > 0 && fbH > 0 && fbo.isValid()) {
+    if (vpW > 0 && vpH > 0 && editorFbo.isValid()) {
         // Adapt camera projection to FBO aspect ratio
-        camera_.setViewportSize(fbo.width(), fbo.height());
+        camera_.setViewportSize(vpW, vpH);
 
-        fbo.bind();
+        // Execute render graph — all passes render into internal FBOs
+        RenderPassContext ctx;
+        ctx.spriteBatch = &spriteBatch_;
+        ctx.camera = &camera_;
+        ctx.world = world;
+        ctx.viewportWidth = vpW;
+        ctx.viewportHeight = vpH;
+        renderGraph_.execute(ctx);
+
+        // Blit final result (PostProcess FBO) to editor viewport FBO
+        editorFbo.bind();
         glClear(GL_COLOR_BUFFER_BIT);
+
+        auto& postFbo = renderGraph_.getFBO("PostProcess", vpW, vpH);
+
+        static Shader s_blitShader;
+        static bool s_blitLoaded = false;
+        if (!s_blitLoaded) {
+            s_blitLoaded = s_blitShader.loadFromFile(
+                "assets/shaders/fullscreen_quad.vert",
+                "assets/shaders/blit.frag"
+            );
+        }
+
+        if (s_blitLoaded) {
+            s_blitShader.bind();
+            s_blitShader.setInt("u_texture", 0);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, postFbo.textureId());
+            FullscreenQuad::instance().draw();
+            s_blitShader.unbind();
+        }
+
+        // Legacy onRender callback (for any remaining direct rendering)
         onRender(spriteBatch_, camera_);
+
+        // Editor overlays (grid, selection, etc.) drawn on top
         editor.renderScene(&spriteBatch_, &camera_);
-        fbo.unbind();
+
+        editorFbo.unbind();
     }
 
     // Editor UI fills the window
@@ -366,6 +409,10 @@ void App::shutdown() {
     AllocatorRegistry::instance().remove("FrameArena");
 #endif
     onShutdown();
+
+    // Destroy render graph FBOs while GL context is still alive
+    renderGraph_.clearFBOs();
+    FullscreenQuad::instance().shutdown();
 
     Editor::instance().shutdown();
     spriteBatch_.shutdown();

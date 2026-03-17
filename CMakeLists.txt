@@ -71,6 +71,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(implot)
 
+FetchContent_Declare(
+    imguizmo
+    GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(imguizmo)
+
 # doctest (header-only test framework)
 FetchContent_Declare(
     doctest
@@ -113,11 +121,13 @@ add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
     ${implot_SOURCE_DIR}/implot.cpp
     ${implot_SOURCE_DIR}/implot_items.cpp
+    ${imguizmo_SOURCE_DIR}/ImGuizmo.cpp
 )
 target_include_directories(imgui_lib PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
     ${implot_SOURCE_DIR}
+    ${imguizmo_SOURCE_DIR}
 )
 target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static ${OPENGL_LIB})
 # No loader define = ImGui uses its own minimal GL loader

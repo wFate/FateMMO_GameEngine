@@ -1,6 +1,10 @@
 #pragma once
 #include "engine/render/sprite_batch.h"
 #include "engine/render/camera.h"
+#include "engine/render/render_graph.h"
+#include "engine/render/lighting.h"
+#include "engine/render/post_process.h"
+#include "engine/render/fullscreen_quad.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/editor/editor.h"
 #include "engine/input/input.h"
@@ -51,6 +55,9 @@ public:
     float fps() const { return fps_; }
     bool isRunning() const { return running_; }
     FrameArena& frameArena() { return frameArena_; }
+    RenderGraph& renderGraph() { return renderGraph_; }
+    LightingConfig& lightingConfig() { return lightingConfig_; }
+    PostProcessConfig& postProcessConfig() { return postProcessConfig_; }
 
 protected:
     AppConfig config_;
@@ -60,6 +67,9 @@ private:
     SDL_GLContext glContext_ = nullptr;
     SpriteBatch spriteBatch_;
     Camera camera_;
+    RenderGraph renderGraph_;
+    LightingConfig lightingConfig_;
+    PostProcessConfig postProcessConfig_;
 
     bool running_ = false;
     float deltaTime_ = 0.0f;
