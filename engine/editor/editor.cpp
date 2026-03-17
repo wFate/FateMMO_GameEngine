@@ -44,6 +44,9 @@ namespace fate {
 bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+#if defined(ENGINE_MEMORY_DEBUG)
+    ImPlot::CreateContext();
+#endif
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
@@ -129,6 +132,9 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
 
 void Editor::shutdown() {
     viewportFbo_.destroy();
+#if defined(ENGINE_MEMORY_DEBUG)
+    ImPlot::DestroyContext();
+#endif
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
@@ -164,7 +170,7 @@ void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
     }
 }
 
-void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch) {
+void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameArena* frameArena) {
     if (!frameStarted_) return;
 
     dockWorld_ = world;
@@ -180,6 +186,12 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch) {
     drawTilePalette(world, camera);
     drawAssetBrowser(world, camera);
     drawDebugInfoPanel(world);
+
+#if defined(ENGINE_MEMORY_DEBUG)
+    if (showMemoryPanel_) {
+        drawMemoryPanel(&showMemoryPanel_, frameArena);
+    }
+#endif
 
     if (showDemoWindow_) {
         ImGui::ShowDemoWindow(&showDemoWindow_);
@@ -273,6 +285,9 @@ void Editor::drawDockSpace() {
             if (ImGui::MenuItem("Reset Layout")) { resetLayout_ = true; }
             ImGui::Separator();
             ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow_);
+#if defined(ENGINE_MEMORY_DEBUG)
+            ImGui::MenuItem("Memory", nullptr, &showMemoryPanel_);
+#endif
             ImGui::EndMenu();
         }
 
