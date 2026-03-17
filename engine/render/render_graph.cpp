@@ -33,6 +33,10 @@ void RenderGraph::execute(RenderPassContext& ctx) {
     }
 }
 
+void RenderGraph::clearPasses() {
+    passes_.clear();
+}
+
 void RenderGraph::clearFBOs() {
     for (auto& [name, fbo] : fboPool_) {
         fbo->destroy();

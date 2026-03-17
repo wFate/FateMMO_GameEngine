@@ -1,13 +1,17 @@
 #include "engine/particle/particle_system.h"
+#include "engine/particle/particle_emitter_component.h"
+#include "game/components/transform.h"
 
 namespace fate {
 
 void ParticleSystem::update(float dt) {
-    // Particle emitter updates happen via forEach<ParticleEmitterComponent, Transform>
-    // The game layer registers this system and provides the component iteration
-    // in game_app.cpp. This base implementation is a hook point for the ECS system loop.
-    // Actual particle update logic goes in the game's onUpdate or in a registered
-    // render pass callback that calls emitter.update() for each entity.
+    if (!world_) return;
+
+    world_->forEach<ParticleEmitterComponent, Transform>(
+        [&](Entity*, ParticleEmitterComponent* emitterComp, Transform* transform) {
+            emitterComp->emitter.update(dt, transform->position);
+        }
+    );
 }
 
 } // namespace fate

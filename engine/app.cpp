@@ -409,6 +409,11 @@ void App::shutdown() {
 #if defined(ENGINE_MEMORY_DEBUG)
     AllocatorRegistry::instance().remove("FrameArena");
 #endif
+
+    // Clear render passes first — their lambda captures reference game objects
+    // (tilemap_, renderSystem_, etc.) that onShutdown() is about to destroy.
+    renderGraph_.clearPasses();
+
     onShutdown();
 
     // Destroy render graph FBOs while GL context is still alive

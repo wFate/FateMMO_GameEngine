@@ -23,6 +23,8 @@
 #include "game/systems/spawn_system.h"
 #include "game/systems/npc_interaction_system.h"
 #include "game/systems/quest_system.h"
+#include "engine/particle/particle_system.h"
+#include "engine/particle/particle_emitter_component.h"
 #include "game/ui/inventory_ui.h"
 #include "game/ui/skill_bar_ui.h"
 #include "game/ui/hud_bars_ui.h"
@@ -377,6 +379,7 @@ void GameApp::onInit() {
         zoneSystem_->camera = &camera();
 
         world.addSystem<SpawnSystem>();
+        world.addSystem<ParticleSystem>();
 
         renderSystem_ = new SpriteRenderSystem();
         renderSystem_->batch = &spriteBatch();
@@ -435,6 +438,50 @@ void GameApp::onInit() {
 
         if (renderSystem_) {
             renderSystem_->update(0.0f);
+        }
+
+        sceneFbo.unbind();
+    }});
+
+    // Pass: Particles — particle emitters (accumulates onto Scene FBO)
+    graph.addPass({"Particles", true, [this](RenderPassContext& ctx) {
+        auto& sceneFbo = ctx.graph->getFBO("Scene", ctx.viewportWidth, ctx.viewportHeight, true);
+        sceneFbo.bind();
+
+        if (ctx.world) {
+            Mat4 vp = ctx.camera->getViewProjection();
+
+            ctx.world->forEach<ParticleEmitterComponent, Transform>(
+                [&](Entity*, ParticleEmitterComponent* emitterComp, Transform*) {
+                    const auto& verts = emitterComp->emitter.vertices();
+                    if (verts.empty()) return;
+
+                    if (emitterComp->emitter.config().additiveBlend) {
+                        ctx.spriteBatch->setBlendMode(BlendMode::Additive);
+                    }
+
+                    ctx.spriteBatch->begin(vp);
+                    // Draw each particle quad as a colored rect
+                    for (size_t i = 0; i + 3 < verts.size(); i += 4) {
+                        const auto& v = verts[i];
+                        Vec2 center = {
+                            (verts[i].x + verts[i+2].x) * 0.5f,
+                            (verts[i].y + verts[i+2].y) * 0.5f
+                        };
+                        float w = verts[i+1].x - verts[i].x;
+                        float h = verts[i+2].y - verts[i+1].y;
+                        if (w < 0) w = -w;
+                        if (h < 0) h = -h;
+                        Color c(v.r, v.g, v.b, v.a);
+                        ctx.spriteBatch->drawRect(center, {w, h}, c, emitterComp->emitter.config().depth);
+                    }
+                    ctx.spriteBatch->end();
+
+                    if (emitterComp->emitter.config().additiveBlend) {
+                        ctx.spriteBatch->setBlendMode(BlendMode::Alpha);
+                    }
+                }
+            );
         }
 
         sceneFbo.unbind();
