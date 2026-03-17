@@ -317,7 +317,6 @@ void Editor::drawDockSpace() {
         ImGui::DockBuilderDockWindow("Log", dockBottom);
         ImGui::DockBuilderDockWindow("Debug Info", dockBottom);
         ImGui::DockBuilderDockWindow("Tile Palette", dockRight);
-        ImGui::DockBuilderDockWindow("HUD Layout", dockRight);
 
         ImGui::DockBuilderFinish(dockspaceId);
     }
