@@ -12,8 +12,8 @@ namespace fate {
 
 struct AppConfig {
     std::string title = "FateEngine";
-    int windowWidth = 1280;
-    int windowHeight = 720;
+    int windowWidth = 1600;
+    int windowHeight = 900;
     bool fullscreen = false;
     bool vsync = true;
     int targetFPS = 60;
