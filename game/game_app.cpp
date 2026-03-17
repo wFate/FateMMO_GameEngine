@@ -10,7 +10,7 @@
 #include "game/components/box_collider.h"
 #include "game/components/polygon_collider.h"
 #include "game/components/game_components.h"
-#include "engine/render/text_renderer.h"
+#include "engine/render/sdf_text.h"
 #include "engine/ecs/prefab.h"
 #include "game/entity_factory.h"
 #include "game/systems/movement_system.h"
@@ -383,9 +383,8 @@ void GameApp::onInit() {
         renderSystem_->init(&world);
     }
 
-    // Initialize text rendering
-    TextRenderer::instance().init("C:/Windows/Fonts/consola.ttf", 16.0f);
-    hudFont_ = TextRenderer::instance().loadFont("C:/Windows/Fonts/consola.ttf", 24.0f);
+    // Initialize SDF text rendering
+    SDFText::instance().init("assets/fonts/default.png", "assets/fonts/default.json");
 
     // Try to load a tilemap (if present, replaces procedural ground)
     tilemap_ = std::make_unique<Tilemap>();
@@ -956,7 +955,7 @@ void GameApp::renderAggroRadius(SpriteBatch& batch, Camera& camera) {
 
 void GameApp::onShutdown() {
     tilemap_.reset();
-    TextRenderer::instance().shutdown();
+    SDFText::instance().shutdown();
     delete renderSystem_;
     renderSystem_ = nullptr;
     LOG_INFO("Game", "Game shutting down...");

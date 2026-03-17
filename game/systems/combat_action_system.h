@@ -7,7 +7,7 @@
 #include "game/shared/combat_system.h"
 #include "game/shared/xp_calculator.h"
 #include "engine/core/logger.h"
-#include "engine/render/text_renderer.h"
+#include "engine/render/sdf_text.h"
 #include "engine/render/sprite_batch.h"
 #include "engine/render/camera.h"
 #include "game/components/sprite_component.h"
@@ -100,13 +100,12 @@ public:
         }
 
         // --- Nameplates above entities ---
-        auto* textRenderer = &TextRenderer::instance();
-        if (textRenderer->defaultFont() && world_) {
+        auto& sdfText = SDFText::instance();
+        if (world_) {
             // Player nameplates
-            auto* font = textRenderer->defaultFont();
             world_->forEach<Transform, NameplateComponent>(
                 [&](Entity* entity, Transform* t, NameplateComponent* np) {
-                    if (!np->visible || !font) return;
+                    if (!np->visible) return;
                     auto* spr = entity->getComponent<SpriteComponent>();
                     float spriteH = spr ? spr->size.y : 32.0f;
 
@@ -119,33 +118,32 @@ public:
                     }
 
                     // Center text above sprite
-                    Vec2 textSize = font->measureText(npBuf);
-                    float textW = textSize.x * np->fontSize;
-                    Vec2 namePos = {t->position.x - textW * 0.5f, t->position.y + spriteH * 0.5f + 4.0f};
+                    float npFontSize = np->fontSize * 16.0f;
+                    Vec2 textSize = sdfText.measure(npBuf, npFontSize);
+                    Vec2 namePos = {t->position.x - textSize.x * 0.5f, t->position.y + spriteH * 0.5f + 4.0f};
 
-                    textRenderer->drawWorldYUp(batch, npBuf, namePos, np->nameColor, np->fontSize, 85.0f);
+                    sdfText.drawWorld(batch, npBuf, namePos, npFontSize, np->nameColor, 85.0f, TextStyle::Outlined);
 
                     // Track the top of the nameplate stack for quest marker positioning
-                    float nextYAbove = namePos.y + font->measureText(npBuf).y * np->fontSize + 2.0f;
+                    float nextYAbove = namePos.y + textSize.y + 2.0f;
 
                     // Guild name below (centered)
                     if (np->showGuildSymbol && !np->guildName.empty()) {
-                        Vec2 guildSize = font->measureText(np->guildName);
-                        float guildW = guildSize.x * np->fontSize * 0.85f;
-                        Vec2 guildPos = {t->position.x - guildW * 0.5f, namePos.y + 10.0f};
-                        textRenderer->drawWorldYUp(batch, np->guildName, guildPos,
-                            Color(0.4f, 1.0f, 0.4f), np->fontSize * 0.85f, 85.0f);
+                        float guildFontSize = npFontSize * 0.85f;
+                        Vec2 guildSize = sdfText.measure(np->guildName, guildFontSize);
+                        Vec2 guildPos = {t->position.x - guildSize.x * 0.5f, namePos.y + 10.0f};
+                        sdfText.drawWorld(batch, np->guildName, guildPos, guildFontSize,
+                            Color(0.4f, 1.0f, 0.4f), 85.0f, TextStyle::Outlined);
                     }
 
                     // NPC role subtitle (e.g., "[Merchant]", "[Quest]") — grey, below name
                     if (!np->roleSubtitle.empty()) {
-                        Vec2 subSize = font->measureText(np->roleSubtitle);
-                        float subScale = np->fontSize * 0.75f;
-                        float subW = subSize.x * subScale;
+                        float subFontSize = npFontSize * 0.75f;
+                        Vec2 subSize = sdfText.measure(np->roleSubtitle, subFontSize);
                         // Position below the nameplate text (Y-up: subtract to go lower)
-                        Vec2 subPos = {t->position.x - subW * 0.5f, namePos.y - subSize.y * subScale - 2.0f};
-                        textRenderer->drawWorldYUp(batch, np->roleSubtitle, subPos,
-                            Color(0.7f, 0.7f, 0.7f, 1.0f), subScale, 85.0f);
+                        Vec2 subPos = {t->position.x - subSize.x * 0.5f, namePos.y - subSize.y - 2.0f};
+                        sdfText.drawWorld(batch, np->roleSubtitle, subPos, subFontSize,
+                            Color(0.7f, 0.7f, 0.7f, 1.0f), 85.0f, TextStyle::Outlined);
                     }
 
                     // Quest marker (? or !) above nameplate
@@ -164,11 +162,10 @@ public:
                                 default: /* Starter */      markerColor = Color(1.0f, 1.0f, 1.0f, 1.0f);     break; // White
                             }
                         }
-                        float markerScale = np->fontSize * 1.3f;
-                        Vec2 markerSize = font->measureText(markerText);
-                        float markerW = markerSize.x * markerScale;
-                        Vec2 markerPos = {t->position.x - markerW * 0.5f, nextYAbove};
-                        textRenderer->drawWorldYUp(batch, markerText, markerPos, markerColor, markerScale, 86.0f);
+                        float markerFontSize = npFontSize * 1.3f;
+                        Vec2 markerSize = sdfText.measure(markerText, markerFontSize);
+                        Vec2 markerPos = {t->position.x - markerSize.x * 0.5f, nextYAbove};
+                        sdfText.drawWorld(batch, markerText, markerPos, markerFontSize, markerColor, 86.0f, TextStyle::Glow);
                     }
                 }
             );
@@ -183,7 +180,7 @@ public:
 
             world_->forEach<Transform, MobNameplateComponent>(
                 [&](Entity* entity, Transform* t, MobNameplateComponent* mnp) {
-                    if (!mnp->visible || !font) return;
+                    if (!mnp->visible) return;
                     auto* enemyComp = entity->getComponent<EnemyStatsComponent>();
                     if (enemyComp && !enemyComp->stats.isAlive) return; // Hide dead mob names
 
@@ -208,11 +205,11 @@ public:
                         }
                     }
                     // Center text above sprite
-                    Vec2 mnpTextSize = font->measureText(mnpBuf);
-                    float mnpTextW = mnpTextSize.x * mnp->fontSize;
-                    Vec2 namePos = {t->position.x - mnpTextW * 0.5f, t->position.y + spriteH * 0.5f + 4.0f};
+                    float mnpFontSize = mnp->fontSize * 16.0f;
+                    Vec2 mnpTextSize = sdfText.measure(mnpBuf, mnpFontSize);
+                    Vec2 namePos = {t->position.x - mnpTextSize.x * 0.5f, t->position.y + spriteH * 0.5f + 4.0f};
 
-                    textRenderer->drawWorldYUp(batch, mnpBuf, namePos, mobColor, mnp->fontSize, 85.0f);
+                    sdfText.drawWorld(batch, mnpBuf, namePos, mnpFontSize, mobColor, 85.0f, TextStyle::Outlined);
 
                     // HP bar below name for targeted or damaged mobs
                     if (enemyComp && enemyComp->stats.currentHP < enemyComp->stats.maxHP) {
@@ -233,18 +230,17 @@ public:
         }
 
         // --- Floating damage/XP text ---
-        if (textRenderer->defaultFont()) {
-            for (auto& ft : floatingTexts_) {
-                float alpha = 1.0f - (ft.elapsed / ft.lifetime);
-                if (alpha <= 0.0f) continue;
+        for (auto& ft : floatingTexts_) {
+            float alpha = 1.0f - (ft.elapsed / ft.lifetime);
+            if (alpha <= 0.0f) continue;
 
-                Color c = ft.color;
-                c.a = alpha;
+            Color c = ft.color;
+            c.a = alpha;
 
-                float scale = ft.isCrit ? 1.3f : 1.0f;
+            float fontSize = ft.isCrit ? 1.3f * 16.0f : 16.0f;
+            TextStyle style = ft.isCrit ? TextStyle::Glow : TextStyle::Shadow;
 
-                textRenderer->drawWorldYUp(batch, ft.text, ft.position, c, scale, 90.0f);
-            }
+            sdfText.drawWorld(batch, ft.text, ft.position, fontSize, c, 90.0f, style);
         }
 
         batch.end();
