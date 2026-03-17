@@ -1535,6 +1535,31 @@ void Editor::saveScene(World* world, const std::string& path) {
             };
         }
 
+        if (auto* sz = entity->getComponent<SpawnZoneComponent>()) {
+            nlohmann::json rulesJson = nlohmann::json::array();
+            for (auto& r : sz->config.rules) {
+                rulesJson.push_back({
+                    {"enemyId", r.enemyId},
+                    {"targetCount", r.targetCount},
+                    {"minLevel", r.minLevel},
+                    {"maxLevel", r.maxLevel},
+                    {"baseHP", r.baseHP},
+                    {"baseDamage", r.baseDamage},
+                    {"isAggressive", r.isAggressive},
+                    {"isBoss", r.isBoss},
+                    {"respawnSeconds", r.respawnSeconds}
+                });
+            }
+            comps["SpawnZone"] = {
+                {"zoneName", sz->config.zoneName},
+                {"size", {sz->config.size.x, sz->config.size.y}},
+                {"minSpawnDistance", sz->config.minSpawnDistance},
+                {"serverTickInterval", sz->config.serverTickInterval},
+                {"showBounds", sz->showBounds},
+                {"rules", rulesJson}
+            };
+        }
+
         ej["components"] = comps;
         entitiesJson.push_back(ej);
     });
@@ -1712,6 +1737,35 @@ void Editor::loadScene(World* world, const std::string& path) {
             p->fadeDuration = pj.value("fadeDuration", 0.3f);
             p->showLabel = pj.value("showLabel", true);
             p->label = pj.value("label", "");
+        }
+
+        if (comps.contains("SpawnZone")) {
+            auto& szj = comps["SpawnZone"];
+            auto* sz = entity->addComponent<SpawnZoneComponent>();
+            sz->config.zoneName = szj.value("zoneName", "DefaultZone");
+            if (szj.contains("size")) {
+                auto s = szj["size"];
+                sz->config.size = {s[0].get<float>(), s[1].get<float>()};
+            }
+            sz->config.minSpawnDistance = szj.value("minSpawnDistance", 48.0f);
+            sz->config.serverTickInterval = szj.value("serverTickInterval", 0.5f);
+            sz->showBounds = szj.value("showBounds", false);
+
+            if (szj.contains("rules")) {
+                for (auto& rj : szj["rules"]) {
+                    MobSpawnRule rule;
+                    rule.enemyId = rj.value("enemyId", "");
+                    rule.targetCount = rj.value("targetCount", 5);
+                    rule.minLevel = rj.value("minLevel", 1);
+                    rule.maxLevel = rj.value("maxLevel", 5);
+                    rule.baseHP = rj.value("baseHP", 50);
+                    rule.baseDamage = rj.value("baseDamage", 5);
+                    rule.isAggressive = rj.value("isAggressive", true);
+                    rule.isBoss = rj.value("isBoss", false);
+                    rule.respawnSeconds = rj.value("respawnSeconds", 34.0f);
+                    sz->config.rules.push_back(rule);
+                }
+            }
         }
     }
 
