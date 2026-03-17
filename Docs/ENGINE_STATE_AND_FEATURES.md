@@ -36,6 +36,10 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Zone Snapshots | Done | Persistent entity IDs (64-bit), serialization skeleton for mob/boss state across zone visits |
 | Tracy Profiler | Done | On-demand profiling, named zones, frame marks, arena memory tracking |
 | Component Registry | Done | Compile-time CompId, Hot/Warm/Cold tier classification, zero-RTTI macros |
+| Reflection System | Done | FATE_REFLECT macro, field-level metadata (name, offset, type), auto-generated JSON serializers |
+| Serialization Registry | Done | ComponentMetaRegistry maps string names → type-erased serialize/deserialize, aliases for backward compat |
+| Component Traits | Done | ComponentFlags (Serializable/Networked/Persistent/EditorOnly), per-component policy via component_traits<T> |
+| Generic Inspector | Done | Reflection-driven ImGui widget fallback for any reflected component, manual inspectors take priority |
 | Chunk Lifecycle | Done | 7-state machine (Queued→Loading→Setup→Active→Sleeping→Unloading→Evicted), ticket system, rate-limited transitions, double-buffered staging |
 | AOI Groundwork | Done | Visibility sets with enter/leave/stay diffs, hysteresis (20% larger deactivation radius) |
 | Ghost Entity Scaffold | Done | GhostFlag component, dedicated GhostArena for cross-zone proxy entities |
@@ -45,7 +49,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 |---------|--------|-------|
 | Toggle with F3 | Done | Auto-pauses game when opened |
 | Entity Hierarchy | Done | Grouped by name+tag (collapsible), color-coded (player/ground/obstacle/mob/boss), error badges |
-| Inspector Panel | Done | Edit all engine + game component properties live, sprite preview thumbnail |
+| Inspector Panel | Done | Edit all engine + game component properties live, sprite preview thumbnail, reflection-driven generic fallback |
 | Project Browser | Done | Tabs: Sprites, Scripts, Scenes, Shaders, Prefabs |
 | Right-Click Context Menus | Done | Open in VS Code, Show in Explorer, Copy Path, Delete |
 | Asset Placement | Done | Click sprite thumbnail, click scene to stamp entities |
@@ -183,9 +187,11 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Save Entity as Prefab | Done | JSON to assets/prefabs/, saves to both source + build dirs |
-| Spawn from Prefab | Done | Click in Prefabs tab, click scene to place |
-| Prefab Library | Done | Auto-loads all .json from prefab directory on startup |
+| Spawn from Prefab | Done | Click in Prefabs tab, click scene to place. Registry-based deserialization (no hardcoded types) |
+| Prefab Library | Done | Auto-loads all .json from prefab directory on startup. Unknown components preserved as raw JSON |
 | Editor Integration | Done | Prefabs tab, right-click to place/delete, tooltip shows components |
+| Scene Versioning | Done | `"version": 1` header in scene files, forward-compat validation |
+| Registry-Based Save/Load | Done | Scene and prefab serialization driven by ComponentMetaRegistry — adding new components requires zero file edits |
 | Duplicate Entity | Done | Uses prefab serialization for deep copy |
 
 ### Tile Painting
@@ -390,6 +396,60 @@ Spawn zones are spatial entities you place and resize in the scene editor. Mobs 
 **HUD maxFury fix:**
 - Fury display reads s.maxFury directly instead of recomputing from formula
 - Inspector changes to maxFury properly reflected in HUD
+
+### March 17, 2026 - Reflection, Serialization & Game Systems
+
+**Reflection system:**
+- FATE_REFLECT macro generates compile-time field metadata (name, offset, size, type) per component
+- FieldType enum: Float, Int, Bool, Vec2, Vec3, Color, Rect, String, EntityHandle, Direction, Custom
+- Reflection<T> template specialization with static fields() returning std::span<const FieldInfo>
+- All 30+ game components reflected with FATE_REFLECT or FATE_REFLECT_EMPTY
+
+**Serialization registry:**
+- ComponentMetaRegistry maps string names → type-erased construct/destroy/toJson/fromJson
+- Auto-generates JSON serializers from reflected fields (zero boilerplate for simple components)
+- Custom serializer overrides for complex types (SpriteComponent, etc.)
+- Alias support for backward compatibility ("Sprite" → "SpriteComponent")
+- ComponentFlags (Serializable, Networked, Persistent, EditorOnly) per component via component_traits<T>
+
+**Prefab system rewrite:**
+- Removed 164 lines of hardcoded per-component serialization
+- entityToJson/jsonToEntity now fully data-driven via ComponentMetaRegistry
+- Unknown components preserved as raw JSON (no data loss on version mismatch)
+- Adding new component requires zero changes to prefab.cpp
+
+**Scene save/load rewrite:**
+- Removed 160 lines of hardcoded serialization from editor.cpp
+- Version header ("version": 1) added for future migration support
+- Registry-based serialization for all entities and components
+
+**Generic inspector:**
+- drawReflectedComponent() auto-renders any reflected component via ImGui widgets
+- Fallback for components without manual inspector code
+- Manual inspectors take priority when present
+
+**Type-erased addComponentById:**
+- World::addComponentById(handle, CompId, size, alignment) enables runtime component creation by ID
+- Entity::unknownComponents_ preserves unregistered component JSON across save/load
+
+**Explicit component registration:**
+- registerAllComponents() in game/register_components.h called from GameApp::onInit()
+- All 30+ components registered with traits, reflection, and serializers
+
+**NPC & quest systems (new):**
+- NPCInteractionSystem: click-to-interact with NPCs, range check, dialogue triggers
+- QuestSystem: event-driven progress tracking, 5 objective types, quest markers on NPCs
+- NPC Dialogue UI: branching story dialogue with quest accept/decline/complete
+- Shop UI, Quest Log UI, Skill Trainer UI, Bank Storage UI, Teleporter UI
+- 6 starter quests, NPC templates with composable roles
+
+**Additional game systems:**
+- Faction system with registry and chat garbler
+- Pet system with leveling and stat calculation
+- Stat enchant system for accessory enchanting
+- Mage double-cast mechanic with hidden instant-cast window
+
+**Files: 56 changed, +7,831 lines across 21 commits**
 
 ### March 17, 2026 - Engine Research Upgrade (Full Stack)
 
