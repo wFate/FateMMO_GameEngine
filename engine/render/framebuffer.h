@@ -1,17 +1,16 @@
 #pragma once
-#include "engine/render/gl_loader.h"
 
 namespace fate {
 
 class Framebuffer {
 public:
     Framebuffer() = default;
-    // No auto-cleanup in destructor (matches SpriteBatch::init/shutdown pattern)
-    ~Framebuffer() = default;
+    ~Framebuffer() = default; // No auto-cleanup — matches SpriteBatch pattern. Call destroy() explicitly before GL context teardown.
 
-    bool create(int width, int height);
+    bool create(int width, int height, bool withDepthStencil = false);
     void destroy();
     void resize(int width, int height);
+
     void bind();
     void unbind();
 
@@ -19,12 +18,15 @@ public:
     int width() const { return width_; }
     int height() const { return height_; }
     bool isValid() const { return fbo_ != 0; }
+    bool hasDepthStencil() const { return hasDepthStencil_; }
 
 private:
     unsigned int fbo_ = 0;
     unsigned int texture_ = 0;
+    unsigned int rbo_ = 0;
     int width_ = 0;
     int height_ = 0;
+    bool hasDepthStencil_ = false;
 };
 
 } // namespace fate
