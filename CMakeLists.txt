@@ -45,6 +45,7 @@ FetchContent_MakeAvailable(stb)
 add_library(stb_image STATIC
     third_party/stb/stb_image_impl.cpp
     third_party/stb/stb_truetype_impl.cpp
+    third_party/stb/stb_image_write_impl.cpp
 )
 target_include_directories(stb_image PUBLIC ${stb_SOURCE_DIR})
 
