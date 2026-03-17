@@ -39,6 +39,9 @@ public:
     // FBO pool — get or create by name
     Framebuffer& getFBO(const std::string& name, int width, int height, bool withDepthStencil = false);
 
+    // Destroy all pooled FBOs (call before GL context teardown)
+    void clearFBOs();
+
     const std::vector<RenderPass>& passes() const { return passes_; }
 
 private:

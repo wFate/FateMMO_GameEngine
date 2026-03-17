@@ -33,6 +33,13 @@ void RenderGraph::execute(RenderPassContext& ctx) {
     }
 }
 
+void RenderGraph::clearFBOs() {
+    for (auto& [name, fbo] : fboPool_) {
+        fbo->destroy();
+    }
+    fboPool_.clear();
+}
+
 Framebuffer& RenderGraph::getFBO(const std::string& name, int width, int height, bool withDepthStencil) {
     auto it = fboPool_.find(name);
     if (it != fboPool_.end()) {
