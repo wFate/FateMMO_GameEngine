@@ -412,7 +412,7 @@ private:
                 }
 
                 // ---- Escape clears target ----
-                if (input.isKeyPressed(SDL_SCANCODE_ESCAPE)) {
+                if (input.isActionPressed(ActionId::Cancel)) {
                     clearTarget();
                     return;
                 }
@@ -444,8 +444,8 @@ private:
 
                 bool isMage = (playerStats.classDef.classType == ClassType::Mage);
 
-                // ---- Space pressed ----
-                if (input.isKeyPressed(SDL_SCANCODE_SPACE)) {
+                // ---- Attack action (buffered) ----
+                if (input.consumeBuffered(ActionId::Attack)) {
                     if (currentTargetId_ == INVALID_ENTITY) {
                         // No target — select nearest mob
                         Entity* nearest = findNearestMob(

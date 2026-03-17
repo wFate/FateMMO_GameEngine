@@ -659,23 +659,23 @@ void GameApp::spawnTestNPCs(World& world) {
 void GameApp::onUpdate(float deltaTime) {
     // F1 HUD toggle removed — HUD is always on
     // F2 collision debug removed — now controlled via editor toolbar toggle
-    // I key toggles inventory (not while typing in editor)
-    if (Input::instance().isKeyPressed(SDL_SCANCODE_I) && !Editor::instance().wantsKeyboard()) {
+    auto& input = Input::instance();
+
+    // UI toggles — action map suppresses these in Chat context automatically
+    if (input.isActionPressed(ActionId::ToggleInventory) && !Editor::instance().wantsKeyboard()) {
         InventoryUI::instance().toggle();
     }
-    // K key toggles skill bar visibility
-    if (Input::instance().isKeyPressed(SDL_SCANCODE_K) && !Editor::instance().wantsKeyboard()) {
+    if (input.isActionPressed(ActionId::ToggleSkillBar) && !Editor::instance().wantsKeyboard()) {
         SkillBarUI::instance().toggle();
     }
-    // L key toggles quest log
-    if (Input::instance().isKeyPressed(SDL_SCANCODE_L) && !Editor::instance().wantsKeyboard()) {
+    if (input.isActionPressed(ActionId::ToggleQuestLog) && !Editor::instance().wantsKeyboard()) {
         questLogUI_.toggle();
     }
-    // [ and ] keys switch skill bar pages
-    if (Input::instance().isKeyPressed(SDL_SCANCODE_LEFTBRACKET) && !Editor::instance().wantsKeyboard()) {
+    // Skill bar page switching
+    if (input.isActionPressed(ActionId::SkillPagePrev) && !Editor::instance().wantsKeyboard()) {
         SkillBarUI::instance().prevPage();
     }
-    if (Input::instance().isKeyPressed(SDL_SCANCODE_RIGHTBRACKET) && !Editor::instance().wantsKeyboard()) {
+    if (input.isActionPressed(ActionId::SkillPageNext) && !Editor::instance().wantsKeyboard()) {
         SkillBarUI::instance().nextPage();
     }
 }
