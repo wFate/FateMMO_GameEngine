@@ -1,9 +1,11 @@
 #pragma once
 #include "engine/ecs/world.h"
 #include "engine/ecs/entity.h"
+#include "engine/ecs/entity_handle.h"
 #include "engine/render/camera.h"
 #include "engine/render/sprite_batch.h"
 #include "engine/render/texture.h"
+#include "engine/render/framebuffer.h"
 #include <SDL.h>
 #include <string>
 #include <vector>
@@ -44,6 +46,22 @@ public:
     void beginFrame();
     void render(World* world, Camera* camera, SpriteBatch* batch);
 
+    // Split render into scene (FBO-bound) and UI (ImGui panels)
+    void renderScene(SpriteBatch* batch, Camera* camera);
+    void renderUI(World* world, Camera* camera, SpriteBatch* batch);
+
+    // Viewport info (for input routing in App)
+    Vec2 viewportPos() const { return viewportPos_; }
+    Vec2 viewportSize() const { return viewportSize_; }
+    bool isViewportHovered() const { return viewportHovered_; }
+
+    // Toolbar toggle accessors
+    bool showCollisionDebug() const { return showCollisionDebug_; }
+    bool showGrid() const { return showGrid_; }
+
+    // FBO management
+    Framebuffer& viewportFbo() { return viewportFbo_; }
+
     void handleSceneClick(World* world, Camera* camera, const Vec2& screenPos,
                           int windowWidth, int windowHeight);
     void handleSceneDrag(Camera* camera, const Vec2& screenPos,
@@ -80,8 +98,15 @@ public:
     void scanAssets();
 
     // Multi-select
-    const std::set<EntityId>& selectedEntities() const { return selectedEntities_; }
-    bool isSelected(EntityId id) const { return selectedEntities_.count(id) > 0; }
+    const std::set<EntityHandle>& selectedEntities() const { return selectedEntities_; }
+    bool isSelected(EntityHandle h) const { return selectedEntities_.count(h) > 0; }
+    bool isSelected(EntityId id) const {
+        // Legacy compat: search by raw id
+        for (auto& h : selectedEntities_) {
+            if (h.index() == id) return true;
+        }
+        return false;
+    }
 
     // Entity locking
     static bool isEntityLocked(Entity* e) { return e && e->tag() == "ground"; }
@@ -102,6 +127,19 @@ private:
     bool wantsKeyboard_ = false;
     bool wantsMouse_ = false;
     bool showDemoWindow_ = false;
+
+    // Viewport FBO
+    Framebuffer viewportFbo_;
+
+    // Viewport tracking (set each frame by drawSceneViewport)
+    Vec2 viewportPos_ = {0, 0};
+    Vec2 viewportSize_ = {0, 0};
+    bool viewportHovered_ = false;
+
+    // Toolbar toggles
+    bool showGrid_ = true;
+    bool showCollisionDebug_ = false;
+
     bool openSavePrefab_ = false;
 
     // Tool mode
@@ -113,7 +151,7 @@ private:
 
     // Selection
     Entity* selectedEntity_ = nullptr;
-    std::set<EntityId> selectedEntities_; // multi-select
+    std::set<EntityHandle> selectedEntities_; // multi-select
     bool isDraggingEntity_ = false;
     bool isResizingEntity_ = false;
     int resizeHandle_ = -1;
@@ -154,6 +192,10 @@ private:
     void drawTilePalette(World* world, Camera* camera);
     void drawSceneGrid(SpriteBatch* batch, Camera* camera);
     void drawConsole(World* world);
+    void drawDockSpace();
+    void drawSceneViewport();
+    void drawViewportHUD(World* world);
+    void drawDebugInfoPanel(World* world);
     void loadTileset(const std::string& path, int tileSize = 32);
 
     // Console command execution
