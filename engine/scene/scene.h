@@ -5,6 +5,10 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
+// Current scene file format version.
+// Increment when the on-disk layout changes in a backward-incompatible way.
+static constexpr int SCENE_FORMAT_VERSION = 1;
+
 namespace fate {
 
 struct ZoneSnapshot;  // forward declare — defined in engine/memory/zone_snapshot.h
@@ -27,8 +31,11 @@ public:
     // Zone arena — available for zone-level allocations (snapshot data, etc.)
     Arena& zoneArena() { return zoneArena_; }
 
-    // Load scene definition from JSON file
+    // Load scene definition from JSON file (registry-based deserialization)
     bool loadFromFile(const std::string& path);
+
+    // Save scene to JSON file (registry-based serialization with version header)
+    bool saveToFile(const std::string& path) const;
 
     // Lifecycle
     void onEnter();   // called when scene becomes active
@@ -66,8 +73,9 @@ private:
     bool isLoading_ = false;
     float loadProgress_ = 0.0f;
 
-    // Entity factory: creates entity from JSON definition
-    Entity* createEntityFromJson(const nlohmann::json& entityDef);
+    // Serialize metadata to/from JSON
+    nlohmann::json metadataToJson() const;
+    void metadataFromJson(const nlohmann::json& meta);
 };
 
 } // namespace fate
