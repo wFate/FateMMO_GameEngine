@@ -11,6 +11,9 @@ public:
     ~Shader();
 
     bool loadFromFile(const std::string& vertPath, const std::string& fragPath);
+    bool reloadFromFile(const std::string& vertPath, const std::string& fragPath);
+    const std::string& vertPath() const { return vertPath_; }
+    const std::string& fragPath() const { return fragPath_; }
     bool loadFromSource(const std::string& vertSrc, const std::string& fragSrc);
 
     void bind() const;
@@ -31,6 +34,8 @@ private:
 
     int getUniformLocation(const std::string& name);
     bool compileShader(unsigned int shader, const std::string& source, const char* type);
+    std::string vertPath_;
+    std::string fragPath_;
 };
 
 } // namespace fate

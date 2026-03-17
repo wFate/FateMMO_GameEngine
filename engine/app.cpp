@@ -4,6 +4,9 @@
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
 #include "engine/profiling/tracy_zones.h"
+#if defined(ENGINE_MEMORY_DEBUG)
+#include "engine/memory/allocator_registry.h"
+#endif
 #include <SDL.h>
 
 namespace fate {
@@ -82,6 +85,31 @@ bool App::init(const AppConfig& config) {
     });
 
     onInit();
+
+    assetsDir_ = config.assetsDir;
+
+    // Register asset loaders
+    AssetRegistry::instance().registerLoader(makeTextureLoader());
+    AssetRegistry::instance().registerLoader(makeJsonLoader());
+    AssetRegistry::instance().registerLoader(makeShaderLoader());
+
+    // Start file watcher on assets directory
+    if (!assetsDir_.empty()) {
+        fileWatcher_.start(assetsDir_, [this](const std::string& relativePath) {
+            std::string fullPath = assetsDir_ + "/" + relativePath;
+            AssetRegistry::instance().queueReload(fullPath);
+        });
+    }
+
+#if defined(ENGINE_MEMORY_DEBUG)
+    AllocatorRegistry::instance().add({
+        .name = "FrameArena",
+        .type = AllocatorType::FrameArena,
+        .getUsed = [this]() -> size_t { return frameArena_.current().position(); },
+        .getCommitted = [this]() -> size_t { return frameArena_.current().committed(); },
+        .getReserved = [this]() -> size_t { return frameArena_.current().reserved(); },
+    });
+#endif
 
     running_ = true;
     LOG_INFO("App", "Engine initialized successfully");
@@ -266,6 +294,10 @@ void App::processEvents() {
 }
 
 void App::update() {
+    // Process asset reloads unconditionally (hot-reload works while editing)
+    elapsedTime_ += deltaTime_;
+    AssetRegistry::instance().processReloads(elapsedTime_);
+
     onUpdate(deltaTime_);
 
     // Always process destroy queue (so editor delete works while paused)
@@ -322,7 +354,7 @@ void App::render() {
     glViewport(0, 0, config_.windowWidth, config_.windowHeight);
     glClearColor(0.12f, 0.12f, 0.15f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    editor.renderUI(world, &camera_, &spriteBatch_);
+    editor.renderUI(world, &camera_, &spriteBatch_, &frameArena_);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
     SDL_GL_SwapWindow(window_);
@@ -330,11 +362,16 @@ void App::render() {
 
 void App::shutdown() {
     LOG_INFO("App", "Shutting down...");
+#if defined(ENGINE_MEMORY_DEBUG)
+    AllocatorRegistry::instance().remove("FrameArena");
+#endif
     onShutdown();
 
     Editor::instance().shutdown();
     spriteBatch_.shutdown();
+    fileWatcher_.stop();
     TextureCache::instance().clear();
+    AssetRegistry::instance().clear();
 
     if (glContext_) {
         SDL_GL_DeleteContext(glContext_);
