@@ -30,6 +30,10 @@ public:
     Scene* currentScene() { return currentScene_.get(); }
     const std::string& currentSceneName() const { return currentSceneName_; }
 
+    // Loading state — true while a scene transition is in progress
+    bool isLoading() const { return isLoading_; }
+    float loadProgress() const { return loadProgress_; }
+
     // Callback when scene is loaded (game code hooks into this)
     std::function<void(Scene&)> onSceneLoaded;
 
@@ -39,6 +43,8 @@ private:
     std::unique_ptr<Scene> currentScene_;
     std::string currentSceneName_;
     std::unordered_map<std::string, SceneFactory> factories_;
+    bool isLoading_ = false;
+    float loadProgress_ = 0.0f;
 };
 
 } // namespace fate
