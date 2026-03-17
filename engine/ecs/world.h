@@ -1,6 +1,9 @@
 #pragma once
 #include "engine/ecs/entity.h"
 #include "engine/ecs/entity_handle.h"
+#include "engine/ecs/archetype.h"
+#include "engine/ecs/command_buffer.h"
+#include "engine/memory/arena.h"
 #include <vector>
 #include <memory>
 #include <functional>
@@ -33,10 +36,15 @@ protected:
 };
 
 // The World manages all entities and systems
+// Backed by archetype storage for cache-friendly component iteration
 class World {
 public:
     World();
     ~World();
+
+    // Non-copyable, non-movable (owns Arena + ArchetypeStorage)
+    World(const World&) = delete;
+    World& operator=(const World&) = delete;
 
     // --- Handle-based API (preferred) ---
     EntityHandle createEntityH(const std::string& name = "Entity");
@@ -51,15 +59,106 @@ public:
     Entity* findByName(const std::string& name) const;
     Entity* findByTag(const std::string& tag) const;
 
-    // Query entities that have a specific component
+    // --- Archetype-backed component operations (called by Entity) ---
+
+    // Add a component to an entity, migrating to a new archetype
+    template<typename T, typename... Args>
+    T* addComponentToEntity(Entity* entity, Args&&... args) {
+        CompId cid = componentId<T>();
+        archetypes_.registerType<T>();
+
+        ArchetypeId oldArchId = entity->archetypeId_;
+        RowIndex oldRow = entity->row_;
+
+        // Migrate to new archetype with this component added
+        ArchetypeId newArchId = archetypes_.migrateEntity(
+            oldArchId, oldRow, entity->handle(), cid, true);
+
+        // The migration may have caused swap-and-pop in the old archetype.
+        // We need to update the entity that was swapped into oldRow.
+        updateSwappedEntity(oldArchId, oldRow);
+
+        // Find entity's new row (it's the last added in the new archetype)
+        RowIndex newRow = archetypes_.entityCount(newArchId) - 1;
+        entity->archetypeId_ = newArchId;
+        entity->row_ = newRow;
+
+        // Construct the new component with placement new
+        T* column = archetypes_.getColumn<T>(newArchId);
+        T* comp = &column[newRow];
+        new (comp) T(std::forward<Args>(args)...);
+        return comp;
+    }
+
+    // Get a component from an entity's archetype
+    template<typename T>
+    T* getComponentFromArchetype(const Entity* entity) const {
+        if (entity->archetypeId_ == UINT32_MAX) return nullptr;
+        CompId cid = componentId<T>();
+        const auto& arch = archetypes_.getArchetype(entity->archetypeId_);
+        if (!arch.hasType(cid)) return nullptr;
+        T* column = const_cast<ArchetypeStorage&>(archetypes_).getColumn<T>(entity->archetypeId_);
+        if (!column) return nullptr;
+        return &column[entity->row_];
+    }
+
+    // Check if an entity has a component
+    template<typename T>
+    bool hasComponentInArchetype(const Entity* entity) const {
+        if (entity->archetypeId_ == UINT32_MAX) return false;
+        CompId cid = componentId<T>();
+        return archetypes_.getArchetype(entity->archetypeId_).hasType(cid);
+    }
+
+    // Remove a component from an entity, migrating to a new archetype
+    template<typename T>
+    void removeComponentFromEntity(Entity* entity) {
+        if (entity->archetypeId_ == UINT32_MAX) return;
+        CompId cid = componentId<T>();
+        const auto& arch = archetypes_.getArchetype(entity->archetypeId_);
+        if (!arch.hasType(cid)) return;
+
+        ArchetypeId oldArchId = entity->archetypeId_;
+        RowIndex oldRow = entity->row_;
+
+        ArchetypeId newArchId = archetypes_.migrateEntity(
+            oldArchId, oldRow, entity->handle(), cid, false);
+
+        updateSwappedEntity(oldArchId, oldRow);
+
+        RowIndex newRow = archetypes_.entityCount(newArchId) - 1;
+        entity->archetypeId_ = newArchId;
+        entity->row_ = newRow;
+    }
+
+    // Get count of components for an entity
+    size_t componentCountForEntity(const Entity* entity) const {
+        if (entity->archetypeId_ == UINT32_MAX) return 0;
+        return archetypes_.getArchetype(entity->archetypeId_).typeIds.size();
+    }
+
+    // Iterate components of an entity as type-erased pointers (expensive, for editor)
+    void forEachComponentOfEntity(Entity* entity, const std::function<void(void*, CompId)>& fn);
+
+    // --- Query entities with specific components (archetype iteration) ---
     template<typename T>
     void forEach(const std::function<void(Entity*, T*)>& fn) {
-        for (uint32_t i = 1; i < slots_.size(); ++i) {
-            auto& slot = slots_[i];
-            if (!slot.alive || !slot.entity || !slot.entity->isActive()) continue;
-            T* comp = slot.entity->getComponent<T>();
-            if (comp && comp->enabled) {
-                fn(slot.entity.get(), comp);
+        CompId typeId = componentId<T>();
+        for (size_t i = 0; i < archetypes_.archetypeCount(); ++i) {
+            ArchetypeId aid = static_cast<ArchetypeId>(i);
+            const auto& arch = archetypes_.getArchetype(aid);
+            if (arch.count == 0 || !arch.hasType(typeId)) continue;
+
+            T* column = archetypes_.getColumn<T>(aid);
+            EntityHandle* handles = archetypes_.getHandles(aid);
+
+            for (uint32_t row = 0; row < arch.count; ++row) {
+                Entity* entity = getEntity(handles[row]);
+                if (!entity || !entity->isActive()) continue;
+                T* comp = &column[row];
+                if (comp->enabled) {
+                    fn(entity, comp);
+                }
             }
         }
     }
@@ -67,13 +166,25 @@ public:
     // Query entities with two components
     template<typename T1, typename T2>
     void forEach(const std::function<void(Entity*, T1*, T2*)>& fn) {
-        for (uint32_t i = 1; i < slots_.size(); ++i) {
-            auto& slot = slots_[i];
-            if (!slot.alive || !slot.entity || !slot.entity->isActive()) continue;
-            T1* c1 = slot.entity->getComponent<T1>();
-            T2* c2 = slot.entity->getComponent<T2>();
-            if (c1 && c1->enabled && c2 && c2->enabled) {
-                fn(slot.entity.get(), c1, c2);
+        CompId cid1 = componentId<T1>();
+        CompId cid2 = componentId<T2>();
+        for (size_t i = 0; i < archetypes_.archetypeCount(); ++i) {
+            ArchetypeId aid = static_cast<ArchetypeId>(i);
+            const auto& arch = archetypes_.getArchetype(aid);
+            if (arch.count == 0 || !arch.hasType(cid1) || !arch.hasType(cid2)) continue;
+
+            T1* col1 = archetypes_.getColumn<T1>(aid);
+            T2* col2 = archetypes_.getColumn<T2>(aid);
+            EntityHandle* handles = archetypes_.getHandles(aid);
+
+            for (uint32_t row = 0; row < arch.count; ++row) {
+                Entity* entity = getEntity(handles[row]);
+                if (!entity || !entity->isActive()) continue;
+                T1* c1 = &col1[row];
+                T2* c2 = &col2[row];
+                if (c1->enabled && c2->enabled) {
+                    fn(entity, c1, c2);
+                }
             }
         }
     }
@@ -99,9 +210,9 @@ public:
 
     // Iterate ALL entities (for editor hierarchy)
     void forEachEntity(const std::function<void(Entity*)>& fn) {
-        for (uint32_t i = 1; i < slots_.size(); ++i) {
+        for (uint32_t i = 1; i < static_cast<uint32_t>(slots_.size()); ++i) {
             if (slots_[i].alive && slots_[i].entity) {
-                fn(slots_[i].entity.get());
+                fn(slots_[i].entity);
             }
         }
     }
@@ -118,13 +229,23 @@ public:
     // Cleanup destroyed entities (called at end of frame)
     void processDestroyQueue();
 
+    // Access to archetype storage (for advanced iteration)
+    ArchetypeStorage& archetypes() { return archetypes_; }
+    const ArchetypeStorage& archetypes() const { return archetypes_; }
+
 private:
     struct EntitySlot {
-        std::unique_ptr<Entity> entity;
-        uint32_t generation = 1; // starts at 1 so handle (0,0) is always invalid
+        Entity* entity = nullptr;       // heap-allocated, stable pointer
+        uint32_t generation = 1;        // starts at 1 so handle (0,0) is always invalid
         bool alive = false;
     };
 
+    // After a swap-and-pop in an archetype, update the swapped entity's row_
+    void updateSwappedEntity(ArchetypeId archId, RowIndex vacatedRow);
+
+    Arena arena_;                                   // backing memory for archetype columns
+    ArchetypeStorage archetypes_;                    // archetype storage
+    ArchetypeId emptyArchetypeId_ = UINT32_MAX;     // archetype with no components (for new entities)
     std::vector<EntitySlot> slots_;
     std::vector<uint32_t> freeSlots_;
     std::vector<EntityHandle> destroyQueue_;
@@ -133,3 +254,6 @@ private:
 };
 
 } // namespace fate
+
+// Include template implementations that need World to be fully defined
+#include "engine/ecs/entity_inline.h"

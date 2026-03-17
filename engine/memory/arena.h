@@ -108,6 +108,7 @@ public:
     }
 
     void reset() { pos_ = 0; }
+    void resetTo(size_t pos) { pos_ = pos; }
 
     void resetAndDecommit(size_t keepBytes = 0) {
         pos_ = 0;
@@ -157,7 +158,7 @@ private:
 // ==========================================================================
 class FrameArena {
 public:
-    explicit FrameArena(size_t reservePerBuffer = 16 * 1024 * 1024)
+    explicit FrameArena(size_t reservePerBuffer = 64 * 1024 * 1024)
         : arenas_{Arena(reservePerBuffer), Arena(reservePerBuffer)} {}
 
     void swap() {

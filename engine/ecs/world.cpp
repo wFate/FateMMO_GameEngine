@@ -4,15 +4,32 @@
 
 namespace fate {
 
-World::World() {
+World::World()
+    : arena_(64 * 1024 * 1024),  // 64 MB arena for archetype columns
+      archetypes_(arena_)
+{
     // Reserve slot 0 as null sentinel
     slots_.resize(1);
     slots_[0].generation = 0;
     slots_[0].alive = false;
     slots_.reserve(1024);
+
+    // Create the empty archetype (no components) for newly created entities
+    emptyArchetypeId_ = archetypes_.findOrCreateArchetype({});
 }
 
-World::~World() = default;
+World::~World() {
+    // Destroy all archetype data first (calls destructors on components)
+    archetypes_.destroyAll();
+
+    // Delete all heap-allocated Entity objects
+    for (uint32_t i = 1; i < static_cast<uint32_t>(slots_.size()); ++i) {
+        if (slots_[i].entity) {
+            delete slots_[i].entity;
+            slots_[i].entity = nullptr;
+        }
+    }
+}
 
 // --- Handle-based API ---
 
@@ -29,11 +46,18 @@ EntityHandle World::createEntityH(const std::string& name) {
     }
 
     auto& slot = slots_[slotIdx];
-    slot.entity = std::make_unique<Entity>(slotIdx, name);
+    Entity* entity = new Entity(slotIdx, name);
+    slot.entity = entity;
     slot.alive = true;
 
     EntityHandle handle(slotIdx, slot.generation);
-    slot.entity->setHandle(handle);
+    entity->setHandle(handle);
+    entity->world_ = this;
+
+    // Add entity to the empty archetype
+    RowIndex row = archetypes_.addEntity(emptyArchetypeId_, handle);
+    entity->archetypeId_ = emptyArchetypeId_;
+    entity->row_ = row;
 
     if (name != "Tile") {
         LOG_DEBUG("World", "Created entity '%s' (idx=%u, gen=%u)",
@@ -67,7 +91,7 @@ Entity* World::getEntity(EntityHandle handle) const {
     if (idx >= static_cast<uint32_t>(slots_.size())) return nullptr;
     auto& slot = slots_[idx];
     if (!slot.alive || slot.generation != handle.generation()) return nullptr;
-    return slot.entity.get();
+    return slot.entity;
 }
 
 bool World::isAlive(EntityHandle handle) const {
@@ -78,10 +102,10 @@ bool World::isAlive(EntityHandle handle) const {
 }
 
 Entity* World::getEntity(EntityId id) const {
-    // Legacy O(n) fallback — searches by entity id (slot index)
+    // Legacy O(n) fallback -- searches by entity id (slot index)
     for (uint32_t i = 1; i < static_cast<uint32_t>(slots_.size()); ++i) {
         if (slots_[i].alive && slots_[i].entity && slots_[i].entity->id() == id) {
-            return slots_[i].entity.get();
+            return slots_[i].entity;
         }
     }
     return nullptr;
@@ -90,7 +114,7 @@ Entity* World::getEntity(EntityId id) const {
 Entity* World::findByName(const std::string& name) const {
     for (uint32_t i = 1; i < static_cast<uint32_t>(slots_.size()); ++i) {
         if (slots_[i].alive && slots_[i].entity && slots_[i].entity->name() == name)
-            return slots_[i].entity.get();
+            return slots_[i].entity;
     }
     return nullptr;
 }
@@ -98,7 +122,7 @@ Entity* World::findByName(const std::string& name) const {
 Entity* World::findByTag(const std::string& tag) const {
     for (uint32_t i = 1; i < static_cast<uint32_t>(slots_.size()); ++i) {
         if (slots_[i].alive && slots_[i].entity && slots_[i].entity->tag() == tag)
-            return slots_[i].entity.get();
+            return slots_[i].entity;
     }
     return nullptr;
 }
@@ -133,6 +157,38 @@ size_t World::entityCount() const {
     return count;
 }
 
+// --- Internal: update swapped entity after swap-and-pop ---
+
+void World::updateSwappedEntity(ArchetypeId archId, RowIndex vacatedRow) {
+    // After migrateEntity removes from the source archetype via swap-and-pop,
+    // if the removed row wasn't the last, another entity was swapped into that row.
+    // We need to find that entity and update its row_ field.
+    const auto& arch = archetypes_.getArchetype(archId);
+    if (vacatedRow < arch.count) {
+        // An entity was swapped into vacatedRow
+        EntityHandle* handles = archetypes_.getHandles(archId);
+        EntityHandle swappedHandle = handles[vacatedRow];
+        Entity* swappedEntity = getEntity(swappedHandle);
+        if (swappedEntity) {
+            swappedEntity->row_ = vacatedRow;
+        }
+    }
+}
+
+// --- forEachComponent (expensive, for editor inspector) ---
+
+void World::forEachComponentOfEntity(Entity* entity, const std::function<void(void*, CompId)>& fn) {
+    if (!entity || entity->archetypeId_ == UINT32_MAX) return;
+
+    const auto& arch = archetypes_.getArchetype(entity->archetypeId_);
+    for (size_t colIdx = 0; colIdx < arch.columns.size(); ++colIdx) {
+        const auto& col = arch.columns[colIdx];
+        // Get the component data at this entity's row as type-erased pointer
+        void* data = col.at(entity->row_);
+        fn(data, col.typeId);
+    }
+}
+
 // --- Cleanup ---
 
 void World::processDestroyQueue() {
@@ -142,11 +198,37 @@ void World::processDestroyQueue() {
         auto& slot = slots_[idx];
         if (!slot.alive || slot.generation != handle.generation()) continue;
 
-        if (slot.entity) {
+        Entity* entity = slot.entity;
+        if (entity) {
             LOG_DEBUG("World", "Destroyed entity '%s' (idx=%u, gen=%u)",
-                      slot.entity->name().c_str(), idx, slot.generation);
+                      entity->name().c_str(), idx, slot.generation);
+
+            // Remove from archetype storage (swap-and-pop)
+            if (entity->archetypeId_ != UINT32_MAX) {
+                ArchetypeId archId = entity->archetypeId_;
+                RowIndex row = entity->row_;
+
+                // Destroy component data at this row before removing
+                const auto& arch = archetypes_.getArchetype(archId);
+                for (size_t colIdx = 0; colIdx < arch.columns.size(); ++colIdx) {
+                    auto& col = const_cast<ArchetypeColumn&>(arch.columns[colIdx]);
+                    col.destroyRange(row, 1);
+                }
+
+                EntityHandle swapped = archetypes_.removeEntity(archId, row);
+
+                // Update the entity that was swapped into the vacated row
+                if (!swapped.isNull()) {
+                    Entity* swappedEntity = getEntity(swapped);
+                    if (swappedEntity) {
+                        swappedEntity->row_ = row;
+                    }
+                }
+            }
+
+            delete entity;
         }
-        slot.entity.reset();
+        slot.entity = nullptr;
         slot.alive = false;
         // Bump generation for stale reference detection
         slot.generation = (slot.generation + 1) & EntityHandle::GEN_MASK;
@@ -154,6 +236,16 @@ void World::processDestroyQueue() {
         freeSlots_.push_back(idx);
     }
     destroyQueue_.clear();
+}
+
+// --- Entity non-template helpers ---
+
+size_t Entity::componentCount() const {
+    return world_->componentCountForEntity(this);
+}
+
+void Entity::forEachComponent(const std::function<void(void*, CompId)>& fn) {
+    world_->forEachComponentOfEntity(this, fn);
 }
 
 } // namespace fate

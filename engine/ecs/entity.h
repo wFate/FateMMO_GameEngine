@@ -1,10 +1,8 @@
 #pragma once
-#include "engine/ecs/component.h"
+#include "engine/ecs/component_registry.h"
 #include "engine/ecs/entity_handle.h"
+#include "engine/ecs/archetype.h"
 #include "engine/core/types.h"
-#include <memory>
-#include <unordered_map>
-#include <vector>
 #include <string>
 #include <functional>
 
@@ -30,48 +28,38 @@ public:
     EntityHandle handle() const { return handle_; }
     void setHandle(EntityHandle h) { handle_ = h; }
 
-    // Component management
+    // Component access -- delegates to archetype storage via World
+    // Implementations are in entity_inline.h (included after World is defined)
     template<typename T, typename... Args>
-    T* addComponent(Args&&... args) {
-        auto comp = std::make_unique<T>(std::forward<Args>(args)...);
-        T* ptr = comp.get();
-        components_[getComponentTypeId<T>()] = std::move(comp);
-        return ptr;
-    }
+    T* addComponent(Args&&... args);
 
     template<typename T>
-    T* getComponent() const {
-        auto it = components_.find(getComponentTypeId<T>());
-        if (it == components_.end()) return nullptr;
-        return static_cast<T*>(it->second.get());
-    }
+    T* getComponent() const;
 
     template<typename T>
-    bool hasComponent() const {
-        return components_.find(getComponentTypeId<T>()) != components_.end();
-    }
+    bool hasComponent() const;
 
     template<typename T>
-    void removeComponent() {
-        components_.erase(getComponentTypeId<T>());
-    }
+    void removeComponent();
 
-    // Iterate all components
-    void forEachComponent(const std::function<void(Component*)>& fn) {
-        for (auto& [id, comp] : components_) {
-            fn(comp.get());
-        }
-    }
+    size_t componentCount() const;
 
-    size_t componentCount() const { return components_.size(); }
+    // Iterate components as type-erased pointers (for editor inspector)
+    // This is expensive -- iterates archetype columns
+    void forEachComponent(const std::function<void(void*, CompId)>& fn);
 
 private:
+    friend class World;
     EntityId id_;
     EntityHandle handle_;
     std::string name_;
     std::string tag_;
     bool active_ = true;
-    std::unordered_map<ComponentTypeId, std::unique_ptr<Component>> components_;
+
+    // Archetype location -- updated by World on migration/swap
+    World* world_ = nullptr;
+    ArchetypeId archetypeId_ = UINT32_MAX;
+    RowIndex row_ = UINT32_MAX;
 };
 
 } // namespace fate
