@@ -89,6 +89,13 @@ bool App::init(const AppConfig& config) {
         LogViewer::instance().addMessage(msg, level);
     });
 
+    assetsDir_ = config.assetsDir;
+
+    // Register asset loaders BEFORE onInit() — game creates entities that load textures
+    AssetRegistry::instance().registerLoader(makeTextureLoader());
+    AssetRegistry::instance().registerLoader(makeJsonLoader());
+    AssetRegistry::instance().registerLoader(makeShaderLoader());
+
     // Game registers its scene passes (tiles, entities, etc.) in onInit()
     onInit();
 
@@ -96,13 +103,6 @@ bool App::init(const AppConfig& config) {
     // [game scene passes] -> Lighting -> BloomExtract -> BloomBlur -> PostProcess
     registerLightingPass(renderGraph_, lightingConfig_);
     registerPostProcessPasses(renderGraph_, postProcessConfig_);
-
-    assetsDir_ = config.assetsDir;
-
-    // Register asset loaders
-    AssetRegistry::instance().registerLoader(makeTextureLoader());
-    AssetRegistry::instance().registerLoader(makeJsonLoader());
-    AssetRegistry::instance().registerLoader(makeShaderLoader());
 
     // Start file watcher on assets directory
     if (!assetsDir_.empty()) {
