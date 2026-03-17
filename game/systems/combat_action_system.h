@@ -121,6 +121,9 @@ public:
 
                     textRenderer->drawWorldYUp(batch, npBuf, namePos, np->nameColor, np->fontSize, 85.0f);
 
+                    // Track the top of the nameplate stack for quest marker positioning
+                    float nextYAbove = namePos.y + font->measureText(npBuf).y * np->fontSize + 2.0f;
+
                     // Guild name below (centered)
                     if (np->showGuildSymbol && !np->guildName.empty()) {
                         Vec2 guildSize = font->measureText(np->guildName);
@@ -128,6 +131,40 @@ public:
                         Vec2 guildPos = {t->position.x - guildW * 0.5f, namePos.y + 10.0f};
                         textRenderer->drawWorldYUp(batch, np->guildName, guildPos,
                             Color(0.4f, 1.0f, 0.4f), np->fontSize * 0.85f, 85.0f);
+                    }
+
+                    // NPC role subtitle (e.g., "[Merchant]", "[Quest]") — grey, below name
+                    if (!np->roleSubtitle.empty()) {
+                        Vec2 subSize = font->measureText(np->roleSubtitle);
+                        float subScale = np->fontSize * 0.75f;
+                        float subW = subSize.x * subScale;
+                        // Position below the nameplate text (Y-up: subtract to go lower)
+                        Vec2 subPos = {t->position.x - subW * 0.5f, namePos.y - subSize.y * subScale - 2.0f};
+                        textRenderer->drawWorldYUp(batch, np->roleSubtitle, subPos,
+                            Color(0.7f, 0.7f, 0.7f, 1.0f), subScale, 85.0f);
+                    }
+
+                    // Quest marker (? or !) above nameplate
+                    auto* qm = entity->getComponent<QuestMarkerComponent>();
+                    if (qm && qm->currentState != MarkerState::None) {
+                        const char* markerText = (qm->currentState == MarkerState::Available) ? "?" : "!";
+                        Color markerColor;
+                        if (qm->currentState == MarkerState::TurnIn) {
+                            markerColor = Color(1.0f, 0.863f, 0.0f, 1.0f); // Yellow {255,220,0}
+                        } else {
+                            // Available — color by quest tier
+                            switch (qm->highestTier) {
+                                case QuestTier::Novice:     markerColor = Color(0.0f, 0.784f, 0.0f, 1.0f);   break; // Green {0,200,0}
+                                case QuestTier::Apprentice: markerColor = Color(0.706f, 0.863f, 0.0f, 1.0f); break; // Yellow-Green {180,220,0}
+                                case QuestTier::Adept:      markerColor = Color(1.0f, 0.863f, 0.0f, 1.0f);   break; // Yellow {255,220,0}
+                                default: /* Starter */      markerColor = Color(1.0f, 1.0f, 1.0f, 1.0f);     break; // White
+                            }
+                        }
+                        float markerScale = np->fontSize * 1.3f;
+                        Vec2 markerSize = font->measureText(markerText);
+                        float markerW = markerSize.x * markerScale;
+                        Vec2 markerPos = {t->position.x - markerW * 0.5f, nextYAbove};
+                        textRenderer->drawWorldYUp(batch, markerText, markerPos, markerColor, markerScale, 86.0f);
                     }
                 }
             );
