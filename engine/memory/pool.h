@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cassert>
+#include <cstring>
 
 namespace fate {
 
@@ -31,6 +32,11 @@ public:
             *static_cast<void**>(block) = freeList_;
             freeList_ = block;
         }
+#if defined(ENGINE_MEMORY_DEBUG)
+        size_t bitmapBytes = (blockCount_ + 7) / 8;
+        occupancyBitmap_ = static_cast<uint8_t*>(arena.push(bitmapBytes, 1));
+        std::memset(occupancyBitmap_, 0, bitmapBytes);
+#endif
     }
 
     void* alloc() {
@@ -38,6 +44,10 @@ public:
         void* block = freeList_;
         freeList_ = *static_cast<void**>(freeList_);
         ++activeCount_;
+#if defined(ENGINE_MEMORY_DEBUG)
+        size_t idx = (static_cast<uint8_t*>(block) - memory_) / blockSize_;
+        occupancyBitmap_[idx / 8] |= (1 << (idx % 8));
+#endif
         return block;
     }
 
@@ -47,6 +57,10 @@ public:
         *static_cast<void**>(block) = freeList_;
         freeList_ = block;
         --activeCount_;
+#if defined(ENGINE_MEMORY_DEBUG)
+        size_t idx = (static_cast<uint8_t*>(block) - memory_) / blockSize_;
+        occupancyBitmap_[idx / 8] &= ~(1 << (idx % 8));
+#endif
     }
 
     size_t activeCount() const { return activeCount_; }
@@ -60,6 +74,12 @@ private:
     size_t blockSize_ = 0;
     size_t blockCount_ = 0;
     size_t activeCount_ = 0;
+#if defined(ENGINE_MEMORY_DEBUG)
+    uint8_t* occupancyBitmap_ = nullptr;
+public:
+    const uint8_t* occupancyBitmap() const { return occupancyBitmap_; }
+private:
+#endif
 };
 
 } // namespace fate

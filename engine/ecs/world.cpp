@@ -16,9 +16,23 @@ World::World()
 
     // Create the empty archetype (no components) for newly created entities
     emptyArchetypeId_ = archetypes_.findOrCreateArchetype({});
+
+#if defined(ENGINE_MEMORY_DEBUG)
+    AllocatorRegistry::instance().add({
+        .name = "WorldArena",
+        .type = AllocatorType::Arena,
+        .getUsed = [this]() -> size_t { return arena_.position(); },
+        .getCommitted = [this]() -> size_t { return arena_.committed(); },
+        .getReserved = [this]() -> size_t { return arena_.reserved(); },
+    });
+#endif
 }
 
 World::~World() {
+#if defined(ENGINE_MEMORY_DEBUG)
+    AllocatorRegistry::instance().remove("WorldArena");
+#endif
+
     // Destroy all archetype data first (calls destructors on components)
     archetypes_.destroyAll();
 

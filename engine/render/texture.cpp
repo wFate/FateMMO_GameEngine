@@ -1,6 +1,7 @@
 #include "engine/render/texture.h"
 #include "engine/render/gl_loader.h"
 #include "engine/core/logger.h"
+#include "engine/asset/asset_registry.h"
 #include "stb_image.h"
 
 namespace fate {
@@ -28,6 +29,29 @@ bool Texture::loadFromFile(const std::string& path) {
         LOG_DEBUG("Texture", "Loaded %s (%dx%d)", path.c_str(), width_, height_);
     }
     return result;
+}
+
+bool Texture::reloadFromFile(const std::string& path) {
+    stbi_set_flip_vertically_on_load(true);
+    int w, h, channels;
+    unsigned char* data = stbi_load(path.c_str(), &w, &h, &channels, 4);
+    if (!data) {
+        LOG_ERROR("Texture", "Reload failed: %s (%s)", path.c_str(), stbi_failure_reason());
+        return false;
+    }
+
+    width_ = w;
+    height_ = h;
+    path_ = path;
+
+    // Reuse existing GL texture name — glTexImage2D respecifies storage
+    glBindTexture(GL_TEXTURE_2D, textureId_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    stbi_image_free(data);
+    LOG_INFO("Texture", "Reloaded %s (%dx%d)", path.c_str(), w, h);
+    return true;
 }
 
 bool Texture::loadFromMemory(const unsigned char* data, int width, int height, int channels) {
@@ -64,9 +88,13 @@ std::shared_ptr<Texture> TextureCache::load(const std::string& path) {
     auto it = cache_.find(path);
     if (it != cache_.end()) return it->second;
 
-    auto tex = std::make_shared<Texture>();
-    if (!tex->loadFromFile(path)) return nullptr;
+    // Delegate to AssetRegistry for actual loading
+    AssetHandle h = AssetRegistry::instance().load(path);
+    Texture* raw = AssetRegistry::instance().get<Texture>(h);
+    if (!raw) return nullptr;
 
+    // Non-owning shared_ptr — AssetRegistry owns the lifetime
+    auto tex = std::shared_ptr<Texture>(raw, [](Texture*){});
     cache_[path] = tex;
     return tex;
 }
