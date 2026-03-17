@@ -101,6 +101,9 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
         bool ambientIsWhite = (ar >= 1.0f && ag >= 1.0f && ab >= 1.0f);
 
         if (ambientIsWhite && lightCount == 0) {
+            // Restore standard alpha blending before early exit
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             return; // light map is solid white — composite is a no-op
         }
 
@@ -129,8 +132,9 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
         FullscreenQuad::instance().draw();
         s_blitShader.unbind();
 
-        // Restore standard alpha blending
+        // Restore standard alpha blending and clear color
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         scene.unbind();
     }});
 }

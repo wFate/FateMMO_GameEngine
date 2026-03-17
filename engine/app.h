@@ -72,6 +72,7 @@ private:
     PostProcessConfig postProcessConfig_;
 
     bool running_ = false;
+    bool shutdownComplete_ = false;
     float deltaTime_ = 0.0f;
     float fps_ = 0.0f;
     float fixedTimeAccumulator_ = 0.0f;

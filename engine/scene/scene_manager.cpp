@@ -76,4 +76,13 @@ bool SceneManager::switchScene(const std::string& name) {
     return true;
 }
 
+void SceneManager::unloadScene() {
+    if (currentScene_) {
+        currentScene_->onExit();
+        currentScene_.reset();
+        currentSceneName_.clear();
+        LOG_INFO("SceneManager", "Scene unloaded");
+    }
+}
+
 } // namespace fate

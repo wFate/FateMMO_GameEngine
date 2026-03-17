@@ -26,6 +26,9 @@ public:
     // Switch to a registered scene (calls factory)
     bool switchScene(const std::string& name);
 
+    // Unload the current scene (destroys World and all entities)
+    void unloadScene();
+
     // Get current active scene
     Scene* currentScene() { return currentScene_.get(); }
     const std::string& currentSceneName() const { return currentSceneName_; }
