@@ -1989,7 +1989,32 @@ void Editor::drawInspector() {
                     ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
                     INSPECTOR_ROW("Texture");
-                    ImGui::Text("%s", s->texturePath.empty() ? "(procedural)" : s->texturePath.c_str());
+                    {
+                        // Sprite texture selector — dropdown of available sprite assets
+                        std::string currentName = s->texturePath.empty() ? "(none)" :
+                            fs::path(s->texturePath).filename().string();
+                        ImGui::SetNextItemWidth(-1);
+                        if (ImGui::BeginCombo("##sprTex", currentName.c_str())) {
+                            // Option to clear
+                            if (ImGui::Selectable("(none)", s->texturePath.empty())) {
+                                s->texturePath.clear();
+                                s->texture = nullptr;
+                            }
+                            // List all sprite assets
+                            for (auto& asset : assets_) {
+                                if (asset.type != AssetType::Sprite) continue;
+                                bool selected = (asset.relativePath == s->texturePath);
+                                if (ImGui::Selectable(asset.name.c_str(), selected)) {
+                                    s->texturePath = asset.relativePath;
+                                    s->texture = TextureCache::instance().load(asset.relativePath);
+                                    if (s->texture) {
+                                        s->size = {(float)s->texture->width(), (float)s->texture->height()};
+                                    }
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                    }
 
                     if (s->texture) {
                         INSPECTOR_ROW("Tex Size");
