@@ -206,17 +206,19 @@ void Editor::drawDockSpace() {
     // ---- Main menu bar (File / Edit / View / Entity) ----
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("File")) {
-            if (ImGui::BeginMenu("Save Scene")) {
-                static char saveNameBuf[64] = "scene";
-                ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
-                if (ImGui::Button("Save")) {
-                    std::string path = std::string("assets/scenes/") + saveNameBuf + ".json";
-                    saveScene(dockWorld_, path);
-                    ImGui::CloseCurrentPopup();
+            if (ImGui::MenuItem("New Scene")) {
+                if (dockWorld_) {
+                    dockWorld_->forEachEntity([&](Entity* e) {
+                        dockWorld_->destroyEntity(e->handle());
+                    });
+                    dockWorld_->processDestroyQueue();
+                    selectedEntity_ = nullptr;
+                    currentScenePath_.clear();
+                    LOG_INFO("Editor", "New scene");
                 }
-                ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Load Scene")) {
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Open Scene")) {
                 std::string scenesDir = "assets/scenes";
                 if (fs::exists(scenesDir)) {
                     for (auto& entry : fs::directory_iterator(scenesDir)) {
@@ -230,15 +232,21 @@ void Editor::drawDockSpace() {
                 }
                 ImGui::EndMenu();
             }
-            if (ImGui::MenuItem("New Scene")) {
-                if (dockWorld_) {
-                    dockWorld_->forEachEntity([&](Entity* e) {
-                        dockWorld_->destroyEntity(e->handle());
-                    });
-                    dockWorld_->processDestroyQueue();
-                    selectedEntity_ = nullptr;
-                    LOG_INFO("Editor", "Cleared scene");
+            ImGui::Separator();
+            // Save — overwrites current scene file (grayed out if no scene loaded)
+            if (ImGui::MenuItem("Save", "Ctrl+S", false, !currentScenePath_.empty())) {
+                saveScene(dockWorld_, currentScenePath_);
+            }
+            // Save As — always prompts for a new name
+            if (ImGui::BeginMenu("Save As...")) {
+                static char saveNameBuf[64] = "scene";
+                ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
+                if (ImGui::Button("Save")) {
+                    std::string path = std::string("assets/scenes/") + saveNameBuf + ".json";
+                    saveScene(dockWorld_, path);
+                    ImGui::CloseCurrentPopup();
                 }
+                ImGui::EndMenu();
             }
             ImGui::EndMenu();
         }
@@ -1433,6 +1441,7 @@ void Editor::drawSceneGrid(SpriteBatch* batch, Camera* camera) {
 
 void Editor::saveScene(World* world, const std::string& path) {
     if (!world) return;
+    currentScenePath_ = path;
 
     nlohmann::json root;
     root["version"] = 1;
@@ -1555,6 +1564,7 @@ void Editor::saveScene(World* world, const std::string& path) {
 
 void Editor::loadScene(World* world, const std::string& path) {
     if (!world) return;
+    currentScenePath_ = path;
 
     std::ifstream file(path);
     if (!file.is_open()) {
@@ -2967,9 +2977,9 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
         (ctrl && shift && scancode == SDL_SCANCODE_Z)) {
         UndoSystem::instance().redo(world);
     }
-    // Ctrl+S = Save
-    if (ctrl && scancode == SDL_SCANCODE_S) {
-        saveScene(world, "assets/scenes/scene.json");
+    // Ctrl+S = Save current scene
+    if (ctrl && scancode == SDL_SCANCODE_S && !currentScenePath_.empty()) {
+        saveScene(world, currentScenePath_);
     }
     // Ctrl+D = Duplicate
     if (ctrl && scancode == SDL_SCANCODE_D && selectedEntity_) {
