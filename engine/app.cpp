@@ -92,6 +92,7 @@ void App::run() {
     Uint64 freq = SDL_GetPerformanceFrequency();
 
     while (running_) {
+        frameArena_.swap();
         Uint64 currentTick = SDL_GetPerformanceCounter();
         deltaTime_ = (float)(currentTick - lastTick) / (float)freq;
         lastTick = currentTick;
@@ -290,15 +291,51 @@ void App::update() {
 }
 
 void App::render() {
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    // Game rendering
-    onRender(spriteBatch_, camera_);
-
-    // Editor overlay (renders ImGui on top of game)
     auto* scene = SceneManager::instance().currentScene();
     World* world = scene ? &scene->world() : nullptr;
-    Editor::instance().render(world, &camera_, &spriteBatch_);
+    auto& editor = Editor::instance();
+
+    if (editor.isOpen()) {
+        // --- FBO path: render game into viewport framebuffer ---
+        auto& fbo = editor.viewportFbo();
+        Vec2 vpSize = editor.viewportSize();
+        int fbW = (int)vpSize.x;
+        int fbH = (int)vpSize.y;
+
+        if (fbW > 0 && fbH > 0 && fbo.isValid()) {
+            fbo.bind();
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            onRender(spriteBatch_, camera_);
+
+            // In-viewport overlays (grid, selection highlights)
+            editor.renderScene(&spriteBatch_, &camera_);
+
+            // IMPORTANT: All SpriteBatch begin/end pairs must complete before FBO unbind.
+            // renderScene's sub-functions (drawSceneGrid) manage their own begin/end.
+            // onRender() must also ensure its SpriteBatch calls are flushed before returning.
+
+            fbo.unbind();
+        }
+
+        // Restore window viewport
+        glViewport(0, 0, config_.windowWidth, config_.windowHeight);
+        glClearColor(0.12f, 0.12f, 0.15f, 1.0f);  // dark editor background
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // Editor UI (DockSpace + all panels + viewport showing FBO texture)
+        editor.renderUI(world, &camera_, &spriteBatch_);
+
+        // Restore game clear color
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    } else {
+        // --- Direct path: render game to screen (no FBO overhead) ---
+        glClear(GL_COLOR_BUFFER_BIT);
+        onRender(spriteBatch_, camera_);
+
+        // HUD-only overlay (tile coords)
+        editor.renderUI(world, &camera_, &spriteBatch_);
+    }
 
     SDL_GL_SwapWindow(window_);
 }
