@@ -116,7 +116,7 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
 
     scanAssets();
 
-    LOG_INFO("Editor", "Editor initialized (F3 to toggle)");
+    LOG_INFO("Editor", "Editor initialized");
     return true;
 }
 
@@ -160,16 +160,7 @@ void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
 void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch) {
     if (!frameStarted_) return;
 
-    // HUD always visible (when editor is closed, this is the only thing drawn)
-    if (!open_) {
-        drawHUD(world);
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        return;
-    }
-
-    // Full editor UI
-    dockWorld_ = world; // stash for menu bar / viewport toolbar access
+    dockWorld_ = world;
     drawDockSpace();
     drawMenuBar(world);
     drawSceneViewport();

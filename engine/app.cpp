@@ -119,10 +119,9 @@ void App::processEvents() {
         // Editor gets events first
         Editor::instance().processEvent(event);
 
-        // Keyboard routing: when editor is open and playing, let game keys through
-        // unless an ImGui text field has focus. Mouse routing is handled per-event below.
-        bool editorWantsKeyboard = Editor::instance().isOpen() &&
-            Editor::instance().wantsKeyboard() && Editor::instance().isPaused();
+        // Keyboard routing: when paused (editing), editor captures keyboard.
+        // When playing, game keys go through unless an ImGui text field has focus.
+        bool editorWantsKeyboard = Editor::instance().wantsKeyboard() && Editor::instance().isPaused();
         if (!editorWantsKeyboard) {
             Input::instance().processEvent(event);
         } else {
@@ -155,19 +154,13 @@ void App::processEvents() {
                 break;
 
             case SDL_KEYDOWN:
-                if (event.key.keysym.scancode == SDL_SCANCODE_F3) {
-                    Editor::instance().toggle();
-                    LOG_INFO("App", "Editor: %s", Editor::instance().isOpen() ? "OPEN" : "CLOSED");
-                }
                 if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-                    if (Editor::instance().isOpen()) {
-                        Editor::instance().cancelPlacement();
-                    }
+                    Editor::instance().cancelPlacement();
                     // Escape no longer quits — use window close (X) button instead.
                     // Game systems (combat targeting) use Escape for gameplay actions.
                 }
                 // Forward all keyboard shortcuts to editor
-                if (Editor::instance().isOpen()) {
+                {
                     auto* scene = SceneManager::instance().currentScene();
                     if (scene) {
                         Editor::instance().handleKeyShortcuts(&scene->world(), event);
@@ -177,7 +170,7 @@ void App::processEvents() {
 
             case SDL_MOUSEWHEEL:
                 // Scroll wheel zoom (works when editor is open)
-                if (Editor::instance().isOpen() && Editor::instance().isViewportHovered()) {
+                if (Editor::instance().isViewportHovered()) {
                     float zoom = camera_.zoom();
                     if (event.wheel.y > 0) zoom *= 1.15f;  // scroll up = zoom in
                     else if (event.wheel.y < 0) zoom *= 0.87f; // scroll down = zoom out
@@ -190,7 +183,6 @@ void App::processEvents() {
 
             case SDL_MOUSEBUTTONDOWN:
                 if (event.button.button == SDL_BUTTON_LEFT &&
-                    Editor::instance().isOpen() &&
                     Editor::instance().isViewportHovered() &&
                     Editor::instance().isPaused()) {
                     auto* scene = SceneManager::instance().currentScene();
@@ -219,7 +211,7 @@ void App::processEvents() {
                 break;
 
             case SDL_MOUSEMOTION:
-                if (Editor::instance().isOpen() && Editor::instance().isViewportHovered()) {
+                if (Editor::instance().isViewportHovered()) {
                     Vec2 vpPos = Editor::instance().viewportPos();
                     Vec2 vpSize = Editor::instance().viewportSize();
                     Vec2 localPos = {
@@ -306,47 +298,26 @@ void App::render() {
     World* world = scene ? &scene->world() : nullptr;
     auto& editor = Editor::instance();
 
-    if (editor.isOpen()) {
-        // --- FBO path: render game into viewport framebuffer ---
-        auto& fbo = editor.viewportFbo();
-        Vec2 vpSize = editor.viewportSize();
-        int fbW = (int)vpSize.x;
-        int fbH = (int)vpSize.y;
+    // Render game into viewport FBO
+    auto& fbo = editor.viewportFbo();
+    Vec2 vpSize = editor.viewportSize();
+    int fbW = (int)vpSize.x;
+    int fbH = (int)vpSize.y;
 
-        if (fbW > 0 && fbH > 0 && fbo.isValid()) {
-            fbo.bind();
-            glClear(GL_COLOR_BUFFER_BIT);
-
-            onRender(spriteBatch_, camera_);
-
-            // In-viewport overlays (grid, selection highlights)
-            editor.renderScene(&spriteBatch_, &camera_);
-
-            // IMPORTANT: All SpriteBatch begin/end pairs must complete before FBO unbind.
-            // renderScene's sub-functions (drawSceneGrid) manage their own begin/end.
-            // onRender() must also ensure its SpriteBatch calls are flushed before returning.
-
-            fbo.unbind();
-        }
-
-        // Restore window viewport
-        glViewport(0, 0, config_.windowWidth, config_.windowHeight);
-        glClearColor(0.12f, 0.12f, 0.15f, 1.0f);  // dark editor background
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        // Editor UI (DockSpace + all panels + viewport showing FBO texture)
-        editor.renderUI(world, &camera_, &spriteBatch_);
-
-        // Restore game clear color
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    } else {
-        // --- Direct path: render game to screen (no FBO overhead) ---
+    if (fbW > 0 && fbH > 0 && fbo.isValid()) {
+        fbo.bind();
         glClear(GL_COLOR_BUFFER_BIT);
         onRender(spriteBatch_, camera_);
-
-        // HUD-only overlay (tile coords)
-        editor.renderUI(world, &camera_, &spriteBatch_);
+        editor.renderScene(&spriteBatch_, &camera_);
+        fbo.unbind();
     }
+
+    // Editor UI fills the window
+    glViewport(0, 0, config_.windowWidth, config_.windowHeight);
+    glClearColor(0.12f, 0.12f, 0.15f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    editor.renderUI(world, &camera_, &spriteBatch_);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
     SDL_GL_SwapWindow(window_);
 }
