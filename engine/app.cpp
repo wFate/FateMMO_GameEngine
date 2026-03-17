@@ -83,6 +83,21 @@ bool App::init(const AppConfig& config) {
 
     onInit();
 
+    assetsDir_ = config.assetsDir;
+
+    // Register asset loaders
+    AssetRegistry::instance().registerLoader(makeTextureLoader());
+    AssetRegistry::instance().registerLoader(makeJsonLoader());
+    AssetRegistry::instance().registerLoader(makeShaderLoader());
+
+    // Start file watcher on assets directory
+    if (!assetsDir_.empty()) {
+        fileWatcher_.start(assetsDir_, [this](const std::string& relativePath) {
+            std::string fullPath = assetsDir_ + "/" + relativePath;
+            AssetRegistry::instance().queueReload(fullPath);
+        });
+    }
+
     running_ = true;
     LOG_INFO("App", "Engine initialized successfully");
     return true;
@@ -266,6 +281,10 @@ void App::processEvents() {
 }
 
 void App::update() {
+    // Process asset reloads unconditionally (hot-reload works while editing)
+    elapsedTime_ += deltaTime_;
+    AssetRegistry::instance().processReloads(elapsedTime_);
+
     onUpdate(deltaTime_);
 
     // Always process destroy queue (so editor delete works while paused)
@@ -334,7 +353,9 @@ void App::shutdown() {
 
     Editor::instance().shutdown();
     spriteBatch_.shutdown();
+    fileWatcher_.stop();
     TextureCache::instance().clear();
+    AssetRegistry::instance().clear();
 
     if (glContext_) {
         SDL_GL_DeleteContext(glContext_);
