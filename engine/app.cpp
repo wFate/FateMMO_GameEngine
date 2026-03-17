@@ -101,13 +101,9 @@ void App::run() {
         if (deltaTime_ > 0.1f) deltaTime_ = 0.1f;
         fps_ = (deltaTime_ > 0.0f) ? 1.0f / deltaTime_ : 0.0f;
 
-        LOG_INFO("FRAME", "--- processEvents ---");
         processEvents();
-        LOG_INFO("FRAME", "--- update ---");
         update();
-        LOG_INFO("FRAME", "--- render ---");
         render();
-        LOG_INFO("FRAME", "--- frame done ---");
 
         FATE_FRAME_MARK;
     }
@@ -317,11 +313,8 @@ void App::render() {
 
         fbo.bind();
         glClear(GL_COLOR_BUFFER_BIT);
-        LOG_INFO("RENDER", "onRender start");
         onRender(spriteBatch_, camera_);
-        LOG_INFO("RENDER", "onRender done, renderScene start");
         editor.renderScene(&spriteBatch_, &camera_);
-        LOG_INFO("RENDER", "renderScene done");
         fbo.unbind();
     }
 
@@ -329,9 +322,7 @@ void App::render() {
     glViewport(0, 0, config_.windowWidth, config_.windowHeight);
     glClearColor(0.12f, 0.12f, 0.15f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    LOG_INFO("RENDER", "renderUI start");
     editor.renderUI(world, &camera_, &spriteBatch_);
-    LOG_INFO("RENDER", "renderUI done");
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
     SDL_GL_SwapWindow(window_);

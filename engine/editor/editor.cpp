@@ -371,9 +371,10 @@ void Editor::drawSceneViewport() {
 
             // Toggle buttons
             auto toggleBtn = [&](const char* label, bool* val) {
-                if (*val) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.80f, 1.00f));
+                bool wasActive = *val;
+                if (wasActive) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.80f, 1.00f));
                 if (ImGui::Button(label, ImVec2(0, btnH))) *val = !(*val);
-                if (*val) ImGui::PopStyleColor();
+                if (wasActive) ImGui::PopStyleColor();
                 ImGui::SameLine();
             };
             toggleBtn("Grid", &showGrid_);
@@ -1517,13 +1518,10 @@ void Editor::loadScene(World* world, const std::string& path) {
     }
 
     // Clear existing entities
-    LOG_INFO("SCENE_LOAD", "Destroying %zu existing entities...", world->entityCount());
     world->forEachEntity([&](Entity* entity) {
         world->destroyEntity(entity->handle());
     });
-    LOG_INFO("SCENE_LOAD", "Processing destroy queue...");
     world->processDestroyQueue();
-    LOG_INFO("SCENE_LOAD", "Destroy complete, %zu entities remain", world->entityCount());
 
     if (root.contains("gridSize")) {
         gridSize_ = root["gridSize"].get<float>();
@@ -1532,14 +1530,11 @@ void Editor::loadScene(World* world, const std::string& path) {
     if (!root.contains("entities")) return;
 
     // Registry-based deserialization — all registered components are handled
-    LOG_INFO("SCENE_LOAD", "Deserializing %zu entities from JSON...", root["entities"].size());
     size_t loadedCount = 0;
     for (auto& ej : root["entities"]) {
         PrefabLibrary::jsonToEntity(ej, *world);
         ++loadedCount;
     }
-    LOG_INFO("SCENE_LOAD", "Deserialized %zu entities", loadedCount);
-
     selectedEntity_ = nullptr;
     LOG_INFO("Editor", "Scene loaded v%d from %s (%zu entities)",
              version, path.c_str(), world->entityCount());
