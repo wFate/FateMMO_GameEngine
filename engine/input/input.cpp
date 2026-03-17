@@ -3,6 +3,9 @@
 namespace fate {
 
 void Input::beginFrame() {
+    actionMap_.beginFrame();
+    inputBuffer_.advanceFrame();
+
     // Transition pressed → down, released → up
     for (auto& [key, state] : keys_) {
         if (state == KeyState::Pressed) state = KeyState::Down;
@@ -24,11 +27,25 @@ void Input::processEvent(const SDL_Event& event) {
         case SDL_KEYDOWN:
             if (!event.key.repeat) {
                 keys_[event.key.keysym.scancode] = KeyState::Pressed;
+                actionMap_.onKeyDown(event.key.keysym.scancode);
+                // Buffer combat actions
+                SDL_Scancode sc = event.key.keysym.scancode;
+                auto checkBuffer = [&](ActionId id) {
+                    const auto& b = actionMap_.binding(id);
+                    if (sc == b.primary || sc == b.secondary) inputBuffer_.record(id);
+                };
+                checkBuffer(ActionId::Attack);
+                checkBuffer(ActionId::SkillSlot1);
+                checkBuffer(ActionId::SkillSlot2);
+                checkBuffer(ActionId::SkillSlot3);
+                checkBuffer(ActionId::SkillSlot4);
+                checkBuffer(ActionId::SkillSlot5);
             }
             break;
 
         case SDL_KEYUP:
             keys_[event.key.keysym.scancode] = KeyState::Released;
+            actionMap_.onKeyUp(event.key.keysym.scancode);
             break;
 
         case SDL_MOUSEMOTION:
@@ -123,18 +140,26 @@ Vec2 Input::touchPosition(int finger) const {
 }
 
 Direction Input::getCardinalDirection() const {
-    bool up    = isKeyDown(SDL_SCANCODE_W) || isKeyDown(SDL_SCANCODE_UP);
-    bool down  = isKeyDown(SDL_SCANCODE_S) || isKeyDown(SDL_SCANCODE_DOWN);
-    bool left  = isKeyDown(SDL_SCANCODE_A) || isKeyDown(SDL_SCANCODE_LEFT);
-    bool right = isKeyDown(SDL_SCANCODE_D) || isKeyDown(SDL_SCANCODE_RIGHT);
+    bool up    = actionMap_.isHeld(ActionId::MoveUp);
+    bool down  = actionMap_.isHeld(ActionId::MoveDown);
+    bool left  = actionMap_.isHeld(ActionId::MoveLeft);
+    bool right = actionMap_.isHeld(ActionId::MoveRight);
 
-    // TWOM-style: only one direction at a time, vertical takes priority
     if (up && !down) return Direction::Up;
     if (down && !up) return Direction::Down;
     if (left && !right) return Direction::Left;
     if (right && !left) return Direction::Right;
-
     return Direction::None;
+}
+
+void Input::setChatMode(bool enabled) {
+    if (enabled) {
+        actionMap_.setContext(InputContext::Chat);
+        SDL_StartTextInput();
+    } else {
+        actionMap_.setContext(InputContext::Gameplay);
+        SDL_StopTextInput();
+    }
 }
 
 } // namespace fate
