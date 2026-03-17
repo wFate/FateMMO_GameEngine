@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
+#include "engine/ecs/reflect.h"
 
 namespace fate {
 
@@ -27,3 +28,10 @@ struct BoxCollider {
 };
 
 } // namespace fate
+
+FATE_REFLECT(fate::BoxCollider,
+    FATE_FIELD(offset, Vec2),
+    FATE_FIELD(size, Vec2),
+    FATE_FIELD(isTrigger, Bool),
+    FATE_FIELD(isStatic, Bool)
+)

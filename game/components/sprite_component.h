@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
+#include "engine/ecs/reflect.h"
 #include "engine/render/texture.h"
 #include <memory>
 #include <string>
@@ -44,3 +45,17 @@ struct SpriteComponent {
 };
 
 } // namespace fate
+
+FATE_REFLECT(fate::SpriteComponent,
+    FATE_FIELD(texturePath, String),
+    FATE_FIELD(sourceRect, Rect),
+    FATE_FIELD(size, Vec2),
+    FATE_FIELD(tint, Color),
+    FATE_FIELD(flipX, Bool),
+    FATE_FIELD(flipY, Bool),
+    FATE_FIELD(frameWidth, Int),
+    FATE_FIELD(frameHeight, Int),
+    FATE_FIELD(currentFrame, Int),
+    FATE_FIELD(totalFrames, Int),
+    FATE_FIELD(columns, Int)
+)

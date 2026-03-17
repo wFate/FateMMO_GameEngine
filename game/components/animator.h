@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
+#include "engine/ecs/reflect.h"
 #include <string>
 #include <unordered_map>
 
@@ -55,3 +56,10 @@ struct Animator {
 };
 
 } // namespace fate
+
+// Animator has complex inner state (unordered_map of AnimationDefs) — needs custom serializer
+FATE_REFLECT(fate::Animator,
+    FATE_FIELD(currentAnimation, String),
+    FATE_FIELD(timer, Float),
+    FATE_FIELD(playing, Bool)
+)

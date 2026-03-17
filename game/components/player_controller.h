@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
+#include "engine/ecs/reflect.h"
 
 namespace fate {
 
@@ -18,3 +19,10 @@ struct PlayerController {
 };
 
 } // namespace fate
+
+FATE_REFLECT(fate::PlayerController,
+    FATE_FIELD(moveSpeed, Float),
+    FATE_FIELD(facing, Direction),
+    FATE_FIELD(isMoving, Bool),
+    FATE_FIELD(isLocalPlayer, Bool)
+)
