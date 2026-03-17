@@ -1,0 +1,26 @@
+#pragma once
+#include "engine/ecs/entity.h"
+
+namespace fate {
+
+class NPCInteractionSystem;
+class QuestSystem;
+
+class NPCDialogueUI {
+public:
+    void render(Entity* npc, Entity* player, NPCInteractionSystem* npcSystem, QuestSystem* questSystem);
+
+private:
+    uint32_t currentDialogueNodeId_ = 0;
+    bool inStoryDialogue_ = false;
+
+    void renderQuestGiverOptions(Entity* npc, Entity* player, NPCInteractionSystem* npcSystem, QuestSystem* questSystem);
+    void renderShopButton(Entity* npc, NPCInteractionSystem* npcSystem);
+    void renderSkillTrainerButton(Entity* npc, NPCInteractionSystem* npcSystem);
+    void renderBankerButton(Entity* npc, NPCInteractionSystem* npcSystem);
+    void renderGuildNPCButton(Entity* npc, Entity* player, NPCInteractionSystem* npcSystem);
+    void renderTeleporterOptions(Entity* npc, Entity* player, NPCInteractionSystem* npcSystem);
+    void renderStoryDialogue(Entity* npc, Entity* player, NPCInteractionSystem* npcSystem);
+};
+
+} // namespace fate
