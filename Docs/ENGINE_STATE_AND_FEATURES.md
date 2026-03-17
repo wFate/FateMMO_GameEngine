@@ -19,15 +19,26 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 |---------|--------|-------|
 | SDL2 Window | Done | 1280x720 default, resizable |
 | OpenGL 3.3 Rendering | Done | Custom function loader, no GLAD dependency |
-| Batched Sprite Renderer | Done | Sorts by depth + texture, 10k sprite capacity, raw texture ID support |
+| Batched Sprite Renderer | Done | Sorts by depth + texture, 10k capacity, dirty-flag sort skip (hash-based) |
 | 2D Orthographic Camera | Done | 480x270 virtual resolution (pixel art scale), 0.05x-8x zoom |
-| Custom ECS | Done | Entity/Component/System with typed queries, forEachEntity |
+| Archetype ECS | Done | Contiguous SoA component storage, O(matching) forEach queries, generational handles, command buffer for deferred structural changes |
 | Input System | Done | Keyboard, mouse, touch, cardinal direction helper |
 | Structured Logging | Done | Timestamped, categorized, console + file output |
 | Text Rendering | Done | stb_truetype, TTF font atlas, screen-space drawing |
 | Tilemap System | Done | Tiled JSON loader, frustum-culled, collision layers |
 | Coordinate System | Done | Tile-based coords (32px grid), pixel-to-tile conversion |
-| Spatial Hash Grid | Done | 128px cells, O(1) range/nearest/point queries, used by MobAI + Combat systems |
+| Spatial Grid (Primary) | Done | Fixed power-of-two grid, bitshift cell lookup (zero hash computation), std::span query results, std::expected error handling |
+| Spatial Hash (Fallback) | Done | Mueller-style 128px cells, counting-sort rebuild, for unbounded/sparse regions |
+| Memory: Zone Arena | Done | 256 MB virtual reserve per scene, O(1) bulk reset on zone unload |
+| Memory: Frame Arena | Done | Double-buffered 64 MB, per-frame temporaries, swap at frame start |
+| Memory: Scratch Arenas | Done | Thread-local (2 per thread, 256 MB), Fleury conflict-avoidance, ScratchScope RAII |
+| Memory: Pool Allocator | Done | Free-list on arena backing, O(1) alloc/dealloc |
+| Zone Snapshots | Done | Persistent entity IDs (64-bit), serialization skeleton for mob/boss state across zone visits |
+| Tracy Profiler | Done | On-demand profiling, named zones, frame marks, arena memory tracking |
+| Component Registry | Done | Compile-time CompId, Hot/Warm/Cold tier classification, zero-RTTI macros |
+| Chunk Lifecycle | Done | 7-state machine (Queued→Loading→Setup→Active→Sleeping→Unloading→Evicted), ticket system, rate-limited transitions, double-buffered staging |
+| AOI Groundwork | Done | Visibility sets with enter/leave/stay diffs, hysteresis (20% larger deactivation radius) |
+| Ghost Entity Scaffold | Done | GhostFlag component, dedicated GhostArena for cross-zone proxy entities |
 
 ### Editor (Dear ImGui)
 | Feature | Status | Notes |
@@ -348,6 +359,70 @@ Spawn zones are spatial entities you place and resize in the scene editor. Mobs 
 **HUD maxFury fix:**
 - Fury display reads s.maxFury directly instead of recomputing from formula
 - Inspector changes to maxFury properly reflected in HUD
+
+### March 17, 2026 - Engine Research Upgrade (Full Stack)
+
+**Archetype ECS (replaced unordered_map-per-entity storage):**
+- Contiguous typed columns per archetype — all entities with the same component set stored together
+- Swap-and-pop entity removal, O(matching entities) forEach queries
+- Cached archetype matching with version-counter invalidation
+- Deferred command buffer for structural changes during iteration
+- Entity* pointer stability preserved (heap-allocated, not stack facade)
+- Compile-time CompId (uint32_t) with Hot/Warm/Cold tier classification
+
+**Memory system (Fleury-inspired arena stack):**
+- Zone Arena (256 MB reserve per scene) — O(1) bulk reset on zone unload
+- Frame Arena upgraded to 64 MB double-buffered
+- Thread-local scratch arenas (2 per thread, 256 MB) with conflict-avoidance
+- ScratchScope RAII guard for automatic reset on scope exit
+- Pool allocator composes on arena backing
+
+**Spatial Grid (fixed power-of-two, replaces hash for bounded worlds):**
+- Direct-indexed: `(y << gridBits) | x` — two shifts and an OR, zero hash computation
+- gridBits computed from map dimensions at zone load
+- Counting-sort rebuild via prefix sums (same O(n) pattern as Mueller hash)
+- queryRadius returns std::span into scratch arena (zero-copy)
+- findNearest returns Expected<EntityHandle, SpatialError>
+- MobAISystem migrated to engine SpatialGrid (removed duplicate spatial hash)
+
+**7-state chunk lifecycle (upgraded from 3 states):**
+- States: Queued → Loading → Setup → Active → Sleeping → Unloading → Evicted
+- Ticket system: player proximity, system holds (boss fights), future multiplayer
+- Rate-limited transitions (max 4 per frame) prevent frame hitches
+- Double-buffered staging tiles for future async loading
+- Concentric rings: active buffer → sleep buffer → prefetch buffer
+
+**Zone snapshots & persistent IDs:**
+- PersistentId: 64-bit (zoneId:16 | creationTime:32 | sequence:16) with overflow handling
+- ZoneSnapshot: serialization skeleton for mob positions, health, respawn timers
+- Absolute timestamps for respawn timers (time passes correctly while zone unloaded)
+
+**Scene/SceneManager zone arena lifecycle:**
+- Scene owns dedicated zone arena, reset on exit
+- Loading state tracking (isLoading, loadProgress) for future loading screens
+- Snapshot hooks for persistent zone state
+
+**Profiling & diagnostics:**
+- Tracy Profiler integration (on-demand, named/colored zones, frame marks)
+- FATE_ZONE/FATE_ALLOC/FATE_FRAME_MARK macro wrappers
+- SpriteBatch dirty flag — FNV-1a hash-based sort skip when draw order unchanged
+- MSVC AddressSanitizer preset in CMake
+
+**Multiplayer groundwork (data structures only, no networking):**
+- AOI: VisibilitySet with enter/leave/stay diffs, hysteresis
+- Ghost entity scaffold: GhostFlag component + GhostArena
+- Delta compression: dirty bit infrastructure on components
+
+**Component migration:**
+- All 27 game components migrated from virtual Component base to new FATE_COMPONENT macros
+- Zero RTTI — compile-time type IDs and tier classification
+- Components are plain structs, no vtable overhead
+
+**Testing:**
+- doctest framework integrated via FetchContent
+- 32 test cases, 740 assertions covering arena, archetype, spatial grid, chunk lifecycle, world
+
+**Files: 47 changed, +3,823 lines across 15 commits**
 
 ### March 16, 2026 - Skill Bar UI & HUD Bars
 
@@ -765,7 +840,7 @@ game/
 ### Near-Term (Engine Foundation)
 - [ ] Audio system (SDL_mixer - music per zone, SFX for combat/UI)
 - [ ] Sprite animation testing with real spritesheets
-- [ ] Scene transitions with loading screen and zone portals
+- [x] Scene transitions with loading screen and zone portals
 - [ ] Undo/Redo in editor
 - [ ] Multi-select and bulk operations in editor
 - [ ] Eraser tool for tile painting
@@ -804,6 +879,8 @@ game/
 - [x] HUD target info (name, level, HP when target selected)
 - [x] Core gameplay loop (walk → aggro → fight → kill → XP → level up)
 - [x] Spatial hash grid for efficient mob-player range queries (128px cells, used by MobAI + Combat)
+- [x] Archetype ECS with contiguous SoA storage, swap-and-pop, cached queries
+- [x] MobAI unified onto engine SpatialGrid (removed duplicate spatial hash)
 - [ ] Event bus for cross-system communication (loot drops, party XP sharing)
 - [ ] Timer/scheduler utility for periodic game events
 
@@ -824,7 +901,7 @@ game/
 - [ ] Custom replication system (dirty-flag sync, delta serialization)
 - [ ] Client-server message protocol (binary, not JSON)
 - [ ] Server-authoritative game logic
-- [ ] Zone-based interest management
+- [x] Zone-based interest management (AOI data structures, visibility set diffs, hysteresis)
 - [ ] Client-side prediction and server reconciliation
 - [ ] Authentication and session management
 - [ ] Wire up all game/shared/ systems to networking layer
@@ -848,8 +925,16 @@ game/
 ### Advanced Engine
 - [ ] Particle system (spell effects, death, level up)
 - [ ] Shader effects (water, fog, screen flash)
-- [ ] Spatial hash grid for efficient entity queries
+- [x] Spatial grid for efficient entity queries (power-of-two bitshift, zero hash)
 - [ ] Object pooling for frequently spawned entities
 - [ ] Hot-reload for data files (JSON, prefabs)
-- [ ] Built-in profiler (frame time breakdown by system)
+- [x] Built-in profiler (Tracy integration, on-demand, named zones, memory tracking)
 - [ ] Console command system for runtime debugging
+- [x] Zone arena memory system (O(1) bulk deallocation on zone unload)
+- [x] 7-state chunk lifecycle with ticket system and rate-limited streaming
+- [x] Zone snapshots with persistent entity IDs (mob/boss state persists across zone visits)
+- [x] Ghost entity scaffold for future seamless zone transitions
+- [x] Compile-time component type system (CompId, Hot/Warm/Cold tiers, no RTTI)
+- [ ] SIMD intrinsics for spatial queries (future optimization)
+- [ ] C++20 coroutines for async chunk I/O (structured for future drop-in)
+- [x] Unit test suite (doctest, 32 test cases, 740 assertions)

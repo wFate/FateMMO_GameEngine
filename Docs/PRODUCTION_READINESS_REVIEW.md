@@ -204,6 +204,17 @@ The FateMMO engine demonstrates **strong foundational game logic** with a clean 
 - **Detailed documentation** — `ENGINE_STATE_AND_FEATURES.md` is thorough
 - **Modern C++20** — Uses ranges, `std::erase_if`, structured bindings throughout
 
+### What's Been Addressed (March 17, 2026 Upgrade)
+- **Archetype ECS replaces O(n) queries** — contiguous SoA storage, O(matching) iteration, cached archetype matching
+- **Sprite batch sort optimization** — dirty-flag hash-based skip, near-zero cost on static scenes
+- **Zone arena memory** — O(1) bulk deallocation, no fragmentation, pool allocator on arena
+- **Spatial grid** — power-of-two bitshift lookup, zero hash computation for bounded worlds
+- **7-state chunk lifecycle** — ticket system, rate-limited transitions, double-buffered staging
+- **Tracy profiler** — on-demand instrumentation, named zones, memory tracking
+- **Multiplayer groundwork** — AOI visibility sets, ghost entity scaffold, persistent IDs, zone snapshots
+- **Unit test suite** — 32 tests, 740 assertions (doctest)
+- **Component type system** — compile-time CompId, no RTTI, Hot/Warm/Cold tiers
+
 ---
 
 ## Recommended Fix Priority (Road to Production)
@@ -224,8 +235,8 @@ The FateMMO engine demonstrates **strong foundational game logic** with a clean 
 5. Implement async asset loading
 
 ### Phase 3: Performance & Polish (Weeks 9-12)
-1. Replace O(n) ECS queries with archetype system
-2. Optimize sprite batch sorting (dirty flag)
+1. ~~Replace O(n) ECS queries with archetype system~~ **DONE** (archetype ECS with cached queries)
+2. ~~Optimize sprite batch sorting (dirty flag)~~ **DONE** (hash-based sort skip)
 3. Fix font atlas VRAM waste
 4. Add texture cache eviction
 5. Cross-platform font loading
