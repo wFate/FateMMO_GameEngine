@@ -128,6 +128,7 @@ struct EnemyStatsComponent : public Component {
 struct MobAIComponent : public Component {
     FATE_COMPONENT(MobAIComponent)
     MobAI ai;
+    float tickAccumulator = 0.0f;  // DEAR: time since last AI tick
 };
 
 // Mob nameplate (separate from player nameplate for different rendering)

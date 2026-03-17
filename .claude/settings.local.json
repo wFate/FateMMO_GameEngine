@@ -4,7 +4,10 @@
       "Bash(cmake:*)",
       "Bash(cmd.exe /c \"cmake --build build --config Debug\" 2>&1)",
       "Bash(cmd.exe /c \"cmake --build build --config Debug 2>&1\")",
-      "Bash(CMAKE=\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" && \"$CMAKE\" --build build --config Debug 2>&1)"
+      "Bash(CMAKE=\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" && \"$CMAKE\" --build build --config Debug 2>&1)",
+      "Bash(CMAKE=\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\"\n\"$CMAKE\" --build /c/Users/Caleb/FateMMO_GameEngine/build --config Debug 2>&1)",
+      "Bash(CMAKE=\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" && cd \"C:/Users/Caleb/FateMMO_GameEngine\" && \"$CMAKE\" --build build --config Debug 2>&1)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build build --config Debug 2>&1 | head -60)"
     ]
   }
 }

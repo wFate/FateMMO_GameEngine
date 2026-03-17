@@ -4,6 +4,7 @@
 #include "engine/scene/scene_manager.h"
 #include "engine/editor/editor.h"
 #include "engine/input/input.h"
+#include "engine/memory/arena.h"
 #include <SDL.h>
 #include <string>
 
@@ -45,6 +46,7 @@ public:
     float deltaTime() const { return deltaTime_; }
     float fps() const { return fps_; }
     bool isRunning() const { return running_; }
+    FrameArena& frameArena() { return frameArena_; }
 
 protected:
     AppConfig config_;
@@ -59,6 +61,7 @@ private:
     float deltaTime_ = 0.0f;
     float fps_ = 0.0f;
     float fixedTimeAccumulator_ = 0.0f;
+    FrameArena frameArena_;
 
     void processEvents();
     void update();

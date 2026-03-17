@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/ecs/component.h"
+#include "engine/ecs/entity_handle.h"
 #include "engine/core/types.h"
 #include <memory>
 #include <unordered_map>
@@ -25,6 +26,9 @@ public:
 
     const std::string& tag() const { return tag_; }
     void setTag(const std::string& tag) { tag_ = tag; }
+
+    EntityHandle handle() const { return handle_; }
+    void setHandle(EntityHandle h) { handle_ = h; }
 
     // Component management
     template<typename T, typename... Args>
@@ -63,6 +67,7 @@ public:
 
 private:
     EntityId id_;
+    EntityHandle handle_;
     std::string name_;
     std::string tag_;
     bool active_ = true;

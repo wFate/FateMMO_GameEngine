@@ -108,6 +108,8 @@ bool Tilemap::loadFromFile(const std::string& path) {
             }
         }
 
+        chunkManager_.buildFromLayers(layers_, mapWidth_, mapHeight_);
+
         LOG_INFO("Tilemap", "Loaded '%s': %dx%d tiles, %zu layers, %zu tilesets, %zu objects",
                  path.c_str(), mapWidth_, mapHeight_, layers_.size(),
                  tilesets_.size(), objects_.size());
@@ -122,43 +124,49 @@ bool Tilemap::loadFromFile(const std::string& path) {
 void Tilemap::render(SpriteBatch& batch, Camera& camera, float depth) {
     Rect visible = camera.getVisibleBounds();
 
-    for (auto& layer : layers_) {
-        if (!layer.visible || layer.isCollisionLayer) continue;
+    // Update chunk states based on camera proximity
+    chunkManager_.updateChunkStates(visible, origin, tileWidth_, tileHeight_);
 
-        // Calculate visible tile range
-        int startCol = (int)((visible.x - origin.x) / tileWidth_) - 1;
-        int startRow = (int)((visible.y - origin.y) / tileHeight_) - 1;
-        int endCol = (int)((visible.x + visible.w - origin.x) / tileWidth_) + 1;
-        int endRow = (int)((visible.y + visible.h - origin.y) / tileHeight_) + 1;
+    for (auto& cl : chunkManager_.layers()) {
+        if (!cl.visible || cl.isCollisionLayer) continue;
 
-        if (startCol < 0) startCol = 0;
-        if (startRow < 0) startRow = 0;
-        if (endCol >= layer.width) endCol = layer.width - 1;
-        if (endRow >= layer.height) endRow = layer.height - 1;
+        for (auto& chunk : cl.chunks) {
+            if (chunk.state != ChunkState::Active) continue;
 
-        for (int row = startRow; row <= endRow; row++) {
-            for (int col = startCol; col <= endCol; col++) {
-                int index = row * layer.width + col;
-                if (index < 0 || index >= (int)layer.data.size()) continue;
+            // Frustum-cull the entire chunk
+            float chunkWorldX = origin.x + chunk.chunkX * CHUNK_SIZE * tileWidth_;
+            float chunkWorldY = origin.y + chunk.chunkY * CHUNK_SIZE * tileHeight_;
+            float chunkWorldW = CHUNK_SIZE * (float)tileWidth_;
+            float chunkWorldH = CHUNK_SIZE * (float)tileHeight_;
+            Rect chunkBounds(chunkWorldX, chunkWorldY, chunkWorldW, chunkWorldH);
 
-                int gid = layer.data[index];
-                if (gid <= 0) continue;
+            if (!visible.overlaps(chunkBounds)) continue;
 
-                const Tileset* ts = findTileset(gid);
-                if (!ts || !ts->texture) continue;
+            // Render each tile in this active chunk
+            for (int ly = 0; ly < CHUNK_SIZE; ++ly) {
+                for (int lx = 0; lx < CHUNK_SIZE; ++lx) {
+                    int gid = chunk.tiles[ly * CHUNK_SIZE + lx];
+                    if (gid <= 0) continue;
 
-                int localId = gid - ts->firstGid;
-                Rect uv = ts->getTileUV(localId);
-                Vec2 worldPos = tileToWorld(col, row);
+                    const Tileset* ts = findTileset(gid);
+                    if (!ts || !ts->texture) continue;
 
-                SpriteDrawParams params;
-                params.position = worldPos;
-                params.size = {(float)tileWidth_, (float)tileHeight_};
-                params.sourceRect = uv;
-                params.color = Color(1, 1, 1, layer.opacity);
-                params.depth = depth;
+                    int globalCol = chunk.chunkX * CHUNK_SIZE + lx;
+                    int globalRow = chunk.chunkY * CHUNK_SIZE + ly;
 
-                batch.draw(ts->texture, params);
+                    int localId = gid - ts->firstGid;
+                    Rect uv = ts->getTileUV(localId);
+                    Vec2 worldPos = tileToWorld(globalCol, globalRow);
+
+                    SpriteDrawParams params;
+                    params.position = worldPos;
+                    params.size = {(float)tileWidth_, (float)tileHeight_};
+                    params.sourceRect = uv;
+                    params.color = Color(1, 1, 1, cl.opacity);
+                    params.depth = depth;
+
+                    batch.draw(ts->texture, params);
+                }
             }
         }
 
@@ -167,42 +175,63 @@ void Tilemap::render(SpriteBatch& batch, Camera& camera, float depth) {
 }
 
 bool Tilemap::checkCollision(const Rect& worldRect) const {
-    for (auto& layer : layers_) {
-        if (!layer.isCollisionLayer) continue;
-
-        // Convert world rect to tile range
-        int startCol = (int)((worldRect.x - origin.x) / tileWidth_);
-        int startRow = (int)((worldRect.y - origin.y) / tileHeight_);
-        int endCol = (int)((worldRect.x + worldRect.w - origin.x) / tileWidth_);
-        int endRow = (int)((worldRect.y + worldRect.h - origin.y) / tileHeight_);
-
-        if (startCol < 0) startCol = 0;
-        if (startRow < 0) startRow = 0;
-        if (endCol >= layer.width) endCol = layer.width - 1;
-        if (endRow >= layer.height) endRow = layer.height - 1;
-
-        for (int row = startRow; row <= endRow; row++) {
-            for (int col = startCol; col <= endCol; col++) {
-                int index = row * layer.width + col;
-                if (index >= 0 && index < (int)layer.data.size() && layer.data[index] > 0) {
-                    return true; // hit a collision tile
-                }
-            }
-        }
-    }
-    return false;
+    return chunkManager_.checkCollision(worldRect, origin, tileWidth_, tileHeight_);
 }
 
 int Tilemap::getTileAt(const std::string& layerName, float worldX, float worldY) const {
-    for (auto& layer : layers_) {
-        if (layer.name != layerName) continue;
-        int col = (int)((worldX - origin.x) / tileWidth_);
-        int row = (int)((worldY - origin.y) / tileHeight_);
-        if (col < 0 || col >= layer.width || row < 0 || row >= layer.height) return 0;
-        int index = row * layer.width + col;
-        return (index < (int)layer.data.size()) ? layer.data[index] : 0;
+    return chunkManager_.getTileAt(layerName, worldX, worldY, origin, tileWidth_, tileHeight_);
+}
+
+// ChunkManager::buildFromLayers — implemented here where TilemapLayer is fully defined
+void ChunkManager::buildFromLayers(const std::vector<TilemapLayer>& layers,
+                                    int mapWidth, int mapHeight) {
+    chunkLayers_.clear();
+
+    int wChunks = (mapWidth  + CHUNK_SIZE - 1) / CHUNK_SIZE;
+    int hChunks = (mapHeight + CHUNK_SIZE - 1) / CHUNK_SIZE;
+
+    for (int li = 0; li < (int)layers.size(); ++li) {
+        const TilemapLayer& src = layers[li];
+
+        ChunkLayer cl;
+        cl.name             = src.name;
+        cl.visible          = src.visible;
+        cl.opacity          = src.opacity;
+        cl.isCollisionLayer = src.isCollisionLayer;
+        cl.widthInChunks    = wChunks;
+        cl.heightInChunks   = hChunks;
+        cl.chunks.resize(wChunks * hChunks);
+
+        for (int cy = 0; cy < hChunks; ++cy) {
+            for (int cx = 0; cx < wChunks; ++cx) {
+                ChunkData& cd = cl.chunks[cy * wChunks + cx];
+                cd.chunkX     = cx;
+                cd.chunkY     = cy;
+                cd.layerIndex = li;
+                cd.state      = ChunkState::Active;
+                cd.dirty      = false;
+                cd.tiles.resize(CHUNK_SIZE * CHUNK_SIZE, 0);
+
+                int tileStartX = cx * CHUNK_SIZE;
+                int tileStartY = cy * CHUNK_SIZE;
+
+                for (int ly = 0; ly < CHUNK_SIZE; ++ly) {
+                    int srcRow = tileStartY + ly;
+                    if (srcRow >= src.height) break;
+                    for (int lx = 0; lx < CHUNK_SIZE; ++lx) {
+                        int srcCol = tileStartX + lx;
+                        if (srcCol >= src.width) break;
+                        int srcIdx = srcRow * src.width + srcCol;
+                        if (srcIdx >= 0 && srcIdx < (int)src.data.size()) {
+                            cd.tiles[ly * CHUNK_SIZE + lx] = src.data[srcIdx];
+                        }
+                    }
+                }
+            }
+        }
+
+        chunkLayers_.push_back(std::move(cl));
     }
-    return 0;
 }
 
 const Tileset* Tilemap::findTileset(int gid) const {

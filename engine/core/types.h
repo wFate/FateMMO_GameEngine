@@ -12,6 +12,9 @@ namespace fate {
 using EntityId = uint32_t;
 constexpr EntityId INVALID_ENTITY = 0;
 
+// Forward declare EntityHandle (full definition in engine/ecs/entity_handle.h)
+struct EntityHandle;
+
 // ============================================================================
 // Vec2
 // ============================================================================
