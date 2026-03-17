@@ -33,21 +33,20 @@ Each faction has a `FactionDefinition` struct:
 
 ### Core Rules
 
-1. **Cannot damage same-faction players.** Attack is blocked at the combat layer.
-2. **Cross-faction chat is garbled.** All Chat and proximity chat from other factions is replaced with deterministic gibberish (seeded from message hash for consistency). Party, Guild, Whisper, and System channels are readable regardless of faction.
-3. **Faction is permanent.** Set once at character creation, stored on `CharacterStats` (or a dedicated `FactionComponent`). Never changes.
-4. **Home village PvP exception.** Enemy faction players inside your faction's village can be attacked freely without PK penalty.
+1. **Cannot damage same-faction players.** The combat layer checks attacker/victim factions before any combat processing. Same-faction attacks are rejected before `PKSystem` is ever invoked. `PKSystem` remains pure status-transition logic with no faction awareness.
+2. **Cross-faction chat is garbled.** All Chat and proximity chat from other factions is replaced with deterministic gibberish (seeded from message hash for consistency). Party, Guild, Whisper, and System channels are readable regardless of faction. `ChatMessage` gains a `Faction senderFaction` field. Garbling happens server-side: the server sends garbled payloads to cross-faction recipients, readable payloads to same-faction recipients.
+3. **Faction is permanent.** Set once at character creation, stored on a dedicated `FactionComponent` on the player entity (not on `CharacterStats` — keeps the ECS clean, consistent with the dedicated `PetComponent` pattern). Never changes.
+4. **Home village PvP exception.** Enemy faction players inside your faction's village can be attacked freely without PK penalty. The combat layer checks the attacker's current zone ID against their faction's `homeVillageId` before calling `PKSystem::processPvPKill()`. If in home village and target is enemy faction, `attackerPenalized` is overridden to false. Zone detection uses the existing `ZoneComponent` — each zone has an ID that can be matched against `FactionDefinition::homeVillageId`.
 
 ### Chat Garbling
 
-Each character in the original message maps to a random character from a fixed garble alphabet. The substitution is deterministic per-message — seeded from a hash of the message content — so the same message always produces the same garbled output. This prevents information leaking through length or pattern analysis.
+Each character in the original message maps to a random character from a fixed garble alphabet. The substitution is deterministic per-message — seeded from a hash of the message content — so the same message always produces the same garbled output. Note: garbled output length matches the original, so message length is visible to cross-faction readers.
 
 ### Integration Points
 
-- `PKSystem::processPvPAttack()` — add faction check; same faction = attack blocked
-- `PKSystem::processPvPKill()` — add home village exception (no Red name for killing enemy faction in your village)
-- `ChatManager` — garble pass for cross-faction messages in public channels
-- `CharacterStats` or new `FactionComponent` — `Faction faction` field
+- **Combat layer** (e.g., `CombatActionSystem` or equivalent) — faction check before any PvP processing; same faction = attack rejected. Home village zone check before calling `processPvPKill()` to override penalty. `PKSystem` and `CombatSystem` are NOT modified — they remain pure logic.
+- `ChatManager` — garble pass using `ChatMessage::senderFaction` for cross-faction messages in public channels
+- `FactionComponent` — new ECS component holding `Faction faction` field
 - Nameplate rendering — color-coded by faction
 - Faction merchants — NPCs restricted to selling only to their faction members
 - `EntityFactory::createPlayer()` — faction parameter at creation time
@@ -85,13 +84,14 @@ struct PetInstance {
     std::string instanceId;         // UUID
     std::string petDefinitionId;    // references PetDefinition
     std::string petName;            // player-renamable
-    ItemRarity rarity;
-    int level            = 1;
+    int level            = 1;       // max level = player level cap (50)
     int64_t currentXP    = 0;
     int64_t xpToNextLevel = 100;
     bool autoLootEnabled = false;
     bool isSoulbound     = false;   // false by default — pets are tradable
 };
+// Note: rarity is NOT stored on PetInstance — always looked up from PetDefinition
+// via petDefinitionId to avoid data divergence.
 ```
 
 ### Pet Leveling
@@ -108,7 +108,9 @@ At any given pet level, the effective stats are:
 - `effectiveCritRate = baseCritRate + critPerLevel * (petLevel - 1)`
 - `effectiveExpBonus = baseExpBonus + expBonusPerLevel * (petLevel - 1)`
 
-These feed into the `CharacterStats` equipment bonus pipeline during `recalculateStats()`. The XP bonus is applied as a multiplier in `CharacterStats::addXP()` before XP is added.
+**Stat application order:** When `recalculateStats()` runs: (1) `clearEquipmentBonuses()` zeros all `equipBonus*` fields, (2) equipment system writes gear bonuses to `equipBonus*`, (3) pet system writes pet bonuses to the same `equipBonus*` fields (additive), (4) `recalculateStats()` computes derived stats from the totals.
+
+**XP bonus application:** The caller multiplies XP by the pet's `effectiveExpBonus` *before* calling `CharacterStats::addXP()`. This avoids adding a pet dependency to CharacterStats. Example: `stats.addXP(static_cast<int64_t>(baseXP * (1.0f + petExpBonus)));`
 
 ### Auto-Loot
 
@@ -145,11 +147,14 @@ A hidden spell chaining system. Certain mage spells open a brief window where th
 
 Addition to `SkillDefinition`:
 ```cpp
+float castTime          = 0.0f;    // seconds to cast (0 = instant). NEW FIELD — required prerequisite.
 bool enablesDoubleCast  = false;   // casting this opens the window
 float doubleCastWindow  = 2.0f;    // seconds before window expires
 ```
 
-Caster state on `SkillManager`:
+Note: `castTime` does not currently exist on `SkillDefinition`. It must be added as a prerequisite for this mechanic to work — double-cast sets `castTime` to 0 for the follow-up. Skills with `castTime = 0` already (instant casts) are unaffected by the double-cast window since they are already instant.
+
+Caster state on `SkillManager` (transient server-only state, excluded from serialization/persistence):
 ```cpp
 bool doubleCastReady          = false;
 float doubleCastExpireTime    = 0.0f;
@@ -178,6 +183,7 @@ This is intentionally hidden. No glowing buttons, no "double cast ready!" text, 
 
 - Skill execution logic checks `doubleCastReady` before applying cast time. If ready, cast time = 0.
 - `SkillManager::tick()` checks `doubleCastExpireTime` and resets the flag on expiry.
+- **CC interaction:** If the mage is stunned/rooted/silenced during the double-cast window, the window continues ticking down normally. CC does not freeze or extend the window — it simply expires if the mage cannot act within the timeframe. The existing `CrowdControlSystem` blocks spell casts during CC as usual.
 - Class restriction: only `ClassType::Mage` skills should have `enablesDoubleCast = true` in data, but the system code is class-agnostic (future-proof if another class ever needs it).
 
 ---
@@ -219,6 +225,21 @@ This complements the existing `EnchantSystem` which explicitly excludes these sl
 2. **No break risk.** The item is never destroyed or damaged.
 3. **Fail = enchant removed.** Rolling a fail resets the accessory to +0 (no stat enchant). This creates tension since you can lose a good existing roll.
 4. **Scroll consumed on use** regardless of outcome.
+
+### Stat Mapping
+
+Scroll types map to `StatType` enum values:
+- `scroll_enchant_str` → `StatType::Strength`
+- `scroll_enchant_int` → `StatType::Intelligence`
+- `scroll_enchant_dex` → `StatType::Dexterity`
+- `scroll_enchant_vit` → `StatType::Vitality`
+- `scroll_enchant_wis` → `StatType::Wisdom`
+- `scroll_enchant_hp` → `StatType::MaxHealth` (feeds into `equipBonusHP` — flat additive after vitality multiplier)
+- `scroll_enchant_mp` → `StatType::MaxMana` (feeds into `equipBonusMP`)
+
+### Gold Cost
+
+No gold cost to use. The scroll itself is the cost (consumed on use). Scrolls drop from mobs/bosses and are tradable, so their value is market-driven.
 
 ### Data Model
 
@@ -266,22 +287,23 @@ public:
 - `game/shared/faction.h` — Faction enum, FactionDefinition, faction utility functions, chat garbler
 - `game/shared/pet_system.h` / `.cpp` — PetDefinition, PetInstance, pet leveling, stat calculation
 - `game/shared/stat_enchant_system.h` — StatEnchantSystem static utility
-- `game/components/pet_component.h` — PetComponent for ECS
-- `game/components/faction_component.h` — FactionComponent for ECS (if not placed on CharacterStats)
+- `game/components/pet_component.h` — PetComponent for ECS (holds PetInstance)
+- `game/components/faction_component.h` — FactionComponent for ECS (holds Faction enum)
 - `tests/test_faction.cpp` — Faction system tests
 - `tests/test_pet_system.cpp` — Pet system tests
 - `tests/test_double_cast.cpp` — Double-cast mechanic tests
 - `tests/test_stat_enchant.cpp` — Stat enchant scroll tests
 
 ### Modified Files
-- `game/shared/game_types.h` — new EquipmentSlot::Pet (if used), Faction enum (or import)
-- `game/shared/character_stats.h/.cpp` — faction field, pet stat integration, XP bonus multiplier
-- `game/shared/skill_manager.h/.cpp` — double-cast state and logic
+- `game/shared/game_types.h` — Faction enum import or forward declaration
+- `game/shared/character_stats.h/.cpp` — pet stat integration in recalculateStats() (pet writes to equipBonus* fields)
+- `game/shared/skill_manager.h/.cpp` — double-cast state fields, castTime field on SkillDefinition, enablesDoubleCast/doubleCastWindow fields, tick() expiry logic
 - `game/shared/item_instance.h` — statEnchantType/statEnchantValue fields
-- `game/shared/pk_system.h/.cpp` — faction checks, home village exception
-- `game/shared/chat_manager.h/.cpp` — cross-faction garble pass
-- `game/shared/combat_system.h/.cpp` — faction-based attack validation
+- `game/shared/chat_manager.h/.cpp` — senderFaction field on ChatMessage, cross-faction garble pass
 - `game/components/game_components.h` — register PetComponent, FactionComponent
-- `game/shared/skill_manager.h` — SkillDefinition additions (enablesDoubleCast, doubleCastWindow)
 - `game/entity_factory.h` — faction parameter on createPlayer, pet attachment helpers
 - `game/register_components.h` — register new components with meta registry
+
+### NOT Modified (intentionally)
+- `game/shared/pk_system.h/.cpp` — remains pure status-transition logic. Faction/zone checks happen at the combat layer before PKSystem is called.
+- `game/shared/combat_system.h/.cpp` — remains a stateless math utility. Faction-based attack validation happens at a higher layer (combat action system).
