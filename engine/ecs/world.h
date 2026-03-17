@@ -4,6 +4,9 @@
 #include "engine/ecs/archetype.h"
 #include "engine/ecs/command_buffer.h"
 #include "engine/memory/arena.h"
+#if defined(ENGINE_MEMORY_DEBUG)
+#include "engine/memory/allocator_registry.h"
+#endif
 #include <vector>
 #include <memory>
 #include <functional>

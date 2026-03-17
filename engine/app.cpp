@@ -4,6 +4,9 @@
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
 #include "engine/profiling/tracy_zones.h"
+#if defined(ENGINE_MEMORY_DEBUG)
+#include "engine/memory/allocator_registry.h"
+#endif
 #include <SDL.h>
 
 namespace fate {
@@ -97,6 +100,16 @@ bool App::init(const AppConfig& config) {
             AssetRegistry::instance().queueReload(fullPath);
         });
     }
+
+#if defined(ENGINE_MEMORY_DEBUG)
+    AllocatorRegistry::instance().add({
+        .name = "FrameArena",
+        .type = AllocatorType::FrameArena,
+        .getUsed = [this]() -> size_t { return frameArena_.current().position(); },
+        .getCommitted = [this]() -> size_t { return frameArena_.current().committed(); },
+        .getReserved = [this]() -> size_t { return frameArena_.current().reserved(); },
+    });
+#endif
 
     running_ = true;
     LOG_INFO("App", "Engine initialized successfully");
@@ -349,6 +362,9 @@ void App::render() {
 
 void App::shutdown() {
     LOG_INFO("App", "Shutting down...");
+#if defined(ENGINE_MEMORY_DEBUG)
+    AllocatorRegistry::instance().remove("FrameArena");
+#endif
     onShutdown();
 
     Editor::instance().shutdown();
