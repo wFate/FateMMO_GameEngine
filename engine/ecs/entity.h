@@ -1,5 +1,4 @@
 #pragma once
-#include "engine/ecs/component.h"
 #include "engine/ecs/component_registry.h"
 #include "engine/ecs/entity_handle.h"
 #include "engine/ecs/archetype.h"
@@ -45,9 +44,9 @@ public:
 
     size_t componentCount() const;
 
-    // Legacy: iterate components (for editor inspector)
+    // Iterate components as type-erased pointers (for editor inspector)
     // This is expensive -- iterates archetype columns
-    void forEachComponent(const std::function<void(Component*)>& fn);
+    void forEachComponent(const std::function<void(void*, CompId)>& fn);
 
 private:
     friend class World;

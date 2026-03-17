@@ -177,20 +177,15 @@ void World::updateSwappedEntity(ArchetypeId archId, RowIndex vacatedRow) {
 
 // --- forEachComponent (expensive, for editor inspector) ---
 
-void World::forEachComponentOfEntity(Entity* entity, const std::function<void(Component*)>& fn) {
+void World::forEachComponentOfEntity(Entity* entity, const std::function<void(void*, CompId)>& fn) {
     if (!entity || entity->archetypeId_ == UINT32_MAX) return;
 
     const auto& arch = archetypes_.getArchetype(entity->archetypeId_);
     for (size_t colIdx = 0; colIdx < arch.columns.size(); ++colIdx) {
         const auto& col = arch.columns[colIdx];
-        // Get the component data at this entity's row
+        // Get the component data at this entity's row as type-erased pointer
         void* data = col.at(entity->row_);
-        // Try to cast to Component* (legacy components inherit from Component)
-        Component* comp = static_cast<Component*>(data);
-        // Safety: only call fn if the pointer looks valid (has vtable from Component)
-        // Since all game components inherit from Component and are placed via placement new,
-        // this cast is valid as long as the type actually inherits from Component
-        fn(comp);
+        fn(data, col.typeId);
     }
 }
 
@@ -249,7 +244,7 @@ size_t Entity::componentCount() const {
     return world_->componentCountForEntity(this);
 }
 
-void Entity::forEachComponent(const std::function<void(Component*)>& fn) {
+void Entity::forEachComponent(const std::function<void(void*, CompId)>& fn) {
     world_->forEachComponentOfEntity(this, fn);
 }
 
