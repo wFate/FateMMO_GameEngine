@@ -2,6 +2,7 @@
 #include "engine/ecs/entity_handle.h"
 #include <vector>
 #include <algorithm>
+#include <iterator>
 
 namespace fate {
 
