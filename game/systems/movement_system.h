@@ -16,7 +16,6 @@ public:
     const char* name() const override { return "MovementSystem"; }
 
     void update(float dt) override {
-        LOG_INFO("TICK", "MovementSystem::update");
         auto& input = Input::instance();
         Direction dir = input.getCardinalDirection();
 
@@ -135,7 +134,6 @@ public:
     const char* name() const override { return "AnimationSystem"; }
 
     void update(float dt) override {
-        LOG_INFO("TICK", "AnimationSystem::update");
         world_->forEach<SpriteComponent, Animator>(
             [&](Entity*, SpriteComponent* sprite, Animator* anim) {
                 if (anim->playing) {
@@ -156,7 +154,6 @@ public:
     Camera* camera = nullptr;
 
     void update(float dt) override {
-        LOG_INFO("TICK", "CameraFollowSystem::update");
         if (!camera) return;
 
         world_->forEach<Transform, PlayerController>(

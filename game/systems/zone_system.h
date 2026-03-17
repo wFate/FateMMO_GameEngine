@@ -25,7 +25,6 @@ public:
     std::function<void()> onFadeEnd;
 
     void update(float dt) override {
-        LOG_INFO("TICK", "ZoneSystem::update");
         if (!camera) return;
 
         // Find the local player

@@ -21,7 +21,6 @@ public:
     float respawnCooldown = 5.0f;  // Seconds before respawn
 
     void update(float dt) override {
-        LOG_INFO("TICK", "GameplaySystem::update");
         if (!world_) return;
 
         regenTimer_   += dt;

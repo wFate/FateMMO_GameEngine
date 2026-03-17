@@ -85,7 +85,6 @@ bool FriendsManager::removeFriend(const std::string& targetCharId) {
         return false;
     }
 
-    LOG_INFO("ERASE_DEBUG", "friends_manager.cpp:87 — erasing from friends_ (size=%zu)", friends_.size());
     friends_.erase(it);
 
     if (onFriendsChanged) {
@@ -129,7 +128,6 @@ bool FriendsManager::unblockPlayer(const std::string& targetCharId) {
         return false;
     }
 
-    LOG_INFO("ERASE_DEBUG", "friends_manager.cpp:130 — erasing from blockedPlayers_ (size=%zu)", blockedPlayers_.size());
     blockedPlayers_.erase(it);
     blockedIds_.erase(targetCharId);
 
@@ -176,7 +174,6 @@ bool FriendsManager::acceptRequest(const std::string& fromCharId) {
     newFriend.className = it->fromClassName;
     newFriend.level = it->fromLevel;
 
-    LOG_INFO("ERASE_DEBUG", "friends_manager.cpp:176 — erasing from incomingRequests_ (size=%zu)", incomingRequests_.size());
     incomingRequests_.erase(it);
 
     return addFriend(newFriend);
@@ -188,7 +185,6 @@ void FriendsManager::declineRequest(const std::string& fromCharId) {
     });
 
     if (it != incomingRequests_.end()) {
-        LOG_INFO("ERASE_DEBUG", "friends_manager.cpp:187 — erasing from incomingRequests_ (size=%zu)", incomingRequests_.size());
         incomingRequests_.erase(it);
     }
 }

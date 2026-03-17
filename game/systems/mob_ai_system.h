@@ -26,7 +26,6 @@ public:
     const char* name() const override { return "MobAISystem"; }
 
     void update(float dt) override {
-        LOG_INFO("TICK", "MobAISystem::update");
         if (!world_) return;
 
         gameTime_ += dt;

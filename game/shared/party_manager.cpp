@@ -110,7 +110,6 @@ bool PartyManager::removeMember(const std::string& characterId) {
 
     std::string name = it->characterName;
     bool wasLeader = it->isLeader;
-    LOG_INFO("ERASE_DEBUG", "party_manager.cpp:112 — erasing from members (size=%zu)", members.size());
     members.erase(it);
 
     // If the removed member was leader and members remain, promote next member
@@ -225,7 +224,6 @@ bool PartyManager::acceptInvite(int inviteId) {
     }
 
     if (it->isExpired()) {
-        LOG_INFO("ERASE_DEBUG", "party_manager.cpp:226 — erasing from pendingInvites (size=%zu)", pendingInvites.size());
         pendingInvites.erase(it);
         if (onActionResult) onActionResult("Invite has expired.");
         return false;
@@ -237,7 +235,6 @@ bool PartyManager::acceptInvite(int inviteId) {
     }
 
     // Server handles the actual join; clear the invite locally
-    LOG_INFO("ERASE_DEBUG", "party_manager.cpp:237 — erasing from pendingInvites (size=%zu)", pendingInvites.size());
     pendingInvites.erase(it);
     if (onActionResult) onActionResult("Invite accepted.");
     return true;
@@ -248,7 +245,6 @@ void PartyManager::declineInvite(int inviteId) {
         [&](const PartyInviteInfo& inv) { return inv.inviteId == inviteId; });
 
     if (it != pendingInvites.end()) {
-        LOG_INFO("ERASE_DEBUG", "party_manager.cpp:247 — erasing from pendingInvites (size=%zu)", pendingInvites.size());
         pendingInvites.erase(it);
     }
 
@@ -299,7 +295,6 @@ void PartyManager::tick(float deltaTime) {
         [](const PartyInviteInfo& inv) { return inv.isExpired(); });
 
     if (it != pendingInvites.end()) {
-        LOG_INFO("ERASE_DEBUG", "party_manager.cpp:297 — erase-remove on pendingInvites (size=%zu)", pendingInvites.size());
         pendingInvites.erase(it, pendingInvites.end());
         changed = true;
     }

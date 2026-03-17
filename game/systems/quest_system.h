@@ -17,7 +17,6 @@ public:
     const char* name() const override { return "QuestSystem"; }
 
     void update(float /*dt*/) override {
-        LOG_INFO("TICK", "QuestSystem::update");
         if (!world_) return;
 
         // On first frame, wire up callbacks for event-driven marker updates

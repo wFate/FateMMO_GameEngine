@@ -94,7 +94,6 @@ bool QuestManager::abandonQuest(uint32_t questId) {
     auto it = std::find_if(activeQuests_.begin(), activeQuests_.end(),
         [questId](const ActiveQuest& aq) { return aq.questId == questId; });
     if (it == activeQuests_.end()) return false;
-    LOG_INFO("ERASE_DEBUG", "quest_manager.cpp:96 — erasing from activeQuests_ (size=%zu)", activeQuests_.size());
     activeQuests_.erase(it);
     return true;
 }
@@ -145,7 +144,6 @@ bool QuestManager::turnInQuest(uint32_t questId, CharacterStats& stats, Inventor
 
     // Mark completed
     completedQuestIds_.push_back(questId);
-    LOG_INFO("ERASE_DEBUG", "quest_manager.cpp:146 — erasing from activeQuests_ (size=%zu)", activeQuests_.size());
     activeQuests_.erase(it);
 
     if (onQuestCompleted) onQuestCompleted(questId);

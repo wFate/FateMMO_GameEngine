@@ -16,7 +16,6 @@ public:
     Camera* camera = nullptr;
 
     void update(float) override {
-        LOG_INFO("TICK", "SpriteRenderSystem::update");
         if (!batch || !camera) return;
 
         Mat4 vp = camera->getViewProjection();
