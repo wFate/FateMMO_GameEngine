@@ -167,21 +167,32 @@ void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
     if (!open_ || !batch || !camera) return;
 
     if (showGrid_ && paused_) {
-        drawSceneGrid(batch, camera);
+        // Prefer GPU grid shader; fall back to SpriteBatch grid if shader fails
+        drawSceneGridShader(camera);
+        if (!gridShaderLoaded_) {
+            drawSceneGrid(batch, camera);
+        }
+    }
+
+    // Draw selection outlines for selected entities
+    if (paused_) {
+        drawSelectionOutlines(batch, camera);
     }
 }
 
 void Editor::drawSceneGridShader(Camera* camera) {
-    // Lazy-load the grid shader
-    if (!gridShaderLoaded_) {
+    // Lazy-load the grid shader (only attempt once)
+    if (!gridShaderLoaded_ && !gridShaderAttempted_) {
+        gridShaderAttempted_ = true;
         gridShaderLoaded_ = gridShader_.loadFromFile(
             "assets/shaders/fullscreen_quad.vert",
             "assets/shaders/grid.frag");
         if (!gridShaderLoaded_) {
-            LOG_ERROR("Editor", "Failed to load grid shader");
+            LOG_ERROR("Editor", "Failed to load grid shader — falling back to SpriteBatch grid");
             return;
         }
     }
+    if (!gridShaderLoaded_) return;
 
     Mat4 vp = const_cast<Camera*>(camera)->getViewProjection();
     Mat4 invVP = vp.inverse();
@@ -234,17 +245,30 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     }
 
     // Post-process config panel
-    if (showPostProcessPanel_) {
-        ImGui::SetNextWindowSize(ImVec2(280, 200), ImGuiCond_FirstUseEver);
+    if (showPostProcessPanel_ && postProcessConfig_) {
+        ImGui::SetNextWindowSize(ImVec2(280, 320), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Post Process", &showPostProcessPanel_)) {
             ImGui::Text("Post-processing settings");
             ImGui::Separator();
-            static float bloomStrength = 1.0f;
-            static float vignetteStrength = 0.3f;
-            static float colorTint[3] = {1.0f, 1.0f, 1.0f};
-            ImGui::DragFloat("Bloom Strength", &bloomStrength, 0.01f, 0.0f, 4.0f);
-            ImGui::DragFloat("Vignette", &vignetteStrength, 0.01f, 0.0f, 1.0f);
-            ImGui::ColorEdit3("Color Tint", colorTint);
+
+            ImGui::Checkbox("Bloom Enabled", &postProcessConfig_->bloomEnabled);
+            ImGui::DragFloat("Bloom Threshold", &postProcessConfig_->bloomThreshold, 0.01f, 0.0f, 2.0f);
+            ImGui::DragFloat("Bloom Strength", &postProcessConfig_->bloomStrength, 0.01f, 0.0f, 4.0f);
+
+            ImGui::Separator();
+            ImGui::Checkbox("Vignette Enabled", &postProcessConfig_->vignetteEnabled);
+            ImGui::DragFloat("Vignette Radius", &postProcessConfig_->vignetteRadius, 0.01f, 0.0f, 2.0f);
+            ImGui::DragFloat("Vignette Smoothness", &postProcessConfig_->vignetteSmoothness, 0.01f, 0.0f, 2.0f);
+
+            ImGui::Separator();
+            float tint[3] = {postProcessConfig_->colorTint.r, postProcessConfig_->colorTint.g, postProcessConfig_->colorTint.b};
+            if (ImGui::ColorEdit3("Color Tint", tint)) {
+                postProcessConfig_->colorTint.r = tint[0];
+                postProcessConfig_->colorTint.g = tint[1];
+                postProcessConfig_->colorTint.b = tint[2];
+            }
+            ImGui::DragFloat("Brightness", &postProcessConfig_->brightness, 0.01f, 0.0f, 3.0f);
+            ImGui::DragFloat("Contrast", &postProcessConfig_->contrast, 0.01f, 0.0f, 3.0f);
         }
         ImGui::End();
     }

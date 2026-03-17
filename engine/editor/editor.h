@@ -7,6 +7,7 @@
 #include "engine/render/texture.h"
 #include "engine/render/framebuffer.h"
 #include "engine/render/shader.h"
+#include "engine/render/post_process.h"
 #if defined(ENGINE_MEMORY_DEBUG)
 #include "engine/editor/memory_panel.h"
 #include <implot.h>
@@ -121,6 +122,8 @@ public:
     void saveScene(World* world, const std::string& path);
     void loadScene(World* world, const std::string& path);
 
+    void setPostProcessConfig(PostProcessConfig* cfg) { postProcessConfig_ = cfg; }
+
     void setAssetRoot(const std::string& root) { assetRoot_ = root; }
     void setSourceDir(const std::string& dir) { sourceDir_ = dir; }
     void scanAssets();
@@ -229,9 +232,11 @@ private:
     // Grid shader (lazy-loaded)
     Shader gridShader_;
     bool gridShaderLoaded_ = false;
+    bool gridShaderAttempted_ = false;
 
-    // Post-process panel toggle
+    // Post-process panel
     bool showPostProcessPanel_ = false;
+    PostProcessConfig* postProcessConfig_ = nullptr;
 
     // ImGuizmo operation mode (synced to currentTool_)
     ImGuizmo::OPERATION gizmoOperation_ = ImGuizmo::TRANSLATE;

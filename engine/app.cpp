@@ -82,6 +82,7 @@ bool App::init(const AppConfig& config) {
 
     // Initialize editor (Dear ImGui)
     Editor::instance().init(window_, glContext_);
+    Editor::instance().setPostProcessConfig(&postProcessConfig_);
 
     // Hook log viewer into logger
     Logger::instance().setLogCallback([](const std::string& msg, int level) {
