@@ -1451,9 +1451,13 @@ void Editor::saveScene(World* world, const std::string& path) {
     nlohmann::json entitiesJson = nlohmann::json::array();
 
     world->forEachEntity([&](Entity* entity) {
+        // Skip transient entities — mobs/bosses are spawned at runtime by SpawnSystem
+        std::string tag = entity->tag();
+        if (tag == "mob" || tag == "boss") return;
+
         nlohmann::json ej;
         ej["name"] = entity->name();
-        ej["tag"] = entity->tag();
+        ej["tag"] = tag;
         ej["active"] = entity->isActive();
 
         nlohmann::json comps;
