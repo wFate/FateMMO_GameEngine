@@ -345,7 +345,7 @@ void GameApp::onInit() {
         createPlayer(scene.world());
         createTestEntities(scene.world());
         spawnTestMobs(scene.world());
-        spawnTestNPCs(scene.world());
+        // spawnTestNPCs(scene.world()); // DISABLED: investigating crash
     });
 
     SceneManager::instance().switchScene("TestScene");
