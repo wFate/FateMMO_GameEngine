@@ -11,6 +11,7 @@ public:
     ~Texture();
 
     bool loadFromFile(const std::string& path);
+    bool reloadFromFile(const std::string& path);
     bool loadFromMemory(const unsigned char* data, int width, int height, int channels);
 
     void bind(unsigned int slot = 0) const;

@@ -30,6 +30,29 @@ bool Texture::loadFromFile(const std::string& path) {
     return result;
 }
 
+bool Texture::reloadFromFile(const std::string& path) {
+    stbi_set_flip_vertically_on_load(true);
+    int w, h, channels;
+    unsigned char* data = stbi_load(path.c_str(), &w, &h, &channels, 4);
+    if (!data) {
+        LOG_ERROR("Texture", "Reload failed: %s (%s)", path.c_str(), stbi_failure_reason());
+        return false;
+    }
+
+    width_ = w;
+    height_ = h;
+    path_ = path;
+
+    // Reuse existing GL texture name — glTexImage2D respecifies storage
+    glBindTexture(GL_TEXTURE_2D, textureId_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    stbi_image_free(data);
+    LOG_INFO("Texture", "Reloaded %s (%dx%d)", path.c_str(), w, h);
+    return true;
+}
+
 bool Texture::loadFromMemory(const unsigned char* data, int width, int height, int channels) {
     width_ = width;
     height_ = height;
