@@ -24,6 +24,28 @@ struct AssetEntry {
     std::shared_ptr<Texture> thumbnail;
 };
 
+// Display resolution presets for play-testing
+struct DisplayPreset {
+    const char* name;
+    int width;
+    int height;
+};
+
+static constexpr DisplayPreset kDisplayPresets[] = {
+    {"Free Aspect",       0,    0},
+    {"iPhone 16 Pro",   393,  852},
+    {"iPhone 16 Pro Max", 430, 932},
+    {"iPhone SE",       375,  667},
+    {"iPad Pro 11\"",   834, 1194},
+    {"iPad Pro 12.9\"",1024, 1366},
+    {"Samsung S24",     360,  780},
+    {"Pixel 9",         412,  915},
+    {"1080p",          1920, 1080},
+    {"720p",           1280,  720},
+    {"4K",             3840, 2160},
+};
+static constexpr int kDisplayPresetCount = sizeof(kDisplayPresets) / sizeof(kDisplayPresets[0]);
+
 // Editor tool modes (like Unity W/E/R)
 enum class EditorTool {
     Move,    // W - drag to move entities
@@ -140,6 +162,9 @@ private:
     // Toolbar toggles
     bool showGrid_ = true;
     bool showCollisionDebug_ = false;
+
+    // Display resolution preset (0 = Free Aspect, fills viewport)
+    int displayPresetIdx_ = 0;
 
     bool openSavePrefab_ = false;
 

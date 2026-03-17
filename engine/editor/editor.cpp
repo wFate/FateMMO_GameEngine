@@ -367,14 +367,9 @@ void Editor::drawSceneViewport() {
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
             ImGui::SameLine();
 
-            // Centered play/pause button group
+            // Play/Pause
             {
-                float avail = ImGui::GetContentRegionAvail().x;
                 float playBtnW = 50.0f;
-                float centerX = ImGui::GetCursorPosX() + (avail * 0.5f) - playBtnW;
-                if (centerX > ImGui::GetCursorPosX())
-                    ImGui::SetCursorPosX(centerX);
-
                 if (paused_) {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
                     if (ImGui::Button("|>", ImVec2(playBtnW, btnH))) { paused_ = false; clearSelection(); }
@@ -385,6 +380,38 @@ void Editor::drawSceneViewport() {
                     ImGui::PopStyleColor();
                 }
             }
+
+            ImGui::SameLine();
+            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            ImGui::SameLine();
+
+            // Display resolution dropdown
+            {
+                const auto& preset = kDisplayPresets[displayPresetIdx_];
+                char label[64];
+                if (preset.width == 0)
+                    snprintf(label, sizeof(label), "%s", preset.name);
+                else
+                    snprintf(label, sizeof(label), "%s (%dx%d)", preset.name, preset.width, preset.height);
+
+                ImGui::SetNextItemWidth(160.0f);
+                if (ImGui::BeginCombo("##Display", label, ImGuiComboFlags_HeightLarge)) {
+                    for (int i = 0; i < kDisplayPresetCount; i++) {
+                        char itemLabel[64];
+                        if (kDisplayPresets[i].width == 0)
+                            snprintf(itemLabel, sizeof(itemLabel), "%s", kDisplayPresets[i].name);
+                        else
+                            snprintf(itemLabel, sizeof(itemLabel), "%s  %dx%d", kDisplayPresets[i].name,
+                                     kDisplayPresets[i].width, kDisplayPresets[i].height);
+
+                        if (ImGui::Selectable(itemLabel, i == displayPresetIdx_))
+                            displayPresetIdx_ = i;
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+
+            ImGui::SameLine();
 
             // Right-aligned: FPS stats in muted gray
             {
@@ -416,24 +443,76 @@ void Editor::drawSceneViewport() {
 
         // ---- FBO viewport image fills the rest ----
         ImVec2 avail = ImGui::GetContentRegionAvail();
-        viewportSize_ = {avail.x, avail.y};
-
-        ImVec2 cursorPos = ImGui::GetCursorScreenPos();
-        viewportPos_ = {cursorPos.x, cursorPos.y};
+        ImVec2 cursorScreen = ImGui::GetCursorScreenPos();
         viewportHovered_ = ImGui::IsWindowHovered();
 
-        int fbW = (int)avail.x;
-        int fbH = (int)avail.y;
-        if (fbW > 0 && fbH > 0) {
+        int panelW = (int)avail.x;
+        int panelH = (int)avail.y;
+
+        const auto& preset = kDisplayPresets[displayPresetIdx_];
+        bool useDeviceRes = !paused_ && preset.width > 0 && preset.height > 0;
+
+        int fbW, fbH;
+        if (useDeviceRes) {
+            // Play mode with device preset — FBO at device resolution
+            fbW = preset.width;
+            fbH = preset.height;
+        } else {
+            // Edit mode or Free Aspect — FBO fills the panel
+            fbW = panelW;
+            fbH = panelH;
+        }
+
+        if (fbW > 0 && fbH > 0 && panelW > 0 && panelH > 0) {
             viewportFbo_.resize(fbW, fbH);
 
             if (viewportFbo_.isValid()) {
-                ImGui::Image(
-                    (ImTextureID)(intptr_t)viewportFbo_.textureId(),
-                    avail,
-                    ImVec2(0, 1), ImVec2(1, 0)
-                );
+                if (useDeviceRes) {
+                    // Letterbox/pillarbox: fit device resolution into panel with black bars
+                    float scaleX = (float)panelW / (float)fbW;
+                    float scaleY = (float)panelH / (float)fbH;
+                    float scale = (scaleX < scaleY) ? scaleX : scaleY;
+                    float dispW = fbW * scale;
+                    float dispH = fbH * scale;
+                    float offsetX = (avail.x - dispW) * 0.5f;
+                    float offsetY = (avail.y - dispH) * 0.5f;
+
+                    // Black background for letterbox bars
+                    ImVec2 bgMin = cursorScreen;
+                    ImVec2 bgMax = ImVec2(cursorScreen.x + avail.x, cursorScreen.y + avail.y);
+                    ImGui::GetWindowDrawList()->AddRectFilled(bgMin, bgMax, IM_COL32(0, 0, 0, 255));
+
+                    // Position the image centered
+                    if (offsetX > 0 || offsetY > 0) {
+                        ImGui::SetCursorPos(ImVec2(
+                            ImGui::GetCursorPos().x + offsetX,
+                            ImGui::GetCursorPos().y + offsetY));
+                    }
+
+                    // Track viewport to the actual displayed image area
+                    ImVec2 imgPos = ImGui::GetCursorScreenPos();
+                    viewportPos_ = {imgPos.x, imgPos.y};
+                    viewportSize_ = {dispW, dispH};
+
+                    ImGui::Image(
+                        (ImTextureID)(intptr_t)viewportFbo_.textureId(),
+                        ImVec2(dispW, dispH),
+                        ImVec2(0, 1), ImVec2(1, 0)
+                    );
+                } else {
+                    // Free aspect — image fills the panel
+                    viewportPos_ = {cursorScreen.x, cursorScreen.y};
+                    viewportSize_ = {avail.x, avail.y};
+
+                    ImGui::Image(
+                        (ImTextureID)(intptr_t)viewportFbo_.textureId(),
+                        avail,
+                        ImVec2(0, 1), ImVec2(1, 0)
+                    );
+                }
             }
+        } else {
+            viewportSize_ = {0, 0};
         }
     } else {
         viewportSize_ = {0, 0};
