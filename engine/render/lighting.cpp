@@ -46,6 +46,9 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
         );
         glClear(GL_COLOR_BUFFER_BIT);
 
+        // Count point lights so we know whether the light map is trivially white
+        int lightCount = 0;
+
         // Additive blending for point lights
         glBlendFunc(GL_ONE, GL_ONE);
 
@@ -59,6 +62,7 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
         ctx.world->forEach<PointLightComponent, Transform>(
             [&](Entity*, PointLightComponent* plc, Transform* t) {
                 const PointLight& light = plc->light;
+                ++lightCount;
 
                 // Convert world position to NDC via view-projection matrix
                 float px = t->position.x, py = t->position.y;
@@ -87,6 +91,18 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
 
         s_lightShader.unbind();
         lightMap.unbind();
+
+        // Optimization: if the light map is solid white (ambient is white and
+        // no point lights exist), multiplying the scene by it is a no-op.
+        // Skip the composite draw entirely to save GPU time.
+        float ar = config.ambientColor.r * config.ambientIntensity;
+        float ag = config.ambientColor.g * config.ambientIntensity;
+        float ab = config.ambientColor.b * config.ambientIntensity;
+        bool ambientIsWhite = (ar >= 1.0f && ag >= 1.0f && ab >= 1.0f);
+
+        if (ambientIsWhite && lightCount == 0) {
+            return; // light map is solid white — composite is a no-op
+        }
 
         // Composite light map onto scene via multiplicative blend
         // (Scene *= LightMap): use DST_COLOR * SRC_COLOR + 0 * DST_COLOR
