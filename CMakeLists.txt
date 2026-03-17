@@ -158,8 +158,10 @@ add_custom_command(TARGET FateEngine POST_BUILD
 # Test Executable
 # =============================================================================
 file(GLOB_RECURSE TEST_SOURCES tests/*.cpp)
+# Some tests reference game/shared code (gitignored); include if present
+file(GLOB_RECURSE GAME_SHARED_SOURCES game/shared/*.cpp)
 if(TEST_SOURCES)
-    add_executable(fate_tests ${TEST_SOURCES})
+    add_executable(fate_tests ${TEST_SOURCES} ${GAME_SHARED_SOURCES})
     target_link_libraries(fate_tests PRIVATE fate_engine doctest::doctest)
     target_include_directories(fate_tests PRIVATE ${CMAKE_SOURCE_DIR})
 endif()

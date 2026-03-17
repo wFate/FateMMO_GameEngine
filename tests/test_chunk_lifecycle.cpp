@@ -1,4 +1,5 @@
 #include <doctest/doctest.h>
+#include "engine/tilemap/tilemap.h"
 #include "engine/tilemap/chunk.h"
 
 // ============================================================================
