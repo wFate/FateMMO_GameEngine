@@ -4,7 +4,7 @@
 
 Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landscape gameplay with a built-in Unity-style editor for scene building, tile painting, and rapid iteration. All game systems from the Unity/C# prototype have been ported to C++ as server-authoritative logic.
 
-**Tech Stack:** C++23, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), nlohmann/json, stb_image, stb_truetype
+**Tech Stack:** C++23, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImPlot, nlohmann/json, stb_image, stb_truetype
 
 **Build System:** CMake with FetchContent (auto-downloads all dependencies)
 
@@ -46,7 +46,9 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Memory: Zone Arena | Done | 256 MB virtual reserve per scene, O(1) bulk reset on zone unload |
 | Memory: Frame Arena | Done | Double-buffered 64 MB, per-frame temporaries, swap at frame start |
 | Memory: Scratch Arenas | Done | Thread-local (2 per thread, 256 MB), Fleury conflict-avoidance, ScratchScope RAII |
-| Memory: Pool Allocator | Done | Free-list on arena backing, O(1) alloc/dealloc |
+| Memory: Pool Allocator | Done | Free-list on arena backing, O(1) alloc/dealloc, debug occupancy bitmap |
+| Asset Hot-Reload | Done | Generational asset handles (20+12 bit), AssetRegistry with type-erased loaders, Windows file watcher (ReadDirectoryChangesW), 300ms debounced reload for textures/JSON/shaders |
+| Allocator Visualization | Done | ImGui/ImPlot memory panel: arena watermark bars (color-coded), pool heat maps (per-block grid), frame arena timeline (300-sample ring buffer with high-water mark). Guarded by ENGINE_MEMORY_DEBUG |
 | Zone Snapshots | Done | Persistent entity IDs (64-bit), serialization skeleton for mob/boss state across zone visits |
 | Tracy Profiler | Done | On-demand profiling, named zones, frame marks, arena memory tracking |
 | Component Registry | Done | Compile-time CompId, Hot/Warm/Cold tier classification, zero-RTTI macros |
@@ -91,6 +93,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Eraser Tool | Done | X key, click/drag to delete ground tiles with undo support |
 | Layer Visibility | Done | Gnd/Obj toggles in toolbar to show/hide entity layers |
 | Log Viewer | Done | In-editor log panel with level filters (DBG/INF/WRN/ERR), text search, color-coded |
+| Memory Panel | Done | View > Memory: 3 tabs (Arena watermarks, Pool heat maps, Frame Timeline chart). ENGINE_MEMORY_DEBUG guarded |
 | Command Console | Done | Type commands: help, list, count, find, delete, spawn, tp. Results in log viewer |
 | Error Badges | Done | Red [!] in hierarchy for entities with missing textures |
 | Panel Persistence | Done | ImGui saves window layout to imgui.ini, panels don't steal focus |
@@ -135,7 +138,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Transform | Done | Position (px), scale, rotation, depth; tile coord display |
-| SpriteComponent | Done | Texture, sourceRect (tileset support), spritesheet frames, tint, flip |
+| SpriteComponent | Done | Texture (via AssetHandle), sourceRect (tileset support), spritesheet frames, tint, flip |
 | Animator | Done | State machine, frame-based animation |
 | PlayerController | Done | Cardinal movement, speed, facing, isLocalPlayer flag |
 | BoxCollider | Done | AABB with offset, trigger/static flags, "Fit to Sprite" button |
@@ -314,6 +317,36 @@ pvpDamage = baseDamage * 0.05
 ---
 
 ## Changelog
+
+### March 17, 2026 - Phase 3: Asset Hot-Reload & Allocator Visualization
+
+**Asset Hot-Reload — edit assets, see changes instantly without restarting:**
+
+- **AssetHandle** (`engine/asset/asset_handle.h`): 32-bit generational index (20-bit slot + 12-bit generation). Components reference assets by handle instead of raw pointers. Handles survive reloads and detect stale references in O(1).
+- **AssetRegistry** (`engine/asset/asset_registry.h/cpp`): Unified singleton registry with type-erased loaders. Path canonicalization via `std::filesystem::weakly_canonical` ensures consistent lookups regardless of relative/absolute paths. Slot 0 permanently reserved as null sentinel.
+- **Debounced reload queue**: File changes are buffered for 300ms to handle editors that fire multiple events per save. Thread-safe queueing from the watcher thread, processing on the main thread (no GL calls under mutex).
+- **FileWatcher** (`engine/asset/file_watcher.h/cpp`): Windows `ReadDirectoryChangesW` with overlapped I/O on a background `std::jthread`. Proper UTF-8/UTF-16 conversion for non-ASCII paths. Clean shutdown via manual-reset event + join.
+- **Texture reload**: `Texture::reloadFromFile()` calls `glTexImage2D` on the existing GL texture name, avoiding delete/recreate and preserving texture IDs across reloads.
+- **Shader reload**: `Shader::reloadFromFile()` compiles a new program via `loadFromSource()`, swaps on success, rolls back to the old program on failure. Uniform cache cleared after swap. Edit a `.frag`, save, see results instantly.
+- **JSON reload**: Parse into temp, validate, swap with existing. Malformed JSON files are rejected with a warning.
+- **Shader pair awareness**: Loading a `.vert` file registers the `.frag` partner as an alias in the path index, so changing either file triggers reload of the pair.
+- **TextureCache migration**: `TextureCache::load()` now delegates to `AssetRegistry` internally, returning a non-owning `shared_ptr` (no-op deleter). This is Step 1-2 of the migration; full `TextureCache` removal deferred.
+- **Shutdown ordering**: `FileWatcher::stop()` -> `TextureCache::clear()` -> `AssetRegistry::clear()` -> GL context teardown.
+
+**Allocator Visualization — see memory usage in real-time while editing:**
+
+- **AllocatorRegistry** (`engine/memory/allocator_registry.h`): Header-only singleton where arenas and pools register themselves with `std::function` callbacks for stats queries. Entire system compiles away with `ENGINE_MEMORY_DEBUG=OFF`.
+- **Pool occupancy bitmap** (`engine/memory/pool.h`): Debug-only 1-bit-per-block bitmap tracking which blocks are allocated. Cost: `blockCount / 8` bytes, allocated from the same backing arena.
+- **Memory debug panel** (`engine/editor/memory_panel.h/cpp`): 3-tab ImGui window accessible via View > Memory:
+  - **Arenas tab**: Color-coded progress bars (green < 70%, yellow < 90%, red > 90%) showing used/reserved. Secondary dimmer bar for committed (physical) memory.
+  - **Pools tab**: Per-block heat map grid (red=occupied, gray=free) using `ImDrawList::AddRectFilled`. Tooltip on hover shows block index. Summary shows active/total counts.
+  - **Frame Timeline tab**: ImPlot scrolling line chart with 300-frame ring buffer of `frameArena.current().position()`. Red high-water mark reference line. Reset button.
+- **ImPlot** added via FetchContent (v0.16). ImGui pinned to `v1.91.9b-docking` for API compatibility.
+- **Registered allocators**: WorldArena and FrameArena auto-register/deregister with the registry in their owners' constructors/destructors.
+
+**New files (14):** `engine/asset/asset_handle.h`, `engine/asset/asset_registry.h/cpp`, `engine/asset/file_watcher.h/cpp`, `engine/asset/loaders.h/cpp`, `engine/memory/allocator_registry.h`, `engine/editor/memory_panel.h/cpp`, `tests/test_asset_handle.cpp`, `tests/test_asset_registry.cpp`, `tests/test_allocator_registry.cpp`, `tests/test_pool_bitmap.cpp`
+
+**Tests:** 120 -> 137 test cases, 1241 -> 1288 assertions
 
 ### March 16, 2026 - Spawn Zone System
 
