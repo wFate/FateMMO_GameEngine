@@ -42,6 +42,9 @@ public:
     // Destroy all pooled FBOs (call before GL context teardown)
     void clearFBOs();
 
+    // Destroy all passes (call before tearing down objects captured by lambdas)
+    void clearPasses();
+
     const std::vector<RenderPass>& passes() const { return passes_; }
 
 private:

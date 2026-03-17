@@ -89,6 +89,7 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
         lightMap.unbind();
 
         // Composite light map onto scene via multiplicative blend
+        // (Scene *= LightMap): use DST_COLOR * SRC_COLOR + 0 * DST_COLOR
         static Shader s_blitShader;
         static bool s_blitLoaded = false;
         if (!s_blitLoaded) {
@@ -100,7 +101,10 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
 
         auto& scene = ctx.graph->getFBO("Scene", w, h, true);
         scene.bind();
-        glDisable(GL_BLEND);
+
+        // Multiplicative blend: existing scene color * light map color
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_DST_COLOR, GL_ZERO);
 
         s_blitShader.bind();
         s_blitShader.setInt("u_texture", 0);
@@ -109,8 +113,8 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
         FullscreenQuad::instance().draw();
         s_blitShader.unbind();
 
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // restore
+        // Restore standard alpha blending
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         scene.unbind();
     }});
 }
