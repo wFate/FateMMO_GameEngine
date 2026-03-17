@@ -44,8 +44,6 @@ public:
 
     void processEvent(const SDL_Event& event);
     void beginFrame();
-    void render(World* world, Camera* camera, SpriteBatch* batch);
-
     // Split render into scene (FBO-bound) and UI (ImGui panels)
     void renderScene(SpriteBatch* batch, Camera* camera);
     void renderUI(World* world, Camera* camera, SpriteBatch* batch);
