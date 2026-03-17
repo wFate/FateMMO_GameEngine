@@ -18,6 +18,8 @@
 #include "game/components/faction_component.h"
 #include "game/components/pet_component.h"
 #include "game/systems/spawn_system.h"  // SpawnZoneComponent
+#include "engine/particle/particle_emitter_component.h"
+#include "engine/render/point_light_component.h"
 
 #include <nlohmann/json.hpp>
 
@@ -124,6 +126,16 @@ template<> struct component_traits<DamageableComponent> {
 
 // --- CombatControllerComponent: serialized ---
 template<> struct component_traits<CombatControllerComponent> {
+    static constexpr ComponentFlags flags = ComponentFlags::Serializable;
+};
+
+// --- ParticleEmitterComponent: serialized (emitter config persisted) ---
+template<> struct component_traits<ParticleEmitterComponent> {
+    static constexpr ComponentFlags flags = ComponentFlags::Serializable;
+};
+
+// --- PointLightComponent: serialized (light properties persisted) ---
+template<> struct component_traits<PointLightComponent> {
     static constexpr ComponentFlags flags = ComponentFlags::Serializable;
 };
 
@@ -501,6 +513,79 @@ inline void registerAllComponents() {
     // ----- Faction & Pet components -----
     reg.registerComponent<FactionComponent>();
     reg.registerComponent<PetComponent>();
+
+    // ----- Particle & Lighting components -----
+
+    // ParticleEmitterComponent: EmitterConfig fields serialized; texture as path string
+    reg.registerComponent<ParticleEmitterComponent>(
+        // toJson
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const ParticleEmitterComponent*>(data);
+            const auto& cfg = c->emitter.config();
+            j["spawnRate"]         = cfg.spawnRate;
+            j["burstCount"]        = cfg.burstCount;
+            j["velocityMin"]       = { cfg.velocityMin.x, cfg.velocityMin.y };
+            j["velocityMax"]       = { cfg.velocityMax.x, cfg.velocityMax.y };
+            j["lifetimeMin"]       = cfg.lifetimeMin;
+            j["lifetimeMax"]       = cfg.lifetimeMax;
+            j["sizeMin"]           = cfg.sizeMin;
+            j["sizeMax"]           = cfg.sizeMax;
+            j["rotationSpeedMin"]  = cfg.rotationSpeedMin;
+            j["rotationSpeedMax"]  = cfg.rotationSpeedMax;
+            j["colorStart"]        = { cfg.colorStart.r, cfg.colorStart.g, cfg.colorStart.b, cfg.colorStart.a };
+            j["colorEnd"]          = { cfg.colorEnd.r,   cfg.colorEnd.g,   cfg.colorEnd.b,   cfg.colorEnd.a   };
+            j["gravity"]           = { cfg.gravity.x, cfg.gravity.y };
+            j["depth"]             = cfg.depth;
+            j["worldSpace"]        = cfg.worldSpace;
+            j["additiveBlend"]     = cfg.additiveBlend;
+            j["autoDestroy"]       = c->autoDestroy;
+        },
+        // fromJson
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<ParticleEmitterComponent*>(data);
+            EmitterConfig cfg;
+            if (j.contains("spawnRate"))    cfg.spawnRate    = j["spawnRate"].get<float>();
+            if (j.contains("burstCount"))   cfg.burstCount   = j["burstCount"].get<int>();
+            if (j.contains("velocityMin")) { auto& v = j["velocityMin"]; cfg.velocityMin = { v[0].get<float>(), v[1].get<float>() }; }
+            if (j.contains("velocityMax")) { auto& v = j["velocityMax"]; cfg.velocityMax = { v[0].get<float>(), v[1].get<float>() }; }
+            if (j.contains("lifetimeMin"))  cfg.lifetimeMin  = j["lifetimeMin"].get<float>();
+            if (j.contains("lifetimeMax"))  cfg.lifetimeMax  = j["lifetimeMax"].get<float>();
+            if (j.contains("sizeMin"))      cfg.sizeMin      = j["sizeMin"].get<float>();
+            if (j.contains("sizeMax"))      cfg.sizeMax      = j["sizeMax"].get<float>();
+            if (j.contains("rotationSpeedMin")) cfg.rotationSpeedMin = j["rotationSpeedMin"].get<float>();
+            if (j.contains("rotationSpeedMax")) cfg.rotationSpeedMax = j["rotationSpeedMax"].get<float>();
+            if (j.contains("colorStart")) { auto& c2 = j["colorStart"]; cfg.colorStart = Color(c2[0].get<float>(), c2[1].get<float>(), c2[2].get<float>(), c2[3].get<float>()); }
+            if (j.contains("colorEnd"))   { auto& c2 = j["colorEnd"];   cfg.colorEnd   = Color(c2[0].get<float>(), c2[1].get<float>(), c2[2].get<float>(), c2[3].get<float>()); }
+            if (j.contains("gravity"))    { auto& g = j["gravity"]; cfg.gravity = { g[0].get<float>(), g[1].get<float>() }; }
+            if (j.contains("depth"))        cfg.depth        = j["depth"].get<float>();
+            if (j.contains("worldSpace"))   cfg.worldSpace   = j["worldSpace"].get<bool>();
+            if (j.contains("additiveBlend")) cfg.additiveBlend = j["additiveBlend"].get<bool>();
+            if (j.contains("autoDestroy"))  c->autoDestroy   = j["autoDestroy"].get<bool>();
+            c->emitter.init(cfg);
+        }
+    );
+
+    // PointLightComponent: all PointLight fields serialized
+    reg.registerComponent<PointLightComponent>(
+        // toJson
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const PointLightComponent*>(data);
+            j["position"]  = { c->light.position.x, c->light.position.y };
+            j["color"]     = { c->light.color.r, c->light.color.g, c->light.color.b, c->light.color.a };
+            j["radius"]    = c->light.radius;
+            j["intensity"] = c->light.intensity;
+            j["falloff"]   = c->light.falloff;
+        },
+        // fromJson
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<PointLightComponent*>(data);
+            if (j.contains("position")) { auto& p = j["position"]; c->light.position = { p[0].get<float>(), p[1].get<float>() }; }
+            if (j.contains("color"))    { auto& col = j["color"];   c->light.color = Color(col[0].get<float>(), col[1].get<float>(), col[2].get<float>(), col[3].get<float>()); }
+            if (j.contains("radius"))    c->light.radius    = j["radius"].get<float>();
+            if (j.contains("intensity")) c->light.intensity = j["intensity"].get<float>();
+            if (j.contains("falloff"))   c->light.falloff   = j["falloff"].get<float>();
+        }
+    );
 
     // ----- Backward-compat aliases -----
     reg.registerAlias("Sprite", "SpriteComponent");

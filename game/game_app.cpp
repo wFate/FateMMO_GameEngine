@@ -1,5 +1,6 @@
 #include "game/game_app.h"
 #include "engine/core/logger.h"
+#include "engine/render/gl_loader.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/editor/editor.h"
 #include "game/register_components.h"
@@ -406,6 +407,73 @@ void GameApp::onInit() {
         }
     }
 
+    // ========================================================================
+    // Register game render passes with the render graph
+    // ========================================================================
+    auto& graph = renderGraph();
+
+    // Pass: GroundTiles — tilemap rendering into Scene FBO
+    graph.addPass({"GroundTiles", true, [this](RenderPassContext& ctx) {
+        auto& sceneFbo = ctx.graph->getFBO("Scene", ctx.viewportWidth, ctx.viewportHeight, true);
+        sceneFbo.bind();
+        glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+        if (tilemap_) {
+            Mat4 vp = ctx.camera->getViewProjection();
+            ctx.spriteBatch->begin(vp);
+            tilemap_->render(*ctx.spriteBatch, *ctx.camera, -10.0f);
+            ctx.spriteBatch->end();
+        }
+
+        sceneFbo.unbind();
+    }});
+
+    // Pass: Entities — sprite rendering (accumulates onto Scene FBO)
+    graph.addPass({"Entities", true, [this](RenderPassContext& ctx) {
+        auto& sceneFbo = ctx.graph->getFBO("Scene", ctx.viewportWidth, ctx.viewportHeight, true);
+        sceneFbo.bind();
+
+        if (renderSystem_) {
+            renderSystem_->update(0.0f);
+        }
+
+        sceneFbo.unbind();
+    }});
+
+    // Pass: SDFText — floating damage/XP text (accumulates onto Scene FBO)
+    graph.addPass({"SDFText", true, [this](RenderPassContext& ctx) {
+        auto& sceneFbo = ctx.graph->getFBO("Scene", ctx.viewportWidth, ctx.viewportHeight, true);
+        sceneFbo.bind();
+
+        if (combatSystem_) {
+            combatSystem_->renderFloatingTexts(*ctx.spriteBatch, *ctx.camera);
+        }
+
+        sceneFbo.unbind();
+    }});
+
+    // Pass: DebugOverlays — collision debug, aggro radius, spawn zones (editor only)
+    graph.addPass({"DebugOverlays", true, [this](RenderPassContext& ctx) {
+        if (!Editor::instance().isPaused()) return;
+
+        auto& sceneFbo = ctx.graph->getFBO("Scene", ctx.viewportWidth, ctx.viewportHeight, true);
+        sceneFbo.bind();
+
+        if (Editor::instance().showCollisionDebug()) {
+            renderCollisionDebug(*ctx.spriteBatch, *ctx.camera);
+        }
+        renderAggroRadius(*ctx.spriteBatch, *ctx.camera);
+
+        auto* scene = SceneManager::instance().currentScene();
+        if (scene) {
+            if (auto* spawnSys = scene->world().getSystem<SpawnSystem>()) {
+                spawnSys->renderDebug(*ctx.spriteBatch, *ctx.camera);
+            }
+        }
+
+        sceneFbo.unbind();
+    }});
+
     LOG_INFO("Game", "Initialized");
 }
 
@@ -680,33 +748,9 @@ void GameApp::onUpdate(float deltaTime) {
 }
 
 void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
-    // Tilemap (behind everything)
-    if (tilemap_) {
-        Mat4 vp = camera.getViewProjection();
-        batch.begin(vp);
-        tilemap_->render(batch, camera, -10.0f);
-        batch.end();
-    }
-
-    // Entity sprites
-    if (renderSystem_) {
-        renderSystem_->update(0.0f);
-    }
-
-    // Floating damage/XP text (rendered in world space)
-    if (combatSystem_) {
-        combatSystem_->renderFloatingTexts(batch, camera);
-    }
-    // Debug overlays — only in editor/pause mode
-    if (Editor::instance().isPaused()) {
-        if (Editor::instance().showCollisionDebug()) {
-            renderCollisionDebug(batch, camera);
-        }
-        renderAggroRadius(batch, camera);
-        if (auto* spawnSys = SceneManager::instance().currentScene()->world().getSystem<SpawnSystem>()) {
-            spawnSys->renderDebug(batch, camera);
-        }
-    }
+    // Scene rendering (tiles, entities, combat text, debug overlays) is now handled
+    // by render graph passes registered in onInit(). This callback only handles
+    // ImGui game UI and screen-space overlays that render into the editor viewport FBO.
 
     // ImGui game UI — suppress when editor is open and paused (no gameplay happening)
     if (!(Editor::instance().isOpen() && Editor::instance().isPaused())) {
@@ -739,8 +783,6 @@ void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
             }
         }
     }
-
-    // HUD bar positions are configured per device preset via normalized coords
 
     // Zone transition fade overlay
     if (zoneSystem_ && zoneSystem_->isTransitioning()) {

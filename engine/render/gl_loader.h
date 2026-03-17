@@ -56,6 +56,11 @@ extern PFNGLDELETEFRAMEBUFFERSPROC       glDeleteFramebuffers_fp;
 extern PFNGLBINDFRAMEBUFFERPROC          glBindFramebuffer_fp;
 extern PFNGLFRAMEBUFFERTEXTURE2DPROC     glFramebufferTexture2D_fp;
 extern PFNGLCHECKFRAMEBUFFERSTATUSPROC   glCheckFramebufferStatus_fp;
+extern PFNGLGENRENDERBUFFERSPROC           glGenRenderbuffers_fp;
+extern PFNGLDELETERENDERBUFFERSPROC        glDeleteRenderbuffers_fp;
+extern PFNGLBINDRENDERBUFFERPROC           glBindRenderbuffer_fp;
+extern PFNGLRENDERBUFFERSTORAGEPROC        glRenderbufferStorage_fp;
+extern PFNGLFRAMEBUFFERRENDERBUFFERPROC    glFramebufferRenderbuffer_fp;
 
 // ============================================================================
 // Convenience macros so code reads like normal GL calls
@@ -97,6 +102,11 @@ extern PFNGLCHECKFRAMEBUFFERSTATUSPROC   glCheckFramebufferStatus_fp;
 #undef glBindFramebuffer
 #undef glFramebufferTexture2D
 #undef glCheckFramebufferStatus
+#undef glGenRenderbuffers
+#undef glDeleteRenderbuffers
+#undef glBindRenderbuffer
+#undef glRenderbufferStorage
+#undef glFramebufferRenderbuffer
 
 #define glCreateShader          glCreateShader_fp
 #define glDeleteShader          glDeleteShader_fp
@@ -135,6 +145,11 @@ extern PFNGLCHECKFRAMEBUFFERSTATUSPROC   glCheckFramebufferStatus_fp;
 #define glBindFramebuffer       glBindFramebuffer_fp
 #define glFramebufferTexture2D  glFramebufferTexture2D_fp
 #define glCheckFramebufferStatus glCheckFramebufferStatus_fp
+#define glGenRenderbuffers         glGenRenderbuffers_fp
+#define glDeleteRenderbuffers      glDeleteRenderbuffers_fp
+#define glBindRenderbuffer         glBindRenderbuffer_fp
+#define glRenderbufferStorage      glRenderbufferStorage_fp
+#define glFramebufferRenderbuffer  glFramebufferRenderbuffer_fp
 
 // ============================================================================
 // Loader function (call after creating SDL GL context)

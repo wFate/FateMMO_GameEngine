@@ -1,6 +1,7 @@
 #include "engine/editor/editor.h"
 #include "engine/core/logger.h"
 #include "engine/render/gl_loader.h"
+#include "engine/render/fullscreen_quad.h"
 #include "engine/input/input.h"
 
 #include "imgui.h"
@@ -170,8 +171,43 @@ void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
     }
 }
 
+void Editor::drawSceneGridShader(Camera* camera) {
+    // Lazy-load the grid shader
+    if (!gridShaderLoaded_) {
+        gridShaderLoaded_ = gridShader_.loadFromFile(
+            "assets/shaders/fullscreen_quad.vert",
+            "assets/shaders/grid.frag");
+        if (!gridShaderLoaded_) {
+            LOG_ERROR("Editor", "Failed to load grid shader");
+            return;
+        }
+    }
+
+    Mat4 vp = const_cast<Camera*>(camera)->getViewProjection();
+    Mat4 invVP = vp.inverse();
+
+    gridShader_.bind();
+    gridShader_.setMat4("u_inverseVP", invVP);
+    gridShader_.setFloat("u_gridSize", gridSize_);
+    gridShader_.setFloat("u_zoom", camera->zoom());
+    gridShader_.setVec4("u_gridColor", 1.0f, 1.0f, 1.0f, 0.12f);
+    gridShader_.setVec2("u_cameraPos", camera->position());
+
+    // Additive/transparent blend for grid overlay
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_DEPTH_TEST);
+
+    FullscreenQuad::instance().draw();
+
+    gridShader_.unbind();
+}
+
 void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameArena* frameArena) {
     if (!frameStarted_) return;
+
+    // ImGuizmo requires BeginFrame() once per ImGui frame
+    ImGuizmo::BeginFrame();
 
     dockWorld_ = world;
     dockCamera_ = camera;
@@ -195,6 +231,22 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
 
     if (showDemoWindow_) {
         ImGui::ShowDemoWindow(&showDemoWindow_);
+    }
+
+    // Post-process config panel
+    if (showPostProcessPanel_) {
+        ImGui::SetNextWindowSize(ImVec2(280, 200), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Post Process", &showPostProcessPanel_)) {
+            ImGui::Text("Post-processing settings");
+            ImGui::Separator();
+            static float bloomStrength = 1.0f;
+            static float vignetteStrength = 0.3f;
+            static float colorTint[3] = {1.0f, 1.0f, 1.0f};
+            ImGui::DragFloat("Bloom Strength", &bloomStrength, 0.01f, 0.0f, 4.0f);
+            ImGui::DragFloat("Vignette", &vignetteStrength, 0.01f, 0.0f, 1.0f);
+            ImGui::ColorEdit3("Color Tint", colorTint);
+        }
+        ImGui::End();
     }
 
     ImGui::Render();
@@ -281,6 +333,8 @@ void Editor::drawDockSpace() {
             ImGui::Separator();
             ImGui::MenuItem("Show Grid", nullptr, &showGrid_);
             ImGui::MenuItem("Show Colliders", nullptr, &showCollisionDebug_);
+            ImGui::Separator();
+            ImGui::MenuItem("Post Process", nullptr, &showPostProcessPanel_);
             ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout")) { resetLayout_ = true; }
             ImGui::Separator();
@@ -377,7 +431,8 @@ void Editor::drawSceneViewport() {
                 ImGui::SameLine();
             };
             toolBtn("Move", EditorTool::Move);
-            toolBtn("Resize", EditorTool::Resize);
+            toolBtn("Scale", EditorTool::Scale);
+            toolBtn("Rotate", EditorTool::Rotate);
             toolBtn("Paint", EditorTool::Paint);
             toolBtn("Erase", EditorTool::Erase);
 
@@ -558,6 +613,14 @@ void Editor::drawSceneViewport() {
                         ImVec2(0, 1), ImVec2(1, 0)
                     );
                 }
+
+                // ImGuizmo: draw transform gizmo over the selected entity
+                if (paused_ && selectedEntity_ && dockCamera_ &&
+                    (currentTool_ == EditorTool::Move ||
+                     currentTool_ == EditorTool::Scale ||
+                     currentTool_ == EditorTool::Rotate)) {
+                    drawImGuizmo(dockCamera_);
+                }
             }
         } else {
             viewportSize_ = {0, 0};
@@ -619,7 +682,8 @@ void Editor::drawDebugInfoPanel(World* world) {
         ImGui::Separator();
         ImGui::Text("Paused: %s", paused_ ? "Yes" : "No");
         ImGui::Text("Tool: %s", currentTool_ == EditorTool::Move ? "Move" :
-                                 currentTool_ == EditorTool::Resize ? "Resize" :
+                                 currentTool_ == EditorTool::Scale ? "Scale" :
+                                 currentTool_ == EditorTool::Rotate ? "Rotate" :
                                  currentTool_ == EditorTool::Paint ? "Paint" : "Erase");
     }
     ImGui::End();
@@ -720,9 +784,9 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
         }
 
         if (t && (s || szComp)) {
-            // Resize handles only in Resize tool mode (E key)
+            // Resize handles only in Scale tool mode (E key)
             float minDim = (hw < hh ? hw : hh) * 2.0f;
-            bool allowResize = (currentTool_ == EditorTool::Resize);
+            bool allowResize = (currentTool_ == EditorTool::Scale);
             // Spawn zones always allow resize (they're invisible, no sprite to click on)
             if (szComp) allowResize = true;
             float handleZone = 6.0f / camera->zoom();
@@ -1453,6 +1517,132 @@ void Editor::drawSceneGrid(SpriteBatch* batch, Camera* camera) {
     }
 
     batch->end();
+}
+
+// ============================================================================
+// Selection Outlines (stencil-based)
+// ============================================================================
+
+void Editor::drawSelectionOutlines(SpriteBatch* batch, Camera* camera) {
+    if (!selectedEntity_ || !batch || !camera) return;
+
+    // Single selection = orange, multi-selection = blue
+    bool isMulti = selectedEntities_.size() > 1;
+    Color outlineColor = isMulti ? Color(0.2f, 0.4f, 1.0f, 0.9f) : Color(1.0f, 0.55f, 0.0f, 0.9f);
+
+    Mat4 vp = const_cast<Camera*>(camera)->getViewProjection();
+
+    auto drawOutlineFor = [&](Entity* entity, Color col) {
+        auto* t = entity->getComponent<Transform>();
+        auto* s = entity->getComponent<SpriteComponent>();
+        if (!t || !s) return;
+
+        float hw = s->size.x * t->scale.x * 0.5f + 3.0f;
+        float hh = s->size.y * t->scale.y * 0.5f + 3.0f;
+
+        // Draw border rects as outline
+        batch->begin(vp);
+        // Top
+        batch->drawRect({t->position.x, t->position.y + hh}, {hw * 2.0f, 2.0f}, col, 200.0f);
+        // Bottom
+        batch->drawRect({t->position.x, t->position.y - hh}, {hw * 2.0f, 2.0f}, col, 200.0f);
+        // Left
+        batch->drawRect({t->position.x - hw, t->position.y}, {2.0f, hh * 2.0f}, col, 200.0f);
+        // Right
+        batch->drawRect({t->position.x + hw, t->position.y}, {2.0f, hh * 2.0f}, col, 200.0f);
+        batch->end();
+    };
+
+    if (isMulti) {
+        for (auto& handle : selectedEntities_) {
+            Entity* e = nullptr;
+            if (dockWorld_) {
+                e = dockWorld_->getEntity(handle);
+            }
+            if (e) drawOutlineFor(e, outlineColor);
+        }
+    } else {
+        drawOutlineFor(selectedEntity_, outlineColor);
+    }
+}
+
+// ============================================================================
+// ImGuizmo Transform Handles
+// ============================================================================
+
+void Editor::drawImGuizmo(Camera* camera) {
+    if (!selectedEntity_ || !camera || viewportSize_.x <= 0 || viewportSize_.y <= 0) return;
+
+    auto* t = selectedEntity_->getComponent<Transform>();
+    if (!t) return;
+
+    // Sync ImGuizmo operation to tool mode
+    if (currentTool_ == EditorTool::Move)   gizmoOperation_ = ImGuizmo::TRANSLATE;
+    else if (currentTool_ == EditorTool::Scale) gizmoOperation_ = ImGuizmo::SCALE;
+    else if (currentTool_ == EditorTool::Rotate) gizmoOperation_ = ImGuizmo::ROTATE;
+
+    // Set ImGuizmo rect to the viewport
+    ImGuizmo::SetRect(viewportPos_.x, viewportPos_.y, viewportSize_.x, viewportSize_.y);
+    ImGuizmo::SetOrthographic(true);
+
+    // Build view matrix (camera space — translate by -camPos, scale by zoom)
+    float zoom = camera->zoom();
+    Vec2 camPos = camera->position();
+    float invZoom = 1.0f / zoom;
+
+    // View: identity (for 2D orthographic ImGuizmo, view is usually identity)
+    float view[16] = {
+        1,0,0,0,
+        0,1,0,0,
+        0,0,1,0,
+        0,0,0,1
+    };
+
+    // Use the camera VP matrix as projection
+    Mat4 vp = const_cast<Camera*>(camera)->getViewProjection();
+    float proj[16];
+    for (int i = 0; i < 16; i++) proj[i] = vp.m[i];
+
+    // Build model matrix from entity transform (column-major)
+    float cosR = cosf(t->rotation);
+    float sinR = sinf(t->rotation);
+    float sx = t->scale.x;
+    float sy = t->scale.y;
+    float tx = t->position.x;
+    float ty = t->position.y;
+
+    float model[16] = {
+        cosR*sx,  sinR*sx, 0, 0,
+        -sinR*sy, cosR*sy, 0, 0,
+        0,        0,       1, 0,
+        tx,       ty,      0, 1
+    };
+
+    if (ImGuizmo::Manipulate(view, proj, gizmoOperation_, ImGuizmo::LOCAL, model)) {
+        // Decompose the modified model matrix back to entity transform
+        float matTranslation[3], matRotation[3], matScale[3];
+        ImGuizmo::DecomposeMatrixToComponents(model, matTranslation, matRotation, matScale);
+
+        Vec2 oldPos = t->position;
+        Vec2 oldScale = t->scale;
+        float oldRot = t->rotation;
+
+        t->position.x = matTranslation[0];
+        t->position.y = matTranslation[1];
+        t->scale.x = matScale[0];
+        t->scale.y = matScale[1];
+        // ImGuizmo returns degrees, convert to radians
+        t->rotation = matRotation[2] * 0.0174532925f;
+
+        // Record undo if transform changed
+        if (t->position != oldPos && currentTool_ == EditorTool::Move) {
+            auto cmd = std::make_unique<MoveCommand>();
+            cmd->entityHandle = selectedEntity_->handle();
+            cmd->oldPos = oldPos;
+            cmd->newPos = t->position;
+            UndoSystem::instance().push(std::move(cmd));
+        }
+    }
 }
 
 // ============================================================================
@@ -2991,9 +3181,13 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     if (scancode == SDL_SCANCODE_W && !ctrl) {
         currentTool_ = EditorTool::Move;
     }
-    // E = Resize tool
+    // E = Scale tool (was Resize)
     if (scancode == SDL_SCANCODE_E && !ctrl) {
-        currentTool_ = EditorTool::Resize;
+        currentTool_ = EditorTool::Scale;
+    }
+    // R = Rotate tool
+    if (scancode == SDL_SCANCODE_R && !ctrl) {
+        currentTool_ = EditorTool::Rotate;
     }
     // B = Paint tool
     if (scancode == SDL_SCANCODE_B && !ctrl) {

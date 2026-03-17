@@ -335,6 +335,20 @@ void SpriteBatch::flush() {
     shader_.unbind();
 }
 
+void SpriteBatch::setBlendMode(BlendMode mode) {
+    if (mode == blendMode_) return;
+    flush(); // must flush before changing GL state
+    blendMode_ = mode;
+    switch (mode) {
+        case BlendMode::Alpha:
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            break;
+        case BlendMode::Additive:
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            break;
+    }
+}
+
 void SpriteBatch::createWhiteTexture() {
     unsigned char white[] = {255, 255, 255, 255};
     glGenTextures(1, &whiteTexture_);

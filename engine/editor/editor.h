@@ -6,10 +6,12 @@
 #include "engine/render/sprite_batch.h"
 #include "engine/render/texture.h"
 #include "engine/render/framebuffer.h"
+#include "engine/render/shader.h"
 #if defined(ENGINE_MEMORY_DEBUG)
 #include "engine/editor/memory_panel.h"
 #include <implot.h>
 #endif
+#include <ImGuizmo.h>
 #include <SDL.h>
 #include <string>
 #include <vector>
@@ -53,7 +55,8 @@ static constexpr int kDisplayPresetCount = sizeof(kDisplayPresets) / sizeof(kDis
 // Editor tool modes (like Unity W/E/R)
 enum class EditorTool {
     Move,    // W - drag to move entities
-    Resize,  // E - drag handles to resize
+    Scale,   // E - drag handles to scale/resize
+    Rotate,  // R - rotate entity
     Paint,   // B - tile painting mode
     Erase    // X - click to delete ground tiles
 };
@@ -108,6 +111,7 @@ public:
     void cancelPlacement() { isDraggingAsset_ = false; draggedAssetPath_.clear(); }
     bool isTilePaintMode() const { return currentTool_ == EditorTool::Paint && selectedTileIndex_ >= 0; }
     bool isEraseMode() const { return currentTool_ == EditorTool::Erase; }
+    bool isScaleMode() const { return currentTool_ == EditorTool::Scale; }
 
     EditorTool currentTool() const { return currentTool_; }
 
@@ -222,6 +226,16 @@ private:
     // Console command
     char consoleCmdBuf_[256] = "";
 
+    // Grid shader (lazy-loaded)
+    Shader gridShader_;
+    bool gridShaderLoaded_ = false;
+
+    // Post-process panel toggle
+    bool showPostProcessPanel_ = false;
+
+    // ImGuizmo operation mode (synced to currentTool_)
+    ImGuizmo::OPERATION gizmoOperation_ = ImGuizmo::TRANSLATE;
+
     // Draw functions
     void drawHUD(World* world);
     void drawMenuBar(World* world);
@@ -231,6 +245,9 @@ private:
     void drawAssetBrowser(World* world, Camera* camera);
     void drawTilePalette(World* world, Camera* camera);
     void drawSceneGrid(SpriteBatch* batch, Camera* camera);
+    void drawSceneGridShader(Camera* camera); // fullscreen quad grid shader
+    void drawSelectionOutlines(SpriteBatch* batch, Camera* camera); // stencil outlines
+    void drawImGuizmo(Camera* camera); // ImGuizmo transform handles
     void drawConsole(World* world);
     void drawDockSpace();
     void drawSceneViewport();
