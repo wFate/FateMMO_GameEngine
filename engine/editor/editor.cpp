@@ -23,12 +23,15 @@
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
 
+#include "engine/ecs/component_meta.h"
+
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <sstream>
 #include <filesystem>
 #include <algorithm>
 #include <cstring>
+#include <unordered_set>
 
 namespace fs = std::filesystem;
 
@@ -1731,6 +1734,63 @@ void Editor::drawHierarchy(World* world) {
 }
 
 // ============================================================================
+// Reflection-driven inspector helper
+// ============================================================================
+
+static void drawReflectedComponent(const fate::ComponentMeta& meta, void* data) {
+    for (const auto& field : meta.fields) {
+        uint8_t* ptr = static_cast<uint8_t*>(data) + field.offset;
+        switch (field.type) {
+            case fate::FieldType::Float:
+                ImGui::DragFloat(field.name, reinterpret_cast<float*>(ptr), 0.1f);
+                break;
+            case fate::FieldType::Int:
+                ImGui::DragInt(field.name, reinterpret_cast<int*>(ptr));
+                break;
+            case fate::FieldType::Bool:
+                ImGui::Checkbox(field.name, reinterpret_cast<bool*>(ptr));
+                break;
+            case fate::FieldType::Vec2: {
+                auto* v = reinterpret_cast<fate::Vec2*>(ptr);
+                float vals[2] = { v->x, v->y };
+                if (ImGui::DragFloat2(field.name, vals, 0.5f)) {
+                    v->x = vals[0]; v->y = vals[1];
+                }
+                break;
+            }
+            case fate::FieldType::Color: {
+                auto* c = reinterpret_cast<fate::Color*>(ptr);
+                ImGui::ColorEdit4(field.name, &c->r);
+                break;
+            }
+            case fate::FieldType::Rect: {
+                auto* r = reinterpret_cast<fate::Rect*>(ptr);
+                float vals[4] = { r->x, r->y, r->w, r->h };
+                if (ImGui::DragFloat4(field.name, vals, 0.5f)) {
+                    r->x = vals[0]; r->y = vals[1]; r->w = vals[2]; r->h = vals[3];
+                }
+                break;
+            }
+            case fate::FieldType::String: {
+                auto* s = reinterpret_cast<std::string*>(ptr);
+                char buf[256] = {};
+                strncpy(buf, s->c_str(), sizeof(buf) - 1);
+                if (ImGui::InputText(field.name, buf, sizeof(buf))) {
+                    *s = buf;
+                }
+                break;
+            }
+            case fate::FieldType::UInt:
+                ImGui::DragScalar(field.name, ImGuiDataType_U32, reinterpret_cast<uint32_t*>(ptr));
+                break;
+            default:
+                ImGui::TextDisabled("%s: [custom/unsupported]", field.name);
+                break;
+        }
+    }
+}
+
+// ============================================================================
 // Inspector
 // ============================================================================
 
@@ -2543,6 +2603,49 @@ void Editor::drawInspector() {
                     cfg.rules.push_back(MobSpawnRule{});
                 }
             }
+        }
+
+        // Generic fallback: render any reflected components not handled above
+        {
+            static const std::unordered_set<CompId> manuallyInspected = {
+                componentId<Transform>(),
+                componentId<SpriteComponent>(),
+                componentId<BoxCollider>(),
+                componentId<PolygonCollider>(),
+                componentId<PlayerController>(),
+                componentId<Animator>(),
+                componentId<ZoneComponent>(),
+                componentId<PortalComponent>(),
+                componentId<CharacterStatsComponent>(),
+                componentId<EnemyStatsComponent>(),
+                componentId<MobAIComponent>(),
+                componentId<CombatControllerComponent>(),
+                componentId<InventoryComponent>(),
+                componentId<SkillManagerComponent>(),
+                componentId<StatusEffectComponent>(),
+                componentId<CrowdControlComponent>(),
+                componentId<NameplateComponent>(),
+                componentId<MobNameplateComponent>(),
+                componentId<TargetingComponent>(),
+                componentId<DamageableComponent>(),
+                componentId<PartyComponent>(),
+                componentId<GuildComponent>(),
+                componentId<ChatComponent>(),
+                componentId<FriendsComponent>(),
+                componentId<TradeComponent>(),
+                componentId<MarketComponent>(),
+                componentId<SpawnZoneComponent>(),
+            };
+
+            selectedEntity_->forEachComponent([&](void* data, CompId id) {
+                if (manuallyInspected.count(id)) return;
+                auto* meta = ComponentMetaRegistry::instance().findById(id);
+                if (!meta || meta->fields.empty()) return;
+
+                if (ImGui::CollapsingHeader(meta->name)) {
+                    drawReflectedComponent(*meta, data);
+                }
+            });
         }
 
         endInspectorComponents:;
