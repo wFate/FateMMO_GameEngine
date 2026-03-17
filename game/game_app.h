@@ -1,7 +1,7 @@
 #pragma once
 #include "engine/app.h"
 #include "engine/tilemap/tilemap.h"
-#include "engine/render/text_renderer.h"
+#include "engine/render/sdf_text.h"
 #include "game/systems/render_system.h"
 #include "game/ui/npc_dialogue_ui.h"
 #include "game/ui/quest_log_ui.h"
@@ -32,8 +32,6 @@ private:
     NPCInteractionSystem* npcInteractionSystem_ = nullptr;
     QuestSystem* questSystem_ = nullptr;
     std::unique_ptr<Tilemap> tilemap_;
-    Font* hudFont_ = nullptr;
-
     NPCDialogueUI npcDialogueUI_;
     QuestLogUI questLogUI_;
 
