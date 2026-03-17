@@ -314,6 +314,7 @@ void Editor::drawDockSpace() {
         ImGui::DockBuilderDockWindow("Log", dockBottom);
         ImGui::DockBuilderDockWindow("Debug Info", dockBottom);
         ImGui::DockBuilderDockWindow("Tile Palette", dockRight);
+        ImGui::DockBuilderDockWindow("HUD Layout", dockRight);
 
         ImGui::DockBuilderFinish(dockspaceId);
     }
@@ -342,28 +343,28 @@ void Editor::drawSceneViewport() {
             auto toolBtn = [&](const char* label, EditorTool tool) {
                 bool active = (currentTool_ == tool);
                 if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.80f, 1.00f));
-                if (ImGui::Button(label, ImVec2(btnSq, btnH))) currentTool_ = tool;
+                if (ImGui::Button(label, ImVec2(0, btnH))) currentTool_ = tool;
                 if (active) ImGui::PopStyleColor();
                 ImGui::SameLine();
             };
-            toolBtn("M", EditorTool::Move);
-            toolBtn("R", EditorTool::Resize);
-            toolBtn("P", EditorTool::Paint);
-            toolBtn("E", EditorTool::Erase);
+            toolBtn("Move", EditorTool::Move);
+            toolBtn("Resize", EditorTool::Resize);
+            toolBtn("Paint", EditorTool::Paint);
+            toolBtn("Erase", EditorTool::Erase);
 
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
             ImGui::SameLine();
 
-            // Toggle buttons (compact, no checkbox labels)
+            // Toggle buttons
             auto toggleBtn = [&](const char* label, bool* val) {
                 if (*val) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.80f, 1.00f));
-                if (ImGui::Button(label, ImVec2(btnSq, btnH))) *val = !(*val);
+                if (ImGui::Button(label, ImVec2(0, btnH))) *val = !(*val);
                 if (*val) ImGui::PopStyleColor();
                 ImGui::SameLine();
             };
-            toggleBtn("G", &showGrid_);
-            toggleBtn("S", &gridSnap_);
-            toggleBtn("C", &showCollisionDebug_);
+            toggleBtn("Grid", &showGrid_);
+            toggleBtn("Snap", &gridSnap_);
+            toggleBtn("Colliders", &showCollisionDebug_);
 
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
             ImGui::SameLine();
