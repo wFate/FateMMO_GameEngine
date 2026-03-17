@@ -173,6 +173,7 @@ private:
 
     bool openSavePrefab_ = false;
     bool resetLayout_ = false;  // Set via View > Reset Layout
+    std::string currentScenePath_;  // Path of currently loaded/saved scene
 
     // Tool mode
     EditorTool currentTool_ = EditorTool::Move;
