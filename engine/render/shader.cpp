@@ -29,7 +29,41 @@ bool Shader::loadFromFile(const std::string& vertPath, const std::string& fragPa
     vertStream << vertFile.rdbuf();
     fragStream << fragFile.rdbuf();
 
+    vertPath_ = vertPath;
+    fragPath_ = fragPath;
     return loadFromSource(vertStream.str(), fragStream.str());
+}
+
+bool Shader::reloadFromFile(const std::string& vertPath, const std::string& fragPath) {
+    std::ifstream vertFile(vertPath);
+    std::ifstream fragFile(fragPath);
+    if (!vertFile.is_open() || !fragFile.is_open()) {
+        LOG_ERROR("Shader", "Reload: cannot open shader files");
+        return false;
+    }
+
+    std::stringstream vertStream, fragStream;
+    vertStream << vertFile.rdbuf();
+    fragStream << fragFile.rdbuf();
+
+    // Save old program in case loadFromSource fails
+    unsigned int oldProgram = programId_;
+    programId_ = 0;
+
+    if (!loadFromSource(vertStream.str(), fragStream.str())) {
+        // Restore old program — loadFromSource already logged the error
+        programId_ = oldProgram;
+        LOG_WARN("Shader", "Reload failed — keeping old program %u", programId_);
+        return false;
+    }
+
+    // Success: delete old program, clear uniform cache (locations may differ)
+    glDeleteProgram(oldProgram);
+    uniformCache_.clear();
+    vertPath_ = vertPath;
+    fragPath_ = fragPath;
+    LOG_INFO("Shader", "Reloaded shader program %u", programId_);
+    return true;
 }
 
 bool Shader::loadFromSource(const std::string& vertSrc, const std::string& fragSrc) {
