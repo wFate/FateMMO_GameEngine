@@ -172,6 +172,7 @@ private:
     float savedCamZoom_ = 1.0f;
 
     bool openSavePrefab_ = false;
+    bool resetLayout_ = true;  // Force layout rebuild on first run
 
     // Tool mode
     EditorTool currentTool_ = EditorTool::Move;
