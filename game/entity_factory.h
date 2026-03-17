@@ -9,6 +9,8 @@
 #include "game/components/box_collider.h"
 #include "game/components/animator.h"
 #include "game/components/game_components.h"
+#include "game/components/faction_component.h"
+#include "game/components/pet_component.h"
 #include "game/shared/game_types.h"
 
 namespace fate {
@@ -17,7 +19,7 @@ class EntityFactory {
 public:
     /// Create a fully-assembled player entity with all game components.
     /// Mirrors the Unity PlayerScene2 prefab (24 MonoBehaviours).
-    static Entity* createPlayer(World& world, const std::string& name, ClassType classType, bool isLocal = false) {
+    static Entity* createPlayer(World& world, const std::string& name, ClassType classType, bool isLocal = false, Faction faction = Faction::None) {
         Entity* player = world.createEntity(name);
         player->setTag("player");
 
@@ -134,6 +136,13 @@ public:
         player->addComponent<QuestComponent>();
         auto* bankComp = player->addComponent<BankStorageComponent>();
         bankComp->storage.initialize(30);
+
+        // Faction
+        auto* factionComp = player->addComponent<FactionComponent>();
+        factionComp->faction = faction;
+
+        // Pet (empty by default — no pet equipped)
+        player->addComponent<PetComponent>();
 
         // Nameplate
         auto* nameplate = player->addComponent<NameplateComponent>();
