@@ -3,6 +3,7 @@
 #include <random>
 #include "game/shared/game_types.h"
 #include "game/shared/item_instance.h"
+#include "game/shared/character_stats.h"
 
 namespace fate {
 
@@ -43,6 +44,22 @@ public:
             return tier * 10;
         }
         return tier;
+    }
+
+    /// Apply an item's stat enchant bonus to CharacterStats equipBonus fields.
+    /// Call for each equipped accessory, after equipment bonuses, before recalculateStats().
+    static void applyToEquipBonuses(const ItemInstance& item, CharacterStats& stats) {
+        if (item.statEnchantValue <= 0) return;
+        switch (item.statEnchantType) {
+            case StatType::Strength:     stats.equipBonusSTR += item.statEnchantValue; break;
+            case StatType::Intelligence: stats.equipBonusINT += item.statEnchantValue; break;
+            case StatType::Dexterity:    stats.equipBonusDEX += item.statEnchantValue; break;
+            case StatType::Vitality:     stats.equipBonusVIT += item.statEnchantValue; break;
+            case StatType::Wisdom:       stats.equipBonusWIS += item.statEnchantValue; break;
+            case StatType::MaxHealth:    stats.equipBonusHP  += item.statEnchantValue; break;
+            case StatType::MaxMana:      stats.equipBonusMP  += item.statEnchantValue; break;
+            default: break;
+        }
     }
 
     static void applyStatEnchant(ItemInstance& item, StatType type, int tier) {

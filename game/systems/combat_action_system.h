@@ -16,6 +16,7 @@
 
 #include "game/systems/quest_system.h"
 #include "game/components/faction_component.h"
+#include "game/components/zone_component.h"
 
 #include <vector>
 #include <limits>
@@ -702,6 +703,33 @@ private:
     void clearTarget() {
         currentTargetId_ = INVALID_ENTITY;
         autoAttackEnabled_ = false;
+    }
+
+    // ------------------------------------------------------------------
+    // isInHomeVillage — check if attacker is in their faction's home zone
+    // Used for PK exception: no Red penalty for killing enemy faction in your village.
+    // Called by future PvP kill handler before processPvPKill().
+    // ------------------------------------------------------------------
+    bool isInHomeVillage(Entity* attacker) {
+        auto* factionComp = attacker->getComponent<FactionComponent>();
+        if (!factionComp || factionComp->faction == Faction::None) return false;
+
+        auto* playerT = attacker->getComponent<Transform>();
+        if (!playerT) return false;
+
+        // Scan all zone entities to find which zone the attacker is in
+        bool inHomeVillage = false;
+        world_->forEach<ZoneComponent, Transform>(
+            [&](Entity* zoneEntity, ZoneComponent* zone, Transform* zoneT) {
+                if (inHomeVillage) return; // already found
+                if (zone->contains(zoneT->position, playerT->position)) {
+                    if (FactionRegistry::isHomeVillage(factionComp->faction, zone->zoneName)) {
+                        inHomeVillage = true;
+                    }
+                }
+            }
+        );
+        return inHomeVillage;
     }
 
     // ------------------------------------------------------------------

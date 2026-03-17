@@ -10,6 +10,10 @@ using namespace fate;
 static CharacterStats makeStats(int level = 1) {
     CharacterStats s;
     s.level = level;
+    s.recalculateXPRequirement();
+    s.recalculateStats();
+    s.currentHP = s.maxHP;
+    s.currentMP = s.maxMP;
     return s;
 }
 
@@ -136,12 +140,14 @@ TEST_CASE("QuestManager: turn in completed quest") {
     qm.acceptQuest(1, 1);
     for (int i = 0; i < 10; ++i) qm.onMobKilled("leaf_boar");
 
+    int levelBefore = stats.level;
     int64_t xpBefore = stats.currentXP;
     CHECK(qm.turnInQuest(1, stats, inv));
 
     CHECK_FALSE(qm.isQuestActive(1));
     CHECK(qm.hasCompletedQuest(1));
-    CHECK(stats.currentXP > xpBefore);
+    // Quest 1 rewards 100 XP — may cause level up (XP resets to 0), so check either condition
+    CHECK((stats.currentXP > xpBefore || stats.level > levelBefore));
     CHECK(inv.getGold() == 50);
 }
 
