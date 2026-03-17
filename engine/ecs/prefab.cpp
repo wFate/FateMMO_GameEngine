@@ -1,13 +1,9 @@
 #include "engine/ecs/prefab.h"
+#include "engine/ecs/component_meta.h"
+#include "engine/ecs/component_traits.h"
 #include "engine/core/logger.h"
-#include "engine/render/texture.h"
 
-#include "game/components/transform.h"
-#include "game/components/sprite_component.h"
-#include "game/components/player_controller.h"
-#include "game/components/box_collider.h"
-#include "game/components/polygon_collider.h"
-#include "game/components/animator.h"
+#include "game/components/transform.h"  // needed by spawn() for position override
 
 #include <fstream>
 #include <filesystem>
@@ -124,178 +120,53 @@ const nlohmann::json* PrefabLibrary::getJson(const std::string& name) const {
 // ============================================================================
 
 nlohmann::json PrefabLibrary::entityToJson(Entity* entity) {
-    nlohmann::json ej;
-    ej["name"] = entity->name();
-    ej["tag"] = entity->tag();
+    nlohmann::json data;
+    data["name"] = entity->name();
+    data["tag"] = entity->tag();
+    data["active"] = entity->isActive();
 
     nlohmann::json comps;
 
-    if (auto* t = entity->getComponent<Transform>()) {
-        comps["Transform"] = {
-            {"position", {t->position.x, t->position.y}},
-            {"scale", {t->scale.x, t->scale.y}},
-            {"rotation", t->rotation},
-            {"depth", t->depth}
-        };
+    entity->forEachComponent([&](void* ptr, CompId id) {
+        auto* meta = ComponentMetaRegistry::instance().findById(id);
+        if (!meta || !meta->toJson) return;
+        if (!hasFlag(meta->flags, ComponentFlags::Serializable)) return;
+
+        nlohmann::json compJson;
+        meta->toJson(ptr, compJson);
+        comps[meta->name] = compJson;
+    });
+
+    // Preserve unknown components (types not registered at load time)
+    for (auto& [name, blob] : entity->unknownComponents_) {
+        comps[name] = blob;
     }
 
-    if (auto* s = entity->getComponent<SpriteComponent>()) {
-        comps["Sprite"] = {
-            {"texture", s->texturePath},
-            {"size", {s->size.x, s->size.y}},
-            {"tint", {s->tint.r, s->tint.g, s->tint.b, s->tint.a}},
-            {"flipX", s->flipX},
-            {"flipY", s->flipY}
-        };
-    }
-
-    if (auto* c = entity->getComponent<BoxCollider>()) {
-        comps["BoxCollider"] = {
-            {"size", {c->size.x, c->size.y}},
-            {"offset", {c->offset.x, c->offset.y}},
-            {"isTrigger", c->isTrigger},
-            {"isStatic", c->isStatic}
-        };
-    }
-
-    if (auto* pc = entity->getComponent<PolygonCollider>()) {
-        nlohmann::json pts = nlohmann::json::array();
-        for (auto& p : pc->points) {
-            pts.push_back({p.x, p.y});
-        }
-        comps["PolygonCollider"] = {
-            {"points", pts},
-            {"isTrigger", pc->isTrigger},
-            {"isStatic", pc->isStatic}
-        };
-    }
-
-    if (auto* p = entity->getComponent<PlayerController>()) {
-        comps["PlayerController"] = {
-            {"moveSpeed", p->moveSpeed},
-            {"isLocalPlayer", p->isLocalPlayer}
-        };
-    }
-
-    if (auto* a = entity->getComponent<Animator>()) {
-        nlohmann::json anims;
-        for (auto& [name, def] : a->animations) {
-            anims[name] = {
-                {"startFrame", def.startFrame},
-                {"frameCount", def.frameCount},
-                {"frameRate", def.frameRate},
-                {"loop", def.loop}
-            };
-        }
-        comps["Animator"] = {
-            {"animations", anims},
-            {"currentAnimation", a->currentAnimation}
-        };
-    }
-
-    ej["components"] = comps;
-    return ej;
+    data["components"] = comps;
+    return data;
 }
 
 Entity* PrefabLibrary::jsonToEntity(const nlohmann::json& data, World& world) {
-    std::string name = data.value("name", "Entity");
+    std::string name = data.value("name", std::string("Entity"));
     Entity* entity = world.createEntity(name);
-    entity->setTag(data.value("tag", ""));
+    entity->setTag(data.value("tag", std::string("")));
+    entity->setActive(data.value("active", true));
 
     if (!data.contains("components")) return entity;
-    auto& comps = data["components"];
 
-    if (comps.contains("Transform")) {
-        auto& tj = comps["Transform"];
-        auto* t = entity->addComponent<Transform>();
-        if (tj.contains("position")) {
-            auto p = tj["position"];
-            t->position = {p[0].get<float>(), p[1].get<float>()};
+    for (auto& [typeName, compJson] : data["components"].items()) {
+        auto* meta = ComponentMetaRegistry::instance().findByName(typeName);
+        if (!meta) {
+            // Unknown component -- preserve raw JSON for round-trip fidelity
+            entity->unknownComponents_[typeName] = compJson;
+            continue;
         }
-        if (tj.contains("scale")) {
-            auto s = tj["scale"];
-            t->scale = {s[0].get<float>(), s[1].get<float>()};
-        }
-        t->rotation = tj.value("rotation", 0.0f);
-        t->depth = tj.value("depth", 0.0f);
-    }
+        if (!meta->fromJson) continue;
 
-    if (comps.contains("Sprite")) {
-        auto& sj = comps["Sprite"];
-        auto* s = entity->addComponent<SpriteComponent>();
-        s->texturePath = sj.value("texture", "");
-        if (!s->texturePath.empty()) {
-            s->texture = TextureCache::instance().load(s->texturePath);
-        }
-        // If texture failed to load, generate a magenta placeholder so it's visible
-        if (!s->texture) {
-            unsigned char px[] = {255, 0, 255, 255, 200, 0, 200, 255,
-                                  200, 0, 200, 255, 255, 0, 255, 255};
-            auto tex = std::make_shared<Texture>();
-            tex->loadFromMemory(px, 2, 2, 4);
-            s->texture = tex;
-        }
-        if (sj.contains("size")) {
-            auto sz = sj["size"];
-            s->size = {sz[0].get<float>(), sz[1].get<float>()};
-        }
-        if (sj.contains("tint")) {
-            auto tn = sj["tint"];
-            s->tint = {tn[0].get<float>(), tn[1].get<float>(),
-                       tn[2].get<float>(), tn[3].get<float>()};
-        }
-        s->flipX = sj.value("flipX", false);
-        s->flipY = sj.value("flipY", false);
-    }
-
-    if (comps.contains("BoxCollider")) {
-        auto& cj = comps["BoxCollider"];
-        auto* c = entity->addComponent<BoxCollider>();
-        if (cj.contains("size")) {
-            auto sz = cj["size"];
-            c->size = {sz[0].get<float>(), sz[1].get<float>()};
-        }
-        if (cj.contains("offset")) {
-            auto off = cj["offset"];
-            c->offset = {off[0].get<float>(), off[1].get<float>()};
-        }
-        c->isTrigger = cj.value("isTrigger", false);
-        c->isStatic = cj.value("isStatic", true);
-    }
-
-    if (comps.contains("PolygonCollider")) {
-        auto& pj = comps["PolygonCollider"];
-        auto* pc = entity->addComponent<PolygonCollider>();
-        if (pj.contains("points")) {
-            for (auto& pt : pj["points"]) {
-                pc->points.push_back({pt[0].get<float>(), pt[1].get<float>()});
-            }
-        }
-        pc->isTrigger = pj.value("isTrigger", false);
-        pc->isStatic = pj.value("isStatic", true);
-    }
-
-    if (comps.contains("PlayerController")) {
-        auto& pj = comps["PlayerController"];
-        auto* p = entity->addComponent<PlayerController>();
-        p->moveSpeed = pj.value("moveSpeed", 96.0f);
-        p->isLocalPlayer = pj.value("isLocalPlayer", false);
-    }
-
-    if (comps.contains("Animator")) {
-        auto& aj = comps["Animator"];
-        auto* a = entity->addComponent<Animator>();
-        if (aj.contains("animations")) {
-            for (auto& [name, def] : aj["animations"].items()) {
-                a->addAnimation(name,
-                    def.value("startFrame", 0),
-                    def.value("frameCount", 1),
-                    def.value("frameRate", 8.0f),
-                    def.value("loop", true));
-            }
-        }
-        if (aj.contains("currentAnimation")) {
-            a->play(aj["currentAnimation"].get<std::string>());
+        void* ptr = world.addComponentById(entity->handle(), meta->id, meta->size, meta->alignment);
+        if (ptr) {
+            if (meta->construct) meta->construct(ptr);
+            meta->fromJson(compJson, ptr);
         }
     }
 

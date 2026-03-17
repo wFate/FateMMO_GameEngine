@@ -18,9 +18,12 @@
 #include "game/components/game_components.h"
 #include "game/systems/spawn_system.h"
 #include "engine/ecs/prefab.h"
+#include "engine/scene/scene.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
+
+#include "engine/ecs/component_meta.h"
 
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -28,6 +31,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <cstring>
+#include <unordered_set>
 
 namespace fs = std::filesystem;
 
@@ -1444,8 +1448,8 @@ void Editor::saveScene(World* world, const std::string& path) {
     currentScenePath_ = path;
 
     nlohmann::json root;
-    root["version"] = 1;
-    root["gridSize"] = gridSize_;
+    root["version"]   = SCENE_FORMAT_VERSION;
+    root["gridSize"]  = gridSize_;
     root["sceneName"] = SceneManager::instance().currentSceneName();
 
     nlohmann::json entitiesJson = nlohmann::json::array();
@@ -1455,113 +1459,8 @@ void Editor::saveScene(World* world, const std::string& path) {
         std::string tag = entity->tag();
         if (tag == "mob" || tag == "boss") return;
 
-        nlohmann::json ej;
-        ej["name"] = entity->name();
-        ej["tag"] = tag;
-        ej["active"] = entity->isActive();
-
-        nlohmann::json comps;
-
-        if (auto* t = entity->getComponent<Transform>()) {
-            comps["Transform"] = {
-                {"position", {t->position.x, t->position.y}},
-                {"scale", {t->scale.x, t->scale.y}},
-                {"rotation", t->rotation},
-                {"depth", t->depth}
-            };
-        }
-
-        if (auto* s = entity->getComponent<SpriteComponent>()) {
-            comps["Sprite"] = {
-                {"texture", s->texturePath},
-                {"size", {s->size.x, s->size.y}},
-                {"sourceRect", {s->sourceRect.x, s->sourceRect.y, s->sourceRect.w, s->sourceRect.h}},
-                {"tint", {s->tint.r, s->tint.g, s->tint.b, s->tint.a}},
-                {"flipX", s->flipX},
-                {"flipY", s->flipY}
-            };
-        }
-
-        if (auto* c = entity->getComponent<BoxCollider>()) {
-            comps["BoxCollider"] = {
-                {"size", {c->size.x, c->size.y}},
-                {"offset", {c->offset.x, c->offset.y}},
-                {"isTrigger", c->isTrigger},
-                {"isStatic", c->isStatic}
-            };
-        }
-
-        if (auto* pc = entity->getComponent<PolygonCollider>()) {
-            nlohmann::json pts = nlohmann::json::array();
-            for (auto& p : pc->points) {
-                pts.push_back({p.x, p.y});
-            }
-            comps["PolygonCollider"] = {
-                {"points", pts},
-                {"isTrigger", pc->isTrigger},
-                {"isStatic", pc->isStatic}
-            };
-        }
-
-        if (auto* p = entity->getComponent<PlayerController>()) {
-            comps["PlayerController"] = {
-                {"moveSpeed", p->moveSpeed},
-                {"isLocalPlayer", p->isLocalPlayer}
-            };
-        }
-
-        if (auto* z = entity->getComponent<ZoneComponent>()) {
-            comps["Zone"] = {
-                {"zoneName", z->zoneName},
-                {"displayName", z->displayName},
-                {"size", {z->size.x, z->size.y}},
-                {"zoneType", z->zoneType},
-                {"minLevel", z->minLevel},
-                {"maxLevel", z->maxLevel},
-                {"pvpEnabled", z->pvpEnabled}
-            };
-        }
-
-        if (auto* p = entity->getComponent<PortalComponent>()) {
-            comps["Portal"] = {
-                {"triggerSize", {p->triggerSize.x, p->triggerSize.y}},
-                {"targetScene", p->targetScene},
-                {"targetZone", p->targetZone},
-                {"targetSpawnPos", {p->targetSpawnPos.x, p->targetSpawnPos.y}},
-                {"useFadeTransition", p->useFadeTransition},
-                {"fadeDuration", p->fadeDuration},
-                {"showLabel", p->showLabel},
-                {"label", p->label}
-            };
-        }
-
-        if (auto* sz = entity->getComponent<SpawnZoneComponent>()) {
-            nlohmann::json rulesJson = nlohmann::json::array();
-            for (auto& r : sz->config.rules) {
-                rulesJson.push_back({
-                    {"enemyId", r.enemyId},
-                    {"targetCount", r.targetCount},
-                    {"minLevel", r.minLevel},
-                    {"maxLevel", r.maxLevel},
-                    {"baseHP", r.baseHP},
-                    {"baseDamage", r.baseDamage},
-                    {"isAggressive", r.isAggressive},
-                    {"isBoss", r.isBoss},
-                    {"respawnSeconds", r.respawnSeconds}
-                });
-            }
-            comps["SpawnZone"] = {
-                {"zoneName", sz->config.zoneName},
-                {"size", {sz->config.size.x, sz->config.size.y}},
-                {"minSpawnDistance", sz->config.minSpawnDistance},
-                {"serverTickInterval", sz->config.serverTickInterval},
-                {"showBounds", sz->showBounds},
-                {"rules", rulesJson}
-            };
-        }
-
-        ej["components"] = comps;
-        entitiesJson.push_back(ej);
+        // Registry-based serialization — all registered components are handled
+        entitiesJson.push_back(PrefabLibrary::entityToJson(entity));
     });
 
     root["entities"] = entitiesJson;
@@ -1609,6 +1508,14 @@ void Editor::loadScene(World* world, const std::string& path) {
         return;
     }
 
+    // Read version (default to 1 for backward compat with pre-header files)
+    int version = root.value("version", 1);
+    if (version > SCENE_FORMAT_VERSION) {
+        LOG_ERROR("Editor", "Scene file version %d is newer than supported (%d)",
+                  version, SCENE_FORMAT_VERSION);
+        return;
+    }
+
     // Clear existing entities
     world->forEachEntity([&](Entity* entity) {
         world->destroyEntity(entity->handle());
@@ -1621,156 +1528,14 @@ void Editor::loadScene(World* world, const std::string& path) {
 
     if (!root.contains("entities")) return;
 
+    // Registry-based deserialization — all registered components are handled
     for (auto& ej : root["entities"]) {
-        std::string name = ej.value("name", "Entity");
-        Entity* entity = world->createEntity(name);
-        entity->setTag(ej.value("tag", ""));
-        entity->setActive(ej.value("active", true));
-
-        auto& comps = ej["components"];
-
-        if (comps.contains("Transform")) {
-            auto& tj = comps["Transform"];
-            auto* t = entity->addComponent<Transform>();
-            auto pos = tj["position"];
-            t->position = {pos[0].get<float>(), pos[1].get<float>()};
-            if (tj.contains("scale")) {
-                auto sc = tj["scale"];
-                t->scale = {sc[0].get<float>(), sc[1].get<float>()};
-            }
-            t->rotation = tj.value("rotation", 0.0f);
-            t->depth = tj.value("depth", 0.0f);
-        }
-
-        if (comps.contains("Sprite")) {
-            auto& sj = comps["Sprite"];
-            auto* s = entity->addComponent<SpriteComponent>();
-            s->texturePath = sj.value("texture", "");
-            if (!s->texturePath.empty()) {
-                s->texture = TextureCache::instance().load(s->texturePath);
-            }
-            // Placeholder for missing textures so entities are still visible
-            if (!s->texture) {
-                unsigned char px[] = {255, 0, 255, 255, 200, 0, 200, 255,
-                                      200, 0, 200, 255, 255, 0, 255, 255};
-                auto tex = std::make_shared<Texture>();
-                tex->loadFromMemory(px, 2, 2, 4);
-                s->texture = tex;
-            }
-            if (sj.contains("size")) {
-                auto sz = sj["size"];
-                s->size = {sz[0].get<float>(), sz[1].get<float>()};
-            }
-            if (sj.contains("tint")) {
-                auto tn = sj["tint"];
-                s->tint = {tn[0].get<float>(), tn[1].get<float>(),
-                           tn[2].get<float>(), tn[3].get<float>()};
-            }
-            if (sj.contains("sourceRect")) {
-                auto sr = sj["sourceRect"];
-                s->sourceRect = {sr[0].get<float>(), sr[1].get<float>(),
-                                 sr[2].get<float>(), sr[3].get<float>()};
-            }
-            s->flipX = sj.value("flipX", false);
-            s->flipY = sj.value("flipY", false);
-        }
-
-        if (comps.contains("BoxCollider")) {
-            auto& cj = comps["BoxCollider"];
-            auto* c = entity->addComponent<BoxCollider>();
-            auto sz = cj["size"];
-            c->size = {sz[0].get<float>(), sz[1].get<float>()};
-            auto off = cj["offset"];
-            c->offset = {off[0].get<float>(), off[1].get<float>()};
-            c->isTrigger = cj.value("isTrigger", false);
-            c->isStatic = cj.value("isStatic", true);
-        }
-
-        if (comps.contains("PolygonCollider")) {
-            auto& pj = comps["PolygonCollider"];
-            auto* pc = entity->addComponent<PolygonCollider>();
-            if (pj.contains("points")) {
-                for (auto& pt : pj["points"]) {
-                    pc->points.push_back({pt[0].get<float>(), pt[1].get<float>()});
-                }
-            }
-            pc->isTrigger = pj.value("isTrigger", false);
-            pc->isStatic = pj.value("isStatic", true);
-        }
-
-        if (comps.contains("PlayerController")) {
-            auto& pj = comps["PlayerController"];
-            auto* p = entity->addComponent<PlayerController>();
-            p->moveSpeed = pj.value("moveSpeed", 96.0f);
-            p->isLocalPlayer = pj.value("isLocalPlayer", false);
-        }
-
-        if (comps.contains("Zone")) {
-            auto& zj = comps["Zone"];
-            auto* z = entity->addComponent<ZoneComponent>();
-            z->zoneName = zj.value("zoneName", "");
-            z->displayName = zj.value("displayName", "");
-            if (zj.contains("size")) {
-                auto s = zj["size"];
-                z->size = {s[0].get<float>(), s[1].get<float>()};
-            }
-            z->zoneType = zj.value("zoneType", "zone");
-            z->minLevel = zj.value("minLevel", 1);
-            z->maxLevel = zj.value("maxLevel", 99);
-            z->pvpEnabled = zj.value("pvpEnabled", false);
-        }
-
-        if (comps.contains("Portal")) {
-            auto& pj = comps["Portal"];
-            auto* p = entity->addComponent<PortalComponent>();
-            if (pj.contains("triggerSize")) {
-                auto ts = pj["triggerSize"];
-                p->triggerSize = {ts[0].get<float>(), ts[1].get<float>()};
-            }
-            p->targetScene = pj.value("targetScene", "");
-            p->targetZone = pj.value("targetZone", "");
-            if (pj.contains("targetSpawnPos")) {
-                auto sp = pj["targetSpawnPos"];
-                p->targetSpawnPos = {sp[0].get<float>(), sp[1].get<float>()};
-            }
-            p->useFadeTransition = pj.value("useFadeTransition", true);
-            p->fadeDuration = pj.value("fadeDuration", 0.3f);
-            p->showLabel = pj.value("showLabel", true);
-            p->label = pj.value("label", "");
-        }
-
-        if (comps.contains("SpawnZone")) {
-            auto& szj = comps["SpawnZone"];
-            auto* sz = entity->addComponent<SpawnZoneComponent>();
-            sz->config.zoneName = szj.value("zoneName", "DefaultZone");
-            if (szj.contains("size")) {
-                auto s = szj["size"];
-                sz->config.size = {s[0].get<float>(), s[1].get<float>()};
-            }
-            sz->config.minSpawnDistance = szj.value("minSpawnDistance", 48.0f);
-            sz->config.serverTickInterval = szj.value("serverTickInterval", 0.5f);
-            sz->showBounds = szj.value("showBounds", false);
-
-            if (szj.contains("rules")) {
-                for (auto& rj : szj["rules"]) {
-                    MobSpawnRule rule;
-                    rule.enemyId = rj.value("enemyId", "");
-                    rule.targetCount = rj.value("targetCount", 5);
-                    rule.minLevel = rj.value("minLevel", 1);
-                    rule.maxLevel = rj.value("maxLevel", 5);
-                    rule.baseHP = rj.value("baseHP", 50);
-                    rule.baseDamage = rj.value("baseDamage", 5);
-                    rule.isAggressive = rj.value("isAggressive", true);
-                    rule.isBoss = rj.value("isBoss", false);
-                    rule.respawnSeconds = rj.value("respawnSeconds", 34.0f);
-                    sz->config.rules.push_back(rule);
-                }
-            }
-        }
+        PrefabLibrary::jsonToEntity(ej, *world);
     }
 
     selectedEntity_ = nullptr;
-    LOG_INFO("Editor", "Scene loaded from %s (%zu entities)", path.c_str(), world->entityCount());
+    LOG_INFO("Editor", "Scene loaded v%d from %s (%zu entities)",
+             version, path.c_str(), world->entityCount());
 }
 
 // ============================================================================
@@ -1966,6 +1731,63 @@ void Editor::drawHierarchy(World* world) {
         }
     }
     ImGui::End();
+}
+
+// ============================================================================
+// Reflection-driven inspector helper
+// ============================================================================
+
+static void drawReflectedComponent(const fate::ComponentMeta& meta, void* data) {
+    for (const auto& field : meta.fields) {
+        uint8_t* ptr = static_cast<uint8_t*>(data) + field.offset;
+        switch (field.type) {
+            case fate::FieldType::Float:
+                ImGui::DragFloat(field.name, reinterpret_cast<float*>(ptr), 0.1f);
+                break;
+            case fate::FieldType::Int:
+                ImGui::DragInt(field.name, reinterpret_cast<int*>(ptr));
+                break;
+            case fate::FieldType::Bool:
+                ImGui::Checkbox(field.name, reinterpret_cast<bool*>(ptr));
+                break;
+            case fate::FieldType::Vec2: {
+                auto* v = reinterpret_cast<fate::Vec2*>(ptr);
+                float vals[2] = { v->x, v->y };
+                if (ImGui::DragFloat2(field.name, vals, 0.5f)) {
+                    v->x = vals[0]; v->y = vals[1];
+                }
+                break;
+            }
+            case fate::FieldType::Color: {
+                auto* c = reinterpret_cast<fate::Color*>(ptr);
+                ImGui::ColorEdit4(field.name, &c->r);
+                break;
+            }
+            case fate::FieldType::Rect: {
+                auto* r = reinterpret_cast<fate::Rect*>(ptr);
+                float vals[4] = { r->x, r->y, r->w, r->h };
+                if (ImGui::DragFloat4(field.name, vals, 0.5f)) {
+                    r->x = vals[0]; r->y = vals[1]; r->w = vals[2]; r->h = vals[3];
+                }
+                break;
+            }
+            case fate::FieldType::String: {
+                auto* s = reinterpret_cast<std::string*>(ptr);
+                char buf[256] = {};
+                strncpy(buf, s->c_str(), sizeof(buf) - 1);
+                if (ImGui::InputText(field.name, buf, sizeof(buf))) {
+                    *s = buf;
+                }
+                break;
+            }
+            case fate::FieldType::UInt:
+                ImGui::DragScalar(field.name, ImGuiDataType_U32, reinterpret_cast<uint32_t*>(ptr));
+                break;
+            default:
+                ImGui::TextDisabled("%s: [custom/unsupported]", field.name);
+                break;
+        }
+    }
 }
 
 // ============================================================================
@@ -2781,6 +2603,49 @@ void Editor::drawInspector() {
                     cfg.rules.push_back(MobSpawnRule{});
                 }
             }
+        }
+
+        // Generic fallback: render any reflected components not handled above
+        {
+            static const std::unordered_set<CompId> manuallyInspected = {
+                componentId<Transform>(),
+                componentId<SpriteComponent>(),
+                componentId<BoxCollider>(),
+                componentId<PolygonCollider>(),
+                componentId<PlayerController>(),
+                componentId<Animator>(),
+                componentId<ZoneComponent>(),
+                componentId<PortalComponent>(),
+                componentId<CharacterStatsComponent>(),
+                componentId<EnemyStatsComponent>(),
+                componentId<MobAIComponent>(),
+                componentId<CombatControllerComponent>(),
+                componentId<InventoryComponent>(),
+                componentId<SkillManagerComponent>(),
+                componentId<StatusEffectComponent>(),
+                componentId<CrowdControlComponent>(),
+                componentId<NameplateComponent>(),
+                componentId<MobNameplateComponent>(),
+                componentId<TargetingComponent>(),
+                componentId<DamageableComponent>(),
+                componentId<PartyComponent>(),
+                componentId<GuildComponent>(),
+                componentId<ChatComponent>(),
+                componentId<FriendsComponent>(),
+                componentId<TradeComponent>(),
+                componentId<MarketComponent>(),
+                componentId<SpawnZoneComponent>(),
+            };
+
+            selectedEntity_->forEachComponent([&](void* data, CompId id) {
+                if (manuallyInspected.count(id)) return;
+                auto* meta = ComponentMetaRegistry::instance().findById(id);
+                if (!meta || meta->fields.empty()) return;
+
+                if (ImGui::CollapsingHeader(meta->name)) {
+                    drawReflectedComponent(*meta, data);
+                }
+            });
         }
 
         endInspectorComponents:;

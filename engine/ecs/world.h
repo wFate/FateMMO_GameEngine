@@ -61,6 +61,10 @@ public:
 
     // --- Archetype-backed component operations (called by Entity) ---
 
+    // Type-erased component addition for serialization.
+    // Returns pointer to zero-initialized memory. Caller constructs the component.
+    void* addComponentById(EntityHandle handle, CompId id, size_t size, size_t alignment);
+
     // Add a component to an entity, migrating to a new archetype
     template<typename T, typename... Args>
     T* addComponentToEntity(Entity* entity, Args&&... args) {

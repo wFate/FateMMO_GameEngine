@@ -3,7 +3,9 @@
 #include "engine/ecs/entity_handle.h"
 #include "engine/ecs/archetype.h"
 #include "engine/core/types.h"
+#include <nlohmann/json.hpp>
 #include <string>
+#include <unordered_map>
 #include <functional>
 
 namespace fate {
@@ -47,6 +49,10 @@ public:
     // Iterate components as type-erased pointers (for editor inspector)
     // This is expensive -- iterates archetype columns
     void forEachComponent(const std::function<void(void*, CompId)>& fn);
+
+    // Preserves JSON for components whose types weren't registered at load time.
+    // Key = component type name string, Value = raw JSON object for that component.
+    std::unordered_map<std::string, nlohmann::json> unknownComponents_;
 
 private:
     friend class World;

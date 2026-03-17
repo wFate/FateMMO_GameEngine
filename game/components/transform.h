@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
+#include "engine/ecs/reflect.h"
 
 namespace fate {
 
@@ -19,3 +20,10 @@ struct Transform {
 };
 
 } // namespace fate
+
+FATE_REFLECT(fate::Transform,
+    FATE_FIELD(position, Vec2),
+    FATE_FIELD(rotation, Float),
+    FATE_FIELD(depth, Float),
+    FATE_FIELD(scale, Vec2)
+)

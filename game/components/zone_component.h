@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/ecs/component_registry.h"
 #include "engine/core/types.h"
+#include "engine/ecs/reflect.h"
 #include <string>
 #include <vector>
 
@@ -70,3 +71,24 @@ struct PortalComponent {
 };
 
 } // namespace fate
+
+FATE_REFLECT(fate::ZoneComponent,
+    FATE_FIELD(zoneName, String),
+    FATE_FIELD(size, Vec2),
+    FATE_FIELD(displayName, String),
+    FATE_FIELD(zoneType, String),
+    FATE_FIELD(minLevel, Int),
+    FATE_FIELD(maxLevel, Int),
+    FATE_FIELD(pvpEnabled, Bool)
+)
+
+FATE_REFLECT(fate::PortalComponent,
+    FATE_FIELD(triggerSize, Vec2),
+    FATE_FIELD(targetScene, String),
+    FATE_FIELD(targetZone, String),
+    FATE_FIELD(targetSpawnPos, Vec2),
+    FATE_FIELD(showLabel, Bool),
+    FATE_FIELD(label, String),
+    FATE_FIELD(useFadeTransition, Bool),
+    FATE_FIELD(fadeDuration, Float)
+)

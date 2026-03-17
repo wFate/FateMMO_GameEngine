@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/ecs/world.h"
+#include "engine/ecs/reflect.h"
 #include "game/shared/spawn_zone.h"
 #include "game/entity_factory.h"
 #include "game/components/game_components.h"
@@ -343,3 +344,9 @@ private:
 };
 
 } // namespace fate
+
+// SpawnZoneComponent has complex inner types (SpawnZoneConfig, vector<TrackedMob>) — custom serializer in Task 6
+// Only reflect the simple debug toggle field
+FATE_REFLECT(fate::SpawnZoneComponent,
+    FATE_FIELD(showBounds, Bool)
+)

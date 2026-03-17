@@ -127,6 +127,38 @@ Entity* World::findByTag(const std::string& tag) const {
     return nullptr;
 }
 
+// --- Type-erased component addition ---
+
+void* World::addComponentById(EntityHandle handle, CompId id, size_t size, size_t alignment) {
+    Entity* entity = getEntity(handle);
+    if (!entity) return nullptr;
+
+    // Register type metadata if not already known
+    archetypes_.registerTypeById(id, size, alignment);
+
+    ArchetypeId oldArchId = entity->archetypeId_;
+    RowIndex oldRow = entity->row_;
+
+    // Migrate to new archetype with this component added
+    ArchetypeId newArchId = archetypes_.migrateEntity(
+        oldArchId, oldRow, entity->handle(), id, true);
+
+    // Update entity that was swapped into the old row
+    updateSwappedEntity(oldArchId, oldRow);
+
+    // Find entity's new row (it's the last added in the new archetype)
+    RowIndex newRow = archetypes_.entityCount(newArchId) - 1;
+    entity->archetypeId_ = newArchId;
+    entity->row_ = newRow;
+
+    // Return pointer to the zero-initialized component data
+    // (addEntity already zero-inits all columns for the new row)
+    void* columnBase = archetypes_.getColumnRaw(newArchId, id);
+    if (!columnBase) return nullptr;
+    size_t elemSize = archetypes_.getColumnElemSize(newArchId, id);
+    return static_cast<uint8_t*>(columnBase) + static_cast<size_t>(newRow) * elemSize;
+}
+
 // --- Frame updates ---
 
 void World::update(float deltaTime) {

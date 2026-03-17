@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/ecs/component_registry.h"
+#include "engine/ecs/reflect.h"
 #include "game/shared/character_stats.h"
 #include "game/shared/enemy_stats.h"
 #include "game/shared/mob_ai.h"
@@ -18,6 +19,8 @@
 #include "game/shared/npc_types.h"
 #include "game/shared/quest_manager.h"
 #include "game/shared/bank_storage.h"
+#include "game/shared/faction.h"
+#include "game/shared/pet_system.h"
 
 namespace fate {
 
@@ -230,3 +233,110 @@ struct BankStorageComponent {
 };
 
 } // namespace fate
+
+// ============================================================================
+// Reflection declarations — OUTSIDE namespace fate
+// ============================================================================
+
+// --- Player Components ---
+
+// CharacterStatsComponent wraps complex CharacterStats — custom serializer in Task 6
+FATE_REFLECT_EMPTY(fate::CharacterStatsComponent)
+
+FATE_REFLECT(fate::CombatControllerComponent,
+    FATE_FIELD(baseAttackCooldown, Float),
+    FATE_FIELD(attackCooldownRemaining, Float)
+)
+
+// Marker component — no data fields
+FATE_REFLECT_EMPTY(fate::DamageableComponent)
+
+// Complex inner types — custom serializers in Task 6
+FATE_REFLECT_EMPTY(fate::InventoryComponent)
+FATE_REFLECT_EMPTY(fate::SkillManagerComponent)
+FATE_REFLECT_EMPTY(fate::StatusEffectComponent)
+FATE_REFLECT_EMPTY(fate::CrowdControlComponent)
+
+FATE_REFLECT(fate::TargetingComponent,
+    FATE_FIELD(selectedTargetId, UInt),
+    FATE_FIELD(maxTargetRange, Float),
+    FATE_FIELD(clickConsumed, Bool)
+)
+
+FATE_REFLECT_EMPTY(fate::ChatComponent)
+FATE_REFLECT_EMPTY(fate::GuildComponent)
+FATE_REFLECT_EMPTY(fate::PartyComponent)
+FATE_REFLECT_EMPTY(fate::FriendsComponent)
+FATE_REFLECT_EMPTY(fate::MarketComponent)
+FATE_REFLECT_EMPTY(fate::TradeComponent)
+
+FATE_REFLECT(fate::NameplateComponent,
+    FATE_FIELD(displayName, String),
+    FATE_FIELD(displayLevel, Int),
+    FATE_FIELD(nameColor, Color),
+    FATE_FIELD(showGuildSymbol, Bool),
+    FATE_FIELD(guildName, String),
+    FATE_FIELD(visible, Bool),
+    FATE_FIELD(showLevel, Bool),
+    FATE_FIELD(roleSubtitle, String),
+    FATE_FIELD(fontSize, Float)
+)
+
+// --- Mob/Enemy Components ---
+
+// EnemyStatsComponent wraps complex EnemyStats — custom serializer in Task 6
+FATE_REFLECT_EMPTY(fate::EnemyStatsComponent)
+
+// MobAIComponent wraps complex MobAI — custom serializer in Task 6
+FATE_REFLECT_EMPTY(fate::MobAIComponent)
+
+FATE_REFLECT(fate::MobNameplateComponent,
+    FATE_FIELD(displayName, String),
+    FATE_FIELD(level, Int),
+    FATE_FIELD(isBoss, Bool),
+    FATE_FIELD(isElite, Bool),
+    FATE_FIELD(visible, Bool),
+    FATE_FIELD(showLevel, Bool),
+    FATE_FIELD(fontSize, Float)
+)
+
+// --- NPC Components ---
+
+FATE_REFLECT(fate::NPCComponent,
+    FATE_FIELD(npcId, UInt),
+    FATE_FIELD(displayName, String),
+    FATE_FIELD(dialogueGreeting, String),
+    FATE_FIELD(interactionRadius, Float)
+)
+
+// QuestGiverComponent has vector<uint32_t> — custom serializer in Task 6
+FATE_REFLECT_EMPTY(fate::QuestGiverComponent)
+
+FATE_REFLECT_EMPTY(fate::QuestMarkerComponent)
+
+// ShopComponent has complex vector<ShopItem> — custom serializer in Task 6
+FATE_REFLECT_EMPTY(fate::ShopComponent)
+
+// SkillTrainerComponent has complex vector<TrainableSkill> — custom serializer in Task 6
+FATE_REFLECT_EMPTY(fate::SkillTrainerComponent)
+
+FATE_REFLECT(fate::BankerComponent,
+    FATE_FIELD(storageSlots, UInt),
+    FATE_FIELD(depositFeePercent, Float)
+)
+
+FATE_REFLECT(fate::GuildNPCComponent,
+    FATE_FIELD(creationCost, Int),
+    FATE_FIELD(requiredLevel, UInt)
+)
+
+// TeleporterComponent has complex vector<TeleportDestination> — custom serializer in Task 6
+FATE_REFLECT_EMPTY(fate::TeleporterComponent)
+
+// StoryNPCComponent has complex vector<DialogueNode> — custom serializer in Task 6
+FATE_REFLECT_EMPTY(fate::StoryNPCComponent)
+
+// --- Player Quest & Bank Components ---
+
+FATE_REFLECT_EMPTY(fate::QuestComponent)
+FATE_REFLECT_EMPTY(fate::BankStorageComponent)
