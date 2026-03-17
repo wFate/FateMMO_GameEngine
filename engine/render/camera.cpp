@@ -9,7 +9,7 @@ Camera::Camera() {
 
 Mat4 Camera::getViewProjection() {
     if (dirty_) {
-        float halfW = (VIRTUAL_WIDTH * 0.5f) / zoom_;
+        float halfW = (virtualWidth_ * 0.5f) / zoom_;
         float halfH = (VIRTUAL_HEIGHT * 0.5f) / zoom_;
 
         Mat4 projection = Mat4::ortho(
@@ -31,7 +31,7 @@ Vec2 Camera::screenToWorld(const Vec2& screen, int windowWidth, int windowHeight
     float nx = (screen.x / windowWidth) * 2.0f - 1.0f;
     float ny = 1.0f - (screen.y / windowHeight) * 2.0f; // flip Y
 
-    float halfW = (VIRTUAL_WIDTH * 0.5f) / zoom_;
+    float halfW = (virtualWidth_ * 0.5f) / zoom_;
     float halfH = (VIRTUAL_HEIGHT * 0.5f) / zoom_;
 
     return {
@@ -41,7 +41,7 @@ Vec2 Camera::screenToWorld(const Vec2& screen, int windowWidth, int windowHeight
 }
 
 Vec2 Camera::worldToScreen(const Vec2& world, int windowWidth, int windowHeight) const {
-    float halfW = (VIRTUAL_WIDTH * 0.5f) / zoom_;
+    float halfW = (virtualWidth_ * 0.5f) / zoom_;
     float halfH = (VIRTUAL_HEIGHT * 0.5f) / zoom_;
 
     float nx = (world.x - position_.x) / halfW;
@@ -54,7 +54,7 @@ Vec2 Camera::worldToScreen(const Vec2& world, int windowWidth, int windowHeight)
 }
 
 Rect Camera::getVisibleBounds() const {
-    float halfW = (VIRTUAL_WIDTH * 0.5f) / zoom_;
+    float halfW = (virtualWidth_ * 0.5f) / zoom_;
     float halfH = (VIRTUAL_HEIGHT * 0.5f) / zoom_;
     return {
         position_.x - halfW,

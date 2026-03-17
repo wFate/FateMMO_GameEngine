@@ -223,7 +223,7 @@ void App::processEvents() {
 
                     // Right-click drag: pan camera
                     if (event.motion.state & SDL_BUTTON_RMASK) {
-                        float scaleX = Camera::VIRTUAL_WIDTH / (float)vpW / camera_.zoom();
+                        float scaleX = camera_.virtualWidth() / (float)vpW / camera_.zoom();
                         float scaleY = Camera::VIRTUAL_HEIGHT / (float)vpH / camera_.zoom();
                         Vec2 panDelta = {
                             -(float)event.motion.xrel * scaleX,
@@ -305,6 +305,9 @@ void App::render() {
     int fbH = (int)vpSize.y;
 
     if (fbW > 0 && fbH > 0 && fbo.isValid()) {
+        // Adapt camera projection to FBO aspect ratio
+        camera_.setViewportSize(fbo.width(), fbo.height());
+
         fbo.bind();
         glClear(GL_COLOR_BUFFER_BIT);
         onRender(spriteBatch_, camera_);
