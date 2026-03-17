@@ -164,6 +164,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch) {
     if (!frameStarted_) return;
 
     dockWorld_ = world;
+    dockCamera_ = camera;
     drawDockSpace();
     drawMenuBar(world);
     drawSceneViewport();
@@ -372,11 +373,27 @@ void Editor::drawSceneViewport() {
                 float playBtnW = 50.0f;
                 if (paused_) {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
-                    if (ImGui::Button("|>", ImVec2(playBtnW, btnH))) { paused_ = false; clearSelection(); }
+                    if (ImGui::Button("|>", ImVec2(playBtnW, btnH))) {
+                        // Save editor camera state, reset to default zoom for play
+                        if (dockCamera_) {
+                            savedCamPos_ = dockCamera_->position();
+                            savedCamZoom_ = dockCamera_->zoom();
+                            dockCamera_->setZoom(1.0f);
+                        }
+                        paused_ = false;
+                        clearSelection();
+                    }
                     ImGui::PopStyleColor();
                 } else {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.20f, 0.20f, 1.00f));
-                    if (ImGui::Button("||", ImVec2(playBtnW, btnH))) { paused_ = true; }
+                    if (ImGui::Button("||", ImVec2(playBtnW, btnH))) {
+                        // Restore editor camera state
+                        if (dockCamera_) {
+                            dockCamera_->setPosition(savedCamPos_);
+                            dockCamera_->setZoom(savedCamZoom_);
+                        }
+                        paused_ = true;
+                    }
                     ImGui::PopStyleColor();
                 }
             }
