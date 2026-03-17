@@ -32,17 +32,17 @@ struct DisplayPreset {
 };
 
 static constexpr DisplayPreset kDisplayPresets[] = {
-    {"Free Aspect",       0,    0},
-    {"iPhone 16 Pro",   393,  852},
-    {"iPhone 16 Pro Max", 430, 932},
-    {"iPhone SE",       375,  667},
-    {"iPad Pro 11\"",   834, 1194},
-    {"iPad Pro 12.9\"",1024, 1366},
-    {"Samsung S24",     360,  780},
-    {"Pixel 9",         412,  915},
-    {"1080p",          1920, 1080},
-    {"720p",           1280,  720},
-    {"4K",             3840, 2160},
+    {"Free Aspect",         0,    0},
+    {"iPhone 16 Pro",     852,  393},
+    {"iPhone 16 Pro Max", 932,  430},
+    {"iPhone SE",         667,  375},
+    {"iPad Pro 11\"",    1194,  834},
+    {"iPad Pro 12.9\"",  1366, 1024},
+    {"Samsung S24",       780,  360},
+    {"Pixel 9",           915,  412},
+    {"1080p",            1920, 1080},
+    {"720p",             1280,  720},
+    {"4K",               3840, 2160},
 };
 static constexpr int kDisplayPresetCount = sizeof(kDisplayPresets) / sizeof(kDisplayPresets[0]);
 
