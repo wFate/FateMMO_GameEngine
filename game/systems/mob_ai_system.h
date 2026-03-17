@@ -6,6 +6,7 @@
 #include "game/components/transform.h"
 #include "game/components/player_controller.h"
 #include "game/components/sprite_component.h"
+#include "engine/core/logger.h"
 
 #include <algorithm>
 #include <cmath>
@@ -25,6 +26,7 @@ public:
     const char* name() const override { return "MobAISystem"; }
 
     void update(float dt) override {
+        LOG_INFO("TICK", "MobAISystem::update");
         if (!world_) return;
 
         gameTime_ += dt;

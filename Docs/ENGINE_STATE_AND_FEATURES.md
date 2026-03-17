@@ -171,7 +171,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | SpriteRenderSystem | Done | Frustum culled, depth sorted |
 | GameplaySystem | Done | Ticks StatusEffects, CrowdControl, HP/MP regen, PK decay, respawn, nameplates |
 | MobAISystem | Done | Ticks MobAI for all mobs, scans for players, applies movement, fires attacks |
-| CombatActionSystem | Done | TWOM Option B targeting, click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP, same-faction PvP block |
+| CombatActionSystem | Done | TWOM Option B targeting, click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP, same-faction PvP block, home village PK exception check |
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment |
 | NPCInteractionSystem | Done | Click-to-interact with NPCs, range check, dialogue open/close, click consumption (prevents combat targeting) |
 | QuestSystem | Done | Routes mob kills/item pickups/NPC talks to quest progress, event-driven quest marker updates on all NPCs |
@@ -456,6 +456,8 @@ Spawn zones are spatial entities you place and resize in the scene editor. Mobs 
 - Cross-faction chat garbling: public channels (Map/Global/Trade) garbled via deterministic FactionChatGarbler; Party/Guild/Whisper/System channels pass through
 - ChatManager.localFaction set at player creation for client-side garble routing
 - Faction-based spawn position (each faction starts at distinct map offset)
+- Home village PK exception: `isInHomeVillage()` checks attacker zone against faction's homeVillageId — ready for future PvP kill handler
+- `FactionRegistry::isHomeVillage()` utility for zone name matching
 
 **Pet system (leveling, rarity-tiered stats, auto-loot):**
 - PetDefinition (base stats + per-level growth, rarity determines stat quality)
@@ -463,6 +465,7 @@ Spawn zones are spatial entities you place and resize in the scene editor. Mobs 
 - PetSystem static utility: effectiveHP/CritRate/ExpBonus, addXP with player-level cap (max 50)
 - PetComponent on all players (empty by default, equip pet to activate)
 - Pets gain 50% of player XP, cannot outlevel owner
+- `PetSystem::applyToEquipBonuses()` writes pet HP/CritRate to CharacterStats equipBonus fields for recalculateStats()
 
 **Stat enchant system (accessory-only enchanting):**
 - StatEnchantSystem: 7 scroll types (STR/INT/DEX/VIT/WIS/HP/MP), Belt/Ring/Necklace/Cloak only
@@ -470,6 +473,7 @@ Spawn zones are spatial entities you place and resize in the scene editor. Mobs 
 - Fail removes existing enchant (risk/reward), new enchant replaces previous, no item break
 - HP/MP scrolls use x10 scaling (+10/+20/+30/+40/+50)
 - statEnchantType/statEnchantValue fields on ItemInstance
+- `StatEnchantSystem::applyToEquipBonuses()` writes accessory enchant values to CharacterStats equipBonus fields (STR/INT/DEX/VIT/WIS/HP/MP)
 
 **Mage double-cast mechanic (hidden instant-cast window):**
 - SkillDefinition gains castTime, enablesDoubleCast, doubleCastWindow fields
@@ -477,6 +481,9 @@ Spawn zones are spatial entities you place and resize in the scene editor. Mobs 
 - Next spell within window is instant cast (zero cast time), mana/cooldown still apply
 - No UI indicators — players discover through experimentation
 - Window expires on use, timeout, or CC (not frozen by stun/root)
+
+**Bug fixes:**
+- Quest turn-in XP test: accounted for level-up when XP reward equals level threshold (test_quest_manager.cpp — 106/106 tests now passing)
 
 **Files: 56 changed, +7,831 lines across 21 commits**
 

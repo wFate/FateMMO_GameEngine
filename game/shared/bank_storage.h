@@ -4,6 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include "engine/core/logger.h"
 
 namespace fate {
 
@@ -57,6 +58,7 @@ public:
                 if (it->count < count) return false;
                 it->count -= count;
                 if (it->count == 0) {
+                    LOG_INFO("ERASE_DEBUG", "bank_storage.h:60 — erasing from items_ (size=%zu)", items_.size());
                     items_.erase(it);
                 }
                 return true;

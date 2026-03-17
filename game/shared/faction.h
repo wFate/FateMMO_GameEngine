@@ -38,6 +38,14 @@ public:
         return a == b;
     }
 
+    /// Returns true if the given zone name is this faction's home village.
+    /// Used for the PK exception: killing enemy faction in your village = no Red penalty.
+    static bool isHomeVillage(Faction f, const std::string& zoneName) {
+        const auto* def = get(f);
+        if (!def || zoneName.empty()) return false;
+        return def->homeVillageId == zoneName;
+    }
+
 private:
     static inline const std::array<FactionDefinition, 4> s_factions = {{
         { Faction::Xyros,  "Xyros",  {0.85f, 0.25f, 0.25f}, "zone_xyros_village",  "npc_merchant_xyros"  },

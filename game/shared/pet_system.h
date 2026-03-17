@@ -50,6 +50,14 @@ public:
         return def.baseExpBonus + def.expBonusPerLevel * (pet.level - 1);
     }
 
+    /// Apply pet stat bonuses to CharacterStats equipBonus fields (additive).
+    /// Call this after equipment bonuses are set, before recalculateStats().
+    static void applyToEquipBonuses(const PetDefinition& def, const PetInstance& pet,
+                                     int& outBonusHP, float& outBonusCritRate) {
+        outBonusHP += effectiveHP(def, pet);
+        outBonusCritRate += effectiveCritRate(def, pet);
+    }
+
     static void addXP(const PetDefinition& def, PetInstance& pet, int64_t amount, int playerLevel);
     static int64_t calculateXPToNextLevel(int petLevel);
     static PetInstance createInstance(const PetDefinition& def, const std::string& instanceId);

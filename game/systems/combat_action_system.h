@@ -16,6 +16,7 @@
 
 #include "game/systems/quest_system.h"
 #include "game/components/faction_component.h"
+#include "game/components/zone_component.h"
 
 #include <vector>
 #include <limits>
@@ -45,6 +46,7 @@ public:
     Camera* camera = nullptr;  // Set by GameApp for click-to-target
 
     void update(float dt) override {
+        LOG_INFO("TICK", "CombatActionSystem::update");
         gameTime_ += dt;
 
         // Rebuild mob spatial hash each frame
@@ -410,7 +412,7 @@ private:
                 }
 
                 // ---- Escape clears target ----
-                if (input.isKeyPressed(SDL_SCANCODE_ESCAPE)) {
+                if (input.isActionPressed(ActionId::Cancel)) {
                     clearTarget();
                     return;
                 }
@@ -442,8 +444,8 @@ private:
 
                 bool isMage = (playerStats.classDef.classType == ClassType::Mage);
 
-                // ---- Space pressed ----
-                if (input.isKeyPressed(SDL_SCANCODE_SPACE)) {
+                // ---- Attack action (buffered) ----
+                if (input.consumeBuffered(ActionId::Attack)) {
                     if (currentTargetId_ == INVALID_ENTITY) {
                         // No target — select nearest mob
                         Entity* nearest = findNearestMob(
@@ -705,6 +707,33 @@ private:
     }
 
     // ------------------------------------------------------------------
+    // isInHomeVillage — check if attacker is in their faction's home zone
+    // Used for PK exception: no Red penalty for killing enemy faction in your village.
+    // Called by future PvP kill handler before processPvPKill().
+    // ------------------------------------------------------------------
+    bool isInHomeVillage(Entity* attacker) {
+        auto* factionComp = attacker->getComponent<FactionComponent>();
+        if (!factionComp || factionComp->faction == Faction::None) return false;
+
+        auto* playerT = attacker->getComponent<Transform>();
+        if (!playerT) return false;
+
+        // Scan all zone entities to find which zone the attacker is in
+        bool inHomeVillage = false;
+        world_->forEach<ZoneComponent, Transform>(
+            [&](Entity* zoneEntity, ZoneComponent* zone, Transform* zoneT) {
+                if (inHomeVillage) return; // already found
+                if (zone->contains(zoneT->position, playerT->position)) {
+                    if (FactionRegistry::isHomeVillage(factionComp->faction, zone->zoneName)) {
+                        inHomeVillage = true;
+                    }
+                }
+            }
+        );
+        return inHomeVillage;
+    }
+
+    // ------------------------------------------------------------------
     // Floating text management
     // ------------------------------------------------------------------
     void updateFloatingTexts(float dt) {
@@ -715,6 +744,7 @@ private:
         }
 
         // Remove expired texts
+        LOG_INFO("ERASE_DEBUG", "combat_action_system.h:746 — erase-remove on floatingTexts_ (size=%zu)", floatingTexts_.size());
         floatingTexts_.erase(
             std::remove_if(floatingTexts_.begin(), floatingTexts_.end(),
                 [](const FloatingText& ft) { return ft.elapsed >= ft.lifetime; }),
