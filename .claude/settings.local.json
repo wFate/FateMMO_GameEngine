@@ -7,7 +7,15 @@
       "Bash(CMAKE=\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" && \"$CMAKE\" --build build --config Debug 2>&1)",
       "Bash(CMAKE=\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\"\n\"$CMAKE\" --build /c/Users/Caleb/FateMMO_GameEngine/build --config Debug 2>&1)",
       "Bash(CMAKE=\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" && cd \"C:/Users/Caleb/FateMMO_GameEngine\" && \"$CMAKE\" --build build --config Debug 2>&1)",
-      "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build build --config Debug 2>&1 | head -60)"
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build build --config Debug 2>&1 | head -60)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build build --config Debug --target fate_engine)",
+      "Bash(sort -k2)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" -S \"C:/Users/Caleb/FateMMO_GameEngine\" -B \"C:/Users/Caleb/FateMMO_GameEngine/build\")",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build \"C:/Users/Caleb/FateMMO_GameEngine/build\" --target fate_tests --config Debug)",
+      "Bash(\"C:/Users/Caleb/FateMMO_GameEngine/build/Debug/fate_tests.exe\" 2>&1)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build \"C:/Users/Caleb/FateMMO_GameEngine/build\" --target FateEngine --config Debug)",
+      "Bash(\"C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe\" --build out/build --target fate_tests)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\\\\Common7\\\\IDE\\\\CommonExtensions\\\\Microsoft\\\\CMake\\\\CMake\\\\bin\\\\cmake.exe\" --build out/build/x64-Debug)"
     ]
   }
 }

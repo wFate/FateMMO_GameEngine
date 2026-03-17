@@ -1047,6 +1047,17 @@ void GameApp::onShutdown() {
     SDFText::instance().shutdown();
     delete renderSystem_;
     renderSystem_ = nullptr;
+
+    // Null out raw pointers to systems owned by the World (via addSystem).
+    // The World will destroy these when the scene is unloaded; keeping stale
+    // pointers here would risk use-after-free.
+    gameplaySystem_ = nullptr;
+    mobAISystem_ = nullptr;
+    combatSystem_ = nullptr;
+    zoneSystem_ = nullptr;
+    npcInteractionSystem_ = nullptr;
+    questSystem_ = nullptr;
+
     LOG_INFO("Game", "Game shutting down...");
 }
 

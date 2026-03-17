@@ -514,6 +514,63 @@ inline void registerAllComponents() {
     reg.registerComponent<FactionComponent>();
     reg.registerComponent<PetComponent>();
 
+    // ----- SpawnZoneComponent -----
+    reg.registerComponent<SpawnZoneComponent>(
+        // toJson
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const SpawnZoneComponent*>(data);
+            j["zoneName"]          = c->config.zoneName;
+            j["size"]              = { c->config.size.x, c->config.size.y };
+            j["minSpawnDistance"]   = c->config.minSpawnDistance;
+            j["maxSpawnAttempts"]   = c->config.maxSpawnAttempts;
+            j["serverTickInterval"] = c->config.serverTickInterval;
+            j["showBounds"]        = c->showBounds;
+
+            nlohmann::json rulesJ = nlohmann::json::array();
+            for (const auto& r : c->config.rules) {
+                nlohmann::json rj;
+                rj["enemyId"]        = r.enemyId;
+                rj["targetCount"]    = r.targetCount;
+                rj["minLevel"]       = r.minLevel;
+                rj["maxLevel"]       = r.maxLevel;
+                rj["baseHP"]         = r.baseHP;
+                rj["baseDamage"]     = r.baseDamage;
+                rj["isAggressive"]   = r.isAggressive;
+                rj["isBoss"]         = r.isBoss;
+                rj["respawnSeconds"] = r.respawnSeconds;
+                rulesJ.push_back(rj);
+            }
+            j["rules"] = rulesJ;
+        },
+        // fromJson
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<SpawnZoneComponent*>(data);
+            if (j.contains("zoneName"))          c->config.zoneName          = j["zoneName"].get<std::string>();
+            if (j.contains("size"))            { auto& v = j["size"]; c->config.size = { v[0].get<float>(), v[1].get<float>() }; }
+            if (j.contains("minSpawnDistance"))   c->config.minSpawnDistance   = j["minSpawnDistance"].get<float>();
+            if (j.contains("maxSpawnAttempts"))   c->config.maxSpawnAttempts   = j["maxSpawnAttempts"].get<int>();
+            if (j.contains("serverTickInterval")) c->config.serverTickInterval = j["serverTickInterval"].get<float>();
+            if (j.contains("showBounds"))        c->showBounds               = j["showBounds"].get<bool>();
+
+            if (j.contains("rules")) {
+                c->config.rules.clear();
+                for (const auto& rj : j["rules"]) {
+                    MobSpawnRule r;
+                    if (rj.contains("enemyId"))        r.enemyId        = rj["enemyId"].get<std::string>();
+                    if (rj.contains("targetCount"))    r.targetCount    = rj["targetCount"].get<int>();
+                    if (rj.contains("minLevel"))       r.minLevel       = rj["minLevel"].get<int>();
+                    if (rj.contains("maxLevel"))       r.maxLevel       = rj["maxLevel"].get<int>();
+                    if (rj.contains("baseHP"))         r.baseHP         = rj["baseHP"].get<int>();
+                    if (rj.contains("baseDamage"))     r.baseDamage     = rj["baseDamage"].get<int>();
+                    if (rj.contains("isAggressive"))   r.isAggressive   = rj["isAggressive"].get<bool>();
+                    if (rj.contains("isBoss"))         r.isBoss         = rj["isBoss"].get<bool>();
+                    if (rj.contains("respawnSeconds")) r.respawnSeconds = rj["respawnSeconds"].get<float>();
+                    c->config.rules.push_back(r);
+                }
+            }
+        }
+    );
+
     // ----- Particle & Lighting components -----
 
     // ParticleEmitterComponent: EmitterConfig fields serialized; texture as path string

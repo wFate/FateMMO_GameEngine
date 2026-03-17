@@ -363,6 +363,7 @@ void App::render() {
 
         // Blit final result (PostProcess FBO) to editor viewport FBO
         editorFbo.bind();
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         auto& postFbo = renderGraph_.getFBO("PostProcess", vpW, vpH);
@@ -377,12 +378,16 @@ void App::render() {
         }
 
         if (s_blitLoaded) {
+            // Blit is a full copy — disable blending so prior GL state cannot corrupt it
+            glDisable(GL_BLEND);
             s_blitShader.bind();
             s_blitShader.setInt("u_texture", 0);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, postFbo.textureId());
             FullscreenQuad::instance().draw();
             s_blitShader.unbind();
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         }
 
         // Legacy onRender callback (for any remaining direct rendering)
@@ -405,6 +410,8 @@ void App::render() {
 }
 
 void App::shutdown() {
+    if (shutdownComplete_) return;
+    shutdownComplete_ = true;
     LOG_INFO("App", "Shutting down...");
 #if defined(ENGINE_MEMORY_DEBUG)
     AllocatorRegistry::instance().remove("FrameArena");
@@ -415,6 +422,12 @@ void App::shutdown() {
     renderGraph_.clearPasses();
 
     onShutdown();
+
+    // Destroy the current scene (and its World) now, while all singletons are
+    // still alive.  If we leave this to SceneManager's static destructor, the
+    // AllocatorRegistry singleton may already be destroyed, causing a
+    // "vector erase iterator outside range" assertion in World::~World().
+    SceneManager::instance().unloadScene();
 
     // Destroy render graph FBOs while GL context is still alive
     renderGraph_.clearFBOs();
