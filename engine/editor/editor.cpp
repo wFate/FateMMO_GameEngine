@@ -44,7 +44,7 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    io.FontGlobalScale = 1.2f;
+    io.FontGlobalScale = 1.0f;
 
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
@@ -58,13 +58,14 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     style.WindowBorderSize = 1.0f;
     style.FrameBorderSize = 0.0f;
     style.PopupBorderSize = 1.0f;
-    style.WindowPadding = ImVec2(8.0f, 8.0f);
-    style.FramePadding = ImVec2(6.0f, 4.0f);
-    style.ItemSpacing = ImVec2(8.0f, 4.0f);
-    style.ItemInnerSpacing = ImVec2(4.0f, 4.0f);
-    style.IndentSpacing = 16.0f;
-    style.ScrollbarSize = 12.0f;
-    style.GrabMinSize = 8.0f;
+    style.WindowPadding = ImVec2(6.0f, 6.0f);
+    style.FramePadding = ImVec2(4.0f, 3.0f);
+    style.CellPadding = ImVec2(4.0f, 2.0f);
+    style.ItemSpacing = ImVec2(6.0f, 3.0f);
+    style.ItemInnerSpacing = ImVec2(4.0f, 3.0f);
+    style.IndentSpacing = 14.0f;
+    style.ScrollbarSize = 10.0f;
+    style.GrabMinSize = 6.0f;
     style.TabBorderSize = 1.0f;
     style.DockingSeparatorSize = 2.0f;
 
@@ -113,6 +114,8 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
 
     ImGui_ImplSDL2_InitForOpenGL(window, glContext);
     ImGui_ImplOpenGL3_Init("#version 330");
+
+    SDL_SetWindowTitle(window, "FateMMO Engine | Editor");
 
     scanAssets();
 
@@ -236,8 +239,6 @@ void Editor::drawDockSpace() {
                     LOG_INFO("Editor", "Cleared scene");
                 }
             }
-            ImGui::Separator();
-            if (ImGui::MenuItem("Close Editor", "F3")) { open_ = false; }
             ImGui::EndMenu();
         }
 
@@ -300,9 +301,9 @@ void Editor::drawDockSpace() {
         ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->WorkSize);
 
         ImGuiID dockMain = dockspaceId;
-        ImGuiID dockLeft = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.17f, nullptr, &dockMain);
-        ImGuiID dockRight = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.23f, nullptr, &dockMain);
-        ImGuiID dockBottom = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.25f, nullptr, &dockMain);
+        ImGuiID dockLeft = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.15f, nullptr, &dockMain);
+        ImGuiID dockRight = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.22f, nullptr, &dockMain);
+        ImGuiID dockBottom = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.22f, nullptr, &dockMain);
 
         ImGui::DockBuilderDockWindow("Hierarchy", dockLeft);
         ImGui::DockBuilderDockWindow("Scene", dockMain);
@@ -323,36 +324,24 @@ void Editor::drawDockSpace() {
 void Editor::drawSceneViewport() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     if (ImGui::Begin("Scene")) {
-        // ---- Viewport toolbar bar ----
+        // ---- Viewport toolbar bar (Unity-style compact) ----
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 4.0f));
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 4.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 3.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.10f, 0.12f, 1.00f));
 
-            float toolbarHeight = ImGui::GetFrameHeight() + 8.0f;
+            float toolbarHeight = ImGui::GetFrameHeight() + 6.0f;
             ImGui::BeginChild("##ViewportToolbar", ImVec2(0, toolbarHeight), false,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-            // Play/Pause
-            if (paused_) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
-                if (ImGui::Button("Play")) { paused_ = false; }
-                ImGui::PopStyleColor();
-            } else {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.20f, 0.20f, 1.00f));
-                if (ImGui::Button("Pause")) { paused_ = true; }
-                ImGui::PopStyleColor();
-            }
+            float btnH = ImGui::GetFrameHeight();
+            float btnSq = btnH; // square buttons
 
-            ImGui::SameLine();
-            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-            ImGui::SameLine();
-
-            // Tool mode buttons — compact single-letter
+            // Left side: tool buttons
             auto toolBtn = [&](const char* label, EditorTool tool) {
                 bool active = (currentTool_ == tool);
                 if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.80f, 1.00f));
-                if (ImGui::Button(label)) currentTool_ = tool;
+                if (ImGui::Button(label, ImVec2(btnSq, btnH))) currentTool_ = tool;
                 if (active) ImGui::PopStyleColor();
                 ImGui::SameLine();
             };
@@ -364,28 +353,63 @@ void Editor::drawSceneViewport() {
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
             ImGui::SameLine();
 
-            // Grid / Snap / Colliders toggles
-            ImGui::Checkbox("Grid", &showGrid_);
-            ImGui::SameLine();
-            ImGui::Checkbox("Snap", &gridSnap_);
-            ImGui::SameLine();
-            ImGui::Checkbox("Col", &showCollisionDebug_);
+            // Toggle buttons (compact, no checkbox labels)
+            auto toggleBtn = [&](const char* label, bool* val) {
+                if (*val) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.80f, 1.00f));
+                if (ImGui::Button(label, ImVec2(btnSq, btnH))) *val = !(*val);
+                if (*val) ImGui::PopStyleColor();
+                ImGui::SameLine();
+            };
+            toggleBtn("G", &showGrid_);
+            toggleBtn("S", &gridSnap_);
+            toggleBtn("C", &showCollisionDebug_);
 
-            // Right-aligned: FPS and entity count
+            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            ImGui::SameLine();
+
+            // Centered play/pause button group
+            {
+                float avail = ImGui::GetContentRegionAvail().x;
+                float playBtnW = 50.0f;
+                float centerX = ImGui::GetCursorPosX() + (avail * 0.5f) - playBtnW;
+                if (centerX > ImGui::GetCursorPosX())
+                    ImGui::SetCursorPosX(centerX);
+
+                if (paused_) {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
+                    if (ImGui::Button("|>", ImVec2(playBtnW, btnH))) { paused_ = false; }
+                    ImGui::PopStyleColor();
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.20f, 0.20f, 1.00f));
+                    if (ImGui::Button("||", ImVec2(playBtnW, btnH))) { paused_ = true; }
+                    ImGui::PopStyleColor();
+                }
+            }
+
+            // Right-aligned: FPS stats in muted gray
             {
                 ImGuiIO& io = ImGui::GetIO();
                 char stats[64];
-                snprintf(stats, sizeof(stats), "FPS: %.0f | Ents: %zu",
+                snprintf(stats, sizeof(stats), "%.0f FPS | %zu ent",
                          io.Framerate, dockWorld_ ? dockWorld_->entityCount() : 0u);
                 float textW = ImGui::CalcTextSize(stats).x;
                 float regionW = ImGui::GetContentRegionAvail().x;
-                if (regionW > textW + 8.0f) {
+                if (regionW > textW + 4.0f) {
                     ImGui::SameLine(ImGui::GetCursorPosX() + regionW - textW);
-                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.7f, 1.0f), "%s", stats);
+                    ImGui::TextColored(ImVec4(0.45f, 0.45f, 0.50f, 1.0f), "%s", stats);
                 }
             }
 
             ImGui::EndChild();
+
+            // Subtle bottom border line
+            {
+                ImVec2 p0 = ImGui::GetCursorScreenPos();
+                p0.y -= 1.0f;
+                ImVec2 p1 = ImVec2(p0.x + ImGui::GetContentRegionAvail().x, p0.y);
+                ImGui::GetWindowDrawList()->AddLine(p0, p1, IM_COL32(60, 60, 68, 255));
+            }
+
             ImGui::PopStyleColor();
             ImGui::PopStyleVar(2);
         }
@@ -1677,9 +1701,11 @@ void Editor::drawHierarchy(World* world) {
             return;
         }
 
+        // Compact search box with hint text
         static char searchBuf[128] = "";
-        ImGui::InputText("Filter", searchBuf, sizeof(searchBuf));
-        ImGui::Separator();
+        ImGui::SetNextItemWidth(-1);
+        ImGui::InputTextWithHint("##Search", "Search...", searchBuf, sizeof(searchBuf));
+        ImGui::Spacing();
 
         std::string filter(searchBuf);
 
@@ -1727,9 +1753,10 @@ void Editor::drawHierarchy(World* world) {
             ImVec4 color = getTagColor(group.tag);
 
             if (group.entities.size() == 1) {
-                // Single entity — show as leaf
+                // Single entity -- show as leaf (no ID, just name like Unity)
                 Entity* entity = group.entities[0];
-                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                                         | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_OpenOnArrow;
                 if (entity == selectedEntity_) flags |= ImGuiTreeNodeFlags_Selected;
 
                 auto* spr = entity->getComponent<SpriteComponent>();
@@ -1738,35 +1765,31 @@ void Editor::drawHierarchy(World* world) {
                 if (hasError) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
                 else if (hasTag) ImGui::PushStyleColor(ImGuiCol_Text, color);
 
-                char label[256];
-                snprintf(label, sizeof(label), "%s%s [%u]%s%s%s",
-                    entity->name().c_str(), hasError ? " [!]" : "",
-                    entity->id(),
-                    hasTag ? " (" : "", hasTag ? group.tag.c_str() : "", hasTag ? ")" : "");
-
-                ImGui::TreeNodeEx((void*)(intptr_t)entity->id(), flags, "%s", label);
+                ImGui::TreeNodeEx((void*)(intptr_t)entity->id(), flags, "%s%s",
+                    entity->name().c_str(), hasError ? " (!)" : "");
 
                 if (ImGui::IsItemClicked()) selectedEntity_ = entity;
                 if (hasError || hasTag) ImGui::PopStyleColor();
             } else {
-                // Multiple entities — show as collapsible group
+                // Multiple entities -- group with child count badge
                 if (hasTag) ImGui::PushStyleColor(ImGuiCol_Text, color);
 
-                char groupLabel[256];
-                snprintf(groupLabel, sizeof(groupLabel), "%s (%s) x%zu",
-                    group.name.c_str(), group.tag.c_str(), group.entities.size());
+                ImGuiTreeNodeFlags groupFlags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_OpenOnArrow;
 
-                bool open = ImGui::TreeNode(groupLabel);
+                char groupLabel[256];
+                snprintf(groupLabel, sizeof(groupLabel), "%s (x%zu)",
+                    group.name.c_str(), group.entities.size());
+
+                bool open = ImGui::TreeNodeEx(groupLabel, groupFlags);
                 if (hasTag) ImGui::PopStyleColor();
 
                 if (open) {
                     for (auto* entity : group.entities) {
-                        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+                        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen
+                                                 | ImGuiTreeNodeFlags_SpanAvailWidth;
                         if (entity == selectedEntity_) flags |= ImGuiTreeNodeFlags_Selected;
 
-                        char label[64];
-                        snprintf(label, sizeof(label), "[%u]", entity->id());
-                        ImGui::TreeNodeEx((void*)(intptr_t)entity->id(), flags, "%s", label);
+                        ImGui::TreeNodeEx((void*)(intptr_t)entity->id(), flags, "%s", entity->name().c_str());
 
                         if (ImGui::IsItemClicked()) selectedEntity_ = entity;
                     }
@@ -1790,55 +1813,108 @@ void Editor::drawInspector() {
             return;
         }
 
+        // -- Entity name (prominent input at top) --
         char nameBuf[128];
         strncpy(nameBuf, selectedEntity_->name().c_str(), sizeof(nameBuf) - 1);
         nameBuf[sizeof(nameBuf) - 1] = '\0';
-        if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
+        ImGui::SetNextItemWidth(-1);
+        if (ImGui::InputText("##EntityName", nameBuf, sizeof(nameBuf))) {
             selectedEntity_->setName(nameBuf);
         }
 
-        char tagBuf[64];
-        strncpy(tagBuf, selectedEntity_->tag().c_str(), sizeof(tagBuf) - 1);
-        tagBuf[sizeof(tagBuf) - 1] = '\0';
-        if (ImGui::InputText("Tag", tagBuf, sizeof(tagBuf))) {
-            selectedEntity_->setTag(tagBuf);
+        // Tag + Active on same line
+        {
+            char tagBuf[64];
+            strncpy(tagBuf, selectedEntity_->tag().c_str(), sizeof(tagBuf) - 1);
+            tagBuf[sizeof(tagBuf) - 1] = '\0';
+
+            bool active = selectedEntity_->isActive();
+            if (ImGui::Checkbox("##Active", &active)) {
+                selectedEntity_->setActive(active);
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputTextWithHint("##Tag", "Tag", tagBuf, sizeof(tagBuf))) {
+                selectedEntity_->setTag(tagBuf);
+            }
         }
 
-        bool active = selectedEntity_->isActive();
-        if (ImGui::Checkbox("Active", &active)) {
-            selectedEntity_->setActive(active);
-        }
+        ImGui::Spacing();
 
-        ImGui::Separator();
+        // Helper macro for a two-column property row
+        #define INSPECTOR_ROW(labelText) \
+            ImGui::TableNextRow(); \
+            ImGui::TableSetColumnIndex(0); \
+            ImGui::AlignTextToFramePadding(); \
+            ImGui::Text(labelText); \
+            ImGui::TableSetColumnIndex(1); \
+            ImGui::SetNextItemWidth(-1)
 
         // Transform
         if (auto* t = selectedEntity_->getComponent<Transform>()) {
             if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::DragFloat2("Position (px)", &t->position.x, 1.0f);
-                Vec2 tile = Coords::toTile(t->position);
-                ImGui::Text("Tile: (%d, %d)", (int)tile.x, (int)tile.y);
-                ImGui::DragFloat2("Scale", &t->scale.x, 0.01f, 0.01f, 10.0f);
-                float degrees = t->rotation * 57.2957795f;
-                if (ImGui::DragFloat("Rotation", &degrees, 1.0f, -360.0f, 360.0f)) {
-                    t->rotation = degrees * 0.0174532925f;
+                if (ImGui::BeginTable("##TransformProps", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+                    INSPECTOR_ROW("Position");
+                    ImGui::DragFloat2("##pos", &t->position.x, 1.0f);
+
+                    INSPECTOR_ROW("Tile");
+                    Vec2 tile = Coords::toTile(t->position);
+                    ImGui::Text("(%d, %d)", (int)tile.x, (int)tile.y);
+
+                    INSPECTOR_ROW("Scale");
+                    ImGui::DragFloat2("##scale", &t->scale.x, 0.01f, 0.01f, 10.0f);
+
+                    INSPECTOR_ROW("Rotation");
+                    float degrees = t->rotation * 57.2957795f;
+                    if (ImGui::DragFloat("##rot", &degrees, 1.0f, -360.0f, 360.0f)) {
+                        t->rotation = degrees * 0.0174532925f;
+                    }
+
+                    INSPECTOR_ROW("Depth");
+                    ImGui::DragFloat("##depth", &t->depth, 0.1f);
+
+                    ImGui::EndTable();
                 }
-                ImGui::DragFloat("Depth", &t->depth, 0.1f);
             }
         }
 
         // Sprite
         if (auto* s = selectedEntity_->getComponent<SpriteComponent>()) {
             if (ImGui::CollapsingHeader("Sprite", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Text("Texture: %s", s->texturePath.empty() ? "(procedural)" : s->texturePath.c_str());
-                if (s->texture) {
-                    ImGui::Text("Tex Size: %dx%d", s->texture->width(), s->texture->height());
-                    // Show thumbnail
-                    ImTextureID texId = (ImTextureID)(intptr_t)s->texture->id();
-                    ImGui::Image(texId, ImVec2(64, 64), ImVec2(0, 1), ImVec2(1, 0));
-                }
-                ImGui::DragFloat2("Render Size", &s->size.x, 1.0f, 1.0f, 2048.0f);
+                if (ImGui::BeginTable("##SpriteProps", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
-                // Source rect (UV region of the texture — for tileset tiles)
+                    INSPECTOR_ROW("Texture");
+                    ImGui::Text("%s", s->texturePath.empty() ? "(procedural)" : s->texturePath.c_str());
+
+                    if (s->texture) {
+                        INSPECTOR_ROW("Tex Size");
+                        ImGui::Text("%dx%d", s->texture->width(), s->texture->height());
+
+                        INSPECTOR_ROW("Preview");
+                        ImTextureID texId = (ImTextureID)(intptr_t)s->texture->id();
+                        ImGui::Image(texId, ImVec2(48, 48), ImVec2(0, 1), ImVec2(1, 0));
+                    }
+
+                    INSPECTOR_ROW("Size");
+                    ImGui::DragFloat2("##sprSize", &s->size.x, 1.0f, 1.0f, 2048.0f);
+
+                    INSPECTOR_ROW("Tint");
+                    ImGui::ColorEdit4("##tint", &s->tint.r, ImGuiColorEditFlags_NoLabel);
+
+                    INSPECTOR_ROW("Flip");
+                    ImGui::Checkbox("X##flipX", &s->flipX);
+                    ImGui::SameLine();
+                    ImGui::Checkbox("Y##flipY", &s->flipY);
+
+                    ImGui::EndTable();
+                }
+
+                // Source rect (UV region of the texture -- for tileset tiles)
                 if (ImGui::TreeNode("Source Rect (UV)")) {
                     ImGui::DragFloat4("XYWH", &s->sourceRect.x, 0.01f, 0.0f, 1.0f);
                     if (s->texture) {
@@ -1850,33 +1926,40 @@ void Editor::drawInspector() {
                     }
                     ImGui::TreePop();
                 }
-
-                ImGui::ColorEdit4("Tint", &s->tint.r);
-                ImGui::Checkbox("Flip X", &s->flipX);
-                ImGui::SameLine();
-                ImGui::Checkbox("Flip Y", &s->flipY);
             }
         }
 
         // BoxCollider
         if (auto* c = selectedEntity_->getComponent<BoxCollider>()) {
             bool open = ImGui::CollapsingHeader("Box Collider", ImGuiTreeNodeFlags_DefaultOpen);
-            // Right-click to remove
             if (ImGui::BeginPopupContextItem("##rmBoxCollider")) {
                 if (ImGui::MenuItem("Remove Component")) {
                     selectedEntity_->removeComponent<BoxCollider>();
                     ImGui::EndPopup();
-                    goto endInspectorComponents; // component removed, skip rest
+                    goto endInspectorComponents;
                 }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<BoxCollider>()) {
-                ImGui::DragFloat2("Size##box", &c->size.x, 0.5f, 1.0f, 512.0f);
-                ImGui::DragFloat2("Offset##box", &c->offset.x, 0.5f);
-                ImGui::Checkbox("Is Trigger##box", &c->isTrigger);
-                ImGui::Checkbox("Is Static##box", &c->isStatic);
+                if (ImGui::BeginTable("##BoxColProps", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
-                // Visual helper: fit to sprite
+                    INSPECTOR_ROW("Size");
+                    ImGui::DragFloat2("##boxSize", &c->size.x, 0.5f, 1.0f, 512.0f);
+
+                    INSPECTOR_ROW("Offset");
+                    ImGui::DragFloat2("##boxOff", &c->offset.x, 0.5f);
+
+                    INSPECTOR_ROW("Trigger");
+                    ImGui::Checkbox("##boxTrig", &c->isTrigger);
+
+                    INSPECTOR_ROW("Static");
+                    ImGui::Checkbox("##boxStatic", &c->isStatic);
+
+                    ImGui::EndTable();
+                }
+
                 auto* spr = selectedEntity_->getComponent<SpriteComponent>();
                 if (spr && ImGui::Button("Fit to Sprite##box")) {
                     c->size = spr->size;
@@ -1897,9 +1980,21 @@ void Editor::drawInspector() {
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<PolygonCollider>()) {
-                ImGui::Checkbox("Is Trigger##poly", &pc->isTrigger);
-                ImGui::Checkbox("Is Static##poly", &pc->isStatic);
-                ImGui::Text("Vertices: %zu", pc->points.size());
+                if (ImGui::BeginTable("##PolyColProps", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+                    INSPECTOR_ROW("Trigger");
+                    ImGui::Checkbox("##polyTrig", &pc->isTrigger);
+
+                    INSPECTOR_ROW("Static");
+                    ImGui::Checkbox("##polyStatic", &pc->isStatic);
+
+                    INSPECTOR_ROW("Vertices");
+                    ImGui::Text("%zu", pc->points.size());
+
+                    ImGui::EndTable();
+                }
 
                 int removeIdx = -1;
                 for (int i = 0; i < (int)pc->points.size(); i++) {
@@ -1947,10 +2042,22 @@ void Editor::drawInspector() {
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<PlayerController>()) {
-                ImGui::DragFloat("Move Speed", &p->moveSpeed, 1.0f, 0.0f, 500.0f);
-                ImGui::Checkbox("Is Local Player", &p->isLocalPlayer);
-                const char* dirs[] = {"None", "Up", "Down", "Left", "Right"};
-                ImGui::Text("Facing: %s | Moving: %s", dirs[(int)p->facing], p->isMoving ? "Yes" : "No");
+                if (ImGui::BeginTable("##PlayerCtrlProps", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+                    INSPECTOR_ROW("Speed");
+                    ImGui::DragFloat("##moveSpd", &p->moveSpeed, 1.0f, 0.0f, 500.0f);
+
+                    INSPECTOR_ROW("Local");
+                    ImGui::Checkbox("##isLocal", &p->isLocalPlayer);
+
+                    INSPECTOR_ROW("Facing");
+                    const char* dirs[] = {"None", "Up", "Down", "Left", "Right"};
+                    ImGui::Text("%s | %s", dirs[(int)p->facing], p->isMoving ? "Moving" : "Idle");
+
+                    ImGui::EndTable();
+                }
             }
         }
 
@@ -1966,8 +2073,18 @@ void Editor::drawInspector() {
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<Animator>()) {
-                ImGui::Text("Current: %s", a->currentAnimation.c_str());
-                ImGui::Text("Playing: %s | Timer: %.2f", a->playing ? "Yes" : "No", a->timer);
+                if (ImGui::BeginTable("##AnimatorProps", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+                    INSPECTOR_ROW("Animation");
+                    ImGui::Text("%s", a->currentAnimation.c_str());
+
+                    INSPECTOR_ROW("State");
+                    ImGui::Text("%s | %.2f", a->playing ? "Playing" : "Stopped", a->timer);
+
+                    ImGui::EndTable();
+                }
             }
         }
 
@@ -1983,29 +2100,51 @@ void Editor::drawInspector() {
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<ZoneComponent>()) {
-                char nameBuf[64];
-                strncpy(nameBuf, z->zoneName.c_str(), sizeof(nameBuf) - 1);
-                nameBuf[sizeof(nameBuf) - 1] = '\0';
-                if (ImGui::InputText("Zone Name", nameBuf, sizeof(nameBuf))) z->zoneName = nameBuf;
+                if (ImGui::BeginTable("##ZoneProps", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
-                char dispBuf[64];
-                strncpy(dispBuf, z->displayName.c_str(), sizeof(dispBuf) - 1);
-                dispBuf[sizeof(dispBuf) - 1] = '\0';
-                if (ImGui::InputText("Display Name", dispBuf, sizeof(dispBuf))) z->displayName = dispBuf;
+                    INSPECTOR_ROW("Zone Name");
+                    char znameBuf[64];
+                    strncpy(znameBuf, z->zoneName.c_str(), sizeof(znameBuf) - 1);
+                    znameBuf[sizeof(znameBuf) - 1] = '\0';
+                    if (ImGui::InputText("##zoneName", znameBuf, sizeof(znameBuf))) z->zoneName = znameBuf;
 
-                ImGui::DragFloat2("Size", &z->size.x, 8.0f, 32.0f, 10000.0f);
+                    INSPECTOR_ROW("Display");
+                    char dispBuf[64];
+                    strncpy(dispBuf, z->displayName.c_str(), sizeof(dispBuf) - 1);
+                    dispBuf[sizeof(dispBuf) - 1] = '\0';
+                    if (ImGui::InputText("##zoneDisp", dispBuf, sizeof(dispBuf))) z->displayName = dispBuf;
+
+                    INSPECTOR_ROW("Size");
+                    ImGui::DragFloat2("##zoneSize", &z->size.x, 8.0f, 32.0f, 10000.0f);
+
+                    ImGui::EndTable();
+                }
 
                 const char* types[] = {"town", "zone", "dungeon"};
                 int typeIdx = 0;
                 if (z->zoneType == "zone") typeIdx = 1;
                 if (z->zoneType == "dungeon") typeIdx = 2;
-                if (ImGui::Combo("Type", &typeIdx, types, 3)) {
+                if (ImGui::Combo("##zoneType", &typeIdx, types, 3)) {
                     z->zoneType = types[typeIdx];
                 }
 
-                ImGui::DragInt("Min Level", &z->minLevel, 1, 1, 99);
-                ImGui::DragInt("Max Level", &z->maxLevel, 1, 1, 99);
-                ImGui::Checkbox("PvP Enabled", &z->pvpEnabled);
+                if (ImGui::BeginTable("##ZoneProps2", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+                    INSPECTOR_ROW("Min Level");
+                    ImGui::DragInt("##zMinLvl", &z->minLevel, 1, 1, 99);
+
+                    INSPECTOR_ROW("Max Level");
+                    ImGui::DragInt("##zMaxLvl", &z->maxLevel, 1, 1, 99);
+
+                    INSPECTOR_ROW("PvP");
+                    ImGui::Checkbox("##zPvp", &z->pvpEnabled);
+
+                    ImGui::EndTable();
+                }
             }
         }
 
@@ -2021,31 +2160,47 @@ void Editor::drawInspector() {
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<PortalComponent>()) {
-                ImGui::DragFloat2("Trigger Size", &p->triggerSize.x, 1.0f, 8.0f, 256.0f);
+                if (ImGui::BeginTable("##PortalProps", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
-                char sceneBuf[64];
-                strncpy(sceneBuf, p->targetScene.c_str(), sizeof(sceneBuf) - 1);
-                sceneBuf[sizeof(sceneBuf) - 1] = '\0';
-                if (ImGui::InputText("Target Scene", sceneBuf, sizeof(sceneBuf))) p->targetScene = sceneBuf;
-                ImGui::SameLine();
-                ImGui::TextDisabled("(empty = same scene)");
+                    INSPECTOR_ROW("Trigger");
+                    ImGui::DragFloat2("##pTrigSz", &p->triggerSize.x, 1.0f, 8.0f, 256.0f);
 
-                char zoneBuf[64];
-                strncpy(zoneBuf, p->targetZone.c_str(), sizeof(zoneBuf) - 1);
-                zoneBuf[sizeof(zoneBuf) - 1] = '\0';
-                if (ImGui::InputText("Target Zone", zoneBuf, sizeof(zoneBuf))) p->targetZone = zoneBuf;
+                    INSPECTOR_ROW("Scene");
+                    char sceneBuf[64];
+                    strncpy(sceneBuf, p->targetScene.c_str(), sizeof(sceneBuf) - 1);
+                    sceneBuf[sizeof(sceneBuf) - 1] = '\0';
+                    if (ImGui::InputText("##pScene", sceneBuf, sizeof(sceneBuf))) p->targetScene = sceneBuf;
 
-                ImGui::DragFloat2("Spawn Position", &p->targetSpawnPos.x, 1.0f);
-                ImGui::Checkbox("Fade Transition", &p->useFadeTransition);
-                if (p->useFadeTransition) {
-                    ImGui::DragFloat("Fade Duration", &p->fadeDuration, 0.05f, 0.1f, 2.0f);
+                    INSPECTOR_ROW("Zone");
+                    char zoneBuf[64];
+                    strncpy(zoneBuf, p->targetZone.c_str(), sizeof(zoneBuf) - 1);
+                    zoneBuf[sizeof(zoneBuf) - 1] = '\0';
+                    if (ImGui::InputText("##pZone", zoneBuf, sizeof(zoneBuf))) p->targetZone = zoneBuf;
+
+                    INSPECTOR_ROW("Spawn Pos");
+                    ImGui::DragFloat2("##pSpawn", &p->targetSpawnPos.x, 1.0f);
+
+                    INSPECTOR_ROW("Fade");
+                    ImGui::Checkbox("##pFade", &p->useFadeTransition);
+
+                    if (p->useFadeTransition) {
+                        INSPECTOR_ROW("Duration");
+                        ImGui::DragFloat("##pFadeDur", &p->fadeDuration, 0.05f, 0.1f, 2.0f);
+                    }
+
+                    INSPECTOR_ROW("Label");
+                    ImGui::Checkbox("##pShowLbl", &p->showLabel);
+
+                    INSPECTOR_ROW("Override");
+                    char labelBuf[64];
+                    strncpy(labelBuf, p->label.c_str(), sizeof(labelBuf) - 1);
+                    labelBuf[sizeof(labelBuf) - 1] = '\0';
+                    if (ImGui::InputText("##pLabel", labelBuf, sizeof(labelBuf))) p->label = labelBuf;
+
+                    ImGui::EndTable();
                 }
-                ImGui::Checkbox("Show Label", &p->showLabel);
-
-                char labelBuf[64];
-                strncpy(labelBuf, p->label.c_str(), sizeof(labelBuf) - 1);
-                labelBuf[sizeof(labelBuf) - 1] = '\0';
-                if (ImGui::InputText("Label Override", labelBuf, sizeof(labelBuf))) p->label = labelBuf;
             }
         }
 
@@ -2518,6 +2673,8 @@ void Editor::drawInspector() {
         }
     }
     ImGui::End();
+
+    #undef INSPECTOR_ROW
 }
 
 // ============================================================================
