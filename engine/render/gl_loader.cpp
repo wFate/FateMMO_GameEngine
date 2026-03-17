@@ -52,6 +52,11 @@ PFNGLDELETEFRAMEBUFFERSPROC       glDeleteFramebuffers_fp = nullptr;
 PFNGLBINDFRAMEBUFFERPROC          glBindFramebuffer_fp = nullptr;
 PFNGLFRAMEBUFFERTEXTURE2DPROC     glFramebufferTexture2D_fp = nullptr;
 PFNGLCHECKFRAMEBUFFERSTATUSPROC   glCheckFramebufferStatus_fp = nullptr;
+PFNGLGENRENDERBUFFERSPROC           glGenRenderbuffers_fp = nullptr;
+PFNGLDELETERENDERBUFFERSPROC        glDeleteRenderbuffers_fp = nullptr;
+PFNGLBINDRENDERBUFFERPROC           glBindRenderbuffer_fp = nullptr;
+PFNGLRENDERBUFFERSTORAGEPROC        glRenderbufferStorage_fp = nullptr;
+PFNGLFRAMEBUFFERRENDERBUFFERPROC    glFramebufferRenderbuffer_fp = nullptr;
 
 namespace fate {
 
@@ -106,6 +111,11 @@ bool loadGLFunctions() {
     LOAD_GL(glBindFramebuffer);
     LOAD_GL(glFramebufferTexture2D);
     LOAD_GL(glCheckFramebufferStatus);
+    LOAD_GL(glGenRenderbuffers);
+    LOAD_GL(glDeleteRenderbuffers);
+    LOAD_GL(glBindRenderbuffer);
+    LOAD_GL(glRenderbufferStorage);
+    LOAD_GL(glFramebufferRenderbuffer);
 
     #undef LOAD_GL
 
