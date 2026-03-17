@@ -89,3 +89,50 @@ TEST_CASE("AssetRegistry clear destroys all assets") {
     // After clear, handle is stale
     CHECK(reg.get<int>(h) == nullptr);
 }
+
+TEST_CASE("AssetRegistry reload bumps generation") {
+    auto& reg = fate::AssetRegistry::instance();
+    reg.clear();
+    reg.registerLoader(makeMockLoader());
+
+    auto h = reg.load("test.mock");
+    REQUIRE(h.valid());
+    int* val = reg.get<int>(h);
+    REQUIRE(val != nullptr);
+    CHECK(*val == 42);
+
+    // Queue and process reload
+    reg.queueReload("test.mock");
+    reg.processReloads(1.0f); // stamp time
+    reg.processReloads(2.0f); // past 300ms debounce
+
+    // Old handle is now stale
+    CHECK(reg.get<int>(h) == nullptr);
+
+    // Get fresh handle
+    auto h2 = reg.find("test.mock");
+    CHECK(h2.generation() == h.generation() + 1);
+    int* val2 = reg.get<int>(h2);
+    REQUIRE(val2 != nullptr);
+    CHECK(*val2 == 99); // reload sets to 99
+}
+
+TEST_CASE("AssetRegistry debounce prevents premature reload") {
+    auto& reg = fate::AssetRegistry::instance();
+    reg.clear();
+    reg.registerLoader(makeMockLoader());
+
+    auto h = reg.load("test.mock");
+    reg.queueReload("test.mock");
+
+    // Process immediately (within debounce window)
+    reg.processReloads(0.1f); // stamp
+    reg.processReloads(0.2f); // only 0.1s elapsed, < 0.3s debounce
+
+    // Handle should still be valid (not reloaded yet)
+    CHECK(reg.get<int>(h) != nullptr);
+
+    // Now past debounce
+    reg.processReloads(0.5f); // 0.4s since stamp
+    CHECK(reg.get<int>(h) == nullptr); // reloaded, old handle stale
+}
