@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/ecs/entity.h"
+#include "engine/ecs/entity_handle.h"
 #include <vector>
 #include <memory>
 #include <functional>
@@ -37,7 +38,13 @@ public:
     World();
     ~World();
 
-    // Entity lifecycle
+    // --- Handle-based API (preferred) ---
+    EntityHandle createEntityH(const std::string& name = "Entity");
+    void destroyEntity(EntityHandle handle);
+    Entity* getEntity(EntityHandle handle) const;
+    bool isAlive(EntityHandle handle) const;
+
+    // --- Legacy API (backward compat, delegates internally) ---
     Entity* createEntity(const std::string& name = "Entity");
     void destroyEntity(EntityId id);
     Entity* getEntity(EntityId id) const;
@@ -47,11 +54,12 @@ public:
     // Query entities that have a specific component
     template<typename T>
     void forEach(const std::function<void(Entity*, T*)>& fn) {
-        for (auto& entity : entities_) {
-            if (!entity || !entity->isActive()) continue;
-            T* comp = entity->getComponent<T>();
+        for (uint32_t i = 1; i < slots_.size(); ++i) {
+            auto& slot = slots_[i];
+            if (!slot.alive || !slot.entity || !slot.entity->isActive()) continue;
+            T* comp = slot.entity->getComponent<T>();
             if (comp && comp->enabled) {
-                fn(entity.get(), comp);
+                fn(slot.entity.get(), comp);
             }
         }
     }
@@ -59,12 +67,13 @@ public:
     // Query entities with two components
     template<typename T1, typename T2>
     void forEach(const std::function<void(Entity*, T1*, T2*)>& fn) {
-        for (auto& entity : entities_) {
-            if (!entity || !entity->isActive()) continue;
-            T1* c1 = entity->getComponent<T1>();
-            T2* c2 = entity->getComponent<T2>();
+        for (uint32_t i = 1; i < slots_.size(); ++i) {
+            auto& slot = slots_[i];
+            if (!slot.alive || !slot.entity || !slot.entity->isActive()) continue;
+            T1* c1 = slot.entity->getComponent<T1>();
+            T2* c2 = slot.entity->getComponent<T2>();
             if (c1 && c1->enabled && c2 && c2->enabled) {
-                fn(entity.get(), c1, c2);
+                fn(slot.entity.get(), c1, c2);
             }
         }
     }
@@ -90,8 +99,10 @@ public:
 
     // Iterate ALL entities (for editor hierarchy)
     void forEachEntity(const std::function<void(Entity*)>& fn) {
-        for (auto& entity : entities_) {
-            if (entity) fn(entity.get());
+        for (uint32_t i = 1; i < slots_.size(); ++i) {
+            if (slots_[i].alive && slots_[i].entity) {
+                fn(slots_[i].entity.get());
+            }
         }
     }
 
@@ -108,10 +119,17 @@ public:
     void processDestroyQueue();
 
 private:
-    std::vector<std::unique_ptr<Entity>> entities_;
+    struct EntitySlot {
+        std::unique_ptr<Entity> entity;
+        uint32_t generation = 1; // starts at 1 so handle (0,0) is always invalid
+        bool alive = false;
+    };
+
+    std::vector<EntitySlot> slots_;
+    std::vector<uint32_t> freeSlots_;
+    std::vector<EntityHandle> destroyQueue_;
     std::vector<std::unique_ptr<System>> systems_;
-    std::vector<EntityId> destroyQueue_;
-    EntityId nextId_ = 1;
+    uint32_t nextSlotIndex_ = 1; // slot 0 is reserved (null handle)
 };
 
 } // namespace fate

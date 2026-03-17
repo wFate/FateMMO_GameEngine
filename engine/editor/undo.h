@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/ecs/world.h"
 #include "engine/ecs/entity.h"
+#include "engine/ecs/entity_handle.h"
 #include "engine/ecs/prefab.h"
 #include "engine/core/types.h"
 #include "game/components/transform.h"
@@ -21,15 +22,15 @@ struct UndoCommand {
 
 // Move entity
 struct MoveCommand : UndoCommand {
-    EntityId entityId;
+    EntityHandle entityHandle;
     Vec2 oldPos, newPos;
 
     void undo(World* w) override {
-        auto* e = w->getEntity(entityId);
+        auto* e = w->getEntity(entityHandle);
         if (e) if (auto* t = e->getComponent<Transform>()) t->position = oldPos;
     }
     void redo(World* w) override {
-        auto* e = w->getEntity(entityId);
+        auto* e = w->getEntity(entityHandle);
         if (e) if (auto* t = e->getComponent<Transform>()) t->position = newPos;
     }
     std::string description() const override { return "Move"; }
@@ -37,7 +38,7 @@ struct MoveCommand : UndoCommand {
 
 // Resize entity
 struct ResizeCommand : UndoCommand {
-    EntityId entityId;
+    EntityHandle entityHandle;
     Vec2 oldSize, newSize;
 
     void undo(World* w) override;
@@ -48,14 +49,14 @@ struct ResizeCommand : UndoCommand {
 // Create entity (undo = delete, redo = recreate)
 struct CreateCommand : UndoCommand {
     nlohmann::json entityData;
-    EntityId createdId = 0;
+    EntityHandle createdHandle;
 
     void undo(World* w) override {
-        if (createdId) { w->destroyEntity(createdId); w->processDestroyQueue(); }
+        if (createdHandle) { w->destroyEntity(createdHandle); w->processDestroyQueue(); }
     }
     void redo(World* w) override {
         auto* e = PrefabLibrary::jsonToEntity(entityData, *w);
-        if (e) createdId = e->id();
+        if (e) createdHandle = e->handle();
     }
     std::string description() const override { return "Create"; }
 };
@@ -63,21 +64,21 @@ struct CreateCommand : UndoCommand {
 // Delete entity (undo = recreate, redo = delete)
 struct DeleteCommand : UndoCommand {
     nlohmann::json entityData;
-    EntityId deletedId = 0;
+    EntityHandle deletedHandle;
 
     void undo(World* w) override {
         auto* e = PrefabLibrary::jsonToEntity(entityData, *w);
-        if (e) deletedId = e->id();
+        if (e) deletedHandle = e->handle();
     }
     void redo(World* w) override {
-        if (deletedId) { w->destroyEntity(deletedId); w->processDestroyQueue(); }
+        if (deletedHandle) { w->destroyEntity(deletedHandle); w->processDestroyQueue(); }
     }
     std::string description() const override { return "Delete"; }
 };
 
 // Generic property change (stores full entity snapshot)
 struct PropertyCommand : UndoCommand {
-    EntityId entityId;
+    EntityHandle entityHandle;
     nlohmann::json oldState, newState;
     std::string desc;
 

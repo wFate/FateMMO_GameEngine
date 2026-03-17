@@ -3,6 +3,7 @@
 #include "engine/render/texture.h"
 #include "engine/render/sprite_batch.h"
 #include "engine/render/camera.h"
+#include "engine/tilemap/chunk.h"
 #include <string>
 #include <vector>
 #include <memory>
@@ -79,6 +80,10 @@ public:
     float worldHeight() const { return mapHeight_ * (float)tileHeight_; }
     const std::vector<TilemapObject>& objects() const { return objects_; }
 
+    // Chunk manager access
+    ChunkManager& chunkManager() { return chunkManager_; }
+    const ChunkManager& chunkManager() const { return chunkManager_; }
+
     // World origin offset (tilemap (0,0) in world coords)
     Vec2 origin;
 
@@ -92,6 +97,7 @@ private:
     std::vector<TilemapLayer> layers_;
     std::vector<TilemapObject> objects_;
     std::string basePath_; // directory containing the .json file
+    ChunkManager chunkManager_;
 
     const Tileset* findTileset(int gid) const;
     Vec2 tileToWorld(int col, int row) const;
