@@ -258,6 +258,8 @@ void Editor::drawDockSpace() {
             ImGui::MenuItem("Show Grid", nullptr, &showGrid_);
             ImGui::MenuItem("Show Colliders", nullptr, &showCollisionDebug_);
             ImGui::Separator();
+            if (ImGui::MenuItem("Reset Layout")) { resetLayout_ = true; }
+            ImGui::Separator();
             ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow_);
             ImGui::EndMenu();
         }
@@ -296,7 +298,8 @@ void Editor::drawDockSpace() {
 
     ImGuiID dockspaceId = ImGui::GetID("EditorDockSpace");
 
-    if (ImGui::DockBuilderGetNode(dockspaceId) == nullptr) {
+    if (resetLayout_ || ImGui::DockBuilderGetNode(dockspaceId) == nullptr) {
+        resetLayout_ = false;
         ImGui::DockBuilderRemoveNode(dockspaceId);
         ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_None);
         ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->WorkSize);
