@@ -48,10 +48,68 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
 
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 4.0f;
+
+    // Sharp, tight, professional
+    style.WindowRounding = 0.0f;
     style.FrameRounding = 2.0f;
     style.GrabRounding = 2.0f;
+    style.TabRounding = 0.0f;
+    style.ScrollbarRounding = 2.0f;
     style.WindowBorderSize = 1.0f;
+    style.FrameBorderSize = 0.0f;
+    style.PopupBorderSize = 1.0f;
+    style.WindowPadding = ImVec2(8.0f, 8.0f);
+    style.FramePadding = ImVec2(6.0f, 4.0f);
+    style.ItemSpacing = ImVec2(8.0f, 4.0f);
+    style.ItemInnerSpacing = ImVec2(4.0f, 4.0f);
+    style.IndentSpacing = 16.0f;
+    style.ScrollbarSize = 12.0f;
+    style.GrabMinSize = 8.0f;
+    style.TabBorderSize = 1.0f;
+    style.DockingSeparatorSize = 2.0f;
+
+    // Color scheme — dark charcoal with subtle blue accents
+    ImVec4* c = style.Colors;
+    c[ImGuiCol_WindowBg]             = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
+    c[ImGuiCol_ChildBg]              = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
+    c[ImGuiCol_PopupBg]              = ImVec4(0.10f, 0.10f, 0.12f, 0.96f);
+    c[ImGuiCol_Border]               = ImVec4(0.22f, 0.22f, 0.25f, 1.00f);
+    c[ImGuiCol_BorderShadow]         = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    c[ImGuiCol_FrameBg]              = ImVec4(0.16f, 0.16f, 0.19f, 1.00f);
+    c[ImGuiCol_FrameBgHovered]       = ImVec4(0.22f, 0.22f, 0.26f, 1.00f);
+    c[ImGuiCol_FrameBgActive]        = ImVec4(0.28f, 0.28f, 0.33f, 1.00f);
+    c[ImGuiCol_TitleBg]              = ImVec4(0.09f, 0.09f, 0.11f, 1.00f);
+    c[ImGuiCol_TitleBgActive]        = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
+    c[ImGuiCol_TitleBgCollapsed]     = ImVec4(0.09f, 0.09f, 0.11f, 0.80f);
+    c[ImGuiCol_MenuBarBg]            = ImVec4(0.14f, 0.14f, 0.16f, 1.00f);
+    c[ImGuiCol_ScrollbarBg]          = ImVec4(0.10f, 0.10f, 0.12f, 1.00f);
+    c[ImGuiCol_ScrollbarGrab]        = ImVec4(0.28f, 0.28f, 0.32f, 1.00f);
+    c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.35f, 0.35f, 0.40f, 1.00f);
+    c[ImGuiCol_ScrollbarGrabActive]  = ImVec4(0.42f, 0.42f, 0.48f, 1.00f);
+    c[ImGuiCol_CheckMark]            = ImVec4(0.40f, 0.65f, 1.00f, 1.00f);
+    c[ImGuiCol_SliderGrab]           = ImVec4(0.40f, 0.65f, 1.00f, 0.80f);
+    c[ImGuiCol_SliderGrabActive]     = ImVec4(0.50f, 0.72f, 1.00f, 1.00f);
+    c[ImGuiCol_Button]               = ImVec4(0.20f, 0.20f, 0.24f, 1.00f);
+    c[ImGuiCol_ButtonHovered]        = ImVec4(0.28f, 0.28f, 0.34f, 1.00f);
+    c[ImGuiCol_ButtonActive]         = ImVec4(0.35f, 0.35f, 0.42f, 1.00f);
+    c[ImGuiCol_Header]               = ImVec4(0.20f, 0.20f, 0.24f, 1.00f);
+    c[ImGuiCol_HeaderHovered]        = ImVec4(0.28f, 0.32f, 0.42f, 1.00f);
+    c[ImGuiCol_HeaderActive]         = ImVec4(0.30f, 0.38f, 0.52f, 1.00f);
+    c[ImGuiCol_Separator]            = ImVec4(0.22f, 0.22f, 0.25f, 1.00f);
+    c[ImGuiCol_SeparatorHovered]     = ImVec4(0.40f, 0.55f, 0.80f, 0.80f);
+    c[ImGuiCol_SeparatorActive]      = ImVec4(0.40f, 0.55f, 0.80f, 1.00f);
+    c[ImGuiCol_ResizeGrip]           = ImVec4(0.30f, 0.30f, 0.35f, 0.40f);
+    c[ImGuiCol_ResizeGripHovered]    = ImVec4(0.40f, 0.55f, 0.80f, 0.60f);
+    c[ImGuiCol_ResizeGripActive]     = ImVec4(0.40f, 0.55f, 0.80f, 0.90f);
+    c[ImGuiCol_Tab]                  = ImVec4(0.14f, 0.14f, 0.17f, 1.00f);
+    c[ImGuiCol_TabHovered]           = ImVec4(0.28f, 0.32f, 0.42f, 1.00f);
+    c[ImGuiCol_TabSelected]          = ImVec4(0.20f, 0.24f, 0.33f, 1.00f);
+    c[ImGuiCol_TabDimmed]            = ImVec4(0.10f, 0.10f, 0.12f, 1.00f);
+    c[ImGuiCol_TabDimmedSelected]    = ImVec4(0.16f, 0.18f, 0.24f, 1.00f);
+    c[ImGuiCol_DockingPreview]       = ImVec4(0.40f, 0.55f, 0.80f, 0.40f);
+    c[ImGuiCol_DockingEmptyBg]       = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
+    c[ImGuiCol_TextSelectedBg]       = ImVec4(0.30f, 0.45f, 0.70f, 0.40f);
+    c[ImGuiCol_NavHighlight]         = ImVec4(0.40f, 0.55f, 0.80f, 1.00f);
 
     ImGui_ImplSDL2_InitForOpenGL(window, glContext);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -111,9 +169,9 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch) {
     }
 
     // Full editor UI
+    dockWorld_ = world; // stash for menu bar / viewport toolbar access
     drawDockSpace();
     drawMenuBar(world);
-    drawToolbar(world);
     drawSceneViewport();
     drawViewportHUD(world);
     drawHierarchy(world);
@@ -141,7 +199,7 @@ void Editor::drawDockSpace() {
     ImGuiWindowFlags hostFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
                                   ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                                   ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
-                                  ImGuiWindowFlags_NoBackground;
+                                  ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_MenuBar;
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -149,6 +207,99 @@ void Editor::drawDockSpace() {
 
     ImGui::Begin("##DockSpaceHost", nullptr, hostFlags);
     ImGui::PopStyleVar(3);
+
+    // ---- Main menu bar (File / Edit / View / Entity) ----
+    if (ImGui::BeginMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::BeginMenu("Save Scene")) {
+                static char saveNameBuf[64] = "scene";
+                ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
+                if (ImGui::Button("Save")) {
+                    std::string path = std::string("assets/scenes/") + saveNameBuf + ".json";
+                    saveScene(dockWorld_, path);
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Load Scene")) {
+                std::string scenesDir = "assets/scenes";
+                if (fs::exists(scenesDir)) {
+                    for (auto& entry : fs::directory_iterator(scenesDir)) {
+                        if (!entry.is_regular_file()) continue;
+                        if (entry.path().extension() != ".json") continue;
+                        std::string name = entry.path().stem().string();
+                        if (ImGui::MenuItem(name.c_str())) {
+                            loadScene(dockWorld_, entry.path().string());
+                        }
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::MenuItem("New Scene")) {
+                if (dockWorld_) {
+                    dockWorld_->forEachEntity([&](Entity* e) {
+                        dockWorld_->destroyEntity(e->handle());
+                    });
+                    dockWorld_->processDestroyQueue();
+                    selectedEntity_ = nullptr;
+                    LOG_INFO("Editor", "Cleared scene");
+                }
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Close Editor", "F3")) { open_ = false; }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Edit")) {
+            bool canUndo = UndoSystem::instance().canUndo();
+            bool canRedo = UndoSystem::instance().canRedo();
+            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo)) UndoSystem::instance().undo(dockWorld_);
+            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo)) UndoSystem::instance().redo(dockWorld_);
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("View")) {
+            ImGui::MenuItem("Grid Snap", nullptr, &gridSnap_);
+            ImGui::DragFloat("Grid Size", &gridSize_, 1.0f, 8.0f, 128.0f);
+            ImGui::Separator();
+            ImGui::MenuItem("Show Grid", nullptr, &showGrid_);
+            ImGui::MenuItem("Show Colliders", nullptr, &showCollisionDebug_);
+            ImGui::Separator();
+            ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow_);
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Entity")) {
+            if (ImGui::MenuItem("Create Empty")) {
+                if (dockWorld_) {
+                    auto* e = dockWorld_->createEntity("New Entity");
+                    e->addComponent<Transform>();
+                    selectedEntity_ = e;
+                }
+            }
+            if (ImGui::MenuItem("Duplicate Selected", "Ctrl+D", false, selectedEntity_ != nullptr)) {
+                if (dockWorld_ && selectedEntity_) {
+                    auto json = PrefabLibrary::entityToJson(selectedEntity_);
+                    Entity* copy = PrefabLibrary::jsonToEntity(json, *dockWorld_);
+                    auto* t = copy->getComponent<Transform>();
+                    if (t) t->position += Vec2(32.0f, 0.0f);
+                    selectedEntity_ = copy;
+                }
+            }
+            if (ImGui::MenuItem("Save as Prefab", nullptr, false, selectedEntity_ != nullptr)) {
+                openSavePrefab_ = true;
+            }
+            if (ImGui::MenuItem("Delete Selected", "Delete", false, selectedEntity_ != nullptr)) {
+                if (dockWorld_ && selectedEntity_) {
+                    dockWorld_->destroyEntity(selectedEntity_->handle());
+                    selectedEntity_ = nullptr;
+                }
+            }
+            ImGui::EndMenu();
+        }
+
+        ImGui::EndMenuBar();
+    }
 
     ImGuiID dockspaceId = ImGui::GetID("EditorDockSpace");
 
@@ -181,6 +332,74 @@ void Editor::drawDockSpace() {
 void Editor::drawSceneViewport() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     if (ImGui::Begin("Scene")) {
+        // ---- Viewport toolbar bar ----
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 4.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 4.0f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.10f, 0.12f, 1.00f));
+
+            float toolbarHeight = ImGui::GetFrameHeight() + 8.0f;
+            ImGui::BeginChild("##ViewportToolbar", ImVec2(0, toolbarHeight), false,
+                              ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+            // Play/Pause
+            if (paused_) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
+                if (ImGui::Button("Play")) { paused_ = false; }
+                ImGui::PopStyleColor();
+            } else {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.20f, 0.20f, 1.00f));
+                if (ImGui::Button("Pause")) { paused_ = true; }
+                ImGui::PopStyleColor();
+            }
+
+            ImGui::SameLine();
+            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            ImGui::SameLine();
+
+            // Tool mode buttons — compact single-letter
+            auto toolBtn = [&](const char* label, EditorTool tool) {
+                bool active = (currentTool_ == tool);
+                if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.80f, 1.00f));
+                if (ImGui::Button(label)) currentTool_ = tool;
+                if (active) ImGui::PopStyleColor();
+                ImGui::SameLine();
+            };
+            toolBtn("M", EditorTool::Move);
+            toolBtn("R", EditorTool::Resize);
+            toolBtn("P", EditorTool::Paint);
+            toolBtn("E", EditorTool::Erase);
+
+            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            ImGui::SameLine();
+
+            // Grid / Snap / Colliders toggles
+            ImGui::Checkbox("Grid", &showGrid_);
+            ImGui::SameLine();
+            ImGui::Checkbox("Snap", &gridSnap_);
+            ImGui::SameLine();
+            ImGui::Checkbox("Col", &showCollisionDebug_);
+
+            // Right-aligned: FPS and entity count
+            {
+                ImGuiIO& io = ImGui::GetIO();
+                char stats[64];
+                snprintf(stats, sizeof(stats), "FPS: %.0f | Ents: %zu",
+                         io.Framerate, dockWorld_ ? dockWorld_->entityCount() : 0u);
+                float textW = ImGui::CalcTextSize(stats).x;
+                float regionW = ImGui::GetContentRegionAvail().x;
+                if (regionW > textW + 8.0f) {
+                    ImGui::SameLine(ImGui::GetCursorPosX() + regionW - textW);
+                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.7f, 1.0f), "%s", stats);
+                }
+            }
+
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+            ImGui::PopStyleVar(2);
+        }
+
+        // ---- FBO viewport image fills the rest ----
         ImVec2 avail = ImGui::GetContentRegionAvail();
         viewportSize_ = {avail.x, avail.y};
 
@@ -1448,157 +1667,11 @@ void Editor::drawMenuBar(World* world) {
 // Toolbar
 // ============================================================================
 
-void Editor::drawToolbar(World* world) {
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar |
-                             ImGuiWindowFlags_NoCollapse;
-
-    if (ImGui::Begin("##Toolbar", nullptr, flags)) {
-        // File / View / Entity dropdown menus (inline as buttons with popups)
-        if (ImGui::Button("File")) ImGui::OpenPopup("##FileMenu");
-        if (ImGui::BeginPopup("##FileMenu")) {
-            if (ImGui::BeginMenu("Save Scene")) {
-                static char saveNameBuf[64] = "scene";
-                ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
-                if (ImGui::Button("Save")) {
-                    std::string path = std::string("assets/scenes/") + saveNameBuf + ".json";
-                    saveScene(world, path);
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::EndMenu();
-            }
-            if (ImGui::BeginMenu("Load Scene")) {
-                std::string scenesDir = "assets/scenes";
-                if (fs::exists(scenesDir)) {
-                    for (auto& entry : fs::directory_iterator(scenesDir)) {
-                        if (!entry.is_regular_file()) continue;
-                        if (entry.path().extension() != ".json") continue;
-                        std::string name = entry.path().stem().string();
-                        if (ImGui::MenuItem(name.c_str())) {
-                            loadScene(world, entry.path().string());
-                        }
-                    }
-                }
-                ImGui::EndMenu();
-            }
-            if (ImGui::MenuItem("New Scene")) {
-                if (world) {
-                    world->forEachEntity([&](Entity* e) {
-                        world->destroyEntity(e->handle());
-                    });
-                    world->processDestroyQueue();
-                    selectedEntity_ = nullptr;
-                    LOG_INFO("Editor", "Cleared scene");
-                }
-            }
-            ImGui::Separator();
-            if (ImGui::MenuItem("Close Editor", "F3")) { open_ = false; }
-            ImGui::EndPopup();
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("View")) ImGui::OpenPopup("##ViewMenu");
-        if (ImGui::BeginPopup("##ViewMenu")) {
-            ImGui::MenuItem("Grid Snap", nullptr, &gridSnap_);
-            ImGui::DragFloat("Grid Size", &gridSize_, 1.0f, 8.0f, 128.0f);
-            ImGui::Separator();
-            ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow_);
-            ImGui::EndPopup();
-        }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Entity")) ImGui::OpenPopup("##EntityMenu");
-        if (ImGui::BeginPopup("##EntityMenu")) {
-            if (ImGui::MenuItem("Create Empty")) {
-                if (world) {
-                    auto* e = world->createEntity("New Entity");
-                    e->addComponent<Transform>();
-                    selectedEntity_ = e;
-                }
-            }
-            if (ImGui::MenuItem("Duplicate Selected", "Ctrl+D", false, selectedEntity_ != nullptr)) {
-                if (world && selectedEntity_) {
-                    auto json = PrefabLibrary::entityToJson(selectedEntity_);
-                    Entity* copy = PrefabLibrary::jsonToEntity(json, *world);
-                    auto* t = copy->getComponent<Transform>();
-                    if (t) t->position += Vec2(32.0f, 0.0f);
-                    selectedEntity_ = copy;
-                }
-            }
-            if (ImGui::MenuItem("Save as Prefab", nullptr, false, selectedEntity_ != nullptr)) {
-                openSavePrefab_ = true;
-            }
-            if (ImGui::MenuItem("Delete Selected", "Delete", false, selectedEntity_ != nullptr)) {
-                if (world && selectedEntity_) {
-                    world->destroyEntity(selectedEntity_->handle());
-                    selectedEntity_ = nullptr;
-                }
-            }
-            ImGui::EndPopup();
-        }
-
-        ImGui::SameLine(); ImGui::Text("|"); ImGui::SameLine();
-
-        // Play/Pause
-        if (paused_) {
-            if (ImGui::Button("PLAY")) { paused_ = false; }
-        } else {
-            if (ImGui::Button("PAUSE")) { paused_ = true; }
-        }
-
-        ImGui::SameLine(); ImGui::Text("|"); ImGui::SameLine();
-
-        // Undo/Redo
-        {
-            bool canUndo = UndoSystem::instance().canUndo();
-            bool canRedo = UndoSystem::instance().canRedo();
-            if (!canUndo) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.4f);
-            if (ImGui::Button("Undo") && canUndo) UndoSystem::instance().undo(world);
-            if (!canUndo) ImGui::PopStyleVar();
-            ImGui::SameLine();
-            if (!canRedo) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.4f);
-            if (ImGui::Button("Redo") && canRedo) UndoSystem::instance().redo(world);
-            if (!canRedo) ImGui::PopStyleVar();
-        }
-
-        ImGui::SameLine(); ImGui::Text("|"); ImGui::SameLine();
-
-        // Tool modes
-        auto toolBtn = [&](const char* label, EditorTool tool) {
-            bool active = (currentTool_ == tool);
-            if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 1.0f, 0.8f));
-            if (ImGui::Button(label)) currentTool_ = tool;
-            if (active) ImGui::PopStyleColor();
-            ImGui::SameLine();
-        };
-        toolBtn("W:Move", EditorTool::Move);
-        toolBtn("E:Size", EditorTool::Resize);
-        toolBtn("B:Paint", EditorTool::Paint);
-        toolBtn("X:Erase", EditorTool::Erase);
-
-        ImGui::Text("|");
-        ImGui::SameLine();
-
-        // Grid + Debug toggles
-        ImGui::Checkbox("Grid", &showGrid_);
-        ImGui::SameLine();
-        ImGui::Checkbox("Snap", &gridSnap_);
-        ImGui::SameLine();
-        ImGui::Checkbox("Colliders", &showCollisionDebug_);
-        ImGui::SameLine();
-        ImGui::Checkbox("Gnd", &showGroundLayer_);
-        ImGui::SameLine();
-        ImGui::Checkbox("Obj", &showObstacleLayer_);
-
-        ImGui::SameLine(); ImGui::Text("|"); ImGui::SameLine();
-
-        if (world) ImGui::Text("%zu", world->entityCount());
-
-        if (isDraggingAsset_) {
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1, 1, 0, 1), "| PLACING");
-        }
-    }
-    ImGui::End();
+void Editor::drawToolbar(World* /*world*/) {
+    // Toolbar content has been moved:
+    //   File/Edit/View/Entity menus -> DockSpace menu bar
+    //   Play/tool/toggle buttons    -> Scene viewport toolbar
+    // This method is intentionally empty.
 }
 
 // ============================================================================

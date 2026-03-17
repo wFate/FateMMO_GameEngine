@@ -126,6 +126,9 @@ private:
     bool wantsMouse_ = false;
     bool showDemoWindow_ = false;
 
+    // Cached world pointer for menu bar / viewport toolbar (set each frame in renderUI)
+    World* dockWorld_ = nullptr;
+
     // Viewport FBO
     Framebuffer viewportFbo_;
 
