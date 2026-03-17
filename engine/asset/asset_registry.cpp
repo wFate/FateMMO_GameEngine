@@ -54,6 +54,7 @@ AssetHandle AssetRegistry::load(const std::string& path) {
 
     if (!slot.loaded) {
         LOG_ERROR("AssetRegistry", "Failed to load: %s", canon.c_str());
+        slot.generation++; // invalidate any handle already issued to this index
         freeList_.push_back(idx);
         return AssetHandle{};
     }
@@ -183,6 +184,12 @@ uint32_t AssetRegistry::allocSlot() {
     if (!freeList_.empty()) {
         uint32_t idx = freeList_.back();
         freeList_.pop_back();
+        // Reset slot data but preserve generation so old handles remain stale
+        auto& slot = slots_[idx];
+        slot.path.clear();
+        slot.data = nullptr;
+        slot.loaded = false;
+        slot.kind = {};
         return idx;
     }
     uint32_t idx = static_cast<uint32_t>(slots_.size());
