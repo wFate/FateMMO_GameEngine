@@ -377,7 +377,7 @@ void Editor::drawSceneViewport() {
 
                 if (paused_) {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
-                    if (ImGui::Button("|>", ImVec2(playBtnW, btnH))) { paused_ = false; }
+                    if (ImGui::Button("|>", ImVec2(playBtnW, btnH))) { paused_ = false; clearSelection(); }
                     ImGui::PopStyleColor();
                 } else {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.20f, 0.20f, 1.00f));
