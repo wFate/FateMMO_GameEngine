@@ -119,8 +119,11 @@ void App::processEvents() {
         // Editor gets events first
         Editor::instance().processEvent(event);
 
-        // Only pass to game input if editor doesn't want it
-        if (!Editor::instance().wantsInput()) {
+        // Keyboard routing: when editor is open and playing, let game keys through
+        // unless an ImGui text field has focus. Mouse routing is handled per-event below.
+        bool editorWantsKeyboard = Editor::instance().isOpen() &&
+            Editor::instance().wantsKeyboard() && Editor::instance().isPaused();
+        if (!editorWantsKeyboard) {
             Input::instance().processEvent(event);
         } else {
             // Still process window events and quit
@@ -154,8 +157,7 @@ void App::processEvents() {
             case SDL_KEYDOWN:
                 if (event.key.keysym.scancode == SDL_SCANCODE_F3) {
                     Editor::instance().toggle();
-                    Editor::instance().setPaused(Editor::instance().isOpen());
-                    LOG_INFO("App", "Editor: %s", Editor::instance().isOpen() ? "OPEN (paused)" : "CLOSED (resumed)");
+                    LOG_INFO("App", "Editor: %s", Editor::instance().isOpen() ? "OPEN" : "CLOSED");
                 }
                 if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
                     if (Editor::instance().isOpen()) {
@@ -175,7 +177,7 @@ void App::processEvents() {
 
             case SDL_MOUSEWHEEL:
                 // Scroll wheel zoom (works when editor is open)
-                if (Editor::instance().isOpen() && !Editor::instance().wantsMouse()) {
+                if (Editor::instance().isOpen() && Editor::instance().isViewportHovered()) {
                     float zoom = camera_.zoom();
                     if (event.wheel.y > 0) zoom *= 1.15f;  // scroll up = zoom in
                     else if (event.wheel.y < 0) zoom *= 0.87f; // scroll down = zoom out
@@ -189,62 +191,71 @@ void App::processEvents() {
             case SDL_MOUSEBUTTONDOWN:
                 if (event.button.button == SDL_BUTTON_LEFT &&
                     Editor::instance().isOpen() &&
-                    !Editor::instance().wantsMouse()) {
+                    Editor::instance().isViewportHovered() &&
+                    Editor::instance().isPaused()) {
                     auto* scene = SceneManager::instance().currentScene();
                     if (scene) {
-                        Vec2 screenPos = {(float)event.button.x, (float)event.button.y};
+                        Vec2 vpPos = Editor::instance().viewportPos();
+                        Vec2 vpSize = Editor::instance().viewportSize();
+                        Vec2 screenPos = {
+                            (float)event.button.x - vpPos.x,
+                            (float)event.button.y - vpPos.y
+                        };
+                        int vpW = (int)vpSize.x;
+                        int vpH = (int)vpSize.y;
+
                         if (Editor::instance().isTilePaintMode()) {
                             Editor::instance().paintTileAt(
-                                &scene->world(), &camera_,
-                                screenPos, config_.windowWidth, config_.windowHeight);
+                                &scene->world(), &camera_, screenPos, vpW, vpH);
                         } else if (Editor::instance().isEraseMode()) {
                             Editor::instance().eraseTileAt(
-                                &scene->world(), &camera_,
-                                screenPos, config_.windowWidth, config_.windowHeight);
+                                &scene->world(), &camera_, screenPos, vpW, vpH);
                         } else {
                             Editor::instance().handleSceneClick(
-                                &scene->world(), &camera_,
-                                screenPos, config_.windowWidth, config_.windowHeight);
+                                &scene->world(), &camera_, screenPos, vpW, vpH);
                         }
                     }
                 }
                 break;
 
             case SDL_MOUSEMOTION:
-                if (Editor::instance().isOpen() && !Editor::instance().wantsMouse()) {
+                if (Editor::instance().isOpen() && Editor::instance().isViewportHovered()) {
+                    Vec2 vpPos = Editor::instance().viewportPos();
+                    Vec2 vpSize = Editor::instance().viewportSize();
+                    Vec2 localPos = {
+                        (float)event.motion.x - vpPos.x,
+                        (float)event.motion.y - vpPos.y
+                    };
+                    int vpW = (int)vpSize.x;
+                    int vpH = (int)vpSize.y;
+
                     // Right-click drag: pan camera
                     if (event.motion.state & SDL_BUTTON_RMASK) {
-                        float scaleX = Camera::VIRTUAL_WIDTH / (float)config_.windowWidth / camera_.zoom();
-                        float scaleY = Camera::VIRTUAL_HEIGHT / (float)config_.windowHeight / camera_.zoom();
+                        float scaleX = Camera::VIRTUAL_WIDTH / (float)vpW / camera_.zoom();
+                        float scaleY = Camera::VIRTUAL_HEIGHT / (float)vpH / camera_.zoom();
                         Vec2 panDelta = {
                             -(float)event.motion.xrel * scaleX,
-                            (float)event.motion.yrel * scaleY  // screen Y-down, world Y-up
+                            (float)event.motion.yrel * scaleY
                         };
                         camera_.setPosition(camera_.position() + panDelta);
                     }
-                    // Left-click drag: paint tiles or move entity
-                    else if (event.motion.state & SDL_BUTTON_LMASK) {
+                    // Left-click drag: paint tiles or move entity (only when paused/editing)
+                    else if ((event.motion.state & SDL_BUTTON_LMASK) && Editor::instance().isPaused()) {
                         if (Editor::instance().isTilePaintMode()) {
                             auto* scene = SceneManager::instance().currentScene();
                             if (scene) {
-                                Vec2 screenPos = {(float)event.motion.x, (float)event.motion.y};
                                 Editor::instance().paintTileAt(
-                                    &scene->world(), &camera_,
-                                    screenPos, config_.windowWidth, config_.windowHeight);
+                                    &scene->world(), &camera_, localPos, vpW, vpH);
                             }
                         } else if (Editor::instance().isEraseMode()) {
                             auto* scene = SceneManager::instance().currentScene();
                             if (scene) {
-                                Vec2 screenPos = {(float)event.motion.x, (float)event.motion.y};
                                 Editor::instance().eraseTileAt(
-                                    &scene->world(), &camera_,
-                                    screenPos, config_.windowWidth, config_.windowHeight);
+                                    &scene->world(), &camera_, localPos, vpW, vpH);
                             }
                         } else {
-                            Vec2 screenPos = {(float)event.motion.x, (float)event.motion.y};
                             Editor::instance().handleSceneDrag(
-                                &camera_, screenPos,
-                                config_.windowWidth, config_.windowHeight);
+                                &camera_, localPos, vpW, vpH);
                         }
                     }
                 }
