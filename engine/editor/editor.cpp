@@ -2726,6 +2726,34 @@ void Editor::drawInspector() {
             if (!selectedEntity_->hasComponent<MarketComponent>() && ImGui::MenuItem("Market Manager"))
                 selectedEntity_->addComponent<MarketComponent>();
 
+            ImGui::Separator();
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "-- NPC --");
+            if (!selectedEntity_->hasComponent<NPCComponent>() && ImGui::MenuItem("NPC"))
+                selectedEntity_->addComponent<NPCComponent>();
+            if (!selectedEntity_->hasComponent<QuestGiverComponent>() && ImGui::MenuItem("Quest Giver"))
+                selectedEntity_->addComponent<QuestGiverComponent>();
+            if (!selectedEntity_->hasComponent<QuestMarkerComponent>() && ImGui::MenuItem("Quest Marker"))
+                selectedEntity_->addComponent<QuestMarkerComponent>();
+            if (!selectedEntity_->hasComponent<ShopComponent>() && ImGui::MenuItem("Shop"))
+                selectedEntity_->addComponent<ShopComponent>();
+            if (!selectedEntity_->hasComponent<SkillTrainerComponent>() && ImGui::MenuItem("Skill Trainer"))
+                selectedEntity_->addComponent<SkillTrainerComponent>();
+            if (!selectedEntity_->hasComponent<BankerComponent>() && ImGui::MenuItem("Banker"))
+                selectedEntity_->addComponent<BankerComponent>();
+            if (!selectedEntity_->hasComponent<GuildNPCComponent>() && ImGui::MenuItem("Guild NPC"))
+                selectedEntity_->addComponent<GuildNPCComponent>();
+            if (!selectedEntity_->hasComponent<TeleporterComponent>() && ImGui::MenuItem("Teleporter"))
+                selectedEntity_->addComponent<TeleporterComponent>();
+            if (!selectedEntity_->hasComponent<StoryNPCComponent>() && ImGui::MenuItem("Story NPC"))
+                selectedEntity_->addComponent<StoryNPCComponent>();
+
+            ImGui::Separator();
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "-- Player Quest/Bank --");
+            if (!selectedEntity_->hasComponent<QuestComponent>() && ImGui::MenuItem("Quest Manager"))
+                selectedEntity_->addComponent<QuestComponent>();
+            if (!selectedEntity_->hasComponent<BankStorageComponent>() && ImGui::MenuItem("Bank Storage"))
+                selectedEntity_->addComponent<BankStorageComponent>();
+
             ImGui::EndPopup();
         }
     }
