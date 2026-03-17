@@ -3,6 +3,7 @@
 #include "engine/core/logger.h"
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
+#include "engine/profiling/tracy_zones.h"
 #include <SDL.h>
 
 namespace fate {
@@ -103,6 +104,8 @@ void App::run() {
         processEvents();
         update();
         render();
+
+        FATE_FRAME_MARK;
     }
 }
 
