@@ -140,7 +140,7 @@ public:
     template<typename BoundsCheckFn>
     EntityId findAtPoint(Vec2 point, BoundsCheckFn&& boundsCheck) const {
         EntityId best = INVALID_ENTITY;
-        float bestDistSq = std::numeric_limits<float>::max();
+        float bestDistSq = (std::numeric_limits<float>::max)();
 
         int cx = toCell(point.x);
         int cy = toCell(point.y);

@@ -142,7 +142,7 @@ void SkillBarUI::drawSkillSlot(SkillManager* skills, int pageSlotIndex, float si
         onCooldown = skills->isOnCooldown(skillId);
         if (onCooldown) {
             cdRemaining = skills->getRemainingCooldown(skillId);
-            cdPct = std::min(1.0f, cdRemaining / 10.0f); // normalize to 10s max display
+            cdPct = (std::min)(1.0f, cdRemaining / 10.0f); // normalize to 10s max display
         }
     }
 
