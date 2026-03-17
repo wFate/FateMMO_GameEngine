@@ -1,5 +1,7 @@
 #pragma once
 #include "engine/core/types.h"
+#include "engine/input/action_map.h"
+#include "engine/input/input_buffer.h"
 #include <SDL.h>
 #include <unordered_map>
 
@@ -38,6 +40,20 @@ public:
     bool isTouchPressed(int finger = 0) const;
     Vec2 touchPosition(int finger = 0) const;
 
+    // Action-based API (game systems use these)
+    bool isActionPressed(ActionId id) const { return actionMap_.isPressed(id); }
+    bool isActionHeld(ActionId id) const { return actionMap_.isHeld(id); }
+    bool isActionReleased(ActionId id) const { return actionMap_.isReleased(id); }
+    bool consumeBuffered(ActionId id, int window = 6) { return inputBuffer_.consume(id, window); }
+
+    // Context switching for chat
+    void setChatMode(bool enabled);
+    bool isChatMode() const { return actionMap_.context() == InputContext::Chat; }
+
+    // Access for advanced use
+    ActionMap& actionMap() { return actionMap_; }
+    const ActionMap& actionMap() const { return actionMap_; }
+
     // TWOM-style cardinal direction from WASD/arrows
     Direction getCardinalDirection() const;
 
@@ -60,6 +76,9 @@ private:
         KeyState state = KeyState::Up;
     };
     std::unordered_map<int, TouchInfo> touches_;
+
+    ActionMap actionMap_;
+    InputBuffer inputBuffer_;
 
     int windowWidth_ = 1280;
     int windowHeight_ = 720;
