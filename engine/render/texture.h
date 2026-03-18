@@ -1,4 +1,5 @@
 #pragma once
+#include "engine/render/gfx/types.h"
 #include <string>
 #include <unordered_map>
 #include <memory>
@@ -21,9 +22,11 @@ public:
     int width() const { return width_; }
     int height() const { return height_; }
     const std::string& path() const { return path_; }
+    gfx::TextureHandle gfxHandle() const { return gfxHandle_; }
 
 private:
     unsigned int textureId_ = 0;
+    gfx::TextureHandle gfxHandle_{};
     int width_ = 0;
     int height_ = 0;
     std::string path_;
