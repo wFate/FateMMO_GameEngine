@@ -1599,6 +1599,14 @@ void GameApp::onUpdate(float deltaTime) {
             if (!localPlayerCreated_) {
                 auto* sc = SceneManager::instance().currentScene();
                 if (sc) {
+                    auto& world = sc->world();
+
+                    // Destroy any existing player entity from the saved scene
+                    world.forEach<PlayerController>([&](Entity* e, PlayerController*) {
+                        world.destroyEntity(e->handle());
+                    });
+                    world.processDestroyQueue();
+
                     // Determine class from auth response
                     ClassType ct = ClassType::Warrior;
                     if (pendingClassName_ == "Mage") ct = ClassType::Mage;
@@ -1606,7 +1614,7 @@ void GameApp::onUpdate(float deltaTime) {
 
                     Faction playerFaction = Faction::Xyros;
                     Entity* player = EntityFactory::createPlayer(
-                        sc->world(), pendingCharName_, ct, true, playerFaction);
+                        world, pendingCharName_, ct, true, playerFaction);
 
                     auto* transform = player->getComponent<Transform>();
                     if (transform) transform->position = {0.0f, 0.0f};
