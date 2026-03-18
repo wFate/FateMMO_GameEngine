@@ -1585,29 +1585,12 @@ void GameApp::onUpdate(float deltaTime) {
             netClient_.poll(netTime_);
 
             if (netClient_.isConnected()) {
-                // Create local player BEFORE entering InGame state
-                auto* sc = SceneManager::instance().currentScene();
-                if (sc) {
-                    ClassType ct = ClassType::Warrior;
-                    if (pendingClassName_ == "Mage") ct = ClassType::Mage;
-                    else if (pendingClassName_ == "Archer") ct = ClassType::Archer;
-
-                    createPlayer(sc->world());
-
-                    // Rename the player to match auth data
-                    sc->world().forEach<PlayerController>([&](Entity* e, PlayerController* ctrl) {
-                        if (ctrl->isLocalPlayer) {
-                            e->setName(pendingCharName_);
-                            auto* np = e->getComponent<NameplateComponent>();
-                            if (np) {
-                                np->displayName = pendingCharName_;
-                            }
-                        }
-                    });
-                }
-
                 connState_ = ConnectionState::InGame;
                 loginScreen_.statusMessage = "";
+
+                // Defer player creation to next frame by setting flag
+                localPlayerCreated_ = false;
+
                 LOG_INFO("GameApp", "Connected to game server, entering game as '%s' (%s)",
                          pendingCharName_.c_str(), pendingClassName_.c_str());
             }
@@ -1616,6 +1599,17 @@ void GameApp::onUpdate(float deltaTime) {
         }
 
         case ConnectionState::InGame: {
+            // Deferred player creation — runs on first InGame frame
+            if (!localPlayerCreated_) {
+                localPlayerCreated_ = true;
+                auto* sc = SceneManager::instance().currentScene();
+                if (sc) {
+                    createPlayer(sc->world());
+                    LOG_INFO("GameApp", "Local player created for '%s'", pendingCharName_.c_str());
+                }
+                break; // Skip the rest of the first frame to let the world settle
+            }
+
             // Network: poll for server messages and send movement
             netTime_ += deltaTime;
             if (netClient_.isConnected()) {
