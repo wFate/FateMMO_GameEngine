@@ -27,6 +27,8 @@ void RenderGraph::setPassEnabled(const std::string& name, bool enabled) {
 
 void RenderGraph::execute(RenderPassContext& ctx) {
     ctx.graph = this;
+    gfx::CommandList cmdList;
+    ctx.commandList = &cmdList;
     for (auto& pass : passes_) {
         if (!pass.enabled) continue;
         pass.execute(ctx);
