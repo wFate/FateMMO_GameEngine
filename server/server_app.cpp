@@ -1,6 +1,9 @@
 #include "server/server_app.h"
 #include "engine/core/logger.h"
 #include "engine/net/protocol.h"
+#include "engine/ecs/persistent_id.h"
+#include "game/entity_factory.h"
+#include "game/shared/game_types.h"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -36,6 +39,12 @@ bool ServerApp::init(uint16_t port) {
 
     // Register gameplay systems (no render systems)
     // For now, empty world — systems will be added when we have entity replication
+
+    // Register existing mobs for replication
+    world_.forEach<Transform, EnemyStatsComponent>([&](Entity* entity, Transform*, EnemyStatsComponent*) {
+        PersistentId pid = PersistentId::generate(1);
+        replication_.registerEntity(entity->handle(), pid);
+    });
 
     LOG_INFO("Server", "Started on port %d at %.0f ticks/sec", port, TICK_RATE);
     return true;
@@ -80,10 +89,13 @@ void ServerApp::tick(float dt) {
     // 2. World update (systems)
     world_.update(dt);
 
-    // 3. Retransmit unacked reliable packets
+    // 3. Replicate entity state to connected clients
+    replication_.update(world_, server_);
+
+    // 4. Retransmit unacked reliable packets
     server_.processRetransmits(gameTime_);
 
-    // 4. Check timeouts
+    // 5. Check timeouts
     auto timedOut = server_.checkTimeouts(gameTime_);
     for (uint16_t id : timedOut) {
         LOG_INFO("Server", "Client %d timed out", id);
@@ -94,10 +106,34 @@ void ServerApp::tick(float dt) {
 
 void ServerApp::onClientConnected(uint16_t clientId) {
     LOG_INFO("Server", "Client %d connected", clientId);
+
+    // Create player entity for this client
+    Entity* player = EntityFactory::createPlayer(world_, "Player" + std::to_string(clientId),
+                                                  ClassType::Warrior, false, Faction::None);
+    auto* t = player->getComponent<Transform>();
+    if (t) t->position = {0.0f, 0.0f}; // spawn point
+
+    // Assign persistent ID and register for replication
+    PersistentId pid = PersistentId::generate(1); // zoneId = 1
+    replication_.registerEntity(player->handle(), pid);
+
+    // Link client to their player entity
+    auto* client = server_.connections().findById(clientId);
+    if (client) client->playerEntityId = pid.value();
 }
 
 void ServerApp::onClientDisconnected(uint16_t clientId) {
     LOG_INFO("Server", "Client %d disconnected", clientId);
+    auto* client = server_.connections().findById(clientId);
+    if (client && client->playerEntityId != 0) {
+        PersistentId pid(client->playerEntityId);
+        EntityHandle h = replication_.getEntityHandle(pid);
+        if (h) {
+            world_.destroyEntity(h);
+            world_.processDestroyQueue();
+        }
+        replication_.unregisterEntity(h);
+    }
 }
 
 void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload) {
@@ -105,8 +141,16 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
     switch (type) {
         case PacketType::CmdMove: {
             auto move = CmdMove::read(payload);
-            // TODO: validate and apply movement
-            (void)move;
+            auto* client = server_.connections().findById(clientId);
+            if (client && client->playerEntityId != 0) {
+                PersistentId pid(client->playerEntityId);
+                EntityHandle h = replication_.getEntityHandle(pid);
+                Entity* e = world_.getEntity(h);
+                if (e) {
+                    auto* t = e->getComponent<Transform>();
+                    if (t) t->position = move.position;
+                }
+            }
             break;
         }
         case PacketType::CmdChat: {

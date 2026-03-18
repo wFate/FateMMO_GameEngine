@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/net/net_server.h"
+#include "engine/net/replication.h"
 #include "engine/ecs/world.h"
 #include <cstdint>
 
@@ -17,6 +18,7 @@ private:
 
     World world_;
     NetServer server_;
+    ReplicationManager replication_;
     float gameTime_ = 0.0f;
     bool running_ = false;
 
