@@ -73,3 +73,28 @@ TEST_CASE("CounterPool: acquire and release") {
     REQUIRE(c2 != nullptr);
     CHECK(c2->value.load() == 0); // reset on acquire
 }
+
+TEST_CASE("JobSystem: submit and wait") {
+    auto& js = fate::JobSystem::instance();
+    js.init(2);
+
+    std::atomic<int> sum{0};
+
+    auto jobFunc = [](void* param) {
+        auto* s = static_cast<std::atomic<int>*>(param);
+        s->fetch_add(10);
+    };
+
+    fate::Job jobs[4];
+    for (auto& j : jobs) {
+        j.function = jobFunc;
+        j.param = &sum;
+    }
+
+    fate::Counter* counter = js.submit(jobs, 4);
+    js.waitForCounter(counter, 0);
+
+    CHECK(sum.load() == 40);
+
+    js.shutdown();
+}

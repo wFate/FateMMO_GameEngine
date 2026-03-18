@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <cstddef>
 #include <cassert>
+#include <thread>
+#include "engine/job/fiber.h"
 
 namespace fate {
 
@@ -105,6 +107,55 @@ public:
     void release(Counter* c) {
         if (c) c->inUse.store(false, std::memory_order_release);
     }
+};
+
+class JobSystem {
+public:
+    static JobSystem& instance();
+
+    void init(int workerCount = 4);
+    void shutdown();
+
+    Counter* submit(Job* jobs, int count);
+    void waitForCounter(Counter* counter, int target = 0);
+
+private:
+    JobSystem() = default;
+
+    static constexpr int MAX_FIBERS = 32;
+    static constexpr size_t FIBER_STACK_SIZE = 65536;
+
+    struct WaitEntry {
+        FiberHandle fiber = nullptr;
+        Counter* counter = nullptr;
+        int target = 0;
+    };
+
+    struct FiberContext {
+        Job currentJob;
+        int workerIndex = -1;
+    };
+
+    std::thread workers_[8];
+    int workerCount_ = 0;
+    std::atomic<bool> running_{false};
+
+    MPMCQueue<Job, 256> jobQueue_;
+    CounterPool counterPool_;
+
+    FiberHandle fiberPool_[MAX_FIBERS];
+    std::atomic<bool> fiberInUse_[MAX_FIBERS];
+    FiberContext fiberContexts_[MAX_FIBERS];
+
+    WaitEntry waitList_[MAX_FIBERS];
+    std::atomic<int> waitCount_{0};
+    std::atomic_flag waitLock_ = ATOMIC_FLAG_INIT;
+
+    void workerMain(int workerIndex);
+    static void __stdcall fiberEntry(void* param);
+    FiberHandle acquireFiber(int& outIndex);
+    void releaseFiber(int fiberIndex);
+    void checkWaitList();
 };
 
 } // namespace fate
