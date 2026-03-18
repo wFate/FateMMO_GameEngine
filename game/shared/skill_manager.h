@@ -104,6 +104,16 @@ public:
     [[nodiscard]] const std::vector<LearnedSkill>&  getLearnedSkills()  const { return learnedSkills; }
     [[nodiscard]] const std::vector<std::string>&   getSkillBarSlots()  const { return skillBarSlots; }
 
+    // Serialization support
+    void setSerializedState(std::vector<LearnedSkill> skills, std::vector<std::string> bar,
+                            int available, int earned, int spent) {
+        learnedSkills = std::move(skills);
+        skillBarSlots = std::move(bar);
+        availableSkillPoints = available;
+        totalEarnedPoints = earned;
+        totalSpentPoints = spent;
+    }
+
 private:
     std::vector<LearnedSkill>                 learnedSkills;
     std::vector<std::string>                  skillBarSlots;        // 20 slots

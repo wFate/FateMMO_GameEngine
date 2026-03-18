@@ -82,3 +82,7 @@ namespace CollisionUtil {
 }
 
 } // namespace fate
+
+// Custom serializer handles vector<Vec2> — no auto-reflected fields
+#include "engine/ecs/reflect.h"
+FATE_REFLECT_EMPTY(fate::PolygonCollider)

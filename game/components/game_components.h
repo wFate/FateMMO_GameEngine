@@ -302,12 +302,8 @@ FATE_REFLECT(fate::MobNameplateComponent,
 
 // --- NPC Components ---
 
-FATE_REFLECT(fate::NPCComponent,
-    FATE_FIELD(npcId, UInt),
-    FATE_FIELD(displayName, String),
-    FATE_FIELD(dialogueGreeting, String),
-    FATE_FIELD(interactionRadius, Float)
-)
+// NPCComponent: custom serializer handles faceDirection (uint8_t enum)
+FATE_REFLECT_EMPTY(fate::NPCComponent)
 
 // QuestGiverComponent has vector<uint32_t> — custom serializer in Task 6
 FATE_REFLECT_EMPTY(fate::QuestGiverComponent)

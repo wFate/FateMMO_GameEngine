@@ -1,6 +1,6 @@
 #include "engine/editor/editor.h"
 #include "engine/core/logger.h"
-#include "engine/render/gl_loader.h"
+#include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/render/fullscreen_quad.h"
 #include "engine/input/input.h"
 
@@ -17,6 +17,8 @@
 #include "game/components/animator.h"
 #include "game/components/zone_component.h"
 #include "game/components/game_components.h"
+#include "game/components/faction_component.h"
+#include "game/components/pet_component.h"
 #include "game/systems/spawn_system.h"
 #include "engine/ecs/prefab.h"
 #include "engine/scene/scene.h"
@@ -760,6 +762,12 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
         if (entity) {
             selectedEntity_ = entity;
             LOG_INFO("Editor", "Placed at (%.0f, %.0f)", placePos.x, placePos.y);
+
+            // Record undo for asset placement
+            auto cmd = std::make_unique<CreateCommand>();
+            cmd->entityData = PrefabLibrary::entityToJson(entity);
+            cmd->createdHandle = entity->handle();
+            UndoSystem::instance().push(std::move(cmd));
         }
         return;
     }
@@ -800,24 +808,20 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
         if (szComp && t) {
             hw = szComp->config.size.x * 0.5f + 2.0f;
             hh = szComp->config.size.y * 0.5f + 2.0f;
-        } else if (s) {
-            hw = s->size.x * 0.5f + 2.0f;
-            hh = s->size.y * 0.5f + 2.0f;
+        } else if (s && t) {
+            hw = s->size.x * t->scale.x * 0.5f + 2.0f;
+            hh = s->size.y * t->scale.y * 0.5f + 2.0f;
         } else {
             hw = hh = 0.0f;
         }
 
         if (t && (s || szComp)) {
-            // Resize handles only in Scale tool mode (E key)
-            float minDim = (hw < hh ? hw : hh) * 2.0f;
-            bool allowResize = (currentTool_ == EditorTool::Scale);
-            // Spawn zones always allow resize (they're invisible, no sprite to click on)
-            if (szComp) allowResize = true;
-            float handleZone = 6.0f / camera->zoom();
-            float distToCenter = worldPos.distance(t->position);
-            float edgeThreshold = szComp ? 0.0f : (minDim * 0.5f) * 0.6f;
+            // Resize handles are always active — if the user clicks a visible handle,
+            // resize regardless of the active tool (handles are always drawn)
+            bool allowResize = true;
+            float handleZone = 12.0f / camera->zoom();
 
-            if (allowResize && distToCenter > edgeThreshold) {
+            if (allowResize) {
                 Vec2 handles[8] = {
                     {t->position.x - hw, t->position.y + hh},
                     {t->position.x + hw, t->position.y + hh},
@@ -830,7 +834,7 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
                 };
 
                 for (int i = 0; i < 8; i++) {
-                    if (worldPos.distance(handles[i]) < handleZone + 4.0f / camera->zoom()) {
+                    if (worldPos.distance(handles[i]) < handleZone) {
                         isResizingEntity_ = true;
                         isDraggingEntity_ = false;
                         resizeHandle_ = i;
@@ -1509,9 +1513,9 @@ void Editor::drawSceneGrid(SpriteBatch* batch, Camera* camera) {
         if (szSel) {
             hw = szSel->config.size.x * 0.5f + 2.0f;
             hh = szSel->config.size.y * 0.5f + 2.0f;
-        } else if (s) {
-            hw = s->size.x * 0.5f + 2.0f;
-            hh = s->size.y * 0.5f + 2.0f;
+        } else if (s && t) {
+            hw = s->size.x * t->scale.x * 0.5f + 2.0f;
+            hh = s->size.y * t->scale.y * 0.5f + 2.0f;
         }
 
         if (t && (s || szSel) && hw > 0) {
@@ -1659,11 +1663,25 @@ void Editor::drawImGuizmo(Camera* camera) {
         t->rotation = matRotation[2] * 0.0174532925f;
 
         // Record undo if transform changed
-        if (t->position != oldPos && currentTool_ == EditorTool::Move) {
+        if (t->position != oldPos) {
             auto cmd = std::make_unique<MoveCommand>();
             cmd->entityHandle = selectedEntity_->handle();
             cmd->oldPos = oldPos;
             cmd->newPos = t->position;
+            UndoSystem::instance().push(std::move(cmd));
+        }
+        if (t->rotation != oldRot) {
+            auto cmd = std::make_unique<RotateCommand>();
+            cmd->entityHandle = selectedEntity_->handle();
+            cmd->oldRotation = oldRot;
+            cmd->newRotation = t->rotation;
+            UndoSystem::instance().push(std::move(cmd));
+        }
+        if (t->scale != oldScale) {
+            auto cmd = std::make_unique<ScaleCommand>();
+            cmd->entityHandle = selectedEntity_->handle();
+            cmd->oldScale = oldScale;
+            cmd->newScale = t->scale;
             UndoSystem::instance().push(std::move(cmd));
         }
     }
@@ -2836,6 +2854,41 @@ void Editor::drawInspector() {
             }
         }
 
+        // Faction
+        if (auto* fc = selectedEntity_->getComponent<FactionComponent>()) {
+            bool open = ImGui::CollapsingHeader("Faction");
+            if (ImGui::BeginPopupContextItem("##rmFaction")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<FactionComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<FactionComponent>()) {
+                static const char* factionNames[] = { "None", "Xyros", "Fenor", "Zethos", "Solis" };
+                int current = static_cast<int>(fc->faction);
+                if (ImGui::Combo("Faction##fc", &current, factionNames, 5)) {
+                    fc->faction = static_cast<Faction>(current);
+                }
+            }
+        }
+
+        // Pet
+        if (auto* pc = selectedEntity_->getComponent<PetComponent>()) {
+            bool open = ImGui::CollapsingHeader("Pet");
+            if (ImGui::BeginPopupContextItem("##rmPet")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<PetComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<PetComponent>()) {
+                ImGui::Text("Has Pet: %s", pc->hasPet() ? "Yes" : "No");
+                if (pc->hasPet()) {
+                    ImGui::Text("Name: %s", pc->equippedPet.petName.c_str());
+                    ImGui::Text("Definition: %s", pc->equippedPet.petDefinitionId.c_str());
+                    ImGui::Text("Level: %d  XP: %lld/%lld", pc->equippedPet.level, (long long)pc->equippedPet.currentXP, (long long)pc->equippedPet.xpToNextLevel);
+                    ImGui::Checkbox("Auto-Loot##pet", &pc->equippedPet.autoLootEnabled);
+                }
+                ImGui::DragFloat("Auto-Loot Radius##pet", &pc->autoLootRadius, 1.0f, 0.0f, 512.0f);
+            }
+        }
+
         // Generic fallback: render any reflected components not handled above
         {
             static const std::unordered_set<CompId> manuallyInspected = {
@@ -2866,6 +2919,8 @@ void Editor::drawInspector() {
                 componentId<TradeComponent>(),
                 componentId<MarketComponent>(),
                 componentId<SpawnZoneComponent>(),
+                componentId<FactionComponent>(),
+                componentId<PetComponent>(),
             };
 
             selectedEntity_->forEachComponent([&](void* data, CompId id) {
@@ -2984,6 +3039,10 @@ void Editor::drawInspector() {
                 selectedEntity_->addComponent<QuestComponent>();
             if (!selectedEntity_->hasComponent<BankStorageComponent>() && ImGui::MenuItem("Bank Storage"))
                 selectedEntity_->addComponent<BankStorageComponent>();
+            if (!selectedEntity_->hasComponent<FactionComponent>() && ImGui::MenuItem("Faction"))
+                selectedEntity_->addComponent<FactionComponent>();
+            if (!selectedEntity_->hasComponent<PetComponent>() && ImGui::MenuItem("Pet"))
+                selectedEntity_->addComponent<PetComponent>();
 
             ImGui::EndPopup();
         }

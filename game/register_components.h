@@ -114,6 +114,16 @@ template<> struct component_traits<InventoryComponent> {
         ComponentFlags::Serializable | ComponentFlags::Persistent;
 };
 
+// --- StatusEffectComponent: runtime only (effects are transient) ---
+template<> struct component_traits<StatusEffectComponent> {
+    static constexpr ComponentFlags flags = ComponentFlags::None;
+};
+
+// --- CrowdControlComponent: runtime only (CC state is transient) ---
+template<> struct component_traits<CrowdControlComponent> {
+    static constexpr ComponentFlags flags = ComponentFlags::None;
+};
+
 // --- EnemyStatsComponent: serialized for spawning ---
 template<> struct component_traits<EnemyStatsComponent> {
     static constexpr ComponentFlags flags = ComponentFlags::Serializable;
@@ -207,20 +217,251 @@ inline void registerAllComponents() {
 
     reg.registerComponent<BoxCollider>();
     reg.registerComponent<PlayerController>();
-    reg.registerComponent<Animator>();
-    reg.registerComponent<PolygonCollider>();
+    // Animator: auto-reflect handles currentAnimation/timer/playing,
+    // but animations map needs custom serializer
+    reg.registerComponent<Animator>(
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const Animator*>(data);
+            j["currentAnimation"] = c->currentAnimation;
+            j["timer"]            = c->timer;
+            j["playing"]          = c->playing;
+
+            auto& animsJ = j["animations"] = nlohmann::json::object();
+            for (const auto& [name, anim] : c->animations) {
+                animsJ[name] = {
+                    {"startFrame", anim.startFrame},
+                    {"frameCount", anim.frameCount},
+                    {"frameRate",  anim.frameRate},
+                    {"loop",       anim.loop}
+                };
+            }
+        },
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<Animator*>(data);
+            if (j.contains("currentAnimation")) c->currentAnimation = j["currentAnimation"].get<std::string>();
+            if (j.contains("timer"))            c->timer            = j["timer"].get<float>();
+            if (j.contains("playing"))          c->playing          = j["playing"].get<bool>();
+
+            if (j.contains("animations")) {
+                c->animations.clear();
+                for (auto& [name, aj] : j["animations"].items()) {
+                    AnimationDef anim;
+                    anim.name = name;
+                    if (aj.contains("startFrame")) anim.startFrame = aj["startFrame"].get<int>();
+                    if (aj.contains("frameCount")) anim.frameCount = aj["frameCount"].get<int>();
+                    if (aj.contains("frameRate"))  anim.frameRate  = aj["frameRate"].get<float>();
+                    if (aj.contains("loop"))       anim.loop       = aj["loop"].get<bool>();
+                    c->animations[name] = anim;
+                }
+            }
+        }
+    );
+    // PolygonCollider: vector<Vec2> points needs custom serializer
+    reg.registerComponent<PolygonCollider>(
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const PolygonCollider*>(data);
+            j["isTrigger"] = c->isTrigger;
+            j["isStatic"]  = c->isStatic;
+            auto& pts = j["points"] = nlohmann::json::array();
+            for (const auto& p : c->points) {
+                pts.push_back({p.x, p.y});
+            }
+        },
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<PolygonCollider*>(data);
+            if (j.contains("isTrigger")) c->isTrigger = j["isTrigger"].get<bool>();
+            if (j.contains("isStatic"))  c->isStatic  = j["isStatic"].get<bool>();
+            if (j.contains("points")) {
+                c->points.clear();
+                for (const auto& pt : j["points"]) {
+                    c->points.push_back({pt[0].get<float>(), pt[1].get<float>()});
+                }
+            }
+        }
+    );
 
     // ----- Zone / portal components -----
     reg.registerComponent<ZoneComponent>();
     reg.registerComponent<PortalComponent>();
-    reg.registerComponent<SpawnZoneComponent>();
+    // SpawnZoneComponent registered below with custom serializer
 
     // ----- Player components -----
-    reg.registerComponent<CharacterStatsComponent>();
+
+    // CharacterStatsComponent: wraps CharacterStats with many public fields
+    reg.registerComponent<CharacterStatsComponent>(
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const CharacterStatsComponent*>(data);
+            const auto& s = c->stats;
+            j["characterId"]   = s.characterId;
+            j["characterName"] = s.characterName;
+            j["className"]     = s.className;
+            j["classType"]     = static_cast<uint8_t>(s.classDef.classType);
+            j["level"]         = s.level;
+            j["currentHP"]     = s.currentHP;
+            j["maxHP"]         = s.maxHP;
+            j["currentMP"]     = s.currentMP;
+            j["maxMP"]         = s.maxMP;
+            j["currentFury"]   = s.currentFury;
+            j["maxFury"]       = s.maxFury;
+            j["currentXP"]     = s.currentXP;
+            j["xpToNextLevel"] = s.xpToNextLevel;
+            j["honor"]         = s.honor;
+            j["pvpKills"]      = s.pvpKills;
+            j["pvpDeaths"]     = s.pvpDeaths;
+            j["pkStatus"]      = static_cast<uint8_t>(s.pkStatus);
+            j["isDead"]        = s.isDead;
+        },
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<CharacterStatsComponent*>(data);
+            auto& s = c->stats;
+            if (j.contains("characterId"))   s.characterId   = j["characterId"].get<std::string>();
+            if (j.contains("characterName")) s.characterName = j["characterName"].get<std::string>();
+            if (j.contains("className"))     s.className     = j["className"].get<std::string>();
+            if (j.contains("classType"))     s.classDef.classType = static_cast<ClassType>(j["classType"].get<uint8_t>());
+            if (j.contains("level"))         s.level         = j["level"].get<int>();
+            if (j.contains("currentHP"))     s.currentHP     = j["currentHP"].get<int>();
+            if (j.contains("maxHP"))         s.maxHP         = j["maxHP"].get<int>();
+            if (j.contains("currentMP"))     s.currentMP     = j["currentMP"].get<int>();
+            if (j.contains("maxMP"))         s.maxMP         = j["maxMP"].get<int>();
+            if (j.contains("currentFury"))   s.currentFury   = j["currentFury"].get<float>();
+            if (j.contains("maxFury"))       s.maxFury       = j["maxFury"].get<int>();
+            if (j.contains("currentXP"))     s.currentXP     = j["currentXP"].get<int64_t>();
+            if (j.contains("xpToNextLevel")) s.xpToNextLevel = j["xpToNextLevel"].get<int64_t>();
+            if (j.contains("honor"))         s.honor         = j["honor"].get<int>();
+            if (j.contains("pvpKills"))      s.pvpKills      = j["pvpKills"].get<int>();
+            if (j.contains("pvpDeaths"))     s.pvpDeaths     = j["pvpDeaths"].get<int>();
+            if (j.contains("pkStatus"))      s.pkStatus      = static_cast<PKStatus>(j["pkStatus"].get<uint8_t>());
+            if (j.contains("isDead"))        s.isDead        = j["isDead"].get<bool>();
+        }
+    );
+
     reg.registerComponent<CombatControllerComponent>();
     reg.registerComponent<DamageableComponent>();
-    reg.registerComponent<InventoryComponent>();
-    reg.registerComponent<SkillManagerComponent>();
+
+    // InventoryComponent: wraps Inventory with private slots/equipment/gold
+    reg.registerComponent<InventoryComponent>(
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const InventoryComponent*>(data);
+            j["gold"] = c->inventory.getGold();
+
+            auto& slotsJ = j["slots"] = nlohmann::json::array();
+            for (const auto& item : c->inventory.getSlots()) {
+                if (!item.isValid()) { slotsJ.push_back(nullptr); continue; }
+                nlohmann::json ij;
+                ij["instanceId"]   = item.instanceId;
+                ij["itemId"]       = item.itemId;
+                ij["quantity"]     = item.quantity;
+                ij["enchantLevel"] = item.enchantLevel;
+                ij["isProtected"]  = item.isProtected;
+                ij["isSoulbound"]  = item.isSoulbound;
+                ij["boundTo"]      = item.boundToCharacterId;
+                ij["statEnchantType"]  = static_cast<uint8_t>(item.statEnchantType);
+                ij["statEnchantValue"] = item.statEnchantValue;
+                slotsJ.push_back(ij);
+            }
+
+            auto& equipJ = j["equipment"] = nlohmann::json::object();
+            for (const auto& [slot, item] : c->inventory.getEquipmentMap()) {
+                if (!item.isValid()) continue;
+                nlohmann::json ij;
+                ij["instanceId"]   = item.instanceId;
+                ij["itemId"]       = item.itemId;
+                ij["quantity"]     = item.quantity;
+                ij["enchantLevel"] = item.enchantLevel;
+                ij["isProtected"]  = item.isProtected;
+                ij["isSoulbound"]  = item.isSoulbound;
+                ij["statEnchantType"]  = static_cast<uint8_t>(item.statEnchantType);
+                ij["statEnchantValue"] = item.statEnchantValue;
+                equipJ[std::to_string(static_cast<uint8_t>(slot))] = ij;
+            }
+        },
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<InventoryComponent*>(data);
+            int64_t gold = 0;
+            if (j.contains("gold")) gold = j["gold"].get<int64_t>();
+
+            std::vector<ItemInstance> slots;
+            if (j.contains("slots")) {
+                for (const auto& ij : j["slots"]) {
+                    if (ij.is_null()) { slots.emplace_back(); continue; }
+                    ItemInstance item;
+                    if (ij.contains("instanceId"))   item.instanceId   = ij["instanceId"].get<std::string>();
+                    if (ij.contains("itemId"))       item.itemId       = ij["itemId"].get<std::string>();
+                    if (ij.contains("quantity"))      item.quantity     = ij["quantity"].get<int>();
+                    if (ij.contains("enchantLevel"))  item.enchantLevel = ij["enchantLevel"].get<int>();
+                    if (ij.contains("isProtected"))   item.isProtected  = ij["isProtected"].get<bool>();
+                    if (ij.contains("isSoulbound"))   item.isSoulbound  = ij["isSoulbound"].get<bool>();
+                    if (ij.contains("boundTo"))       item.boundToCharacterId = ij["boundTo"].get<std::string>();
+                    if (ij.contains("statEnchantType"))  item.statEnchantType  = static_cast<StatType>(ij["statEnchantType"].get<uint8_t>());
+                    if (ij.contains("statEnchantValue")) item.statEnchantValue = ij["statEnchantValue"].get<int>();
+                    slots.push_back(std::move(item));
+                }
+            }
+
+            std::unordered_map<EquipmentSlot, ItemInstance> equipment;
+            if (j.contains("equipment")) {
+                for (auto& [key, ij] : j["equipment"].items()) {
+                    auto slot = static_cast<EquipmentSlot>(std::stoi(key));
+                    ItemInstance item;
+                    if (ij.contains("instanceId"))   item.instanceId   = ij["instanceId"].get<std::string>();
+                    if (ij.contains("itemId"))       item.itemId       = ij["itemId"].get<std::string>();
+                    if (ij.contains("quantity"))      item.quantity     = ij["quantity"].get<int>();
+                    if (ij.contains("enchantLevel"))  item.enchantLevel = ij["enchantLevel"].get<int>();
+                    if (ij.contains("isProtected"))   item.isProtected  = ij["isProtected"].get<bool>();
+                    if (ij.contains("isSoulbound"))   item.isSoulbound  = ij["isSoulbound"].get<bool>();
+                    if (ij.contains("statEnchantType"))  item.statEnchantType  = static_cast<StatType>(ij["statEnchantType"].get<uint8_t>());
+                    if (ij.contains("statEnchantValue")) item.statEnchantValue = ij["statEnchantValue"].get<int>();
+                    equipment[slot] = std::move(item);
+                }
+            }
+            c->inventory.setSerializedState(gold, std::move(slots), std::move(equipment));
+        }
+    );
+
+    // SkillManagerComponent: wraps SkillManager with private learned skills and bar
+    reg.registerComponent<SkillManagerComponent>(
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const SkillManagerComponent*>(data);
+            j["availablePoints"] = c->skills.availablePoints();
+            j["earnedPoints"]    = c->skills.earnedPoints();
+            j["spentPoints"]     = c->skills.spentPoints();
+
+            auto& skillsJ = j["learnedSkills"] = nlohmann::json::array();
+            for (const auto& sk : c->skills.getLearnedSkills()) {
+                skillsJ.push_back({
+                    {"skillId",       sk.skillId},
+                    {"unlockedRank",  sk.unlockedRank},
+                    {"activatedRank", sk.activatedRank}
+                });
+            }
+            j["skillBar"] = c->skills.getSkillBarSlots();
+        },
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<SkillManagerComponent*>(data);
+            int avail = 0, earned = 0, spent = 0;
+            if (j.contains("availablePoints")) avail  = j["availablePoints"].get<int>();
+            if (j.contains("earnedPoints"))    earned = j["earnedPoints"].get<int>();
+            if (j.contains("spentPoints"))     spent  = j["spentPoints"].get<int>();
+
+            std::vector<LearnedSkill> skills;
+            if (j.contains("learnedSkills")) {
+                for (const auto& sk : j["learnedSkills"]) {
+                    LearnedSkill ls;
+                    if (sk.contains("skillId"))       ls.skillId       = sk["skillId"].get<std::string>();
+                    if (sk.contains("unlockedRank"))   ls.unlockedRank  = sk["unlockedRank"].get<int>();
+                    if (sk.contains("activatedRank"))  ls.activatedRank = sk["activatedRank"].get<int>();
+                    skills.push_back(std::move(ls));
+                }
+            }
+            std::vector<std::string> bar;
+            if (j.contains("skillBar")) bar = j["skillBar"].get<std::vector<std::string>>();
+
+            c->skills.setSerializedState(std::move(skills), std::move(bar), avail, earned, spent);
+        }
+    );
+
+    // StatusEffectComponent & CrowdControlComponent: runtime-only transient state
+    // (effects expire, not meaningful to persist across saves)
     reg.registerComponent<StatusEffectComponent>();
     reg.registerComponent<CrowdControlComponent>();
     reg.registerComponent<TargetingComponent>();
@@ -233,12 +474,76 @@ inline void registerAllComponents() {
     reg.registerComponent<NameplateComponent>();
 
     // ----- Mob / Enemy components -----
-    reg.registerComponent<EnemyStatsComponent>();
+    reg.registerComponent<EnemyStatsComponent>(
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const EnemyStatsComponent*>(data);
+            const auto& s = c->stats;
+            j["enemyId"]         = s.enemyId;
+            j["enemyName"]       = s.enemyName;
+            j["monsterType"]     = s.monsterType;
+            j["level"]           = s.level;
+            j["currentHP"]       = s.currentHP;
+            j["maxHP"]           = s.maxHP;
+            j["baseDamage"]      = s.baseDamage;
+            j["armor"]           = s.armor;
+            j["magicResist"]     = s.magicResist;
+            j["critRate"]        = s.critRate;
+            j["attackSpeed"]     = s.attackSpeed;
+            j["moveSpeed"]       = s.moveSpeed;
+            j["xpReward"]        = s.xpReward;
+            j["isAggressive"]    = s.isAggressive;
+            j["honorReward"]     = s.honorReward;
+            j["lootTableId"]     = s.lootTableId;
+            j["minGoldDrop"]     = s.minGoldDrop;
+            j["maxGoldDrop"]     = s.maxGoldDrop;
+            j["goldDropChance"]  = s.goldDropChance;
+        },
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<EnemyStatsComponent*>(data);
+            auto& s = c->stats;
+            if (j.contains("enemyId"))        s.enemyId        = j["enemyId"].get<std::string>();
+            if (j.contains("enemyName"))      s.enemyName      = j["enemyName"].get<std::string>();
+            if (j.contains("monsterType"))    s.monsterType    = j["monsterType"].get<std::string>();
+            if (j.contains("level"))          s.level          = j["level"].get<int>();
+            if (j.contains("currentHP"))      s.currentHP      = j["currentHP"].get<int>();
+            if (j.contains("maxHP"))          s.maxHP          = j["maxHP"].get<int>();
+            if (j.contains("baseDamage"))     s.baseDamage     = j["baseDamage"].get<int>();
+            if (j.contains("armor"))          s.armor          = j["armor"].get<int>();
+            if (j.contains("magicResist"))    s.magicResist    = j["magicResist"].get<int>();
+            if (j.contains("critRate"))       s.critRate       = j["critRate"].get<float>();
+            if (j.contains("attackSpeed"))    s.attackSpeed    = j["attackSpeed"].get<float>();
+            if (j.contains("moveSpeed"))      s.moveSpeed      = j["moveSpeed"].get<float>();
+            if (j.contains("xpReward"))       s.xpReward       = j["xpReward"].get<int>();
+            if (j.contains("isAggressive"))   s.isAggressive   = j["isAggressive"].get<bool>();
+            if (j.contains("honorReward"))    s.honorReward    = j["honorReward"].get<int>();
+            if (j.contains("lootTableId"))    s.lootTableId    = j["lootTableId"].get<std::string>();
+            if (j.contains("minGoldDrop"))    s.minGoldDrop    = j["minGoldDrop"].get<int>();
+            if (j.contains("maxGoldDrop"))    s.maxGoldDrop    = j["maxGoldDrop"].get<int>();
+            if (j.contains("goldDropChance")) s.goldDropChance = j["goldDropChance"].get<float>();
+        }
+    );
     reg.registerComponent<MobAIComponent>();
     reg.registerComponent<MobNameplateComponent>();
 
     // ----- NPC components -----
-    reg.registerComponent<NPCComponent>();
+    reg.registerComponent<NPCComponent>(
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const NPCComponent*>(data);
+            j["npcId"]              = c->npcId;
+            j["displayName"]       = c->displayName;
+            j["dialogueGreeting"]  = c->dialogueGreeting;
+            j["interactionRadius"] = c->interactionRadius;
+            j["faceDirection"]     = static_cast<uint8_t>(c->faceDirection);
+        },
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<NPCComponent*>(data);
+            if (j.contains("npcId"))              c->npcId              = j["npcId"].get<uint32_t>();
+            if (j.contains("displayName"))        c->displayName        = j["displayName"].get<std::string>();
+            if (j.contains("dialogueGreeting"))   c->dialogueGreeting   = j["dialogueGreeting"].get<std::string>();
+            if (j.contains("interactionRadius"))  c->interactionRadius  = j["interactionRadius"].get<float>();
+            if (j.contains("faceDirection"))       c->faceDirection      = static_cast<FaceDirection>(j["faceDirection"].get<uint8_t>());
+        }
+    );
 
     // QuestGiverComponent: vector<uint32_t> questIds
     reg.registerComponent<QuestGiverComponent>(
@@ -511,8 +816,53 @@ inline void registerAllComponents() {
     );
 
     // ----- Faction & Pet components -----
-    reg.registerComponent<FactionComponent>();
-    reg.registerComponent<PetComponent>();
+    reg.registerComponent<FactionComponent>(
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const FactionComponent*>(data);
+            j["faction"] = static_cast<uint8_t>(c->faction);
+        },
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<FactionComponent*>(data);
+            if (j.contains("faction"))
+                c->faction = static_cast<Faction>(j["faction"].get<uint8_t>());
+        }
+    );
+
+    reg.registerComponent<PetComponent>(
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const PetComponent*>(data);
+            j["autoLootRadius"] = c->autoLootRadius;
+            if (c->hasPet()) {
+                const auto& pet = c->equippedPet;
+                j["pet"] = {
+                    {"instanceId",       pet.instanceId},
+                    {"petDefinitionId",  pet.petDefinitionId},
+                    {"petName",          pet.petName},
+                    {"level",            pet.level},
+                    {"currentXP",        pet.currentXP},
+                    {"xpToNextLevel",    pet.xpToNextLevel},
+                    {"autoLootEnabled",  pet.autoLootEnabled},
+                    {"isSoulbound",      pet.isSoulbound}
+                };
+            }
+        },
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<PetComponent*>(data);
+            if (j.contains("autoLootRadius")) c->autoLootRadius = j["autoLootRadius"].get<float>();
+            if (j.contains("pet")) {
+                const auto& p = j["pet"];
+                auto& pet = c->equippedPet;
+                if (p.contains("instanceId"))       pet.instanceId       = p["instanceId"].get<std::string>();
+                if (p.contains("petDefinitionId"))   pet.petDefinitionId  = p["petDefinitionId"].get<std::string>();
+                if (p.contains("petName"))           pet.petName          = p["petName"].get<std::string>();
+                if (p.contains("level"))             pet.level            = p["level"].get<int>();
+                if (p.contains("currentXP"))         pet.currentXP        = p["currentXP"].get<int64_t>();
+                if (p.contains("xpToNextLevel"))     pet.xpToNextLevel    = p["xpToNextLevel"].get<int64_t>();
+                if (p.contains("autoLootEnabled"))   pet.autoLootEnabled  = p["autoLootEnabled"].get<bool>();
+                if (p.contains("isSoulbound"))       pet.isSoulbound      = p["isSoulbound"].get<bool>();
+            }
+        }
+    );
 
     // ----- SpawnZoneComponent -----
     reg.registerComponent<SpawnZoneComponent>(
