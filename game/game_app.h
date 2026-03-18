@@ -3,6 +3,7 @@
 #include "engine/tilemap/tilemap.h"
 #include "engine/render/sdf_text.h"
 #include "engine/net/net_client.h"
+#include "engine/net/interpolation.h"
 #include "engine/ecs/entity_handle.h"
 #include "game/systems/render_system.h"
 #include "game/ui/npc_dialogue_ui.h"
@@ -38,6 +39,7 @@ private:
     NPCDialogueUI npcDialogueUI_;
     QuestLogUI questLogUI_;
     NetClient netClient_;
+    InterpolationManager ghostInterpolation_;
     std::unordered_map<uint64_t, EntityHandle> ghostEntities_; // PersistentId -> local ghost
     float lastMoveSendTime_ = 0.0f;
     float netTime_ = 0.0f; // accumulated time for network polling

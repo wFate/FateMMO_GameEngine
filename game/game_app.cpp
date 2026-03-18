@@ -413,20 +413,22 @@ void GameApp::onInit() {
             }
             ghostEntities_.erase(it);
         }
+        ghostInterpolation_.removeEntity(msg.persistentId);
     };
 
     netClient_.onEntityUpdate = [this](const SvEntityUpdateMsg& msg) {
         auto it = ghostEntities_.find(msg.persistentId);
         if (it == ghostEntities_.end()) return;
+
+        if (msg.fieldMask & 0x01) { // position — feed interpolation buffer
+            ghostInterpolation_.onEntityUpdate(msg.persistentId, msg.position);
+        }
+
         auto* sc = SceneManager::instance().currentScene();
         if (!sc) return;
         Entity* ghost = sc->world().getEntity(it->second);
         if (!ghost) return;
 
-        if (msg.fieldMask & 0x01) { // position
-            auto* t = ghost->getComponent<Transform>();
-            if (t) t->position = msg.position;
-        }
         if (msg.fieldMask & 0x02) { // animFrame
             auto* s = ghost->getComponent<SpriteComponent>();
             if (s) s->currentFrame = msg.animFrame;
@@ -825,6 +827,21 @@ void GameApp::onUpdate(float deltaTime) {
     netTime_ += deltaTime;
     if (netClient_.isConnected()) {
         netClient_.poll(netTime_);
+
+        // Interpolate ghost entity positions
+        {
+            auto* sc = SceneManager::instance().currentScene();
+            if (sc) {
+                for (auto& [pid, handle] : ghostEntities_) {
+                    Vec2 pos = ghostInterpolation_.getInterpolatedPosition(pid, deltaTime);
+                    Entity* ghost = sc->world().getEntity(handle);
+                    if (ghost) {
+                        auto* t = ghost->getComponent<Transform>();
+                        if (t) t->position = pos;
+                    }
+                }
+            }
+        }
 
         // Send movement 30 times/sec max
         if (netTime_ - lastMoveSendTime_ >= 1.0f / 30.0f) {
