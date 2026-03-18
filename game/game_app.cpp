@@ -1601,11 +1601,18 @@ void GameApp::onUpdate(float deltaTime) {
                 if (sc) {
                     auto& world = sc->world();
 
-                    // Destroy any existing player entity from the saved scene
+                    // Collect existing player entities (can't destroy inside forEach)
+                    std::vector<EntityHandle> playersToRemove;
                     world.forEach<PlayerController>([&](Entity* e, PlayerController*) {
-                        world.destroyEntity(e->handle());
+                        playersToRemove.push_back(e->handle());
                     });
-                    world.processDestroyQueue();
+                    // Destroy them outside the iteration
+                    for (auto h : playersToRemove) {
+                        world.destroyEntity(h);
+                    }
+                    if (!playersToRemove.empty()) {
+                        world.processDestroyQueue();
+                    }
 
                     // Determine class from auth response
                     ClassType ct = ClassType::Warrior;

@@ -112,7 +112,7 @@ bool Scene::saveToFile(const std::string& path) const {
     w.forEachEntity([&](Entity* entity) {
         // Skip transient entities (runtime-spawned mobs/bosses)
         std::string tag = entity->tag();
-        if (tag == "mob" || tag == "boss") return;
+        if (tag == "mob" || tag == "boss" || tag == "player") return;
 
         entitiesJson.push_back(PrefabLibrary::entityToJson(entity));
     });
