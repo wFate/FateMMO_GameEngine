@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "engine/net/byte_stream.h"
+#include "engine/net/packet.h"
 
 TEST_CASE("ByteStream primitive round-trip") {
     uint8_t buf[64];
@@ -64,4 +65,36 @@ TEST_CASE("ByteStream Vec2 round-trip") {
     CHECK(v.x == doctest::Approx(1.5f));
     CHECK(v.y == doctest::Approx(-2.25f));
     CHECK_FALSE(r.overflowed());
+}
+
+TEST_CASE("PacketHeader write/read round-trip") {
+    fate::PacketHeader hdr;
+    hdr.protocolId   = fate::PROTOCOL_ID;
+    hdr.sessionToken = 0xCAFEBABE;
+    hdr.sequence     = 1001;
+    hdr.ack          = 1000;
+    hdr.ackBits      = 0xFFFF;
+    hdr.channel      = fate::Channel::ReliableOrdered;
+    hdr.packetType   = fate::PacketType::CmdMove;
+    hdr.payloadSize  = 42;
+
+    uint8_t buf[64];
+    fate::ByteWriter w(buf, sizeof(buf));
+    hdr.write(w);
+    CHECK_FALSE(w.overflowed());
+    CHECK(w.size() == fate::PACKET_HEADER_SIZE);
+
+    fate::ByteReader r(buf, w.size());
+    fate::PacketHeader h2 = fate::PacketHeader::read(r);
+    CHECK_FALSE(r.overflowed());
+    CHECK(r.remaining() == 0);
+
+    CHECK(h2.protocolId   == fate::PROTOCOL_ID);
+    CHECK(h2.sessionToken == 0xCAFEBABE);
+    CHECK(h2.sequence     == 1001);
+    CHECK(h2.ack          == 1000);
+    CHECK(h2.ackBits      == 0xFFFF);
+    CHECK(h2.channel      == fate::Channel::ReliableOrdered);
+    CHECK(h2.packetType   == fate::PacketType::CmdMove);
+    CHECK(h2.payloadSize  == 42);
 }
