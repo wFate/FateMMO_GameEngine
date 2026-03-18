@@ -340,11 +340,20 @@ void SpriteBatch::setBlendMode(BlendMode mode) {
     flush(); // must flush before changing GL state
     blendMode_ = mode;
     switch (mode) {
+        case BlendMode::None:
+            glDisable(GL_BLEND);
+            break;
         case BlendMode::Alpha:
+            glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             break;
         case BlendMode::Additive:
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_ONE, GL_ONE);
+            break;
+        case BlendMode::Multiplicative:
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_DST_COLOR, GL_ZERO);
             break;
     }
 }

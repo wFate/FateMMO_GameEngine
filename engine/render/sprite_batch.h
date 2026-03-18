@@ -2,12 +2,13 @@
 #include "engine/core/types.h"
 #include "engine/render/shader.h"
 #include "engine/render/texture.h"
+#include "engine/render/gfx/types.h"
 #include <vector>
 #include <memory>
 
 namespace fate {
 
-enum class BlendMode { Alpha, Additive };
+using BlendMode = gfx::BlendMode;
 
 // A single sprite draw call's data
 struct SpriteVertex {
