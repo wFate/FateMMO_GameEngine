@@ -212,8 +212,36 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
         }
         case PacketType::CmdChat: {
             auto chat = CmdChat::read(payload);
-            // TODO: route chat message
-            LOG_INFO("Server", "Chat from client %d: %s", clientId, chat.message.c_str());
+            LOG_INFO("Server", "Chat from client %d (ch=%d): %s",
+                     clientId, chat.channel, chat.message.c_str());
+
+            // Get sender info
+            std::string senderName = "Unknown";
+            uint8_t senderFaction = 0;
+            auto* client = server_.connections().findById(clientId);
+            if (client && client->playerEntityId != 0) {
+                PersistentId pid(client->playerEntityId);
+                EntityHandle h = replication_.getEntityHandle(pid);
+                Entity* e = world_.getEntity(h);
+                if (e) {
+                    auto* nameplate = e->getComponent<NameplateComponent>();
+                    if (nameplate) senderName = nameplate->displayName;
+                    auto* factionComp = e->getComponent<FactionComponent>();
+                    if (factionComp) senderFaction = static_cast<uint8_t>(factionComp->faction);
+                }
+            }
+
+            // Build and broadcast chat message
+            SvChatMessageMsg msg;
+            msg.channel    = chat.channel;
+            msg.senderName = senderName;
+            msg.message    = chat.message;
+            msg.faction    = senderFaction;
+
+            uint8_t buf[512];
+            ByteWriter w(buf, sizeof(buf));
+            msg.write(w);
+            server_.broadcast(Channel::ReliableOrdered, PacketType::SvChatMessage, buf, w.size());
             break;
         }
         default:
