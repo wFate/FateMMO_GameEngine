@@ -18,6 +18,7 @@
 
 #include <chrono>
 #include <thread>
+#include <cstdlib>
 
 namespace fate {
 
@@ -47,6 +48,30 @@ bool ServerApp::init(uint16_t port) {
         PersistentId pid = PersistentId::generate(1);
         replication_.registerEntity(entity->handle(), pid);
     });
+
+    // DB connection
+    const char* dbUrl = std::getenv("DATABASE_URL");
+    if (dbUrl) {
+        dbConnectionString_ = dbUrl;
+    }
+
+    if (dbConnectionString_.empty()) {
+        LOG_ERROR("Server", "DATABASE_URL not set; cannot start server without DB");
+        return false;
+    }
+
+    if (!gameDbConn_.connect(dbConnectionString_)) {
+        LOG_ERROR("Server", "Failed to connect to game DB");
+        return false;
+    }
+
+    characterRepo_ = std::make_unique<CharacterRepository>(gameDbConn_.connection());
+    inventoryRepo_ = std::make_unique<InventoryRepository>(gameDbConn_.connection());
+
+    // Auth server startup (warning only — game server can run without auth in dev)
+    if (!authServer_.start(authPort_, tlsCertPath_, tlsKeyPath_, dbConnectionString_)) {
+        LOG_WARN("Server", "Auth server failed to start on port %d; continuing without auth", authPort_);
+    }
 
     LOG_INFO("Server", "Started on port %d at %.0f ticks/sec", port, TICK_RATE);
     return true;
@@ -79,6 +104,14 @@ void ServerApp::run() {
 }
 
 void ServerApp::shutdown() {
+    // Save all connected players before stopping
+    server_.connections().forEach([this](ClientConnection& c) {
+        savePlayerToDB(c.clientId);
+    });
+
+    authServer_.stop();
+    gameDbConn_.disconnect();
+
     server_.stop();
     NetSocket::shutdownPlatform();
     LOG_INFO("Server", "Shutdown complete");
@@ -91,40 +124,152 @@ void ServerApp::tick(float dt) {
     // 1. Drain incoming packets
     server_.poll(gameTime_);
 
-    // 2. World update (systems)
+    // 2. Drain auth results
+    consumePendingSessions();
+
+    // 3. World update (systems)
     world_.update(dt);
 
-    // 3. Replicate entity state to connected clients
+    // 4. Replicate entity state to connected clients
     replication_.update(world_, server_);
 
-    // 4. Retransmit unacked reliable packets
+    // 5. Retransmit unacked reliable packets
     server_.processRetransmits(gameTime_);
 
-    // 5. Check timeouts
+    // 6. Check timeouts
     auto timedOut = server_.checkTimeouts(gameTime_);
     for (uint16_t id : timedOut) {
         LOG_INFO("Server", "Client %d timed out", id);
         if (server_.onClientDisconnected) server_.onClientDisconnected(id);
         server_.connections().removeClient(id);
     }
+
+    // 7. Clean expired pending sessions
+    for (auto it = pendingSessions_.begin(); it != pendingSessions_.end(); ) {
+        if (static_cast<double>(gameTime_) > it->second.expires_at) {
+            it = pendingSessions_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void ServerApp::consumePendingSessions() {
+    AuthResult result;
+    while (authServer_.popAuthResult(result)) {
+        // Duplicate login: kick existing session for this account
+        auto existing = activeAccountSessions_.find(result.session.account_id);
+        if (existing != activeAccountSessions_.end()) {
+            uint16_t oldClientId = existing->second;
+            LOG_INFO("Server", "Duplicate login for account %d; kicking client %d",
+                     result.session.account_id, oldClientId);
+            savePlayerToDB(oldClientId);
+
+            auto* oldClient = server_.connections().findById(oldClientId);
+            if (oldClient) {
+                // Disconnect them
+                if (server_.onClientDisconnected) server_.onClientDisconnected(oldClientId);
+                server_.connections().removeClient(oldClientId);
+            }
+            activeAccountSessions_.erase(existing);
+        }
+
+        // Store pending session with 30s expiry
+        result.session.expires_at = static_cast<double>(gameTime_) + 30.0;
+        pendingSessions_[result.token] = result.session;
+    }
 }
 
 void ServerApp::onClientConnected(uint16_t clientId) {
-    LOG_INFO("Server", "Client %d connected", clientId);
+    auto* client = server_.connections().findById(clientId);
+    if (!client) return;
 
-    // Create player entity for this client
-    Entity* player = EntityFactory::createPlayer(world_, "Player" + std::to_string(clientId),
-                                                  ClassType::Warrior, false, Faction::None);
+    // Look up auth token in pending sessions
+    auto it = pendingSessions_.find(client->authToken);
+    if (it == pendingSessions_.end()) {
+        LOG_WARN("Server", "Client %d has invalid or expired auth token; rejecting", clientId);
+        server_.sendConnectReject(client->address, "Invalid or expired auth token");
+        server_.connections().removeClient(clientId);
+        return;
+    }
+
+    // Consume the pending session
+    PendingSession session = it->second;
+    pendingSessions_.erase(it);
+
+    client->account_id = session.account_id;
+    client->character_id = session.character_id;
+
+    // Load character from DB
+    auto recOpt = characterRepo_->loadCharacter(session.character_id);
+    if (!recOpt) {
+        LOG_ERROR("Server", "Client %d: failed to load character '%s'; rejecting",
+                  clientId, session.character_id.c_str());
+        server_.sendConnectReject(client->address, "Character not found");
+        server_.connections().removeClient(clientId);
+        return;
+    }
+    const CharacterRecord& rec = *recOpt;
+
+    // Determine ClassType from class_name string
+    ClassType classType = ClassType::Warrior;
+    if (rec.class_name == "Mage") {
+        classType = ClassType::Mage;
+    } else if (rec.class_name == "Archer") {
+        classType = ClassType::Archer;
+    }
+
+    // Create player entity
+    Entity* player = EntityFactory::createPlayer(world_, rec.character_name, classType, false, Faction::None);
+
+    // Override stats with DB values
+    auto* charStatsComp = player->getComponent<CharacterStatsComponent>();
+    if (charStatsComp) {
+        CharacterStats& s = charStatsComp->stats;
+        s.level        = rec.level;
+        s.currentXP    = rec.current_xp;
+        s.xpToNextLevel = static_cast<int64_t>(rec.xp_to_next_level);
+        s.honor        = rec.honor;
+        s.pvpKills     = rec.pvp_kills;
+        s.pvpDeaths    = rec.pvp_deaths;
+        s.isDead       = rec.is_dead;
+
+        // Recalculate derived stats (resets currentHP/MP to max)
+        s.recalculateStats();
+
+        // Re-apply saved HP/MP after recalc
+        s.currentHP    = rec.current_hp;
+        s.currentMP    = rec.current_mp;
+        s.currentFury  = rec.current_fury;
+        s.maxHP        = rec.max_hp;
+        s.maxMP        = rec.max_mp;
+    }
+
+    // Set position
     auto* t = player->getComponent<Transform>();
-    if (t) t->position = {0.0f, 0.0f}; // spawn point
+    if (t) {
+        t->position = {rec.position_x, rec.position_y};
+    }
 
-    // Assign persistent ID and register for replication
-    PersistentId pid = PersistentId::generate(1); // zoneId = 1
+    // Set gold on inventory
+    auto* inv = player->getComponent<InventoryComponent>();
+    if (inv) {
+        inv->inventory.addGold(rec.gold);
+    }
+
+    // Assign persistent ID based on hash of character_id
+    uint64_t pidVal = std::hash<std::string>{}(rec.character_id);
+    if (pidVal == 0) pidVal = 1;
+    PersistentId pid(pidVal);
+
+    // Register with replication
     replication_.registerEntity(player->handle(), pid);
 
     // Link client to their player entity
-    auto* client = server_.connections().findById(clientId);
-    if (client) client->playerEntityId = pid.value();
+    client->playerEntityId = pid.value();
+
+    // Track active account session
+    activeAccountSessions_[session.account_id] = clientId;
 
     // Initialize movement tracking
     lastValidPositions_[clientId] = t ? t->position : Vec2{0.0f, 0.0f};
@@ -133,11 +278,75 @@ void ServerApp::onClientConnected(uint16_t clientId) {
 
     // Send initial player state
     sendPlayerState(clientId);
+
+    LOG_INFO("Server", "Client %d connected: account=%d char='%s' level=%d",
+             clientId, session.account_id, rec.character_name.c_str(), rec.level);
+}
+
+void ServerApp::savePlayerToDB(uint16_t clientId) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* e = world_.getEntity(h);
+    if (!e) return;
+
+    CharacterRecord rec;
+    rec.character_id = client->character_id;
+    rec.account_id   = client->account_id;
+
+    auto* charStatsComp = e->getComponent<CharacterStatsComponent>();
+    if (charStatsComp) {
+        const CharacterStats& s = charStatsComp->stats;
+        rec.character_name   = s.characterName;
+        rec.class_name       = s.className;
+        rec.level            = s.level;
+        rec.current_xp       = s.currentXP;
+        rec.xp_to_next_level = static_cast<int>(s.xpToNextLevel);
+        rec.current_hp       = s.currentHP;
+        rec.max_hp           = s.maxHP;
+        rec.current_mp       = s.currentMP;
+        rec.max_mp           = s.maxMP;
+        rec.current_fury     = s.currentFury;
+        rec.honor            = s.honor;
+        rec.pvp_kills        = s.pvpKills;
+        rec.pvp_deaths       = s.pvpDeaths;
+        rec.is_dead          = s.isDead;
+    }
+
+    auto* t = e->getComponent<Transform>();
+    if (t) {
+        rec.position_x = t->position.x;
+        rec.position_y = t->position.y;
+    }
+
+    auto* inv = e->getComponent<InventoryComponent>();
+    if (inv) {
+        rec.gold = inv->inventory.getGold();
+    }
+
+    if (!characterRepo_->saveCharacter(rec)) {
+        // Retry once
+        if (!characterRepo_->saveCharacter(rec)) {
+            LOG_ERROR("Server", "DATA LOSS: failed to save character '%s' (client %d) after retry",
+                      rec.character_id.c_str(), clientId);
+        }
+    }
 }
 
 void ServerApp::onClientDisconnected(uint16_t clientId) {
     LOG_INFO("Server", "Client %d disconnected", clientId);
+
+    // Save player data first
+    savePlayerToDB(clientId);
+
+    // Remove from active account sessions
     auto* client = server_.connections().findById(clientId);
+    if (client && client->account_id != 0) {
+        activeAccountSessions_.erase(client->account_id);
+    }
+
     if (client && client->playerEntityId != 0) {
         PersistentId pid(client->playerEntityId);
         EntityHandle h = replication_.getEntityHandle(pid);
