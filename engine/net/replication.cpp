@@ -103,7 +103,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         ByteWriter writer(buf, sizeof(buf));
         enterMsg.write(writer);
         server.sendTo(client.clientId, Channel::ReliableOrdered,
-                      0x10, // SvEntityEnter packet type
+                      PacketType::SvEntityEnter,
                       writer.data(), writer.size());
 
         // Initialize last acked state
@@ -122,7 +122,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         ByteWriter writer(buf, sizeof(buf));
         leaveMsg.write(writer);
         server.sendTo(client.clientId, Channel::ReliableOrdered,
-                      0x11, // SvEntityLeave packet type
+                      PacketType::SvEntityLeave,
                       writer.data(), writer.size());
 
         client.lastAckedState.erase(pid.value());
@@ -168,7 +168,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         ByteWriter writer(buf, sizeof(buf));
         deltaMsg.write(writer);
         server.sendTo(client.clientId, Channel::Unreliable,
-                      0x12, // SvEntityUpdate packet type
+                      PacketType::SvEntityUpdate,
                       writer.data(), writer.size());
 
         // Update last acked state
