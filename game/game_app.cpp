@@ -1604,10 +1604,28 @@ void GameApp::onUpdate(float deltaTime) {
                 localPlayerCreated_ = true;
                 auto* sc = SceneManager::instance().currentScene();
                 if (sc) {
-                    createPlayer(sc->world());
+                    // Create minimal local player (just transform + sprite + controller)
+                    Entity* player = sc->world().createEntity(pendingCharName_);
+                    player->setTag("player");
+                    auto* t = player->addComponent<Transform>(0.0f, 0.0f);
+                    t->depth = 10.0f;
+                    auto* sprite = player->addComponent<SpriteComponent>();
+                    sprite->texturePath = "assets/sprites/player.png";
+                    sprite->texture = TextureCache::instance().load(sprite->texturePath);
+                    sprite->size = sprite->texture ? Vec2{(float)sprite->texture->width(), (float)sprite->texture->height()} : Vec2{20.0f, 33.0f};
+                    auto* ctrl = player->addComponent<PlayerController>();
+                    ctrl->moveSpeed = 96.0f;
+                    ctrl->isLocalPlayer = true;
+                    auto* collider = player->addComponent<BoxCollider>();
+                    collider->size = {sprite->size.x - 4.0f, sprite->size.y * 0.5f};
+                    collider->offset = {0.0f, -sprite->size.y * 0.25f};
+                    collider->isStatic = false;
+                    auto* np = player->addComponent<NameplateComponent>();
+                    np->displayName = pendingCharName_;
+                    np->displayLevel = 1;
                     LOG_INFO("GameApp", "Local player created for '%s'", pendingCharName_.c_str());
                 }
-                break; // Skip the rest of the first frame to let the world settle
+                break; // Skip rest of first frame
             }
 
             // Network: poll for server messages and send movement
