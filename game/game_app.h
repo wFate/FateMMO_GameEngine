@@ -59,6 +59,9 @@ private:
     LoginScreen loginScreen_;
     AuthToken pendingAuthToken_ = {};
     int authPort_ = 7778;
+    std::string pendingCharName_;
+    std::string pendingClassName_;
+    bool localPlayerCreated_ = false;
 
     // Network config UI
     char serverHost_[64] = "127.0.0.1";

@@ -32,6 +32,7 @@
 #include "game/shared/npc_types.h"
 #include "imgui.h"
 #include <cstdio>
+#include <cmath>
 #include <algorithm>
 #include <filesystem>
 #include "stb_image_write.h"
@@ -40,13 +41,23 @@ namespace fs = std::filesystem;  // std::min, std::max (used with parenthesized 
 namespace fate {
 
 // ============================================================================
-// Procedural tile generation — creates village assets if they don't exist
+// Procedural art generation — pixel-art sprites & tileset
 // ============================================================================
+
+// --- Pixel helpers -----------------------------------------------------------
 
 static void setPixel(std::vector<unsigned char>& px, int x, int y, int sz,
                      unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
     if (x < 0 || x >= sz || y < 0 || y >= sz) return;
     int i = (y * sz + x) * 4;
+    px[i] = r; px[i+1] = g; px[i+2] = b; px[i+3] = a;
+}
+
+// setPixel for arbitrary-stride buffers (width != height)
+static void setPixelW(std::vector<unsigned char>& px, int x, int y, int w, int h,
+                      unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
+    if (x < 0 || x >= w || y < 0 || y >= h) return;
+    int i = (y * w + x) * 4;
     px[i] = r; px[i+1] = g; px[i+2] = b; px[i+3] = a;
 }
 
@@ -58,9 +69,395 @@ static void generateTileIfMissing(const std::string& path, int size,
     stbi_write_png(path.c_str(), size, size, 4, pixels.data(), size * 4);
 }
 
+// Simple hash for deterministic pseudo-random noise
+static inline int pixelHash(int x, int y, int seed = 0) {
+    int h = x * 374761393 + y * 668265263 + seed * 1274126177;
+    h = (h ^ (h >> 13)) * 1274126177;
+    return h ^ (h >> 16);
+}
+
+// Clamp int to 0..255
+static inline unsigned char clampByte(int v) {
+    return (unsigned char)((v < 0) ? 0 : (v > 255) ? 255 : v);
+}
+
+// --- Procedural tileset (256x160 = 8 cols x 5 rows of 32x32 tiles) ----------
+
+static void generateProceduralTileset() {
+    const std::string path = "assets/tiles/procedural_tileset.png";
+    if (fs::exists(path)) return;
+    fs::create_directories("assets/tiles");
+
+    const int TILE = 32;
+    const int COLS = 8;
+    const int ROWS = 5;
+    const int W = COLS * TILE;   // 256
+    const int H = ROWS * TILE;   // 160
+    std::vector<unsigned char> img(W * H * 4, 0);
+
+    auto set = [&](int x, int y, unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
+        setPixelW(img, x, y, W, H, r, g, b, a);
+    };
+
+    auto drawTile = [&](int col, int row, auto fn) {
+        int ox = col * TILE, oy = row * TILE;
+        for (int ly = 0; ly < TILE; ly++)
+            for (int lx = 0; lx < TILE; lx++)
+                fn(ox + lx, oy + ly, lx, ly);
+    };
+
+    // ---- Row 0: Grass variations ----
+
+    // 0,0 : Plain grass
+    drawTile(0, 0, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 1);
+        int n = (h % 21) - 10;
+        // Warm green base with subtle variation
+        int r = 56 + n/2, g = 118 + n, b = 40 + n/3;
+        // Subtle horizontal grass blade pattern
+        if ((h & 7) == 0) { g += 12; r -= 4; }
+        set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+    });
+
+    // 1,0 : Grass with flowers
+    drawTile(1, 0, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 2);
+        int n = (h % 21) - 10;
+        int r = 52 + n/2, g = 112 + n, b = 38 + n/3;
+        if ((h & 7) == 0) { g += 10; }
+        set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+        // Scatter flower pixels
+        int fh = pixelHash(lx, ly, 200);
+        if ((fh % 37) == 0) {
+            unsigned char fr, fg, fb;
+            int colorSel = (fh >> 8) % 4;
+            if      (colorSel == 0) { fr=240; fg=70;  fb=70;  }  // red
+            else if (colorSel == 1) { fr=255; fg=210; fb=50;  }  // yellow
+            else if (colorSel == 2) { fr=200; fg=100; fb=240; }  // purple
+            else                    { fr=255; fg=160; fb=200; }  // pink
+            set(gx, gy, fr, fg, fb);
+            // Petals around center
+            if (lx > 0) set(gx-1, gy, clampByte(fr-20), clampByte(fg-20), clampByte(fb-20));
+            if (lx < 31) set(gx+1, gy, clampByte(fr-20), clampByte(fg-20), clampByte(fb-20));
+        }
+    });
+
+    // 2,0 : Tall grass
+    drawTile(2, 0, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 3);
+        int n = (h % 21) - 10;
+        int r = 48 + n/2, g = 105 + n, b = 35 + n/3;
+        // Vertical blade highlights every few pixels
+        if ((pixelHash(lx, 0, 30) % 5) == 0 && ly > 8 && ly < 28) {
+            int bladeH = pixelHash(lx, 0, 31) % 8 + 10;
+            if (ly > (TILE - bladeH)) { g += 20; r -= 5; }
+        }
+        // Darker at bottom
+        if (ly > 24) { r -= 8; g -= 12; b -= 6; }
+        set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+    });
+
+    // 3,0 : Dark grass (forest floor)
+    drawTile(3, 0, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 4);
+        int n = (h % 17) - 8;
+        int r = 30 + n/2, g = 68 + n, b = 28 + n/3;
+        // Occasional dark leaf litter
+        if ((h % 19) == 0) { r += 15; g -= 10; b -= 5; }
+        set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+    });
+
+    // ---- Row 1: Dirt/path variations ----
+
+    // 0,1 : Dirt
+    drawTile(0, 1, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 10);
+        int n = (h % 21) - 10;
+        int r = 142 + n, g = 102 + n*3/4, b = 62 + n/2;
+        // Small pebble detail
+        if ((h % 29) == 0) { r += 20; g += 18; b += 15; }
+        set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+    });
+
+    // 1,1 : Dirt path center
+    drawTile(1, 1, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 11);
+        int n = (h % 17) - 8;
+        int r = 168 + n, g = 138 + n*3/4, b = 98 + n/2;
+        // Smoother center: less noise
+        set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+    });
+
+    // 2,1 : Dirt path edge
+    drawTile(2, 1, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 12);
+        int n = (h % 19) - 9;
+        // Left half is dirt-path, right half transitions to grass
+        if (lx < 20) {
+            int r = 160 + n, g = 130 + n*3/4, b = 90 + n/2;
+            set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+        } else {
+            // Dithered transition
+            float t = (float)(lx - 20) / 12.0f;
+            int h2 = pixelHash(lx, ly, 120);
+            bool useGrass = ((float)(h2 % 100) / 100.0f) < t;
+            if (useGrass) {
+                int r = 52 + n/2, g = 112 + n, b = 38 + n/3;
+                set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+            } else {
+                int r = 155 + n, g = 125 + n*3/4, b = 85 + n/2;
+                set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+            }
+        }
+    });
+
+    // 3,1 : Gravel
+    drawTile(3, 1, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 13);
+        int n = (h % 31) - 15;
+        int base = 140 + n;
+        int r = base + 5, g = base + 3, b = base;
+        // Occasional stone speck
+        if ((h % 11) == 0) { r += 25; g += 23; b += 20; }
+        if ((h % 13) == 0) { r -= 20; g -= 18; b -= 15; }
+        set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+    });
+
+    // ---- Row 2: Water variations ----
+
+    // 0,2 : Deep water
+    drawTile(0, 2, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 20);
+        int n = (h % 15) - 7;
+        int r = 18 + n/2, g = 45 + n, b = 140 + n;
+        // Subtle wave highlight
+        int wave = (int)(4.0f * sinf((float)(lx + ly * 2) * 0.3f));
+        g += wave; b += wave * 2;
+        set(gx, gy, clampByte(r), clampByte(g), clampByte(b), 230);
+    });
+
+    // 1,2 : Shallow water
+    drawTile(1, 2, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 21);
+        int n = (h % 15) - 7;
+        int r = 40 + n, g = 100 + n, b = 175 + n;
+        int wave = (int)(3.0f * sinf((float)(lx * 2 + ly) * 0.25f));
+        g += wave; b += wave;
+        set(gx, gy, clampByte(r), clampByte(g), clampByte(b), 210);
+    });
+
+    // 2,2 : Water edge (water on left, sand on right)
+    drawTile(2, 2, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 22);
+        int n = (h % 15) - 7;
+        // Wavy edge line
+        int edgeX = 16 + (int)(3.0f * sinf((float)ly * 0.6f));
+        if (lx < edgeX - 2) {
+            // Water
+            int r = 35 + n, g = 85 + n, b = 165 + n;
+            set(gx, gy, clampByte(r), clampByte(g), clampByte(b), 215);
+        } else if (lx < edgeX + 2) {
+            // Foam/surf line
+            set(gx, gy, clampByte(210 + n), clampByte(225 + n), clampByte(235 + n), 240);
+        } else {
+            // Sand
+            int r = 215 + n, g = 195 + n*3/4, b = 150 + n/2;
+            set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+        }
+    });
+
+    // 3,2 : Sand/beach
+    drawTile(3, 2, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 23);
+        int n = (h % 17) - 8;
+        int r = 220 + n, g = 200 + n*3/4, b = 155 + n/2;
+        // Occasional shell/pebble
+        if ((h % 41) == 0) { r -= 30; g -= 25; b -= 10; }
+        set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+    });
+
+    // ---- Row 3: Stone/dungeon ----
+
+    // 0,3 : Stone floor
+    drawTile(0, 3, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 30);
+        int n = (h % 17) - 8;
+        int base = 135 + n;
+        // Grid mortar lines every 8px
+        bool mortarH = (ly % 8 == 0);
+        bool mortarV = (lx % 8 == 0);
+        // Offset every other row for brick pattern
+        bool mortarV2 = ((ly / 8) % 2 == 1) ? ((lx + 4) % 8 == 0) : mortarV;
+        if (mortarH || mortarV2) {
+            set(gx, gy, clampByte(base - 30), clampByte(base - 28), clampByte(base - 25));
+        } else {
+            set(gx, gy, clampByte(base), clampByte(base - 2), clampByte(base + 2));
+        }
+    });
+
+    // 1,3 : Stone wall top
+    drawTile(1, 3, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 31);
+        int n = (h % 15) - 7;
+        // Brick pattern
+        int brickH = 6, brickW = 10;
+        int rowIdx = ly / brickH;
+        int offset = (rowIdx % 2) * (brickW / 2);
+        bool mortarH = (ly % brickH == 0);
+        bool mortarV = ((lx + offset) % brickW == 0);
+        if (mortarH || mortarV) {
+            set(gx, gy, clampByte(90 + n), clampByte(85 + n), clampByte(80 + n));
+        } else {
+            // Darker at bottom for depth
+            int shade = (int)(20.0f * (1.0f - (float)ly / TILE));
+            set(gx, gy, clampByte(155 + n + shade), clampByte(150 + n + shade), clampByte(145 + n + shade));
+        }
+    });
+
+    // 2,3 : Cobblestone
+    drawTile(2, 3, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 32);
+        int n = (h % 21) - 10;
+        // Irregular cobble pattern using distance to nearest grid point
+        float cx = (float)((lx + 3) / 7) * 7.0f + 3.0f;
+        float cy = (float)((ly + 3) / 7) * 7.0f + 3.0f;
+        float dx = lx - cx, dy = ly - cy;
+        float d = dx*dx + dy*dy;
+        if (d > 8.0f) {
+            // Mortar gap
+            set(gx, gy, clampByte(100 + n/2), clampByte(95 + n/2), clampByte(90 + n/2));
+        } else {
+            // Stone surface with per-cobble color variation
+            int cobbleN = pixelHash((int)cx, (int)cy, 320) % 20 - 10;
+            set(gx, gy, clampByte(150 + n + cobbleN), clampByte(148 + n + cobbleN), clampByte(142 + n + cobbleN));
+        }
+    });
+
+    // 3,3 : Dark stone
+    drawTile(3, 3, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 33);
+        int n = (h % 15) - 7;
+        int base = 70 + n;
+        bool mortarH = (ly % 8 == 0);
+        int offset = ((ly / 8) % 2) * 4;
+        bool mortarV = ((lx + offset) % 8 == 0);
+        if (mortarH || mortarV) {
+            set(gx, gy, clampByte(base - 20), clampByte(base - 18), clampByte(base - 15));
+        } else {
+            set(gx, gy, clampByte(base), clampByte(base + 2), clampByte(base + 5));
+        }
+    });
+
+    // ---- Row 4: Decorative ----
+
+    // 0,4 : Grass-dirt transition (top grass, bottom dirt, dithered)
+    drawTile(0, 4, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 40);
+        int n = (h % 17) - 8;
+        float t = (float)ly / (float)TILE;
+        // Dithered transition around the middle
+        float threshold = 0.45f + 0.12f * sinf((float)lx * 0.5f);
+        int dither = pixelHash(lx, ly, 400);
+        bool useDirt = (t + (float)(dither % 10 - 5) * 0.015f) > threshold;
+        if (useDirt) {
+            int r = 140 + n, g = 100 + n*3/4, b = 60 + n/2;
+            set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+        } else {
+            int r = 52 + n/2, g = 112 + n, b = 38 + n/3;
+            set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+        }
+    });
+
+    // 1,4 : Cliff edge (top surface, steep face with shadow)
+    drawTile(1, 4, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 41);
+        int n = (h % 15) - 7;
+        if (ly < 10) {
+            // Top grass surface
+            int r = 52 + n/2, g = 110 + n, b = 38 + n/3;
+            set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+        } else if (ly < 14) {
+            // Cliff lip - dark edge
+            set(gx, gy, clampByte(80 + n), clampByte(70 + n), clampByte(55 + n));
+        } else {
+            // Rock face with vertical streaks
+            int streak = pixelHash(lx, 0, 410) % 12 - 6;
+            int shade = (int)(15.0f * (float)(ly - 14) / 18.0f); // darker lower
+            int base = 120 + n + streak - shade;
+            set(gx, gy, clampByte(base + 5), clampByte(base + 2), clampByte(base));
+        }
+    });
+
+    // 2,4 : Wooden planks
+    drawTile(2, 4, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 42);
+        int n = (h % 13) - 6;
+        int plankIdx = ly / 6;
+        bool gap = (ly % 6 == 0);
+        int plankColor = pixelHash(plankIdx, 0, 420) % 16 - 8;
+        if (gap) {
+            set(gx, gy, clampByte(65 + n), clampByte(42 + n), clampByte(22 + n));
+        } else {
+            // Wood grain: horizontal streaks
+            int grain = pixelHash(lx, plankIdx, 421) % 8 - 4;
+            int r = 155 + n + plankColor + grain;
+            int g = 110 + n*3/4 + plankColor + grain;
+            int b = 60 + n/2 + plankColor/2;
+            // Knot detail
+            if ((pixelHash(lx, ly, 422) % 97) == 0) { r -= 25; g -= 20; b -= 10; }
+            set(gx, gy, clampByte(r), clampByte(g), clampByte(b));
+        }
+    });
+
+    // 3,4 : Carpet/rug (red with border pattern)
+    drawTile(3, 4, [&](int gx, int gy, int lx, int ly) {
+        int h = pixelHash(lx, ly, 43);
+        int n = (h % 9) - 4;
+        bool border = (lx < 3 || lx > 28 || ly < 3 || ly > 28);
+        bool innerBorder = (lx >= 3 && lx <= 5) || (lx >= 26 && lx <= 28) ||
+                           (ly >= 3 && ly <= 5) || (ly >= 26 && ly <= 28);
+        if (border) {
+            // Fringe
+            set(gx, gy, clampByte(180 + n), clampByte(150 + n), clampByte(50 + n));
+        } else if (innerBorder) {
+            // Gold border stripe
+            set(gx, gy, clampByte(200 + n), clampByte(170 + n), clampByte(40 + n));
+        } else {
+            // Red carpet body
+            set(gx, gy, clampByte(160 + n), clampByte(35 + n), clampByte(30 + n));
+        }
+    });
+
+    // Fill remaining columns (4-7) in each row with slight variations of column 0
+    for (int row = 0; row < ROWS; row++) {
+        for (int col = 4; col < COLS; col++) {
+            int srcCol = col - 4;
+            int srcOx = srcCol * TILE, srcOy = row * TILE;
+            int dstOx = col * TILE, dstOy = row * TILE;
+            for (int ly = 0; ly < TILE; ly++) {
+                for (int lx = 0; lx < TILE; lx++) {
+                    int si = ((srcOy + ly) * W + (srcOx + lx)) * 4;
+                    int varN = pixelHash(lx, ly, 500 + row * 8 + col) % 11 - 5;
+                    setPixelW(img, dstOx + lx, dstOy + ly, W, H,
+                        clampByte(img[si] + varN),
+                        clampByte(img[si+1] + varN),
+                        clampByte(img[si+2] + varN),
+                        img[si+3]);
+                }
+            }
+        }
+    }
+
+    stbi_write_png(path.c_str(), W, H, 4, img.data(), W * 4);
+    LOG_INFO("Game", "Generated procedural tileset: %s (%dx%d, %d tiles)", path.c_str(), W, H, COLS * ROWS);
+}
+
 static void generateVillageTiles() {
     fs::create_directories("assets/tiles");
     fs::create_directories("assets/sprites");
+
+    // Generate the consolidated procedural tileset PNG
+    generateProceduralTileset();
 
     // --- Ground tiles ---
 
@@ -492,6 +889,7 @@ void GameApp::onInit() {
     netClient_.onDisconnected = [this]() {
         if (connState_ == ConnectionState::InGame) {
             connState_ = ConnectionState::LoginScreen;
+            localPlayerCreated_ = false;
             loginScreen_.reset();
             LOG_INFO("GameApp", "Disconnected, returning to login screen");
         }
@@ -639,137 +1037,338 @@ void GameApp::createPlayer(World& world) {
     Faction playerFaction = Faction::Xyros;
     Entity* player = EntityFactory::createPlayer(world, "Player", ClassType::Warrior, true, playerFaction);
 
-    // Spawn at faction's home village position
+    // Spawn player at origin so they start near the mobs
     auto* transform = player->getComponent<Transform>();
     if (transform) {
-        const auto* factionDef = FactionRegistry::get(playerFaction);
-        // Each faction gets a distinct spawn offset (will be replaced by zone system)
-        float spawnX = 16.0f;
-        float spawnY = 16.0f;
-        if (factionDef) {
-            // Spread factions across the map — 8 tile spacing per faction index
-            spawnX = 16.0f + static_cast<float>(static_cast<uint8_t>(playerFaction) - 1) * 8.0f * Coords::TILE_SIZE;
-        }
-        transform->position = {spawnX, spawnY};
+        transform->position = {0.0f, 0.0f};
     }
 
-    // Create placeholder sprite if no texture was loaded by the factory
+    // Create proper pixel-art player sprite if no texture was loaded by the factory
     auto* sprite = player->getComponent<SpriteComponent>();
     if (sprite && !sprite->texture) {
         std::string playerPath = "assets/sprites/player.png";
         if (!fs::exists(playerPath)) {
-            // Generate and save placeholder (blue character shape)
-            const int SZ = 16;
-            std::vector<unsigned char> pixels(SZ * SZ * 4, 0);
-            for (int y = 0; y < SZ; y++) {
-                for (int x = 0; x < SZ; x++) {
-                    int i = (y * SZ + x) * 4;
-                    float dx = x - 7.5f, dy = y - 7.5f;
-                    bool body = (x >= 4 && x <= 11 && y >= 2 && y <= 13);
-                    bool head = (dx * dx + (dy + 3) * (dy + 3)) < 12.0f;
-                    if (body || head) {
-                        pixels[i + 0] = 80;  pixels[i + 1] = 120;
-                        pixels[i + 2] = 230; pixels[i + 3] = 255;
-                    }
+            // 20x33 character sprite — TWOM-style warrior
+            const int W = 20, H = 33;
+            std::vector<unsigned char> pixels(W * H * 4, 0);
+            auto sp = [&](int x, int y, unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
+                setPixelW(pixels, x, y, W, H, r, g, b, a);
+            };
+            auto outline = [&](int x, int y) { sp(x, y, 20, 20, 25); };
+
+            // -- Hair (rows 0-4) --
+            for (int y = 1; y <= 4; y++)
+                for (int x = 6; x <= 13; x++) {
+                    int n = pixelHash(x, y, 600) % 7 - 3;
+                    sp(x, y, clampByte(60+n), clampByte(35+n), clampByte(20+n)); // brown hair
+                }
+            // Hair outline
+            for (int x = 6; x <= 13; x++) outline(x, 0);
+            outline(5, 1); outline(5, 2); outline(5, 3);
+            outline(14, 1); outline(14, 2); outline(14, 3);
+
+            // -- Head / face (rows 4-10) --
+            for (int y = 4; y <= 10; y++)
+                for (int x = 7; x <= 12; x++) {
+                    int n = pixelHash(x, y, 601) % 5 - 2;
+                    sp(x, y, clampByte(230+n), clampByte(190+n), clampByte(150+n)); // skin
+                }
+            // Eyes
+            sp(8, 7, 40, 40, 50); sp(9, 7, 40, 40, 50);
+            sp(11, 7, 40, 40, 50); sp(12, 7, 40, 40, 50);
+            // Mouth
+            sp(9, 9, 180, 120, 100); sp(10, 9, 180, 120, 100); sp(11, 9, 180, 120, 100);
+            // Face outline
+            for (int y = 4; y <= 10; y++) { outline(6, y); outline(13, y); }
+            for (int x = 7; x <= 12; x++) outline(x, 11);
+
+            // -- Body / tunic (rows 11-22) --
+            for (int y = 11; y <= 22; y++)
+                for (int x = 5; x <= 14; x++) {
+                    int n = pixelHash(x, y, 602) % 7 - 3;
+                    // Blue tunic with lighter chest highlight
+                    int highlight = (x >= 8 && x <= 11 && y >= 13 && y <= 17) ? 20 : 0;
+                    sp(x, y, clampByte(50+n+highlight/2), clampByte(80+n+highlight), clampByte(170+n+highlight));
+                }
+            // Belt
+            for (int x = 5; x <= 14; x++) {
+                int n = pixelHash(x, 20, 603) % 5 - 2;
+                sp(x, 20, clampByte(120+n), clampByte(85+n), clampByte(40+n)); // brown belt
+            }
+            sp(10, 20, 200, 180, 60); // belt buckle
+            // Body outline
+            for (int y = 11; y <= 22; y++) { outline(4, y); outline(15, y); }
+            for (int x = 5; x <= 14; x++) outline(x, 22);
+
+            // -- Arms (rows 12-20, sides of body) --
+            for (int y = 12; y <= 19; y++) {
+                int n = pixelHash(3, y, 604) % 5 - 2;
+                sp(3, y, clampByte(230+n), clampByte(190+n), clampByte(150+n)); // skin left arm
+                sp(4, y, clampByte(50+n), clampByte(80+n), clampByte(170+n)); // sleeve left
+                sp(16, y, clampByte(230+n), clampByte(190+n), clampByte(150+n)); // skin right arm
+                sp(15, y, clampByte(50+n), clampByte(80+n), clampByte(170+n)); // sleeve right
+            }
+            for (int y = 12; y <= 19; y++) { outline(2, y); outline(17, y); }
+            outline(3, 20); outline(16, 20);
+
+            // -- Sword (right side, rows 8-24) --
+            for (int y = 8; y <= 22; y++) {
+                sp(18, y, 180, 185, 195); // blade
+                if (y >= 8 && y <= 10) sp(19, y, 160, 165, 175); // blade width
+            }
+            sp(18, 23, 120, 85, 40); sp(18, 24, 120, 85, 40); // hilt
+            sp(17, 23, 180, 160, 50); sp(19, 23, 180, 160, 50); // crossguard
+
+            // -- Legs / pants (rows 23-30) --
+            for (int y = 23; y <= 30; y++) {
+                for (int x = 6; x <= 9; x++) {
+                    int n = pixelHash(x, y, 605) % 5 - 2;
+                    sp(x, y, clampByte(65+n), clampByte(55+n), clampByte(45+n)); // dark pants left
+                }
+                for (int x = 11; x <= 14; x++) {
+                    int n = pixelHash(x, y, 606) % 5 - 2;
+                    sp(x, y, clampByte(65+n), clampByte(55+n), clampByte(45+n)); // dark pants right
                 }
             }
+            // Leg outline
+            for (int y = 23; y <= 30; y++) {
+                outline(5, y); outline(10, y);
+                outline(10, y); outline(15, y);
+            }
+
+            // -- Boots (rows 30-32) --
+            for (int y = 31; y <= 32; y++) {
+                for (int x = 5; x <= 9; x++) sp(x, y, 80, 55, 30);
+                for (int x = 11; x <= 15; x++) sp(x, y, 80, 55, 30);
+            }
+            for (int x = 5; x <= 9; x++) outline(x, (std::min)(32, H-1));
+            for (int x = 11; x <= 15; x++) outline(x, (std::min)(32, H-1));
+
             fs::create_directories("assets/sprites");
-            stbi_write_png(playerPath.c_str(), SZ, SZ, 4, pixels.data(), SZ * 4);
+            stbi_write_png(playerPath.c_str(), W, H, 4, pixels.data(), W * 4);
         }
         sprite->texture = TextureCache::instance().load(playerPath);
         sprite->texturePath = playerPath;
+        if (sprite->texture) {
+            sprite->size = {(float)sprite->texture->width(), (float)sprite->texture->height()};
+        }
     }
 
-    LOG_INFO("Game", "Player entity created at (%d, %d)", Coords::tileX(16.0f), Coords::tileY(16.0f));
+    LOG_INFO("Game", "Player entity created at (0, 0)");
 }
 
 void GameApp::createTestEntities(World& world) {
-    // Create a grid of ground tiles to show the world
+    // ---- Generate improved grass tile variants ----
     std::string grassPath = "assets/sprites/grass_tile.png";
-    auto groundTex = TextureCache::instance().load(grassPath);
+    std::string grassDarkPath = "assets/sprites/grass_dark_tile.png";
+    std::string dirtPatchPath = "assets/sprites/dirt_patch_tile.png";
 
-    if (!groundTex) {
-        // Generate procedural grass tile and save to disk
+    auto grassTex = TextureCache::instance().load(grassPath);
+    if (!grassTex) {
         const int SIZE = 32;
         std::vector<unsigned char> pixels(SIZE * SIZE * 4);
         for (int y = 0; y < SIZE; y++) {
             for (int x = 0; x < SIZE; x++) {
                 int i = (y * SIZE + x) * 4;
-                int noise = ((x * 7 + y * 13) % 20) - 10;
-                pixels[i + 0] = (unsigned char)(std::max)(0, (std::min)(255, 34 + noise));
-                pixels[i + 1] = (unsigned char)(std::max)(0, (std::min)(255, 85 + noise));
-                pixels[i + 2] = (unsigned char)(std::max)(0, (std::min)(255, 34 + noise));
-                pixels[i + 3] = 255;
+                int h = pixelHash(x, y, 700);
+                int n = (h % 21) - 10;
+                // Warm green base
+                int r = 55 + n/2, g = 115 + n, b = 38 + n/3;
+                // Grass blade highlights
+                if ((h & 7) == 0) { g += 15; r -= 3; }
+                // Subtle darker tufts
+                if ((h % 23) == 0) { r -= 8; g -= 12; b -= 5; }
+                pixels[i+0] = clampByte(r);
+                pixels[i+1] = clampByte(g);
+                pixels[i+2] = clampByte(b);
+                pixels[i+3] = 255;
             }
         }
         fs::create_directories("assets/sprites");
         stbi_write_png(grassPath.c_str(), SIZE, SIZE, 4, pixels.data(), SIZE * 4);
-        groundTex = TextureCache::instance().load(grassPath);
+        grassTex = TextureCache::instance().load(grassPath);
     }
 
-    // Tiles placed so origin (0,0) is at tile corner, not tile center
-    // Centers at 16, 48, 80... so edges align with 0, 32, 64...
-    int tilesX = 32;
-    int tilesY = 20;
+    auto grassDarkTex = TextureCache::instance().load(grassDarkPath);
+    if (!grassDarkTex) {
+        const int SIZE = 32;
+        std::vector<unsigned char> pixels(SIZE * SIZE * 4);
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                int i = (y * SIZE + x) * 4;
+                int h = pixelHash(x, y, 701);
+                int n = (h % 17) - 8;
+                int r = 38 + n/2, g = 82 + n, b = 30 + n/3;
+                if ((h & 11) == 0) { g += 10; }
+                if ((h % 19) == 0) { r += 12; g -= 8; b -= 4; } // leaf litter
+                pixels[i+0] = clampByte(r); pixels[i+1] = clampByte(g);
+                pixels[i+2] = clampByte(b); pixels[i+3] = 255;
+            }
+        }
+        stbi_write_png(grassDarkPath.c_str(), SIZE, SIZE, 4, pixels.data(), SIZE * 4);
+        grassDarkTex = TextureCache::instance().load(grassDarkPath);
+    }
+
+    auto dirtTex = TextureCache::instance().load(dirtPatchPath);
+    if (!dirtTex) {
+        const int SIZE = 32;
+        std::vector<unsigned char> pixels(SIZE * SIZE * 4);
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                int i = (y * SIZE + x) * 4;
+                int h = pixelHash(x, y, 702);
+                int n = (h % 21) - 10;
+                int r = 140 + n, g = 100 + n*3/4, b = 62 + n/2;
+                if ((h % 29) == 0) { r += 18; g += 15; b += 12; } // pebble
+                pixels[i+0] = clampByte(r); pixels[i+1] = clampByte(g);
+                pixels[i+2] = clampByte(b); pixels[i+3] = 255;
+            }
+        }
+        stbi_write_png(dirtPatchPath.c_str(), SIZE, SIZE, 4, pixels.data(), SIZE * 4);
+        dirtTex = TextureCache::instance().load(dirtPatchPath);
+    }
+
+    // ---- Lay ground tiles: 48x32 grid centered on origin ----
+    int tilesX = 48;
+    int tilesY = 32;
     float tileSize = 32.0f;
     float half = tileSize * 0.5f;
     int halfX = tilesX / 2;
     int halfY = tilesY / 2;
 
-    for (int y = 0; y < tilesY; y++) {
-        for (int x = 0; x < tilesX; x++) {
+    for (int ty = 0; ty < tilesY; ty++) {
+        for (int tx = 0; tx < tilesX; tx++) {
             Entity* tile = world.createEntity("Tile");
             tile->setTag("ground");
 
             auto* transform = tile->addComponent<Transform>(
-                (float)(x - halfX) * tileSize + half,
-                (float)(y - halfY) * tileSize + half
+                (float)(tx - halfX) * tileSize + half,
+                (float)(ty - halfY) * tileSize + half
             );
             transform->depth = 0.0f;
 
             auto* sprite = tile->addComponent<SpriteComponent>();
-            sprite->texture = groundTex;
-            sprite->texturePath = grassPath;
             sprite->size = {tileSize, tileSize};
+
+            // Choose tile type: mostly grass, occasional dirt patches and dark grass
+            int tileH = pixelHash(tx, ty, 800);
+            if ((tileH % 17) == 0) {
+                // Dirt patch
+                sprite->texture = dirtTex;
+                sprite->texturePath = dirtPatchPath;
+            } else if ((tileH % 7) == 0) {
+                // Dark grass (near trees / edges)
+                sprite->texture = grassDarkTex;
+                sprite->texturePath = grassDarkPath;
+            } else {
+                sprite->texture = grassTex;
+                sprite->texturePath = grassPath;
+            }
         }
     }
 
-    // Create some test objects (trees, rocks) scattered around
+    // ---- Generate improved tree sprite (32x48) ----
     std::string treePath = "assets/sprites/tree.png";
-    auto objTex = TextureCache::instance().load(treePath);
-    if (!objTex) {
-        // Generate procedural tree and save to disk
-        const int SIZE = 32;
-        std::vector<unsigned char> pixels(SIZE * SIZE * 4, 0);
-        for (int y = 0; y < SIZE; y++) {
-            for (int x = 0; x < SIZE; x++) {
-                int i = (y * SIZE + x) * 4;
-                // Trunk at bottom (high y = bottom of image in PNG top-left coords)
-                if (x >= 13 && x <= 18 && y >= 20) {
-                    pixels[i + 0] = 101; pixels[i + 1] = 67;
-                    pixels[i + 2] = 33;  pixels[i + 3] = 255;
-                } else {
-                    // Canopy at top
-                    float dx = x - 16.0f;
-                    float dy = y - 10.0f;
-                    if (dx * dx + dy * dy < 100.0f && y < 22) {
-                        int noise = ((x * 3 + y * 7) % 30) - 15;
-                        pixels[i + 0] = (unsigned char)(std::max)(0, (std::min)(255, 20 + noise));
-                        pixels[i + 1] = (unsigned char)(std::max)(0, (std::min)(255, 100 + noise));
-                        pixels[i + 2] = (unsigned char)(std::max)(0, (std::min)(255, 20 + noise));
-                        pixels[i + 3] = 255;
+    auto treeTex = TextureCache::instance().load(treePath);
+    if (!treeTex) {
+        const int W = 32, H = 48;
+        std::vector<unsigned char> pixels(W * H * 4, 0);
+        auto sp = [&](int x, int y, unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
+            setPixelW(pixels, x, y, W, H, r, g, b, a);
+        };
+
+        // Trunk (centered, rows 30-47)
+        for (int y = 30; y < H; y++) {
+            for (int x = 12; x <= 19; x++) {
+                int n = pixelHash(x, y, 710) % 11 - 5;
+                // Bark texture: lighter on left (light source from left-top)
+                int highlight = (x <= 14) ? 12 : ((x >= 18) ? -10 : 0);
+                sp(x, y, clampByte(95 + n + highlight), clampByte(65 + n + highlight), clampByte(30 + n));
+                // Vertical bark lines
+                if ((pixelHash(x, 0, 711) % 4) == 0) {
+                    int bn = pixelHash(x, y, 712) % 7 - 3;
+                    sp(x, y, clampByte(80 + bn + highlight), clampByte(55 + bn + highlight), clampByte(25 + bn));
+                }
+            }
+        }
+        // Trunk outline
+        for (int y = 30; y < H; y++) {
+            sp(11, y, 30, 22, 12); sp(20, y, 30, 22, 12);
+        }
+
+        // Canopy (organic round shape with multiple layers)
+        // Main canopy ellipse centered at (16, 16), radii ~14x14
+        float cx = 16.0f, cy = 16.0f;
+        float rx = 14.5f, ry = 14.0f;
+        for (int y = 0; y < 32; y++) {
+            for (int x = 0; x < W; x++) {
+                float dx = x - cx, dy = y - cy;
+                float d = (dx*dx)/(rx*rx) + (dy*dy)/(ry*ry);
+                if (d < 1.0f) {
+                    int n = pixelHash(x, y, 713) % 15 - 7;
+                    // Multiple green shades: lighter toward top-left, darker at bottom-right
+                    float lightFactor = 1.0f - d * 0.3f;
+                    float topBias = (cy - (float)y) / ry; // positive = upper part
+                    int baseG = (int)(95.0f + topBias * 25.0f);
+                    int baseR = (int)(25.0f + topBias * 10.0f);
+                    int baseB = (int)(18.0f + topBias * 5.0f);
+
+                    // Shadow on lower-right
+                    if (dx > 3 && dy > 3) { baseG -= 15; baseR -= 5; }
+                    // Highlight on upper-left (dappled)
+                    if (dx < -2 && dy < -2 && (pixelHash(x, y, 714) % 5) == 0) { baseG += 25; baseR += 8; }
+                    // Leaf cluster variation
+                    int cluster = pixelHash(x / 3, y / 3, 715) % 20 - 10;
+
+                    sp(x, y, clampByte(baseR + n + cluster/2),
+                             clampByte(baseG + n + cluster),
+                             clampByte(baseB + n + cluster/3));
+                }
+            }
+        }
+
+        // Canopy dark outline
+        for (int y = 0; y < 32; y++) {
+            for (int x = 0; x < W; x++) {
+                float dx = x - cx, dy = y - cy;
+                float d = (dx*dx)/(rx*rx) + (dy*dy)/(ry*ry);
+                if (d >= 0.85f && d < 1.15f) {
+                    // Check if neighbor is transparent
+                    bool hasEmpty = false;
+                    for (int dy2 = -1; dy2 <= 1; dy2++)
+                        for (int dx2 = -1; dx2 <= 1; dx2++) {
+                            int nx = x+dx2, ny = y+dy2;
+                            if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
+                                if (pixels[(ny*W+nx)*4+3] == 0) hasEmpty = true;
+                            }
+                        }
+                    if (hasEmpty && pixels[(y*W+x)*4+3] != 0) {
+                        sp(x, y, 15, 40, 10);
                     }
                 }
             }
         }
-        stbi_write_png(treePath.c_str(), SIZE, SIZE, 4, pixels.data(), SIZE * 4);
-        objTex = TextureCache::instance().load(treePath);
+
+        stbi_write_png(treePath.c_str(), W, H, 4, pixels.data(), W * 4);
+        treeTex = TextureCache::instance().load(treePath);
     }
 
-    // Place some trees
+    // ---- Place trees: clustered + scattered for natural feel ----
+    // Clusters near edges, some random
     Vec2 treePositions[] = {
-        {-128, 64}, {96, -96}, {-64, 128}, {192, 48},
-        {-200, -64}, {64, 200}, {256, -128}, {-160, 180}
+        // Cluster NW
+        {-320, -200}, {-290, -180}, {-350, -160}, {-310, -140},
+        // Cluster NE
+        {280, -210}, {310, -190}, {260, -170}, {300, -150},
+        // Cluster SW
+        {-280, 200}, {-310, 180}, {-260, 220},
+        // Cluster SE
+        {300, 190}, {330, 210}, {280, 230},
+        // Scattered singles
+        {-100, 80}, {120, -60}, {-50, -150}, {200, 100},
+        {-180, 30}, {180, -120}, {-20, 250}, {60, -240},
+        // Near center but offset
+        {-140, -50}, {160, 60}, {50, 140}, {-80, -110},
     };
 
     for (auto& pos : treePositions) {
@@ -780,19 +1379,70 @@ void GameApp::createTestEntities(World& world) {
         transform->depth = 5.0f;
 
         auto* sprite = tree->addComponent<SpriteComponent>();
-        sprite->texture = objTex;
+        sprite->texture = treeTex;
         sprite->texturePath = treePath;
-        sprite->size = {32.0f, 48.0f}; // trees are taller
+        sprite->size = {32.0f, 48.0f};
 
-        // Tree collision — covers the trunk and lower canopy
-        // Full-sprite collision (editor will allow custom polygon shapes)
         auto* collider = tree->addComponent<BoxCollider>();
-        collider->size = {28.0f, 44.0f};
-        collider->offset = {0.0f, 0.0f};
+        collider->size = {12.0f, 18.0f};
+        collider->offset = {0.0f, 8.0f};
         collider->isStatic = true;
     }
 
-    LOG_INFO("Game", "Test scene created: %zu entities total", world.entityCount());
+    // ---- Generate and place rock decorations ----
+    std::string rockPath = "assets/sprites/rock_small.png";
+    auto rockTex = TextureCache::instance().load(rockPath);
+    if (!rockTex) {
+        const int SIZE = 16;
+        std::vector<unsigned char> pixels(SIZE * SIZE * 4, 0);
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                float dx = x - 8.0f, dy = y - 9.0f;
+                // Slightly flat ellipse
+                if (dx*dx/(6.5f*6.5f) + dy*dy/(5.5f*5.5f) < 1.0f) {
+                    int n = pixelHash(x, y, 720) % 15 - 7;
+                    int shade = (int)(25.0f * (1.0f - (float)y / SIZE));
+                    unsigned char base = clampByte(130 + n + shade);
+                    setPixel(pixels, x, y, SIZE, base, clampByte(base - 3), clampByte(base - 8));
+                    // Highlight speck
+                    if (y < 6 && (pixelHash(x, y, 721) % 7) == 0) {
+                        setPixel(pixels, x, y, SIZE, clampByte(base + 30), clampByte(base + 25), clampByte(base + 20));
+                    }
+                }
+            }
+        }
+        // Outline
+        for (int y = 0; y < SIZE; y++)
+            for (int x = 0; x < SIZE; x++) {
+                if (pixels[(y*SIZE+x)*4+3] == 0) continue;
+                bool edge = false;
+                for (int d = -1; d <= 1 && !edge; d++)
+                    for (int e = -1; e <= 1 && !edge; e++) {
+                        int nx = x+e, ny = y+d;
+                        if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE || pixels[(ny*SIZE+nx)*4+3] == 0) edge = true;
+                    }
+                if (edge) setPixel(pixels, x, y, SIZE, 60, 55, 50);
+            }
+        stbi_write_png(rockPath.c_str(), SIZE, SIZE, 4, pixels.data(), SIZE * 4);
+        rockTex = TextureCache::instance().load(rockPath);
+    }
+
+    Vec2 rockPositions[] = {
+        {-60, 40}, {80, -30}, {-150, 100}, {200, -80},
+        {30, 170}, {-100, -130}, {250, 50}, {-220, -40},
+    };
+    for (auto& pos : rockPositions) {
+        Entity* rock = world.createEntity("Rock");
+        rock->setTag("decoration");
+        auto* transform = rock->addComponent<Transform>(pos);
+        transform->depth = 2.0f;
+        auto* sprite = rock->addComponent<SpriteComponent>();
+        sprite->texture = rockTex;
+        sprite->texturePath = rockPath;
+        sprite->size = {16.0f, 16.0f};
+    }
+
+    LOG_INFO("Game", "Test scene created: %zu entities total (%dx%d tiles + trees + rocks)", world.entityCount(), tilesX, tilesY);
 }
 
 void GameApp::spawnTestMobs(World& world) {
@@ -803,7 +1453,7 @@ void GameApp::spawnTestMobs(World& world) {
     zoneTransform->depth = -5.0f; // Behind everything (invisible zone marker)
     auto* szComp = zone->addComponent<SpawnZoneComponent>();
     szComp->config.zoneName = "Whispering Woods";
-    szComp->config.size = {400.0f, 300.0f};
+    szComp->config.size = {200.0f, 150.0f};
 
     // Add spawn rules
     MobSpawnRule slimeRule;
@@ -913,6 +1563,8 @@ void GameApp::onUpdate(float deltaTime) {
                 AuthResponse resp = authClient_.consumeResult();
                 if (resp.success) {
                     pendingAuthToken_ = resp.authToken;
+                    pendingCharName_ = resp.characterName;
+                    pendingClassName_ = resp.className;
                     // Connect to game server via UDP with auth token
                     std::string host = loginScreen_.serverHost;
                     netClient_.connectWithToken(host, static_cast<uint16_t>(serverPort_), pendingAuthToken_);
@@ -935,6 +1587,7 @@ void GameApp::onUpdate(float deltaTime) {
             if (netClient_.isConnected()) {
                 connState_ = ConnectionState::InGame;
                 loginScreen_.statusMessage = "";
+                localPlayerCreated_ = false;
                 LOG_INFO("GameApp", "Connected to game server, entering game");
             }
             // ConnectReject is handled by the onConnectRejected callback set up in onInit
@@ -942,6 +1595,28 @@ void GameApp::onUpdate(float deltaTime) {
         }
 
         case ConnectionState::InGame: {
+            // Create local player entity on first frame of InGame (after auth + scene load)
+            if (!localPlayerCreated_) {
+                auto* sc = SceneManager::instance().currentScene();
+                if (sc) {
+                    // Determine class from auth response
+                    ClassType ct = ClassType::Warrior;
+                    if (pendingClassName_ == "Mage") ct = ClassType::Mage;
+                    else if (pendingClassName_ == "Archer") ct = ClassType::Archer;
+
+                    Faction playerFaction = Faction::Xyros;
+                    Entity* player = EntityFactory::createPlayer(
+                        sc->world(), pendingCharName_, ct, true, playerFaction);
+
+                    auto* transform = player->getComponent<Transform>();
+                    if (transform) transform->position = {0.0f, 0.0f};
+
+                    localPlayerCreated_ = true;
+                    LOG_INFO("GameApp", "Local player '%s' (%s) created",
+                             pendingCharName_.c_str(), pendingClassName_.c_str());
+                }
+            }
+
             // Network: poll for server messages and send movement
             netTime_ += deltaTime;
             if (netClient_.isConnected()) {
