@@ -23,6 +23,12 @@ static void ensureLightShader() {
     }
 }
 
+// TODO(RHI): Migrate to CommandList — replace direct GL calls with:
+//   ctx.commandList->setFramebuffer(...)   (replaces lightMap.bind/unbind, scene.bind/unbind)
+//   ctx.commandList->clear(...)            (replaces glClearColor + glClear)
+//   ctx.commandList->bindPipeline(...)     (replaces glBlendFunc + shader.bind)
+//   ctx.commandList->bindTexture(...)      (replaces glActiveTexture + glBindTexture)
+//   ctx.commandList->draw(...)             (replaces FullscreenQuad::draw)
 void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
     graph.addPass({"Lighting", true, [&config](RenderPassContext& ctx) {
         if (!config.enabled || !ctx.world) return;

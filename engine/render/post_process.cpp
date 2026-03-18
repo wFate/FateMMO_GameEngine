@@ -21,6 +21,12 @@ static void ensureShaders() {
     if (!ok) LOG_ERROR("PostProcess", "Failed to load one or more post-process shaders");
 }
 
+// TODO(RHI): Migrate to CommandList — replace direct GL calls with:
+//   ctx.commandList->setFramebuffer(...)   (replaces FBO bind/unbind)
+//   ctx.commandList->clear(...)            (replaces glClear)
+//   ctx.commandList->bindPipeline(...)     (replaces glEnable/glDisable + glBlendFunc + shader.bind)
+//   ctx.commandList->bindTexture(...)      (replaces glActiveTexture + glBindTexture)
+//   ctx.commandList->draw(...)             (replaces FullscreenQuad::draw)
 void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
     // Pass: Bloom Extract
     graph.addPass({"BloomExtract", true, [&config](RenderPassContext& ctx) {
