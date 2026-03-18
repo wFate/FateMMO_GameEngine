@@ -153,6 +153,10 @@ target_link_libraries(fate_engine PUBLIC
     TracyClient
 )
 
+if(WIN32)
+    target_link_libraries(fate_engine PUBLIC ws2_32)
+endif()
+
 if(ENGINE_MEMORY_DEBUG)
     target_compile_definitions(fate_engine PUBLIC ENGINE_MEMORY_DEBUG)
 endif()
