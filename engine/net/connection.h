@@ -1,6 +1,8 @@
 #pragma once
 #include "engine/net/socket.h"
 #include "engine/net/reliability.h"
+#include "engine/net/aoi.h"
+#include "engine/net/protocol.h"
 #include <cstdint>
 #include <vector>
 #include <unordered_map>
@@ -14,6 +16,10 @@ struct ClientConnection {
     uint32_t sessionToken = 0;
     float lastHeartbeat = 0.0f;
     ReliabilityLayer reliability;
+
+    VisibilitySet aoi;
+    std::unordered_map<uint64_t, SvEntityUpdateMsg> lastAckedState; // keyed by PersistentId value
+    uint64_t playerEntityId = 0; // PersistentId of this client's player entity
 };
 
 class ConnectionManager {
