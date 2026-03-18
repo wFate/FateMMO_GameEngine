@@ -1,4 +1,5 @@
 #pragma once
+#include "engine/render/gfx/types.h"
 
 namespace fate {
 
@@ -14,6 +15,7 @@ public:
 private:
     FullscreenQuad() = default;
     unsigned int vao_ = 0;
+    gfx::PipelineHandle pipelineHandle_{};
 };
 
 } // namespace fate

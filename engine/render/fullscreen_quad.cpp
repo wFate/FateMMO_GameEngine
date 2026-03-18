@@ -1,4 +1,5 @@
 #include "engine/render/fullscreen_quad.h"
+#include "engine/render/gfx/device.h"
 #include "engine/render/gfx/backend/gl/gl_loader.h"
 
 namespace fate {
@@ -9,12 +10,16 @@ FullscreenQuad& FullscreenQuad::instance() {
 }
 
 void FullscreenQuad::init() {
-    glGenVertexArrays(1, &vao_);
+    auto& device = gfx::Device::instance();
+    gfx::PipelineDesc desc{};
+    pipelineHandle_ = device.createPipeline(desc);
+    vao_ = device.resolveGLPipelineVAO(pipelineHandle_);
 }
 
 void FullscreenQuad::shutdown() {
-    if (vao_) {
-        glDeleteVertexArrays(1, &vao_);
+    if (pipelineHandle_.valid()) {
+        gfx::Device::instance().destroy(pipelineHandle_);
+        pipelineHandle_ = {};
         vao_ = 0;
     }
 }
