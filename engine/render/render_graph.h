@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/render/framebuffer.h"
+#include "engine/render/gfx/command_list.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -18,6 +19,7 @@ struct RenderPassContext {
     Camera* camera = nullptr;
     World* world = nullptr;
     RenderGraph* graph = nullptr;
+    gfx::CommandList* commandList = nullptr;
     int viewportWidth = 0;
     int viewportHeight = 0;
 };
