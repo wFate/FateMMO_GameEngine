@@ -1,4 +1,5 @@
 #include "engine/render/texture.h"
+#include "engine/render/gfx/device.h"
 #include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/core/logger.h"
 #include "engine/asset/asset_registry.h"
@@ -7,8 +8,8 @@
 namespace fate {
 
 Texture::~Texture() {
-    if (textureId_) {
-        glDeleteTextures(1, &textureId_);
+    if (gfxHandle_.valid()) {
+        gfx::Device::instance().destroy(gfxHandle_);
     }
 }
 
@@ -40,37 +41,39 @@ bool Texture::reloadFromFile(const std::string& path) {
         return false;
     }
 
+    // Destroy old handle and create a new one
+    if (gfxHandle_.valid()) {
+        gfx::Device::instance().destroy(gfxHandle_);
+        gfxHandle_ = {};
+        textureId_ = 0;
+    }
+
     width_ = w;
     height_ = h;
     path_ = path;
 
-    // Reuse existing GL texture name — glTexImage2D respecifies storage
-    glBindTexture(GL_TEXTURE_2D, textureId_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
+    bool result = loadFromMemory(data, w, h, 4);
     stbi_image_free(data);
-    LOG_INFO("Texture", "Reloaded %s (%dx%d)", path.c_str(), w, h);
-    return true;
+
+    if (result) {
+        LOG_INFO("Texture", "Reloaded %s (%dx%d)", path.c_str(), w, h);
+    }
+    return result;
 }
 
 bool Texture::loadFromMemory(const unsigned char* data, int width, int height, int channels) {
     width_ = width;
     height_ = height;
 
-    glGenTextures(1, &textureId_);
-    glBindTexture(GL_TEXTURE_2D, textureId_);
+    auto& device = gfx::Device::instance();
+    gfx::TextureFormat fmt = (channels == 4) ? gfx::TextureFormat::RGBA8 : gfx::TextureFormat::RGB8;
+    gfxHandle_ = device.createTexture(width, height, fmt, data);
+    if (!gfxHandle_.valid()) {
+        LOG_ERROR("Texture", "Device::createTexture failed");
+        return false;
+    }
 
-    // Pixel art settings: nearest-neighbor filtering, no blurring
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    GLenum format = (channels == 4) ? GL_RGBA : GL_RGB;
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
+    textureId_ = device.resolveGLTexture(gfxHandle_);
     return true;
 }
 
