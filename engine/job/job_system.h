@@ -6,6 +6,7 @@
 #include <cassert>
 #include <thread>
 #include "engine/job/fiber.h"
+#include "engine/memory/arena.h"
 
 namespace fate {
 
@@ -119,6 +120,8 @@ public:
     Counter* submit(Job* jobs, int count);
     void waitForCounter(Counter* counter, int target = 0);
 
+    Arena* fiberScratchArena();
+
 private:
     JobSystem() = default;
 
@@ -150,6 +153,8 @@ private:
     WaitEntry waitList_[MAX_FIBERS];
     std::atomic<int> waitCount_{0};
     std::atomic_flag waitLock_ = ATOMIC_FLAG_INIT;
+
+    Arena* fiberArenas_ = nullptr;
 
     void workerMain(int workerIndex);
     static void __stdcall fiberEntry(void* param);
