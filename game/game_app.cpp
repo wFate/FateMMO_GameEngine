@@ -439,6 +439,48 @@ void GameApp::onInit() {
         }
     };
 
+    netClient_.onCombatEvent = [this](const SvCombatEventMsg& msg) {
+        LOG_INFO("Combat", "Damage: %d to entity %llu%s%s",
+                 msg.damage, (unsigned long long)msg.targetId,
+                 msg.isCrit ? " (CRIT)" : "",
+                 msg.isKill ? " (KILL)" : "");
+    };
+
+    netClient_.onPlayerState = [this](const SvPlayerStateMsg& msg) {
+        auto* scene = SceneManager::instance().currentScene();
+        if (!scene) return;
+        scene->world().forEach<CharacterStatsComponent, PlayerController>(
+            [&](Entity*, CharacterStatsComponent* stats, PlayerController* ctrl) {
+                if (!ctrl->isLocalPlayer) return;
+                stats->stats.currentHP = msg.currentHP;
+                stats->stats.maxHP = msg.maxHP;
+                stats->stats.currentMP = msg.currentMP;
+                stats->stats.maxMP = msg.maxMP;
+                stats->stats.currentFury = msg.currentFury;
+                stats->stats.currentXP = msg.currentXP;
+                stats->stats.level = msg.level;
+            }
+        );
+    };
+
+    netClient_.onMovementCorrection = [this](const SvMovementCorrectionMsg& msg) {
+        if (!msg.rubberBand) return;
+        auto* scene = SceneManager::instance().currentScene();
+        if (!scene) return;
+        scene->world().forEach<Transform, PlayerController>(
+            [&](Entity*, Transform* t, PlayerController* ctrl) {
+                if (!ctrl->isLocalPlayer) return;
+                t->position = msg.correctedPosition;
+                LOG_WARN("Net", "Rubber-banded to (%.0f, %.0f)",
+                         msg.correctedPosition.x, msg.correctedPosition.y);
+            }
+        );
+    };
+
+    netClient_.onChatMessage = [this](const SvChatMessageMsg& msg) {
+        LOG_INFO("Chat", "[%s] %s", msg.senderName.c_str(), msg.message.c_str());
+    };
+
     // Initialize SDF text rendering
     SDFText::instance().init("assets/fonts/default.png", "assets/fonts/default.json");
 
