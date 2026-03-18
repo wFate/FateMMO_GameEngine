@@ -1,0 +1,59 @@
+#pragma once
+#include "engine/render/gfx/types.h"
+#include <string>
+
+namespace gfx {
+
+class Device {
+public:
+    static Device& instance();
+
+    bool init();
+    void shutdown();
+
+    // Resource creation
+    ShaderHandle createShader(const std::string& vertSrc, const std::string& fragSrc);
+    ShaderHandle createShaderFromFiles(const std::string& vertPath, const std::string& fragPath);
+    TextureHandle createTexture(int width, int height, TextureFormat format,
+                                const void* data = nullptr);
+    BufferHandle createBuffer(BufferType type, BufferUsage usage,
+                              size_t size, const void* data = nullptr);
+    PipelineHandle createPipeline(const PipelineDesc& desc);
+    FramebufferHandle createFramebuffer(int width, int height,
+                                        TextureFormat colorFormat = TextureFormat::RGBA8,
+                                        bool withDepthStencil = false);
+
+    // Resource destruction
+    void destroy(ShaderHandle h);
+    void destroy(TextureHandle h);
+    void destroy(BufferHandle h);
+    void destroy(PipelineHandle h);
+    void destroy(FramebufferHandle h);
+
+    // Resource updates
+    void updateBuffer(BufferHandle h, const void* data, size_t size, size_t offset = 0);
+    void updateTexture(TextureHandle h, const void* data, int width, int height);
+
+    // Queries
+    TextureHandle getFramebufferTexture(FramebufferHandle h);
+    void getFramebufferSize(FramebufferHandle h, int& outW, int& outH);
+
+    // GL backend helpers — resolve handles to GL names (for CommandList use)
+    unsigned int resolveGLShader(ShaderHandle h) const;
+    unsigned int resolveGLTexture(TextureHandle h) const;
+    unsigned int resolveGLBuffer(BufferHandle h) const;
+    unsigned int resolveGLFramebuffer(FramebufferHandle h) const;
+    unsigned int resolveGLPipelineVAO(PipelineHandle h) const;
+    const PipelineDesc* resolvePipelineDesc(PipelineHandle h) const;
+    BufferType getBufferType(BufferHandle h) const;
+
+    // Uniform location cache (per-shader program)
+    int getUniformLocation(ShaderHandle shader, const char* name);
+
+private:
+    Device() = default;
+    struct Impl;
+    Impl* impl_ = nullptr;
+};
+
+} // namespace gfx
