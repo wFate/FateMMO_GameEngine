@@ -27,6 +27,8 @@ void JobSystem::init(int workerCount) {
     waitCount_.store(0, std::memory_order_relaxed);
     waitLock_.clear();
 
+    fiberArenas_ = new Arena[MAX_FIBERS * 2];
+
     for (int i = 0; i < workerCount_; ++i) {
         workers_[i] = std::thread(&JobSystem::workerMain, this, i);
     }
@@ -47,6 +49,9 @@ void JobSystem::shutdown() {
             fiberPool_[i] = nullptr;
         }
     }
+
+    delete[] fiberArenas_;
+    fiberArenas_ = nullptr;
 
     LOG_INFO("JobSystem", "Shutdown complete");
 }
@@ -91,6 +96,13 @@ void JobSystem::waitForCounter(Counter* counter, int target) {
     waitLock_.clear(std::memory_order_release);
 
     fiber::switchTo(t_schedulerFiber);
+}
+
+Arena* JobSystem::fiberScratchArena() {
+    if (t_currentFiberIndex >= 0 && t_currentFiberIndex < MAX_FIBERS) {
+        return &fiberArenas_[t_currentFiberIndex * 2];
+    }
+    return nullptr;
 }
 
 void JobSystem::workerMain(int workerIndex) {

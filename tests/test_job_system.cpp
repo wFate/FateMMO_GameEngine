@@ -98,3 +98,32 @@ TEST_CASE("JobSystem: submit and wait") {
 
     js.shutdown();
 }
+
+TEST_CASE("JobSystem: fiber-local scratch arena") {
+    auto& js = fate::JobSystem::instance();
+    js.init(2);
+
+    std::atomic<bool> arenaWorked{false};
+
+    auto jobFunc = [](void* param) {
+        auto* flag = static_cast<std::atomic<bool>*>(param);
+        auto* arena = fate::JobSystem::instance().fiberScratchArena();
+        if (arena) {
+            size_t saved = arena->position();
+            void* mem = arena->push(128, 16);
+            if (mem) flag->store(true);
+            arena->resetTo(saved);
+        }
+    };
+
+    fate::Job job;
+    job.function = jobFunc;
+    job.param = &arenaWorked;
+
+    fate::Counter* c = js.submit(&job, 1);
+    js.waitForCounter(c, 0);
+
+    CHECK(arenaWorked.load());
+
+    js.shutdown();
+}
