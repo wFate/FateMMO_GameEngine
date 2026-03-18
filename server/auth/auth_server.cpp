@@ -459,6 +459,35 @@ void AuthServer::processRegister(const RegisterRequest& req, AuthResponse& resp)
         return;
     }
 
+    // Grant starter equipment based on class
+    try {
+        pqxx::work txn(dbConn_.connection());
+
+        // Class-specific weapon
+        std::string weaponId;
+        if (req.className == "Warrior")    weaponId = "item_rusty_dagger";
+        else if (req.className == "Mage")  weaponId = "item_gnarled_stick";
+        else if (req.className == "Archer") weaponId = "item_makeshift_bow";
+
+        const char* insertSql =
+            "INSERT INTO character_inventory (character_id, item_id, is_equipped, equipped_slot, quantity) "
+            "VALUES ($1, $2, TRUE, $3, 1)";
+
+        if (!weaponId.empty()) {
+            txn.exec_params(insertSql, charId, weaponId, "weapon");
+        }
+        txn.exec_params(insertSql, charId, "item_quilted_vest", "armor");
+        txn.exec_params(insertSql, charId, "item_worn_sandals", "boots");
+        txn.exec_params(insertSql, charId, "item_tattered_gloves", "gloves");
+
+        txn.commit();
+        LOG_INFO("AuthServer", "Granted starter equipment to character '%s' (%s)",
+                 req.characterName.c_str(), req.className.c_str());
+    } catch (const std::exception& e) {
+        LOG_ERROR("AuthServer", "Failed to grant starter equipment: %s", e.what());
+        // Non-fatal — character still created, just no gear
+    }
+
     // Generate auth token and pending session
     AuthToken token = generateAuthToken();
 

@@ -244,7 +244,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 ## Game Systems (Ported from Unity Prototype)
 
-All 20 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`. Total: **38 files, 6,464 lines**, all compile with zero errors. Systems marked with **(networking done, needs DB)** have full game logic implemented with networking transport wired up; database persistence via libpqxx remains to be integrated.
+All 27 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`. Total: **45 files, ~7,800 lines**, all compile with zero errors. Systems marked with **(networking done, needs DB)** have full game logic implemented with networking transport wired up; database persistence via libpqxx remains to be integrated.
 
 ### Core Gameplay (Fully Ported — Logic Identical to C#)
 | System | Files | Lines | C# Source | Notes |
@@ -261,6 +261,7 @@ All 20 game systems from the C#/Unity prototype have been converted to C++ and l
 | Enchantment | `enchant_system.h` | 224 | EnchantmentSystem (601L) | +1 to +12 with success rates, protection scrolls, secret bonuses, stone tiers |
 | Item Instance | `item_instance.h` | 121 | ItemInstance (403L) | Item data with rolled stats, sockets, enchant, soulbound |
 | Item Stat Roller | `item_stat_roller.h/.cpp` | 340 | ItemStatRoller (399L) | Weighted stat rolling, exponential decay distribution, JSON serialization |
+| Socket System | `socket_system.h` | ~170 | SocketSystem (351L) | Accessory socketing (Ring/Necklace/Cloak), weighted probability rolls (+1: 25%…+10: 0.5%), stat scroll validation, server-authoritative trySocket with re-socket support |
 
 ### NPC & Quest System (New — TWOM-Inspired)
 | System | Files | Notes |
@@ -285,10 +286,16 @@ See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 | Chat Manager | `chat_manager.h/.cpp` | 120 | NetworkChatManager | 7 channels (Map/Global/Trade/Party/Guild/Private/System), cross-faction garbling on public channels **(networking done, needs DB)** |
 | Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(networking done, needs DB)** |
 | Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(networking done, needs DB)** |
-| Gauntlet | `gauntlet.h/.cpp` | 425 | GauntletConfig + GauntletInstance | Wave survival PvPvE, team scoring, tiebreaker elimination **(networking done, needs DB)** |
+| Gauntlet | `gauntlet.h/.cpp` | ~850 | GauntletManager + GauntletInstance + GauntletTeam + GauntletRegistry + GauntletConfig (10 files) | Full event scheduler (2hr cycle, 10min signup), division-based matchmaking, GauntletTeam per-team scoring/MVP, GauntletRegistry signup queues, BasicWaveConfig/BossSpawnConfig/LevelMobMapping for wave spawning, reward configs (winner/loser/performance), consolation for overflow, announcement callbacks, debug commands **(networking done, needs DB)** |
 | Faction System | `faction.h` | ~130 | FactionRegistry + FactionChatGarbler | 4 factions (Xyros/Fenor/Zethos/Solis), registry, deterministic chat garbling, same-faction checks |
 | Pet System | `pet_system.h/.cpp` | ~120 | PetDefinition + PetInstance + PetSystem | Leveling, rarity-tiered stats (HP/Crit/XP bonus), XP sharing (50%), player-level cap |
 | Stat Enchant System | `stat_enchant_system.h` | ~70 | StatEnchantSystem | Accessory enchanting (Belt/Ring/Necklace/Cloak), 6-tier roll table, HP/MP x10 scaling |
+| Bounty System | `bounty_system.h` | ~200 | NetworkBountyManager + BountyService + BountyRepository | PvE bounty board (max 10 active, 50K-500M gold, 48hr expiry), 2% tax, guild-mate protection, 12hr guild-leave cooldown, party split on claim, cancel/refund, expiration processing **(needs DB)** |
+| Ranking System | `ranking_system.h` | ~170 | NetworkRankingManager + RankingRepository | Global/class/guild/honor leaderboards, paginated (50/page), 60s cache, PlayerRankInfo (global+class+guild rank), K/D ratio, honor rankings **(needs DB)** |
+| Profanity Filter | `profanity_filter.h` | ~260 | ProfanityFilter (351L) | Leetspeak normalization (8 mappings), 50+ word list (EN+ES), 4 blocked phrases, 3 modes (Validate/Censor/Remove), character/guild name validation, chat filtering, word-boundary logic for short words |
+| Input Validator | `input_validator.h` | ~75 | InputValidator (76L) | Chat/Name validation modes, per-character rejection, username (3-20 alphanumeric+underscore) and password (8-128) validation, delegates to ProfanityFilter |
+| Consumable Definition | `consumable_definition.h` | ~105 | ConsumableDefinition (127L) | 16 effect types (HP/MP restore, 8 buff types, teleport, skill book, stat reset), cooldown groups, safe-zone/combat restrictions, effects description builder |
+| Bag Definition | `bag_definition.h` | ~30 | BagDefinition (23L) | Inventory expansion bags (1-20 slots per bag), rarity, validation |
 
 ### Key Formulas Preserved (Exact Match to C# Prototype)
 ```
@@ -328,6 +335,10 @@ multiplier = 1 + (enchantLevel * 0.125)
 // Enchant success rates
 +1 to +8: 100%, +9: 40%, +10: 15%, +11: 10%, +12: 5%
 
+// Socket value probabilities (weighted roll 1-10)
++1: 25%, +2: 20%, +3: 17%, +4: 13%, +5: 10%
++6: 7%, +7: 4%, +8: 2.5%, +9: 1%, +10: 0.5%
+
 // PvP damage multiplier
 pvpDamage = baseDamage * 0.05
 ```
@@ -335,6 +346,58 @@ pvpDamage = baseDamage * 0.05
 ---
 
 ## Changelog
+
+### March 18, 2026 - Loot Drop, Ground Items, Boss Spawning, Starter Equipment
+
+**Server-authoritative loot pipeline ported from C# prototype + starter gear on registration:**
+
+- **Item Definition Cache** (`server/cache/item_definition_cache.h/.cpp`): Loads all item definitions from `item_definitions` table at server startup. CachedItemDefinition struct with type helpers (isWeapon, isArmor, isAccessory), attribute accessors, possible stat parsing from JSONB.
+- **Loot Table Cache** (`server/cache/loot_table_cache.h/.cpp`): Loads loot drop tables from DB, groups by `loot_table_id`. `rollLoot()` rolls each entry against drop chance, generates `ItemInstance` with rolled stats (via ItemStatRoller), weighted enchant levels (+0=40%...+7=0.5%), and socket rolls for accessories.
+- **Dropped Item Component** (`game/components/dropped_item_component.h`): Ground loot entity data — itemId, quantity, enchantLevel, rolledStatsJson, rarity, isGold/goldAmount, ownerEntityId (top damager), 2-minute despawn timer.
+- **Entity Type 3 Protocol**: Extended `SvEntityEnterMsg` with conditional item fields when `entityType == 3`. New `SvLootPickupMsg` (packet 0x98) notifies client on pickup. Backward compatible — existing entity types unchanged.
+- **Replication**: Dropped items replicated via AOI as entity type 3. `buildEnterMessage()` populates item fields from `DroppedItemComponent`.
+- **Server Loot Pipeline** (`server_app.cpp`): On mob kill — `takeDamageFrom()` tracks per-attacker damage, top damager gets loot ownership. `LootTableCache::rollLoot()` generates drops, spawned as ground entities with grid offset + jitter. Gold rolls separately. All registered with `ReplicationManager`.
+- **Pickup System**: `CmdAction(actionType=3)` targets a dropped item's PersistentId. Server validates proximity (48px), loot ownership, adds item/gold to inventory, sends `SvLootPickupMsg`, destroys entity.
+- **Despawn**: Server tick iterates all `DroppedItemComponent` entities, destroys any past `despawnAfter` (120s default).
+- **Boss Spawn Points** (`game/components/boss_spawn_point_component.h`): Fixed-position boss spawning from designer-specified coordinate lists. Respawns at different coordinate after death. 0.25s tick interval.
+- **Boss Death Persistence** (`server/db/zone_mob_state_repository.h/.cpp`): Saves boss death state to `zone_mob_deaths` table. Restores respawn timers on server restart. Auto-cleanup of expired records.
+- **Starter Equipment**: New characters receive class-specific weapon (Rusty Dagger / Gnarled Stick / Makeshift Bow) plus shared armor (Quilted Vest, Worn Sandals, Tattered Gloves) — inserted as equipped items in `character_inventory` during registration.
+- **Client Handling**: Ghost dropped item entities created via `EntityFactory::createGhostDroppedItem()`. `onLootPickup` callback logs pickup notifications.
+
+### March 18, 2026 - Database Layer: Connection Pool, Definition Caches, Data Migration
+
+**Connection pool, startup caches, and game data migration from Unity DB:**
+
+- **Connection Pool** (`server/db/db_pool.h/.cpp`): Thread-safe pqxx connection pool. Min 5, max 50 connections. RAII `Guard` class for automatic release. Eager creation of min connections at startup, overflow safety valve, dead connection detection on release, `testConnection()` health check.
+- **Mob Definition Cache** (`server/db/definition_caches.h/.cpp`): Loads 73 mobs from `mob_definitions` at startup. Full stat loading (HP, damage, armor, crit, speed, scaling per level, aggro/attack/leash ranges, spawn weights, loot table IDs, gold drops, honor rewards).
+- **Skill Definition Cache** (`server/db/definition_caches.h/.cpp`): Loads 60 skills + 174 ranks from `skill_definitions` and `skill_ranks`. Lookup by ID, by class, rank data with all passive/active/transform/resurrect fields.
+- **Scene Cache** (`server/db/definition_caches.h/.cpp`): Loads 3 scenes from `scenes` table. PvP status queries.
+- **Data Migration**: Migrated game data from `fate_mmo` (Unity prod DB) to `fate_engine_dev` via CSV export/import. FK dependency order: loot_tables before loot_drops, item_definitions before loot_drops, skill_definitions before skill_ranks. See `Docs/DATABASE_REFERENCE.md` for full schema reference.
+- **Database Reference Doc** (`Docs/DATABASE_REFERENCE.md`): Complete reference for all 65 tables with column names/types, FK relationships, migration history, C++ query patterns, and connection details.
+
+**Data loaded into fate_engine_dev:** 748 items, 73 mobs, 60 skills, 174 skill ranks, 72 loot tables, 835 loot drops, 3 scenes.
+
+### March 18, 2026 - Bounty, Ranking, Profanity, Consumables, Bags, Input Validation
+
+**Ported 6 remaining missing systems from Unity prototype:**
+
+- **Bounty System** (`bounty_system.h`): Full PvE bounty board ported from `NetworkBountyManager.cs` + `BountyService.cs` + `BountyRepository.cs`. Constants: 50K min, 500M max, 10 board slots, 48hr expiry, 2% tax, 12hr guild-leave cooldown. Validation (self-bounty, guild-mate, board capacity), payout calculation with party split, cancel/refund with tax, expiration tick, human-readable result messages. DB callbacks for persistence layer.
+- **Ranking System** (`ranking_system.h`): Leaderboards ported from `NetworkRankingManager.cs` + `RankingRepository.cs`. 6 categories (Global/Warrior/Mage/Archer/Guild/Honor), paginated at 50/page, 60s cache. Data structs: `PlayerRankingEntry`, `GuildRankingEntry`, `HonorRankingEntry` (with K/D ratio), `PlayerRankInfo` (global+class+guild rank).
+- **Profanity Filter** (`profanity_filter.h`): Full port from `ProfanityFilter.cs`. 3 modes (Validate/Censor/Remove), leetspeak normalization (8 char mappings), 50+ word list (English + Spanish), 4 blocked phrases, 11 blocked characters. Character name validation (1-16 chars, starts with letter), guild name validation (1-20 chars), chat message filtering (max 200 chars), per-character input validation. Word-boundary logic for short words (<=3 chars).
+- **Input Validator** (`input_validator.h`): Port from `InputValidator.cs`. Chat/Name validation modes, per-character rejection, username validation (3-20 chars, alphanumeric + underscore), password validation (8-128 chars). Delegates to ProfanityFilter for name/chat validation.
+- **Consumable Definition** (`consumable_definition.h`): Port from `ConsumableDefinition.cs`. 16 effect types: RestoreHealth/Mana/Both, 8 buff types (STR/INT/DEX/VIT/ATK/DEF/Speed/EXP), Teleport, RevealMap, SkillBook, StatReset. Cooldown groups, safe-zone-only/out-of-combat-only/while-moving flags, effects description builder.
+- **Bag Definition** (`bag_definition.h`): Port from `BagDefinition.cs`. Inventory expansion bags with 1-20 slot range, rarity, validation.
+
+### March 18, 2026 - Socket System Port & Gauntlet Expansion
+
+**Ported socket rolling/validation from Unity prototype, expanded Gauntlet to full event system:**
+
+- **Socket System** (`socket_system.h`): New header-only system ported from Unity's `SocketSystem.cs`. Weighted probability socket rolling (1-10, cumulative thresholds out of 1000), equipment slot validation (Ring/Necklace/Cloak), stat type validation (STR/DEX/INT only), stat scroll ID mapping, `trySocket()` server operation with re-socket tracking, `clearSocket()`. Thread-safe RNG via `thread_local std::mt19937`.
+- **Gauntlet Team** (`gauntlet.h/.cpp`): New `GauntletTeam` class tracking per-team members, scoring (mob kills = level pts, PvP kills = victim_level x 2), aggregate stats, MVP/top-killer/top-mob-killer queries.
+- **Gauntlet Registry** (`gauntlet.h/.cpp`): New `GauntletRegistry` class managing signup queues per division. Open/close/cancel signup windows, player registration/unregistration with fast character-to-division lookup, queue size queries, time-remaining calculation.
+- **Gauntlet Manager** (`gauntlet.h/.cpp`): New `GauntletManager` class — full event scheduler. 2-hour event cycle, 10-minute signup windows, announcement callbacks at 5m/2m/1m/30s/10s thresholds, division settings and reward config storage, instance creation per division, player overflow consolation (5 honor + 1 token), per-player netId-to-division tracking, debug GM commands for forcing signup open/close.
+- **Gauntlet Config Structs**: Added `GauntletRewardType` enum, `GauntletRewardConfig`, `GauntletPerformanceRewardConfig`, `BasicWaveConfig` (per-wave spawn intervals/limits for waves 1-4), `BossSpawnConfig` (boss/miniboss entries for final wave), `LevelMobMapping`, `GauntletDivisionSettings` (extended config with mob level calculation, wave configs, tiebreaker settings, spawn points), `GauntletInstanceInfo` (client sync data).
+- **Gauntlet Bug Fix**: `completeMatch()` now captures `wentToTiebreaker` before overwriting state, and calculates `durationSeconds` from match/wave timestamps.
 
 ### March 18, 2026 - Audit Fixes, Art Pipeline, Editor Polish
 
@@ -1158,7 +1221,7 @@ game/
 - [ ] Multi-select and bulk operations in editor
 - [x] Eraser tool for tile painting
 - [ ] Auto-load last scene on startup (once real sprites replace procedural)
-- [ ] Persistence & authentication (PostgreSQL character saves, login flow)
+- [x] Persistence & authentication (PostgreSQL character saves, login flow)
 - [ ] Mobile build (iOS/Android via SDL2, touch input, D-Pad)
 
 ### Game Systems (Port from Unity Prototype)
@@ -1200,7 +1263,10 @@ game/
 - [x] Spatial hash grid for efficient mob-player range queries (128px cells, used by MobAI + Combat)
 - [x] Archetype ECS with contiguous SoA storage, swap-and-pop, cached queries
 - [x] MobAI unified onto engine SpatialGrid (removed duplicate spatial hash)
-- [ ] Event bus for cross-system communication (loot drops, party XP sharing)
+- [x] Loot drop pipeline (loot table rolling, ground items, pickup, despawn)
+- [x] Boss spawn points (fixed-position, death persistence, respawn timer)
+- [x] Starter equipment on character creation (class-specific weapon + shared armor)
+- [ ] Event bus for cross-system communication (party XP sharing)
 - [ ] Timer/scheduler utility for periodic game events
 
 ### UI Systems
@@ -1213,7 +1279,7 @@ game/
 - [ ] Chat System UI (channel tabs, scrolling text buffer)
 - [x] Mob Nameplates (level-colored by difficulty, HP bars when damaged)
 - [x] Player Nameplates (name + level + PK color + guild name)
-- [x] Gold drops on mob kill (floating text + inventory integration)
+- [x] Ground loot on mob kill (items + gold as entity type 3, pickup via CmdAction)
 
 ### Networking (Custom Proprietary)
 - [x] Custom reliable UDP transport layer (Winsock2, 3 channels, ack bitfields, RTT estimation)
@@ -1224,14 +1290,14 @@ game/
 - [x] Client-side position interpolation for ghost entities
 - [x] Session tokens, heartbeat/timeout connection management
 - [ ] Client-side prediction and server reconciliation
-- [ ] Authentication and login flow
+- [x] Authentication and login flow (TLS auth, bcrypt, auth token bridging)
 - [ ] Wire up remaining game/shared/ systems to networking messages
 
 ### Database Integration
-- [ ] PostgreSQL via libpqxx (same schema as Unity prototype)
-- [ ] Connection pooling
-- [ ] Definition caches (mob, item, skill, loot table)
-- [ ] Character persistence (save/load)
+- [x] PostgreSQL via libpqxx (same schema as Unity prototype)
+- [x] Connection pooling (min 5, max 50, RAII Guard)
+- [x] Definition caches (mob, item, skill, loot table)
+- [x] Character persistence (save/load on connect/disconnect)
 - [ ] Async queries for non-critical operations
 - [ ] Wire up all game/shared/ systems to database layer
 
