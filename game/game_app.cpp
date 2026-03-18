@@ -23,6 +23,7 @@
 #include "game/systems/spawn_system.h"
 #include "game/systems/npc_interaction_system.h"
 #include "game/systems/quest_system.h"
+#include "engine/job/job_system.h"
 #include "engine/particle/particle_system.h"
 #include "engine/particle/particle_emitter_component.h"
 #include "game/ui/inventory_ui.h"
@@ -773,6 +774,15 @@ void GameApp::spawnTestNPCs(World& world) {
 void GameApp::onUpdate(float deltaTime) {
     // TODO(Phase5): Submit spatial grid rebuild as a job when profiling shows need
     // TODO(Phase5): Submit chunk lifecycle transitions as jobs when profiling shows need
+
+    // Parallel AI ticking via job system
+    if (mobAISystem_) {
+        Counter* aiCounter = mobAISystem_->submitParallelUpdate(deltaTime);
+        if (aiCounter) {
+            JobSystem::instance().waitForCounter(aiCounter, 0);
+            mobAISystem_->processDeferredAttacks();
+        }
+    }
 
     // F1 HUD toggle removed — HUD is always on
     // F2 collision debug removed — now controlled via editor toolbar toggle
