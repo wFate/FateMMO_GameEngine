@@ -5,6 +5,7 @@
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
 #include "engine/profiling/tracy_zones.h"
+#include "engine/job/job_system.h"
 #if defined(ENGINE_MEMORY_DEBUG)
 #include "engine/memory/allocator_registry.h"
 #endif
@@ -76,6 +77,8 @@ bool App::init(const AppConfig& config) {
         LOG_FATAL("App", "Failed to initialize SpriteBatch");
         return false;
     }
+
+    JobSystem::instance().init(4);
 
     // Initialize fullscreen quad (used by lighting + post-process passes)
     FullscreenQuad::instance().init();
@@ -438,6 +441,8 @@ void App::shutdown() {
     fileWatcher_.stop();
     TextureCache::instance().clear();
     AssetRegistry::instance().clear();
+
+    JobSystem::instance().shutdown();
 
     if (glContext_) {
         SDL_GL_DeleteContext(glContext_);
