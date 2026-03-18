@@ -1,0 +1,180 @@
+#include "engine/net/net_server.h"
+#include "engine/net/protocol.h"
+
+namespace fate {
+
+bool NetServer::start(uint16_t port) {
+    if (!socket_.open(port)) {
+        LOG_ERROR("NetServer", "Failed to open socket on port %d", port);
+        return false;
+    }
+    LOG_INFO("NetServer", "Listening on port %d", socket_.port());
+    return true;
+}
+
+void NetServer::stop() {
+    socket_.close();
+    LOG_INFO("NetServer", "Stopped");
+}
+
+void NetServer::poll(float currentTime) {
+    uint8_t buf[MAX_PACKET_SIZE];
+    NetAddress from;
+    int received;
+    while ((received = socket_.recvFrom(buf, sizeof(buf), from)) > 0) {
+        handleRawPacket(from, buf, received, currentTime);
+    }
+}
+
+void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int size, float currentTime) {
+    if (size < static_cast<int>(PACKET_HEADER_SIZE)) return;
+
+    ByteReader r(data, static_cast<size_t>(size));
+    PacketHeader hdr = PacketHeader::read(r);
+
+    if (hdr.protocolId != PROTOCOL_ID) return;
+
+    if (hdr.packetType == PacketType::Connect) {
+        handleConnect(from, currentTime);
+        return;
+    }
+
+    // Find client by address
+    ClientConnection* client = connections_.findByAddress(from);
+    if (!client) return;
+
+    // Validate session token
+    if (hdr.sessionToken != client->sessionToken) return;
+
+    // Process acks on client's reliability layer
+    client->reliability.processAck(hdr.ack, hdr.ackBits, currentTime);
+    client->reliability.onReceive(hdr.sequence);
+
+    if (hdr.packetType == PacketType::Heartbeat) {
+        client->lastHeartbeat = currentTime;
+        return;
+    }
+
+    if (hdr.packetType == PacketType::Disconnect) {
+        uint16_t id = client->clientId;
+        if (onClientDisconnected) onClientDisconnected(id);
+        connections_.removeClient(id);
+        LOG_INFO("NetServer", "Client %d disconnected", id);
+        return;
+    }
+
+    // Game packet — forward to callback
+    if (onPacketReceived) {
+        ByteReader payload(data + r.position(), hdr.payloadSize);
+        onPacketReceived(client->clientId, hdr.packetType, payload);
+    }
+}
+
+void NetServer::handleConnect(const NetAddress& from, float currentTime) {
+    // Check if already connected — re-send ConnectAccept
+    ClientConnection* existing = connections_.findByAddress(from);
+    if (existing) {
+        // Re-send ConnectAccept
+        uint8_t payloadBuf[8];
+        ByteWriter pw(payloadBuf, sizeof(payloadBuf));
+        pw.writeU16(existing->clientId);
+        pw.writeU32(existing->sessionToken);
+
+        uint8_t buf[MAX_PACKET_SIZE];
+        ByteWriter w(buf, sizeof(buf));
+        PacketHeader hdr;
+        hdr.packetType = PacketType::ConnectAccept;
+        hdr.channel = Channel::ReliableOrdered;
+        hdr.payloadSize = static_cast<uint16_t>(pw.size());
+        hdr.write(w);
+        w.writeBytes(payloadBuf, pw.size());
+        socket_.sendTo(buf, w.size(), from);
+        return;
+    }
+
+    // Add new client
+    uint16_t clientId = connections_.addClient(from);
+    ClientConnection* client = connections_.findById(clientId);
+    if (!client) return;
+
+    client->lastHeartbeat = currentTime;
+
+    // Build and send ConnectAccept
+    uint8_t payloadBuf[8];
+    ByteWriter pw(payloadBuf, sizeof(payloadBuf));
+    pw.writeU16(clientId);
+    pw.writeU32(client->sessionToken);
+
+    uint8_t buf[MAX_PACKET_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    PacketHeader hdr;
+    hdr.packetType = PacketType::ConnectAccept;
+    hdr.channel = Channel::ReliableOrdered;
+    hdr.payloadSize = static_cast<uint16_t>(pw.size());
+    hdr.write(w);
+    w.writeBytes(payloadBuf, pw.size());
+    socket_.sendTo(buf, w.size(), from);
+
+    if (onClientConnected) onClientConnected(clientId);
+
+    LOG_INFO("NetServer", "Client %d connected from %u:%u", clientId, from.ip, from.port);
+}
+
+void NetServer::sendTo(uint16_t clientId, Channel channel, uint8_t packetType,
+                       const uint8_t* payload, size_t payloadSize) {
+    ClientConnection* client = connections_.findById(clientId);
+    if (!client) return;
+    sendPacket(*client, channel, packetType, payload, payloadSize);
+}
+
+void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t packetType,
+                           const uint8_t* payload, size_t payloadSize) {
+    uint8_t buf[MAX_PACKET_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+
+    uint16_t ack, ackBits;
+    client.reliability.buildAckFields(ack, ackBits);
+
+    PacketHeader hdr;
+    hdr.sessionToken = client.sessionToken;
+    hdr.sequence = client.reliability.nextLocalSequence();
+    hdr.ack = ack;
+    hdr.ackBits = ackBits;
+    hdr.channel = channel;
+    hdr.packetType = packetType;
+    hdr.payloadSize = static_cast<uint16_t>(payloadSize);
+    hdr.write(w);
+
+    if (payload && payloadSize > 0) {
+        w.writeBytes(payload, payloadSize);
+    }
+
+    socket_.sendTo(buf, w.size(), client.address);
+
+    if (channel != Channel::Unreliable) {
+        client.reliability.trackReliable(hdr.sequence, buf, w.size());
+    }
+}
+
+void NetServer::broadcast(Channel channel, uint8_t packetType,
+                          const uint8_t* payload, size_t payloadSize) {
+    connections_.forEach([&](ClientConnection& client) {
+        sendPacket(client, channel, packetType, payload, payloadSize);
+    });
+}
+
+void NetServer::processRetransmits(float currentTime) {
+    connections_.forEach([&](ClientConnection& client) {
+        auto retransmits = client.reliability.getRetransmits(currentTime);
+        for (auto& pkt : retransmits) {
+            socket_.sendTo(pkt.data.data(), pkt.data.size(), client.address);
+            client.reliability.markRetransmitted(pkt.sequence, currentTime);
+        }
+    });
+}
+
+std::vector<uint16_t> NetServer::checkTimeouts(float currentTime, float timeoutSec) {
+    return connections_.getTimedOutClients(currentTime, timeoutSec);
+}
+
+} // namespace fate
