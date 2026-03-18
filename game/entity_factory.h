@@ -195,7 +195,7 @@ public:
         auto* collider = mob->addComponent<BoxCollider>();
         collider->size = sprite->size * 0.8f;
         collider->isStatic = false;
-        collider->isTrigger = true; // Mobs don't block each other (TWOM-style)
+        collider->isTrigger = false; // Mobs block players and each other
 
         // Enemy Stats
         auto* enemyComp = mob->addComponent<EnemyStatsComponent>();

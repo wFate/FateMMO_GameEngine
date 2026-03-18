@@ -44,6 +44,12 @@ private:
     float lastMoveSendTime_ = 0.0f;
     float netTime_ = 0.0f; // accumulated time for network polling
 
+    // Network config UI
+    char serverHost_[64] = "127.0.0.1";
+    int serverPort_ = 7777;
+    bool showNetPanel_ = true;
+    void drawNetworkPanel();
+
     void createPlayer(World& world);
     void createTestEntities(World& world);
     void spawnTestMobs(World& world);

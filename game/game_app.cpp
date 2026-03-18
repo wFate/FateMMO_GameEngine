@@ -899,8 +899,8 @@ void GameApp::onUpdate(float deltaTime) {
         }
     }
 
-    // Parallel AI ticking via job system
-    if (mobAISystem_) {
+    // Parallel AI ticking via job system (skip when editor is paused)
+    if (mobAISystem_ && !Editor::instance().isPaused()) {
         Counter* aiCounter = mobAISystem_->submitParallelUpdate(deltaTime);
         if (aiCounter) {
             JobSystem::instance().waitForCounter(aiCounter, 0);
@@ -968,6 +968,11 @@ void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
         }
     }
 
+    // Network config panel (always visible in editor)
+    if (Editor::instance().isOpen()) {
+        drawNetworkPanel();
+    }
+
     // Zone transition fade overlay
     if (zoneSystem_ && zoneSystem_->isTransitioning()) {
         float alpha = zoneSystem_->fadeAlpha();
@@ -978,6 +983,48 @@ void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
                       Color(0, 0, 0, alpha), 200.0f);
         batch.end();
     }
+}
+
+void GameApp::drawNetworkPanel() {
+    ImGui::SetNextWindowSize(ImVec2(280, 160), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Network", &showNetPanel_)) {
+        ImGui::End();
+        return;
+    }
+
+    if (netClient_.isConnected()) {
+        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "Connected");
+        ImGui::Text("Client ID: %d", netClient_.clientId());
+        ImGui::Text("Ghosts: %zu", ghostEntities_.size());
+
+        if (ImGui::Button("Disconnect")) {
+            netClient_.disconnect();
+            // Clean up ghost entities
+            auto* scene = SceneManager::instance().currentScene();
+            if (scene) {
+                for (auto& [pid, handle] : ghostEntities_) {
+                    scene->world().destroyEntity(handle);
+                }
+                scene->world().processDestroyQueue();
+            }
+            ghostEntities_.clear();
+            ghostInterpolation_.clear();
+        }
+    } else {
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Disconnected");
+        ImGui::InputText("Host", serverHost_, sizeof(serverHost_));
+        ImGui::InputInt("Port", &serverPort_);
+
+        if (ImGui::Button("Connect")) {
+            if (netClient_.connect(serverHost_, static_cast<uint16_t>(serverPort_))) {
+                LOG_INFO("Net", "Connecting to %s:%d...", serverHost_, serverPort_);
+            } else {
+                LOG_ERROR("Net", "Failed to connect to %s:%d", serverHost_, serverPort_);
+            }
+        }
+    }
+
+    ImGui::End();
 }
 
 // renderHUD removed — controls hint text is not needed in the engine editor
