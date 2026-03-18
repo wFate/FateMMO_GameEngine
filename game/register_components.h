@@ -149,6 +149,18 @@ template<> struct component_traits<PointLightComponent> {
     static constexpr ComponentFlags flags = ComponentFlags::Serializable;
 };
 
+// --- DroppedItemComponent: networked + serialized (ground loot is transient, NOT persistent) ---
+template<> struct component_traits<DroppedItemComponent> {
+    static constexpr ComponentFlags flags =
+        ComponentFlags::Serializable | ComponentFlags::Networked;
+};
+
+// --- BossSpawnPointComponent: saved to disk ---
+template<> struct component_traits<BossSpawnPointComponent> {
+    static constexpr ComponentFlags flags =
+        ComponentFlags::Serializable | ComponentFlags::Persistent;
+};
+
 // All other components keep the default (Serializable).
 
 // ============================================================================
@@ -994,8 +1006,17 @@ inline void registerAllComponents() {
         }
     );
 
+    // ----- Dropped item component -----
+    reg.registerComponent<DroppedItemComponent>();
+
+    // ----- Boss spawn point component -----
+    reg.registerComponent<BossSpawnPointComponent>();
+
     // ----- Backward-compat aliases -----
     reg.registerAlias("Sprite", "SpriteComponent");
 }
 
 } // namespace fate
+
+FATE_REFLECT_EMPTY(fate::DroppedItemComponent)
+FATE_REFLECT_EMPTY(fate::BossSpawnPointComponent)

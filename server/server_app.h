@@ -8,6 +8,9 @@
 #include "server/db/account_repository.h"
 #include "server/db/character_repository.h"
 #include "server/db/inventory_repository.h"
+#include "server/db/zone_mob_state_repository.h"
+#include "server/cache/item_definition_cache.h"
+#include "server/cache/loot_table_cache.h"
 #include "engine/net/auth_protocol.h"
 #include <cstdint>
 #include <unordered_map>
@@ -42,6 +45,10 @@ private:
     DbConnection gameDbConn_;
     std::unique_ptr<CharacterRepository> characterRepo_;
     std::unique_ptr<InventoryRepository> inventoryRepo_;
+    ItemDefinitionCache itemDefCache_;
+    LootTableCache lootTableCache_;
+    std::unique_ptr<ZoneMobStateRepository> mobStateRepo_;
+    float bossTickTimer_ = 0.0f;
     std::unordered_map<AuthToken, PendingSession, AuthTokenHash> pendingSessions_;
     std::unordered_map<int, uint16_t> activeAccountSessions_; // account_id -> clientId
     uint16_t authPort_ = 7778;

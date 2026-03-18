@@ -793,6 +793,8 @@ void GameApp::onInit() {
         Entity* ghost = nullptr;
         if (msg.entityType == 0) { // player
             ghost = EntityFactory::createGhostPlayer(world, msg.name, msg.position);
+        } else if (msg.entityType == 3) { // dropped item
+            ghost = EntityFactory::createGhostDroppedItem(world, msg.name, msg.position);
         } else { // mob or npc
             ghost = EntityFactory::createGhostMob(world, msg.name, msg.position);
         }
@@ -876,6 +878,11 @@ void GameApp::onInit() {
 
     netClient_.onChatMessage = [this](const SvChatMessageMsg& msg) {
         LOG_INFO("Chat", "[%s] %s", msg.senderName.c_str(), msg.message.c_str());
+    };
+
+    netClient_.onLootPickup = [this](const SvLootPickupMsg& msg) {
+        LOG_INFO("Client", "Picked up: %s x%d", msg.displayName.c_str(),
+                 msg.isGold ? msg.goldAmount : msg.quantity);
     };
 
     // Auth callbacks
@@ -1604,56 +1611,18 @@ void GameApp::onUpdate(float deltaTime) {
                 localPlayerCreated_ = true;
                 auto* sc = SceneManager::instance().currentScene();
                 if (sc) {
-                    // Create minimal local player (just transform + sprite + controller)
-                    Entity* player = sc->world().createEntity(pendingCharName_);
-                    player->setTag("player");
-                    auto* t = player->addComponent<Transform>(0.0f, 0.0f);
-                    t->depth = 10.0f;
-                    auto* sprite = player->addComponent<SpriteComponent>();
-                    sprite->texturePath = "assets/sprites/player.png";
-                    sprite->texture = TextureCache::instance().load(sprite->texturePath);
-                    sprite->size = sprite->texture ? Vec2{(float)sprite->texture->width(), (float)sprite->texture->height()} : Vec2{20.0f, 33.0f};
-                    auto* ctrl = player->addComponent<PlayerController>();
-                    ctrl->moveSpeed = 96.0f;
-                    ctrl->isLocalPlayer = true;
-                    auto* collider = player->addComponent<BoxCollider>();
-                    collider->size = {sprite->size.x - 4.0f, sprite->size.y * 0.5f};
-                    collider->offset = {0.0f, -sprite->size.y * 0.25f};
-                    collider->isStatic = false;
-                    auto* np = player->addComponent<NameplateComponent>();
-                    np->displayName = pendingCharName_;
-                    np->displayLevel = 1;
-
-                    // Combat & targeting components (needed by mob AI and combat systems)
-                    auto* statsComp = player->addComponent<CharacterStatsComponent>();
+                    // Parse class type from pending class name
                     ClassType ct = ClassType::Warrior;
                     if (pendingClassName_ == "Mage") ct = ClassType::Mage;
                     else if (pendingClassName_ == "Archer") ct = ClassType::Archer;
-                    statsComp->stats.characterName = pendingCharName_;
-                    statsComp->stats.className = pendingClassName_;
-                    auto& cd = statsComp->stats.classDef;
-                    cd.classType = ct;
-                    statsComp->stats.level = 1;
-                    statsComp->stats.recalculateStats();
-                    statsComp->stats.currentHP = statsComp->stats.maxHP;
-                    statsComp->stats.currentMP = statsComp->stats.maxMP;
 
-                    player->addComponent<TargetingComponent>();
-                    player->addComponent<CombatControllerComponent>();
-                    player->addComponent<DamageableComponent>();
+                    // Create full player with all 24 game components
+                    Entity* player = EntityFactory::createPlayer(
+                        sc->world(), pendingCharName_, ct, true, Faction::Xyros);
 
-                    // Faction (needed for mob aggro checks)
-                    auto* factionComp = player->addComponent<FactionComponent>();
-                    factionComp->faction = Faction::Xyros;
-
-                    // Debug: verify components
-                    LOG_INFO("GameApp", "Local player created for '%s' (%s) — hasNameplate=%d, hasTransform=%d, hasPCtrl=%d, hasStats=%d, hasTargeting=%d",
+                    LOG_INFO("GameApp", "Local player created for '%s' (%s) with %zu components",
                              pendingCharName_.c_str(), pendingClassName_.c_str(),
-                             player->hasComponent<NameplateComponent>() ? 1 : 0,
-                             player->hasComponent<Transform>() ? 1 : 0,
-                             player->hasComponent<PlayerController>() ? 1 : 0,
-                             player->hasComponent<CharacterStatsComponent>() ? 1 : 0,
-                             player->hasComponent<TargetingComponent>() ? 1 : 0);
+                             player->componentCount());
                 }
                 break; // Skip rest of first frame
             }

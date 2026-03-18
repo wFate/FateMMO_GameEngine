@@ -7,6 +7,8 @@
 #include "game/shared/game_types.h"
 #include "game/components/game_components.h"
 #include "game/components/faction_component.h"
+#include "game/components/dropped_item_component.h"
+#include "game/shared/item_stat_roller.h"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -20,6 +22,7 @@
 #include <chrono>
 #include <thread>
 #include <cstdlib>
+#include <random>
 
 namespace fate {
 
@@ -68,6 +71,14 @@ bool ServerApp::init(uint16_t port) {
 
     characterRepo_ = std::make_unique<CharacterRepository>(gameDbConn_.connection());
     inventoryRepo_ = std::make_unique<InventoryRepository>(gameDbConn_.connection());
+
+    // Initialize definition caches
+    itemDefCache_.initialize(gameDbConn_.connection());
+    lootTableCache_.initialize(gameDbConn_.connection(), itemDefCache_);
+    LOG_INFO("Server", "Loaded %zu item definitions, %zu loot tables",
+             itemDefCache_.size(), lootTableCache_.tableCount());
+
+    mobStateRepo_ = std::make_unique<ZoneMobStateRepository>(gameDbConn_.connection());
 
     // Auth server startup (warning only — game server can run without auth in dev)
     if (!authServer_.start(authPort_, tlsCertPath_, tlsKeyPath_, dbConnectionString_)) {
@@ -130,6 +141,127 @@ void ServerApp::tick(float dt) {
 
     // 3. World update (systems)
     world_.update(dt);
+
+    // Despawn expired ground items
+    {
+        std::vector<EntityHandle> toDestroy;
+        world_.forEach<DroppedItemComponent>([&](Entity* e, DroppedItemComponent* drop) {
+            if (gameTime_ - drop->spawnTime > drop->despawnAfter) {
+                toDestroy.push_back(e->handle());
+            }
+        });
+        for (auto handle : toDestroy) {
+            replication_.unregisterEntity(handle);
+            world_.destroyEntity(handle);
+        }
+    }
+
+    // Boss spawn tick (0.25s interval)
+    bossTickTimer_ += dt;
+    if (bossTickTimer_ >= 0.25f) {
+        bossTickTimer_ = 0.0f;
+
+        std::vector<EntityHandle> bossZoneHandles;
+        world_.forEach<Transform, BossSpawnPointComponent>(
+            [&](Entity* e, Transform*, BossSpawnPointComponent*) {
+                bossZoneHandles.push_back(e->handle());
+            }
+        );
+
+        for (auto handle : bossZoneHandles) {
+            Entity* zoneEntity = world_.getEntity(handle);
+            if (!zoneEntity) continue;
+            auto* bossComp = zoneEntity->getComponent<BossSpawnPointComponent>();
+            auto* zoneT = zoneEntity->getComponent<Transform>();
+            if (!bossComp || !zoneT) continue;
+
+            // Initialize: load persisted death state
+            if (!bossComp->initialized) {
+                bossComp->initialized = true;
+                auto* sc = SceneManager::instance().currentScene();
+                std::string sceneName = sc ? sc->name() : "unknown";
+                auto deaths = mobStateRepo_->loadZoneDeaths(sceneName, bossComp->bossDefId);
+                for (const auto& death : deaths) {
+                    if (!death.hasRespawned()) {
+                        bossComp->respawnAt = gameTime_ + death.getRemainingRespawnTime();
+                        bossComp->bossAlive = false;
+                    }
+                }
+                // Spawn boss if no pending respawn
+                if (bossComp->respawnAt <= 0.0f && !bossComp->spawnCoordinates.empty()) {
+                    thread_local std::mt19937 bossRng{std::random_device{}()};
+                    std::uniform_int_distribution<int> coordDist(
+                        0, static_cast<int>(bossComp->spawnCoordinates.size()) - 1);
+                    int idx = coordDist(bossRng);
+                    bossComp->lastSpawnIndex = idx;
+                    Vec2 spawnPos = bossComp->spawnCoordinates[idx];
+
+                    Entity* boss = EntityFactory::createMob(
+                        world_, bossComp->bossDefId, bossComp->levelOverride > 0 ? bossComp->levelOverride : 1,
+                        500, 50, spawnPos, true, true);
+                    bossComp->bossEntityHandle = boss->handle();
+                    bossComp->bossAlive = true;
+
+                    PersistentId pid = PersistentId::generate(1);
+                    replication_.registerEntity(boss->handle(), pid);
+                }
+                continue;
+            }
+
+            // Detect death
+            if (bossComp->bossAlive && bossComp->bossEntityHandle) {
+                Entity* boss = world_.getEntity(bossComp->bossEntityHandle);
+                if (boss) {
+                    auto* es = boss->getComponent<EnemyStatsComponent>();
+                    if (es && !es->stats.isAlive) {
+                        bossComp->bossAlive = false;
+                        bossComp->respawnAt = gameTime_ + 300.0f;
+
+                        auto* sc = SceneManager::instance().currentScene();
+                        std::string sceneName = sc ? sc->name() : "unknown";
+                        DeadMobRecord rec;
+                        rec.enemyId = bossComp->bossDefId;
+                        rec.mobIndex = 0;
+                        rec.diedAtUnix = static_cast<int64_t>(std::time(nullptr));
+                        rec.respawnSeconds = 300;
+                        mobStateRepo_->saveZoneDeaths(sceneName, bossComp->bossDefId, {rec});
+                    }
+                }
+            }
+
+            // Process respawn
+            if (!bossComp->bossAlive && bossComp->respawnAt > 0.0f && gameTime_ >= bossComp->respawnAt) {
+                bossComp->respawnAt = 0.0f;
+
+                if (!bossComp->spawnCoordinates.empty()) {
+                    thread_local std::mt19937 bossRng{std::random_device{}()};
+                    int idx = 0;
+                    if (bossComp->spawnCoordinates.size() > 1) {
+                        do {
+                            std::uniform_int_distribution<int> coordDist(
+                                0, static_cast<int>(bossComp->spawnCoordinates.size()) - 1);
+                            idx = coordDist(bossRng);
+                        } while (idx == bossComp->lastSpawnIndex);
+                    }
+                    bossComp->lastSpawnIndex = idx;
+                    Vec2 spawnPos = bossComp->spawnCoordinates[idx];
+
+                    Entity* boss = EntityFactory::createMob(
+                        world_, bossComp->bossDefId, bossComp->levelOverride > 0 ? bossComp->levelOverride : 1,
+                        500, 50, spawnPos, true, true);
+                    bossComp->bossEntityHandle = boss->handle();
+                    bossComp->bossAlive = true;
+
+                    PersistentId pid = PersistentId::generate(1);
+                    replication_.registerEntity(boss->handle(), pid);
+
+                    auto* sc = SceneManager::instance().currentScene();
+                    std::string sceneName = sc ? sc->name() : "unknown";
+                    mobStateRepo_->clearZoneDeaths(sceneName, bossComp->bossDefId);
+                }
+            }
+        }
+    }
 
     // 4. Replicate entity state to connected clients
     replication_.update(world_, server_);
@@ -522,7 +654,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         }
 
         // Apply damage
-        enemyStats->stats.takeDamage(damage);
+        enemyStats->stats.takeDamageFrom(attackerHandle.value, damage);
         bool killed = !enemyStats->stats.isAlive;
 
         // Build and broadcast combat event
@@ -540,10 +672,154 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         server_.broadcast(Channel::ReliableOrdered, PacketType::SvCombatEvent, buf, w.size());
 
         if (killed) {
-            LOG_INFO("Server", "Client %d killed target %llu", clientId,
-                     static_cast<unsigned long long>(action.targetId));
-            // Quest/XP integration deferred
+            auto* targetEnemyStats = target->getComponent<EnemyStatsComponent>();
+            EnemyStats& es = targetEnemyStats->stats;
+            Vec2 deathPos = targetTransform ? targetTransform->position : Vec2{0, 0};
+
+            // Determine top damager for loot ownership
+            uint32_t topDamagerId = attackerHandle.value;
+            int topDamage = 0;
+            for (const auto& [attackerId, totalDmg] : es.damageByAttacker) {
+                if (totalDmg > topDamage) {
+                    topDamage = totalDmg;
+                    topDamagerId = attackerId;
+                }
+            }
+
+            // Roll loot table
+            if (!es.lootTableId.empty()) {
+                auto drops = lootTableCache_.rollLoot(es.lootTableId);
+
+                constexpr float kItemSpacing = 10.0f;
+                constexpr int kMaxPerRow = 4;
+                thread_local std::mt19937 dropRng{std::random_device{}()};
+                std::uniform_real_distribution<float> jitter(-3.0f, 3.0f);
+
+                int totalDrops = static_cast<int>(drops.size());
+                int cols = std::min(totalDrops, kMaxPerRow);
+                float gridWidth = (cols - 1) * kItemSpacing;
+
+                for (size_t i = 0; i < drops.size(); ++i) {
+                    int col = static_cast<int>(i) % kMaxPerRow;
+                    int row = static_cast<int>(i) / kMaxPerRow;
+                    Vec2 offset = {
+                        (col * kItemSpacing) - (gridWidth * 0.5f) + jitter(dropRng),
+                        row * kItemSpacing + jitter(dropRng)
+                    };
+                    Vec2 dropPos = {deathPos.x + offset.x, deathPos.y + offset.y};
+
+                    Entity* dropEntity = EntityFactory::createDroppedItem(world_, dropPos, false);
+                    auto* dropComp = dropEntity->getComponent<DroppedItemComponent>();
+                    if (dropComp) {
+                        dropComp->itemId = drops[i].item.itemId;
+                        dropComp->quantity = drops[i].item.quantity;
+                        dropComp->enchantLevel = drops[i].item.enchantLevel;
+                        dropComp->rolledStatsJson = ItemStatRoller::rolledStatsToJson(drops[i].item.rolledStats);
+                        dropComp->ownerEntityId = topDamagerId;
+                        dropComp->spawnTime = gameTime_;
+
+                        const auto* def = itemDefCache_.getDefinition(drops[i].item.itemId);
+                        if (def) dropComp->rarity = def->rarity;
+                    }
+
+                    PersistentId dropPid = PersistentId::generate(1);
+                    replication_.registerEntity(dropEntity->handle(), dropPid);
+                }
+            }
+
+            // Roll gold drop
+            if (es.goldDropChance > 0.0f) {
+                thread_local std::mt19937 goldRng{std::random_device{}()};
+                std::uniform_real_distribution<float> chanceDist(0.0f, 1.0f);
+                if (chanceDist(goldRng) <= es.goldDropChance && es.maxGoldDrop > 0) {
+                    std::uniform_int_distribution<int> goldDist(es.minGoldDrop, es.maxGoldDrop);
+                    int goldAmount = goldDist(goldRng);
+
+                    Entity* goldEntity = EntityFactory::createDroppedItem(world_, deathPos, true);
+                    auto* goldComp = goldEntity->getComponent<DroppedItemComponent>();
+                    if (goldComp) {
+                        goldComp->isGold = true;
+                        goldComp->goldAmount = goldAmount;
+                        goldComp->ownerEntityId = topDamagerId;
+                        goldComp->spawnTime = gameTime_;
+                    }
+
+                    PersistentId goldPid = PersistentId::generate(1);
+                    replication_.registerEntity(goldEntity->handle(), goldPid);
+                }
+            }
+
+            // Hide mob sprite (SpawnSystem handles respawn)
+            auto* mobSprite = target->getComponent<SpriteComponent>();
+            if (mobSprite) mobSprite->enabled = false;
+
+            LOG_INFO("Server", "Client %d killed mob '%s'", clientId, es.enemyName.c_str());
         }
+    } else if (action.actionType == 3) {
+        // Pickup
+        PersistentId itemPid(action.targetId);
+        EntityHandle itemHandle = replication_.getEntityHandle(itemPid);
+        Entity* itemEntity = world_.getEntity(itemHandle);
+        if (!itemEntity) return;
+
+        auto* dropComp = itemEntity->getComponent<DroppedItemComponent>();
+        if (!dropComp) return;
+
+        // Validate proximity
+        auto* playerT = attacker->getComponent<Transform>();
+        auto* itemT = itemEntity->getComponent<Transform>();
+        if (!playerT || !itemT) return;
+        float dist = playerT->position.distance(itemT->position);
+        if (dist > 48.0f) return;
+
+        // Validate loot rights
+        if (dropComp->ownerEntityId != 0 && dropComp->ownerEntityId != attackerHandle.value) {
+            return;
+        }
+
+        // Process pickup
+        auto* inv = attacker->getComponent<InventoryComponent>();
+        if (!inv) return;
+
+        SvLootPickupMsg pickupMsg;
+
+        if (dropComp->isGold) {
+            inv->inventory.addGold(dropComp->goldAmount);
+            pickupMsg.isGold = 1;
+            pickupMsg.goldAmount = dropComp->goldAmount;
+            pickupMsg.displayName = "Gold";
+        } else {
+            ItemInstance item;
+            item.instanceId = std::to_string(
+                std::chrono::steady_clock::now().time_since_epoch().count());
+            item.itemId = dropComp->itemId;
+            item.quantity = dropComp->quantity;
+            item.enchantLevel = dropComp->enchantLevel;
+            item.rolledStats = ItemStatRoller::parseRolledStats(dropComp->rolledStatsJson);
+            inv->inventory.addItem(item);
+
+            pickupMsg.itemId = dropComp->itemId;
+            pickupMsg.quantity = dropComp->quantity;
+            pickupMsg.rarity = dropComp->rarity;
+
+            const auto* def = itemDefCache_.getDefinition(dropComp->itemId);
+            pickupMsg.displayName = def ? def->displayName : dropComp->itemId;
+            if (dropComp->enchantLevel > 0) {
+                pickupMsg.displayName += " +" + std::to_string(dropComp->enchantLevel);
+            }
+        }
+
+        // Send pickup notification
+        uint8_t buf[256];
+        ByteWriter w(buf, sizeof(buf));
+        pickupMsg.write(w);
+        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvLootPickup, buf, w.size());
+
+        sendPlayerState(clientId);
+
+        // Destroy the dropped item
+        replication_.unregisterEntity(itemHandle);
+        world_.destroyEntity(itemHandle);
     } else {
         LOG_INFO("Server", "Unhandled action type %d from client %d", action.actionType, clientId);
     }

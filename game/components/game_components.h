@@ -21,6 +21,8 @@
 #include "game/shared/bank_storage.h"
 #include "game/shared/faction.h"
 #include "game/shared/pet_system.h"
+#include "game/components/dropped_item_component.h"
+#include "game/components/boss_spawn_point_component.h"
 
 namespace fate {
 

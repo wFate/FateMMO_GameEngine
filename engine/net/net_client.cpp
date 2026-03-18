@@ -203,6 +203,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onMovementCorrection) onMovementCorrection(msg);
             break;
         }
+        case PacketType::SvLootPickup: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvLootPickupMsg::read(payload);
+            if (onLootPickup) onLootPickup(msg);
+            break;
+        }
         default:
             break;
     }

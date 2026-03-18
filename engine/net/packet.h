@@ -49,6 +49,7 @@ namespace PacketType {
     constexpr uint8_t SvPlayerState       = 0x95;
     constexpr uint8_t SvMovementCorrection = 0x96;
     constexpr uint8_t SvZoneTransition    = 0x97;
+    constexpr uint8_t SvLootPickup         = 0x98;
 } // namespace PacketType
 
 // ============================================================================
