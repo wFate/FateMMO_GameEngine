@@ -1623,7 +1623,31 @@ void GameApp::onUpdate(float deltaTime) {
                     auto* np = player->addComponent<NameplateComponent>();
                     np->displayName = pendingCharName_;
                     np->displayLevel = 1;
-                    LOG_INFO("GameApp", "Local player created for '%s'", pendingCharName_.c_str());
+
+                    // Combat & targeting components (needed by mob AI and combat systems)
+                    auto* statsComp = player->addComponent<CharacterStatsComponent>();
+                    ClassType ct = ClassType::Warrior;
+                    if (pendingClassName_ == "Mage") ct = ClassType::Mage;
+                    else if (pendingClassName_ == "Archer") ct = ClassType::Archer;
+                    statsComp->stats.characterName = pendingCharName_;
+                    statsComp->stats.className = pendingClassName_;
+                    auto& cd = statsComp->stats.classDef;
+                    cd.classType = ct;
+                    statsComp->stats.level = 1;
+                    statsComp->stats.recalculateStats();
+                    statsComp->stats.currentHP = statsComp->stats.maxHP;
+                    statsComp->stats.currentMP = statsComp->stats.maxMP;
+
+                    player->addComponent<TargetingComponent>();
+                    player->addComponent<CombatControllerComponent>();
+                    player->addComponent<DamageableComponent>();
+
+                    // Faction (needed for mob aggro checks)
+                    auto* factionComp = player->addComponent<FactionComponent>();
+                    factionComp->faction = Faction::Xyros;
+
+                    LOG_INFO("GameApp", "Local player created for '%s' (%s)",
+                             pendingCharName_.c_str(), pendingClassName_.c_str());
                 }
                 break; // Skip rest of first frame
             }
