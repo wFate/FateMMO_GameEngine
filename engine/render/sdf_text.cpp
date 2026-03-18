@@ -147,10 +147,17 @@ void SDFText::drawScreen(SpriteBatch& batch, const std::string& text, Vec2 posit
 void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 position,
                            float fontSize, Color color, float depth, TextStyle style,
                            bool yDown) {
-    const float scale = fontSize / emSize_;
+    // planeBounds are in em units (normalized by emSize_), so multiplying
+    // by fontSize directly converts to pixel size at the requested font size.
+    const float scale = fontSize;
     float penX = position.x;
     float penY = position.y;
     const float startX = position.x;
+
+    // DEBUG: log once per second
+    static int sdfDbgFrame = 0;
+    bool sdfDbgLog = (sdfDbgFrame++ % 600 == 0);
+    int sdfEmitted = 0, sdfSkipped = 0;
 
     size_t i = 0;
     while (i < text.size()) {
@@ -202,17 +209,36 @@ void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 pos
             params.sourceRect = {gm.uvX, gm.uvY, gm.uvW, gm.uvH};
             params.color     = color;
             params.depth     = depth;
-            params.flipY     = !yDown; // Flip for Y-up world space
+            params.flipY     = false; // DEBUG: disable flipY to test UV sampling
 
-            batch.drawTexturedQuad(atlasTexId_, params, static_cast<float>(style));
+            // Use renderType=0 (regular sprite) since atlas is raster bitmap, not actual SDF.
+            // The raster atlas stores white glyphs with alpha coverage — standard alpha blend works.
+            batch.drawTexturedQuad(atlasGfxHandle_, atlasTexId_, params, 0.0f);
+            sdfEmitted++;
+        } else {
+            sdfSkipped++;
         }
 
         penX += gm.advance * scale;
     }
+
+    if (sdfDbgLog && !text.empty()) {
+        // Log first glyph's metrics for debugging
+        uint32_t firstCp = 0;
+        size_t tmpIdx = 0;
+        firstCp = decodeUTF8(text, tmpIdx);
+        auto firstIt = glyphs_.find(firstCp);
+        if (firstIt != glyphs_.end()) {
+            const auto& g = firstIt->second;
+            float qw = g.width * scale, qh = g.height * scale;
+            LOG_INFO("SDFText", "'%c' uv=(%.4f,%.4f,%.4f,%.4f) size=(%.1f,%.1f) pos=(%.1f,%.1f) flipY=%d",
+                     (char)firstCp, g.uvX, g.uvY, g.uvW, g.uvH, qw, qh, position.x, position.y, !yDown);
+        }
+    }
 }
 
 Vec2 SDFText::measure(const std::string& text, float fontSize) const {
-    const float scale = fontSize / emSize_;
+    const float scale = fontSize;
     float totalWidth = 0.0f;
     float maxWidth   = 0.0f;
     int lines = 1;

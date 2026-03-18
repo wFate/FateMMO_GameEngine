@@ -425,6 +425,7 @@ void Editor::drawDockSpace() {
         ImGui::DockBuilderDockWindow("Log", dockBottom);
         ImGui::DockBuilderDockWindow("Debug Info", dockBottom);
         ImGui::DockBuilderDockWindow("Tile Palette", dockRight);
+        ImGui::DockBuilderDockWindow("Network", dockBottom);
 
         ImGui::DockBuilderFinish(dockspaceId);
     }
@@ -1307,56 +1308,75 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
     worldPos.x = std::floor(worldPos.x / gridSize_) * gridSize_ + half;
     worldPos.y = std::floor(worldPos.y / gridSize_) * gridSize_ + half;
 
-    // Check if there's already a ground tile at this position (avoid stacking)
-    bool occupied = false;
+    int col = selectedTileIndex_ % paletteColumns_;
+    int row = selectedTileIndex_ / paletteColumns_;
+    float texW = (float)paletteTexture_->width();
+    float texH = (float)paletteTexture_->height();
+
+    Rect srcRect = {
+        (col * paletteTileSize_) / texW,
+        1.0f - ((row + 1) * paletteTileSize_) / texH,
+        paletteTileSize_ / texW,
+        paletteTileSize_ / texH
+    };
+
+    // Check if there's already a tile from the SAME tileset at this position
+    // (only replace tiles from the same texture to avoid destroying ground under overlays)
+    bool replaced = false;
     world->forEach<Transform, SpriteComponent>(
         [&](Entity* entity, Transform* t, SpriteComponent* s) {
-            if (entity->tag() == "ground" &&
-                std::abs(t->position.x - worldPos.x) < 1.0f &&
-                std::abs(t->position.y - worldPos.y) < 1.0f) {
-                // Update existing tile's texture region instead of creating new
-                int col = selectedTileIndex_ % paletteColumns_;
-                int row = selectedTileIndex_ / paletteColumns_;
-                float texW = (float)paletteTexture_->width();
-                float texH = (float)paletteTexture_->height();
+            if (replaced) return;
+            if (entity->tag() != "ground") return;
+            if (std::abs(t->position.x - worldPos.x) > 1.0f ||
+                std::abs(t->position.y - worldPos.y) > 1.0f) return;
+            if (s->texturePath != paletteTexturePath_) return;
 
-                s->texture = paletteTexture_;
-                s->texturePath = paletteTexturePath_;
-                s->sourceRect = {
-                    (col * paletteTileSize_) / texW,
-                    1.0f - ((row + 1) * paletteTileSize_) / texH,
-                    paletteTileSize_ / texW,
-                    paletteTileSize_ / texH
-                };
-                s->size = {(float)paletteTileSize_, (float)paletteTileSize_};
-                occupied = true;
-            }
+            // Same tileset at same position — update the tile region
+            auto cmd = std::make_unique<PropertyCommand>();
+            cmd->entityHandle = entity->handle();
+            cmd->oldState = PrefabLibrary::entityToJson(entity);
+            cmd->desc = "Paint Tile";
+
+            s->sourceRect = srcRect;
+
+            cmd->newState = PrefabLibrary::entityToJson(entity);
+            UndoSystem::instance().push(std::move(cmd));
+            replaced = true;
         }
     );
 
-    if (!occupied) {
-        // Create new tile entity
-        int col = selectedTileIndex_ % paletteColumns_;
-        int row = selectedTileIndex_ / paletteColumns_;
-        float texW = (float)paletteTexture_->width();
-        float texH = (float)paletteTexture_->height();
+    if (!replaced) {
+        // Create new tile entity as an overlay (depth 1 if ground tiles exist, 0 otherwise)
+        // Check if any ground tile exists at this position
+        float tileDepth = 0.0f;
+        world->forEach<Transform, SpriteComponent>(
+            [&](Entity* entity, Transform* t, SpriteComponent*) {
+                if (entity->tag() == "ground" &&
+                    std::abs(t->position.x - worldPos.x) < 1.0f &&
+                    std::abs(t->position.y - worldPos.y) < 1.0f) {
+                    // Place above the highest existing tile at this position
+                    if (t->depth >= tileDepth) tileDepth = t->depth + 1.0f;
+                }
+            }
+        );
 
         Entity* tile = world->createEntity("Tile");
         tile->setTag("ground");
 
         auto* transform = tile->addComponent<Transform>(worldPos);
-        transform->depth = 0.0f;
+        transform->depth = tileDepth;
 
         auto* sprite = tile->addComponent<SpriteComponent>();
         sprite->texture = paletteTexture_;
         sprite->texturePath = paletteTexturePath_;
-        sprite->sourceRect = {
-            (col * paletteTileSize_) / texW,
-            1.0f - ((row + 1) * paletteTileSize_) / texH,
-            paletteTileSize_ / texW,
-            paletteTileSize_ / texH
-        };
+        sprite->sourceRect = srcRect;
         sprite->size = {(float)paletteTileSize_, (float)paletteTileSize_};
+
+        // Record undo for new tile creation
+        auto cmd = std::make_unique<CreateCommand>();
+        cmd->createdHandle = tile->handle();
+        cmd->entityData = PrefabLibrary::entityToJson(tile);
+        UndoSystem::instance().push(std::move(cmd));
     }
 }
 
@@ -1371,7 +1391,7 @@ void Editor::drawTilePalette(World* world, Camera* camera) {
                           fs::path(paletteTexturePath_).filename().string().c_str())) {
         std::string tilesDir = assetRoot_ + "/tiles";
         if (fs::exists(tilesDir)) {
-            for (auto& entry : fs::directory_iterator(tilesDir)) {
+            for (auto& entry : fs::recursive_directory_iterator(tilesDir)) {
                 if (!entry.is_regular_file()) continue;
                 std::string ext = entry.path().extension().string();
                 std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
@@ -1379,7 +1399,9 @@ void Editor::drawTilePalette(World* world, Camera* camera) {
 
                 std::string path = entry.path().string();
                 std::replace(path.begin(), path.end(), '\\', '/');
-                std::string name = entry.path().filename().string();
+                // Show relative path from tiles dir for clarity
+                std::string name = fs::relative(entry.path(), tilesDir).string();
+                std::replace(name.begin(), name.end(), '\\', '/');
 
                 if (ImGui::Selectable(name.c_str(), paletteTexturePath_ == path)) {
                     loadTileset(path, paletteTileSize_);

@@ -5,6 +5,7 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/persistent_id.h"
 #include "engine/ecs/entity_handle.h"
+#include "engine/spatial/spatial_hash.h"
 #include "game/components/transform.h"
 #include "game/components/sprite_component.h"
 #include "game/components/game_components.h"
@@ -36,6 +37,12 @@ private:
     // Bidirectional mapping: EntityHandle <-> PersistentId
     std::unordered_map<uint32_t, PersistentId> handleToPid_; // key = EntityHandle packed value
     std::unordered_map<uint64_t, EntityHandle> pidToHandle_; // key = PersistentId value
+
+    // Spatial index for registered entities, rebuilt each tick
+    SpatialHashEngine spatialIndex_{128.0f, 4096};
+
+    // Rebuild the spatial index with current positions of all registered entities
+    void rebuildSpatialIndex(World& world);
 
     // Build AOI visibility for a single client
     void buildVisibility(World& world, ClientConnection& client);

@@ -52,6 +52,8 @@ public:
 
     // Draw a quad with a raw GL texture ID (for font atlas, custom textures)
     void drawTexturedQuad(unsigned int glTexId, const SpriteDrawParams& params, float renderType = 0.0f);
+    // Draw a quad with a gfx::TextureHandle (preferred — works with CommandList path)
+    void drawTexturedQuad(gfx::TextureHandle gfxTex, unsigned int glTexId, const SpriteDrawParams& params, float renderType = 0.0f);
 
     int drawCallCount() const { return drawCallCount_; }
     int spriteCount() const { return spriteCount_; }
@@ -71,6 +73,7 @@ private:
         unsigned int rawTexId = 0; // for font atlas / raw GL textures
         SpriteDrawParams params;
         float renderType = 0.0f;
+        gfx::TextureHandle gfxTexHandle{}; // device-managed handle (for CommandList path)
     };
 
     Shader shader_;
