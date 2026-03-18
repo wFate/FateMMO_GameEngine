@@ -68,12 +68,20 @@ std::vector<PossibleStat> ItemDefinitionCache::parsePossibleStats(const std::str
     auto parsed = nlohmann::json::parse(json, nullptr, false);
     if (parsed.is_discarded() || !parsed.is_array()) return stats;
     for (const auto& entry : parsed) {
-        if (!entry.is_object()) continue;  // skip non-object entries
+        if (!entry.is_object()) continue;
         PossibleStat ps;
-        ps.stat     = entry.value("stat", "");
+        // Handle both DB formats: {"stat":"hp"} and {"name":"hp"}
+        if (entry.contains("stat"))
+            ps.stat = entry["stat"].get<std::string>();
+        else if (entry.contains("name"))
+            ps.stat = entry["name"].get<std::string>();
         ps.min      = entry.value("min", 0);
         ps.max      = entry.value("max", 0);
-        ps.weighted = entry.value("weighted", false);
+        // Handle both: {"weighted": true} and {"weight": 1.0}
+        if (entry.contains("weighted"))
+            ps.weighted = entry["weighted"].get<bool>();
+        else if (entry.contains("weight"))
+            ps.weighted = entry["weight"].get<float>() > 0.0f;
         if (!ps.stat.empty()) stats.push_back(ps);
     }
     return stats;
