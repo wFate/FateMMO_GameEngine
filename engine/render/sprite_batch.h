@@ -3,6 +3,8 @@
 #include "engine/render/shader.h"
 #include "engine/render/texture.h"
 #include "engine/render/gfx/types.h"
+#include "engine/render/gfx/device.h"
+#include "engine/render/gfx/command_list.h"
 #include <vector>
 #include <memory>
 
@@ -56,6 +58,9 @@ public:
 
     void setBlendMode(BlendMode mode);
 
+    // Set the CommandList for gfx-abstracted drawing; nullptr = direct GL fallback
+    void setCommandList(gfx::CommandList* cmd) { cmdList_ = cmd; }
+
 private:
     static constexpr int MAX_SPRITES = 10000;
     static constexpr int MAX_VERTICES = MAX_SPRITES * 4;
@@ -74,6 +79,16 @@ private:
     unsigned int ebo_ = 0;
     unsigned int whiteTexture_ = 0;  // 1x1 white pixel for solid rects
 
+    // gfx handles
+    gfx::BufferHandle vboHandle_{};
+    gfx::BufferHandle eboHandle_{};
+    gfx::TextureHandle whiteTexHandle_{};
+    gfx::PipelineHandle pipelineAlpha_{};
+    gfx::PipelineHandle pipelineAdditive_{};
+    gfx::PipelineHandle pipelineMultiplicative_{};
+    gfx::PipelineHandle pipelineNone_{};
+    gfx::CommandList* cmdList_ = nullptr;
+
     Mat4 viewProjection_;
     std::vector<BatchEntry> entries_;
     std::vector<SpriteVertex> vertices_;
@@ -90,6 +105,12 @@ private:
 
     void flush();
     void createWhiteTexture();
+
+    // Get the pipeline handle for the current blend mode
+    gfx::PipelineHandle currentPipeline() const;
+
+    // Build the SpriteVertex layout descriptor
+    static gfx::VertexLayout spriteVertexLayout();
 };
 
 } // namespace fate
