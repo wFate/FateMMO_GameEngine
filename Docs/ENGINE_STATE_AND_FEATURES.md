@@ -53,7 +53,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Tracy Profiler | Done | On-demand profiling, named zones, frame marks, arena memory tracking |
 | Component Registry | Done | Compile-time CompId, Hot/Warm/Cold tier classification, zero-RTTI macros |
 | Reflection System | Done | FATE_REFLECT macro, field-level metadata (name, offset, type), auto-generated JSON serializers |
-| Serialization Registry | Done | ComponentMetaRegistry maps string names → type-erased serialize/deserialize, aliases for backward compat |
+| Serialization Registry | Done | ComponentMetaRegistry maps string names → type-erased serialize/deserialize, aliases for backward compat. Enum/EntityHandle/Direction fields fully serialized (size-aware memcpy for enums) |
 | Component Traits | Done | ComponentFlags (Serializable/Networked/Persistent/EditorOnly), per-component policy via component_traits<T> |
 | Generic Inspector | Done | Reflection-driven ImGui widget fallback for any reflected component, manual inspectors take priority |
 | Chunk Lifecycle | Done | 7-state machine (Queued→Loading→Setup→Active→Sleeping→Unloading→Evicted), ticket system, rate-limited transitions, double-buffered staging |
@@ -66,7 +66,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Fiber Job System | Done | Win32 fibers, 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas |
 | Graphics RHI | Done | gfx::Device + CommandList + Pipeline State Objects, GL backend, typed 32-bit handles, uniform cache |
 | Networking Transport | Done | Custom reliable UDP (Winsock2), ByteWriter/ByteReader, 16-byte packet header, 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation |
-| Entity Replication | Done | AOI-driven enter/leave/update, delta compression with field bitmasks, ghost entities, client-side position interpolation |
+| Entity Replication | Done | AOI-driven enter/leave/update, delta compression with field bitmasks, ghost entities, client-side position interpolation, spatial-indexed visibility |
 | Client-Server Architecture | Done | Headless 20 tick/sec server (FateServer), NetClient/NetServer, session tokens, heartbeat/timeout |
 
 ### Editor (Dear ImGui)
@@ -78,7 +78,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Project Browser | Done | Tabs: Sprites, Scripts, Scenes, Shaders, Prefabs |
 | Right-Click Context Menus | Done | Open in VS Code, Show in Explorer, Copy Path, Delete |
 | Asset Placement | Done | Click sprite thumbnail, click scene to stamp entities |
-| Tile Palette | Done | Collapsible panel, load tilesets, scrollable tile grid, paint/drag to place |
+| Tile Palette | Done | Collapsible panel, load tilesets (recursive subdirectory scan), scrollable tile grid, paint/drag to place |
 | Scene Interaction | Done | Click to select (depth-priority, closest-center), drag to move, sticky selection |
 | Grid Overlay | Done | Tile-edge aligned (tiles sit inside grid cells), toggleable |
 | Grid Snapping | Done | Ground tiles snap to grid, other entities move freely |
@@ -96,7 +96,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Remove Components | Done | Right-click any component header to remove it (all 24+ component types) |
 | Resize Handles | Done | 8 drag handles (4 corners + 4 edges), E key for resize tool mode |
 | Source Rect Editor | Done | UV region editing in Sprite inspector for tileset splicing |
-| Undo/Redo | Done | Ctrl+Z/Ctrl+Y, 200 action history, tracks move/resize/delete/duplicate |
+| Undo/Redo | Done | Ctrl+Z/Ctrl+Y, 200 action history, tracks move/resize/delete/duplicate/tile paint |
 | Tool Modes | Done | W=Move, E=Resize, B=Paint, X=Erase. Active tool highlighted in toolbar |
 | Keyboard Shortcuts | Done | Ctrl+Z undo, Ctrl+Y redo, Ctrl+S save, Ctrl+D duplicate, Ctrl+A select all, Delete |
 | Eraser Tool | Done | X key, click/drag to delete ground tiles with undo support |
@@ -108,7 +108,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Panel Persistence | Done | ImGui saves window layout to imgui.ini, panels don't steal focus |
 | Rotate Tool | Done | R key, ImGuizmo visual handles, undo support |
 | Post-Process Panel | Done | Live tweaking bloom/vignette/color grading |
-| Network Panel | Done | Connect/disconnect to server, host/port config, shows client ID and ghost count |
+| Network Panel | Done | Connect/disconnect to server, host/port config, shows client ID and ghost count, docked in bottom panel |
 | ImGuizmo | Done | Visual translate/scale/rotate handles on selected entities |
 
 ### Game UI (ImGui-based, in-game panels)
@@ -198,12 +198,12 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | MovementSystem | Done | WASD input (local player only), Box+Polygon collision (all combos) |
 | AnimationSystem | Done | Timer-based frame updates |
 | CameraFollowSystem | Done | Locked to local player, smooth (no pixel-snap jitter) |
-| SpriteRenderSystem | Done | Frustum culled, depth sorted |
+| SpriteRenderSystem | Done | Frustum culled, depth sorted, respects sprite enabled flag |
 | GameplaySystem | Done | Ticks StatusEffects, CrowdControl, HP/MP regen, PK decay, respawn, nameplates |
 | MobAISystem | Done | Ticks MobAI for all mobs, scans for players, applies movement, fires attacks |
-| CombatActionSystem | Done | TWOM Option B targeting, click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP, same-faction PvP block, home village PK exception check |
-| SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment |
-| NPCInteractionSystem | Done | Click-to-interact with NPCs, range check, dialogue open/close, click consumption (prevents combat targeting) |
+| CombatActionSystem | Done | TWOM Option B targeting, viewport-aware click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP, same-faction PvP block, home village PK exception check, mob HP bars always visible |
+| SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment, deferred entity creation (safe during archetype iteration) |
+| NPCInteractionSystem | Done | Click-to-interact with NPCs, viewport-aware screen-to-world, range check, dialogue open/close, click consumption (prevents combat targeting) |
 | QuestSystem | Done | Routes mob kills/item pickups/NPC talks to quest progress, event-driven quest marker updates on all NPCs |
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment |
 | ZoneSystem | Done | Zone transitions, portal detection, fade effects |
@@ -213,7 +213,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Feature | Status | Notes |
 |---------|--------|-------|
 | createPlayer() | Done | Assembles player with all 21+ components (includes FactionComponent, PetComponent), faction-based spawn position |
-| createMob() | Done | Assembles mob with EnemyStats, MobAI, StatusEffects, nameplate, placeholder sprite |
+| createMob() | Done | Assembles mob with EnemyStats, MobAI, StatusEffects, nameplate, procedural pixel art sprites (Slime/Goblin/Wolf/Mushroom/Forest Golem), trigger colliders |
 | createNPC() | Done | Assembles NPC from NPCTemplate with composable role components (quest/shop/trainer/bank/guild/teleporter/story) |
 | Class Configuration | Done | Warrior/Mage/Archer stats from CLAUDE.md class table (HP, STR, per-level gains) |
 | Test Mob Spawning | Done | 5 test mobs: Slime, Goblin, Wolf, Mushroom (passive), Forest Golem (boss) |
@@ -232,11 +232,13 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 ### Tile Painting
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Tileset Loading | Done | Dropdown lists PNGs from assets/tiles/, auto-detects grid |
+| Tileset Loading | Done | Dropdown lists PNGs from assets/tiles/ (recursive subdirectory scan), auto-detects grid |
 | Tile Selection | Done | Click tile in palette grid, highlights selected |
 | Paint Mode | Done | Click or drag in scene to stamp tiles, auto-snaps to grid |
-| Overwrite Detection | Done | Painting over existing ground tile updates it instead of stacking |
+| Layer-Aware Painting | Done | Same-tileset overwrites existing tile; different-tileset creates overlay at higher depth (preserves ground under transparent tiles) |
+| Undo Support | Done | Ctrl+Z undoes tile paint (both new tiles and tile updates) |
 | Tileset Persistence | Done | sourceRect saved/loaded in scene JSON, tiles round-trip correctly |
+| Bundled Tilesets | Done | Hyptosis 32x32 (CC-BY 3.0), LPC terrain/atlas (CC-BY-SA 3.0), Town tileset (CC-BY-SA 4.0), procedural tileset (generated at startup) |
 
 ---
 
@@ -333,6 +335,40 @@ pvpDamage = baseDamage * 0.05
 ---
 
 ## Changelog
+
+### March 18, 2026 - Audit Fixes, Art Pipeline, Editor Polish
+
+**Performance & correctness fixes from code audit, improved procedural art, editor tile painting overhaul:**
+
+- **Replication Spatial Indexing**: Replaced O(n×m) brute-force visibility in `ReplicationManager::buildVisibility()` with `SpatialHashEngine` queries. Spatial index rebuilt once per tick (O(n)), then each client queries nearby cells only. Hysteresis (activation/deactivation radius) preserved.
+- **HonorSystem Thread Safety**: Added `std::mutex` to protect static `s_killTracking` map. Public methods lock then delegate to unlocked internal helpers; `processKill()` holds one lock for the full operation.
+- **Component Meta Serialization**: Filled in `autoToJson`/`autoFromJson` for `Enum` (size-aware memcpy), `EntityHandle` (uint32 value), `Direction` (uint8 cast). `Custom` fields now emit `LOG_WARN` instead of silent skip.
+- **Click-to-Target Coordinate Fix**: `CombatActionSystem` and `NPCInteractionSystem` now use editor viewport position/size for screen-to-world conversion instead of full window DisplaySize. Fixes targeting in editor mode.
+- **Mob HP Bars Always Visible**: Changed condition from `currentHP < maxHP` to `isAlive` so mob health bars render at full HP.
+- **Mob Collision**: Mob colliders set to `isTrigger = true` — mobs no longer physically block player movement.
+- **Sprite Enabled Check**: `SpriteRenderSystem` now skips sprites with `enabled = false` (dead mob visibility).
+- **SpawnSystem Iterator Safety**: Refactored `SpawnSystem::update()` to collect zone handles first, then process outside `forEach` — fixes crash when entity creation during archetype iteration caused vector resize.
+- **Tile Painting Undo**: `paintTileAt()` now records `CreateCommand` (new tiles) and `PropertyCommand` (tile updates) for full Ctrl+Z support.
+- **Tile Painting Transparency**: Layer-aware painting — different tilesets create overlay entities at higher depth instead of replacing ground tiles, preserving transparency.
+- **Tile Palette Recursive Scan**: Tileset dropdown now uses `recursive_directory_iterator` to find PNGs in subdirectories, with relative path display.
+- **Network Panel Docking**: Registered "Network" window with `DockBuilderDockWindow` in editor dockspace (bottom panel).
+- **Procedural Art Overhaul**: New pixel art sprites for player (warrior with sword), 5 mob types (Slime/Goblin/Wolf/Mushroom/Forest Golem), trees with bark/canopy, rocks, 3 ground tile variants. Procedural tileset PNG (8×5 grid: grass/dirt/water/stone/decorative).
+- **Expanded Test Scene**: Ground grid 48×32 (was 32×20), 24 clustered trees (was 8), 8 rock decorations, player spawns at origin, spawn zone shrunk to 200×150.
+- **Bundled Tilesets**: Downloaded Hyptosis 32×32 tiles (CC-BY 3.0, 6 sheets), LPC terrain/atlas (CC-BY-SA 3.0), Town tileset (CC-BY-SA 4.0).
+
+### March 18, 2026 - Phase 7: Player Persistence + Auth
+
+**TLS-authenticated login with PostgreSQL character persistence:**
+
+- **Auth Server**: TLS-encrypted TCP auth server (port 7778) with OpenSSL. Runs on own thread with own DB connection. Handles RegisterRequest and LoginRequest. bcrypt password hashing (work factor 12). Thread-safe result queue consumed by game thread.
+- **Auth Client**: Async TLS TCP client for login/register. Background thread for non-blocking UI. FATE_DEV_TLS flag skips cert verification in dev.
+- **Auth Protocol**: 128-bit auth token bridges TLS TCP auth to UDP game connection. Token sent in Connect packet payload. 30-second expiry. Existing 32-bit UDP session token unchanged.
+- **Database Layer**: PostgreSQL via libpqxx (FetchContent). Two separate DB connections (thread safety). Repository pattern: AccountRepository, CharacterRepository, InventoryRepository. Parameterized queries throughout.
+- **Schema**: 1:1 with Unity project's PostgreSQL (DigitalOcean managed DB). Separate dev database `fate_engine_dev` with all 65 tables. Migration: `docs/migrations/001_full_schema.sql`.
+- **Persistence**: Character stats, tile-coord position, gold, scene name saved on disconnect. Loaded from DB on connect. Retry-once on save failure with DATA LOSS logging.
+- **Login UI**: ImGui login/register screens with input validation (username 3-20 chars, password 8-128, email, character name 2-16). Class selection (Warrior/Mage/Archer). Connection state machine: LoginScreen → Authenticating → UDPConnecting → InGame.
+- **Duplicate Login**: New login kicks existing session (saves data, disconnects, destroys entity).
+- **Dependencies**: OpenSSL + libpq via vcpkg, libpqxx via FetchContent, bcrypt vendored (header renamed `bcrypt_hashpw.h` to avoid Windows SDK collision).
 
 ### March 17, 2026 - Phase 6: Networking
 

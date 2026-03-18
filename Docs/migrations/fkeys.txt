@@ -1,0 +1,50 @@
+┌──────────────────────────────┬────────────────────────────────────────────────────┬──────────────────────────┬───────────────────┬────────────────┬─────────────┐
+│          table_name          │                  constraint_name                   │       column_name        │   foreign_table   │ foreign_column │ delete_rule │
+├──────────────────────────────┼────────────────────────────────────────────────────┼──────────────────────────┼───────────────────┼────────────────┼─────────────┤
+│ blocked_players              │ fk_blocker                                         │ blocker_character_id     │ characters        │ character_id   │ CASCADE     │
+│ blocked_players              │ fk_blocked                                         │ blocked_character_id     │ characters        │ character_id   │ CASCADE     │
+│ bounties                     │ bounties_target_character_id_fkey                  │ target_character_id      │ characters        │ character_id   │ CASCADE     │
+│ bounty_contributions         │ bounty_contributions_contributor_character_id_fkey │ contributor_character_id │ characters        │ character_id   │ CASCADE     │
+│ bounty_contributions         │ bounty_contributions_bounty_id_fkey                │ bounty_id                │ bounties          │ bounty_id      │ CASCADE     │
+│ character_bags               │ character_bags_character_id_fkey                   │ character_id             │ characters        │ character_id   │ CASCADE     │
+│ character_bags               │ character_bags_bag_id_fkey                         │ bag_id                   │ bag_definitions   │ bag_id         │ NO ACTION   │
+│ character_inventory          │ character_inventory_character_id_fkey              │ character_id             │ characters        │ character_id   │ CASCADE     │
+│ character_inventory          │ character_inventory_item_id_fkey                   │ item_id                  │ item_definitions  │ item_id        │ NO ACTION   │
+│ character_skill_bar          │ character_skill_bar_character_id_fkey              │ character_id             │ characters        │ character_id   │ CASCADE     │
+│ character_skill_points       │ fk_skill_points_character                          │ character_id             │ characters        │ character_id   │ CASCADE     │
+│ character_skills             │ character_skills_skill_id_fkey                     │ skill_id                 │ skill_definitions │ skill_id       │ CASCADE     │
+│ character_skills             │ character_skills_character_id_fkey                 │ character_id             │ characters        │ character_id   │ CASCADE     │
+│ characters                   │ characters_account_id_fkey                         │ account_id               │ accounts          │ account_id     │ CASCADE     │
+│ crafting_ingredients         │ crafting_ingredients_recipe_id_fkey                │ recipe_id                │ crafting_recipes  │ recipe_id      │ CASCADE     │
+│ friends                      │ fk_friend_friend                                   │ friend_character_id      │ characters        │ character_id   │ CASCADE     │
+│ friends                      │ fk_friend_character                                │ character_id             │ characters        │ character_id   │ CASCADE     │
+│ gauntlet_performance_rewards │ gauntlet_performance_rewards_division_id_fkey      │ division_id              │ gauntlet_config   │ division_id    │ CASCADE     │
+│ gauntlet_player_results      │ gauntlet_player_results_result_id_fkey             │ result_id                │ gauntlet_results  │ result_id      │ CASCADE     │
+│ gauntlet_rewards             │ gauntlet_rewards_division_id_fkey                  │ division_id              │ gauntlet_config   │ division_id    │ CASCADE     │
+│ gauntlet_waves               │ gauntlet_waves_division_id_fkey                    │ division_id              │ gauntlet_config   │ division_id    │ CASCADE     │
+│ guild_invites                │ guild_invites_guild_id_fkey                        │ guild_id                 │ guilds            │ guild_id       │ CASCADE     │
+│ guild_members                │ guild_members_guild_id_fkey                        │ guild_id                 │ guilds            │ guild_id       │ CASCADE     │
+│ inventory                    │ inventory_character_id_fkey                        │ character_id             │ characters        │ character_id   │ CASCADE     │
+│ loot_drops                   │ fk_loot_drops_item                                 │ item_id                  │ item_definitions  │ item_id        │ CASCADE     │
+│ loot_drops                   │ loot_drops_loot_table_id_fkey                      │ loot_table_id            │ loot_tables       │ loot_table_id  │ CASCADE     │
+│ market_listings              │ market_listings_seller_character_id_fkey           │ seller_character_id      │ characters        │ character_id   │ CASCADE     │
+│ parties                      │ fk_party_leader                                    │ leader_character_id      │ characters        │ character_id   │ CASCADE     │
+│ party_invites                │ fk_invite_party                                    │ party_id                 │ parties           │ party_id       │ CASCADE     │
+│ party_invites                │ fk_invite_from                                     │ from_character_id        │ characters        │ character_id   │ CASCADE     │
+│ party_invites                │ fk_invite_to                                       │ to_character_id          │ characters        │ character_id   │ CASCADE     │
+│ party_members                │ fk_party_member_party                              │ party_id                 │ parties           │ party_id       │ CASCADE     │
+│ party_members                │ fk_party_member_character                          │ character_id             │ characters        │ character_id   │ CASCADE     │
+│ pvp_kill_tracking            │ fk_victim                                          │ victim_id                │ characters        │ character_id   │ CASCADE     │
+│ pvp_kill_tracking            │ fk_attacker                                        │ attacker_id              │ characters        │ character_id   │ CASCADE     │
+│ quest_definitions            │ quest_definitions_prerequisite_quest_fkey          │ prerequisite_quest       │ quest_definitions │ quest_id       │ NO ACTION   │
+│ quest_progress               │ quest_progress_character_id_fkey                   │ character_id             │ characters        │ character_id   │ CASCADE     │
+│ quest_rewards                │ quest_rewards_quest_id_fkey                        │ quest_id                 │ quest_definitions │ quest_id       │ CASCADE     │
+│ session_logs                 │ session_logs_character_id_fkey                     │ character_id             │ characters        │ character_id   │ NO ACTION   │
+│ session_logs                 │ session_logs_account_id_fkey                       │ account_id               │ accounts          │ account_id     │ NO ACTION   │
+│ skill_ranks                  │ skill_ranks_skill_id_fkey                          │ skill_id                 │ skill_definitions │ skill_id       │ CASCADE     │
+│ trade_offers                 │ trade_offers_session_id_fkey                       │ session_id               │ trade_sessions    │ session_id     │ CASCADE     │
+│ vendor_inventory             │ vendor_inventory_vendor_id_fkey                    │ vendor_id                │ npc_vendors       │ vendor_id      │ NO ACTION   │
+│ vendor_inventory             │ vendor_inventory_item_id_fkey                      │ item_id                  │ item_definitions  │ item_id        │ NO ACTION   │
+└──────────────────────────────┴────────────────────────────────────────────────────┴──────────────────────────┴───────────────────┴────────────────┴─────────────┘
+(44 rows)
+
