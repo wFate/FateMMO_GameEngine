@@ -1,4 +1,5 @@
 #pragma once
+#include "engine/render/gfx/types.h"
 
 namespace fate {
 
@@ -19,9 +20,11 @@ public:
     int height() const { return height_; }
     bool isValid() const { return fbo_ != 0; }
     bool hasDepthStencil() const { return hasDepthStencil_; }
+    gfx::FramebufferHandle gfxHandle() const { return gfxHandle_; }
 
 private:
     unsigned int fbo_ = 0;
+    gfx::FramebufferHandle gfxHandle_{};
     unsigned int texture_ = 0;
     unsigned int rbo_ = 0;
     int width_ = 0;
