@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/core/types.h"
 #include "engine/render/sprite_batch.h"
+#include "engine/render/gfx/types.h"
 #include <string>
 #include <unordered_map>
 #include <cstdint>
@@ -39,6 +40,7 @@ public:
     Vec2 measure(const std::string& text, float fontSize) const;
 
     unsigned int atlasTextureId() const;
+    gfx::TextureHandle atlasGfxHandle() const { return atlasGfxHandle_; }
     static Mat4 screenProjection(int windowWidth, int windowHeight);
 
     static uint32_t decodeUTF8(const std::string& text, size_t& index);
@@ -46,6 +48,7 @@ public:
 private:
     SDFText() = default;
     unsigned int atlasTexId_ = 0;
+    gfx::TextureHandle atlasGfxHandle_{};
     float atlasWidth_ = 512.0f, atlasHeight_ = 512.0f;
     float pxRange_ = 4.0f;
     float lineHeight_ = 1.2f;
