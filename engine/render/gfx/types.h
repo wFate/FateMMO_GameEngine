@@ -3,7 +3,8 @@
 // - Shader/Texture/Framebuffer: have gfxHandle() accessors (dual-track)
 // - SpriteBatch: uses gfx::BlendMode enum
 // - RenderPassContext: has commandList member
-// - Lighting/PostProcess/SpriteBatch flush: still use direct GL (TODO)
+// - Lighting/PostProcess: migrated to CommandList
+// - SpriteBatch flush: still uses direct GL (TODO)
 // - SDF Text: still uses raw GL texture ID for atlas (TODO)
 // - Editor (ImGui): uses direct GL (intentional — ImGui manages its own GL state)
 
