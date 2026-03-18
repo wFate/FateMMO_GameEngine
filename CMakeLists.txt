@@ -1,4 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
+
+# vcpkg integration
+if(DEFINED ENV{VCPKG_ROOT})
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+elseif(EXISTS "C:/vcpkg/scripts/buildsystems/vcpkg.cmake")
+    set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+endif()
+
 project(FateEngine VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -100,6 +108,32 @@ option(TRACY_ON_DEMAND "Enable Tracy on-demand mode" ON)
 option(ENGINE_MEMORY_DEBUG "Enable allocator debug visualization panels" ON)
 FetchContent_MakeAvailable(tracy)
 
+# OpenSSL (TLS for auth) — installed via vcpkg
+find_package(OpenSSL REQUIRED)
+
+# PostgreSQL client (libpq — required by libpqxx) — installed via vcpkg
+find_package(PostgreSQL REQUIRED)
+
+# libpqxx (C++ PostgreSQL client, wraps libpq)
+FetchContent_Declare(
+    libpqxx
+    GIT_REPOSITORY https://github.com/jtv/libpqxx.git
+    GIT_TAG        7.9.2
+    GIT_SHALLOW    TRUE
+)
+set(SKIP_BUILD_TEST ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(libpqxx)
+
+# bcrypt (password hashing — OpenBSD implementation)
+file(GLOB BCRYPT_SOURCES third_party/bcrypt/*.c)
+if(BCRYPT_SOURCES)
+    add_library(bcrypt_lib STATIC ${BCRYPT_SOURCES})
+    target_include_directories(bcrypt_lib PUBLIC third_party/bcrypt)
+    if(MSVC)
+        target_compile_options(bcrypt_lib PRIVATE /wd4100 /wd4244 /wd4267 /wd4996)
+    endif()
+endif()
+
 # Find OpenGL (cross-platform)
 if(WIN32)
     set(OPENGL_LIB opengl32)
@@ -151,6 +185,7 @@ target_link_libraries(fate_engine PUBLIC
     imgui_lib
     ${OPENGL_LIB}
     TracyClient
+    OpenSSL::SSL OpenSSL::Crypto
 )
 
 if(WIN32)
@@ -178,6 +213,7 @@ target_link_libraries(FateEngine PRIVATE
 # Pass source directory to code so saves go to the right place
 target_compile_definitions(FateEngine PRIVATE
     FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    FATE_DEV_TLS
 )
 
 # Copy assets to build directory on every build
@@ -194,7 +230,7 @@ file(GLOB_RECURSE SERVER_SOURCES server/*.cpp server/*.h)
 file(GLOB_RECURSE SERVER_SHARED_SOURCES game/shared/*.cpp)
 if(SERVER_SOURCES)
     add_executable(FateServer ${SERVER_SOURCES} ${SERVER_SHARED_SOURCES})
-    target_link_libraries(FateServer PRIVATE fate_engine)
+    target_link_libraries(FateServer PRIVATE fate_engine pqxx PostgreSQL::PostgreSQL bcrypt_lib)
     target_include_directories(FateServer PRIVATE ${CMAKE_SOURCE_DIR})
     if(WIN32)
         target_link_libraries(FateServer PRIVATE winmm)
