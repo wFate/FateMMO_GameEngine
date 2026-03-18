@@ -36,7 +36,6 @@ private:
     std::unordered_map<std::string, int> uniformCache_;
 
     int getUniformLocation(const std::string& name);
-    bool compileShader(unsigned int shader, const std::string& source, const char* type);
     std::string vertPath_;
     std::string fragPath_;
 };
