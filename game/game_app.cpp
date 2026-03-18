@@ -481,6 +481,22 @@ void GameApp::onInit() {
         LOG_INFO("Chat", "[%s] %s", msg.senderName.c_str(), msg.message.c_str());
     };
 
+    // Auth callbacks
+    netClient_.onConnectRejected = [this](const std::string& reason) {
+        LOG_WARN("GameApp", "Connection rejected: %s", reason.c_str());
+        loginScreen_.statusMessage = "Connection rejected: " + reason;
+        loginScreen_.isError = true;
+        connState_ = ConnectionState::LoginScreen;
+    };
+
+    netClient_.onDisconnected = [this]() {
+        if (connState_ == ConnectionState::InGame) {
+            connState_ = ConnectionState::LoginScreen;
+            loginScreen_.reset();
+            LOG_INFO("GameApp", "Disconnected, returning to login screen");
+        }
+    };
+
     // Initialize SDF text rendering
     SDFText::instance().init("assets/fonts/default.png", "assets/fonts/default.json");
 
@@ -865,73 +881,145 @@ void GameApp::spawnTestNPCs(World& world) {
 }
 
 void GameApp::onUpdate(float deltaTime) {
-    // Network: poll for server messages and send movement
-    netTime_ += deltaTime;
-    if (netClient_.isConnected()) {
-        netClient_.poll(netTime_);
+    switch (connState_) {
+        case ConnectionState::LoginScreen: {
+            // Only process login screen — no gameplay
+            if (loginScreen_.loginSubmitted) {
+                loginScreen_.loginSubmitted = false;
+                authClient_.loginAsync(loginScreen_.serverHost, static_cast<uint16_t>(loginScreen_.serverPort),
+                                       loginScreen_.username, loginScreen_.password);
+                connState_ = ConnectionState::Authenticating;
+                loginScreen_.statusMessage = "Authenticating...";
+                loginScreen_.isError = false;
+            }
+            if (loginScreen_.registerSubmitted) {
+                loginScreen_.registerSubmitted = false;
+                const char* classNames[] = {"Warrior", "Mage", "Archer"};
+                authClient_.registerAsync(loginScreen_.serverHost, static_cast<uint16_t>(loginScreen_.serverPort),
+                                          loginScreen_.username, loginScreen_.password,
+                                          loginScreen_.email,
+                                          loginScreen_.characterName,
+                                          classNames[loginScreen_.selectedClass]);
+                connState_ = ConnectionState::Authenticating;
+                loginScreen_.statusMessage = "Creating account...";
+                loginScreen_.isError = false;
+            }
+            break;
+        }
 
-        // Interpolate ghost entity positions
-        {
-            auto* sc = SceneManager::instance().currentScene();
-            if (sc) {
-                for (auto& [pid, handle] : ghostEntities_) {
-                    Vec2 pos = ghostInterpolation_.getInterpolatedPosition(pid, deltaTime);
-                    Entity* ghost = sc->world().getEntity(handle);
-                    if (ghost) {
-                        auto* t = ghost->getComponent<Transform>();
-                        if (t) t->position = pos;
-                    }
+        case ConnectionState::Authenticating: {
+            // Poll for auth result
+            if (authClient_.hasResult()) {
+                AuthResponse resp = authClient_.consumeResult();
+                if (resp.success) {
+                    pendingAuthToken_ = resp.authToken;
+                    // Connect to game server via UDP with auth token
+                    std::string host = loginScreen_.serverHost;
+                    netClient_.connectWithToken(host, static_cast<uint16_t>(serverPort_), pendingAuthToken_);
+                    connState_ = ConnectionState::UDPConnecting;
+                    loginScreen_.statusMessage = "Connecting to game server...";
+                } else {
+                    loginScreen_.statusMessage = resp.errorReason;
+                    loginScreen_.isError = true;
+                    connState_ = ConnectionState::LoginScreen;
                 }
             }
+            break;
         }
 
-        // Send movement 30 times/sec max
-        if (netTime_ - lastMoveSendTime_ >= 1.0f / 30.0f) {
-            auto* sc = SceneManager::instance().currentScene();
-            if (sc) {
-                sc->world().forEach<Transform, PlayerController>([&](Entity* entity, Transform* t, PlayerController* pc) {
-                    if (pc->isLocalPlayer) {
-                        netClient_.sendMove(t->position, {0.0f, 0.0f}, netTime_);
-                    }
-                });
+        case ConnectionState::UDPConnecting: {
+            // Poll network for ConnectAccept/ConnectReject
+            netTime_ += deltaTime;
+            netClient_.poll(netTime_);
+
+            if (netClient_.isConnected()) {
+                connState_ = ConnectionState::InGame;
+                loginScreen_.statusMessage = "";
+                LOG_INFO("GameApp", "Connected to game server, entering game");
             }
-            lastMoveSendTime_ = netTime_;
+            // ConnectReject is handled by the onConnectRejected callback set up in onInit
+            break;
         }
-    }
 
-    // Parallel AI ticking via job system (skip when editor is paused)
-    if (mobAISystem_ && !Editor::instance().isPaused()) {
-        Counter* aiCounter = mobAISystem_->submitParallelUpdate(deltaTime);
-        if (aiCounter) {
-            JobSystem::instance().waitForCounter(aiCounter, 0);
-            mobAISystem_->processDeferredAttacks();
+        case ConnectionState::InGame: {
+            // Network: poll for server messages and send movement
+            netTime_ += deltaTime;
+            if (netClient_.isConnected()) {
+                netClient_.poll(netTime_);
+
+                // Interpolate ghost entity positions
+                {
+                    auto* sc = SceneManager::instance().currentScene();
+                    if (sc) {
+                        for (auto& [pid, handle] : ghostEntities_) {
+                            Vec2 pos = ghostInterpolation_.getInterpolatedPosition(pid, deltaTime);
+                            Entity* ghost = sc->world().getEntity(handle);
+                            if (ghost) {
+                                auto* t = ghost->getComponent<Transform>();
+                                if (t) t->position = pos;
+                            }
+                        }
+                    }
+                }
+
+                // Send movement 30 times/sec max
+                if (netTime_ - lastMoveSendTime_ >= 1.0f / 30.0f) {
+                    auto* sc = SceneManager::instance().currentScene();
+                    if (sc) {
+                        sc->world().forEach<Transform, PlayerController>([&](Entity* entity, Transform* t, PlayerController* pc) {
+                            if (pc->isLocalPlayer) {
+                                netClient_.sendMove(t->position, {0.0f, 0.0f}, netTime_);
+                            }
+                        });
+                    }
+                    lastMoveSendTime_ = netTime_;
+                }
+            }
+
+            // Parallel AI ticking via job system (skip when editor is paused)
+            if (mobAISystem_ && !Editor::instance().isPaused()) {
+                Counter* aiCounter = mobAISystem_->submitParallelUpdate(deltaTime);
+                if (aiCounter) {
+                    JobSystem::instance().waitForCounter(aiCounter, 0);
+                    mobAISystem_->processDeferredAttacks();
+                }
+            }
+
+            // F1 HUD toggle removed — HUD is always on
+            // F2 collision debug removed — now controlled via editor toolbar toggle
+            auto& input = Input::instance();
+
+            // UI toggles — action map suppresses these in Chat context automatically
+            if (input.isActionPressed(ActionId::ToggleInventory) && !Editor::instance().wantsKeyboard()) {
+                InventoryUI::instance().toggle();
+            }
+            if (input.isActionPressed(ActionId::ToggleSkillBar) && !Editor::instance().wantsKeyboard()) {
+                SkillBarUI::instance().toggle();
+            }
+            if (input.isActionPressed(ActionId::ToggleQuestLog) && !Editor::instance().wantsKeyboard()) {
+                questLogUI_.toggle();
+            }
+            // Skill bar page switching
+            if (input.isActionPressed(ActionId::SkillPagePrev) && !Editor::instance().wantsKeyboard()) {
+                SkillBarUI::instance().prevPage();
+            }
+            if (input.isActionPressed(ActionId::SkillPageNext) && !Editor::instance().wantsKeyboard()) {
+                SkillBarUI::instance().nextPage();
+            }
+            break;
         }
-    }
-
-    // F1 HUD toggle removed — HUD is always on
-    // F2 collision debug removed — now controlled via editor toolbar toggle
-    auto& input = Input::instance();
-
-    // UI toggles — action map suppresses these in Chat context automatically
-    if (input.isActionPressed(ActionId::ToggleInventory) && !Editor::instance().wantsKeyboard()) {
-        InventoryUI::instance().toggle();
-    }
-    if (input.isActionPressed(ActionId::ToggleSkillBar) && !Editor::instance().wantsKeyboard()) {
-        SkillBarUI::instance().toggle();
-    }
-    if (input.isActionPressed(ActionId::ToggleQuestLog) && !Editor::instance().wantsKeyboard()) {
-        questLogUI_.toggle();
-    }
-    // Skill bar page switching
-    if (input.isActionPressed(ActionId::SkillPagePrev) && !Editor::instance().wantsKeyboard()) {
-        SkillBarUI::instance().prevPage();
-    }
-    if (input.isActionPressed(ActionId::SkillPageNext) && !Editor::instance().wantsKeyboard()) {
-        SkillBarUI::instance().nextPage();
     }
 }
 
 void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
+    // Draw login screen in all pre-game states
+    if (connState_ != ConnectionState::InGame) {
+        loginScreen_.draw();
+        return;
+    }
+
+    // ---- InGame rendering ----
+
     // Scene rendering (tiles, entities, combat text, debug overlays) is now handled
     // by render graph passes registered in onInit(). This callback only handles
     // ImGui game UI and screen-space overlays that render into the editor viewport FBO.

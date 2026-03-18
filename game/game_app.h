@@ -8,10 +8,19 @@
 #include "game/systems/render_system.h"
 #include "game/ui/npc_dialogue_ui.h"
 #include "game/ui/quest_log_ui.h"
+#include "engine/net/auth_client.h"
+#include "game/ui/login_screen.h"
 #include <memory>
 #include <unordered_map>
 
 namespace fate {
+
+enum class ConnectionState {
+    LoginScreen,
+    Authenticating,
+    UDPConnecting,
+    InGame,
+};
 
 class GameplaySystem;
 class MobAISystem;
@@ -43,6 +52,13 @@ private:
     std::unordered_map<uint64_t, EntityHandle> ghostEntities_; // PersistentId -> local ghost
     float lastMoveSendTime_ = 0.0f;
     float netTime_ = 0.0f; // accumulated time for network polling
+
+    // Login state machine
+    ConnectionState connState_ = ConnectionState::LoginScreen;
+    AuthClient authClient_;
+    LoginScreen loginScreen_;
+    AuthToken pendingAuthToken_ = {};
+    int authPort_ = 7778;
 
     // Network config UI
     char serverHost_[64] = "127.0.0.1";
