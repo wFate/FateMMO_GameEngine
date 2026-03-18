@@ -1,6 +1,6 @@
 #include "game/game_app.h"
 #include "engine/core/logger.h"
-#include "engine/render/gl_loader.h"
+#include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/editor/editor.h"
 #include "game/register_components.h"
@@ -388,6 +388,55 @@ void GameApp::onInit() {
         renderSystem_->init(&world);
     }
 
+    // Net client callbacks for ghost entity management
+    netClient_.onEntityEnter = [this](const SvEntityEnterMsg& msg) {
+        auto* sc = SceneManager::instance().currentScene();
+        if (!sc) return;
+        auto& world = sc->world();
+        Entity* ghost = nullptr;
+        if (msg.entityType == 0) { // player
+            ghost = EntityFactory::createGhostPlayer(world, msg.name, msg.position);
+        } else { // mob or npc
+            ghost = EntityFactory::createGhostMob(world, msg.name, msg.position);
+        }
+        if (ghost) {
+            ghostEntities_[msg.persistentId] = ghost->handle();
+        }
+    };
+
+    netClient_.onEntityLeave = [this](const SvEntityLeaveMsg& msg) {
+        auto it = ghostEntities_.find(msg.persistentId);
+        if (it != ghostEntities_.end()) {
+            auto* sc = SceneManager::instance().currentScene();
+            if (sc) {
+                sc->world().destroyEntity(it->second);
+            }
+            ghostEntities_.erase(it);
+        }
+    };
+
+    netClient_.onEntityUpdate = [this](const SvEntityUpdateMsg& msg) {
+        auto it = ghostEntities_.find(msg.persistentId);
+        if (it == ghostEntities_.end()) return;
+        auto* sc = SceneManager::instance().currentScene();
+        if (!sc) return;
+        Entity* ghost = sc->world().getEntity(it->second);
+        if (!ghost) return;
+
+        if (msg.fieldMask & 0x01) { // position
+            auto* t = ghost->getComponent<Transform>();
+            if (t) t->position = msg.position;
+        }
+        if (msg.fieldMask & 0x02) { // animFrame
+            auto* s = ghost->getComponent<SpriteComponent>();
+            if (s) s->currentFrame = msg.animFrame;
+        }
+        if (msg.fieldMask & 0x04) { // flipX
+            auto* s = ghost->getComponent<SpriteComponent>();
+            if (s) s->flipX = (msg.flipX != 0);
+        }
+    };
+
     // Initialize SDF text rendering
     SDFText::instance().init("assets/fonts/default.png", "assets/fonts/default.json");
 
@@ -772,8 +821,24 @@ void GameApp::spawnTestNPCs(World& world) {
 }
 
 void GameApp::onUpdate(float deltaTime) {
-    // TODO(Phase5): Submit spatial grid rebuild as a job when profiling shows need
-    // TODO(Phase5): Submit chunk lifecycle transitions as jobs when profiling shows need
+    // Network: poll for server messages and send movement
+    netTime_ += deltaTime;
+    if (netClient_.isConnected()) {
+        netClient_.poll(netTime_);
+
+        // Send movement 30 times/sec max
+        if (netTime_ - lastMoveSendTime_ >= 1.0f / 30.0f) {
+            auto* sc = SceneManager::instance().currentScene();
+            if (sc) {
+                sc->world().forEach<Transform, PlayerController>([&](Entity* entity, Transform* t, PlayerController* pc) {
+                    if (pc->isLocalPlayer) {
+                        netClient_.sendMove(t->position, {0.0f, 0.0f}, netTime_);
+                    }
+                });
+            }
+            lastMoveSendTime_ = netTime_;
+        }
+    }
 
     // Parallel AI ticking via job system
     if (mobAISystem_) {

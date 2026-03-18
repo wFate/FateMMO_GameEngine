@@ -332,6 +332,34 @@ public:
 
         return npc;
     }
+
+    /// Create a ghost (remote) player entity — minimal visual representation.
+    static Entity* createGhostPlayer(World& world, const std::string& name, Vec2 position) {
+        Entity* entity = world.createEntity(name);
+        entity->setTag("ghost");
+        auto* t = entity->addComponent<Transform>(position);
+        t->depth = 1.0f;
+        auto* sprite = entity->addComponent<SpriteComponent>();
+        sprite->size = {32.0f, 32.0f}; // default player size
+        auto* np = entity->addComponent<NameplateComponent>();
+        np->displayName = name;
+        np->visible = true;
+        return entity;
+    }
+
+    /// Create a ghost (remote) mob entity — minimal visual representation.
+    static Entity* createGhostMob(World& world, const std::string& name, Vec2 position) {
+        Entity* entity = world.createEntity(name);
+        entity->setTag("ghost");
+        auto* t = entity->addComponent<Transform>(position);
+        t->depth = 1.0f;
+        auto* sprite = entity->addComponent<SpriteComponent>();
+        sprite->size = {32.0f, 32.0f};
+        auto* np = entity->addComponent<MobNameplateComponent>();
+        np->displayName = name;
+        np->visible = true;
+        return entity;
+    }
 };
 
 } // namespace fate

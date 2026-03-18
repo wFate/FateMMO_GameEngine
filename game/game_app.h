@@ -2,10 +2,13 @@
 #include "engine/app.h"
 #include "engine/tilemap/tilemap.h"
 #include "engine/render/sdf_text.h"
+#include "engine/net/net_client.h"
+#include "engine/ecs/entity_handle.h"
 #include "game/systems/render_system.h"
 #include "game/ui/npc_dialogue_ui.h"
 #include "game/ui/quest_log_ui.h"
 #include <memory>
+#include <unordered_map>
 
 namespace fate {
 
@@ -34,6 +37,10 @@ private:
     std::unique_ptr<Tilemap> tilemap_;
     NPCDialogueUI npcDialogueUI_;
     QuestLogUI questLogUI_;
+    NetClient netClient_;
+    std::unordered_map<uint64_t, EntityHandle> ghostEntities_; // PersistentId -> local ghost
+    float lastMoveSendTime_ = 0.0f;
+    float netTime_ = 0.0f; // accumulated time for network polling
 
     void createPlayer(World& world);
     void createTestEntities(World& world);
