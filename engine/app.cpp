@@ -1,4 +1,6 @@
 #include "engine/app.h"
+// Direct GL used for initialization (glGetString, initial state, window resize)
+// and FBO blit pass (interleaved with ImGui) — intentionally outside RHI.
 #include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/render/gfx/device.h"
 #include "engine/render/shader.h"
