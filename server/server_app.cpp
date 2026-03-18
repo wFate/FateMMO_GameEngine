@@ -205,6 +205,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             }
             break;
         }
+        case PacketType::CmdAction: {
+            auto action = CmdAction::read(payload);
+            processAction(clientId, action);
+            break;
+        }
         case PacketType::CmdChat: {
             auto chat = CmdChat::read(payload);
             // TODO: route chat message
@@ -214,6 +219,83 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;
+    }
+}
+
+void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
+    // Find attacker's player entity
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId attackerPid(client->playerEntityId);
+    EntityHandle attackerHandle = replication_.getEntityHandle(attackerPid);
+    Entity* attacker = world_.getEntity(attackerHandle);
+    if (!attacker) return;
+
+    // Find target entity
+    PersistentId targetPid(action.targetId);
+    EntityHandle targetHandle = replication_.getEntityHandle(targetPid);
+    Entity* target = world_.getEntity(targetHandle);
+    if (!target) {
+        LOG_WARN("Server", "Client %d action on invalid target %llu", clientId, action.targetId);
+        return;
+    }
+
+    if (action.actionType == 0) {
+        // Basic attack
+        auto* attackerTransform = attacker->getComponent<Transform>();
+        auto* targetTransform = target->getComponent<Transform>();
+        if (!attackerTransform || !targetTransform) return;
+
+        // Validate range
+        float attackRange = 1.0f; // default
+        auto* charStats = attacker->getComponent<CharacterStatsComponent>();
+        if (charStats) {
+            attackRange = charStats->stats.classDef.attackRange;
+        }
+        float maxRange = attackRange * 32.0f + 16.0f;
+        float dist = attackerTransform->position.distance(targetTransform->position);
+        if (dist > maxRange) {
+            LOG_WARN("Server", "Client %d attack out of range (%.1f > %.1f)", clientId, dist, maxRange);
+            return;
+        }
+
+        // Check target is a living enemy
+        auto* enemyStats = target->getComponent<EnemyStatsComponent>();
+        if (!enemyStats || !enemyStats->stats.isAlive) return;
+
+        // Calculate damage
+        int damage = 10; // default
+        bool isCrit = false;
+        if (charStats) {
+            damage = charStats->stats.calculateDamage(false, isCrit);
+        }
+
+        // Apply damage
+        enemyStats->stats.takeDamage(damage);
+        bool killed = !enemyStats->stats.isAlive;
+
+        // Build and broadcast combat event
+        SvCombatEventMsg evt;
+        evt.attackerId = attackerPid.value();
+        evt.targetId   = targetPid.value();
+        evt.damage     = damage;
+        evt.skillId    = action.skillId;
+        evt.isCrit     = isCrit ? 1 : 0;
+        evt.isKill     = killed ? 1 : 0;
+
+        uint8_t buf[64];
+        ByteWriter w(buf, sizeof(buf));
+        evt.write(w);
+        server_.broadcast(Channel::ReliableOrdered, PacketType::SvCombatEvent, buf, w.size());
+
+        if (killed) {
+            LOG_INFO("Server", "Client %d killed target %llu", clientId,
+                     static_cast<unsigned long long>(action.targetId));
+            // Quest/XP integration deferred
+        }
+    } else {
+        LOG_INFO("Server", "Unhandled action type %d from client %d", action.actionType, clientId);
     }
 }
 
