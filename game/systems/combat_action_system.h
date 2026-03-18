@@ -13,6 +13,7 @@
 #include "game/components/sprite_component.h"
 #include "game/shared/spatial_hash.h"
 #include "imgui.h"
+#include "engine/editor/editor.h"
 
 #include "game/systems/quest_system.h"
 #include "game/components/faction_component.h"
@@ -211,8 +212,8 @@ public:
 
                     sdfText.drawWorld(batch, mnpBuf, namePos, mnpFontSize, mobColor, 85.0f, TextStyle::Outlined);
 
-                    // HP bar below name for targeted or damaged mobs
-                    if (enemyComp && enemyComp->stats.currentHP < enemyComp->stats.maxHP) {
+                    // HP bar below name for all living mobs
+                    if (enemyComp && enemyComp->stats.isAlive) {
                         Vec2 barPos = {t->position.x, namePos.y - 3.0f};
                         float barW = 28.0f;
                         float barH = 2.0f;
@@ -349,8 +350,18 @@ private:
 
         // Use touch position if touched, mouse position if clicked
         Vec2 screenPos = touched ? input.touchPosition(0) : input.mousePosition();
-        ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-        Vec2 worldClick = camera->screenToWorld(screenPos, (int)displaySize.x, (int)displaySize.y);
+
+        // Convert screen coords to viewport-relative coords for editor mode
+        auto& ed = Editor::instance();
+        Vec2 vpPos = ed.viewportPos();
+        Vec2 vpSize = ed.viewportSize();
+        if (ed.isOpen() && vpSize.x > 0 && vpSize.y > 0) {
+            screenPos = screenPos - vpPos;
+        } else {
+            ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+            vpSize = {displaySize.x, displaySize.y};
+        }
+        Vec2 worldClick = camera->screenToWorld(screenPos, (int)vpSize.x, (int)vpSize.y);
 
         // Find mob under click via spatial hash + sprite bounds check
         EntityId hitId = mobGrid_.findAtPoint(worldClick,

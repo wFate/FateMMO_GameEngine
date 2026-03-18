@@ -1,5 +1,6 @@
 #include "server/server_app.h"
 #include "engine/core/logger.h"
+#include "engine/scene/scene_manager.h"
 #include "engine/net/protocol.h"
 #include "engine/ecs/persistent_id.h"
 #include "game/entity_factory.h"
@@ -248,10 +249,10 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         s.maxMP        = rec.max_mp;
     }
 
-    // Set position
+    // Set position (DB stores tile coords, engine uses pixel coords)
     auto* t = player->getComponent<Transform>();
     if (t) {
-        t->position = {rec.position_x, rec.position_y};
+        t->position = Coords::toPixel({rec.position_x, rec.position_y});
     }
 
     // Set gold on inventory
@@ -320,9 +321,15 @@ void ServerApp::savePlayerToDB(uint16_t clientId) {
 
     auto* t = e->getComponent<Transform>();
     if (t) {
-        rec.position_x = t->position.x;
-        rec.position_y = t->position.y;
+        // Convert pixel coords to tile coords for DB (matches Unity format)
+        Vec2 tilePos = Coords::toTile(t->position);
+        rec.position_x = tilePos.x;
+        rec.position_y = tilePos.y;
     }
+
+    // Save current scene name
+    auto* sc = SceneManager::instance().currentScene();
+    rec.current_scene = sc ? sc->name() : "Scene2";
 
     auto* inv = e->getComponent<InventoryComponent>();
     if (inv) {
@@ -377,7 +384,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             if (maxPerTick < 1) maxPerTick = 1;
             moveCountThisTick_[clientId]++;
             if (moveCountThisTick_[clientId] > maxPerTick) {
-                LOG_WARN("Server", "Client %d exceeding move rate limit", clientId);
+                // Silently drop excess moves (was spamming logs)
                 break;
             }
 

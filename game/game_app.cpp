@@ -1646,8 +1646,14 @@ void GameApp::onUpdate(float deltaTime) {
                     auto* factionComp = player->addComponent<FactionComponent>();
                     factionComp->faction = Faction::Xyros;
 
-                    LOG_INFO("GameApp", "Local player created for '%s' (%s)",
-                             pendingCharName_.c_str(), pendingClassName_.c_str());
+                    // Debug: verify components
+                    LOG_INFO("GameApp", "Local player created for '%s' (%s) — hasNameplate=%d, hasTransform=%d, hasPCtrl=%d, hasStats=%d, hasTargeting=%d",
+                             pendingCharName_.c_str(), pendingClassName_.c_str(),
+                             player->hasComponent<NameplateComponent>() ? 1 : 0,
+                             player->hasComponent<Transform>() ? 1 : 0,
+                             player->hasComponent<PlayerController>() ? 1 : 0,
+                             player->hasComponent<CharacterStatsComponent>() ? 1 : 0,
+                             player->hasComponent<TargetingComponent>() ? 1 : 0);
                 }
                 break; // Skip rest of first frame
             }
