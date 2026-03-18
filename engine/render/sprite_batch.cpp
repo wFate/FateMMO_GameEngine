@@ -229,6 +229,11 @@ void SpriteBatch::drawTexturedQuad(unsigned int glTexId, const SpriteDrawParams&
     entries_.push_back({nullptr, glTexId, params, renderType});
 }
 
+void SpriteBatch::drawTexturedQuad(gfx::TextureHandle gfxTex, unsigned int glTexId, const SpriteDrawParams& params, float renderType) {
+    if (!drawing_) return;
+    entries_.push_back({nullptr, glTexId, params, renderType, gfxTex});
+}
+
 void SpriteBatch::end() {
     if (!drawing_) return;
     drawing_ = false;
@@ -316,6 +321,8 @@ void SpriteBatch::flush() {
 
                 if (entry.texture) {
                     cmdList_->bindTexture(0, entry.texture->gfxHandle());
+                } else if (entry.gfxTexHandle.valid()) {
+                    cmdList_->bindTexture(0, entry.gfxTexHandle);
                 } else if (entry.rawTexId) {
                     // Raw GL texture ID -- fall back to direct GL bind
                     glActiveTexture(GL_TEXTURE0);

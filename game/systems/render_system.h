@@ -25,7 +25,7 @@ public:
 
         world_->forEach<Transform, SpriteComponent>(
             [&](Entity*, Transform* transform, SpriteComponent* sprite) {
-                if (!sprite->texture) return;
+                if (!sprite->enabled || !sprite->texture) return;
 
                 // Frustum culling: skip sprites outside visible area
                 float halfW = sprite->size.x * 0.5f;

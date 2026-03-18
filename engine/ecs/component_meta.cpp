@@ -1,8 +1,12 @@
 #include "engine/ecs/component_meta.h"
 
+#include <cstring>
+
 #include <nlohmann/json.hpp>
 
+#include "engine/core/logger.h"
 #include "engine/core/types.h"
+#include "engine/ecs/entity_handle.h"
 
 namespace fate {
 
@@ -105,11 +109,26 @@ void autoToJson(const void* data, nlohmann::json& j,
             case FieldType::String:
                 j[f.name] = *static_cast<const std::string*>(ptr);
                 break;
-            case FieldType::Enum:
-            case FieldType::EntityHandle:
-            case FieldType::Direction:
+            case FieldType::Enum: {
+                // Read enum value based on stored size (1, 2, or 4 bytes)
+                int32_t v = 0;
+                std::memcpy(&v, ptr, f.size <= sizeof(v) ? f.size : sizeof(v));
+                j[f.name] = v;
+                break;
+            }
+            case FieldType::EntityHandle: {
+                const auto& h = *static_cast<const EntityHandle*>(ptr);
+                j[f.name] = h.value;
+                break;
+            }
+            case FieldType::Direction: {
+                j[f.name] = static_cast<int>(*static_cast<const Direction*>(ptr));
+                break;
+            }
             case FieldType::Custom:
-                // Skip types that need per-type handling
+                LOG_WARN("ComponentMeta",
+                         "autoToJson: skipping Custom field '%s' (no serializer)",
+                         f.name);
                 break;
         }
     }
@@ -178,10 +197,25 @@ void autoFromJson(const nlohmann::json& j, void* data,
             case FieldType::String:
                 *static_cast<std::string*>(ptr) = val.get<std::string>();
                 break;
-            case FieldType::Enum:
-            case FieldType::EntityHandle:
-            case FieldType::Direction:
+            case FieldType::Enum: {
+                int32_t v = val.get<int32_t>();
+                std::memcpy(ptr, &v, f.size <= sizeof(v) ? f.size : sizeof(v));
+                break;
+            }
+            case FieldType::EntityHandle: {
+                auto& h = *static_cast<EntityHandle*>(ptr);
+                h.value = val.get<uint32_t>();
+                break;
+            }
+            case FieldType::Direction: {
+                *static_cast<Direction*>(ptr) =
+                    static_cast<Direction>(val.get<uint8_t>());
+                break;
+            }
             case FieldType::Custom:
+                LOG_WARN("ComponentMeta",
+                         "autoFromJson: skipping Custom field '%s' (no deserializer)",
+                         f.name);
                 break;
         }
     }

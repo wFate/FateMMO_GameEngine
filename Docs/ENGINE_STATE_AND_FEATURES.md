@@ -244,7 +244,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 ## Game Systems (Ported from Unity Prototype)
 
-All 27 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`. Total: **45 files, ~7,800 lines**, all compile with zero errors. Systems marked with **(networking done, needs DB)** have full game logic implemented with networking transport wired up; database persistence via libpqxx remains to be integrated.
+All 27 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`. Total: **45 files, ~7,800 lines**, all compile with zero errors. Database repositories exist for all systems in `server/db/` (10 repos). Systems marked **(DB wired)** have full load-on-connect and save-on-disconnect. Systems marked **(repo built, needs integration)** have the repository but aren't yet called from ServerApp message handlers (the repo queries work, they just need to be triggered by gameplay events like CmdTrade, CmdListItem, etc.).
 
 ### Core Gameplay (Fully Ported — Logic Identical to C#)
 | System | Files | Lines | C# Source | Notes |
@@ -278,20 +278,20 @@ See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 ### Game Systems (Ported — Needs Database Wiring)
 | System | Files | Lines | C# Source | Notes |
 |--------|-------|-------|-----------|-------|
-| Inventory | `inventory.h/.cpp` | 410 | NetworkInventory | 15 slots, equipment map, gold, trade slot locking, stack/swap **(networking done, needs DB)** |
-| Skill Manager | `skill_manager.h/.cpp` | 340 | PlayerSkillManager (2,079L) | Skill learning (skillbook + points), cooldowns, 4x5 skill bar **(networking done, needs DB)** |
-| Party Manager | `party_manager.h/.cpp` | 410 | NetworkPartyManager | 3-player parties, +10%/member XP bonus, loot mode, invites **(networking done, needs DB)** |
-| Guild Manager | `guild_manager.h/.cpp` | 280 | NetworkGuildManager | TWOM guilds, ranks, 16x16 pixel symbols, XP contribution **(networking done, needs DB)** |
-| Friends Manager | `friends_manager.h/.cpp` | 377 | NetworkFriendsManager | 50 friends, 100 blocks, profile inspection, online status **(networking done, needs DB)** |
-| Chat Manager | `chat_manager.h/.cpp` | 120 | NetworkChatManager | 7 channels (Map/Global/Trade/Party/Guild/Private/System), cross-faction garbling on public channels **(networking done, needs DB)** |
-| Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(networking done, needs DB)** |
-| Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(networking done, needs DB)** |
-| Gauntlet | `gauntlet.h/.cpp` | ~850 | GauntletManager + GauntletInstance + GauntletTeam + GauntletRegistry + GauntletConfig (10 files) | Full event scheduler (2hr cycle, 10min signup), division-based matchmaking, GauntletTeam per-team scoring/MVP, GauntletRegistry signup queues, BasicWaveConfig/BossSpawnConfig/LevelMobMapping for wave spawning, reward configs (winner/loser/performance), consolation for overflow, announcement callbacks, debug commands **(networking done, needs DB)** |
+| Inventory | `inventory.h/.cpp` | 410 | NetworkInventory | 15 slots, equipment map, gold, trade slot locking, stack/swap **(DB wired)** |
+| Skill Manager | `skill_manager.h/.cpp` | 340 | PlayerSkillManager (2,079L) | Skill learning (skillbook + points), cooldowns, 4x5 skill bar **(DB wired — load/save on connect/disconnect)** |
+| Party Manager | `party_manager.h/.cpp` | 410 | NetworkPartyManager | 3-player parties, +10%/member XP bonus, loot mode, invites **(runtime only — no persistence needed)** |
+| Guild Manager | `guild_manager.h/.cpp` | 280 | NetworkGuildManager | TWOM guilds, ranks, 16x16 pixel symbols, XP contribution **(DB wired — load on connect)** |
+| Friends Manager | `friends_manager.h/.cpp` | 377 | NetworkFriendsManager | 50 friends, 100 blocks, profile inspection, online status **(DB wired — init + last_online on connect/disconnect)** |
+| Chat Manager | `chat_manager.h/.cpp` | 120 | NetworkChatManager | 7 channels (Map/Global/Trade/Party/Guild/Private/System), cross-faction garbling on public channels **(runtime only — no persistence needed)** |
+| Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(repo built, needs integration)** |
+| Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(repo built, needs integration; expiry maintenance wired)** |
+| Gauntlet | `gauntlet.h/.cpp` | ~850 | GauntletManager + GauntletInstance + GauntletTeam + GauntletRegistry + GauntletConfig (10 files) | Full event scheduler (2hr cycle, 10min signup), division-based matchmaking, GauntletTeam per-team scoring/MVP, GauntletRegistry signup queues, BasicWaveConfig/BossSpawnConfig/LevelMobMapping for wave spawning, reward configs (winner/loser/performance), consolation for overflow, announcement callbacks, debug commands **(repo built, needs integration)** |
 | Faction System | `faction.h` | ~130 | FactionRegistry + FactionChatGarbler | 4 factions (Xyros/Fenor/Zethos/Solis), registry, deterministic chat garbling, same-faction checks |
 | Pet System | `pet_system.h/.cpp` | ~120 | PetDefinition + PetInstance + PetSystem | Leveling, rarity-tiered stats (HP/Crit/XP bonus), XP sharing (50%), player-level cap |
 | Stat Enchant System | `stat_enchant_system.h` | ~70 | StatEnchantSystem | Accessory enchanting (Belt/Ring/Necklace/Cloak), 6-tier roll table, HP/MP x10 scaling |
-| Bounty System | `bounty_system.h` | ~200 | NetworkBountyManager + BountyService + BountyRepository | PvE bounty board (max 10 active, 50K-500M gold, 48hr expiry), 2% tax, guild-mate protection, 12hr guild-leave cooldown, party split on claim, cancel/refund, expiration processing **(needs DB)** |
-| Ranking System | `ranking_system.h` | ~170 | NetworkRankingManager + RankingRepository | Global/class/guild/honor leaderboards, paginated (50/page), 60s cache, PlayerRankInfo (global+class+guild rank), K/D ratio, honor rankings **(needs DB)** |
+| Bounty System | `bounty_system.h` | ~200 | NetworkBountyManager + BountyService + BountyRepository | PvE bounty board (max 10 active, 50K-500M gold, 48hr expiry), 2% tax, guild-mate protection, 12hr guild-leave cooldown, party split on claim, cancel/refund, expiration processing **(repo built, expiry maintenance wired)** |
+| Ranking System | `ranking_system.h` | ~170 | NetworkRankingManager + RankingRepository | Global/class/guild/honor leaderboards, paginated (50/page), 60s cache, PlayerRankInfo (global+class+guild rank), K/D ratio, honor rankings **(repo built, needs integration)** |
 | Profanity Filter | `profanity_filter.h` | ~260 | ProfanityFilter (351L) | Leetspeak normalization (8 mappings), 50+ word list (EN+ES), 4 blocked phrases, 3 modes (Validate/Censor/Remove), character/guild name validation, chat filtering, word-boundary logic for short words |
 | Input Validator | `input_validator.h` | ~75 | InputValidator (76L) | Chat/Name validation modes, per-character rejection, username (3-20 alphanumeric+underscore) and password (8-128) validation, delegates to ProfanityFilter |
 | Consumable Definition | `consumable_definition.h` | ~105 | ConsumableDefinition (127L) | 16 effect types (HP/MP restore, 8 buff types, teleport, skill book, stat reset), cooldown groups, safe-zone/combat restrictions, effects description builder |
@@ -363,6 +363,24 @@ pvpDamage = baseDamage * 0.05
 - **Boss Death Persistence** (`server/db/zone_mob_state_repository.h/.cpp`): Saves boss death state to `zone_mob_deaths` table. Restores respawn timers on server restart. Auto-cleanup of expired records.
 - **Starter Equipment**: New characters receive class-specific weapon (Rusty Dagger / Gnarled Stick / Makeshift Bow) plus shared armor (Quilted Vest, Worn Sandals, Tattered Gloves) — inserted as equipped items in `character_inventory` during registration.
 - **Client Handling**: Ghost dropped item entities created via `EntityFactory::createGhostDroppedItem()`. `onLootPickup` callback logs pickup notifications.
+
+### March 18, 2026 - Full DB Wiring: Repositories, Async Dispatch, Server Integration
+
+**6 new repositories, fiber-based async dispatcher, full ServerApp integration:**
+
+- **Skill Repository** (`server/db/skill_repository.h/.cpp`): Load/save learned skills (character_skills), skill bar (character_skill_bar, 20 slots), skill points (character_skill_points). Upsert pattern (ON CONFLICT DO UPDATE). Batch save in single transaction.
+- **Guild Repository** (`server/db/guild_repository.h/.cpp`): Full guild lifecycle — create (name check, 100K gold), disband (soft delete, guild_left_at), add/remove members (capacity check, count update), set rank, transfer ownership (demote+promote+update in transaction), guild XP contribution. 20+ SQL operations across guilds, guild_members, guild_invites, characters tables.
+- **Social Repository** (`server/db/social_repository.h/.cpp`): Bidirectional friend system (send/accept/decline/remove), block system (removes friendship first), friend notes, online status tracking. Operates on friends, blocked_players, characters tables.
+- **Market Repository** (`server/db/market_repository.h/.cpp`): Create/cancel/deactivate listings, transaction logging, player listing queries, jackpot pool management (add/reset/get state), expired listing deactivation. 2-day listing expiry. Operates on market_listings, market_transactions, jackpot_pool tables.
+- **Trade Repository** (`server/db/trade_repository.h/.cpp`): Full P2P trade — session create/load/cancel, per-player lock/confirm/gold, item offer add/remove/clear, atomic item transfer (UPDATE character_id), gold transfer, trade history logging, stale session cleanup. 22 methods across trade_sessions, trade_offers, trade_invites, trade_history, character_inventory, characters tables.
+- **Bounty Repository** (`server/db/bounty_repository.h/.cpp`): Place bounty (upsert existing or create new, record contribution), cancel contribution (refund with 2% tax, deactivate if below min), claim bounty (deactivate + calculate payout split), process expired bounties (refund all contributors with tax), guild leave cooldown check. Full bounty_history audit trail. FOR UPDATE row locking on mutations.
+- **Async DB Dispatcher** (`server/db/db_dispatcher.h`): Bridges fiber job system to connection pool. `dispatch<Result>(workFn, completionFn)` runs DB queries on worker fibers, queues results for game thread. `drainCompletions()` called once per tick. Fire-and-forget variant via `dispatchVoid()`. RAII task cleanup. 4 concurrent DB operations via fiber workers.
+- **ServerApp Init**: Creates all 9 repositories + initializes pool (5-50 connections) + dispatcher. Loads 5 definition caches at startup (748 items, 835 loot drops, 73 mobs, 60 skills/174 ranks, 3 scenes). Logs cache summary.
+- **Player Connect**: Now loads skills (learned skills, 20-slot skill bar, skill points), guild membership + rank, initializes friends manager, updates last_online. Staggered auto-save timer set per client (offset by clientId mod 60).
+- **Player Disconnect**: Now saves all skills + skill bar + skill points, updates last_online alongside existing character + inventory save.
+- **Auto-Save**: Every 5 minutes per player (staggered to spread DB load). Full character save including skills.
+- **Periodic Maintenance**: Market listing expiry check (60s interval), bounty expiry + refund processing (60s), stale trade session cleanup (30s, >30min sessions cancelled).
+- **Shutdown**: Saves all connected players, shuts down connection pool, disconnects.
 
 ### March 18, 2026 - Database Layer: Connection Pool, Definition Caches, Data Migration
 

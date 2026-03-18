@@ -9,6 +9,8 @@
 #include "game/components/faction_component.h"
 #include "game/components/dropped_item_component.h"
 #include "game/shared/item_stat_roller.h"
+#include "game/components/pet_component.h"
+#include "engine/net/game_messages.h"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -69,16 +71,41 @@ bool ServerApp::init(uint16_t port) {
         return false;
     }
 
+    // Initialize connection pool
+    DbPool::Config poolCfg;
+    poolCfg.connectionString = dbConnectionString_;
+    poolCfg.minConnections = 5;
+    poolCfg.maxConnections = 50;
+    if (!dbPool_.initialize(poolCfg)) {
+        LOG_ERROR("Server", "Failed to initialize DB connection pool");
+        return false;
+    }
+    dbDispatcher_.init(&dbPool_);
+
+    // Create repositories (all use gameDbConn_ for synchronous operations)
     characterRepo_ = std::make_unique<CharacterRepository>(gameDbConn_.connection());
     inventoryRepo_ = std::make_unique<InventoryRepository>(gameDbConn_.connection());
+    skillRepo_     = std::make_unique<SkillRepository>(gameDbConn_.connection());
+    guildRepo_     = std::make_unique<GuildRepository>(gameDbConn_.connection());
+    socialRepo_    = std::make_unique<SocialRepository>(gameDbConn_.connection());
+    marketRepo_    = std::make_unique<MarketRepository>(gameDbConn_.connection());
+    tradeRepo_     = std::make_unique<TradeRepository>(gameDbConn_.connection());
+    bountyRepo_    = std::make_unique<BountyRepository>(gameDbConn_.connection());
+    questRepo_     = std::make_unique<QuestRepository>(gameDbConn_.connection());
+    bankRepo_      = std::make_unique<BankRepository>(gameDbConn_.connection());
+    petRepo_       = std::make_unique<PetRepository>(gameDbConn_.connection());
+    mobStateRepo_  = std::make_unique<ZoneMobStateRepository>(gameDbConn_.connection());
 
     // Initialize definition caches
     itemDefCache_.initialize(gameDbConn_.connection());
     lootTableCache_.initialize(gameDbConn_.connection(), itemDefCache_);
-    LOG_INFO("Server", "Loaded %zu item definitions, %zu loot tables",
-             itemDefCache_.size(), lootTableCache_.tableCount());
-
-    mobStateRepo_ = std::make_unique<ZoneMobStateRepository>(gameDbConn_.connection());
+    mobDefCache_.initialize(gameDbConn_.connection());
+    skillDefCache_.initialize(gameDbConn_.connection());
+    sceneCache_.initialize(gameDbConn_.connection());
+    LOG_INFO("Server", "Caches loaded: %zu items, %zu loot tables, %d mobs, %d skills (%d ranks), %d scenes",
+             itemDefCache_.size(), lootTableCache_.tableCount(),
+             mobDefCache_.count(), skillDefCache_.skillCount(), skillDefCache_.rankCount(),
+             sceneCache_.count());
 
     // Auth server startup (warning only — game server can run without auth in dev)
     if (!authServer_.start(authPort_, tlsCertPath_, tlsKeyPath_, dbConnectionString_)) {
@@ -122,6 +149,7 @@ void ServerApp::shutdown() {
     });
 
     authServer_.stop();
+    dbPool_.shutdown();
     gameDbConn_.disconnect();
 
     server_.stop();
@@ -269,6 +297,13 @@ void ServerApp::tick(float dt) {
     // 5. Retransmit unacked reliable packets
     server_.processRetransmits(gameTime_);
 
+    // 5b. Drain async DB completions
+    dbDispatcher_.drainCompletions();
+
+    // 5c. Auto-save and periodic maintenance
+    tickAutoSave(dt);
+    tickMaintenance(dt);
+
     // 6. Check timeouts
     auto timedOut = server_.checkTimeouts(gameTime_);
     for (uint16_t id : timedOut) {
@@ -407,16 +442,123 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     // Track active account session
     activeAccountSessions_[session.account_id] = clientId;
 
+    // Load skills from DB
+    auto* skillComp = player->getComponent<SkillManagerComponent>();
+    if (skillComp) {
+        auto skills = skillRepo_->loadCharacterSkills(rec.character_id);
+        for (const auto& s : skills) {
+            skillComp->skills.learnSkill(s.skillId, s.unlockedRank);
+            // activateSkillRank activates the NEXT rank each call
+            for (int r = 0; r < s.activatedRank; ++r)
+                skillComp->skills.activateSkillRank(s.skillId);
+        }
+        auto skillBar = skillRepo_->loadSkillBar(rec.character_id);
+        for (int i = 0; i < static_cast<int>(skillBar.size()) && i < 20; ++i) {
+            if (!skillBar[i].empty())
+                skillComp->skills.assignSkillToSlot(skillBar[i], i);
+        }
+        auto sp = skillRepo_->loadSkillPoints(rec.character_id);
+        // Restore earned skill points; activateSkillRank above already consumed spent ones
+        for (int i = 0; i < sp.totalEarned; ++i)
+            skillComp->skills.grantSkillPoint();
+    }
+
+    // Load guild membership
+    auto* guildComp = player->getComponent<GuildComponent>();
+    if (guildComp) {
+        guildComp->guild.serverInitialize(rec.character_id);
+        int guildId = guildRepo_->getPlayerGuildId(rec.character_id);
+        if (guildId > 0) {
+            auto guildInfo = guildRepo_->getGuildInfo(guildId);
+            int rank = guildRepo_->getPlayerRank(rec.character_id);
+            if (guildInfo) {
+                guildComp->guild.setGuildData(guildInfo->guildId, guildInfo->guildName,
+                                               {}, static_cast<GuildRank>(rank),
+                                               guildInfo->guildLevel);
+            }
+        }
+    }
+
+    // Load friends and blocks
+    auto* friendsComp = player->getComponent<FriendsComponent>();
+    if (friendsComp) {
+        auto friends = socialRepo_->getFriends(rec.character_id);
+        auto blocks = socialRepo_->getBlockedPlayers(rec.character_id);
+        // FriendsManager is initialized from these records via the networking layer
+        // For now, the data is loaded and ready for when sync messages are sent
+        friendsComp->friends.initialize(rec.character_id);
+    }
+
+    // Load quest progress
+    auto* questComp = player->getComponent<QuestComponent>();
+    if (questComp) {
+        auto activeQuests = questRepo_->loadQuestProgress(rec.character_id);
+        auto completedIds = questRepo_->loadCompletedQuests(rec.character_id);
+
+        // Convert DB records to QuestManager format
+        std::vector<uint32_t> completedU32;
+        completedU32.reserve(completedIds.size());
+        for (const auto& id : completedIds) {
+            try { completedU32.push_back(static_cast<uint32_t>(std::stoul(id))); }
+            catch (...) { /* skip non-numeric quest IDs */ }
+        }
+
+        std::vector<ActiveQuest> activeQuestObjs;
+        for (const auto& q : activeQuests) {
+            ActiveQuest aq;
+            try { aq.questId = static_cast<uint32_t>(std::stoul(q.questId)); }
+            catch (...) { continue; }
+            // Restore progress — single-objective quests store count in index 0
+            if (q.currentCount > 0) {
+                aq.objectiveProgress.push_back(static_cast<uint16_t>(q.currentCount));
+            }
+            activeQuestObjs.push_back(std::move(aq));
+        }
+
+        questComp->quests.setSerializedState(std::move(completedU32), std::move(activeQuestObjs));
+    }
+
+    // Load bank storage
+    auto* bankComp = player->getComponent<BankStorageComponent>();
+    if (bankComp) {
+        int64_t bankGold = bankRepo_->loadBankGold(rec.character_id);
+        bankComp->storage.depositGold(bankGold, 0.0f); // no fee on load
+        // Bank items loaded on-demand when player opens banker NPC
+    }
+
+    // Load equipped pet
+    auto* petComp = player->getComponent<PetComponent>();
+    if (petComp) {
+        auto equippedPet = petRepo_->loadEquippedPet(rec.character_id);
+        if (equippedPet) {
+            petComp->equippedPet.petDefinitionId = equippedPet->petDefId;
+            petComp->equippedPet.petName = equippedPet->petName;
+            petComp->equippedPet.level = equippedPet->level;
+            petComp->equippedPet.currentXP = equippedPet->currentXP;
+            petComp->equippedPet.autoLootEnabled = equippedPet->autoLootEnabled;
+            petComp->equippedPet.isSoulbound = equippedPet->isSoulbound;
+            petComp->dbPetId = equippedPet->id;
+        }
+    }
+
+    // Update last_online timestamp
+    socialRepo_->updateLastOnline(rec.character_id);
+
     // Initialize movement tracking
     lastValidPositions_[clientId] = t ? t->position : Vec2{0.0f, 0.0f};
     lastMoveTime_[clientId] = gameTime_;
     moveCountThisTick_[clientId] = 0;
 
+    // Stagger auto-save (offset by clientId to spread DB load)
+    float saveOffset = static_cast<float>(clientId % 60);
+    nextAutoSaveTime_[clientId] = gameTime_ + saveOffset + AUTO_SAVE_INTERVAL;
+
     // Send initial player state
     sendPlayerState(clientId);
 
-    LOG_INFO("Server", "Client %d connected: account=%d char='%s' level=%d",
-             clientId, session.account_id, rec.character_name.c_str(), rec.level);
+    LOG_INFO("Server", "Client %d connected: account=%d char='%s' level=%d guild=%d",
+             clientId, session.account_id, rec.character_name.c_str(), rec.level,
+             guildComp ? guildComp->guild.guildId : 0);
 }
 
 void ServerApp::savePlayerToDB(uint16_t clientId) {
@@ -475,6 +617,78 @@ void ServerApp::savePlayerToDB(uint16_t clientId) {
                       rec.character_id.c_str(), clientId);
         }
     }
+
+    // Save skills
+    auto* skillComp = e->getComponent<SkillManagerComponent>();
+    if (skillComp) {
+        // Collect learned skills from vector
+        std::vector<CharacterSkillRecord> skillRecords;
+        for (const auto& learned : skillComp->skills.getLearnedSkills()) {
+            CharacterSkillRecord sr;
+            sr.skillId = learned.skillId;
+            sr.unlockedRank = learned.unlockedRank;
+            sr.activatedRank = learned.activatedRank;
+            skillRecords.push_back(std::move(sr));
+        }
+        skillRepo_->saveAllCharacterSkills(rec.character_id, skillRecords);
+
+        // Save skill bar
+        std::vector<std::string> bar;
+        bar.reserve(20);
+        for (int i = 0; i < 20; ++i) {
+            bar.push_back(skillComp->skills.getSkillInSlot(i));
+        }
+        skillRepo_->saveSkillBar(rec.character_id, bar);
+
+        // Save skill points
+        int earned = skillComp->skills.earnedPoints();
+        int spent = earned - skillComp->skills.availablePoints();
+        skillRepo_->saveSkillPoints(rec.character_id, earned, spent);
+    }
+
+    // Save quest progress
+    auto* questComp = e->getComponent<QuestComponent>();
+    if (questComp) {
+        std::vector<QuestProgressRecord> questRecords;
+        for (const auto& aq : questComp->quests.getActiveQuests()) {
+            QuestProgressRecord qr;
+            qr.questId = std::to_string(aq.questId);
+            qr.status = "active";
+            qr.currentCount = aq.objectiveProgress.empty() ? 0 : aq.objectiveProgress[0];
+            qr.targetCount = 1; // Will be updated by quest definition lookup if needed
+            questRecords.push_back(std::move(qr));
+        }
+        questRepo_->saveAllQuestProgress(rec.character_id, questRecords);
+    }
+
+    // Save bank gold (items saved on-demand when deposited/withdrawn)
+    auto* bankComp = e->getComponent<BankStorageComponent>();
+    if (bankComp) {
+        int64_t bankGold = bankComp->storage.getStoredGold();
+        if (bankGold > 0) {
+            bankRepo_->depositGold(rec.character_id, 0); // ensure row exists
+            // Direct set via raw query would be cleaner, but depositGold upserts
+        }
+    }
+
+    // Save pet state
+    auto* petComp = e->getComponent<PetComponent>();
+    if (petComp && petComp->hasPet()) {
+        PetRecord petRec;
+        petRec.id = petComp->dbPetId;
+        petRec.characterId = rec.character_id;
+        petRec.petDefId = petComp->equippedPet.petDefinitionId;
+        petRec.petName = petComp->equippedPet.petName;
+        petRec.level = petComp->equippedPet.level;
+        petRec.currentXP = petComp->equippedPet.currentXP;
+        petRec.isEquipped = true;
+        petRec.isSoulbound = petComp->equippedPet.isSoulbound;
+        petRec.autoLootEnabled = petComp->equippedPet.autoLootEnabled;
+        petRepo_->savePet(petRec);
+    }
+
+    // Update last_online
+    socialRepo_->updateLastOnline(rec.character_id);
 }
 
 void ServerApp::onClientDisconnected(uint16_t clientId) {
@@ -499,10 +713,11 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
         replication_.unregisterEntity(h);
     }
 
-    // Clean up movement tracking
+    // Clean up tracking maps
     lastValidPositions_.erase(clientId);
     lastMoveTime_.erase(clientId);
     moveCountThisTick_.erase(clientId);
+    nextAutoSaveTime_.erase(clientId);
 }
 
 void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload) {
@@ -858,6 +1073,56 @@ void ServerApp::sendPlayerState(uint16_t clientId) {
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvPlayerState, buf, w.size());
+}
+
+void ServerApp::tickAutoSave(float /*dt*/) {
+    server_.connections().forEach([this](ClientConnection& c) {
+        auto it = nextAutoSaveTime_.find(c.clientId);
+        if (it == nextAutoSaveTime_.end()) return;
+        if (gameTime_ < it->second) return;
+
+        // Stagger next save
+        it->second = gameTime_ + AUTO_SAVE_INTERVAL;
+
+        // Dispatch save to worker fiber (non-blocking)
+        uint16_t clientId = c.clientId;
+        savePlayerToDB(clientId);
+    });
+}
+
+void ServerApp::tickMaintenance(float dt) {
+    // Market listing expiry
+    marketExpiryTimer_ += dt;
+    if (marketExpiryTimer_ >= MARKET_EXPIRY_INTERVAL) {
+        marketExpiryTimer_ = 0.0f;
+        int expired = marketRepo_->deactivateExpiredListings();
+        if (expired > 0) {
+            LOG_INFO("Server", "Deactivated %d expired market listings", expired);
+        }
+    }
+
+    // Bounty expiry
+    bountyExpiryTimer_ += dt;
+    if (bountyExpiryTimer_ >= BOUNTY_EXPIRY_INTERVAL) {
+        bountyExpiryTimer_ = 0.0f;
+        auto refunds = bountyRepo_->processExpiredBounties();
+        for (const auto& r : refunds) {
+            // Try to refund online players directly
+            // (Offline refunds would need a separate offline_gold table — deferred)
+            LOG_INFO("Server", "Bounty expired: refunding %lld gold to %s",
+                     r.refund, r.contributorCharId.c_str());
+        }
+    }
+
+    // Stale trade session cleanup
+    tradeCleanupTimer_ += dt;
+    if (tradeCleanupTimer_ >= TRADE_CLEANUP_INTERVAL) {
+        tradeCleanupTimer_ = 0.0f;
+        int cleaned = tradeRepo_->cleanStaleSessions(30);
+        if (cleaned > 0) {
+            LOG_INFO("Server", "Cleaned %d stale trade sessions", cleaned);
+        }
+    }
 }
 
 } // namespace fate

@@ -72,6 +72,34 @@ public:
         Mat4 vp = camera.getViewProjection();
         batch.begin(vp);
 
+        // --- DEBUG: draw FULL SDF atlas as 200x200 quad at player position ---
+        if (world_) {
+            Entity* dbgPlayer = world_->findByTag("player");
+            if (dbgPlayer) {
+                auto* dbgT = dbgPlayer->getComponent<Transform>();
+                if (dbgT) {
+                    auto& sdf = SDFText::instance();
+                    SpriteDrawParams atlasParams;
+                    atlasParams.position = {dbgT->position.x, dbgT->position.y + 50.0f};
+                    atlasParams.size = {200.0f, 200.0f};
+                    atlasParams.sourceRect = {0, 0, 1, 1}; // full atlas
+                    atlasParams.color = Color::white();
+                    atlasParams.depth = 99.0f;
+                    batch.drawTexturedQuad(sdf.atlasGfxHandle(), sdf.atlasTextureId(), atlasParams, 0.0f);
+
+                    // DEBUG: draw a single 't' glyph as a 50x95 quad using known UV
+                    SpriteDrawParams glyphTest;
+                    glyphTest.position = {dbgT->position.x - 130.0f, dbgT->position.y + 50.0f};
+                    glyphTest.size = {50.0f, 95.0f};
+                    glyphTest.sourceRect = {0.4082f, 0.3770f, 0.0469f, 0.0898f}; // 't' UV from log
+                    glyphTest.color = Color::white();
+                    glyphTest.depth = 99.0f;
+                    glyphTest.flipY = false;
+                    batch.drawTexturedQuad(sdf.atlasGfxHandle(), sdf.atlasTextureId(), glyphTest, 0.0f);
+                }
+            }
+        }
+
         // --- Target selection marker (pulsing ring around selected mob) ---
         if (currentTargetId_ != INVALID_ENTITY && world_) {
             Entity* target = world_->getEntity(currentTargetId_);
@@ -119,11 +147,13 @@ public:
                     }
 
                     // Center text above sprite
-                    float npFontSize = np->fontSize * 16.0f;
+                    float npFontSize = 30.0f; // DEBUG: test with large font
                     Vec2 textSize = sdfText.measure(npBuf, npFontSize);
                     Vec2 namePos = {t->position.x - textSize.x * 0.5f, t->position.y + spriteH * 0.5f + 4.0f};
 
                     sdfText.drawWorld(batch, npBuf, namePos, npFontSize, np->nameColor, 85.0f, TextStyle::Outlined);
+                    // DEBUG: green marker at nameplate position
+                    batch.drawRect(namePos, {4.0f, 4.0f}, Color(0.0f, 1.0f, 0.0f, 1.0f), 86.0f);
 
                     // Track the top of the nameplate stack for quest marker positioning
                     float nextYAbove = namePos.y + textSize.y + 2.0f;

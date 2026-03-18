@@ -52,29 +52,43 @@ public:
     void update(float dt) override {
         gameTime_ += dt;
 
+        // Collect zone entity handles first — spawning new entities during
+        // forEach invalidates archetype iterators (causes crash with large worlds).
+        std::vector<EntityHandle> zoneHandles;
         world_->forEach<Transform, SpawnZoneComponent>(
-            [&](Entity* zoneEntity, Transform* zoneTransform, SpawnZoneComponent* sz) {
-                // Sync zone center from transform (so dragging entity in editor moves zone)
-                sz->config.position = zoneTransform->position;
-
-                // First-tick initialization: fill zone with mobs
-                if (!sz->initialized) {
-                    spawnMissingToTargets(*world_, *sz, gameTime_);
-                    sz->initialized = true;
-                    sz->nextTickTime = gameTime_ + sz->config.serverTickInterval;
-                    return;
-                }
-
-                // Throttled tick
-                if (gameTime_ < sz->nextTickTime) return;
-                sz->nextTickTime = gameTime_ + sz->config.serverTickInterval;
-
-                detectDeaths(*world_, *sz, gameTime_);
-                processRespawns(*world_, *sz, gameTime_);
-                constrainMobsToZone(*world_, *sz);
-                spawnMissingToTargets(*world_, *sz, gameTime_);
+            [&](Entity* zoneEntity, Transform*, SpawnZoneComponent*) {
+                zoneHandles.push_back(zoneEntity->handle());
             }
         );
+
+        // Now process each zone outside the forEach
+        for (auto handle : zoneHandles) {
+            Entity* zoneEntity = world_->getEntity(handle);
+            if (!zoneEntity) continue;
+            auto* zoneTransform = zoneEntity->getComponent<Transform>();
+            auto* sz = zoneEntity->getComponent<SpawnZoneComponent>();
+            if (!zoneTransform || !sz) continue;
+
+            // Sync zone center from transform (so dragging entity in editor moves zone)
+            sz->config.position = zoneTransform->position;
+
+            // First-tick initialization: fill zone with mobs
+            if (!sz->initialized) {
+                spawnMissingToTargets(*world_, *sz, gameTime_);
+                sz->initialized = true;
+                sz->nextTickTime = gameTime_ + sz->config.serverTickInterval;
+                continue;
+            }
+
+            // Throttled tick
+            if (gameTime_ < sz->nextTickTime) continue;
+            sz->nextTickTime = gameTime_ + sz->config.serverTickInterval;
+
+            detectDeaths(*world_, *sz, gameTime_);
+            processRespawns(*world_, *sz, gameTime_);
+            constrainMobsToZone(*world_, *sz);
+            spawnMissingToTargets(*world_, *sz, gameTime_);
+        }
     }
 
     // ------------------------------------------------------------------

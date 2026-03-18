@@ -29,6 +29,11 @@ struct ArchetypeColumn {
     using DestroyFn = void(*)(void*, size_t);
     DestroyFn destroyFn = nullptr;  // null for trivially-destructible types
 
+    // Relocate: move-construct at dst from src, then destroy src.
+    // Null means type is trivially copyable (safe to memcpy).
+    using RelocateFn = void(*)(void* dst, void* src);
+    RelocateFn relocateFn = nullptr;
+
     void* at(uint32_t row) const {
         return data + static_cast<size_t>(row) * elemSize;
     }
@@ -50,6 +55,19 @@ struct ArchetypeColumn {
         std::memcpy(data + static_cast<size_t>(dst) * elemSize,
                      data + static_cast<size_t>(src) * elemSize,
                      elemSize);
+    }
+
+    // Move-construct dst from src, then destroy src (for non-trivially-copyable types).
+    // Falls back to memcpy for trivially-copyable types.
+    void relocateRow(uint32_t dst, uint32_t src) {
+        if (dst == src) return;
+        void* dstPtr = at(dst);
+        void* srcPtr = at(src);
+        if (relocateFn) {
+            relocateFn(dstPtr, srcPtr);
+        } else {
+            std::memcpy(dstPtr, srcPtr, elemSize);
+        }
     }
 
     void zeroRow(uint32_t row) {
@@ -93,6 +111,7 @@ struct TypeInfo {
     size_t   size      = 0;
     size_t   alignment = 0;
     ArchetypeColumn::DestroyFn destroyFn = nullptr;
+    ArchetypeColumn::RelocateFn relocateFn = nullptr;
 };
 
 // ==========================================================================
@@ -100,7 +119,9 @@ struct TypeInfo {
 // ==========================================================================
 class ArchetypeStorage {
 public:
-    explicit ArchetypeStorage(Arena& arena) : arena_(arena) {}
+    explicit ArchetypeStorage(Arena& arena) : arena_(arena) {
+        archetypes_.reserve(256); // Prevent reallocation during entity migration
+    }
 
     // -- Type registration --------------------------------------------------
 
@@ -118,6 +139,15 @@ public:
             info.destroyFn = [](void* ptr, size_t count) {
                 T* arr = static_cast<T*>(ptr);
                 for (size_t i = 0; i < count; ++i) arr[i].~T();
+            };
+        }
+
+        // Non-trivially-copyable types (containing std::string, std::vector, etc.)
+        // must be relocated via move construction, not memcpy.
+        if constexpr (!std::is_trivially_copyable_v<T>) {
+            info.relocateFn = [](void* dst, void* src) {
+                new (dst) T(std::move(*static_cast<T*>(src)));
+                static_cast<T*>(src)->~T();
             };
         }
 
@@ -170,11 +200,12 @@ public:
             if (infoIt == typeInfos_.end()) continue;
 
             const TypeInfo& ti = infoIt->second;
-            arch.columns[i].typeId    = cid;
-            arch.columns[i].elemSize  = ti.size;
-            arch.columns[i].destroyFn = ti.destroyFn;
-            arch.columns[i].data      = allocateColumn(ti.size, ti.alignment, arch.capacity);
-            arch.typeToColumn[cid]    = i;
+            arch.columns[i].typeId      = cid;
+            arch.columns[i].elemSize    = ti.size;
+            arch.columns[i].destroyFn   = ti.destroyFn;
+            arch.columns[i].relocateFn  = ti.relocateFn;
+            arch.columns[i].data        = allocateColumn(ti.size, ti.alignment, arch.capacity);
+            arch.typeToColumn[cid]      = i;
         }
 
         // Allocate handle storage
@@ -214,9 +245,9 @@ public:
         EntityHandle swapped = NULL_ENTITY_HANDLE;
 
         if (row != lastRow) {
-            // Swap-and-pop: move last row into removed row
+            // Swap-and-pop: relocate last row into removed row
             for (auto& col : arch.columns) {
-                col.copyRow(row, lastRow);
+                col.relocateRow(row, lastRow);
             }
             arch.handles[row] = arch.handles[lastRow];
             swapped = arch.handles[row];
@@ -244,24 +275,27 @@ public:
         }
 
         ArchetypeId toArchId = findOrCreateArchetype(newTypes);
-        // Re-fetch fromArch in case findOrCreateArchetype reallocated archetypes_
-        Archetype& fromArchRef = archetypes_[fromArchId];
-        Archetype& toArch      = archetypes_[toArchId];
 
         // Add entity to destination archetype
         RowIndex toRow = addEntity(toArchId, handle);
-        // Re-fetch again after addEntity (which may grow and reallocate)
+        // Re-fetch after findOrCreateArchetype/addEntity may have reallocated archetypes_
         Archetype& fromArchFinal = archetypes_[fromArchId];
         Archetype& toArchFinal   = archetypes_[toArchId];
 
-        // Copy shared component data
+        // Relocate shared component data (move + destroy for non-trivially-copyable types)
         for (size_t i = 0; i < fromArchFinal.typeIds.size(); ++i) {
             CompId cid = fromArchFinal.typeIds[i];
             size_t toColIdx = toArchFinal.columnIndex(cid);
             if (toColIdx != SIZE_MAX) {
-                std::memcpy(toArchFinal.columns[toColIdx].at(toRow),
-                            fromArchFinal.columns[i].at(fromRow),
-                            fromArchFinal.columns[i].elemSize);
+                auto& fromCol = fromArchFinal.columns[i];
+                auto& toCol   = toArchFinal.columns[toColIdx];
+                void* dstPtr  = toCol.at(toRow);
+                void* srcPtr  = fromCol.at(fromRow);
+                if (fromCol.relocateFn) {
+                    fromCol.relocateFn(dstPtr, srcPtr);
+                } else {
+                    std::memcpy(dstPtr, srcPtr, fromCol.elemSize);
+                }
             }
         }
 
@@ -363,14 +397,23 @@ private:
     void growArchetype(Archetype& arch) {
         uint32_t newCap = arch.capacity * 2;
 
-        // Grow each column: allocate new array from arena, copy old data
+        // Grow each column: allocate new array from arena, relocate old data
         for (size_t i = 0; i < arch.columns.size(); ++i) {
             auto& col = arch.columns[i];
             auto infoIt = typeInfos_.find(col.typeId);
             size_t alignment = (infoIt != typeInfos_.end()) ? infoIt->second.alignment : 16;
 
             uint8_t* newData = allocateColumn(col.elemSize, alignment, newCap);
-            std::memcpy(newData, col.data, col.elemSize * static_cast<size_t>(arch.count));
+            if (col.relocateFn) {
+                // Non-trivially-copyable: move-construct each element, destroy old
+                for (uint32_t r = 0; r < arch.count; ++r) {
+                    col.relocateFn(
+                        newData + static_cast<size_t>(r) * col.elemSize,
+                        col.data + static_cast<size_t>(r) * col.elemSize);
+                }
+            } else {
+                std::memcpy(newData, col.data, col.elemSize * static_cast<size_t>(arch.count));
+            }
             // Old data is abandoned — reclaimed on arena reset
             col.data = newData;
         }

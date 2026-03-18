@@ -10,8 +10,11 @@ struct PetComponent {
 
     PetInstance equippedPet;       // Empty instanceId = no pet equipped
     float autoLootRadius = 64.0f; // Pixels (2 tiles)
+    int dbPetId = 0;              // DB row ID for persistence
 
-    [[nodiscard]] bool hasPet() const { return !equippedPet.instanceId.empty(); }
+    [[nodiscard]] bool hasPet() const {
+        return !equippedPet.petDefinitionId.empty() || !equippedPet.instanceId.empty();
+    }
 };
 
 } // namespace fate

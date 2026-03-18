@@ -8,6 +8,7 @@
 #include "game/components/sprite_component.h"
 #include "engine/core/logger.h"
 #include "imgui.h"
+#include "engine/editor/editor.h"
 
 #include "game/systems/quest_system.h"
 #include <cmath>
@@ -71,11 +72,19 @@ public:
         if (!clicked && !touched) return;
         if (ImGui::GetIO().WantCaptureMouse) return;
 
-        // Screen-to-world conversion
+        // Screen-to-world conversion (viewport-aware for editor mode)
         Vec2 screenPos = touched ? input.touchPosition(0) : input.mousePosition();
-        ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+        auto& ed = Editor::instance();
+        Vec2 vpPos = ed.viewportPos();
+        Vec2 vpSize = ed.viewportSize();
+        if (ed.isOpen() && vpSize.x > 0 && vpSize.y > 0) {
+            screenPos = screenPos - vpPos;
+        } else {
+            ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+            vpSize = {displaySize.x, displaySize.y};
+        }
         Vec2 worldClick = camera->screenToWorld(
-            screenPos, (int)displaySize.x, (int)displaySize.y);
+            screenPos, (int)vpSize.x, (int)vpSize.y);
 
         // Find NPC under click via sprite bounds check
         Entity* hitNPC = nullptr;
