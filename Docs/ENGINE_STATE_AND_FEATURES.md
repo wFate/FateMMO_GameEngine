@@ -351,8 +351,8 @@ pvpDamage = baseDamage * 0.05
 
 **Server-authoritative loot pipeline ported from C# prototype + starter gear on registration:**
 
-- **Item Definition Cache** (`server/cache/item_definition_cache.h/.cpp`): Loads all item definitions from `item_definitions` table at server startup. CachedItemDefinition struct with type helpers (isWeapon, isArmor, isAccessory), attribute accessors, possible stat parsing from JSONB.
-- **Loot Table Cache** (`server/cache/loot_table_cache.h/.cpp`): Loads loot drop tables from DB, groups by `loot_table_id`. `rollLoot()` rolls each entry against drop chance, generates `ItemInstance` with rolled stats (via ItemStatRoller), weighted enchant levels (+0=40%...+7=0.5%), and socket rolls for accessories.
+- **Item Definition Cache** (`server/cache/item_definition_cache.h/.cpp`): Loads all 748 item definitions from `item_definitions` table at server startup. CachedItemDefinition struct with type helpers (isWeapon, isArmor, isAccessory), attribute accessors (getIntAttribute/getFloatAttribute/getStringAttribute from JSONB `attributes` column), possible stat parsing from JSONB `possible_stats` column. Handles both DB formats: `{"stat":"hp","weighted":true}` and legacy `{"name":"int","weight":1.0}`.
+- **Loot Table Cache** (`server/cache/loot_table_cache.h/.cpp`): Loads 72 loot tables (835 drop entries) from `loot_drops` table, groups by `loot_table_id`. `rollLoot()` rolls each entry against `drop_chance`, generates `ItemInstance` with rolled stats (via ItemStatRoller using item's `possible_stats`), weighted enchant levels (+0=40%...+7=0.5%), and socket rolls for accessories. Enchantable subtypes: Sword, Wand, Bow, Shield, Head, Armor, Gloves, Boots, Feet.
 - **Dropped Item Component** (`game/components/dropped_item_component.h`): Ground loot entity data — itemId, quantity, enchantLevel, rolledStatsJson, rarity, isGold/goldAmount, ownerEntityId (top damager), 2-minute despawn timer.
 - **Entity Type 3 Protocol**: Extended `SvEntityEnterMsg` with conditional item fields when `entityType == 3`. New `SvLootPickupMsg` (packet 0x98) notifies client on pickup. Backward compatible — existing entity types unchanged.
 - **Replication**: Dropped items replicated via AOI as entity type 3. `buildEnterMessage()` populates item fields from `DroppedItemComponent`.
@@ -1159,9 +1159,21 @@ engine/
 │       ├── gl_device.cpp
 │       ├── gl_command_list.cpp
 │       ├── gl_loader.h/.cpp
-server/                          # Headless Server (Phase 6)
-├── server_app.h/.cpp           # ServerApp: 20 tick/sec, no rendering
-└── server_main.cpp             # Server entry point
+server/                          # Headless Server (Phase 6+7)
+├── server_app.h/.cpp           # ServerApp: 20 tick/sec, loot pipeline, boss tick, pickup, despawn
+├── server_main.cpp             # Server entry point
+├── auth/
+│   └── auth_server.h/.cpp      # TLS auth (bcrypt, register+login, starter equipment)
+├── cache/
+│   ├── item_definition_cache.h/.cpp  # 748 items from item_definitions (possible_stats, attributes)
+│   └── loot_table_cache.h/.cpp       # 72 loot tables from loot_drops (rollLoot, enchant rolling)
+└── db/
+    ├── db_connection.h/.cpp    # pqxx wrapper with reconnect
+    ├── db_pool.h/.cpp          # Thread-safe connection pool (5-50)
+    ├── account_repository.h/.cpp     # Account CRUD
+    ├── character_repository.h/.cpp   # Character load/save
+    ├── inventory_repository.h/.cpp   # Inventory load/save
+    └── zone_mob_state_repository.h/.cpp  # Boss death persistence (zone_mob_deaths)
 
 game/
 ├── shared/                      # Pure game logic (no engine deps)
@@ -1183,9 +1195,11 @@ game/
 │   ├── box_collider.h           # AABB collision
 │   ├── polygon_collider.h       # SAT collision
 │   ├── animator.h               # Animation state machine
-│   ├── game_components.h        # 18 game logic wrappers
+│   ├── game_components.h        # 20 game logic wrappers
 │   ├── faction_component.h      # FactionComponent (player faction)
-│   └── pet_component.h          # PetComponent (equipped pet, auto-loot)
+│   ├── pet_component.h          # PetComponent (equipped pet, auto-loot)
+│   ├── dropped_item_component.h # DroppedItemComponent (ground loot, despawn, ownership)
+│   └── boss_spawn_point_component.h # BossSpawnPointComponent (fixed coords, respawn)
 │
 ├── systems/                     # ECS systems (tick logic per frame)
 │   ├── movement_system.h        # WASD input + collision
@@ -1206,7 +1220,44 @@ game/
 - `EntityFactory` creates entities with all components attached (mirrors Unity prefab structure)
 - Game logic uses `std::function` callbacks; ECS systems wire these to engine actions
 - RNG uses `thread_local std::mt19937` seeded from `std::random_device`
-- Networking transport is implemented (custom reliable UDP); database persistence integration is pending
+- Networking: custom reliable UDP transport with AOI-driven entity replication
+- Database: PostgreSQL via libpqxx, server-side caches loaded at startup, character persistence on connect/disconnect
+- Loot pipeline: server rolls loot on kill → spawns ground entities → replicates to clients → pickup via CmdAction → despawn after 120s
+
+### Database Integration (Phase 7)
+
+**Connection:** PostgreSQL on DigitalOcean (`fate_engine_dev`, 65 tables). Two separate pqxx connections — game thread and auth thread. Connection pool (5-50) available for future scaling.
+
+**Server Startup Caches (loaded once, read-only):**
+| Cache | Table | Records | Key Lookup |
+|-------|-------|---------|------------|
+| `ItemDefinitionCache` | `item_definitions` | 748 | `getDefinition(itemId)` → `CachedItemDefinition*` |
+| `LootTableCache` | `loot_drops` | 835 entries across 72 tables | `rollLoot(lootTableId)` → `vector<LootDropResult>` |
+| `MobDefinitionCache` | `mob_definitions` | 73 | by mob_def_id |
+| `SkillDefinitionCache` | `skill_definitions` + `skill_ranks` | 60 skills, 174 ranks | by skill ID, by class |
+| `SceneCache` | `scenes` | 3 | PvP status queries |
+
+**Repositories (read/write per-request):**
+| Repository | Tables | Operations |
+|-----------|--------|-----------|
+| `AccountRepository` | `accounts` | createAccount, findByUsername, updateLastLogin |
+| `CharacterRepository` | `characters` | createDefaultCharacter, loadCharacter, saveCharacter |
+| `InventoryRepository` | `character_inventory` | loadInventory, saveInventory |
+| `ZoneMobStateRepository` | `zone_mob_deaths` | saveZoneDeaths, loadZoneDeaths, clearZoneDeaths, cleanupExpired |
+
+**Key DB Tables for Loot Pipeline:**
+- `item_definitions` — 748 items. `possible_stats` JSONB has two formats: `{"stat":"hp","weighted":true}` and legacy `{"name":"int","weight":1.0}` (both parsed). `attributes` JSONB for bonus stats (mp_bonus, lifesteal, move_speed_pct, etc.).
+- `loot_drops` — 835 entries. FK to `loot_tables.loot_table_id` and `item_definitions.item_id`. Columns: `drop_chance` (0.0-1.0), `min_quantity`, `max_quantity`.
+- `loot_tables` — 72 tables. Referenced by `mob_definitions.loot_table_id`.
+- `character_inventory` — Per-character items. UUID `instance_id` (auto-generated), `rolled_stats` JSONB, `socket_stat`/`socket_value`, `enchant_level`, `is_equipped`/`equipped_slot`. Starter equipment inserted on registration.
+- `zone_mob_deaths` — Boss death persistence. `scene_name`, `zone_name`, `enemy_id`, `died_at_unix`, `respawn_seconds`. Loaded on server start, cleared after respawn.
+
+**Starter Equipment (inserted on registration):**
+| Class | Weapon | Body | Boots | Gloves |
+|-------|--------|------|-------|--------|
+| Warrior | `item_rusty_dagger` | `item_quilted_vest` | `item_worn_sandals` | `item_tattered_gloves` |
+| Mage | `item_gnarled_stick` | `item_quilted_vest` | `item_worn_sandals` | `item_tattered_gloves` |
+| Archer | `item_makeshift_bow` | `item_quilted_vest` | `item_worn_sandals` | `item_tattered_gloves` |
 - All formulas are exact 1:1 matches with the C# prototype (verified line-by-line)
 
 ---
