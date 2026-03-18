@@ -1,5 +1,6 @@
 #include "engine/app.h"
 #include "engine/render/gfx/backend/gl/gl_loader.h"
+#include "engine/render/gfx/device.h"
 #include "engine/render/shader.h"
 #include "engine/core/logger.h"
 #include "engine/editor/undo.h"
@@ -63,6 +64,8 @@ bool App::init(const AppConfig& config) {
         LOG_FATAL("App", "Failed to load OpenGL functions");
         return false;
     }
+
+    gfx::Device::instance().init();
 
     LOG_INFO("App", "OpenGL Vendor:   %s", glGetString(GL_VENDOR));
     LOG_INFO("App", "OpenGL Renderer: %s", glGetString(GL_RENDERER));
@@ -443,6 +446,8 @@ void App::shutdown() {
     AssetRegistry::instance().clear();
 
     JobSystem::instance().shutdown();
+
+    gfx::Device::instance().shutdown();
 
     if (glContext_) {
         SDL_GL_DeleteContext(glContext_);
