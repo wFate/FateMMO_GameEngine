@@ -1,5 +1,6 @@
 #include "engine/render/sdf_text.h"
 #include "engine/render/sdf_font_atlas.h"
+#include "engine/render/gfx/device.h"
 #include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/core/logger.h"
 #include "stb_image.h"
@@ -30,17 +31,23 @@ bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath)
     atlasWidth_  = static_cast<float>(w);
     atlasHeight_ = static_cast<float>(h);
 
-    // Create GL texture
-    glGenTextures(1, &atlasTexId_);
+    // Create texture via Device
+    auto& device = gfx::Device::instance();
+    atlasGfxHandle_ = device.createTexture(w, h, gfx::TextureFormat::RGBA8, data);
+    stbi_image_free(data);
+
+    if (!atlasGfxHandle_.valid()) {
+        LOG_ERROR("SDFText", "Device::createTexture failed for atlas");
+        return false;
+    }
+
+    atlasTexId_ = device.resolveGLTexture(atlasGfxHandle_);
+
+    // SDF atlas needs linear filtering (Device defaults to nearest)
     glBindTexture(GL_TEXTURE_2D, atlasTexId_);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
     glBindTexture(GL_TEXTURE_2D, 0);
-
-    stbi_image_free(data);
 
     // Load glyph metrics from JSON
     loadMetrics(metricsPath);
@@ -51,8 +58,9 @@ bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath)
 }
 
 void SDFText::shutdown() {
-    if (atlasTexId_) {
-        glDeleteTextures(1, &atlasTexId_);
+    if (atlasGfxHandle_.valid()) {
+        gfx::Device::instance().destroy(atlasGfxHandle_);
+        atlasGfxHandle_ = {};
         atlasTexId_ = 0;
     }
     glyphs_.clear();
