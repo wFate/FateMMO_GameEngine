@@ -127,3 +127,42 @@ TEST_CASE("JobSystem: fiber-local scratch arena") {
 
     js.shutdown();
 }
+
+TEST_CASE("JobSystem: dependent job chains via counters") {
+    auto& js = fate::JobSystem::instance();
+    js.init(4);
+
+    std::atomic<int> partials[4];
+    for (auto& p : partials) p.store(0);
+
+    fate::Job stage1[4];
+    for (int i = 0; i < 4; ++i) {
+        stage1[i].function = [](void* p) {
+            static_cast<std::atomic<int>*>(p)->store(25);
+        };
+        stage1[i].param = &partials[i];
+    }
+
+    fate::Counter* c1 = js.submit(stage1, 4);
+    js.waitForCounter(c1, 0);
+
+    // Verify stage 1 completed
+    int sum = 0;
+    for (auto& p : partials) sum += p.load();
+    CHECK(sum == 100);
+
+    // Stage 2 depends on stage 1
+    std::atomic<int> total{0};
+    fate::Job stage2;
+    stage2.function = [](void* p) {
+        static_cast<std::atomic<int>*>(p)->store(100);
+    };
+    stage2.param = &total;
+
+    fate::Counter* c2 = js.submit(&stage2, 1);
+    js.waitForCounter(c2, 0);
+
+    CHECK(total.load() == 100);
+
+    js.shutdown();
+}
