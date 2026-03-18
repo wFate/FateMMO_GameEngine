@@ -94,6 +94,28 @@ SpriteBatch::~SpriteBatch() {
     shutdown();
 }
 
+gfx::VertexLayout SpriteBatch::spriteVertexLayout() {
+    gfx::VertexLayout layout;
+    layout.stride = sizeof(SpriteVertex);
+    layout.attributes = {
+        {0, 2, offsetof(SpriteVertex, x),          false}, // aPos
+        {1, 2, offsetof(SpriteVertex, u),          false}, // aTexCoord
+        {2, 4, offsetof(SpriteVertex, r),          false}, // aColor
+        {3, 1, offsetof(SpriteVertex, renderType), false}, // aRenderType
+    };
+    return layout;
+}
+
+gfx::PipelineHandle SpriteBatch::currentPipeline() const {
+    switch (blendMode_) {
+        case BlendMode::None:           return pipelineNone_;
+        case BlendMode::Alpha:          return pipelineAlpha_;
+        case BlendMode::Additive:       return pipelineAdditive_;
+        case BlendMode::Multiplicative: return pipelineMultiplicative_;
+    }
+    return pipelineAlpha_;
+}
+
 bool SpriteBatch::init() {
     // Try loading shader from files first, fall back to embedded
     if (!shader_.loadFromFile("assets/shaders/sprite.vert", "assets/shaders/sprite.frag")) {
@@ -104,31 +126,13 @@ bool SpriteBatch::init() {
         }
     }
 
-    // Create VAO/VBO/EBO
-    glGenVertexArrays(1, &vao_);
-    glGenBuffers(1, &vbo_);
-    glGenBuffers(1, &ebo_);
+    auto& device = gfx::Device::instance();
 
-    glBindVertexArray(vao_);
+    // Create VBO (dynamic, updated each frame)
+    vboHandle_ = device.createBuffer(gfx::BufferType::Vertex, gfx::BufferUsage::Dynamic,
+                                     MAX_VERTICES * sizeof(SpriteVertex), nullptr);
 
-    // VBO - dynamic, updated each frame
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_);
-    glBufferData(GL_ARRAY_BUFFER, MAX_VERTICES * sizeof(SpriteVertex), nullptr, GL_DYNAMIC_DRAW);
-
-    // Position
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(SpriteVertex), (void*)offsetof(SpriteVertex, x));
-    // TexCoord
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(SpriteVertex), (void*)offsetof(SpriteVertex, u));
-    // Color
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(SpriteVertex), (void*)offsetof(SpriteVertex, r));
-    // RenderType
-    glEnableVertexAttribArray(3);
-    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(SpriteVertex), (void*)offsetof(SpriteVertex, renderType));
-
-    // EBO - static index pattern for quads
+    // Create EBO (static index pattern for quads)
     std::vector<unsigned int> indices(MAX_INDICES);
     for (int i = 0; i < MAX_SPRITES; i++) {
         int vi = i * 4;
@@ -140,10 +144,35 @@ bool SpriteBatch::init() {
         indices[ii + 4] = vi + 3;
         indices[ii + 5] = vi + 0;
     }
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+    eboHandle_ = device.createBuffer(gfx::BufferType::Index, gfx::BufferUsage::Static,
+                                     indices.size() * sizeof(unsigned int), indices.data());
 
-    glBindVertexArray(0);
+    // Resolve raw GL names for fallback path
+    vbo_ = device.resolveGLBuffer(vboHandle_);
+    ebo_ = device.resolveGLBuffer(eboHandle_);
+
+    // Create a pipeline for each blend mode
+    auto layout = spriteVertexLayout();
+    auto shaderH = shader_.gfxHandle();
+
+    auto makePipeline = [&](gfx::BlendMode bm) {
+        gfx::PipelineDesc desc;
+        desc.shader = shaderH;
+        desc.vertexLayout = layout;
+        desc.blendMode = bm;
+        desc.depthTest = false;
+        desc.depthWrite = false;
+        return device.createPipeline(desc);
+    };
+
+    pipelineAlpha_          = makePipeline(gfx::BlendMode::Alpha);
+    pipelineAdditive_       = makePipeline(gfx::BlendMode::Additive);
+    pipelineMultiplicative_ = makePipeline(gfx::BlendMode::Multiplicative);
+    pipelineNone_           = makePipeline(gfx::BlendMode::None);
+
+    // Resolve the VAO from the alpha pipeline for the GL fallback path
+    // (all pipelines share the same vertex layout, so any VAO will do)
+    vao_ = device.resolveGLPipelineVAO(pipelineAlpha_);
 
     createWhiteTexture();
 
@@ -155,10 +184,20 @@ bool SpriteBatch::init() {
 }
 
 void SpriteBatch::shutdown() {
-    if (vao_) { glDeleteVertexArrays(1, &vao_); vao_ = 0; }
-    if (vbo_) { glDeleteBuffers(1, &vbo_); vbo_ = 0; }
-    if (ebo_) { glDeleteBuffers(1, &ebo_); ebo_ = 0; }
-    if (whiteTexture_) { glDeleteTextures(1, &whiteTexture_); whiteTexture_ = 0; }
+    auto& device = gfx::Device::instance();
+
+    if (pipelineAlpha_.valid())          { device.destroy(pipelineAlpha_);          pipelineAlpha_ = {}; }
+    if (pipelineAdditive_.valid())       { device.destroy(pipelineAdditive_);       pipelineAdditive_ = {}; }
+    if (pipelineMultiplicative_.valid()) { device.destroy(pipelineMultiplicative_); pipelineMultiplicative_ = {}; }
+    if (pipelineNone_.valid())           { device.destroy(pipelineNone_);           pipelineNone_ = {}; }
+    if (vboHandle_.valid()) { device.destroy(vboHandle_); vboHandle_ = {}; }
+    if (eboHandle_.valid()) { device.destroy(eboHandle_); eboHandle_ = {}; }
+    if (whiteTexHandle_.valid()) { device.destroy(whiteTexHandle_); whiteTexHandle_ = {}; }
+
+    vao_ = 0;
+    vbo_ = 0;
+    ebo_ = 0;
+    whiteTexture_ = 0;
 }
 
 void SpriteBatch::begin(const Mat4& viewProjection) {
@@ -207,7 +246,7 @@ void SpriteBatch::end() {
     }
 
     if (hash == prevSortHash_ && entries_.size() == prevEntryCount_ && !sortDirty_) {
-        // Skip sort — same order as last frame
+        // Skip sort -- same order as last frame
     } else {
         // Sort by depth (back to front), then by texture to minimize state changes
         auto texKey = [](const BatchEntry& e) -> uintptr_t {
@@ -232,6 +271,112 @@ void SpriteBatch::end() {
 }
 
 void SpriteBatch::flush() {
+    // ------------------------------------------------------------------
+    // CommandList path (gfx-abstracted)
+    // ------------------------------------------------------------------
+    if (cmdList_) {
+        auto& device = gfx::Device::instance();
+
+        cmdList_->bindPipeline(currentPipeline());
+        cmdList_->setUniform("uViewProjection", viewProjection_);
+        cmdList_->setUniform("uTexture", 0);
+        cmdList_->setUniform("u_pxRange", 4.0f);
+        cmdList_->setUniform("u_atlasSize", Vec2{512.0f, 512.0f});
+        cmdList_->setUniform("u_shadowOffset", Vec2{0.002f, 0.002f});
+
+        cmdList_->bindVertexBuffer(vboHandle_);
+        cmdList_->bindIndexBuffer(eboHandle_);
+
+        uintptr_t currentTexKey = ~(uintptr_t)0;
+        vertices_.clear();
+
+        auto flushBatch = [&]() {
+            if (vertices_.empty()) return;
+
+            device.updateBuffer(vboHandle_, vertices_.data(),
+                                vertices_.size() * sizeof(SpriteVertex));
+
+            int quadCount = (int)vertices_.size() / 4;
+            cmdList_->drawIndexed(gfx::PrimitiveType::Triangles, quadCount * 6);
+            drawCallCount_++;
+            vertices_.clear();
+        };
+
+        for (auto& entry : entries_) {
+            // Determine texture key for batching
+            uintptr_t texKey;
+            if (entry.texture)       texKey = (uintptr_t)entry.texture.get();
+            else if (entry.rawTexId) texKey = (uintptr_t)entry.rawTexId;
+            else                     texKey = 0;
+
+            // If texture changed, flush current batch and bind new texture
+            if (texKey != currentTexKey) {
+                flushBatch();
+                currentTexKey = texKey;
+
+                if (entry.texture) {
+                    cmdList_->bindTexture(0, entry.texture->gfxHandle());
+                } else if (entry.rawTexId) {
+                    // Raw GL texture ID -- fall back to direct GL bind
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, entry.rawTexId);
+                } else {
+                    cmdList_->bindTexture(0, whiteTexHandle_);
+                }
+            }
+
+            // If batch is full, flush
+            if ((int)vertices_.size() >= MAX_VERTICES) {
+                flushBatch();
+            }
+
+            // Build quad vertices
+            const auto& p = entry.params;
+            float hw = p.size.x * 0.5f;
+            float hh = p.size.y * 0.5f;
+
+            float u0 = p.sourceRect.x;
+            float v0 = p.sourceRect.y;
+            float u1 = p.sourceRect.x + p.sourceRect.w;
+            float v1 = p.sourceRect.y + p.sourceRect.h;
+
+            if (p.flipX) std::swap(u0, u1);
+            if (p.flipY) std::swap(v0, v1);
+
+            float x0 = -hw, y0 = -hh;
+            float x1 =  hw, y1 = -hh;
+            float x2 =  hw, y2 =  hh;
+            float x3 = -hw, y3 =  hh;
+
+            if (std::abs(p.rotation) > 0.001f) {
+                float c = std::cos(p.rotation);
+                float s = std::sin(p.rotation);
+                auto rot = [c, s](float& px, float& py) {
+                    float nx = px * c - py * s;
+                    float ny = px * s + py * c;
+                    px = nx; py = ny;
+                };
+                rot(x0, y0); rot(x1, y1); rot(x2, y2); rot(x3, y3);
+            }
+
+            float cx = p.position.x;
+            float cy = p.position.y;
+
+            vertices_.push_back({cx + x0, cy + y0, u0, v0, p.color.r, p.color.g, p.color.b, p.color.a, entry.renderType});
+            vertices_.push_back({cx + x1, cy + y1, u1, v0, p.color.r, p.color.g, p.color.b, p.color.a, entry.renderType});
+            vertices_.push_back({cx + x2, cy + y2, u1, v1, p.color.r, p.color.g, p.color.b, p.color.a, entry.renderType});
+            vertices_.push_back({cx + x3, cy + y3, u0, v1, p.color.r, p.color.g, p.color.b, p.color.a, entry.renderType});
+
+            spriteCount_++;
+        }
+
+        flushBatch();
+        return;
+    }
+
+    // ------------------------------------------------------------------
+    // Direct GL fallback path (editor/ImGui or when no CommandList is set)
+    // ------------------------------------------------------------------
     shader_.bind();
     shader_.setMat4("uViewProjection", viewProjection_);
     shader_.setInt("uTexture", 0);
@@ -337,8 +482,16 @@ void SpriteBatch::flush() {
 
 void SpriteBatch::setBlendMode(BlendMode mode) {
     if (mode == blendMode_) return;
-    flush(); // must flush before changing GL state
+    flush(); // must flush before changing blend state
     blendMode_ = mode;
+
+    if (cmdList_) {
+        // CommandList path: just switch pipeline on next flush
+        // (pipeline is selected in flush() via currentPipeline())
+        return;
+    }
+
+    // Direct GL fallback
     switch (mode) {
         case BlendMode::None:
             glDisable(GL_BLEND);
@@ -360,12 +513,9 @@ void SpriteBatch::setBlendMode(BlendMode mode) {
 
 void SpriteBatch::createWhiteTexture() {
     unsigned char white[] = {255, 255, 255, 255};
-    glGenTextures(1, &whiteTexture_);
-    glBindTexture(GL_TEXTURE_2D, whiteTexture_);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    auto& device = gfx::Device::instance();
+    whiteTexHandle_ = device.createTexture(1, 1, gfx::TextureFormat::RGBA8, white);
+    whiteTexture_ = device.resolveGLTexture(whiteTexHandle_);
 }
 
 } // namespace fate

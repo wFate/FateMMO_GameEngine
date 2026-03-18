@@ -1,4 +1,5 @@
 #include "engine/render/render_graph.h"
+#include "engine/render/sprite_batch.h"
 #include "engine/core/logger.h"
 #include <algorithm>
 
@@ -29,9 +30,20 @@ void RenderGraph::execute(RenderPassContext& ctx) {
     ctx.graph = this;
     gfx::CommandList cmdList;
     ctx.commandList = &cmdList;
+
+    // Wire up CommandList to SpriteBatch so it uses gfx-abstracted draws
+    if (ctx.spriteBatch) {
+        ctx.spriteBatch->setCommandList(&cmdList);
+    }
+
     for (auto& pass : passes_) {
         if (!pass.enabled) continue;
         pass.execute(ctx);
+    }
+
+    // Disconnect CommandList (stack-local) so SpriteBatch doesn't dangle
+    if (ctx.spriteBatch) {
+        ctx.spriteBatch->setCommandList(nullptr);
     }
 }
 
