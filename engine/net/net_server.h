@@ -35,6 +35,9 @@ public:
 
     ConnectionManager& connections() { return connections_; }
 
+    // Send a ConnectReject to an address (used by ServerApp for invalid auth tokens)
+    void sendConnectReject(const NetAddress& to, const std::string& reason);
+
     // Callbacks
     std::function<void(uint16_t clientId)> onClientConnected;
     std::function<void(uint16_t clientId)> onClientDisconnected;
@@ -45,7 +48,7 @@ private:
     ConnectionManager connections_;
 
     void handleRawPacket(const NetAddress& from, const uint8_t* data, int size, float currentTime);
-    void handleConnect(const NetAddress& from, float currentTime);
+    void handleConnect(const NetAddress& from, const uint8_t* payload, size_t payloadSize, float currentTime);
     void sendPacket(ClientConnection& client, Channel channel, uint8_t packetType,
                     const uint8_t* payload, size_t payloadSize);
 };

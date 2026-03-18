@@ -4,6 +4,7 @@
 #include "engine/net/byte_stream.h"
 #include "engine/net/reliability.h"
 #include "engine/net/protocol.h"
+#include "engine/net/auth_protocol.h"
 #include <functional>
 #include <string>
 
@@ -12,6 +13,7 @@ namespace fate {
 class NetClient {
 public:
     bool connect(const std::string& host, uint16_t port);
+    bool connectWithToken(const std::string& host, uint16_t port, const AuthToken& token);
     void disconnect();
     void poll(float currentTime);
 
@@ -32,6 +34,7 @@ public:
     std::function<void(const SvChatMessageMsg&)> onChatMessage;
     std::function<void(const SvPlayerStateMsg&)> onPlayerState;
     std::function<void(const SvMovementCorrectionMsg&)> onMovementCorrection;
+    std::function<void(const std::string& reason)> onConnectRejected;
 
 private:
     NetSocket socket_;
@@ -44,6 +47,7 @@ private:
     float connectStartTime_ = 0.0f;
     bool waitingForAccept_ = false;
     float lastHeartbeatSent_ = 0.0f;
+    AuthToken authToken_ = {};
 
     void sendPacket(Channel channel, uint8_t packetType,
                     const uint8_t* payload = nullptr, size_t payloadSize = 0);

@@ -3,7 +3,9 @@
 #include "engine/net/reliability.h"
 #include "engine/net/aoi.h"
 #include "engine/net/protocol.h"
+#include "engine/net/auth_protocol.h"
 #include <cstdint>
+#include <string>
 #include <vector>
 #include <unordered_map>
 #include <random>
@@ -20,6 +22,10 @@ struct ClientConnection {
     VisibilitySet aoi;
     std::unordered_map<uint64_t, SvEntityUpdateMsg> lastAckedState; // keyed by PersistentId value
     uint64_t playerEntityId = 0; // PersistentId of this client's player entity
+
+    int account_id = 0;
+    std::string character_id;
+    AuthToken authToken = {};  // populated from Connect packet payload
 };
 
 class ConnectionManager {

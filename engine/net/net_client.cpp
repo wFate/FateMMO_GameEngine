@@ -38,6 +38,42 @@ bool NetClient::connect(const std::string& host, uint16_t port) {
     return true;
 }
 
+bool NetClient::connectWithToken(const std::string& host, uint16_t port, const AuthToken& token) {
+    if (connected_ || waitingForAccept_) return false;
+
+    if (!socket_.isOpen()) {
+        NetSocket::initPlatform();
+        if (!socket_.open(0)) {
+            LOG_ERROR("NetClient", "Failed to open socket");
+            return false;
+        }
+    }
+
+    // Parse host to IP (support "127.0.0.1" dotted-quad format)
+    uint32_t ip = 0;
+    {
+        unsigned a = 0, b = 0, c = 0, d = 0;
+        if (sscanf(host.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d) == 4) {
+            ip = (a << 24) | (b << 16) | (c << 8) | d;
+        } else {
+            LOG_ERROR("NetClient", "Invalid host: %s", host.c_str());
+            return false;
+        }
+    }
+
+    serverAddress_.ip = ip;
+    serverAddress_.port = port;
+    authToken_ = token;
+
+    // Send Connect packet with auth token as payload
+    sendPacket(Channel::ReliableOrdered, PacketType::Connect, token.data(), 16);
+    waitingForAccept_ = true;
+    connectStartTime_ = 0.0f;
+
+    LOG_INFO("NetClient", "Connecting to %s:%d with auth token...", host.c_str(), port);
+    return true;
+}
+
 void NetClient::disconnect() {
     if (connected_) {
         sendPacket(Channel::Unreliable, PacketType::Disconnect);
@@ -114,6 +150,15 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             waitingForAccept_ = false;
             LOG_INFO("NetClient", "Connected as client %d", clientId_);
             if (onConnected) onConnected();
+            break;
+        }
+        case PacketType::ConnectReject: {
+            waitingForAccept_ = false;
+            socket_.close();
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            std::string reason = payload.readString();
+            LOG_WARN("NetClient", "Connection rejected: %s", reason.c_str());
+            if (onConnectRejected) onConnectRejected(reason);
             break;
         }
         case PacketType::SvEntityEnter: {

@@ -1,5 +1,6 @@
 #include "engine/net/net_server.h"
 #include "engine/net/protocol.h"
+#include <cstring>
 
 namespace fate {
 
@@ -35,7 +36,9 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
     if (hdr.protocolId != PROTOCOL_ID) return;
 
     if (hdr.packetType == PacketType::Connect) {
-        handleConnect(from, currentTime);
+        const uint8_t* payload = (size > static_cast<int>(PACKET_HEADER_SIZE)) ? data + PACKET_HEADER_SIZE : nullptr;
+        size_t payloadSize = (size > static_cast<int>(PACKET_HEADER_SIZE)) ? size - PACKET_HEADER_SIZE : 0;
+        handleConnect(from, payload, payloadSize, currentTime);
         return;
     }
 
@@ -70,7 +73,7 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
     }
 }
 
-void NetServer::handleConnect(const NetAddress& from, float currentTime) {
+void NetServer::handleConnect(const NetAddress& from, const uint8_t* payload, size_t payloadSize, float currentTime) {
     // Check if already connected — re-send ConnectAccept
     ClientConnection* existing = connections_.findByAddress(from);
     if (existing) {
@@ -99,6 +102,11 @@ void NetServer::handleConnect(const NetAddress& from, float currentTime) {
 
     client->lastHeartbeat = currentTime;
 
+    // Read auth token from Connect payload (16 bytes)
+    if (payloadSize >= 16 && payload) {
+        std::memcpy(client->authToken.data(), payload, 16);
+    }
+
     // Build and send ConnectAccept
     uint8_t payloadBuf[8];
     ByteWriter pw(payloadBuf, sizeof(payloadBuf));
@@ -118,6 +126,23 @@ void NetServer::handleConnect(const NetAddress& from, float currentTime) {
     if (onClientConnected) onClientConnected(clientId);
 
     LOG_INFO("NetServer", "Client %d connected from %u:%u", clientId, from.ip, from.port);
+}
+
+void NetServer::sendConnectReject(const NetAddress& to, const std::string& reason) {
+    uint8_t payloadBuf[256];
+    ByteWriter pw(payloadBuf, sizeof(payloadBuf));
+    pw.writeString(reason);
+
+    uint8_t buf[MAX_PACKET_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    PacketHeader hdr;
+    hdr.packetType = PacketType::ConnectReject;
+    hdr.channel = Channel::ReliableOrdered;
+    hdr.payloadSize = static_cast<uint16_t>(pw.size());
+    hdr.write(w);
+    w.writeBytes(payloadBuf, pw.size());
+    socket_.sendTo(buf, w.size(), to);
+    LOG_INFO("NetServer", "Sent ConnectReject: %s", reason.c_str());
 }
 
 void NetServer::sendTo(uint16_t clientId, Channel channel, uint8_t packetType,
