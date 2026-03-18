@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/core/types.h"
+#include "engine/render/gfx/types.h"
 #include <string>
 #include <unordered_map>
 
@@ -27,9 +28,11 @@ public:
     void setMat4(const std::string& name, const Mat4& value);
 
     unsigned int id() const { return programId_; }
+    gfx::ShaderHandle gfxHandle() const { return gfxHandle_; }
 
 private:
     unsigned int programId_ = 0;
+    gfx::ShaderHandle gfxHandle_{};
     std::unordered_map<std::string, int> uniformCache_;
 
     int getUniformLocation(const std::string& name);
