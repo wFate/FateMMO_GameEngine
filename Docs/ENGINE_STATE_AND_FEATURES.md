@@ -4,7 +4,7 @@
 
 Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landscape gameplay with a built-in Unity-style editor for scene building, tile painting, and rapid iteration. All game systems from the Unity/C# prototype have been ported to C++ as server-authoritative logic.
 
-**Tech Stack:** C++23, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImPlot, nlohmann/json, stb_image, stb_truetype
+**Tech Stack:** C++20, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImGuizmo, ImPlot, Tracy Profiler, nlohmann/json, stb_image, stb_truetype, Winsock2
 
 **Build System:** CMake with FetchContent (auto-downloads all dependencies)
 
@@ -59,6 +59,15 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Chunk Lifecycle | Done | 7-state machine (Queued→Loading→Setup→Active→Sleeping→Unloading→Evicted), ticket system, rate-limited transitions, double-buffered staging |
 | AOI Groundwork | Done | Visibility sets with enter/leave/stay diffs, hysteresis (20% larger deactivation radius) |
 | Ghost Entity Scaffold | Done | GhostFlag component, dedicated GhostArena for cross-zone proxy entities |
+| Render Graph | Done | 10-pass pipeline: GroundTiles→Entities→Particles→SDFText→DebugOverlays→Lighting→BloomExtract→BloomBlur→PostProcess→Blit |
+| Particle System | Done | CPU emitters, spawn rate/burst, gravity, per-particle lifetime/rotation/color lerp |
+| 2D Lighting | Done | Ambient + point lights, light map FBO, additive accumulation, multiplicative composite |
+| Post-Processing | Done | Bloom (extract + Gaussian blur + composite), vignette, color grading |
+| Fiber Job System | Done | Win32 fibers, 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas |
+| Graphics RHI | Done | gfx::Device + CommandList + Pipeline State Objects, GL backend, typed 32-bit handles, uniform cache |
+| Networking Transport | Done | Custom reliable UDP (Winsock2), ByteWriter/ByteReader, 16-byte packet header, 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation |
+| Entity Replication | Done | AOI-driven enter/leave/update, delta compression with field bitmasks, ghost entities, client-side position interpolation |
+| Client-Server Architecture | Done | Headless 20 tick/sec server (FateServer), NetClient/NetServer, session tokens, heartbeat/timeout |
 
 ### Editor (Dear ImGui)
 | Feature | Status | Notes |
@@ -97,6 +106,10 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Command Console | Done | Type commands: help, list, count, find, delete, spawn, tp. Results in log viewer |
 | Error Badges | Done | Red [!] in hierarchy for entities with missing textures |
 | Panel Persistence | Done | ImGui saves window layout to imgui.ini, panels don't steal focus |
+| Rotate Tool | Done | R key, ImGuizmo visual handles, undo support |
+| Post-Process Panel | Done | Live tweaking bloom/vignette/color grading |
+| Network Panel | Done | Connect/disconnect to server, host/port config, shows client ID and ghost count |
+| ImGuizmo | Done | Visual translate/scale/rotate handles on selected entities |
 
 ### Game UI (ImGui-based, in-game panels)
 | Feature | Status | Notes |
@@ -192,6 +205,9 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment |
 | NPCInteractionSystem | Done | Click-to-interact with NPCs, range check, dialogue open/close, click consumption (prevents combat targeting) |
 | QuestSystem | Done | Routes mob kills/item pickups/NPC talks to quest progress, event-driven quest marker updates on all NPCs |
+| SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment |
+| ZoneSystem | Done | Zone transitions, portal detection, fade effects |
+| ParticleSystem | Done | CPU particle emitters, registered as ECS system |
 
 ### Entity Factory
 | Feature | Status | Notes |
@@ -226,7 +242,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 ## Game Systems (Ported from Unity Prototype)
 
-All 20 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`. Total: **38 files, 6,464 lines**, all compile with zero errors. Systems marked with **(needs net/DB)** have full game logic implemented but contain detailed TODO block comments at the top of each `.cpp` specifying the exact ENet networking and libpqxx database integration points needed.
+All 20 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`. Total: **38 files, 6,464 lines**, all compile with zero errors. Systems marked with **(networking done, needs DB)** have full game logic implemented with networking transport wired up; database persistence via libpqxx remains to be integrated.
 
 ### Core Gameplay (Fully Ported — Logic Identical to C#)
 | System | Files | Lines | C# Source | Notes |
@@ -256,18 +272,18 @@ All 20 game systems from the C#/Unity prototype have been converted to C++ and l
 
 See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 
-### Game Systems (Ported — Needs Networking & Database Wiring)
+### Game Systems (Ported — Needs Database Wiring)
 | System | Files | Lines | C# Source | Notes |
 |--------|-------|-------|-----------|-------|
-| Inventory | `inventory.h/.cpp` | 410 | NetworkInventory | 15 slots, equipment map, gold, trade slot locking, stack/swap **(needs net/DB)** |
-| Skill Manager | `skill_manager.h/.cpp` | 340 | PlayerSkillManager (2,079L) | Skill learning (skillbook + points), cooldowns, 4x5 skill bar **(needs net/DB)** |
-| Party Manager | `party_manager.h/.cpp` | 410 | NetworkPartyManager | 3-player parties, +10%/member XP bonus, loot mode, invites **(needs net/DB)** |
-| Guild Manager | `guild_manager.h/.cpp` | 280 | NetworkGuildManager | TWOM guilds, ranks, 16x16 pixel symbols, XP contribution **(needs net/DB)** |
-| Friends Manager | `friends_manager.h/.cpp` | 377 | NetworkFriendsManager | 50 friends, 100 blocks, profile inspection, online status **(needs net/DB)** |
-| Chat Manager | `chat_manager.h/.cpp` | 120 | NetworkChatManager | 7 channels (Map/Global/Trade/Party/Guild/Private/System), cross-faction garbling on public channels **(needs net/DB)** |
-| Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(needs net/DB)** |
-| Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(needs net/DB)** |
-| Gauntlet | `gauntlet.h/.cpp` | 425 | GauntletConfig + GauntletInstance | Wave survival PvPvE, team scoring, tiebreaker elimination **(needs net/DB)** |
+| Inventory | `inventory.h/.cpp` | 410 | NetworkInventory | 15 slots, equipment map, gold, trade slot locking, stack/swap **(networking done, needs DB)** |
+| Skill Manager | `skill_manager.h/.cpp` | 340 | PlayerSkillManager (2,079L) | Skill learning (skillbook + points), cooldowns, 4x5 skill bar **(networking done, needs DB)** |
+| Party Manager | `party_manager.h/.cpp` | 410 | NetworkPartyManager | 3-player parties, +10%/member XP bonus, loot mode, invites **(networking done, needs DB)** |
+| Guild Manager | `guild_manager.h/.cpp` | 280 | NetworkGuildManager | TWOM guilds, ranks, 16x16 pixel symbols, XP contribution **(networking done, needs DB)** |
+| Friends Manager | `friends_manager.h/.cpp` | 377 | NetworkFriendsManager | 50 friends, 100 blocks, profile inspection, online status **(networking done, needs DB)** |
+| Chat Manager | `chat_manager.h/.cpp` | 120 | NetworkChatManager | 7 channels (Map/Global/Trade/Party/Guild/Private/System), cross-faction garbling on public channels **(networking done, needs DB)** |
+| Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(networking done, needs DB)** |
+| Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(networking done, needs DB)** |
+| Gauntlet | `gauntlet.h/.cpp` | 425 | GauntletConfig + GauntletInstance | Wave survival PvPvE, team scoring, tiebreaker elimination **(networking done, needs DB)** |
 | Faction System | `faction.h` | ~130 | FactionRegistry + FactionChatGarbler | 4 factions (Xyros/Fenor/Zethos/Solis), registry, deterministic chat garbling, same-faction checks |
 | Pet System | `pet_system.h/.cpp` | ~120 | PetDefinition + PetInstance + PetSystem | Leveling, rarity-tiered stats (HP/Crit/XP bonus), XP sharing (50%), player-level cap |
 | Stat Enchant System | `stat_enchant_system.h` | ~70 | StatEnchantSystem | Accessory enchanting (Belt/Ring/Necklace/Cloak), 6-tier roll table, HP/MP x10 scaling |
@@ -317,6 +333,33 @@ pvpDamage = baseDamage * 0.05
 ---
 
 ## Changelog
+
+### March 17, 2026 - Phase 6: Networking
+
+**Custom reliable UDP networking with entity replication:**
+
+- **Phase 6a — Transport**: Custom reliable UDP layer over Winsock2. ByteWriter/ByteReader for binary serialization. 16-byte packet header with sequence numbers. 3 channel types: unreliable, reliable-ordered, reliable-unordered. Ack bitfields for delivery confirmation. RTT estimation for adaptive retransmit.
+- **Phase 6b — Protocol & Server**: Headless server application (FateServer) running at 20 tick/sec with no rendering. NetServer/NetClient facades. Session tokens, heartbeat/timeout for connection management. Full message protocol (CmdMove, SvEntityEnter, SvEntityLeave, SvEntityUpdate, etc.).
+- **Phase 6c — Replication**: AOI-driven entity replication with enter/leave/update messages. Delta compression using per-component field bitmasks — only changed fields sent. Ghost entities on the client for remote players/mobs.
+- **Phase 6d — Gameplay Integration**: Client-side position interpolation for ghost entities. Editor Network Panel for connect/disconnect, host/port config, client ID and ghost count display.
+
+### March 17, 2026 - Phase 5: Job System + Graphics RHI
+
+**Fiber-based parallelism and graphics abstraction layer:**
+
+- **Fiber Job System**: Win32 fibers with 4 worker threads and a 32-fiber pool. Lock-free MPMC queue for job dispatch. Counter-based suspend/resume so fibers can wait on dependencies without blocking. Fiber-local scratch arenas for per-job temporary allocations.
+- **Graphics RHI**: `gfx::Device` and `gfx::CommandList` interfaces abstracting the rendering backend. Pipeline State Objects (PSO) for state management. Typed 32-bit resource handles. Uniform cache to avoid redundant GL calls. OpenGL 3.3 backend implementation. Full render code migration from raw GL calls to the RHI layer.
+
+### March 17, 2026 - Phase 4: Render Graph + Particles + Lighting + Post-Process
+
+**10-pass render pipeline with visual effects and editor polish:**
+
+- **Render Graph**: Declarative 10-pass pipeline: GroundTiles → Entities → Particles → SDFText → DebugOverlays → Lighting → BloomExtract → BloomBlur → PostProcess → Blit. Automatic FBO management and pass ordering.
+- **Particle System**: CPU-driven particle emitters with spawn rate/burst modes, gravity, per-particle lifetime, rotation, and color lerp. Registered as an ECS system.
+- **2D Lighting**: Ambient light + point lights rendered to a light map FBO via additive accumulation, then composited multiplicatively over the scene.
+- **Post-Processing**: Bloom (threshold extract + two-pass Gaussian blur + additive composite), vignette, and color grading with live editor controls.
+- **ImGuizmo**: Visual translate/scale/rotate handles on selected entities. R key for rotate tool mode with undo support.
+- **Editor Polish**: Post-Process Panel for live tweaking, Network Panel stub, rotate tool in toolbar.
 
 ### March 17, 2026 - Phase 3: Asset Hot-Reload & Allocator Visualization
 
@@ -904,7 +947,7 @@ Ported 38 files (6,464 lines) to `game/shared/`, all compiling with zero errors.
 - MarketManager: Marketplace with 2% tax jackpot system, merchant pass, listing filters
 - Gauntlet: Wave survival PvPvE instance with team scoring, tiebreaker elimination
 
-Each networking-dependent `.cpp` has a detailed `NOTE: Networking & Database Integration Pending` block comment specifying exact ENet and libpqxx integration points.
+Networking transport (custom reliable UDP) is now implemented. Database persistence via libpqxx remains pending for these systems.
 
 ### March 15, 2026 - Initial Engine Build
 
@@ -989,6 +1032,38 @@ Each networking-dependent `.cpp` has a detailed `NOTE: Networking & Database Int
 
 ### Game Systems Architecture
 ```
+engine/
+├── net/                         # Networking (Phase 6)
+│   ├── aoi.h                   # AOI visibility sets
+│   ├── ghost.h                 # Ghost entity component
+│   ├── byte_stream.h           # Binary serialization
+│   ├── packet.h                # Packet header, types, channels
+│   ├── socket.h                # UDP socket wrapper
+│   ├── socket_win32.cpp        # Winsock2 implementation
+│   ├── reliability.h/.cpp      # Ack bitfields, retransmit, RTT
+│   ├── connection.h/.cpp       # Client connections, session tokens
+│   ├── protocol.h              # All message types (CmdMove, SvEntityEnter, etc.)
+│   ├── replication.h/.cpp      # AOI-driven entity replication
+│   ├── net_server.h/.cpp       # Server networking facade
+│   ├── net_client.h/.cpp       # Client networking
+│   └── interpolation.h         # Ghost entity position interpolation
+├── job/                         # Job System (Phase 5)
+│   ├── fiber.h                 # Platform fiber abstraction
+│   ├── fiber_win32.cpp         # Win32 CreateFiber implementation
+│   ├── job_system.h            # JobSystem, Job, Counter, MPMC queue
+│   └── job_system.cpp          # Fiber pool, worker threads, scheduling
+├── render/gfx/                  # Graphics RHI (Phase 5)
+│   ├── types.h                 # Typed handles, enums, PipelineDesc
+│   ├── device.h                # gfx::Device interface
+│   ├── command_list.h          # gfx::CommandList interface
+│   └── backend/gl/             # OpenGL 3.3 backend
+│       ├── gl_device.cpp
+│       ├── gl_command_list.cpp
+│       ├── gl_loader.h/.cpp
+server/                          # Headless Server (Phase 6)
+├── server_app.h/.cpp           # ServerApp: 20 tick/sec, no rendering
+└── server_main.cpp             # Server entry point
+
 game/
 ├── shared/                      # Pure game logic (no engine deps)
 │   ├── game_types.h             # All enums, constants, ClassDefinition
@@ -1032,7 +1107,7 @@ game/
 - `EntityFactory` creates entities with all components attached (mirrors Unity prefab structure)
 - Game logic uses `std::function` callbacks; ECS systems wire these to engine actions
 - RNG uses `thread_local std::mt19937` seeded from `std::random_device`
-- Networking-dependent `.cpp` files have `NOTE: Networking & Database Integration Pending` blocks
+- Networking transport is implemented (custom reliable UDP); database persistence integration is pending
 - All formulas are exact 1:1 matches with the C# prototype (verified line-by-line)
 
 ---
@@ -1040,13 +1115,15 @@ game/
 ## Future Implementation Plan
 
 ### Near-Term (Engine Foundation)
-- [ ] Audio system (SDL_mixer - music per zone, SFX for combat/UI)
+- [ ] Audio/sound system (SDL_mixer - music per zone, SFX for combat/UI)
 - [ ] Sprite animation testing with real spritesheets
 - [x] Scene transitions with loading screen and zone portals
-- [ ] Undo/Redo in editor
+- [x] Undo/Redo in editor
 - [ ] Multi-select and bulk operations in editor
-- [ ] Eraser tool for tile painting
+- [x] Eraser tool for tile painting
 - [ ] Auto-load last scene on startup (once real sprites replace procedural)
+- [ ] Persistence & authentication (PostgreSQL character saves, login flow)
+- [ ] Mobile build (iOS/Android via SDL2, touch input, D-Pad)
 
 ### Game Systems (Port from Unity Prototype)
 - [x] CharacterStats (HP, MP, XP, level, stats, fury, death, respawn)
@@ -1103,14 +1180,16 @@ game/
 - [x] Gold drops on mob kill (floating text + inventory integration)
 
 ### Networking (Custom Proprietary)
-- [ ] ENet UDP transport layer
-- [x] Custom replication system (dirty-flag sync, delta serialization) — groundwork: AOI visibility sets, component dirty bits, ghost entity scaffold
-- [ ] Client-server message protocol (binary, not JSON)
-- [ ] Server-authoritative game logic
-- [x] Zone-based interest management (AOI data structures, visibility set diffs, hysteresis)
+- [x] Custom reliable UDP transport layer (Winsock2, 3 channels, ack bitfields, RTT estimation)
+- [x] Custom replication system (AOI-driven enter/leave/update, delta compression with field bitmasks, ghost entities)
+- [x] Client-server message protocol (binary ByteWriter/ByteReader, 16-byte packet header)
+- [x] Server-authoritative game logic (headless 20 tick/sec FateServer)
+- [x] Zone-based interest management (AOI visibility sets, hysteresis, enter/leave/stay diffs)
+- [x] Client-side position interpolation for ghost entities
+- [x] Session tokens, heartbeat/timeout connection management
 - [ ] Client-side prediction and server reconciliation
-- [ ] Authentication and session management
-- [ ] Wire up all game/shared/ systems to networking layer
+- [ ] Authentication and login flow
+- [ ] Wire up remaining game/shared/ systems to networking messages
 
 ### Database Integration
 - [ ] PostgreSQL via libpqxx (same schema as Unity prototype)
@@ -1129,13 +1208,13 @@ game/
 - [ ] 30 FPS cap on mobile, 60 on PC
 
 ### Advanced Engine
-- [ ] Particle system (spell effects, death, level up)
+- [x] Particle system (CPU emitters, spawn rate/burst, gravity, per-particle lifetime/rotation/color lerp)
 - [ ] Shader effects (water, fog, screen flash)
 - [x] Spatial grid for efficient entity queries (power-of-two bitshift, zero hash)
 - [ ] Object pooling for frequently spawned entities
-- [ ] Hot-reload for data files (JSON, prefabs)
+- [x] Hot-reload for data files (textures, shaders, JSON — file watcher + debounced reload)
 - [x] Built-in profiler (Tracy integration, on-demand, named zones, memory tracking)
-- [ ] Console command system for runtime debugging
+- [x] Console command system for runtime debugging
 - [x] Zone arena memory system (O(1) bulk deallocation on zone unload)
 - [x] 7-state chunk lifecycle with ticket system and rate-limited streaming
 - [x] Zone snapshots with persistent entity IDs (mob/boss state persists across zone visits)
@@ -1152,9 +1231,13 @@ game/
 - [x] Registry-based prefab system (removed 164 lines of hardcoded type checks)
 - [x] Registry-based scene save/load (version headers, unknown component preservation)
 - [x] Generic reflection-driven inspector fallback
-- [ ] Asset hot-reload (file watching, generation-based invalidation)
-- [ ] Allocator visualization (ImGui panels for arena watermarks, pool heat maps)
-- [ ] Render graph (declarative pass system, FBO management, post-processing)
-- [ ] Editor polish (ImGuizmo gizmos, selection outlines, infinite grid shader)
-- [ ] Job system / parallel ECS (fiber/coroutine workers, lock-free work-stealing)
-- [ ] Platform abstraction (thin gfx:: wrapper for WebGPU portability)
+- [x] Asset hot-reload (file watching, generation-based invalidation, debounced reload)
+- [x] Allocator visualization (ImGui panels for arena watermarks, pool heat maps, frame timeline)
+- [x] Render graph (10-pass declarative pipeline, FBO management, post-processing)
+- [x] Editor polish (ImGuizmo translate/scale/rotate gizmos, rotate tool, post-process panel)
+- [x] Job system (Win32 fiber-based, 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume)
+- [x] Graphics RHI (gfx::Device + CommandList + PSO, GL backend, typed handles, uniform cache)
+- [x] 2D Lighting (ambient + point lights, light map FBO, multiplicative composite)
+- [x] Post-processing (bloom, vignette, color grading)
+- [x] Networking transport (custom reliable UDP, Winsock2, 3 channels, delta compression, entity replication)
+- [x] Headless server (20 tick/sec FateServer, session tokens, heartbeat/timeout)
