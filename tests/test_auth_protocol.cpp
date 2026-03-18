@@ -21,6 +21,15 @@ TEST_CASE("Auth input validation") {
         CHECK(AuthValidation::isValidPassword("pass\x01word") == false); // non-printable
     }
 
+    SUBCASE("Email validation") {
+        CHECK(AuthValidation::isValidEmail("user@example.com") == true);
+        CHECK(AuthValidation::isValidEmail("a@b.c") == true);
+        CHECK(AuthValidation::isValidEmail("noat") == false);
+        CHECK(AuthValidation::isValidEmail("@no.com") == false);
+        CHECK(AuthValidation::isValidEmail("no@") == false);
+        CHECK(AuthValidation::isValidEmail("no@dot") == false);
+    }
+
     SUBCASE("Character name validation") {
         CHECK(AuthValidation::isValidCharacterName("Hero") == true);
         CHECK(AuthValidation::isValidCharacterName("My Hero") == true); // spaces ok
@@ -50,6 +59,7 @@ TEST_CASE("Auth message serialization") {
         RegisterRequest req;
         req.username = "testuser";
         req.password = "mypassword";
+        req.email = "test@example.com";
         req.characterName = "Hero";
         req.className = "Warrior";
 
@@ -63,6 +73,7 @@ TEST_CASE("Auth message serialization") {
         auto decoded = RegisterRequest::read(r);
         CHECK(decoded.username == "testuser");
         CHECK(decoded.password == "mypassword");
+        CHECK(decoded.email == "test@example.com");
         CHECK(decoded.characterName == "Hero");
         CHECK(decoded.className == "Warrior");
     }

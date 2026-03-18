@@ -53,6 +53,15 @@ struct AuthValidation {
         return true;
     }
 
+    static bool isValidEmail(const std::string& s) {
+        if (s.size() < 5 || s.size() > 128) return false;
+        auto at = s.find('@');
+        if (at == std::string::npos || at == 0 || at == s.size() - 1) return false;
+        auto dot = s.find('.', at);
+        if (dot == std::string::npos || dot == s.size() - 1) return false;
+        return true;
+    }
+
     static bool isValidCharacterName(const std::string& s) {
         if (s.size() < 2 || s.size() > 16) return false;
         if (s.front() == ' ' || s.back() == ' ') return false;
@@ -79,6 +88,7 @@ enum class AuthMessageType : uint8_t {
 struct RegisterRequest {
     std::string username;
     std::string password;
+    std::string email;
     std::string characterName;
     std::string className;
 
@@ -86,6 +96,7 @@ struct RegisterRequest {
         w.writeU8(static_cast<uint8_t>(AuthMessageType::RegisterRequest));
         w.writeString(username);
         w.writeString(password);
+        w.writeString(email);
         w.writeString(characterName);
         w.writeString(className);
     }
@@ -94,6 +105,7 @@ struct RegisterRequest {
         RegisterRequest m;
         m.username      = r.readString();
         m.password      = r.readString();
+        m.email         = r.readString();
         m.characterName = r.readString();
         m.className     = r.readString();
         return m;
