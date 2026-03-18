@@ -191,8 +191,9 @@ add_custom_command(TARGET FateEngine POST_BUILD
 # Server Executable (headless, no SDL window)
 # =============================================================================
 file(GLOB_RECURSE SERVER_SOURCES server/*.cpp server/*.h)
+file(GLOB_RECURSE SERVER_SHARED_SOURCES game/shared/*.cpp)
 if(SERVER_SOURCES)
-    add_executable(FateServer ${SERVER_SOURCES})
+    add_executable(FateServer ${SERVER_SOURCES} ${SERVER_SHARED_SOURCES})
     target_link_libraries(FateServer PRIVATE fate_engine)
     target_include_directories(FateServer PRIVATE ${CMAKE_SOURCE_DIR})
     if(WIN32)
