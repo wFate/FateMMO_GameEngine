@@ -68,6 +68,7 @@ std::vector<PossibleStat> ItemDefinitionCache::parsePossibleStats(const std::str
     auto parsed = nlohmann::json::parse(json, nullptr, false);
     if (parsed.is_discarded() || !parsed.is_array()) return stats;
     for (const auto& entry : parsed) {
+        if (!entry.is_object()) continue;  // skip non-object entries
         PossibleStat ps;
         ps.stat     = entry.value("stat", "");
         ps.min      = entry.value("min", 0);
