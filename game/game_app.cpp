@@ -771,6 +771,9 @@ void GameApp::spawnTestNPCs(World& world) {
 }
 
 void GameApp::onUpdate(float deltaTime) {
+    // TODO(Phase5): Submit spatial grid rebuild as a job when profiling shows need
+    // TODO(Phase5): Submit chunk lifecycle transitions as jobs when profiling shows need
+
     // F1 HUD toggle removed — HUD is always on
     // F2 collision debug removed — now controlled via editor toolbar toggle
     auto& input = Input::instance();
