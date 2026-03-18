@@ -1,6 +1,6 @@
 #include "engine/render/post_process.h"
-#include "engine/render/fullscreen_quad.h"
-#include "engine/render/gfx/backend/gl/gl_loader.h"
+#include "engine/render/gfx/device.h"
+#include "engine/render/gfx/command_list.h"
 #include "engine/core/logger.h"
 
 namespace fate {
@@ -10,6 +10,11 @@ static Shader s_blurShader;
 static Shader s_postProcessShader;
 static bool s_shadersLoaded = false;
 
+// Pipeline handles — one per shader+blend variant
+static gfx::PipelineHandle s_bloomExtractPipeline;  // no blend
+static gfx::PipelineHandle s_blurPipeline;           // no blend
+static gfx::PipelineHandle s_postProcessPipeline;    // no blend
+
 static void ensureShaders() {
     if (s_shadersLoaded) return;
     const char* vert = "assets/shaders/fullscreen_quad.vert";
@@ -18,15 +23,27 @@ static void ensureShaders() {
     ok &= s_blurShader.loadFromFile(vert, "assets/shaders/blur.frag");
     ok &= s_postProcessShader.loadFromFile(vert, "assets/shaders/postprocess.frag");
     s_shadersLoaded = ok;
-    if (!ok) LOG_ERROR("PostProcess", "Failed to load one or more post-process shaders");
+    if (!ok) {
+        LOG_ERROR("PostProcess", "Failed to load one or more post-process shaders");
+        return;
+    }
+
+    // Create pipelines with appropriate blend modes
+    auto& device = gfx::Device::instance();
+
+    gfx::PipelineDesc desc{};
+    desc.blendMode = gfx::BlendMode::None;
+
+    desc.shader = s_bloomExtractShader.gfxHandle();
+    s_bloomExtractPipeline = device.createPipeline(desc);
+
+    desc.shader = s_blurShader.gfxHandle();
+    s_blurPipeline = device.createPipeline(desc);
+
+    desc.shader = s_postProcessShader.gfxHandle();
+    s_postProcessPipeline = device.createPipeline(desc);
 }
 
-// TODO(RHI): Migrate to CommandList — replace direct GL calls with:
-//   ctx.commandList->setFramebuffer(...)   (replaces FBO bind/unbind)
-//   ctx.commandList->clear(...)            (replaces glClear)
-//   ctx.commandList->bindPipeline(...)     (replaces glEnable/glDisable + glBlendFunc + shader.bind)
-//   ctx.commandList->bindTexture(...)      (replaces glActiveTexture + glBindTexture)
-//   ctx.commandList->draw(...)             (replaces FullscreenQuad::draw)
 void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
     // Pass: Bloom Extract
     graph.addPass({"BloomExtract", true, [&config](RenderPassContext& ctx) {
@@ -34,28 +51,26 @@ void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
         ensureShaders();
         if (!s_shadersLoaded) return;
 
+        auto* cmd = ctx.commandList;
+        auto& device = gfx::Device::instance();
         int halfW = ctx.viewportWidth / 2;
         int halfH = ctx.viewportHeight / 2;
 
         auto& scene = ctx.graph->getFBO("Scene", ctx.viewportWidth, ctx.viewportHeight, true);
         auto& bloomDS = ctx.graph->getFBO("BloomDownsample", halfW, halfH);
 
-        bloomDS.bind();
-        glClear(GL_COLOR_BUFFER_BIT);
-        glDisable(GL_BLEND);
+        cmd->setFramebuffer(bloomDS.gfxHandle());
+        cmd->setViewport(0, 0, halfW, halfH);
+        cmd->clear(0.0f, 0.0f, 0.0f, 1.0f);
 
-        s_bloomExtractShader.bind();
-        s_bloomExtractShader.setInt("u_scene", 0);
-        s_bloomExtractShader.setFloat("u_threshold", config.bloomThreshold);
+        cmd->bindPipeline(s_bloomExtractPipeline);
+        cmd->setUniform("u_scene", 0);
+        cmd->setUniform("u_threshold", config.bloomThreshold);
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, scene.textureId());
+        gfx::TextureHandle sceneTex = device.getFramebufferTexture(scene.gfxHandle());
+        cmd->bindTexture(0, sceneTex);
 
-        FullscreenQuad::instance().draw();
-
-        s_bloomExtractShader.unbind();
-        glEnable(GL_BLEND);
-        bloomDS.unbind();
+        cmd->draw(gfx::PrimitiveType::Triangles, 3);
     }});
 
     // Pass: Bloom Blur (horizontal + vertical ping-pong)
@@ -64,6 +79,8 @@ void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
         ensureShaders();
         if (!s_shadersLoaded) return;
 
+        auto* cmd = ctx.commandList;
+        auto& device = gfx::Device::instance();
         int halfW = ctx.viewportWidth / 2;
         int halfH = ctx.viewportHeight / 2;
 
@@ -71,31 +88,26 @@ void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
         auto& blurH = ctx.graph->getFBO("BloomBlurH", halfW, halfH);
         auto& blurV = ctx.graph->getFBO("BloomBlurV", halfW, halfH);
 
-        glDisable(GL_BLEND);
-
-        s_blurShader.bind();
-        s_blurShader.setInt("u_texture", 0);
+        cmd->bindPipeline(s_blurPipeline);
+        cmd->setUniform("u_texture", 0);
 
         // Horizontal pass
-        blurH.bind();
-        glClear(GL_COLOR_BUFFER_BIT);
-        s_blurShader.setVec2("u_direction", {1.0f / (float)halfW, 0.0f});
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, bloomDS.textureId());
-        FullscreenQuad::instance().draw();
-        blurH.unbind();
+        cmd->setFramebuffer(blurH.gfxHandle());
+        cmd->setViewport(0, 0, halfW, halfH);
+        cmd->clear(0.0f, 0.0f, 0.0f, 1.0f);
+        cmd->setUniform("u_direction", Vec2{1.0f / (float)halfW, 0.0f});
+        gfx::TextureHandle bloomDSTex = device.getFramebufferTexture(bloomDS.gfxHandle());
+        cmd->bindTexture(0, bloomDSTex);
+        cmd->draw(gfx::PrimitiveType::Triangles, 3);
 
         // Vertical pass
-        blurV.bind();
-        glClear(GL_COLOR_BUFFER_BIT);
-        s_blurShader.setVec2("u_direction", {0.0f, 1.0f / (float)halfH});
-        glBindTexture(GL_TEXTURE_2D, blurH.textureId());
-        FullscreenQuad::instance().draw();
-        blurV.unbind();
-
-        s_blurShader.unbind();
-
-        glEnable(GL_BLEND);
+        cmd->setFramebuffer(blurV.gfxHandle());
+        cmd->setViewport(0, 0, halfW, halfH);
+        cmd->clear(0.0f, 0.0f, 0.0f, 1.0f);
+        cmd->setUniform("u_direction", Vec2{0.0f, 1.0f / (float)halfH});
+        gfx::TextureHandle blurHTex = device.getFramebufferTexture(blurH.gfxHandle());
+        cmd->bindTexture(0, blurHTex);
+        cmd->draw(gfx::PrimitiveType::Triangles, 3);
     }});
 
     // Pass: Post-Process Composite
@@ -103,6 +115,8 @@ void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
         ensureShaders();
         if (!s_shadersLoaded) return;
 
+        auto* cmd = ctx.commandList;
+        auto& device = gfx::Device::instance();
         int w = ctx.viewportWidth;
         int h = ctx.viewportHeight;
 
@@ -110,31 +124,26 @@ void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {
         auto& blurV = ctx.graph->getFBO("BloomBlurV", w / 2, h / 2);
         auto& postProcess = ctx.graph->getFBO("PostProcess", w, h);
 
-        postProcess.bind();
-        glClear(GL_COLOR_BUFFER_BIT);
-        glDisable(GL_BLEND);
+        cmd->setFramebuffer(postProcess.gfxHandle());
+        cmd->setViewport(0, 0, w, h);
+        cmd->clear(0.0f, 0.0f, 0.0f, 1.0f);
 
-        s_postProcessShader.bind();
-        s_postProcessShader.setInt("u_scene", 0);
-        s_postProcessShader.setInt("u_bloom", 1);
-        s_postProcessShader.setFloat("u_bloomStrength", config.bloomEnabled ? config.bloomStrength : 0.0f);
-        s_postProcessShader.setFloat("u_vignetteRadius", config.vignetteEnabled ? config.vignetteRadius : 10.0f);
-        s_postProcessShader.setFloat("u_vignetteSmooth", config.vignetteSmoothness);
-        s_postProcessShader.setVec3("u_colorTint", {config.colorTint.r, config.colorTint.g, config.colorTint.b});
-        s_postProcessShader.setFloat("u_brightness", config.brightness);
-        s_postProcessShader.setFloat("u_contrast", config.contrast);
+        cmd->bindPipeline(s_postProcessPipeline);
+        cmd->setUniform("u_scene", 0);
+        cmd->setUniform("u_bloom", 1);
+        cmd->setUniform("u_bloomStrength", config.bloomEnabled ? config.bloomStrength : 0.0f);
+        cmd->setUniform("u_vignetteRadius", config.vignetteEnabled ? config.vignetteRadius : 10.0f);
+        cmd->setUniform("u_vignetteSmooth", config.vignetteSmoothness);
+        cmd->setUniform("u_colorTint", Vec3{config.colorTint.r, config.colorTint.g, config.colorTint.b});
+        cmd->setUniform("u_brightness", config.brightness);
+        cmd->setUniform("u_contrast", config.contrast);
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, scene.textureId());
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, blurV.textureId());
+        gfx::TextureHandle sceneTex = device.getFramebufferTexture(scene.gfxHandle());
+        cmd->bindTexture(0, sceneTex);
+        gfx::TextureHandle blurVTex = device.getFramebufferTexture(blurV.gfxHandle());
+        cmd->bindTexture(1, blurVTex);
 
-        FullscreenQuad::instance().draw();
-
-        glActiveTexture(GL_TEXTURE0); // reset active unit
-        s_postProcessShader.unbind();
-        glEnable(GL_BLEND);
-        postProcess.unbind();
+        cmd->draw(gfx::PrimitiveType::Triangles, 3);
     }});
 }
 

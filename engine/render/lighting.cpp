@@ -1,7 +1,7 @@
 #include "engine/render/lighting.h"
 #include "engine/render/point_light_component.h"
-#include "engine/render/fullscreen_quad.h"
-#include "engine/render/gfx/backend/gl/gl_loader.h"
+#include "engine/render/gfx/device.h"
+#include "engine/render/gfx/command_list.h"
 #include "engine/ecs/world.h"
 #include "engine/render/camera.h"
 #include "game/components/transform.h"
@@ -10,7 +10,14 @@
 namespace fate {
 
 static Shader s_lightShader;
+static Shader s_blitShader;
 static bool s_lightShaderLoaded = false;
+static bool s_blitShaderLoaded = false;
+
+// Pipeline handles for each blend mode variant
+static gfx::PipelineHandle s_lightAdditivePipeline;
+static gfx::PipelineHandle s_blitMultiplicativePipeline;
+static gfx::PipelineHandle s_blitAlphaPipeline;  // for restoring standard alpha state
 
 static void ensureLightShader() {
     if (s_lightShaderLoaded) return;
@@ -20,46 +27,69 @@ static void ensureLightShader() {
     );
     if (!s_lightShaderLoaded) {
         LOG_ERROR("Lighting", "Failed to load light shader");
+        return;
     }
+
+    // Create additive pipeline for point light accumulation
+    auto& device = gfx::Device::instance();
+    gfx::PipelineDesc desc{};
+    desc.shader = s_lightShader.gfxHandle();
+    desc.blendMode = gfx::BlendMode::Additive;
+    s_lightAdditivePipeline = device.createPipeline(desc);
 }
 
-// TODO(RHI): Migrate to CommandList — replace direct GL calls with:
-//   ctx.commandList->setFramebuffer(...)   (replaces lightMap.bind/unbind, scene.bind/unbind)
-//   ctx.commandList->clear(...)            (replaces glClearColor + glClear)
-//   ctx.commandList->bindPipeline(...)     (replaces glBlendFunc + shader.bind)
-//   ctx.commandList->bindTexture(...)      (replaces glActiveTexture + glBindTexture)
-//   ctx.commandList->draw(...)             (replaces FullscreenQuad::draw)
+static void ensureBlitShader() {
+    if (s_blitShaderLoaded) return;
+    s_blitShaderLoaded = s_blitShader.loadFromFile(
+        "assets/shaders/fullscreen_quad.vert",
+        "assets/shaders/blit.frag"
+    );
+    if (!s_blitShaderLoaded) {
+        LOG_ERROR("Lighting", "Failed to load blit shader");
+        return;
+    }
+
+    // Create multiplicative pipeline for light map composite
+    auto& device = gfx::Device::instance();
+    gfx::PipelineDesc desc{};
+    desc.shader = s_blitShader.gfxHandle();
+    desc.blendMode = gfx::BlendMode::Multiplicative;
+    s_blitMultiplicativePipeline = device.createPipeline(desc);
+}
+
 void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
     graph.addPass({"Lighting", true, [&config](RenderPassContext& ctx) {
         if (!config.enabled || !ctx.world) return;
 
         ensureLightShader();
         if (!s_lightShaderLoaded) return;
+        ensureBlitShader();
+        if (!s_blitShaderLoaded) return;
 
+        auto* cmd = ctx.commandList;
+        auto& device = gfx::Device::instance();
         int w = ctx.viewportWidth;
         int h = ctx.viewportHeight;
 
         // Build light map
         auto& lightMap = ctx.graph->getFBO("LightMap", w, h);
-        lightMap.bind();
+        cmd->setFramebuffer(lightMap.gfxHandle());
+        cmd->setViewport(0, 0, w, h);
 
         // Clear to ambient
-        glClearColor(
+        cmd->clear(
             config.ambientColor.r * config.ambientIntensity,
             config.ambientColor.g * config.ambientIntensity,
             config.ambientColor.b * config.ambientIntensity,
             1.0f
         );
-        glClear(GL_COLOR_BUFFER_BIT);
 
         // Count point lights so we know whether the light map is trivially white
         int lightCount = 0;
 
-        // Additive blending for point lights
-        glBlendFunc(GL_ONE, GL_ONE);
-
-        s_lightShader.bind();
-        s_lightShader.setVec2("u_resolution", {(float)w, (float)h});
+        // Bind additive pipeline for point lights
+        cmd->bindPipeline(s_lightAdditivePipeline);
+        cmd->setUniform("u_resolution", Vec2{(float)w, (float)h});
 
         // Iterate all entities with PointLightComponent + Transform
         Mat4 vp = ctx.camera->getViewProjection();
@@ -86,17 +116,14 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
                 // Convert world-space radius to screen-space using camera zoom
                 float screenRadius = light.radius * cameraZoom;
 
-                s_lightShader.setVec2("u_lightPos", screenPos);
-                s_lightShader.setVec3("u_lightColor", {light.color.r, light.color.g, light.color.b});
-                s_lightShader.setFloat("u_lightRadius", screenRadius);
-                s_lightShader.setFloat("u_lightIntensity", light.intensity);
-                s_lightShader.setFloat("u_lightFalloff", light.falloff);
+                cmd->setUniform("u_lightPos", screenPos);
+                cmd->setUniform("u_lightColor", Vec3{light.color.r, light.color.g, light.color.b});
+                cmd->setUniform("u_lightRadius", screenRadius);
+                cmd->setUniform("u_lightIntensity", light.intensity);
+                cmd->setUniform("u_lightFalloff", light.falloff);
 
-                FullscreenQuad::instance().draw();
+                cmd->draw(gfx::PrimitiveType::Triangles, 3);
             });
-
-        s_lightShader.unbind();
-        lightMap.unbind();
 
         // Optimization: if the light map is solid white (ambient is white and
         // no point lights exist), multiplying the scene by it is a no-op.
@@ -107,41 +134,20 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
         bool ambientIsWhite = (ar >= 1.0f && ag >= 1.0f && ab >= 1.0f);
 
         if (ambientIsWhite && lightCount == 0) {
-            // Restore standard alpha blending before early exit
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             return; // light map is solid white — composite is a no-op
         }
 
         // Composite light map onto scene via multiplicative blend
-        // (Scene *= LightMap): use DST_COLOR * SRC_COLOR + 0 * DST_COLOR
-        static Shader s_blitShader;
-        static bool s_blitLoaded = false;
-        if (!s_blitLoaded) {
-            s_blitLoaded = s_blitShader.loadFromFile(
-                "assets/shaders/fullscreen_quad.vert",
-                "assets/shaders/blit.frag"
-            );
-        }
-
         auto& scene = ctx.graph->getFBO("Scene", w, h, true);
-        scene.bind();
+        cmd->setFramebuffer(scene.gfxHandle());
+        cmd->setViewport(0, 0, w, h);
 
-        // Multiplicative blend: existing scene color * light map color
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_DST_COLOR, GL_ZERO);
+        cmd->bindPipeline(s_blitMultiplicativePipeline);
+        cmd->setUniform("u_texture", 0);
 
-        s_blitShader.bind();
-        s_blitShader.setInt("u_texture", 0);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, lightMap.textureId());
-        FullscreenQuad::instance().draw();
-        s_blitShader.unbind();
-
-        // Restore standard alpha blending and clear color
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        scene.unbind();
+        gfx::TextureHandle lightMapTex = device.getFramebufferTexture(lightMap.gfxHandle());
+        cmd->bindTexture(0, lightMapTex);
+        cmd->draw(gfx::PrimitiveType::Triangles, 3);
     }});
 }
 
