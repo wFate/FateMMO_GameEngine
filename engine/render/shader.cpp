@@ -1,4 +1,5 @@
 #include "engine/render/shader.h"
+#include "engine/render/gfx/device.h"
 #include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/core/logger.h"
 #include <fstream>
@@ -7,8 +8,8 @@
 namespace fate {
 
 Shader::~Shader() {
-    if (programId_) {
-        glDeleteProgram(programId_);
+    if (gfxHandle_.valid()) {
+        gfx::Device::instance().destroy(gfxHandle_);
     }
 }
 
@@ -46,19 +47,24 @@ bool Shader::reloadFromFile(const std::string& vertPath, const std::string& frag
     vertStream << vertFile.rdbuf();
     fragStream << fragFile.rdbuf();
 
-    // Save old program in case loadFromSource fails
+    // Save old handle in case loadFromSource fails
+    gfx::ShaderHandle oldHandle = gfxHandle_;
     unsigned int oldProgram = programId_;
+    gfxHandle_ = {};
     programId_ = 0;
 
     if (!loadFromSource(vertStream.str(), fragStream.str())) {
-        // Restore old program — loadFromSource already logged the error
+        // Restore old handle — loadFromSource already logged the error
+        gfxHandle_ = oldHandle;
         programId_ = oldProgram;
         LOG_WARN("Shader", "Reload failed — keeping old program %u", programId_);
         return false;
     }
 
-    // Success: delete old program, clear uniform cache (locations may differ)
-    glDeleteProgram(oldProgram);
+    // Success: destroy old handle, clear uniform cache (locations may differ)
+    if (oldHandle.valid()) {
+        gfx::Device::instance().destroy(oldHandle);
+    }
     uniformCache_.clear();
     vertPath_ = vertPath;
     fragPath_ = fragPath;
@@ -67,40 +73,15 @@ bool Shader::reloadFromFile(const std::string& vertPath, const std::string& frag
 }
 
 bool Shader::loadFromSource(const std::string& vertSrc, const std::string& fragSrc) {
-    unsigned int vert = glCreateShader(GL_VERTEX_SHADER);
-    unsigned int frag = glCreateShader(GL_FRAGMENT_SHADER);
-
-    if (!compileShader(vert, vertSrc, "VERTEX")) {
-        glDeleteShader(vert);
-        glDeleteShader(frag);
-        return false;
-    }
-    if (!compileShader(frag, fragSrc, "FRAGMENT")) {
-        glDeleteShader(vert);
-        glDeleteShader(frag);
+    auto& device = gfx::Device::instance();
+    gfx::ShaderHandle handle = device.createShader(vertSrc, fragSrc);
+    if (!handle.valid()) {
+        LOG_ERROR("Shader", "Device::createShader failed");
         return false;
     }
 
-    programId_ = glCreateProgram();
-    glAttachShader(programId_, vert);
-    glAttachShader(programId_, frag);
-    glLinkProgram(programId_);
-
-    GLint success;
-    glGetProgramiv(programId_, GL_LINK_STATUS, &success);
-    if (!success) {
-        char infoLog[1024];
-        glGetProgramInfoLog(programId_, 1024, nullptr, infoLog);
-        LOG_ERROR("Shader", "Program link error:\n%s", infoLog);
-        glDeleteProgram(programId_);
-        programId_ = 0;
-        glDeleteShader(vert);
-        glDeleteShader(frag);
-        return false;
-    }
-
-    glDeleteShader(vert);
-    glDeleteShader(frag);
+    gfxHandle_ = handle;
+    programId_ = device.resolveGLShader(handle);
 
     LOG_INFO("Shader", "Shader program %u linked successfully", programId_);
     return true;
@@ -148,22 +129,6 @@ int Shader::getUniformLocation(const std::string& name) {
     }
     uniformCache_[name] = loc;
     return loc;
-}
-
-bool Shader::compileShader(unsigned int shader, const std::string& source, const char* type) {
-    const char* src = source.c_str();
-    glShaderSource(shader, 1, &src, nullptr);
-    glCompileShader(shader);
-
-    GLint success;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        char infoLog[1024];
-        glGetShaderInfoLog(shader, 1024, nullptr, infoLog);
-        LOG_ERROR("Shader", "%s shader compile error:\n%s", type, infoLog);
-        return false;
-    }
-    return true;
 }
 
 } // namespace fate
