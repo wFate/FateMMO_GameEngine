@@ -1,15 +1,37 @@
 #include "engine/net/replication.h"
 #include "engine/net/packet.h"
+#include "game/components/dropped_item_component.h"
 #include <cmath>
 
 namespace fate {
 
 void ReplicationManager::update(World& world, NetServer& server) {
+    // Rebuild spatial index once per tick with all registered entity positions
+    rebuildSpatialIndex(world);
+
     server.connections().forEach([&](ClientConnection& client) {
         if (client.playerEntityId == 0) return; // not spawned yet
         buildVisibility(world, client);
         sendDiffs(world, server, client);
     });
+}
+
+void ReplicationManager::rebuildSpatialIndex(World& world) {
+    spatialIndex_.beginRebuild(static_cast<uint32_t>(handleToPid_.size()));
+
+    for (const auto& [handleValue, pid] : handleToPid_) {
+        EntityHandle handle(handleValue);
+        Entity* entity = world.getEntity(handle);
+        if (!entity || !entity->isActive()) continue;
+
+        auto* transform = entity->getComponent<Transform>();
+        if (!transform) continue;
+
+        // Use EntityHandle's packed value as EntityId for the spatial hash
+        spatialIndex_.addEntity(handleValue, transform->position);
+    }
+
+    spatialIndex_.endRebuild();
 }
 
 void ReplicationManager::registerEntity(EntityHandle handle, PersistentId pid) {
@@ -59,27 +81,39 @@ void ReplicationManager::buildVisibility(World& world, ClientConnection& client)
         wasPreviouslyVisible[h.value] = true;
     }
 
-    // Check all registered entities
-    for (const auto& [handleValue, pid] : handleToPid_) {
-        // Skip the client's own player entity
-        if (pid.value() == client.playerEntityId) continue;
+    // Query the spatial index using the deactivation radius (the larger one)
+    // to capture both newly-activating and previously-visible entities in one pass.
+    std::vector<EntityId> candidates;
+    spatialIndex_.queryRadius(playerPos, aoiConfig_.deactivationRadius, candidates,
+        [&](EntityId id) {
+            // Exclude the client's own player entity
+            auto pidIt = handleToPid_.find(id);
+            return pidIt != handleToPid_.end() &&
+                   pidIt->second.value() != client.playerEntityId;
+        });
 
-        EntityHandle handle(handleValue);
-        Entity* entity = world.getEntity(handle);
-        if (!entity || !entity->isActive()) continue;
+    // Apply hysteresis: previously-visible entities use deactivation radius,
+    // new entities must be within the tighter activation radius.
+    float activationRadiusSq = aoiConfig_.activationRadius * aoiConfig_.activationRadius;
 
-        auto* transform = entity->getComponent<Transform>();
-        if (!transform) continue;
+    for (EntityId id : candidates) {
+        bool wasVisible = wasPreviouslyVisible.count(id) > 0;
 
-        float dx = transform->position.x - playerPos.x;
-        float dy = transform->position.y - playerPos.y;
-        float dist = std::sqrt(dx * dx + dy * dy);
+        if (wasVisible) {
+            // Already within deactivation radius (guaranteed by spatial query)
+            client.aoi.current.push_back(EntityHandle(id));
+        } else {
+            // New entity: must pass the stricter activation radius check
+            Entity* entity = world.getEntity(EntityHandle(id));
+            if (!entity) continue;
+            auto* transform = entity->getComponent<Transform>();
+            if (!transform) continue;
 
-        bool wasVisible = wasPreviouslyVisible.count(handleValue) > 0;
-        float radius = wasVisible ? aoiConfig_.deactivationRadius : aoiConfig_.activationRadius;
-
-        if (dist <= radius) {
-            client.aoi.current.push_back(handle);
+            float dx = transform->position.x - playerPos.x;
+            float dy = transform->position.y - playerPos.y;
+            if (dx * dx + dy * dy <= activationRadiusSq) {
+                client.aoi.current.push_back(EntityHandle(id));
+            }
         }
     }
 
@@ -190,6 +224,7 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
     auto* charStats = entity->getComponent<CharacterStatsComponent>();
     auto* enemyStats = entity->getComponent<EnemyStatsComponent>();
     auto* npcComp = entity->getComponent<NPCComponent>();
+    auto* droppedItem = entity->getComponent<DroppedItemComponent>();
 
     if (charStats) {
         msg.entityType = 0; // player
@@ -214,6 +249,15 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
     } else if (npcComp) {
         msg.entityType = 2; // npc
         msg.name = npcComp->displayName;
+    } else if (droppedItem) {
+        msg.entityType = 3; // dropped item
+        msg.name = droppedItem->isGold ? "Gold" : droppedItem->itemId;
+        msg.itemId = droppedItem->itemId;
+        msg.quantity = droppedItem->quantity;
+        msg.isGold = droppedItem->isGold ? 1 : 0;
+        msg.goldAmount = droppedItem->goldAmount;
+        msg.enchantLevel = droppedItem->enchantLevel;
+        msg.rarity = droppedItem->rarity;
     }
 
     // Faction

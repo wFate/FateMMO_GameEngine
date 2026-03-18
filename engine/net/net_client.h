@@ -34,6 +34,7 @@ public:
     std::function<void(const SvChatMessageMsg&)> onChatMessage;
     std::function<void(const SvPlayerStateMsg&)> onPlayerState;
     std::function<void(const SvMovementCorrectionMsg&)> onMovementCorrection;
+    std::function<void(const SvLootPickupMsg&)> onLootPickup;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:

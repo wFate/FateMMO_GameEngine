@@ -100,13 +100,21 @@ struct CmdChat {
 
 struct SvEntityEnterMsg {
     uint64_t    persistentId = 0;
-    uint8_t     entityType   = 0; // 0=player, 1=mob, 2=npc
+    uint8_t     entityType   = 0; // 0=player, 1=mob, 2=npc, 3=dropped_item
     Vec2        position;
     std::string name;
     int32_t     level     = 0;
     int32_t     currentHP = 0;
     int32_t     maxHP     = 0;
     uint8_t     faction   = 0;
+
+    // Dropped item fields (only serialized when entityType == 3)
+    std::string itemId;
+    int32_t     quantity     = 0;
+    uint8_t     isGold       = 0;
+    int32_t     goldAmount   = 0;
+    int32_t     enchantLevel = 0;
+    std::string rarity;
 
     void write(ByteWriter& w) const {
         detail::writeU64(w, persistentId);
@@ -117,6 +125,14 @@ struct SvEntityEnterMsg {
         w.writeI32(currentHP);
         w.writeI32(maxHP);
         w.writeU8(faction);
+        if (entityType == 3) {
+            w.writeString(itemId);
+            w.writeI32(quantity);
+            w.writeU8(isGold);
+            w.writeI32(goldAmount);
+            w.writeI32(enchantLevel);
+            w.writeString(rarity);
+        }
     }
 
     static SvEntityEnterMsg read(ByteReader& r) {
@@ -129,6 +145,14 @@ struct SvEntityEnterMsg {
         m.currentHP    = r.readI32();
         m.maxHP        = r.readI32();
         m.faction      = r.readU8();
+        if (m.entityType == 3) {
+            m.itemId       = r.readString();
+            m.quantity     = r.readI32();
+            m.isGold       = r.readU8();
+            m.goldAmount   = r.readI32();
+            m.enchantLevel = r.readI32();
+            m.rarity       = r.readString();
+        }
         return m;
     }
 };
@@ -278,6 +302,35 @@ struct SvMovementCorrectionMsg {
         SvMovementCorrectionMsg m;
         m.correctedPosition = r.readVec2();
         m.rubberBand        = r.readU8();
+        return m;
+    }
+};
+
+struct SvLootPickupMsg {
+    std::string itemId;
+    std::string displayName;
+    int32_t     quantity   = 0;
+    uint8_t     isGold     = 0;
+    int32_t     goldAmount = 0;
+    std::string rarity;
+
+    void write(ByteWriter& w) const {
+        w.writeString(itemId);
+        w.writeString(displayName);
+        w.writeI32(quantity);
+        w.writeU8(isGold);
+        w.writeI32(goldAmount);
+        w.writeString(rarity);
+    }
+
+    static SvLootPickupMsg read(ByteReader& r) {
+        SvLootPickupMsg m;
+        m.itemId      = r.readString();
+        m.displayName = r.readString();
+        m.quantity    = r.readI32();
+        m.isGold      = r.readU8();
+        m.goldAmount  = r.readI32();
+        m.rarity      = r.readString();
         return m;
     }
 };
