@@ -1,12 +1,17 @@
 // RHI Migration Status (Phase 5):
-// - gfx::Device and gfx::CommandList: IMPLEMENTED (GL backend)
-// - Shader/Texture/Framebuffer: have gfxHandle() accessors (dual-track)
-// - SpriteBatch: uses gfx::BlendMode enum
-// - RenderPassContext: has commandList member
-// - Lighting/PostProcess: migrated to CommandList
-// - SpriteBatch flush: still uses direct GL (TODO)
-// - SDF Text: still uses raw GL texture ID for atlas (TODO)
-// - Editor (ImGui): uses direct GL (intentional — ImGui manages its own GL state)
+// MIGRATED:
+//   - Shader: creation/destruction via Device, bind/uniforms direct GL
+//   - Texture: creation/destruction via Device, bind direct GL
+//   - Framebuffer: creation/destruction via Device, bind direct GL
+//   - SpriteBatch: resources via Device, draws via CommandList (with direct GL fallback)
+//   - Lighting passes: fully migrated to CommandList
+//   - Post-process passes: fully migrated to CommandList
+//   - FullscreenQuad: VAO via Device
+//   - SDFText: atlas texture via Device
+// INTENTIONALLY DIRECT GL:
+//   - App initialization (glGetString, initial state, window resize)
+//   - App FBO blit (interleaved with ImGui)
+//   - Editor (ImGui integration)
 
 #pragma once
 #include <cstdint>

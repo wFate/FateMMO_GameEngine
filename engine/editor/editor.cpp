@@ -1,5 +1,6 @@
 #include "engine/editor/editor.h"
 #include "engine/core/logger.h"
+// Editor uses direct GL for ImGui integration — intentionally outside RHI
 #include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/render/fullscreen_quad.h"
 #include "engine/input/input.h"
