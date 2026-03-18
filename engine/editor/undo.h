@@ -76,6 +76,38 @@ struct DeleteCommand : UndoCommand {
     std::string description() const override { return "Delete"; }
 };
 
+// Rotate entity
+struct RotateCommand : UndoCommand {
+    EntityHandle entityHandle;
+    float oldRotation, newRotation;
+
+    void undo(World* w) override {
+        auto* e = w->getEntity(entityHandle);
+        if (e) if (auto* t = e->getComponent<Transform>()) t->rotation = oldRotation;
+    }
+    void redo(World* w) override {
+        auto* e = w->getEntity(entityHandle);
+        if (e) if (auto* t = e->getComponent<Transform>()) t->rotation = newRotation;
+    }
+    std::string description() const override { return "Rotate"; }
+};
+
+// Scale entity (via ImGuizmo)
+struct ScaleCommand : UndoCommand {
+    EntityHandle entityHandle;
+    Vec2 oldScale, newScale;
+
+    void undo(World* w) override {
+        auto* e = w->getEntity(entityHandle);
+        if (e) if (auto* t = e->getComponent<Transform>()) t->scale = oldScale;
+    }
+    void redo(World* w) override {
+        auto* e = w->getEntity(entityHandle);
+        if (e) if (auto* t = e->getComponent<Transform>()) t->scale = newScale;
+    }
+    std::string description() const override { return "Scale"; }
+};
+
 // Generic property change (stores full entity snapshot)
 struct PropertyCommand : UndoCommand {
     EntityHandle entityHandle;

@@ -10,9 +10,9 @@ struct PostProcessConfig {
     float bloomThreshold = 0.8f;
     float bloomStrength = 0.3f;
 
-    bool vignetteEnabled = true;
-    float vignetteRadius = 0.75f;
-    float vignetteSmoothness = 0.4f;
+    bool vignetteEnabled = false;
+    float vignetteRadius = 0.85f;
+    float vignetteSmoothness = 0.25f;
 
     Color colorTint = Color::white();
     float brightness = 1.0f;

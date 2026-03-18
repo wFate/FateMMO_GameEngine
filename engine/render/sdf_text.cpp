@@ -1,6 +1,6 @@
 #include "engine/render/sdf_text.h"
 #include "engine/render/sdf_font_atlas.h"
-#include "engine/render/gl_loader.h"
+#include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/core/logger.h"
 #include "stb_image.h"
 #include <nlohmann/json.hpp>

@@ -1,5 +1,5 @@
 #include "engine/render/fullscreen_quad.h"
-#include "engine/render/gl_loader.h"
+#include "engine/render/gfx/backend/gl/gl_loader.h"
 
 namespace fate {
 

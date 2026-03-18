@@ -1,7 +1,7 @@
 #include "engine/render/lighting.h"
 #include "engine/render/point_light_component.h"
 #include "engine/render/fullscreen_quad.h"
-#include "engine/render/gl_loader.h"
+#include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/ecs/world.h"
 #include "engine/render/camera.h"
 #include "game/components/transform.h"

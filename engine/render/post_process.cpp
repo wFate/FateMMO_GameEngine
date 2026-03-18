@@ -1,6 +1,6 @@
 #include "engine/render/post_process.h"
 #include "engine/render/fullscreen_quad.h"
-#include "engine/render/gl_loader.h"
+#include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/core/logger.h"
 
 namespace fate {

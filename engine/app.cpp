@@ -1,5 +1,5 @@
 #include "engine/app.h"
-#include "engine/render/gl_loader.h"
+#include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/render/shader.h"
 #include "engine/core/logger.h"
 #include "engine/editor/undo.h"

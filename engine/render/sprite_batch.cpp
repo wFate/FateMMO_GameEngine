@@ -1,5 +1,5 @@
 #include "engine/render/sprite_batch.h"
-#include "engine/render/gl_loader.h"
+#include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/core/logger.h"
 #include <algorithm>
 #include <cmath>
