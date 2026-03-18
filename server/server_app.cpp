@@ -184,6 +184,9 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     auto* client = server_.connections().findById(clientId);
     if (!client) return;
 
+    // Drain any pending auth results that arrived between ticks
+    consumePendingSessions();
+
     // Look up auth token in pending sessions
     auto it = pendingSessions_.find(client->authToken);
     if (it == pendingSessions_.end()) {
