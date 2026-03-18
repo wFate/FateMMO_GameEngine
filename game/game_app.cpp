@@ -1585,53 +1585,37 @@ void GameApp::onUpdate(float deltaTime) {
             netClient_.poll(netTime_);
 
             if (netClient_.isConnected()) {
+                // Create local player BEFORE entering InGame state
+                auto* sc = SceneManager::instance().currentScene();
+                if (sc) {
+                    ClassType ct = ClassType::Warrior;
+                    if (pendingClassName_ == "Mage") ct = ClassType::Mage;
+                    else if (pendingClassName_ == "Archer") ct = ClassType::Archer;
+
+                    createPlayer(sc->world());
+
+                    // Rename the player to match auth data
+                    sc->world().forEach<PlayerController>([&](Entity* e, PlayerController* ctrl) {
+                        if (ctrl->isLocalPlayer) {
+                            e->setName(pendingCharName_);
+                            auto* np = e->getComponent<NameplateComponent>();
+                            if (np) {
+                                np->displayName = pendingCharName_;
+                            }
+                        }
+                    });
+                }
+
                 connState_ = ConnectionState::InGame;
                 loginScreen_.statusMessage = "";
-                localPlayerCreated_ = false;
-                LOG_INFO("GameApp", "Connected to game server, entering game");
+                LOG_INFO("GameApp", "Connected to game server, entering game as '%s' (%s)",
+                         pendingCharName_.c_str(), pendingClassName_.c_str());
             }
             // ConnectReject is handled by the onConnectRejected callback set up in onInit
             break;
         }
 
         case ConnectionState::InGame: {
-            // Create local player entity on first frame of InGame (after auth + scene load)
-            if (!localPlayerCreated_) {
-                auto* sc = SceneManager::instance().currentScene();
-                if (sc) {
-                    auto& world = sc->world();
-
-                    // Collect existing player entities (can't destroy inside forEach)
-                    std::vector<EntityHandle> playersToRemove;
-                    world.forEach<PlayerController>([&](Entity* e, PlayerController*) {
-                        playersToRemove.push_back(e->handle());
-                    });
-                    // Destroy them outside the iteration
-                    for (auto h : playersToRemove) {
-                        world.destroyEntity(h);
-                    }
-                    if (!playersToRemove.empty()) {
-                        world.processDestroyQueue();
-                    }
-
-                    // Determine class from auth response
-                    ClassType ct = ClassType::Warrior;
-                    if (pendingClassName_ == "Mage") ct = ClassType::Mage;
-                    else if (pendingClassName_ == "Archer") ct = ClassType::Archer;
-
-                    Faction playerFaction = Faction::Xyros;
-                    Entity* player = EntityFactory::createPlayer(
-                        world, pendingCharName_, ct, true, playerFaction);
-
-                    auto* transform = player->getComponent<Transform>();
-                    if (transform) transform->position = {0.0f, 0.0f};
-
-                    localPlayerCreated_ = true;
-                    LOG_INFO("GameApp", "Local player '%s' (%s) created",
-                             pendingCharName_.c_str(), pendingClassName_.c_str());
-                }
-            }
-
             // Network: poll for server messages and send movement
             netTime_ += deltaTime;
             if (netClient_.isConnected()) {
