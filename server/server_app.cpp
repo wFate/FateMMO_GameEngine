@@ -130,6 +130,9 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     lastValidPositions_[clientId] = t ? t->position : Vec2{0.0f, 0.0f};
     lastMoveTime_[clientId] = gameTime_;
     moveCountThisTick_[clientId] = 0;
+
+    // Send initial player state
+    sendPlayerState(clientId);
 }
 
 void ServerApp::onClientDisconnected(uint16_t clientId) {
@@ -325,6 +328,41 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
     } else {
         LOG_INFO("Server", "Unhandled action type %d from client %d", action.actionType, clientId);
     }
+}
+
+void ServerApp::sendPlayerState(uint16_t clientId) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* e = world_.getEntity(h);
+    if (!e) return;
+
+    auto* charStats = e->getComponent<CharacterStatsComponent>();
+    if (!charStats) return;
+
+    const auto& s = charStats->stats;
+
+    // Get gold from inventory if available
+    int64_t gold = 0;
+    auto* inv = e->getComponent<InventoryComponent>();
+    if (inv) gold = inv->inventory.getGold();
+
+    SvPlayerStateMsg msg;
+    msg.currentHP   = s.currentHP;
+    msg.maxHP       = s.maxHP;
+    msg.currentMP   = s.currentMP;
+    msg.maxMP       = s.maxMP;
+    msg.currentFury = s.currentFury;
+    msg.currentXP   = s.currentXP;
+    msg.gold        = gold;
+    msg.level       = s.level;
+
+    uint8_t buf[64];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvPlayerState, buf, w.size());
 }
 
 } // namespace fate
