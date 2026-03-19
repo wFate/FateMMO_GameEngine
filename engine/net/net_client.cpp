@@ -1,4 +1,5 @@
 #include "engine/net/net_client.h"
+#include "engine/net/game_messages.h"
 #include "engine/core/logger.h"
 
 namespace fate {
@@ -139,7 +140,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
 
     // Process acks on reliability layer
     reliability_.processAck(hdr.ack, hdr.ackBits);
-    reliability_.onReceive(hdr.sequence);
+    bool isNewPacket = reliability_.onReceive(hdr.sequence);
+
+    // Skip duplicate reliable packets (retransmits we already processed)
+    if (!isNewPacket && hdr.channel != Channel::Unreliable) {
+        return;
+    }
 
     switch (hdr.packetType) {
         case PacketType::ConnectAccept: {
@@ -209,6 +215,54 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onLootPickup) onLootPickup(msg);
             break;
         }
+        case PacketType::SvTradeUpdate: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvTradeUpdateMsg::read(payload);
+            if (onTradeUpdate) onTradeUpdate(msg);
+            break;
+        }
+        case PacketType::SvMarketResult: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvMarketResultMsg::read(payload);
+            if (onMarketResult) onMarketResult(msg);
+            break;
+        }
+        case PacketType::SvBountyUpdate: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvBountyUpdateMsg::read(payload);
+            if (onBountyUpdate) onBountyUpdate(msg);
+            break;
+        }
+        case PacketType::SvGauntletUpdate: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvGauntletUpdateMsg::read(payload);
+            if (onGauntletUpdate) onGauntletUpdate(msg);
+            break;
+        }
+        case PacketType::SvGuildUpdate: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvGuildUpdateMsg::read(payload);
+            if (onGuildUpdate) onGuildUpdate(msg);
+            break;
+        }
+        case PacketType::SvSocialUpdate: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvSocialUpdateMsg::read(payload);
+            if (onSocialUpdate) onSocialUpdate(msg);
+            break;
+        }
+        case PacketType::SvQuestUpdate: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvQuestUpdateMsg::read(payload);
+            if (onQuestUpdate) onQuestUpdate(msg);
+            break;
+        }
+        case PacketType::SvZoneTransition: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvZoneTransitionMsg::read(payload);
+            if (onZoneTransition) onZoneTransition(msg);
+            break;
+        }
         default:
             break;
     }
@@ -251,6 +305,17 @@ void NetClient::sendChat(uint8_t channel, const std::string& message, const std:
     chat.write(w);
 
     sendPacket(Channel::ReliableOrdered, PacketType::CmdChat, w.data(), w.size());
+}
+
+void NetClient::sendZoneTransition(const std::string& targetScene) {
+    CmdZoneTransition cmd;
+    cmd.targetScene = targetScene;
+
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    cmd.write(w);
+
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdZoneTransition, w.data(), w.size());
 }
 
 void NetClient::sendPacket(Channel channel, uint8_t packetType,
