@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 #include <pqxx/pqxx>
+#include "game/shared/cached_mob_def.h"
 
 namespace fate {
 
@@ -15,57 +16,8 @@ namespace fate {
 //       This file adds the remaining definition caches: Mob, Skill, Scene.
 // ============================================================================
 
-// ============================================================================
-// Mob Definition (73 mobs)
-// ============================================================================
-struct CachedMobDef {
-    std::string mobDefId;
-    std::string displayName;
-    int baseHP = 100;
-    int baseDamage = 10;
-    int baseArmor = 0;
-    float critRate = 0.05f;
-    float attackSpeed = 1.5f;
-    float moveSpeed = 1.8f;
-    int magicResist = 0;
-    bool dealsMagicDamage = false;
-    int mobHitRate = 0;
-    float hpPerLevel = 20.0f;
-    float damagePerLevel = 2.0f;
-    float armorPerLevel = 0.5f;
-    int baseXPReward = 10;
-    float xpPerLevel = 2.0f;
-    float aggroRange = 4.0f;
-    float attackRange = 1.0f;
-    float leashRadius = 6.0f;
-    int respawnSeconds = 30;
-    int minSpawnLevel = 1;
-    int maxSpawnLevel = 100;
-    int spawnWeight = 10;
-    bool isAggressive = true;
-    bool isBoss = false;
-    bool isElite = false;
-    std::string attackStyle = "Melee";
-    std::string monsterType = "Normal";
-    std::string lootTableId;
-    int minGoldDrop = 0;
-    int maxGoldDrop = 0;
-    float goldDropChance = 1.0f;
-    int honorReward = 0;
-
-    [[nodiscard]] int getHPForLevel(int level) const {
-        return baseHP + static_cast<int>(hpPerLevel * (level - 1));
-    }
-    [[nodiscard]] int getDamageForLevel(int level) const {
-        return baseDamage + static_cast<int>(damagePerLevel * (level - 1));
-    }
-    [[nodiscard]] int getArmorForLevel(int level) const {
-        return baseArmor + static_cast<int>(armorPerLevel * (level - 1));
-    }
-    [[nodiscard]] int getXPRewardForLevel(int level) const {
-        return baseXPReward + static_cast<int>(xpPerLevel * (level - 1));
-    }
-};
+// CachedMobDef is defined in game/shared/cached_mob_def.h (no pqxx dependency,
+// usable by both server and game code).
 
 // ============================================================================
 // Skill Definition (60 skills)
@@ -197,6 +149,7 @@ public:
     bool initialize(pqxx::connection& conn);
 
     [[nodiscard]] const SceneInfoRecord* get(const std::string& sceneId) const;
+    [[nodiscard]] const SceneInfoRecord* getByName(const std::string& sceneName) const;
     [[nodiscard]] bool isPvPEnabled(const std::string& sceneId) const;
     [[nodiscard]] int count() const { return static_cast<int>(scenes_.size()); }
 

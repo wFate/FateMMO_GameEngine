@@ -147,59 +147,40 @@ void SDFText::drawScreen(SpriteBatch& batch, const std::string& text, Vec2 posit
 void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 position,
                            float fontSize, Color color, float depth, TextStyle style,
                            bool yDown) {
-    // planeBounds are in em units (normalized by emSize_), so multiplying
-    // by fontSize directly converts to pixel size at the requested font size.
+    if (glyphs_.empty() || !atlasTexId_) return;
+
     const float scale = fontSize;
     float penX = position.x;
     float penY = position.y;
     const float startX = position.x;
 
-    // DEBUG: log once per second
-    static int sdfDbgFrame = 0;
-    bool sdfDbgLog = (sdfDbgFrame++ % 600 == 0);
-    int sdfEmitted = 0, sdfSkipped = 0;
-
     size_t i = 0;
     while (i < text.size()) {
         uint32_t cp = decodeUTF8(text, i);
 
-        // Handle newlines
         if (cp == '\n') {
             penX = startX;
-            if (yDown) {
-                penY += lineHeight_ * fontSize;
-            } else {
-                penY -= lineHeight_ * fontSize;
-            }
+            penY += (yDown ? 1.0f : -1.0f) * lineHeight_ * fontSize;
             continue;
         }
 
-        // Look up glyph metrics
         auto it = glyphs_.find(cp);
         if (it == glyphs_.end()) {
-            // Unknown glyph -- try space as fallback
             it = glyphs_.find(32);
-            if (it == glyphs_.end()) {
-                continue;
-            }
+            if (it == glyphs_.end()) continue;
         }
 
         const GlyphMetrics& gm = it->second;
 
-        // Skip drawing for space (no atlas bounds), but still advance
         if (gm.width > 0.0f && gm.height > 0.0f) {
             float quadW = gm.width  * scale;
             float quadH = gm.height * scale;
 
-            float quadX, quadY;
+            float quadX = penX + gm.bearingX * scale + quadW * 0.5f;
+            float quadY;
             if (yDown) {
-                // Screen space: Y-down. bearingY is distance from baseline to top (em units).
-                // Top of glyph = penY + (ascender - bearingY) * scale
-                quadX = penX + gm.bearingX * scale + quadW * 0.5f;
                 quadY = penY + (ascender_ - gm.bearingY) * fontSize + quadH * 0.5f;
             } else {
-                // World space: Y-up. bearingY is top of glyph above baseline.
-                quadX = penX + gm.bearingX * scale + quadW * 0.5f;
                 quadY = penY + gm.bearingY * scale - quadH * 0.5f;
             }
 
@@ -209,31 +190,11 @@ void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 pos
             params.sourceRect = {gm.uvX, gm.uvY, gm.uvW, gm.uvH};
             params.color     = color;
             params.depth     = depth;
-            params.flipY     = false; // DEBUG: disable flipY to test UV sampling
-
-            // Use renderType=0 (regular sprite) since atlas is raster bitmap, not actual SDF.
-            // The raster atlas stores white glyphs with alpha coverage — standard alpha blend works.
+            // Raster atlas: use regular sprite rendering (not SDF shader)
             batch.drawTexturedQuad(atlasGfxHandle_, atlasTexId_, params, 0.0f);
-            sdfEmitted++;
-        } else {
-            sdfSkipped++;
         }
 
         penX += gm.advance * scale;
-    }
-
-    if (sdfDbgLog && !text.empty()) {
-        // Log first glyph's metrics for debugging
-        uint32_t firstCp = 0;
-        size_t tmpIdx = 0;
-        firstCp = decodeUTF8(text, tmpIdx);
-        auto firstIt = glyphs_.find(firstCp);
-        if (firstIt != glyphs_.end()) {
-            const auto& g = firstIt->second;
-            float qw = g.width * scale, qh = g.height * scale;
-            LOG_INFO("SDFText", "'%c' uv=(%.4f,%.4f,%.4f,%.4f) size=(%.1f,%.1f) pos=(%.1f,%.1f) flipY=%d",
-                     (char)firstCp, g.uvX, g.uvY, g.uvW, g.uvH, qw, qh, position.x, position.y, !yDown);
-        }
     }
 }
 

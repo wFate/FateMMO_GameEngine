@@ -9,6 +9,7 @@
 #include "engine/core/logger.h"
 #include "engine/render/sdf_text.h"
 #include "engine/render/sprite_batch.h"
+#include "game/ui/game_viewport.h"
 #include "engine/render/camera.h"
 #include "game/components/sprite_component.h"
 #include "game/shared/spatial_hash.h"
@@ -72,34 +73,6 @@ public:
         Mat4 vp = camera.getViewProjection();
         batch.begin(vp);
 
-        // --- DEBUG: draw FULL SDF atlas as 200x200 quad at player position ---
-        if (world_) {
-            Entity* dbgPlayer = world_->findByTag("player");
-            if (dbgPlayer) {
-                auto* dbgT = dbgPlayer->getComponent<Transform>();
-                if (dbgT) {
-                    auto& sdf = SDFText::instance();
-                    SpriteDrawParams atlasParams;
-                    atlasParams.position = {dbgT->position.x, dbgT->position.y + 50.0f};
-                    atlasParams.size = {200.0f, 200.0f};
-                    atlasParams.sourceRect = {0, 0, 1, 1}; // full atlas
-                    atlasParams.color = Color::white();
-                    atlasParams.depth = 99.0f;
-                    batch.drawTexturedQuad(sdf.atlasGfxHandle(), sdf.atlasTextureId(), atlasParams, 0.0f);
-
-                    // DEBUG: draw a single 't' glyph as a 50x95 quad using known UV
-                    SpriteDrawParams glyphTest;
-                    glyphTest.position = {dbgT->position.x - 130.0f, dbgT->position.y + 50.0f};
-                    glyphTest.size = {50.0f, 95.0f};
-                    glyphTest.sourceRect = {0.4082f, 0.3770f, 0.0469f, 0.0898f}; // 't' UV from log
-                    glyphTest.color = Color::white();
-                    glyphTest.depth = 99.0f;
-                    glyphTest.flipY = false;
-                    batch.drawTexturedQuad(sdf.atlasGfxHandle(), sdf.atlasTextureId(), glyphTest, 0.0f);
-                }
-            }
-        }
-
         // --- Target selection marker (pulsing ring around selected mob) ---
         if (currentTargetId_ != INVALID_ENTITY && world_) {
             Entity* target = world_->getEntity(currentTargetId_);
@@ -128,8 +101,19 @@ public:
             }
         }
 
-        // --- Nameplates above entities ---
+        // --- Nameplates above entities (ImGui screen-space overlay) ---
         auto& sdfText = SDFText::instance();
+        // Use GameViewport for screen-space positioning (accounts for letterboxing)
+        float gvpX = GameViewport::x();
+        float gvpY = GameViewport::y();
+        float gvpW = GameViewport::width();
+        float gvpH = GameViewport::height();
+
+        // Clip nameplate text to the game viewport bounds
+        auto* fgDL = ImGui::GetForegroundDrawList();
+        fgDL->PushClipRect(
+            ImVec2(gvpX, gvpY),
+            ImVec2(gvpX + gvpW, gvpY + gvpH), true);
         if (world_) {
             // Player nameplates
             world_->forEach<Transform, NameplateComponent>(
@@ -146,57 +130,32 @@ public:
                         std::snprintf(npBuf, sizeof(npBuf), "%s", np->displayName.c_str());
                     }
 
-                    // Center text above sprite
-                    float npFontSize = 30.0f; // DEBUG: test with large font
-                    Vec2 textSize = sdfText.measure(npBuf, npFontSize);
-                    Vec2 namePos = {t->position.x - textSize.x * 0.5f, t->position.y + spriteH * 0.5f + 4.0f};
+                    // Project world position to screen and draw with ImGui
+                    Vec2 worldPos = {t->position.x, t->position.y + spriteH * 0.5f + 4.0f};
+                    Vec2 screenPos = camera.worldToScreen(worldPos, static_cast<int>(gvpW), static_cast<int>(gvpH));
+                    ImVec2 textSize = ImGui::CalcTextSize(npBuf);
+                    ImVec2 drawPos(gvpX + screenPos.x - textSize.x * 0.5f,
+                                   gvpY + screenPos.y - textSize.y);
+                    // Black outline
+                    auto* dl = ImGui::GetForegroundDrawList();
+                    ImU32 outlineCol = IM_COL32(0, 0, 0, 200);
+                    ImU32 textCol = IM_COL32(
+                        (int)(np->nameColor.r * 255), (int)(np->nameColor.g * 255),
+                        (int)(np->nameColor.b * 255), (int)(np->nameColor.a * 255));
+                    for (int ox = -1; ox <= 1; ++ox)
+                        for (int oy = -1; oy <= 1; ++oy)
+                            if (ox || oy)
+                                dl->AddText(ImVec2(drawPos.x + ox, drawPos.y + oy), outlineCol, npBuf);
+                    dl->AddText(drawPos, textCol, npBuf);
 
-                    sdfText.drawWorld(batch, npBuf, namePos, npFontSize, np->nameColor, 85.0f, TextStyle::Outlined);
-                    // DEBUG: green marker at nameplate position
-                    batch.drawRect(namePos, {4.0f, 4.0f}, Color(0.0f, 1.0f, 0.0f, 1.0f), 86.0f);
-
-                    // Track the top of the nameplate stack for quest marker positioning
-                    float nextYAbove = namePos.y + textSize.y + 2.0f;
-
-                    // Guild name below (centered)
-                    if (np->showGuildSymbol && !np->guildName.empty()) {
-                        float guildFontSize = npFontSize * 0.85f;
-                        Vec2 guildSize = sdfText.measure(np->guildName, guildFontSize);
-                        Vec2 guildPos = {t->position.x - guildSize.x * 0.5f, namePos.y + 10.0f};
-                        sdfText.drawWorld(batch, np->guildName, guildPos, guildFontSize,
-                            Color(0.4f, 1.0f, 0.4f), 85.0f, TextStyle::Outlined);
-                    }
-
-                    // NPC role subtitle (e.g., "[Merchant]", "[Quest]") — grey, below name
-                    if (!np->roleSubtitle.empty()) {
-                        float subFontSize = npFontSize * 0.75f;
-                        Vec2 subSize = sdfText.measure(np->roleSubtitle, subFontSize);
-                        // Position below the nameplate text (Y-up: subtract to go lower)
-                        Vec2 subPos = {t->position.x - subSize.x * 0.5f, namePos.y - subSize.y - 2.0f};
-                        sdfText.drawWorld(batch, np->roleSubtitle, subPos, subFontSize,
-                            Color(0.7f, 0.7f, 0.7f, 1.0f), 85.0f, TextStyle::Outlined);
-                    }
-
-                    // Quest marker (? or !) above nameplate
+                    // Quest marker via ImGui
                     auto* qm = entity->getComponent<QuestMarkerComponent>();
                     if (qm && qm->currentState != MarkerState::None) {
                         const char* markerText = (qm->currentState == MarkerState::Available) ? "?" : "!";
-                        Color markerColor;
-                        if (qm->currentState == MarkerState::TurnIn) {
-                            markerColor = Color(1.0f, 0.863f, 0.0f, 1.0f); // Yellow {255,220,0}
-                        } else {
-                            // Available — color by quest tier
-                            switch (qm->highestTier) {
-                                case QuestTier::Novice:     markerColor = Color(0.0f, 0.784f, 0.0f, 1.0f);   break; // Green {0,200,0}
-                                case QuestTier::Apprentice: markerColor = Color(0.706f, 0.863f, 0.0f, 1.0f); break; // Yellow-Green {180,220,0}
-                                case QuestTier::Adept:      markerColor = Color(1.0f, 0.863f, 0.0f, 1.0f);   break; // Yellow {255,220,0}
-                                default: /* Starter */      markerColor = Color(1.0f, 1.0f, 1.0f, 1.0f);     break; // White
-                            }
-                        }
-                        float markerFontSize = npFontSize * 1.3f;
-                        Vec2 markerSize = sdfText.measure(markerText, markerFontSize);
-                        Vec2 markerPos = {t->position.x - markerSize.x * 0.5f, nextYAbove};
-                        sdfText.drawWorld(batch, markerText, markerPos, markerFontSize, markerColor, 86.0f, TextStyle::Glow);
+                        ImU32 markerCol = (qm->currentState == MarkerState::TurnIn)
+                            ? IM_COL32(255, 220, 0, 255) : IM_COL32(255, 255, 255, 255);
+                        ImVec2 mSz = ImGui::CalcTextSize(markerText);
+                        dl->AddText(ImVec2(drawPos.x + textSize.x * 0.5f - mSz.x * 0.5f, drawPos.y - mSz.y - 2), markerCol, markerText);
                     }
                 }
             );
@@ -235,16 +194,26 @@ public:
                             std::snprintf(mnpBuf, sizeof(mnpBuf), "%s", mnp->displayName.c_str());
                         }
                     }
-                    // Center text above sprite
-                    float mnpFontSize = mnp->fontSize * 16.0f;
-                    Vec2 mnpTextSize = sdfText.measure(mnpBuf, mnpFontSize);
-                    Vec2 namePos = {t->position.x - mnpTextSize.x * 0.5f, t->position.y + spriteH * 0.5f + 4.0f};
-
-                    sdfText.drawWorld(batch, mnpBuf, namePos, mnpFontSize, mobColor, 85.0f, TextStyle::Outlined);
+                    // Project to screen and draw with ImGui
+                    Vec2 worldPos = {t->position.x, t->position.y + spriteH * 0.5f + 4.0f};
+                    Vec2 screenPos = camera.worldToScreen(worldPos, static_cast<int>(gvpW), static_cast<int>(gvpH));
+                    ImVec2 textSz = ImGui::CalcTextSize(mnpBuf);
+                    ImVec2 drawPos(gvpX + screenPos.x - textSz.x * 0.5f,
+                                   gvpY + screenPos.y - textSz.y);
+                    auto* dl = ImGui::GetForegroundDrawList();
+                    ImU32 mobCol = IM_COL32(
+                        (int)(mobColor.r * 255), (int)(mobColor.g * 255),
+                        (int)(mobColor.b * 255), 255);
+                    ImU32 outCol = IM_COL32(0, 0, 0, 200);
+                    for (int ox = -1; ox <= 1; ++ox)
+                        for (int oy = -1; oy <= 1; ++oy)
+                            if (ox || oy)
+                                dl->AddText(ImVec2(drawPos.x + ox, drawPos.y + oy), outCol, mnpBuf);
+                    dl->AddText(drawPos, mobCol, mnpBuf);
 
                     // HP bar below name for all living mobs
                     if (enemyComp && enemyComp->stats.isAlive) {
-                        Vec2 barPos = {t->position.x, namePos.y - 3.0f};
+                        Vec2 barPos = {t->position.x, t->position.y + spriteH * 0.5f + 1.0f};
                         float barW = 28.0f;
                         float barH = 2.0f;
                         float hpPct = (float)enemyComp->stats.currentHP / (float)enemyComp->stats.maxHP;
@@ -274,6 +243,7 @@ public:
             sdfText.drawWorld(batch, ft.text, ft.position, fontSize, c, 90.0f, style);
         }
 
+        fgDL->PopClipRect();
         batch.end();
     }
 
@@ -318,7 +288,16 @@ public:
         return 0;
     }
 
+    // Viewport info for world-to-screen projection (set by GameApp before render)
+    void setViewportInfo(int w, int h, Vec2 offset) {
+        vpWidth_ = w; vpHeight_ = h; vpOffset_ = offset;
+    }
+
 private:
+    int vpWidth_ = 1280;
+    int vpHeight_ = 720;
+    Vec2 vpOffset_ = {0, 0};
+
     // ------------------------------------------------------------------
     // Floating damage text
     // ------------------------------------------------------------------

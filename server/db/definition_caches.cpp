@@ -272,6 +272,13 @@ const SceneInfoRecord* SceneCache::get(const std::string& sceneId) const {
     return it != scenes_.end() ? &it->second : nullptr;
 }
 
+const SceneInfoRecord* SceneCache::getByName(const std::string& sceneName) const {
+    for (const auto& [id, rec] : scenes_) {
+        if (rec.sceneName == sceneName) return &rec;
+    }
+    return nullptr;
+}
+
 bool SceneCache::isPvPEnabled(const std::string& sceneId) const {
     auto* s = get(sceneId);
     return s ? s->pvpEnabled : false;

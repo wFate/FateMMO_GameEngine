@@ -1,4 +1,5 @@
 #include "game/ui/quest_log_ui.h"
+#include "game/ui/game_viewport.h"
 #include "game/components/game_components.h"
 #include "game/shared/quest_data.h"
 #include "engine/core/logger.h"
@@ -20,11 +21,10 @@ void QuestLogUI::render(Entity* player) {
     auto& quests = questComp->quests;
 
     // Window setup — centered, styled to match existing UI
-    ImGuiIO& io = ImGui::GetIO();
     float panelW = 380.0f;
     float panelH = 440.0f;
-    ImGui::SetNextWindowPos(ImVec2((io.DisplaySize.x - panelW) * 0.5f,
-                                    (io.DisplaySize.y - panelH) * 0.5f),
+    ImGui::SetNextWindowPos(ImVec2(GameViewport::centerX() - panelW * 0.5f,
+                                    GameViewport::centerY() - panelH * 0.5f),
                             ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(panelW, panelH), ImGuiCond_FirstUseEver);
 

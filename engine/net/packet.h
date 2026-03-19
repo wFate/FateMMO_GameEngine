@@ -44,6 +44,7 @@ namespace PacketType {
     constexpr uint8_t CmdGauntlet      = 0x17;
     constexpr uint8_t CmdGuild         = 0x18;
     constexpr uint8_t CmdSocial        = 0x19;
+    constexpr uint8_t CmdZoneTransition = 0x1A;
 
     // Server -> Client
     constexpr uint8_t SvEntityEnter        = 0x90;

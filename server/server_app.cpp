@@ -107,6 +107,9 @@ bool ServerApp::init(uint16_t port) {
              mobDefCache_.count(), skillDefCache_.skillCount(), skillDefCache_.rankCount(),
              sceneCache_.count());
 
+    // Initialize Gauntlet system
+    initGauntlet();
+
     // Auth server startup (warning only — game server can run without auth in dev)
     if (!authServer_.start(authPort_, tlsCertPath_, tlsKeyPath_, dbConnectionString_)) {
         LOG_WARN("Server", "Auth server failed to start on port %d; continuing without auth", authPort_);
@@ -300,7 +303,10 @@ void ServerApp::tick(float dt) {
     // 5b. Drain async DB completions
     dbDispatcher_.drainCompletions();
 
-    // 5c. Auto-save and periodic maintenance
+    // 5c. Gauntlet event cycle
+    gauntletManager_.tick(gameTime_);
+
+    // 5d. Auto-save and periodic maintenance
     tickAutoSave(dt);
     tickMaintenance(dt);
 
@@ -544,7 +550,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     // Update last_online timestamp
     socialRepo_->updateLastOnline(rec.character_id);
 
-    // Initialize movement tracking
+    // Initialize movement tracking — mark as needing sync (first move accepted unconditionally)
     lastValidPositions_[clientId] = t ? t->position : Vec2{0.0f, 0.0f};
     lastMoveTime_[clientId] = gameTime_;
     moveCountThisTick_[clientId] = 0;
@@ -691,6 +697,121 @@ void ServerApp::savePlayerToDB(uint16_t clientId) {
     socialRepo_->updateLastOnline(rec.character_id);
 }
 
+void ServerApp::savePlayerToDBAsync(uint16_t clientId) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* e = world_.getEntity(h);
+    if (!e) return;
+
+    // ---- Snapshot all data on game thread ----
+    CharacterRecord rec;
+    rec.character_id = client->character_id;
+    rec.account_id   = client->account_id;
+
+    auto* charStatsComp = e->getComponent<CharacterStatsComponent>();
+    if (charStatsComp) {
+        const CharacterStats& s = charStatsComp->stats;
+        rec.character_name   = s.characterName;
+        rec.class_name       = s.className;
+        rec.level            = s.level;
+        rec.current_xp       = s.currentXP;
+        rec.xp_to_next_level = static_cast<int>(s.xpToNextLevel);
+        rec.current_hp       = s.currentHP;
+        rec.max_hp           = s.maxHP;
+        rec.current_mp       = s.currentMP;
+        rec.max_mp           = s.maxMP;
+        rec.current_fury     = s.currentFury;
+        rec.honor            = s.honor;
+        rec.pvp_kills        = s.pvpKills;
+        rec.pvp_deaths       = s.pvpDeaths;
+        rec.is_dead          = s.isDead;
+    }
+
+    auto* t = e->getComponent<Transform>();
+    if (t) {
+        Vec2 tilePos = Coords::toTile(t->position);
+        rec.position_x = tilePos.x;
+        rec.position_y = tilePos.y;
+    }
+
+    auto* sc = SceneManager::instance().currentScene();
+    rec.current_scene = sc ? sc->name() : "Scene2";
+
+    auto* inv = e->getComponent<InventoryComponent>();
+    if (inv) rec.gold = inv->inventory.getGold();
+
+    // Snapshot skills
+    std::vector<CharacterSkillRecord> skillRecords;
+    int skillEarned = 0, skillSpent = 0;
+    std::vector<std::string> skillBar(20, "");
+    auto* skillComp = e->getComponent<SkillManagerComponent>();
+    if (skillComp) {
+        for (const auto& learned : skillComp->skills.getLearnedSkills()) {
+            CharacterSkillRecord sr;
+            sr.skillId = learned.skillId;
+            sr.unlockedRank = learned.unlockedRank;
+            sr.activatedRank = learned.activatedRank;
+            skillRecords.push_back(std::move(sr));
+        }
+        skillEarned = skillComp->skills.earnedPoints();
+        skillSpent = skillEarned - skillComp->skills.availablePoints();
+        for (int i = 0; i < 20; ++i)
+            skillBar[i] = skillComp->skills.getSkillInSlot(i);
+    }
+
+    std::string charId = client->character_id;
+
+    // ---- Dispatch to fiber worker (non-blocking) ----
+    dbDispatcher_.dispatchVoid([rec, charId, skillRecords, skillEarned, skillSpent, skillBar]
+                               (pqxx::connection& conn) {
+        CharacterRepository charRepo(conn);
+        charRepo.saveCharacter(rec);
+
+        SkillRepository skillRepo(conn);
+        skillRepo.saveAllCharacterSkills(charId, skillRecords);
+        skillRepo.saveSkillBar(charId, skillBar);
+        skillRepo.saveSkillPoints(charId, skillEarned, skillSpent);
+
+        SocialRepository socialRepo(conn);
+        socialRepo.updateLastOnline(charId);
+    });
+}
+
+void ServerApp::saveInventoryForClient(uint16_t clientId) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* e = world_.getEntity(h);
+    if (!e) return;
+
+    auto* inv = e->getComponent<InventoryComponent>();
+    if (!inv) return;
+
+    std::vector<InventorySlotRecord> slots;
+    const auto& items = inv->inventory.getSlots();
+    for (int i = 0; i < static_cast<int>(items.size()); ++i) {
+        if (!items[i].isValid()) continue;
+        InventorySlotRecord s;
+        s.instance_id   = items[i].instanceId;
+        s.character_id  = client->character_id;
+        s.item_id       = items[i].itemId;
+        s.slot_index    = i;
+        s.rolled_stats  = ItemStatRoller::rolledStatsToJson(items[i].rolledStats);
+        s.enchant_level = items[i].enchantLevel;
+        s.is_protected  = items[i].isProtected;
+        s.is_soulbound  = items[i].isSoulbound;
+        s.quantity      = items[i].quantity;
+        slots.push_back(std::move(s));
+    }
+
+    inventoryRepo_->saveInventory(client->character_id, slots);
+}
+
 void ServerApp::onClientDisconnected(uint16_t clientId) {
     LOG_INFO("Server", "Client %d disconnected", clientId);
 
@@ -811,6 +932,753 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             ByteWriter w(buf, sizeof(buf));
             msg.write(w);
             server_.broadcast(Channel::ReliableOrdered, PacketType::SvChatMessage, buf, w.size());
+            break;
+        }
+        case PacketType::CmdMarket: {
+            uint8_t subAction = payload.readU8();
+            auto* client = server_.connections().findById(clientId);
+            if (!client || client->playerEntityId == 0) break;
+
+            switch (subAction) {
+                case MarketAction::ListItem: {
+                    std::string instanceId = payload.readString();
+                    int64_t priceGold = detail::readI64(payload);
+
+                    PersistentId pid(client->playerEntityId);
+                    EntityHandle h = replication_.getEntityHandle(pid);
+                    Entity* e = world_.getEntity(h);
+                    if (!e) break;
+
+                    auto* inv = e->getComponent<InventoryComponent>();
+                    if (!inv) break;
+
+                    auto sendMarketError = [&](const std::string& msg) {
+                        SvMarketResultMsg resp;
+                        resp.action = MarketAction::ListItem;
+                        resp.resultCode = 1;
+                        resp.message = msg;
+                        uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                        resp.write(w);
+                        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvMarketResult, buf, w.size());
+                    };
+
+                    // Validate price
+                    if (priceGold <= 0 || priceGold > MarketConstants::MAX_LISTING_PRICE) {
+                        sendMarketError("Invalid price"); break;
+                    }
+
+                    // Validate listing count
+                    int activeCount = marketRepo_->countActiveListings(client->character_id);
+                    if (activeCount >= MarketConstants::MAX_LISTINGS_PER_PLAYER) {
+                        sendMarketError("Maximum listings reached (7)"); break;
+                    }
+
+                    // Find item in inventory by instance ID
+                    int slot = inv->inventory.findByInstanceId(instanceId);
+                    if (slot < 0) { sendMarketError("Item not found in inventory"); break; }
+
+                    ItemInstance item = inv->inventory.getSlot(slot);
+                    if (item.isBound()) { sendMarketError("Soulbound items cannot be listed"); break; }
+                    if (inv->inventory.isSlotLocked(slot)) { sendMarketError("Item is locked for trade"); break; }
+
+                    // Look up item definition for listing metadata
+                    const auto* def = itemDefCache_.getDefinition(item.itemId);
+                    std::string itemName = def ? def->displayName : item.itemId;
+                    std::string category = def ? def->itemType : "";
+                    std::string subtype  = def ? def->subtype : "";
+                    std::string rarity   = def ? def->rarity : "Common";
+                    int itemLevel        = def ? def->levelReq : 1;
+
+                    std::string rolledJson = ItemStatRoller::rolledStatsToJson(item.rolledStats);
+                    std::string socketStat;
+                    int socketVal = 0;
+                    if (item.hasSocket()) {
+                        // Convert StatType to string for DB
+                        switch (item.socket.statType) {
+                            case StatType::Strength:     socketStat = "STR"; break;
+                            case StatType::Dexterity:    socketStat = "DEX"; break;
+                            case StatType::Intelligence: socketStat = "INT"; break;
+                            default: break;
+                        }
+                        socketVal = item.socket.value;
+                    }
+
+                    // Create listing in DB
+                    int listingId = marketRepo_->createListing(
+                        client->character_id, "", // seller name filled by DB or we fetch it
+                        instanceId, item.itemId, itemName,
+                        item.quantity, item.enchantLevel,
+                        rolledJson, socketStat, socketVal, priceGold,
+                        category, subtype, rarity, itemLevel);
+
+                    if (listingId > 0) {
+                        // Remove from inventory
+                        inv->inventory.removeItem(slot);
+
+                        SvMarketResultMsg resp;
+                        resp.action = MarketAction::ListItem;
+                        resp.resultCode = 0;
+                        resp.listingId = listingId;
+                        resp.message = itemName + " listed for " + std::to_string(priceGold) + " gold";
+                        uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                        resp.write(w);
+                        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvMarketResult, buf, w.size());
+                        sendPlayerState(clientId);
+                        saveInventoryForClient(clientId);
+                    } else {
+                        sendMarketError("Failed to create listing");
+                    }
+                    break;
+                }
+                case MarketAction::BuyItem: {
+                    int32_t listingId = payload.readI32();
+
+                    PersistentId pid(client->playerEntityId);
+                    EntityHandle h = replication_.getEntityHandle(pid);
+                    Entity* e = world_.getEntity(h);
+                    if (!e) break;
+
+                    auto* inv = e->getComponent<InventoryComponent>();
+                    if (!inv) break;
+
+                    auto sendMarketError = [&](const std::string& msg) {
+                        SvMarketResultMsg resp;
+                        resp.action = MarketAction::BuyItem;
+                        resp.resultCode = 1;
+                        resp.message = msg;
+                        uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                        resp.write(w);
+                        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvMarketResult, buf, w.size());
+                    };
+
+                    // Get listing
+                    auto listing = marketRepo_->getListing(listingId);
+                    if (!listing || !listing->isActive) { sendMarketError("Listing not found or expired"); break; }
+
+                    // Can't buy own listing
+                    if (listing->sellerCharacterId == client->character_id) {
+                        sendMarketError("Cannot buy your own listing"); break;
+                    }
+
+                    // Check buyer gold
+                    if (inv->inventory.getGold() < listing->priceGold) {
+                        sendMarketError("Not enough gold"); break;
+                    }
+
+                    // Check buyer inventory space
+                    if (inv->inventory.freeSlots() <= 0) {
+                        sendMarketError("Inventory full"); break;
+                    }
+
+                    // Execute purchase in a transaction via the pool
+                    try {
+                        auto guard = dbPool_.acquire_guard();
+                        pqxx::work txn(guard.connection());
+
+                        // Deactivate listing
+                        marketRepo_->deactivateListing(txn, listingId);
+
+                        // Calculate tax
+                        int64_t tax = static_cast<int64_t>(listing->priceGold * MarketConstants::TAX_RATE);
+                        int64_t sellerReceived = listing->priceGold - tax;
+
+                        // Deduct buyer gold
+                        inv->inventory.removeGold(listing->priceGold);
+
+                        // Add item to buyer inventory
+                        ItemInstance boughtItem;
+                        boughtItem.instanceId   = listing->itemInstanceId;
+                        boughtItem.itemId       = listing->itemId;
+                        boughtItem.quantity      = listing->quantity;
+                        boughtItem.enchantLevel = listing->enchantLevel;
+                        boughtItem.rolledStats  = ItemStatRoller::parseRolledStats(listing->rolledStatsJson);
+                        inv->inventory.addItem(boughtItem);
+
+                        // Credit seller gold (update DB directly — seller may be offline)
+                        txn.exec_params(
+                            "UPDATE characters SET gold = gold + $2 WHERE character_id = $1",
+                            listing->sellerCharacterId, sellerReceived);
+
+                        // Add tax to jackpot
+                        txn.exec_params(
+                            "UPDATE jackpot_pool SET current_pool = current_pool + $1, "
+                            "last_updated_at = NOW() WHERE id = 1", tax);
+
+                        txn.commit();
+
+                        // Log transaction
+                        marketRepo_->logTransaction(listingId, listing->sellerCharacterId,
+                                                     listing->sellerCharacterName,
+                                                     client->character_id, "",
+                                                     listing->itemId, listing->itemName,
+                                                     listing->quantity, listing->enchantLevel,
+                                                     listing->rolledStatsJson,
+                                                     listing->priceGold, tax, sellerReceived);
+
+                        SvMarketResultMsg resp;
+                        resp.action = MarketAction::BuyItem;
+                        resp.resultCode = 0;
+                        resp.listingId = listingId;
+                        resp.message = "Purchased " + listing->itemName + " for " + std::to_string(listing->priceGold) + " gold";
+                        uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                        resp.write(w);
+                        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvMarketResult, buf, w.size());
+                        sendPlayerState(clientId);
+                        saveInventoryForClient(clientId);
+                    } catch (const std::exception& ex) {
+                        LOG_ERROR("Server", "Market buy failed: %s", ex.what());
+                        sendMarketError("Purchase failed — please try again");
+                    }
+                    break;
+                }
+                case MarketAction::CancelListing: {
+                    int32_t listingId = payload.readI32();
+                    marketRepo_->cancelListing(listingId, client->character_id);
+                    SvMarketResultMsg resp;
+                    resp.action = MarketAction::CancelListing;
+                    resp.resultCode = 0;
+                    resp.listingId = listingId;
+                    resp.message = "Listing cancelled";
+                    uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                    resp.write(w);
+                    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvMarketResult, buf, w.size());
+                    break;
+                }
+                default:
+                    LOG_WARN("Server", "Unknown market sub-action %d from client %d", subAction, clientId);
+                    break;
+            }
+            break;
+        }
+        case PacketType::CmdBounty: {
+            uint8_t subAction = payload.readU8();
+            auto* client = server_.connections().findById(clientId);
+            if (!client || client->playerEntityId == 0) break;
+
+            switch (subAction) {
+                case BountyAction::PlaceBounty: {
+                    std::string targetCharId = payload.readString();
+                    int64_t amount = detail::readI64(payload);
+
+                    // Validate via BountyManager logic
+                    int placerGuildId = guildRepo_->getPlayerGuildId(client->character_id);
+                    int targetGuildId = guildRepo_->getPlayerGuildId(targetCharId);
+                    int activeCount = bountyRepo_->getActiveBountyCount();
+                    bool targetHasBounty = bountyRepo_->hasActiveBounty(targetCharId);
+
+                    BountyResult canPlace = BountyManager::canPlaceBounty(
+                        client->character_id, targetCharId, amount,
+                        placerGuildId, targetGuildId, activeCount, targetHasBounty);
+
+                    SvBountyUpdateMsg resp;
+                    resp.updateType = 4; // result
+                    if (canPlace != BountyResult::Success) {
+                        resp.resultCode = static_cast<uint8_t>(canPlace);
+                        resp.message = BountyManager::getResultMessage(canPlace, targetCharId);
+                    } else {
+                        BountyResult dbResult;
+                        bountyRepo_->placeBounty(targetCharId, targetCharId,
+                                                  client->character_id, "",
+                                                  amount, dbResult);
+                        resp.resultCode = static_cast<uint8_t>(dbResult);
+                        resp.message = BountyManager::getResultMessage(dbResult, targetCharId);
+                    }
+                    uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                    resp.write(w);
+                    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvBountyUpdate, buf, w.size());
+                    break;
+                }
+                case BountyAction::CancelBounty: {
+                    std::string targetCharId = payload.readString();
+                    int64_t taxAmount = 0;
+                    BountyResult dbResult;
+                    int64_t refund = bountyRepo_->cancelContribution(
+                        targetCharId, client->character_id, taxAmount, dbResult);
+
+                    SvBountyUpdateMsg resp;
+                    resp.updateType = 4;
+                    resp.resultCode = static_cast<uint8_t>(dbResult);
+                    resp.message = BountyManager::getResultMessage(dbResult, targetCharId);
+                    uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                    resp.write(w);
+                    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvBountyUpdate, buf, w.size());
+
+                    // Refund gold if successful
+                    if (dbResult == BountyResult::Success && refund > 0) {
+                        PersistentId pid(client->playerEntityId);
+                        EntityHandle h = replication_.getEntityHandle(pid);
+                        Entity* e = world_.getEntity(h);
+                        if (e) {
+                            auto* inv = e->getComponent<InventoryComponent>();
+                            if (inv) {
+                                inv->inventory.addGold(refund);
+                                sendPlayerState(clientId);
+                            }
+                        }
+                    }
+                    break;
+                }
+                default:
+                    LOG_WARN("Server", "Unknown bounty sub-action %d from client %d", subAction, clientId);
+                    break;
+            }
+            break;
+        }
+        case PacketType::CmdGuild: {
+            uint8_t subAction = payload.readU8();
+            auto* client = server_.connections().findById(clientId);
+            if (!client || client->playerEntityId == 0) break;
+
+            PersistentId pid(client->playerEntityId);
+            EntityHandle h = replication_.getEntityHandle(pid);
+            Entity* e = world_.getEntity(h);
+            if (!e) break;
+
+            switch (subAction) {
+                case GuildAction::Create: {
+                    std::string guildName = payload.readString();
+                    auto* inv = e->getComponent<InventoryComponent>();
+                    if (!inv || inv->inventory.getGold() < GuildConstants::CREATION_COST) {
+                        SvGuildUpdateMsg resp;
+                        resp.updateType = 5; resp.resultCode = 1;
+                        resp.message = "Not enough gold (need 100,000)";
+                        uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                        resp.write(w);
+                        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, buf, w.size());
+                        break;
+                    }
+
+                    GuildDbResult dbResult;
+                    int guildId = guildRepo_->createGuild(guildName, client->character_id,
+                                                           GuildConstants::DEFAULT_MAX_MEMBERS, dbResult);
+                    SvGuildUpdateMsg resp;
+                    if (dbResult == GuildDbResult::Success) {
+                        inv->inventory.removeGold(GuildConstants::CREATION_COST);
+                        auto* guildComp = e->getComponent<GuildComponent>();
+                        if (guildComp) {
+                            guildComp->guild.setGuildData(guildId, guildName, {},
+                                                           GuildRank::Owner, 1);
+                        }
+                        resp.updateType = 0; resp.resultCode = 0;
+                        resp.guildName = guildName;
+                        resp.message = "Guild created!";
+                        sendPlayerState(clientId);
+                    } else {
+                        resp.updateType = 5;
+                        resp.resultCode = static_cast<uint8_t>(dbResult);
+                        resp.message = dbResult == GuildDbResult::NameTaken ? "Guild name already taken" : "Failed to create guild";
+                    }
+                    uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                    resp.write(w);
+                    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, buf, w.size());
+                    break;
+                }
+                case GuildAction::Leave: {
+                    auto* guildComp = e->getComponent<GuildComponent>();
+                    if (!guildComp || !guildComp->guild.isInGuild()) break;
+
+                    GuildDbResult dbResult;
+                    guildRepo_->removeMember(guildComp->guild.guildId, client->character_id, dbResult);
+                    if (dbResult == GuildDbResult::Success) {
+                        guildComp->guild.clearGuildData();
+                        SvGuildUpdateMsg resp;
+                        resp.updateType = 2; resp.resultCode = 0;
+                        resp.message = "You left the guild";
+                        uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                        resp.write(w);
+                        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, buf, w.size());
+                    }
+                    break;
+                }
+                default:
+                    LOG_INFO("Server", "Guild sub-action %d from client %d (not yet implemented)", subAction, clientId);
+                    break;
+            }
+            break;
+        }
+        case PacketType::CmdSocial: {
+            uint8_t subAction = payload.readU8();
+            auto* client = server_.connections().findById(clientId);
+            if (!client || client->playerEntityId == 0) break;
+
+            switch (subAction) {
+                case SocialAction::SendFriendRequest: {
+                    std::string targetCharId = payload.readString();
+                    if (socialRepo_->isBlocked(targetCharId, client->character_id)) {
+                        // Target has blocked us — silently fail
+                        break;
+                    }
+                    socialRepo_->sendFriendRequest(client->character_id, targetCharId);
+                    SvSocialUpdateMsg resp;
+                    resp.updateType = 0; resp.resultCode = 0;
+                    resp.message = "Friend request sent";
+                    uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                    resp.write(w);
+                    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvSocialUpdate, buf, w.size());
+                    break;
+                }
+                case SocialAction::AcceptFriend: {
+                    std::string fromCharId = payload.readString();
+                    socialRepo_->acceptFriendRequest(client->character_id, fromCharId);
+                    SvSocialUpdateMsg resp;
+                    resp.updateType = 1; resp.resultCode = 0;
+                    resp.message = "Friend request accepted";
+                    uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                    resp.write(w);
+                    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvSocialUpdate, buf, w.size());
+                    break;
+                }
+                case SocialAction::RemoveFriend: {
+                    std::string friendCharId = payload.readString();
+                    socialRepo_->removeFriend(client->character_id, friendCharId);
+                    break;
+                }
+                case SocialAction::BlockPlayer: {
+                    std::string targetCharId = payload.readString();
+                    socialRepo_->blockPlayer(client->character_id, targetCharId);
+                    break;
+                }
+                case SocialAction::UnblockPlayer: {
+                    std::string targetCharId = payload.readString();
+                    socialRepo_->unblockPlayer(client->character_id, targetCharId);
+                    break;
+                }
+                default:
+                    LOG_INFO("Server", "Social sub-action %d from client %d (not yet implemented)", subAction, clientId);
+                    break;
+            }
+            break;
+        }
+        case PacketType::CmdTrade: {
+            uint8_t subAction = payload.readU8();
+            auto* client = server_.connections().findById(clientId);
+            if (!client || client->playerEntityId == 0) break;
+
+            PersistentId pid(client->playerEntityId);
+            EntityHandle h = replication_.getEntityHandle(pid);
+            Entity* e = world_.getEntity(h);
+            if (!e) break;
+            auto* charStats = e->getComponent<CharacterStatsComponent>();
+
+            auto sendTradeResult = [&](uint8_t type, uint8_t code, const std::string& msg) {
+                SvTradeUpdateMsg resp;
+                resp.updateType = type;
+                resp.resultCode = code;
+                resp.otherPlayerName = msg;
+                uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                resp.write(w);
+                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvTradeUpdate, buf, w.size());
+            };
+
+            switch (subAction) {
+                case TradeAction::Initiate: {
+                    std::string targetCharId = payload.readString();
+
+                    // Check if already in trade
+                    if (tradeRepo_->isPlayerInTrade(client->character_id)) {
+                        sendTradeResult(6, 1, "Already in a trade"); break;
+                    }
+                    if (tradeRepo_->isPlayerInTrade(targetCharId)) {
+                        sendTradeResult(6, 2, "Target is already trading"); break;
+                    }
+
+                    // Get current scene
+                    auto* sc = SceneManager::instance().currentScene();
+                    std::string scene = sc ? sc->name() : "unknown";
+
+                    int sessionId = tradeRepo_->createSession(client->character_id, targetCharId, scene);
+                    if (sessionId > 0) {
+                        sendTradeResult(1, 0, "Trade session started");
+                        // Notify target player via system chat + trade invite
+                        std::string senderName = charStats ? charStats->stats.characterName : "Someone";
+                        server_.connections().forEach([&](ClientConnection& c) {
+                            if (c.character_id == targetCharId) {
+                                // System chat notification
+                                SvChatMessageMsg chatMsg;
+                                chatMsg.channel    = static_cast<uint8_t>(ChatChannel::System);
+                                chatMsg.senderName = "[Trade]";
+                                chatMsg.message    = senderName + " wants to trade with you.";
+                                chatMsg.faction    = 0;
+                                uint8_t chatBuf[512]; ByteWriter cw(chatBuf, sizeof(chatBuf));
+                                chatMsg.write(cw);
+                                server_.sendTo(c.clientId, Channel::ReliableOrdered,
+                                               PacketType::SvChatMessage, chatBuf, cw.size());
+
+                                // Trade invite update
+                                SvTradeUpdateMsg invite;
+                                invite.updateType = 0; // invited
+                                invite.sessionId  = sessionId;
+                                invite.otherPlayerName = senderName;
+                                invite.resultCode = 0;
+                                uint8_t tbuf[256]; ByteWriter tw(tbuf, sizeof(tbuf));
+                                invite.write(tw);
+                                server_.sendTo(c.clientId, Channel::ReliableOrdered,
+                                               PacketType::SvTradeUpdate, tbuf, tw.size());
+                            }
+                        });
+                    } else {
+                        sendTradeResult(6, 3, "Failed to create trade session");
+                    }
+                    break;
+                }
+                case TradeAction::AddItem: {
+                    uint8_t slotIdx = payload.readU8();
+                    int32_t sourceSlot = payload.readI32();
+                    std::string instanceId = payload.readString();
+                    int32_t quantity = payload.readI32();
+
+                    auto session = tradeRepo_->getActiveSession(client->character_id);
+                    if (!session) { sendTradeResult(6, 1, "Not in a trade"); break; }
+
+                    // Validate item exists and is tradeable
+                    auto* inv = e->getComponent<InventoryComponent>();
+                    if (!inv) break;
+                    int invSlot = inv->inventory.findByInstanceId(instanceId);
+                    if (invSlot < 0) { sendTradeResult(6, 4, "Item not found"); break; }
+                    ItemInstance item = inv->inventory.getSlot(invSlot);
+                    if (item.isBound()) { sendTradeResult(6, 5, "Item is soulbound"); break; }
+
+                    tradeRepo_->addItemToTrade(session->sessionId, client->character_id,
+                                                slotIdx, sourceSlot, instanceId, quantity);
+                    // Unlock both sides when items change
+                    tradeRepo_->unlockBothPlayers(session->sessionId);
+                    sendTradeResult(2, 0, "Item added");
+                    break;
+                }
+                case TradeAction::RemoveItem: {
+                    uint8_t slotIdx = payload.readU8();
+                    auto session = tradeRepo_->getActiveSession(client->character_id);
+                    if (!session) break;
+                    tradeRepo_->removeItemFromTrade(session->sessionId, client->character_id, slotIdx);
+                    tradeRepo_->unlockBothPlayers(session->sessionId);
+                    sendTradeResult(2, 0, "Item removed");
+                    break;
+                }
+                case TradeAction::SetGold: {
+                    int64_t gold = detail::readI64(payload);
+                    auto session = tradeRepo_->getActiveSession(client->character_id);
+                    if (!session) break;
+
+                    auto* inv = e->getComponent<InventoryComponent>();
+                    if (!inv || inv->inventory.getGold() < gold) {
+                        sendTradeResult(6, 6, "Not enough gold"); break;
+                    }
+
+                    tradeRepo_->setPlayerGold(session->sessionId, client->character_id, gold);
+                    tradeRepo_->unlockBothPlayers(session->sessionId);
+                    sendTradeResult(2, 0, "Gold set");
+                    break;
+                }
+                case TradeAction::Lock: {
+                    auto session = tradeRepo_->getActiveSession(client->character_id);
+                    if (!session) break;
+                    tradeRepo_->setPlayerLocked(session->sessionId, client->character_id, true);
+                    sendTradeResult(3, 0, "Locked");
+                    break;
+                }
+                case TradeAction::Unlock: {
+                    auto session = tradeRepo_->getActiveSession(client->character_id);
+                    if (!session) break;
+                    tradeRepo_->unlockBothPlayers(session->sessionId);
+                    sendTradeResult(3, 0, "Unlocked");
+                    break;
+                }
+                case TradeAction::Confirm: {
+                    auto session = tradeRepo_->getActiveSession(client->character_id);
+                    if (!session || !session->bothLocked()) {
+                        sendTradeResult(6, 7, "Both players must lock first"); break;
+                    }
+
+                    tradeRepo_->setPlayerConfirmed(session->sessionId, client->character_id, true);
+
+                    // Reload session to check if both confirmed
+                    session = tradeRepo_->loadSession(session->sessionId);
+                    if (session && session->bothConfirmed()) {
+                        // Execute trade atomically
+                        try {
+                            auto guard = dbPool_.acquire_guard();
+                            pqxx::work txn(guard.connection());
+
+                            // Get both sides' offers
+                            auto offersA = tradeRepo_->getTradeOffers(session->sessionId, session->playerACharacterId);
+                            auto offersB = tradeRepo_->getTradeOffers(session->sessionId, session->playerBCharacterId);
+
+                            // Transfer items A→B
+                            for (const auto& offer : offersA) {
+                                tradeRepo_->transferItem(txn, offer.itemInstanceId, session->playerBCharacterId);
+                            }
+                            // Transfer items B→A
+                            for (const auto& offer : offersB) {
+                                tradeRepo_->transferItem(txn, offer.itemInstanceId, session->playerACharacterId);
+                            }
+
+                            // Transfer gold
+                            if (session->playerAGold > 0) {
+                                tradeRepo_->updateGold(txn, session->playerACharacterId, -session->playerAGold);
+                                tradeRepo_->updateGold(txn, session->playerBCharacterId, session->playerAGold);
+                            }
+                            if (session->playerBGold > 0) {
+                                tradeRepo_->updateGold(txn, session->playerBCharacterId, -session->playerBGold);
+                                tradeRepo_->updateGold(txn, session->playerACharacterId, session->playerBGold);
+                            }
+
+                            // Complete session
+                            tradeRepo_->completeSession(txn, session->sessionId);
+                            txn.commit();
+
+                            // Log history
+                            tradeRepo_->logTradeHistory(session->sessionId,
+                                session->playerACharacterId, session->playerBCharacterId,
+                                session->playerAGold, session->playerBGold, "[]", "[]");
+
+                            sendTradeResult(5, 0, "Trade completed!");
+                            LOG_INFO("Server", "Trade %d completed: %s <-> %s",
+                                     session->sessionId,
+                                     session->playerACharacterId.c_str(),
+                                     session->playerBCharacterId.c_str());
+                            saveInventoryForClient(clientId);
+                            // Save other player's inventory too
+                            std::string otherCharId = (client->character_id == session->playerACharacterId)
+                                ? session->playerBCharacterId : session->playerACharacterId;
+                            server_.connections().forEach([&](ClientConnection& c) {
+                                if (c.character_id == otherCharId) {
+                                    saveInventoryForClient(c.clientId);
+                                }
+                            });
+                        } catch (const std::exception& ex) {
+                            LOG_ERROR("Server", "Trade execution failed: %s", ex.what());
+                            sendTradeResult(6, 8, "Trade failed — please try again");
+                        }
+                    } else {
+                        sendTradeResult(4, 0, "Confirmed — waiting for other player");
+                    }
+                    break;
+                }
+                case TradeAction::Cancel: {
+                    auto session = tradeRepo_->getActiveSession(client->character_id);
+                    if (session) {
+                        tradeRepo_->cancelSession(session->sessionId);
+                    }
+                    sendTradeResult(6, 0, "Trade cancelled");
+                    break;
+                }
+                default:
+                    LOG_WARN("Server", "Unknown trade sub-action %d from client %d", subAction, clientId);
+                    break;
+            }
+            break;
+        }
+        case PacketType::CmdGauntlet: {
+            processGauntletCommand(clientId, payload);
+            break;
+        }
+        case PacketType::CmdQuestAction: {
+            uint8_t subAction = payload.readU8();
+            std::string questIdStr = payload.readString();
+            auto* client = server_.connections().findById(clientId);
+            if (!client || client->playerEntityId == 0) break;
+
+            PersistentId pid(client->playerEntityId);
+            EntityHandle h = replication_.getEntityHandle(pid);
+            Entity* e = world_.getEntity(h);
+            if (!e) break;
+
+            auto* questComp = e->getComponent<QuestComponent>();
+            auto* charStats = e->getComponent<CharacterStatsComponent>();
+            if (!questComp || !charStats) break;
+
+            uint32_t questId = 0;
+            try { questId = static_cast<uint32_t>(std::stoul(questIdStr)); }
+            catch (...) { break; }
+
+            switch (subAction) {
+                case QuestAction::Accept: {
+                    bool accepted = questComp->quests.acceptQuest(questId, charStats->stats.level);
+                    if (accepted) {
+                        questRepo_->saveQuestProgress(client->character_id, questIdStr, "active", 0, 1);
+                        SvQuestUpdateMsg resp;
+                        resp.updateType = 0;
+                        resp.questId = questIdStr;
+                        resp.message = "Quest accepted";
+                        uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                        resp.write(w);
+                        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvQuestUpdate, buf, w.size());
+                    }
+                    break;
+                }
+                case QuestAction::Abandon: {
+                    questComp->quests.abandonQuest(questId);
+                    questRepo_->abandonQuest(client->character_id, questIdStr);
+                    SvQuestUpdateMsg resp;
+                    resp.updateType = 3;
+                    resp.questId = questIdStr;
+                    resp.message = "Quest abandoned";
+                    uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                    resp.write(w);
+                    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvQuestUpdate, buf, w.size());
+                    break;
+                }
+                case QuestAction::TurnIn: {
+                    auto* inv = e->getComponent<InventoryComponent>();
+                    if (!inv) break;
+                    bool turnedIn = questComp->quests.turnInQuest(questId, charStats->stats, inv->inventory);
+                    if (turnedIn) {
+                        questRepo_->completeQuest(client->character_id, questIdStr);
+                        SvQuestUpdateMsg resp;
+                        resp.updateType = 2;
+                        resp.questId = questIdStr;
+                        resp.message = "Quest completed!";
+                        uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                        resp.write(w);
+                        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvQuestUpdate, buf, w.size());
+                        sendPlayerState(clientId);
+                    }
+                    break;
+                }
+                default: break;
+            }
+            break;
+        }
+        case PacketType::CmdZoneTransition: {
+            auto cmd = CmdZoneTransition::read(payload);
+            auto* client = server_.connections().findById(clientId);
+            if (!client || client->playerEntityId == 0) break;
+
+            PersistentId pid(client->playerEntityId);
+            EntityHandle h = replication_.getEntityHandle(pid);
+            Entity* e = world_.getEntity(h);
+            if (!e) break;
+
+            // Level gate: check SceneCache for minimum level requirement
+            const SceneInfoRecord* targetScene = sceneCache_.getByName(cmd.targetScene);
+            if (targetScene) {
+                auto* charStats = e->getComponent<CharacterStatsComponent>();
+                if (charStats && charStats->stats.level < targetScene->minLevel) {
+                    SvChatMessageMsg chatMsg;
+                    chatMsg.channel = 6; // System channel
+                    chatMsg.senderName = "[System]";
+                    chatMsg.message = "You must be level " + std::to_string(targetScene->minLevel)
+                                    + " to enter " + targetScene->sceneName;
+                    chatMsg.faction = 0;
+                    uint8_t buf[512]; ByteWriter w(buf, sizeof(buf));
+                    chatMsg.write(w);
+                    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvChatMessage, buf, w.size());
+                    break; // block transition
+                }
+            }
+
+            // Transition allowed — send SvZoneTransition back to client
+            LOG_INFO("Server", "Client %d zone transition -> '%s'", clientId, cmd.targetScene.c_str());
+            SvZoneTransitionMsg resp;
+            resp.targetScene = cmd.targetScene;
+            resp.spawnX = 0; // default spawn; portals override via PortalComponent::targetSpawnPos
+            resp.spawnY = 0;
+            uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+            resp.write(w);
+            server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvZoneTransition, buf, w.size());
+
+            // Save updated scene to DB asynchronously
+            savePlayerToDBAsync(clientId);
             break;
         }
         default:
@@ -968,6 +1836,17 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             auto* mobSprite = target->getComponent<SpriteComponent>();
             if (mobSprite) mobSprite->enabled = false;
 
+            // Notify gauntlet of mob kill (if player is in an active instance)
+            if (gauntletManager_.isPlayerInActiveInstance(static_cast<uint32_t>(clientId))) {
+                // Find which division the player is in
+                auto* inst = gauntletManager_.getInstanceForPlayer(static_cast<uint32_t>(clientId));
+                if (inst) {
+                    bool isBoss = (es.monsterType == "Boss" || es.monsterType == "RaidBoss");
+                    gauntletManager_.notifyMobKill(static_cast<uint32_t>(clientId),
+                                                    es.level, isBoss, inst->divisionId);
+                }
+            }
+
             LOG_INFO("Server", "Client %d killed mob '%s'", clientId, es.enemyName.c_str());
         }
     } else if (action.actionType == 3) {
@@ -1086,7 +1965,7 @@ void ServerApp::tickAutoSave(float /*dt*/) {
 
         // Dispatch save to worker fiber (non-blocking)
         uint16_t clientId = c.clientId;
-        savePlayerToDB(clientId);
+        savePlayerToDBAsync(clientId);
     });
 }
 
@@ -1122,6 +2001,258 @@ void ServerApp::tickMaintenance(float dt) {
         if (cleaned > 0) {
             LOG_INFO("Server", "Cleaned %d stale trade sessions", cleaned);
         }
+    }
+}
+
+// ============================================================================
+// Gauntlet Integration
+// ============================================================================
+
+void ServerApp::initGauntlet() {
+    // Try loading gauntlet config from DB
+    try {
+        pqxx::work txn(gameDbConn_.connection());
+
+        // Load division configs
+        auto divResult = txn.exec(
+            "SELECT division_id, division_name, min_level, max_level, arena_scene_name, "
+            "wave_count, seconds_between_waves, respawn_seconds, "
+            "team_spawn_a_x, team_spawn_a_y, team_spawn_b_x, team_spawn_b_y, "
+            "min_players_to_start, max_players_per_team "
+            "FROM gauntlet_config ORDER BY division_id");
+
+        for (const auto& row : divResult) {
+            GauntletDivisionSettings settings;
+            settings.divisionId       = row["division_id"].as<int>();
+            settings.divisionName     = row["division_name"].as<std::string>();
+            settings.minLevel         = row["min_level"].as<int>();
+            settings.maxLevel         = row["max_level"].as<int>();
+            settings.arenaSceneName   = row["arena_scene_name"].as<std::string>();
+            settings.waveBreakSeconds = static_cast<float>(row["seconds_between_waves"].as<int>());
+            settings.playerRespawnSeconds = static_cast<float>(row["respawn_seconds"].as<int>());
+            settings.teamASpawnPoint  = {row["team_spawn_a_x"].as<float>(), row["team_spawn_a_y"].as<float>()};
+            settings.teamBSpawnPoint  = {row["team_spawn_b_x"].as<float>(), row["team_spawn_b_y"].as<float>()};
+            settings.minPlayersToStart = row["min_players_to_start"].as<int>();
+            settings.maxPlayersPerTeam = row["max_players_per_team"].as<int>();
+
+            // Load wave configs for this division
+            auto waveResult = txn.exec_params(
+                "SELECT wave_number, mob_def_id, mob_count, spawn_delay_seconds, is_boss, bonus_points "
+                "FROM gauntlet_waves WHERE division_id = $1 ORDER BY wave_number",
+                settings.divisionId);
+
+            for (const auto& wRow : waveResult) {
+                int waveNum = wRow["wave_number"].as<int>();
+                bool isBoss = wRow["is_boss"].as<bool>();
+
+                if (isBoss) {
+                    BossSpawnConfig boss;
+                    boss.mobDefId          = wRow["mob_def_id"].as<std::string>();
+                    boss.spawnDelaySeconds = wRow["spawn_delay_seconds"].is_null() ? 0.0f : wRow["spawn_delay_seconds"].as<float>();
+                    boss.bonusPoints       = wRow["bonus_points"].is_null() ? 50 : wRow["bonus_points"].as<int>();
+                    settings.bossSpawns.push_back(std::move(boss));
+                } else {
+                    BasicWaveConfig wave;
+                    wave.waveNumber         = waveNum;
+                    wave.maxMobsToSpawn     = wRow["mob_count"].is_null() ? 20 : wRow["mob_count"].as<int>();
+                    wave.spawnIntervalSeconds = wRow["spawn_delay_seconds"].is_null() ? 3.0f : wRow["spawn_delay_seconds"].as<float>();
+
+                    // Also store mob mapping
+                    LevelMobMapping mapping;
+                    mapping.level    = settings.minLevel;
+                    mapping.mobDefId = wRow["mob_def_id"].as<std::string>();
+                    settings.levelMobMappings.push_back(mapping);
+
+                    settings.basicWaves.push_back(std::move(wave));
+                }
+            }
+
+            gauntletManager_.addDivisionSettings(std::move(settings));
+        }
+
+        // Load rewards
+        auto rewardResult = txn.exec(
+            "SELECT division_id, is_winner, reward_type, reward_value, quantity "
+            "FROM gauntlet_rewards");
+
+        for (const auto& row : rewardResult) {
+            GauntletRewardConfig reward;
+            reward.divisionId  = row["division_id"].as<int>();
+            reward.isWinner    = row["is_winner"].as<bool>();
+            std::string type   = row["reward_type"].as<std::string>();
+            if (type == "Gold")  reward.rewardType = GauntletRewardType::Gold;
+            else if (type == "Honor") reward.rewardType = GauntletRewardType::Honor;
+            else if (type == "Token") reward.rewardType = GauntletRewardType::Token;
+            else reward.rewardType = GauntletRewardType::Item;
+            reward.rewardValue = row["reward_value"].as<std::string>();
+            reward.quantity    = row["quantity"].as<int>();
+            gauntletManager_.addRewardConfig(std::move(reward));
+        }
+
+        // Load performance rewards
+        auto perfResult = txn.exec(
+            "SELECT division_id, category, reward_type, reward_value, quantity "
+            "FROM gauntlet_performance_rewards");
+
+        for (const auto& row : perfResult) {
+            GauntletPerformanceRewardConfig reward;
+            reward.divisionId  = row["division_id"].as<int>();
+            reward.category    = row["category"].as<std::string>();
+            std::string type   = row["reward_type"].as<std::string>();
+            if (type == "Gold")  reward.rewardType = GauntletRewardType::Gold;
+            else if (type == "Honor") reward.rewardType = GauntletRewardType::Honor;
+            else if (type == "Token") reward.rewardType = GauntletRewardType::Token;
+            else reward.rewardType = GauntletRewardType::Item;
+            reward.rewardValue = row["reward_value"].as<std::string>();
+            reward.quantity    = row["quantity"].as<int>();
+            gauntletManager_.addPerformanceRewardConfig(std::move(reward));
+        }
+
+        txn.commit();
+        LOG_INFO("Server", "Gauntlet loaded: %zu divisions",
+                 gauntletManager_.activeInstances().size() == 0 ?
+                 divResult.size() : gauntletManager_.activeInstances().size());
+    } catch (const std::exception& e) {
+        LOG_WARN("Server", "Gauntlet config load failed (tables may be empty): %s", e.what());
+    }
+
+    // Wire callbacks
+    gauntletManager_.onAnnouncement = [this](const std::string& message) {
+        // Broadcast gauntlet announcement to all clients via system chat
+        SvChatMessageMsg msg;
+        msg.channel    = static_cast<uint8_t>(ChatChannel::System);
+        msg.senderName = "[Gauntlet]";
+        msg.message    = message;
+        msg.faction    = 0;
+
+        uint8_t buf[512];
+        ByteWriter w(buf, sizeof(buf));
+        msg.write(w);
+        server_.broadcast(Channel::ReliableOrdered, PacketType::SvChatMessage, buf, w.size());
+    };
+
+    gauntletManager_.onDivisionStarted = [this](int divisionId, int playerCount) {
+        LOG_INFO("Server", "Gauntlet division %d started with %d players", divisionId, playerCount);
+    };
+
+    gauntletManager_.onDivisionComplete = [this](int divisionId, const GauntletMatchResult& result) {
+        LOG_INFO("Server", "Gauntlet division %d complete: %s wins (%d-%d), %d players",
+                 divisionId,
+                 result.winningTeam == GauntletTeamId::TeamA ? "TeamA" :
+                 result.winningTeam == GauntletTeamId::TeamB ? "TeamB" : "Tie",
+                 result.teamAScore, result.teamBScore, result.playerCount);
+
+        // Broadcast result announcement
+        if (gauntletManager_.onAnnouncement) {
+            std::string msg = "Gauntlet complete! ";
+            if (result.endedInTie) {
+                msg += "It's a tie!";
+            } else {
+                msg += (result.winningTeam == GauntletTeamId::TeamA ? "Team A" : "Team B");
+                msg += " wins " + std::to_string(result.teamAScore) + "-" + std::to_string(result.teamBScore) + "!";
+            }
+            gauntletManager_.onAnnouncement(msg);
+        }
+    };
+
+    gauntletManager_.onConsolationAwarded = [](const std::string& charId, int honor, int tokens) {
+        LOG_INFO("Server", "Gauntlet consolation: %s gets %d honor, %d tokens", charId.c_str(), honor, tokens);
+        // TODO: Add honor/tokens to player (need to find online player by charId)
+    };
+}
+
+void ServerApp::processGauntletCommand(uint16_t clientId, ByteReader& payload) {
+    uint8_t subAction = payload.readU8();
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* e = world_.getEntity(h);
+    if (!e) return;
+
+    auto* charStats = e->getComponent<CharacterStatsComponent>();
+    if (!charStats) return;
+
+    switch (subAction) {
+        case GauntletAction::Register: {
+            if (!gauntletManager_.isSignupOpen()) {
+                SvGauntletUpdateMsg resp;
+                resp.updateType = 1; resp.resultCode = 1;
+                resp.message = "Gauntlet signup is not currently open.";
+                uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                resp.write(w);
+                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGauntletUpdate, buf, w.size());
+                break;
+            }
+
+            // Auto-detect division from player level
+            int playerLevel = charStats->stats.level;
+            int divisionId = gauntletManager_.getDivisionForLevel(playerLevel);
+            if (divisionId < 0) {
+                SvGauntletUpdateMsg resp;
+                resp.updateType = 1; resp.resultCode = 2;
+                resp.message = "No gauntlet division found for your level.";
+                uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                resp.write(w);
+                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGauntletUpdate, buf, w.size());
+                break;
+            }
+
+            RegisteredPlayer rp;
+            rp.characterId   = client->character_id;
+            rp.characterName = charStats->stats.characterName;
+            rp.level         = playerLevel;
+            rp.netId         = static_cast<uint32_t>(clientId);
+            rp.registeredAt  = gameTime_;
+
+            // Save return position
+            auto* t = e->getComponent<Transform>();
+            if (t) rp.returnPosition = Coords::toTile(t->position);
+            auto* sc = SceneManager::instance().currentScene();
+            rp.returnScene = sc ? sc->name() : "Scene2";
+
+            bool registered = gauntletManager_.registerPlayer(rp, divisionId);
+
+            SvGauntletUpdateMsg resp;
+            resp.updateType = 1;
+            resp.resultCode = registered ? 0 : 3;
+            resp.message = registered ? "Registered for The Gauntlet!" : "Already registered.";
+            uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+            resp.write(w);
+            server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGauntletUpdate, buf, w.size());
+            break;
+        }
+        case GauntletAction::Unregister: {
+            bool unregistered = gauntletManager_.unregisterPlayer(client->character_id);
+            SvGauntletUpdateMsg resp;
+            resp.updateType = 1;
+            resp.resultCode = unregistered ? 0 : 1;
+            resp.message = unregistered ? "Unregistered from The Gauntlet." : "You are not registered.";
+            uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+            resp.write(w);
+            server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGauntletUpdate, buf, w.size());
+            break;
+        }
+        case GauntletAction::GetStatus: {
+            SvGauntletUpdateMsg resp;
+            if (gauntletManager_.isSignupOpen()) {
+                resp.updateType = 0;
+                resp.message = "Signup is open! Speak to the Arena Master to register.";
+            } else {
+                float remaining = gauntletManager_.timeUntilNextEvent(gameTime_);
+                int mins = static_cast<int>(remaining / 60.0f);
+                resp.updateType = 0;
+                resp.message = "Next Gauntlet in " + std::to_string(mins) + " minutes.";
+            }
+            uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+            resp.write(w);
+            server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGauntletUpdate, buf, w.size());
+            break;
+        }
+        default:
+            LOG_WARN("Server", "Unknown gauntlet sub-action %d from client %d", subAction, clientId);
+            break;
     }
 }
 

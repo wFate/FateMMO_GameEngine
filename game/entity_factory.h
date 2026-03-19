@@ -12,6 +12,7 @@
 #include "game/components/faction_component.h"
 #include "game/components/pet_component.h"
 #include "game/shared/game_types.h"
+#include "game/shared/cached_mob_def.h"
 
 namespace fate {
 
@@ -153,9 +154,143 @@ public:
         return player;
     }
 
-    /// Create a mob entity with AI and stats.
-    /// mobDefId would normally load from MobDefinitionCache (PostgreSQL).
-    /// For now, takes parameters directly.
+    /// Create a mob from a database-backed CachedMobDef (73 mob definitions).
+    /// Uses all stats from the definition (HP/damage/armor scaled by level, AI ranges, loot, etc).
+    static Entity* createMobFromDef(World& world, const CachedMobDef& def, int level,
+                                    Vec2 spawnPos) {
+        Entity* mob = world.createEntity(def.displayName);
+        mob->setTag(def.isBoss ? "boss" : "mob");
+
+        auto* transform = mob->addComponent<Transform>(spawnPos.x, spawnPos.y);
+        transform->depth = 8.0f;
+
+        auto* sprite = mob->addComponent<SpriteComponent>();
+        sprite->size = def.isBoss ? Vec2{48.0f, 48.0f} : Vec2{32.0f, 32.0f};
+        sprite->texturePath = "assets/sprites/mob_" + def.displayName + ".png";
+        sprite->texture = TextureCache::instance().load(sprite->texturePath);
+        if (!sprite->texture) {
+            // Procedural sprite — delegate to the existing name-based generator
+            // by falling back to createMob's sprite generation logic.
+            // For now, generate a simple colored blob with face.
+            const int SZ = def.isBoss ? 32 : 24;
+            std::vector<unsigned char> pixels(SZ * SZ * 4, 0);
+
+            auto spMob = [&](int x, int y, unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
+                if (x < 0 || x >= SZ || y < 0 || y >= SZ) return;
+                int i = (y * SZ + x) * 4;
+                pixels[i] = r; pixels[i+1] = g; pixels[i+2] = b; pixels[i+3] = a;
+            };
+            auto outlineMob = [&](int x, int y) { spMob(x, y, 20, 20, 25); };
+            auto mobHash = [](int x, int y, int s) -> int {
+                int h = x * 374761393 + y * 668265263 + s * 1274126177;
+                h = (h ^ (h >> 13)) * 1274126177;
+                return h ^ (h >> 16);
+            };
+            auto clamp = [](int v) -> unsigned char { return (unsigned char)((v<0)?0:(v>255)?255:v); };
+
+            // Color based on monster type
+            bool isBossMob = def.isBoss;
+            bool isEliteMob = def.isElite;
+            float cx2 = SZ/2.0f, cy2 = SZ/2.0f;
+            for (int y = 0; y < SZ; y++) for (int x = 0; x < SZ; x++) {
+                float dx = x - cx2, dy = y - cy2;
+                if (dx*dx + dy*dy < (SZ*0.4f)*(SZ*0.4f)) {
+                    int n = mobHash(x, y, 900) % 11 - 5;
+                    if (isBossMob)
+                        spMob(x, y, clamp(200+n), clamp(60+n), clamp(60+n));
+                    else if (isEliteMob)
+                        spMob(x, y, clamp(180+n), clamp(140+n), clamp(40+n));
+                    else
+                        spMob(x, y, clamp(60+n), clamp(140+n), clamp(180+n));
+                }
+            }
+            // Eyes
+            int eyeY = (int)(cy2 - 2);
+            spMob((int)cx2-2, eyeY, 40, 40, 50); spMob((int)cx2+2, eyeY, 40, 40, 50);
+            // Outline
+            for (int y = 0; y < SZ; y++) for (int x = 0; x < SZ; x++) {
+                if (pixels[(y*SZ+x)*4+3] == 0) continue;
+                for (int dy=-1;dy<=1;dy++) for (int dx=-1;dx<=1;dx++) {
+                    int nx=x+dx, ny=y+dy;
+                    if (nx>=0 && nx<SZ && ny>=0 && ny<SZ && pixels[(ny*SZ+nx)*4+3]==0)
+                        { outlineMob(x,y); goto defmob_next; }
+                }
+                defmob_next:;
+            }
+
+            std::filesystem::create_directories("assets/sprites");
+            stbi_write_png(sprite->texturePath.c_str(), SZ, SZ, 4, pixels.data(), SZ * 4);
+            sprite->texture = TextureCache::instance().load(sprite->texturePath);
+        }
+
+        auto* collider = mob->addComponent<BoxCollider>();
+        collider->size = sprite->size * 0.8f;
+        collider->isStatic = false;
+        collider->isTrigger = true;
+
+        // Enemy Stats — all fields from the definition, scaled by level
+        auto* enemyComp = mob->addComponent<EnemyStatsComponent>();
+        auto& es = enemyComp->stats;
+        es.enemyId        = def.mobDefId;
+        es.enemyName      = def.displayName;
+        es.level          = level;
+        es.maxHP          = def.getHPForLevel(level);
+        es.currentHP      = es.maxHP;
+        es.baseDamage     = def.getDamageForLevel(level);
+        es.armor          = def.getArmorForLevel(level);
+        es.magicResist    = def.magicResist;
+        es.dealsMagicDamage = def.dealsMagicDamage;
+        es.mobHitRate     = def.mobHitRate;
+        es.critRate       = def.critRate;
+        es.attackSpeed    = def.attackSpeed;
+        es.moveSpeed      = def.moveSpeed;
+        es.xpReward       = def.getXPRewardForLevel(level);
+        es.isAggressive   = def.isAggressive;
+        es.lootTableId    = def.lootTableId;
+        es.minGoldDrop    = def.minGoldDrop;
+        es.maxGoldDrop    = def.maxGoldDrop;
+        es.goldDropChance = def.goldDropChance;
+        es.honorReward    = def.honorReward;
+        es.monsterType    = def.monsterType;
+        // Don't call initialize() — we already computed scaled values from the def
+        es.isAlive        = true;
+
+        // Status Effects (mobs can have DoTs, debuffs)
+        mob->addComponent<StatusEffectComponent>();
+
+        // Crowd Control
+        mob->addComponent<CrowdControlComponent>();
+
+        // Damageable marker
+        mob->addComponent<DamageableComponent>();
+
+        // Mob AI — convert tile-based def ranges to pixel coords
+        auto* aiComp = mob->addComponent<MobAIComponent>();
+        aiComp->ai.initialize(spawnPos);
+        aiComp->ai.acquireRadius   = def.aggroRange * Coords::TILE_SIZE;
+        aiComp->ai.attackRange     = def.attackRange * Coords::TILE_SIZE;
+        aiComp->ai.contactRadius   = def.leashRadius * Coords::TILE_SIZE;
+        aiComp->ai.isPassive       = !def.isAggressive;
+        aiComp->ai.baseChaseSpeed  = def.moveSpeed * Coords::TILE_SIZE;
+        aiComp->ai.baseReturnSpeed = def.moveSpeed * Coords::TILE_SIZE;
+        aiComp->ai.baseRoamSpeed   = def.moveSpeed * 0.6f * Coords::TILE_SIZE;
+        aiComp->ai.roamRadius      = 3.0f * Coords::TILE_SIZE;
+        aiComp->ai.stuckThreshold  = 0.05f * Coords::TILE_SIZE;
+        aiComp->ai.wiggleDistance   = 1.5f * Coords::TILE_SIZE;
+        aiComp->ai.attackCooldown  = (def.attackSpeed > 0.0f) ? (1.5f / def.attackSpeed) : 1.5f;
+
+        // Mob nameplate
+        auto* nameplate = mob->addComponent<MobNameplateComponent>();
+        nameplate->displayName = def.displayName;
+        nameplate->level = level;
+        nameplate->isBoss = def.isBoss;
+        nameplate->isElite = def.isElite;
+
+        return mob;
+    }
+
+    /// Create a mob entity with AI and stats (hardcoded fallback).
+    /// Used when no MobDefCache is available (client, tests, legacy).
     static Entity* createMob(World& world, const std::string& mobName, int level,
                              int baseHP, int baseDamage, Vec2 spawnPos,
                              bool aggressive = true, bool isBoss = false) {

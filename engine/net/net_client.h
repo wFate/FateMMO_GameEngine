@@ -5,6 +5,7 @@
 #include "engine/net/reliability.h"
 #include "engine/net/protocol.h"
 #include "engine/net/auth_protocol.h"
+#include "engine/net/game_messages.h"
 #include <functional>
 #include <string>
 
@@ -20,6 +21,7 @@ public:
     void sendMove(const Vec2& position, const Vec2& velocity, float timestamp);
     void sendAction(uint8_t actionType, uint64_t targetId, uint16_t skillId);
     void sendChat(uint8_t channel, const std::string& message, const std::string& target);
+    void sendZoneTransition(const std::string& targetScene);
 
     bool isConnected() const { return connected_; }
     uint16_t clientId() const { return clientId_; }
@@ -35,6 +37,14 @@ public:
     std::function<void(const SvPlayerStateMsg&)> onPlayerState;
     std::function<void(const SvMovementCorrectionMsg&)> onMovementCorrection;
     std::function<void(const SvLootPickupMsg&)> onLootPickup;
+    std::function<void(const SvTradeUpdateMsg&)> onTradeUpdate;
+    std::function<void(const SvMarketResultMsg&)> onMarketResult;
+    std::function<void(const SvBountyUpdateMsg&)> onBountyUpdate;
+    std::function<void(const SvGauntletUpdateMsg&)> onGauntletUpdate;
+    std::function<void(const SvGuildUpdateMsg&)> onGuildUpdate;
+    std::function<void(const SvSocialUpdateMsg&)> onSocialUpdate;
+    std::function<void(const SvQuestUpdateMsg&)> onQuestUpdate;
+    std::function<void(const SvZoneTransitionMsg&)> onZoneTransition;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:

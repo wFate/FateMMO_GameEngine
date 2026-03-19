@@ -21,6 +21,7 @@
 #include "server/db/pet_repository.h"
 #include "server/db/zone_mob_state_repository.h"
 #include "server/db/definition_caches.h"
+#include "game/shared/gauntlet.h"
 #include "server/cache/item_definition_cache.h"
 #include "server/cache/loot_table_cache.h"
 #include "engine/net/auth_protocol.h"
@@ -93,6 +94,9 @@ private:
     SkillDefCache skillDefCache_;
     SceneCache sceneCache_;
 
+    // Gauntlet event system
+    GauntletManager gauntletManager_;
+
     // Session tracking
     std::unordered_map<AuthToken, PendingSession, AuthTokenHash> pendingSessions_;
     std::unordered_map<int, uint16_t> activeAccountSessions_; // account_id -> clientId
@@ -120,8 +124,12 @@ private:
     void sendPlayerState(uint16_t clientId);
     void consumePendingSessions();
     void savePlayerToDB(uint16_t clientId);
+    void savePlayerToDBAsync(uint16_t clientId);
+    void saveInventoryForClient(uint16_t clientId);
     void tickAutoSave(float dt);
     void tickMaintenance(float dt);
+    void initGauntlet();
+    void processGauntletCommand(uint16_t clientId, ByteReader& payload);
 };
 
 } // namespace fate

@@ -10,6 +10,8 @@
 #include "game/ui/quest_log_ui.h"
 #include "engine/net/auth_client.h"
 #include "game/ui/login_screen.h"
+#include "game/ui/chat_ui.h"
+#include "game/ui/game_viewport.h"
 #include <memory>
 #include <unordered_map>
 
@@ -47,6 +49,7 @@ private:
     std::unique_ptr<Tilemap> tilemap_;
     NPCDialogueUI npcDialogueUI_;
     QuestLogUI questLogUI_;
+    ChatUI chatUI_;
     NetClient netClient_;
     InterpolationManager ghostInterpolation_;
     std::unordered_map<uint64_t, EntityHandle> ghostEntities_; // PersistentId -> local ghost
@@ -61,6 +64,7 @@ private:
     int authPort_ = 7778;
     std::string pendingCharName_;
     std::string pendingClassName_;
+    Vec2 pendingSpawnPos_ = {0.0f, 0.0f};
     bool localPlayerCreated_ = false;
 
     // Network config UI

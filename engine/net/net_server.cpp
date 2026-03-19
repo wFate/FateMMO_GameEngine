@@ -51,7 +51,12 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
 
     // Process acks on client's reliability layer
     client->reliability.processAck(hdr.ack, hdr.ackBits, currentTime);
-    client->reliability.onReceive(hdr.sequence);
+    bool isNewPacket = client->reliability.onReceive(hdr.sequence);
+
+    // Skip duplicate reliable packets (retransmits we already processed)
+    if (!isNewPacket && hdr.channel != Channel::Unreliable) {
+        return;
+    }
 
     if (hdr.packetType == PacketType::Heartbeat) {
         client->lastHeartbeat = currentTime;

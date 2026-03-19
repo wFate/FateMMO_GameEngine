@@ -87,6 +87,22 @@ namespace QuestAction {
 }
 
 // ============================================================================
+// Client -> Server: CmdZoneTransition
+// ============================================================================
+struct CmdZoneTransition {
+    std::string targetScene;  // scene name the client wants to enter
+
+    void write(ByteWriter& w) const {
+        w.writeString(targetScene);
+    }
+    static CmdZoneTransition read(ByteReader& r) {
+        CmdZoneTransition m;
+        m.targetScene = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
 // Server -> Client result messages
 // ============================================================================
 
@@ -237,6 +253,25 @@ struct SvQuestUpdateMsg {
         m.currentCount = r.readI32();
         m.targetCount  = r.readI32();
         m.message      = r.readString();
+        return m;
+    }
+};
+
+struct SvZoneTransitionMsg {
+    std::string targetScene;
+    float spawnX = 0;
+    float spawnY = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeString(targetScene);
+        w.writeFloat(spawnX);
+        w.writeFloat(spawnY);
+    }
+    static SvZoneTransitionMsg read(ByteReader& r) {
+        SvZoneTransitionMsg m;
+        m.targetScene = r.readString();
+        m.spawnX = r.readFloat();
+        m.spawnY = r.readFloat();
         return m;
     }
 };

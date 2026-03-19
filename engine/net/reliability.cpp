@@ -13,12 +13,12 @@ void ReliabilityLayer::trackReliable(uint16_t sequence, const uint8_t* data, siz
     pending_.push_back(std::move(pkt));
 }
 
-void ReliabilityLayer::onReceive(uint16_t remoteSequence) {
+bool ReliabilityLayer::onReceive(uint16_t remoteSequence) {
     if (!receivedAny_) {
         receivedAny_ = true;
         remoteSequence_ = remoteSequence;
         receivedBits_ = 0;
-        return;
+        return true; // first packet ever — always new
     }
 
     if (sequenceGreaterThan(remoteSequence, remoteSequence_)) {
@@ -32,12 +32,23 @@ void ReliabilityLayer::onReceive(uint16_t remoteSequence) {
             }
         }
         remoteSequence_ = remoteSequence;
+        return true; // newer than anything we've seen — new
+    } else if (remoteSequence == remoteSequence_) {
+        // Exact duplicate of the most recent sequence
+        return false;
     } else {
-        // Older sequence — set the appropriate bit
+        // Older sequence — check if we already received it
         int16_t diff = static_cast<int16_t>(remoteSequence_ - remoteSequence);
         if (diff > 0 && diff <= 32) {
-            receivedBits_ |= (1u << (diff - 1));
+            uint32_t bit = (1u << (diff - 1));
+            if (receivedBits_ & bit) {
+                return false; // already received this sequence
+            }
+            receivedBits_ |= bit;
+            return true; // old but not yet received
         }
+        // Too old to track — assume duplicate
+        return false;
     }
 }
 

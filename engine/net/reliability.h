@@ -19,7 +19,8 @@ public:
     uint16_t currentLocalSequence() const { return localSequence_; }
 
     void trackReliable(uint16_t sequence, const uint8_t* data, size_t size);
-    void onReceive(uint16_t remoteSequence);
+    /// Returns true if this is a NEW packet, false if duplicate.
+    bool onReceive(uint16_t remoteSequence);
     void buildAckFields(uint16_t& ack, uint16_t& ackBits) const;
     void processAck(uint16_t ack, uint16_t ackBits, float currentTime = 0.0f);
     std::vector<PendingPacket> getRetransmits(float currentTime, float retransmitDelay = 0.2f);

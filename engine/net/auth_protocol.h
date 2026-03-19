@@ -140,6 +140,8 @@ struct AuthResponse {
     std::string characterName;
     std::string className;
     int32_t level = 0;
+    float spawnX = 0.0f;  // pixel coords — saved position from DB
+    float spawnY = 0.0f;
 
     void write(ByteWriter& w) const {
         w.writeU8(success ? 1 : 0);
@@ -149,6 +151,8 @@ struct AuthResponse {
             w.writeString(characterName);
             w.writeString(className);
             w.writeI32(level);
+            w.writeFloat(spawnX);
+            w.writeFloat(spawnY);
         }
     }
 
@@ -161,6 +165,8 @@ struct AuthResponse {
             m.characterName = r.readString();
             m.className     = r.readString();
             m.level         = r.readI32();
+            m.spawnX        = r.readFloat();
+            m.spawnY        = r.readFloat();
         }
         return m;
     }

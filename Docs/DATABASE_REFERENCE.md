@@ -22,8 +22,9 @@ The C++ engine reads `DATABASE_URL` from the environment in `ServerApp::init()`.
 - `001_phase7_base_schema.sql` — 4 foundation tables (accounts, characters, item_definitions, character_inventory)
 - `001_full_schema.sql` — complete 65-table schema
 - `002_bank_and_pets.sql` — character_bank, character_bank_gold, character_pets (3 new tables + 2 indexes)
+- `003_gauntlet_seed_data.sql` — 3 divisions, 15 waves (real mob IDs), 15 rewards, 6 performance rewards
 
-All 68 tables are live on `fate_engine_dev`. The full schema was applied, then game data was migrated from `fate_mmo`, then bank/pet tables added.
+All 68 tables are live on `fate_engine_dev`. The full schema was applied, then game data was migrated from `fate_mmo`, then bank/pet tables added, then gauntlet config populated.
 
 ---
 
@@ -31,6 +32,10 @@ All 68 tables are live on `fate_engine_dev`. The full schema was applied, then g
 
 | Table | Rows | Description |
 |---|---|---|
+| `gauntlet_config` | 3 | Divisions: Novice (1-20), Veteran (21-40), Champion (41-70) |
+| `gauntlet_waves` | 15 | 4 basic + 1 boss per division, real mob IDs |
+| `gauntlet_rewards` | 15 | Winner (gold+honor+tokens) and loser (gold+tokens) per division |
+| `gauntlet_performance_rewards` | 6 | Top mob/PvP killer bonuses per division |
 | `item_definitions` | 748 | All weapons, armor, accessories, consumables, materials |
 | `mob_definitions` | 73 | All mob types with stats, AI config, loot table IDs |
 | `skill_definitions` | 60 | All skills (20 per class: Warrior/Mage/Archer) |
@@ -223,9 +228,12 @@ fate_mmo -> /tmp/scenes.csv           -> fate_engine_dev.scenes          (3 rows
 | `server/db/skill_repository.h/.cpp` | character_skills, character_skill_bar, character_skill_points | DB wired (connect/disconnect/auto-save) |
 | `server/db/guild_repository.h/.cpp` | guilds, guild_members, guild_invites, characters | DB wired (load on connect) |
 | `server/db/social_repository.h/.cpp` | friends, blocked_players, characters | DB wired (init + last_online on connect/disconnect) |
-| `server/db/market_repository.h/.cpp` | market_listings, market_transactions, jackpot_pool | Repo built; expiry maintenance wired |
-| `server/db/trade_repository.h/.cpp` | trade_sessions, trade_offers, trade_history, character_inventory | Repo built; stale cleanup wired |
-| `server/db/bounty_repository.h/.cpp` | bounties, bounty_contributions, bounty_claim_log, bounty_history | Repo built; expiry maintenance wired |
+| `server/db/market_repository.h/.cpp` | market_listings, market_transactions, jackpot_pool | DB wired (list/buy/cancel handlers, 2% tax, jackpot, expiry) |
+| `server/db/trade_repository.h/.cpp` | trade_sessions, trade_offers, trade_history, character_inventory | DB wired (full session flow, atomic item+gold transfer, stale cleanup) |
+| `server/db/bounty_repository.h/.cpp` | bounties, bounty_contributions, bounty_claim_log, bounty_history | DB wired (place/cancel handlers + expiry) |
+| `server/db/quest_repository.h/.cpp` | quest_progress | DB wired (connect/disconnect + quest commands) |
+| `server/db/bank_repository.h/.cpp` | character_bank, character_bank_gold | DB wired (connect/disconnect) |
+| `server/db/pet_repository.h/.cpp` | character_pets | DB wired (connect/disconnect) |
 | `server/db/zone_mob_state_repository.h/.cpp` | zone_mob_deaths | DB wired (boss respawn) |
 
 ### Definition Caches (read-only, loaded at startup)

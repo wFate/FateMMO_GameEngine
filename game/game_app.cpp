@@ -775,6 +775,11 @@ void GameApp::onInit() {
 
         zoneSystem_ = world.addSystem<ZoneSystem>();
         zoneSystem_->camera = &camera();
+        zoneSystem_->onSceneTransition = [this](const std::string& scene) {
+            // Send zone transition request to server for validation (level gate, etc.)
+            // Server will respond with SvZoneTransition if allowed
+            netClient_.sendZoneTransition(scene);
+        };
 
         world.addSystem<SpawnSystem>();
         world.addSystem<ParticleSystem>();
@@ -877,12 +882,82 @@ void GameApp::onInit() {
     };
 
     netClient_.onChatMessage = [this](const SvChatMessageMsg& msg) {
-        LOG_INFO("Chat", "[%s] %s", msg.senderName.c_str(), msg.message.c_str());
+        chatUI_.addMessage(msg.channel, msg.senderName, msg.message, msg.faction);
+    };
+
+    chatUI_.onSendMessage = [this](uint8_t channel, const std::string& message, const std::string& targetName) {
+        netClient_.sendChat(channel, message, targetName);
     };
 
     netClient_.onLootPickup = [this](const SvLootPickupMsg& msg) {
         LOG_INFO("Client", "Picked up: %s x%d", msg.displayName.c_str(),
                  msg.isGold ? msg.goldAmount : msg.quantity);
+    };
+
+    netClient_.onTradeUpdate = [this](const SvTradeUpdateMsg& msg) {
+        std::string text;
+        switch (msg.updateType) {
+            case 0: text = msg.otherPlayerName + " invited you to trade."; break;
+            case 1: text = "Trade session started."; break;
+            case 5: text = "Trade completed!"; break;
+            case 6: text = msg.otherPlayerName.empty() ? "Trade cancelled." : msg.otherPlayerName; break;
+            default: text = "Trade update."; break;
+        }
+        chatUI_.addMessage(6, "[Trade]", text, 0);
+    };
+
+    netClient_.onMarketResult = [this](const SvMarketResultMsg& msg) {
+        chatUI_.addMessage(6, "[Market]", msg.message, 0);
+    };
+
+    netClient_.onBountyUpdate = [this](const SvBountyUpdateMsg& msg) {
+        chatUI_.addMessage(6, "[Bounty]", msg.message, 0);
+    };
+
+    netClient_.onGauntletUpdate = [this](const SvGauntletUpdateMsg& msg) {
+        chatUI_.addMessage(6, "[Gauntlet]", msg.message, 0);
+    };
+
+    netClient_.onGuildUpdate = [this](const SvGuildUpdateMsg& msg) {
+        std::string text = msg.message;
+        if (!msg.guildName.empty()) text = "[" + msg.guildName + "] " + text;
+        chatUI_.addMessage(6, "[Guild]", text, 0);
+    };
+
+    netClient_.onSocialUpdate = [this](const SvSocialUpdateMsg& msg) {
+        chatUI_.addMessage(6, "[Social]", msg.message, 0);
+    };
+
+    netClient_.onQuestUpdate = [this](const SvQuestUpdateMsg& msg) {
+        chatUI_.addMessage(6, "[Quest]", msg.message, 0);
+    };
+
+    netClient_.onZoneTransition = [this](const SvZoneTransitionMsg& msg) {
+        LOG_INFO("Client", "Zone transition to '%s' at (%.1f, %.1f)",
+                 msg.targetScene.c_str(), msg.spawnX, msg.spawnY);
+
+        // Scene files are named by scene ID: assets/scenes/<SceneId>.json
+        std::string jsonPath = "assets/scenes/" + msg.targetScene + ".json";
+
+        auto& sceneMgr = SceneManager::instance();
+        auto* sc = sceneMgr.currentScene();
+        if (sc) {
+            // Load the new scene from JSON into the existing world
+            Editor::instance().loadScene(&sc->world(), jsonPath);
+            LOG_INFO("Client", "Loaded scene '%s' from %s", msg.targetScene.c_str(), jsonPath.c_str());
+
+            // Recreate local player at spawn point (scene load destroys all entities)
+            ClassType ct = ClassType::Warrior;
+            if (pendingClassName_ == "Mage") ct = ClassType::Mage;
+            else if (pendingClassName_ == "Archer") ct = ClassType::Archer;
+            Entity* player = EntityFactory::createPlayer(
+                sc->world(), pendingCharName_, ct, true, Faction::Xyros);
+            auto* t = player->getComponent<Transform>();
+            if (t) t->position = {msg.spawnX, msg.spawnY};
+
+            LOG_INFO("Client", "Player respawned at (%.0f, %.0f) in %s",
+                     msg.spawnX, msg.spawnY, msg.targetScene.c_str());
+        }
     };
 
     // Auth callbacks
@@ -916,12 +991,12 @@ void GameApp::onInit() {
         tilemap_.reset();
     }
 
-    // Auto-load last saved scene (replaces procedural entities, keeps systems)
-    if (fs::exists("assets/scenes/scene.json")) {
+    // Auto-load WhisperingWoods as the default scene
+    if (fs::exists("assets/scenes/WhisperingWoods.json")) {
         auto* s = SceneManager::instance().currentScene();
         if (s) {
-            Editor::instance().loadScene(&s->world(), "assets/scenes/scene.json");
-            LOG_INFO("Game", "Auto-loaded saved scene");
+            Editor::instance().loadScene(&s->world(), "assets/scenes/WhisperingWoods.json");
+            LOG_INFO("Game", "Auto-loaded WhisperingWoods scene");
         }
     }
 
@@ -1008,6 +1083,8 @@ void GameApp::onInit() {
         sceneFbo.bind();
 
         if (combatSystem_) {
+            auto& ed = Editor::instance();
+            combatSystem_->setViewportInfo(ctx.viewportWidth, ctx.viewportHeight, ed.viewportPos());
             combatSystem_->renderFloatingTexts(*ctx.spriteBatch, *ctx.camera);
         }
 
@@ -1572,6 +1649,7 @@ void GameApp::onUpdate(float deltaTime) {
                     pendingAuthToken_ = resp.authToken;
                     pendingCharName_ = resp.characterName;
                     pendingClassName_ = resp.className;
+                    pendingSpawnPos_ = {resp.spawnX, resp.spawnY};
                     // Connect to game server via UDP with auth token
                     std::string host = loginScreen_.serverHost;
                     netClient_.connectWithToken(host, static_cast<uint16_t>(serverPort_), pendingAuthToken_);
@@ -1620,8 +1698,13 @@ void GameApp::onUpdate(float deltaTime) {
                     Entity* player = EntityFactory::createPlayer(
                         sc->world(), pendingCharName_, ct, true, Faction::Xyros);
 
-                    LOG_INFO("GameApp", "Local player created for '%s' (%s) with %zu components",
+                    // Set saved position from DB (sent via auth response)
+                    auto* t = player->getComponent<Transform>();
+                    if (t) t->position = pendingSpawnPos_;
+
+                    LOG_INFO("GameApp", "Local player created for '%s' (%s) at (%.0f, %.0f) with %zu components",
                              pendingCharName_.c_str(), pendingClassName_.c_str(),
+                             pendingSpawnPos_.x, pendingSpawnPos_.y,
                              player->componentCount());
                 }
                 break; // Skip rest of first frame
@@ -1684,6 +1767,24 @@ void GameApp::onUpdate(float deltaTime) {
             if (input.isActionPressed(ActionId::ToggleQuestLog) && !Editor::instance().wantsKeyboard()) {
                 questLogUI_.toggle();
             }
+            // Chat toggle (Enter key)
+            if (input.isActionPressed(ActionId::OpenChat) && !Editor::instance().wantsKeyboard()) {
+                if (!chatUI_.isVisible()) {
+                    chatUI_.show();
+                    input.setChatMode(true);
+                }
+            }
+            if (input.isActionPressed(ActionId::SubmitChat)) {
+                // SubmitChat fires in Chat context after Enter on the input field.
+                // ChatUI handles send/hide internally; we just exit chat mode when it hides.
+                if (!chatUI_.isVisible()) {
+                    input.setChatMode(false);
+                }
+            }
+            if (input.isActionPressed(ActionId::Cancel) && chatUI_.isVisible()) {
+                chatUI_.hide();
+                input.setChatMode(false);
+            }
             // Skill bar page switching
             if (input.isActionPressed(ActionId::SkillPagePrev) && !Editor::instance().wantsKeyboard()) {
                 SkillBarUI::instance().prevPage();
@@ -1711,10 +1812,11 @@ void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
 
     // ImGui game UI — suppress when editor is open and paused (no gameplay happening)
     if (!(Editor::instance().isOpen() && Editor::instance().isPaused())) {
-        // Position HUD bars relative to the viewport panel
+        // Set the global game viewport rect — all UI systems read from this
         auto& ed = Editor::instance();
         Vec2 vp = ed.viewportPos();
         Vec2 vs = ed.viewportSize();
+        GameViewport::set(vp.x, vp.y, vs.x, vs.y);
         HudBarsUI::instance().setViewportRect(vp.x, vp.y, vs.x, vs.y);
 
         auto* scene = SceneManager::instance().currentScene();
@@ -1738,6 +1840,9 @@ void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
             if (questLogUI_.isOpen && npcInteractionSystem_ && npcInteractionSystem_->localPlayer) {
                 questLogUI_.render(npcInteractionSystem_->localPlayer);
             }
+
+            // Chat UI (positioned relative to viewport)
+            chatUI_.render();
         }
     }
 

@@ -1,4 +1,5 @@
 #include "game/ui/inventory_ui.h"
+#include "game/ui/game_viewport.h"
 #include "engine/core/logger.h"
 #include "game/components/transform.h"
 #include "game/components/player_controller.h"
@@ -20,11 +21,10 @@ void InventoryUI::draw(World* world) {
 
     Inventory* inv = findPlayerInventory(world);
 
-    ImGuiIO& io = ImGui::GetIO();
     float panelW = 380.0f;
     float panelH = 420.0f;
-    ImGui::SetNextWindowPos(ImVec2((io.DisplaySize.x - panelW) * 0.5f,
-                                    (io.DisplaySize.y - panelH) * 0.5f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(GameViewport::centerX() - panelW * 0.5f,
+                                    GameViewport::centerY() - panelH * 0.5f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(panelW, panelH), ImGuiCond_FirstUseEver);
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);

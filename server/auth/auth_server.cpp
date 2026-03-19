@@ -1,5 +1,6 @@
 #include "server/auth/auth_server.h"
 #include "engine/core/logger.h"
+#include "engine/core/types.h"
 #include "engine/net/byte_stream.h"
 
 #include <openssl/ssl.h>
@@ -575,6 +576,9 @@ void AuthServer::processLogin(const LoginRequest& req, AuthResponse& resp) {
     resp.characterName = character->character_name;
     resp.className = character->class_name;
     resp.level = character->level;
+    // Send saved position in pixel coords so client spawns at the right place
+    resp.spawnX = character->position_x * Coords::TILE_SIZE;
+    resp.spawnY = character->position_y * Coords::TILE_SIZE;
 
     LOG_INFO("AuthServer", "Login successful: '%s' (id=%d), character '%s' level %d",
              req.username.c_str(), account->account_id,

@@ -10,6 +10,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 **Target:** Windows (development), iOS/Android (future), Linux server (future)
 
+**Codebase:** ~37,600 lines across 225 files (engine/ 17,500 LOC, game/ 20,100 LOC)
+
 ### Build & Run
 
 **Visual Studio (recommended):**
@@ -132,9 +134,9 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Skill Trainer UI | Done | Lists learnable skills, level/gold/SP requirements, greyed out if not met |
 | Bank Storage UI | Done | Deposit/withdraw items and gold, fee display |
 | Teleporter UI | Done | Destination list with costs and level requirements |
+| Chat UI | Done | Chat button (top-right, unread indicator), panel locked to bottom 25% of viewport. 7-tab filter (All/Map/Global/Trade/Party/Guild/Private). Party/Guild blocked if not in one. Private requires `/username message`. System messages show on all tabs. Per-channel colors. All positioned via GameViewport |
 | D-Pad | Planned | Mobile touch control, bottom-left |
 | Action Buttons | Planned | Attack + skill circular buttons, bottom-right |
-| Chat UI | Planned | Text input + channel tabs + scrolling messages |
 
 ### Zone/Portal System
 | Feature | Status | Notes |
@@ -244,7 +246,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 ## Game Systems (Ported from Unity Prototype)
 
-All 27 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`. Total: **45 files, ~7,800 lines**, all compile with zero errors. Database repositories exist for all systems in `server/db/` (10 repos). Systems marked **(DB wired)** have full load-on-connect and save-on-disconnect. Systems marked **(repo built, needs integration)** have the repository but aren't yet called from ServerApp message handlers (the repo queries work, they just need to be triggered by gameplay events like CmdTrade, CmdListItem, etc.).
+All 27 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`. Total: **45 files, ~7,800 lines**, all compile with zero errors (197 test cases, 1777 assertions). Database repositories exist for all systems in `server/db/` (13 repos). All major systems are DB wired with message handlers, load-on-connect, save-on-disconnect, periodic maintenance, and async auto-save. Combat formula matches Unity prototype exactly (off-by-one fixed). Inventory saves after market/trade mutations prevent item duplication. Gauntlet has 3 divisions with real mob data.
 
 ### Core Gameplay (Fully Ported — Logic Identical to C#)
 | System | Files | Lines | C# Source | Notes |
@@ -284,13 +286,13 @@ See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 | Guild Manager | `guild_manager.h/.cpp` | 280 | NetworkGuildManager | TWOM guilds, ranks, 16x16 pixel symbols, XP contribution **(DB wired — load on connect)** |
 | Friends Manager | `friends_manager.h/.cpp` | 377 | NetworkFriendsManager | 50 friends, 100 blocks, profile inspection, online status **(DB wired — init + last_online on connect/disconnect)** |
 | Chat Manager | `chat_manager.h/.cpp` | 120 | NetworkChatManager | 7 channels (Map/Global/Trade/Party/Guild/Private/System), cross-faction garbling on public channels **(runtime only — no persistence needed)** |
-| Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(repo built, needs integration)** |
-| Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(repo built, needs integration; expiry maintenance wired)** |
-| Gauntlet | `gauntlet.h/.cpp` | ~850 | GauntletManager + GauntletInstance + GauntletTeam + GauntletRegistry + GauntletConfig (10 files) | Full event scheduler (2hr cycle, 10min signup), division-based matchmaking, GauntletTeam per-team scoring/MVP, GauntletRegistry signup queues, BasicWaveConfig/BossSpawnConfig/LevelMobMapping for wave spawning, reward configs (winner/loser/performance), consolation for overflow, announcement callbacks, debug commands **(repo built, needs integration)** |
+| Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(DB wired — full session flow: initiate/addItem/lock/confirm/execute/cancel, atomic item+gold transfer)** |
+| Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(DB wired — list/buy/cancel, 2% tax to jackpot, offline seller credit, expiry maintenance)** |
+| Gauntlet | `gauntlet.h/.cpp` | ~850 | GauntletManager + GauntletInstance + GauntletTeam + GauntletRegistry + GauntletConfig (10 files) | Full event scheduler (2hr cycle, 10min signup), division-based matchmaking, GauntletTeam per-team scoring/MVP, GauntletRegistry signup queues, BasicWaveConfig/BossSpawnConfig/LevelMobMapping for wave spawning, reward configs (winner/loser/performance), consolation for overflow, announcement callbacks, debug commands **(DB wired — config loaded at startup, ticked every frame, CmdGauntlet register/unregister/status, mob kill notifications routed)** |
 | Faction System | `faction.h` | ~130 | FactionRegistry + FactionChatGarbler | 4 factions (Xyros/Fenor/Zethos/Solis), registry, deterministic chat garbling, same-faction checks |
 | Pet System | `pet_system.h/.cpp` | ~120 | PetDefinition + PetInstance + PetSystem | Leveling, rarity-tiered stats (HP/Crit/XP bonus), XP sharing (50%), player-level cap |
 | Stat Enchant System | `stat_enchant_system.h` | ~70 | StatEnchantSystem | Accessory enchanting (Belt/Ring/Necklace/Cloak), 6-tier roll table, HP/MP x10 scaling |
-| Bounty System | `bounty_system.h` | ~200 | NetworkBountyManager + BountyService + BountyRepository | PvE bounty board (max 10 active, 50K-500M gold, 48hr expiry), 2% tax, guild-mate protection, 12hr guild-leave cooldown, party split on claim, cancel/refund, expiration processing **(repo built, expiry maintenance wired)** |
+| Bounty System | `bounty_system.h` | ~200 | NetworkBountyManager + BountyService + BountyRepository | PvE bounty board (max 10 active, 50K-500M gold, 48hr expiry), 2% tax, guild-mate protection, 12hr guild-leave cooldown, party split on claim, cancel/refund, expiration processing **(DB wired — place/cancel handlers + expiry maintenance)** |
 | Ranking System | `ranking_system.h` | ~170 | NetworkRankingManager + RankingRepository | Global/class/guild/honor leaderboards, paginated (50/page), 60s cache, PlayerRankInfo (global+class+guild rank), K/D ratio, honor rankings **(repo built, needs integration)** |
 | Profanity Filter | `profanity_filter.h` | ~260 | ProfanityFilter (351L) | Leetspeak normalization (8 mappings), 50+ word list (EN+ES), 4 blocked phrases, 3 modes (Validate/Censor/Remove), character/guild name validation, chat filtering, word-boundary logic for short words |
 | Input Validator | `input_validator.h` | ~75 | InputValidator (76L) | Chat/Name validation modes, per-character rejection, username (3-20 alphanumeric+underscore) and password (8-128) validation, delegates to ProfanityFilter |
@@ -363,6 +365,70 @@ pvpDamage = baseDamage * 0.05
 - **Boss Death Persistence** (`server/db/zone_mob_state_repository.h/.cpp`): Saves boss death state to `zone_mob_deaths` table. Restores respawn timers on server restart. Auto-cleanup of expired records.
 - **Starter Equipment**: New characters receive class-specific weapon (Rusty Dagger / Gnarled Stick / Makeshift Bow) plus shared armor (Quilted Vest, Worn Sandals, Tattered Gloves) — inserted as equipped items in `character_inventory` during registration.
 - **Client Handling**: Ghost dropped item entities created via `EntityFactory::createGhostDroppedItem()`. `onLootPickup` callback logs pickup notifications.
+
+### March 18, 2026 - GameViewport: Universal UI Positioning Fix
+
+**Single source of truth for viewport-relative UI positioning across all aspect ratios:**
+
+- **GameViewport** (`game/ui/game_viewport.h`): New static class providing the active game render rect. Set once per frame by GameApp from `Editor::viewportPos()/viewportSize()`. All UI systems query it instead of `ImGui::GetIO().DisplaySize`. Handles letterboxing/pillarboxing automatically — UI always stays within the visible game area regardless of device aspect ratio.
+- **Fixed 10 UI systems**: Inventory, Skill Bar, Bank Storage, NPC Dialogue, Shop, Quest Log, Skill Trainer, Teleporter, Chat UI, and Nameplates all now use `GameViewport::centerX()/centerY()` for centering and `GameViewport::right()/bottom()` for edge anchoring. Previously used `io.DisplaySize` which broke when editor forced a device resolution.
+- **Nameplate/Combat Text Fix** (`game/systems/combat_action_system.h`): `worldToScreen()` now projects to `GameViewport::width()/height()` (screen display size) instead of FBO dimensions. Offset uses `GameViewport::x()/y()` instead of the old `vpOffset_`. Nameplates, quest markers, and mob names stay correctly positioned above entities in all aspect ratios.
+- **Chat UI Polish**: Removed System tab (system messages still show on all tabs), added party/guild send blocking, private chat requires `/username message`, "Chat" button with unread indicator, panel locked to bottom 25% of viewport, input hint text.
+- **Transport Dedup Fix** (`engine/net/reliability.h/.cpp`): `ReliabilityLayer::onReceive()` now returns `bool` — `true` for new packets, `false` for duplicates. Both `NetClient` and `NetServer` skip processing duplicate reliable packets. Fixes 4x message duplication caused by retransmit without dedup. All reliable packet types affected (chat, combat events, player state, entity updates).
+- **Auth Protocol Fix** (`engine/net/auth_protocol.h`): Fixed `writeF32`/`readF32` → `writeFloat`/`readFloat` (introduced by zone transition subagent).
+
+### March 18, 2026 - Client Side: Chat UI, Message Handlers, DB Mob Spawning, Scene Transitions
+
+**Four client-side systems bringing all server features to the player:**
+
+- **Chat UI** (`game/ui/chat_ui.h/.cpp`): In-game chat panel positioned bottom-left (TWOM style). 7-tab channel filter (All/Map/Global/Trade/Party/Guild/System), 200-message scrolling buffer with per-channel color coding, text input with Enter-to-send, Enter-on-empty to hide. Integrates with Input::setChatMode() to suppress gameplay actions while typing. Wired to `NetClient::onChatMessage` — all server system messages (trade invites, market results, bounty updates, gauntlet announcements, guild/social/quest notifications) now display in the chat panel.
+- **Client Message Handlers** (`engine/net/net_client.h/.cpp`, `game/game_app.cpp`): 7 new `std::function` callbacks added to NetClient (onTradeUpdate, onMarketResult, onBountyUpdate, onGauntletUpdate, onGuildUpdate, onSocialUpdate, onQuestUpdate) + 7 new case blocks in handlePacket for deserialization. All registered in GameApp::onInit() routing to ChatUI as system messages with appropriate sender tags.
+- **DB-Driven Mob Spawning** (`game/entity_factory.h`, `game/systems/spawn_system.h`, `game/shared/cached_mob_def.h`): Extracted `CachedMobDef` struct to standalone header (no pqxx dependency) so both server and game code can use it. New `EntityFactory::createMobFromDef()` uses ALL fields from the DB definition (scaled HP/damage/armor, crit, speed, AI ranges, loot table, gold drops, honor, monster type). SpawnSystem accepts a `mobDefLookup_` function — server wires it to `MobDefCache::get()`, client leaves null (uses fallback). 73 mob definitions now drive spawning with real stats.
+- **Scene Loading from DB** (`engine/net/game_messages.h`, `server/server_app.cpp`, `game/game_app.cpp`): New `CmdZoneTransition` (0x1A) client-to-server message + `SvZoneTransitionMsg` response. Portal collisions now send transition request to server instead of loading locally. Server validates level requirement via `SceneCache::getByName()`, sends system chat rejection or `SvZoneTransition` with spawn coords. Client receives transition, loads scene via SceneManager, repositions player. Server async-saves player state on transition. `SceneCache::getByName()` added for name-based lookups.
+
+### March 18, 2026 - Server Hardening: Combat Fix, Crash Safety, Async Saves, Gauntlet Data
+
+**Five targeted fixes for correctness, safety, and performance:**
+
+- **Combat Damage Off-By-One Fix** (`game/shared/combat_system.cpp`): Changed `<` to `<=` and removed `+1` in `calculateDamageMultiplier`. Engine was applying damage reduction one level earlier than Unity prototype. At levelDiff=2 with `damageReductionStartsAt=2`: was 0.88 (12% penalty), now 1.0 (no penalty). Boundary test added.
+- **Inventory Save After Mutations** (`server/server_app.cpp`): New `saveInventoryForClient()` helper called after Market ListItem, Market BuyItem, and Trade Confirm. Prevents item duplication if server crashes between a trade/market operation and the next auto-save. Trade saves both players' inventories.
+- **Trade Target Notification**: When a player initiates a trade, the target now receives a `[Trade]` system chat message and a `SvTradeUpdate` invite packet with the sender's name and session ID.
+- **Async Auto-Save** (`server/server_app.cpp`): New `savePlayerToDBAsync()` snapshots all component data by value on the game thread, then dispatches DB writes to a fiber worker via `DbDispatcher`. `tickAutoSave` now uses this async path. Disconnect saves remain synchronous (must complete before entity destruction). Game loop no longer blocks on periodic DB round-trips.
+- **Gauntlet Seed Data** (`Docs/migrations/003_gauntlet_seed_data.sql`): 3 divisions (Novice 1-20, Veteran 21-40, Champion 41-70) with real mob IDs from the database. 15 waves using forest/coastal/desert/swamp/sky/void creatures. 7 boss encounters (Tidal Serpent, Pharaoh's Shadow, Fate Maker). Winner/loser/performance rewards with gold, honor, and gauntlet tokens.
+
+### March 18, 2026 - Market & Trade Full Implementation
+
+**Server-authoritative market listing/buying and peer-to-peer trading:**
+
+- **Market ListItem**: Full validation (price range, max 7 listings, item exists by instanceId, not soulbound, not trade-locked). Looks up item definition for metadata. Serializes rolled stats + socket. Creates listing in DB, removes from inventory, sends response.
+- **Market BuyItem**: Loads listing, validates active + not own + buyer has gold + inventory space. Atomic transaction via pool: deactivate listing, calculate 2% tax, deduct buyer gold, add item to buyer, credit seller gold (works offline), add tax to jackpot. Logs in market_transactions.
+- **Market CancelListing**: Deactivates listing, returns item (already implemented).
+- **Trade Full Session**: Initiate (create session, validate not already trading), AddItem (validate instanceId + not soulbound, unlock both sides), RemoveItem, SetGold (validate balance), Lock/Unlock, Confirm (both-locked gate, then atomic execution: transfer all items via UPDATE character_id, transfer gold both ways, complete session, log history — all in single pqxx::work transaction via pool), Cancel (delete offers, mark cancelled).
+- **Inventory.findByInstanceId()**: New method for O(n) lookup by UUID — needed by market and trade to locate specific item instances.
+
+### March 18, 2026 - Gauntlet Server Integration
+
+**GauntletManager fully wired into ServerApp:**
+
+- **Init**: `initGauntlet()` loads all division configs, wave configs, rewards, and performance rewards from `gauntlet_config`, `gauntlet_waves`, `gauntlet_rewards`, `gauntlet_performance_rewards` tables. Parses boss vs basic waves, builds `GauntletDivisionSettings` with level-mob mappings.
+- **Tick**: `gauntletManager_.tick(gameTime_)` called every server tick — drives 2-hour event cycle, 10-minute signup windows, announcement callbacks at 5m/2m/1m/30s/10s thresholds.
+- **Callbacks**: `onAnnouncement` broadcasts to all clients via system chat. `onDivisionStarted` and `onDivisionComplete` log match results and broadcast winner announcements. `onConsolationAwarded` logs honor/token grants for overflow players.
+- **CmdGauntlet Handler**: Register (auto-detects division from player level, saves return position/scene), Unregister, GetStatus (shows signup state or time until next event). All send `SvGauntletUpdateMsg` responses.
+- **Mob Kill Hook**: When a player kills a mob, checks if they're in an active gauntlet instance and routes the kill to `gauntletManager_.notifyMobKill()` with boss detection via `monsterType`.
+- **Graceful fallback**: If gauntlet tables are empty, logs a warning and continues — the event cycle still runs but won't create instances until config is populated.
+
+### March 18, 2026 - Quest/Bank/Pet Repos, Message Handlers, Protocol Expansion
+
+**3 new repos, full message protocol, gameplay command handlers:**
+
+- **Quest Repository** (`server/db/quest_repository.h/.cpp`): Load/save active quest progress + completed quest IDs. Upsert by character_id + quest_id. Batch save in transaction. Restores into QuestManager via `setSerializedState()`.
+- **Bank Repository** (`server/db/bank_repository.h/.cpp`): Load/save bank items (character_bank) and gold (character_bank_gold). Deposit/withdraw items and gold. Delete+re-insert pattern for full save.
+- **Pet Repository** (`server/db/pet_repository.h/.cpp`): Load all pets, load equipped pet, save pet state (upsert by id), equip/unequip (unequip-all-then-equip pattern), add XP.
+- **DB Migration 002** (`Docs/migrations/002_bank_and_pets.sql`): 3 new tables (character_bank, character_bank_gold, character_pets) + 2 indexes. Applied to fate_engine_dev.
+- **Protocol Expansion** (`engine/net/packet.h`): 5 new client commands (CmdMarket 0x15, CmdBounty 0x16, CmdGauntlet 0x17, CmdGuild 0x18, CmdSocial 0x19) + 7 server responses (SvTradeUpdate 0x99 through SvQuestUpdate 0x9F).
+- **Game Messages** (`engine/net/game_messages.h`): Sub-action enums for all command types (MarketAction::ListItem/BuyItem/CancelListing, BountyAction::PlaceBounty/CancelBounty, GuildAction::Create/Invite/Leave/Kick/Promote/Disband, SocialAction::SendFriendRequest/AcceptFriend/BlockPlayer, QuestAction::Accept/Abandon/TurnIn, etc.) + server response message structs with write/read serialization.
+- **Message Handlers** (`server_app.cpp`): Full `onPacketReceived` handlers for Market (list validation + cancel), Bounty (place with guild check + cancel with refund), Guild (create with gold deduction + leave), Social (friend request/accept/decline/remove, block/unblock with blocked-check), Quest (accept/abandon/turnIn with DB persistence). All handlers send typed response messages to the client.
+- **Connect/Disconnect**: Quest progress (active + completed), bank gold, and equipped pet now loaded on connect and saved on disconnect.
 
 ### March 18, 2026 - Full DB Wiring: Repositories, Async Dispatch, Server Integration
 

@@ -334,7 +334,7 @@ void Editor::drawDockSpace() {
             }
             // Save As — always prompts for a new name
             if (ImGui::BeginMenu("Save As...")) {
-                static char saveNameBuf[64] = "scene";
+                static char saveNameBuf[64] = "WhisperingWoods";
                 ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
                 if (ImGui::Button("Save")) {
                     std::string path = std::string("assets/scenes/") + saveNameBuf + ".json";

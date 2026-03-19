@@ -37,7 +37,7 @@ CharacterRecord CharacterRepository::rowToRecord(const pqxx::row& row) {
     rec.current_xp         = row["current_xp"].is_null() ? 0 : row["current_xp"].as<int64_t>();
     rec.xp_to_next_level   = row["xp_to_next_level"].is_null() ? 100 : row["xp_to_next_level"].as<int>();
 
-    rec.current_scene      = row["current_scene"].is_null() ? "Scene2" : row["current_scene"].as<std::string>();
+    rec.current_scene      = row["current_scene"].is_null() ? "WhisperingWoods" : row["current_scene"].as<std::string>();
     rec.position_x         = row["position_x"].is_null() ? 0.0f : row["position_x"].as<float>();
     rec.position_y         = row["position_y"].is_null() ? 0.0f : row["position_y"].as<float>();
 

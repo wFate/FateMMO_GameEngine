@@ -1,4 +1,5 @@
 #include "game/ui/teleporter_ui.h"
+#include "game/ui/game_viewport.h"
 #include "game/components/game_components.h"
 #include "engine/core/logger.h"
 #include "imgui.h"
@@ -38,11 +39,10 @@ void TeleporterUI::render(Entity* player) {
     auto& inv = invComp->inventory;
 
     // Window setup
-    ImGuiIO& io = ImGui::GetIO();
     float panelW = 360.0f;
     float panelH = 350.0f;
-    ImGui::SetNextWindowPos(ImVec2((io.DisplaySize.x - panelW) * 0.5f,
-                                    (io.DisplaySize.y - panelH) * 0.5f),
+    ImGui::SetNextWindowPos(ImVec2(GameViewport::centerX() - panelW * 0.5f,
+                                    GameViewport::centerY() - panelH * 0.5f),
                             ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(panelW, panelH), ImGuiCond_FirstUseEver);
 

@@ -1,4 +1,5 @@
 #include "game/ui/skill_bar_ui.h"
+#include "game/ui/game_viewport.h"
 #include "engine/core/logger.h"
 #include "game/components/transform.h"
 #include "game/components/player_controller.h"
@@ -17,8 +18,6 @@ void SkillBarUI::draw(World* world) {
     SkillManager* skills = findPlayerSkills(world);
     if (!skills) return;
 
-    ImGuiIO& io = ImGui::GetIO();
-
     float slotSize = 40.0f;
     float spacing = 4.0f;
     float panelW = slotSize + 16.0f;  // slot + padding
@@ -27,9 +26,9 @@ void SkillBarUI::draw(World* world) {
     float pageH = 16.0f;   // page indicator text
     float panelH = navH + spacing + slotsH + spacing + navH + spacing + pageH + 12.0f;
 
-    // Position: right side of screen, vertically centered
-    float posX = io.DisplaySize.x - panelW - 10.0f;
-    float posY = (io.DisplaySize.y - panelH) * 0.5f;
+    // Position: right side of viewport, vertically centered
+    float posX = GameViewport::right() - panelW - 10.0f;
+    float posY = GameViewport::centerY() - panelH * 0.5f;
 
     ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(panelW, panelH), ImGuiCond_Always);

@@ -13,6 +13,9 @@
 #include <random>
 #include <algorithm>
 #include <cmath>
+#include <functional>
+
+#include "game/shared/cached_mob_def.h"
 
 namespace fate {
 
@@ -48,6 +51,13 @@ struct SpawnZoneComponent {
 class SpawnSystem : public System {
 public:
     const char* name() const override { return "SpawnSystem"; }
+
+    /// Wire up a mob definition lookup (server sets this from MobDefCache).
+    /// When set, spawns use createMobFromDef with full DB stats.
+    /// When null, falls back to createMob with hardcoded rule stats.
+    void setMobDefLookup(std::function<const CachedMobDef*(const std::string&)> fn) {
+        mobDefLookup_ = std::move(fn);
+    }
 
     void update(float dt) override {
         gameTime_ += dt;
@@ -133,6 +143,7 @@ public:
 
 private:
     float gameTime_ = 0.0f;
+    std::function<const CachedMobDef*(const std::string&)> mobDefLookup_;
 
     static std::mt19937& rng() {
         thread_local std::mt19937 gen{std::random_device{}()};
@@ -164,11 +175,22 @@ private:
 
                 Vec2 spawnPos = getRandomSpawnPosition(sz, world);
 
-                Entity* mob = EntityFactory::createMob(
-                    world, rule.enemyId, level,
-                    rule.baseHP, rule.baseDamage, spawnPos,
-                    rule.isAggressive, rule.isBoss
-                );
+                // Prefer DB-backed mob definition if a lookup is wired up
+                Entity* mob = nullptr;
+                if (mobDefLookup_) {
+                    const auto* def = mobDefLookup_(rule.enemyId);
+                    if (def) {
+                        mob = EntityFactory::createMobFromDef(world, *def, level, spawnPos);
+                    }
+                }
+                // Fallback to hardcoded stats from the spawn rule
+                if (!mob) {
+                    mob = EntityFactory::createMob(
+                        world, rule.enemyId, level,
+                        rule.baseHP, rule.baseDamage, spawnPos,
+                        rule.isAggressive, rule.isBoss
+                    );
+                }
 
                 if (!mob) continue;
 
