@@ -17,6 +17,7 @@
 #include "game/ui/bank_storage_ui.h"
 #include "game/ui/teleporter_ui.h"
 #include "game/ui/game_viewport.h"
+#include "game/shared/faction.h"
 #include <memory>
 #include <unordered_map>
 
@@ -75,6 +76,7 @@ private:
     std::string pendingCharName_;
     std::string pendingClassName_;
     Vec2 pendingSpawnPos_ = {0.0f, 0.0f};
+    Faction pendingFaction_ = Faction::Xyros;
     bool localPlayerCreated_ = false;
 
     // Network config UI

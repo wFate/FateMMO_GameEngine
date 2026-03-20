@@ -23,6 +23,7 @@ public:
     char email[129] = {};        // max 128 chars + null
     char characterName[17] = {}; // max 16 chars + null
     int selectedClass = 0;       // 0=Warrior, 1=Mage, 2=Archer
+    int selectedFaction = 0;     // 0=Xyros, 1=Fenor, 2=Zethos, 3=Solis
 
     // Server connection info
     char serverHost[64] = "127.0.0.1";

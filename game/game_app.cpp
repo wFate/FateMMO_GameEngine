@@ -1153,7 +1153,7 @@ void GameApp::onInit() {
             if (pendingClassName_ == "Mage") ct = ClassType::Mage;
             else if (pendingClassName_ == "Archer") ct = ClassType::Archer;
             Entity* player = EntityFactory::createPlayer(
-                sc->world(), pendingCharName_, ct, true, Faction::Xyros);
+                sc->world(), pendingCharName_, ct, true, pendingFaction_);
             auto* t = player->getComponent<Transform>();
             if (t) t->position = {msg.spawnX, msg.spawnY};
 
@@ -1319,9 +1319,7 @@ void GameApp::onInit() {
 }
 
 void GameApp::createPlayer(World& world) {
-    // TODO: faction selection UI — hardcoded to Xyros for now
-    Faction playerFaction = Faction::Xyros;
-    Entity* player = EntityFactory::createPlayer(world, "Player", ClassType::Warrior, true, playerFaction);
+    Entity* player = EntityFactory::createPlayer(world, "Player", ClassType::Warrior, true, pendingFaction_);
 
     // Spawn player at origin so they start near the mobs
     auto* transform = player->getComponent<Transform>();
@@ -1831,6 +1829,8 @@ void GameApp::onUpdate(float deltaTime) {
             if (loginScreen_.registerSubmitted) {
                 loginScreen_.registerSubmitted = false;
                 const char* classNames[] = {"Warrior", "Mage", "Archer"};
+                constexpr Faction factions[] = {Faction::Xyros, Faction::Fenor, Faction::Zethos, Faction::Solis};
+                pendingFaction_ = factions[loginScreen_.selectedFaction];
                 authClient_.registerAsync(loginScreen_.serverHost, static_cast<uint16_t>(loginScreen_.serverPort),
                                           loginScreen_.username, loginScreen_.password,
                                           loginScreen_.email,
@@ -1898,7 +1898,7 @@ void GameApp::onUpdate(float deltaTime) {
 
                     // Create full player with all 24 game components
                     Entity* player = EntityFactory::createPlayer(
-                        sc->world(), pendingCharName_, ct, true, Faction::Xyros);
+                        sc->world(), pendingCharName_, ct, true, pendingFaction_);
 
                     // Set saved position from DB (sent via auth response)
                     auto* t = player->getComponent<Transform>();

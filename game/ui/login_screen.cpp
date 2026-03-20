@@ -64,8 +64,23 @@ void LoginScreen::draw() {
         ImGui::RadioButton("Mage", &selectedClass, 1); ImGui::SameLine();
         ImGui::RadioButton("Archer", &selectedClass, 2);
 
-        // Future: Replace radio buttons with TWOM-style interactive class showcase
-        // (clickable class models with stat previews, animations, skill previews)
+        ImGui::Spacing();
+        ImGui::Text("Faction:");
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.25f, 0.25f, 1.0f));
+        ImGui::RadioButton("Xyros", &selectedFaction, 0);
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.25f, 0.55f, 0.85f, 1.0f));
+        ImGui::RadioButton("Fenor", &selectedFaction, 1);
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.25f, 0.80f, 0.40f, 1.0f));
+        ImGui::RadioButton("Zethos", &selectedFaction, 2);
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.75f, 0.20f, 1.0f));
+        ImGui::RadioButton("Solis", &selectedFaction, 3);
+        ImGui::PopStyleColor();
 
         ImGui::Spacing();
 
@@ -125,6 +140,7 @@ void LoginScreen::reset() {
     std::memset(email, 0, sizeof(email));
     std::memset(characterName, 0, sizeof(characterName));
     selectedClass = 0;
+    selectedFaction = 0;
     statusMessage = "";
     isError = false;
     loginSubmitted = false;
