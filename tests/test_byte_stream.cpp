@@ -98,3 +98,100 @@ TEST_CASE("PacketHeader write/read round-trip") {
     CHECK(h2.packetType   == fate::PacketType::CmdMove);
     CHECK(h2.payloadSize  == 42);
 }
+
+TEST_CASE("ByteReader rejects NaN float") {
+    uint8_t buf[4];
+    uint32_t nan_bits = 0x7FC00000;
+    std::memcpy(buf, &nan_bits, 4);
+
+    fate::ByteReader r(buf, 4);
+    float val = r.readFloat();
+    CHECK(val == 0.0f);
+    CHECK(r.overflowed());
+}
+
+TEST_CASE("ByteReader rejects Inf float") {
+    uint8_t buf[4];
+    uint32_t inf_bits = 0x7F800000;
+    std::memcpy(buf, &inf_bits, 4);
+
+    fate::ByteReader r(buf, 4);
+    float val = r.readFloat();
+    CHECK(val == 0.0f);
+    CHECK(r.overflowed());
+}
+
+TEST_CASE("ByteReader rejects oversized string") {
+    uint8_t buf[12];
+    fate::ByteWriter w(buf, sizeof(buf));
+    w.writeU16(60000);
+    w.writeU8(0x41);
+
+    fate::ByteReader r(buf, w.size());
+    std::string s = r.readString();
+    CHECK(s.empty());
+    CHECK(r.overflowed());
+}
+
+TEST_CASE("ByteReader readString with maxLen rejects long strings") {
+    uint8_t buf[512];
+    fate::ByteWriter w(buf, sizeof(buf));
+    std::string longStr(300, 'A');
+    w.writeString(longStr);
+
+    fate::ByteReader r(buf, w.size());
+    std::string s = r.readString(256);
+    CHECK(s.empty());
+    CHECK(r.overflowed());
+}
+
+TEST_CASE("ByteReader readString with maxLen accepts valid strings") {
+    uint8_t buf[512];
+    fate::ByteWriter w(buf, sizeof(buf));
+    w.writeString("hello");
+
+    fate::ByteReader r(buf, w.size());
+    std::string s = r.readString(256);
+    CHECK(s == "hello");
+    CHECK_FALSE(r.overflowed());
+}
+
+TEST_CASE("ByteReader readEnum rejects out-of-range value") {
+    enum class TestEnum : uint8_t { A = 0, B = 1, C = 2, MAX = C };
+
+    uint8_t buf[1] = { 5 };
+    fate::ByteReader r(buf, 1);
+    auto val = r.readEnum<TestEnum>(TestEnum::MAX);
+    CHECK(val == TestEnum::A);
+    CHECK(r.overflowed());
+}
+
+TEST_CASE("ByteReader readEnum accepts valid value") {
+    enum class TestEnum : uint8_t { A = 0, B = 1, C = 2, MAX = C };
+
+    uint8_t buf[1] = { 2 };
+    fate::ByteReader r(buf, 1);
+    auto val = r.readEnum<TestEnum>(TestEnum::MAX);
+    CHECK(val == TestEnum::C);
+    CHECK_FALSE(r.overflowed());
+}
+
+TEST_CASE("ByteReader ok() returns false after overflow") {
+    uint8_t buf[1] = { 0x42 };
+    fate::ByteReader r(buf, 1);
+    CHECK(r.ok());
+    r.readU32();
+    CHECK_FALSE(r.ok());
+}
+
+TEST_CASE("ByteReader rejects NaN in Vec2") {
+    uint8_t buf[8];
+    uint32_t nan_bits = 0x7FC00000;
+    float good = 1.0f;
+    std::memcpy(buf, &good, 4);
+    std::memcpy(buf + 4, &nan_bits, 4);
+
+    fate::ByteReader r(buf, 8);
+    fate::Vec2 v = r.readVec2();
+    CHECK(r.overflowed());
+}

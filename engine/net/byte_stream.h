@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 #include <string>
 #include "engine/core/types.h"
 
@@ -67,7 +68,26 @@ public:
     uint16_t readU16() { uint16_t v = 0; readRaw(&v, sizeof(v)); return v; }
     uint32_t readU32() { uint32_t v = 0; readRaw(&v, sizeof(v)); return v; }
     int32_t readI32() { int32_t v = 0; readRaw(&v, sizeof(v)); return v; }
-    float readFloat() { float v = 0; readRaw(&v, sizeof(v)); return v; }
+    float readFloat() {
+        float v = 0;
+        readRaw(&v, sizeof(v));
+        if (!overflow_ && (std::isnan(v) || std::isinf(v))) {
+            overflow_ = true;
+            return 0.0f;
+        }
+        return v;
+    }
+
+    template<typename E>
+    E readEnum(E maxValid) {
+        static_assert(sizeof(E) == 1, "readEnum only supports uint8_t-backed enums");
+        uint8_t raw = readU8();
+        if (!overflow_ && raw > static_cast<uint8_t>(maxValid)) {
+            overflow_ = true;
+            return static_cast<E>(0);
+        }
+        return static_cast<E>(raw);
+    }
 
     Vec2 readVec2() {
         float x = readFloat();
@@ -75,9 +95,14 @@ public:
         return {x, y};
     }
 
-    std::string readString() {
+    std::string readString(uint16_t maxLen = 4096) {
         uint16_t len = readU16();
-        if (overflow_ || pos_ + len > size_) {
+        if (overflow_) return {};
+        if (len > maxLen) {
+            overflow_ = true;
+            return {};
+        }
+        if (pos_ + len > size_) {
             overflow_ = true;
             return {};
         }
@@ -93,6 +118,7 @@ public:
     size_t remaining() const { return overflow_ ? 0 : size_ - pos_; }
     size_t position() const { return pos_; }
     bool overflowed() const { return overflow_; }
+    [[nodiscard]] bool ok() const { return !overflow_; }
 
 private:
     void readRaw(void* dst, size_t len) {
