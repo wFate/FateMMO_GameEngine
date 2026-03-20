@@ -352,6 +352,52 @@ pvpDamage = baseDamage * 0.05
 
 ## Changelog
 
+### March 19, 2026 - Skill System Completion (Full Unity Port)
+
+**Skill execution pipeline (`executeSkill` + `executeSkillAOE`):**
+- 7-step validation: learned/rank, CC canAct, cooldown (double-cast bypass), resource cost (MP/Fury), target alive, range, target type
+- Full damage pipeline: base damage x skill% x status effect mult x level mult x PvP mult (0.30 for skills)
+- Execute threshold: instant kill if target HP% below threshold (bosses exempt)
+- Defense pipeline: shield absorption → block roll (physical/PvP) → armor/MR reduction → Hunter's Mark → Bewitch
+- Post-damage: freeze break, status effect application (bleed/burn/poison/slow/freeze DoTs), CC application (stun/freeze), self-buffs (invulnerability, debuff cleanse, stun immunity, guaranteed crit, transform)
+- Lifesteal, fury on hit, armor shred on crit
+- Special mechanics: Cataclysm (scales with mana spent), double-cast (free second cast window), teleport/dash (non-damaging)
+- AOE: `executeSkillAOE` with per-target hit roll + damage + effects, capped by `maxTargetsPerRank`
+
+**SkillDefinition expansion (~30 new fields):**
+- Resource & scaling: resourceType, canCrit, usesHitRate, furyOnHit, scalesWithResource
+- Effect flags: appliesBleed/Burn/Poison/Slow/Freeze, stunDurationPerRank, effectDuration/ValuePerRank
+- Passive bonuses: passiveDamageReduction/CritBonus/SpeedBonus/HPBonus/StatBonusPerRank
+- Special mechanics: isUltimate, executeThresholdPerRank, grantsInvulnerability, removesDebuffs, grantsStunImmunity, grantsCritGuarantee, aoeRadius, maxTargetsPerRank, teleportDistance, dashDistance, transformDamageMult/SpeedBonus
+
+**Skill bar utilities + learn validation:**
+- `clearSkillSlot`, `swapSkillSlots`, `autoAssignToSkillBar` (auto-assigns on first learn)
+- Learn validation: class requirement, level requirement, sequential rank enforcement
+- Skill definition registry on SkillManager
+
+**ClientSkillDefinitionCache:**
+- Header-only static cache with ClientSkillDef/ClientSkillRankData structs
+- `populate`, `clear`, `getSkill`, `getAllSkills` (sorted by level), `hasSkill`
+
+**Passive skill integration:**
+- Passive bonus accumulators on SkillManager (HP, crit, speed, damage reduction, primary stat)
+- `activateSkillRank` accumulates for passive skills, pushes to CharacterStats
+- `recalculateStats` applies passiveHPBonus, passiveCritBonus, passiveSpeedBonus, passiveStatBonus
+- `takeDamage` applies passiveDamageReduction (capped 90%)
+
+**Combat pipeline wiring (auto-attack + movement):**
+- CombatActionSystem::tryAttackTarget: CC canAct check, status effect damage multiplier, guaranteed crit from effects, magic/armor resistance, Hunter's Mark, Bewitch, shield absorption, freeze break, lifesteal, armor shred on crit, block roll
+- MovementSystem: CC canMove check, status effect speed modifier
+- Floating text: heal (green) and block (light blue) spawners added
+
+**Item rarity display:**
+- Added displayName and rarity fields to ItemInstance
+- InventoryUI uses item.rarity instead of hardcoded Common
+- Tooltip shows displayName, rarity colors match Unity prototype exactly (#FFFFFF, #4ADE80, #60A5FA, #A855F7, #FB923C, #EF4444)
+- Floating text colors fixed to match C# (crit, resist)
+
+**55 new tests (203 → 258 total), all passing.**
+
 ### March 19, 2026 - Death/Respawn System, NPC UI Wiring, Faction Selection
 
 **Death & Respawn (client-side):**
