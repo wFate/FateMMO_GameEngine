@@ -785,7 +785,7 @@ private:
         FloatingText ft;
         ft.position = pos;
         ft.text     = buf;
-        ft.color    = isCrit ? Color(1.0f, 0.6f, 0.0f) : Color::white();
+        ft.color    = isCrit ? Color(1.0f, 0.6f, 0.1f) : Color::white();
         ft.lifetime = kTextLifetime;
         ft.elapsed  = 0.0f;
         ft.startY   = pos.y;
@@ -809,7 +809,7 @@ private:
         FloatingText ft;
         ft.position = pos;
         ft.text     = "Resist";
-        ft.color    = Color(0.66f, 0.33f, 0.97f);  // purple
+        ft.color    = Color(0.6f, 0.3f, 0.9f);  // purple
         ft.lifetime = kTextLifetime;
         ft.elapsed  = 0.0f;
         ft.startY   = pos.y;
@@ -841,6 +841,33 @@ private:
         ft.elapsed  = 0.0f;
         ft.startY   = pos.y;
         ft.isCrit   = true;  // renders at 1.3x scale
+        floatingTexts_.push_back(ft);
+    }
+
+    void spawnHealText(Vec2 pos, int amount) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "+%d", amount);
+
+        FloatingText ft;
+        ft.position = pos;
+        ft.text     = buf;
+        ft.color    = Color(0.2f, 0.9f, 0.3f);  // green
+        ft.lifetime = kTextLifetime;
+        ft.elapsed  = 0.0f;
+        ft.startY   = pos.y;
+        ft.isCrit   = false;
+        floatingTexts_.push_back(ft);
+    }
+
+    void spawnBlockText(Vec2 pos) {
+        FloatingText ft;
+        ft.position = pos;
+        ft.text     = "Block";
+        ft.color    = Color(0.4f, 0.7f, 1.0f);  // light blue
+        ft.lifetime = kTextLifetime;
+        ft.elapsed  = 0.0f;
+        ft.startY   = pos.y;
+        ft.isCrit   = false;
         floatingTexts_.push_back(ft);
     }
 };
