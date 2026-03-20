@@ -24,11 +24,14 @@
 #include "game/systems/npc_interaction_system.h"
 #include "game/systems/quest_system.h"
 #include "engine/job/job_system.h"
+#include <thread>
+#include <chrono>
 #include "engine/particle/particle_system.h"
 #include "engine/particle/particle_emitter_component.h"
 #include "game/ui/inventory_ui.h"
 #include "game/ui/skill_bar_ui.h"
 #include "game/ui/hud_bars_ui.h"
+#include "game/ui/touch_controls.h"
 #include "game/shared/npc_types.h"
 #include "game/components/spawn_point_component.h"
 #include "imgui.h"
@@ -874,6 +877,7 @@ void GameApp::onInit() {
     };
 
     netClient_.onCombatEvent = [this](const SvCombatEventMsg& msg) {
+        if (Editor::instance().isPaused()) return; // Don't process combat while paused
         if (!combatSystem_) return;
         auto* scene = SceneManager::instance().currentScene();
         if (!scene) return;
@@ -927,6 +931,13 @@ void GameApp::onInit() {
     };
 
     netClient_.onPlayerState = [this](const SvPlayerStateMsg& msg) {
+        // If the local player hasn't been created yet (first frame after connect),
+        // store the state and apply it after the player entity is created.
+        if (!localPlayerCreated_) {
+            hasPendingPlayerState_ = true;
+            pendingPlayerState_ = msg;
+            return;
+        }
         auto* scene = SceneManager::instance().currentScene();
         if (!scene) return;
         scene->world().forEach<CharacterStatsComponent, PlayerController>(
@@ -1075,6 +1086,7 @@ void GameApp::onInit() {
     };
 
     netClient_.onDeathNotify = [this](const SvDeathNotifyMsg& msg) {
+        if (Editor::instance().isPaused()) return; // Don't die while paused
         auto* scene = SceneManager::instance().currentScene();
         if (!scene) return;
 
@@ -1283,28 +1295,12 @@ void GameApp::onInit() {
         LOG_INFO("Client", "Zone transition to '%s' at (%.1f, %.1f)",
                  msg.targetScene.c_str(), msg.spawnX, msg.spawnY);
 
-        // Scene files are named by scene ID: assets/scenes/<SceneId>.json
-        std::string jsonPath = "assets/scenes/" + msg.targetScene + ".json";
-
-        auto& sceneMgr = SceneManager::instance();
-        auto* sc = sceneMgr.currentScene();
-        if (sc) {
-            // Load the new scene from JSON into the existing world
-            Editor::instance().loadScene(&sc->world(), jsonPath);
-            LOG_INFO("Client", "Loaded scene '%s' from %s", msg.targetScene.c_str(), jsonPath.c_str());
-
-            // Recreate local player at spawn point (scene load destroys all entities)
-            ClassType ct = ClassType::Warrior;
-            if (pendingClassName_ == "Mage") ct = ClassType::Mage;
-            else if (pendingClassName_ == "Archer") ct = ClassType::Archer;
-            Entity* player = EntityFactory::createPlayer(
-                sc->world(), pendingCharName_, ct, true, pendingFaction_);
-            auto* t = player->getComponent<Transform>();
-            if (t) t->position = {msg.spawnX, msg.spawnY};
-
-            LOG_INFO("Client", "Player respawned at (%.0f, %.0f) in %s",
-                     msg.spawnX, msg.spawnY, msg.targetScene.c_str());
-        }
+        // Defer the actual scene load to after poll() completes. Loading a scene
+        // destroys all entities in the world, which would crash any code that runs
+        // later in the same poll() pass (entity updates, combat events, etc.).
+        pendingZoneTransition_ = true;
+        pendingZoneScene_ = msg.targetScene;
+        pendingZoneSpawn_ = {msg.spawnX, msg.spawnY};
     };
 
     // Auth callbacks
@@ -1997,6 +1993,7 @@ void GameApp::onUpdate(float deltaTime) {
                     pendingCharName_ = resp.characterName;
                     pendingClassName_ = resp.className;
                     pendingSpawnPos_ = {resp.spawnX, resp.spawnY};
+                    pendingSceneName_ = resp.sceneName;
                     // Connect to game server via UDP with auth token
                     std::string host = loginScreen_.serverHost;
                     netClient_.connectWithToken(host, static_cast<uint16_t>(serverPort_), pendingAuthToken_);
@@ -2034,6 +2031,21 @@ void GameApp::onUpdate(float deltaTime) {
             // Deferred player creation — runs on first InGame frame
             if (!localPlayerCreated_) {
                 localPlayerCreated_ = true;
+
+                // Load the correct scene only if a different one is currently open
+                if (!pendingSceneName_.empty()) {
+                    std::string jsonPath = "assets/scenes/" + pendingSceneName_ + ".json";
+                    const std::string& currentPath = Editor::instance().currentScenePath();
+                    // Only reload if the scene file actually differs
+                    if (currentPath.find(pendingSceneName_) == std::string::npos) {
+                        auto* sc = SceneManager::instance().currentScene();
+                        if (sc) {
+                            Editor::instance().loadScene(&sc->world(), jsonPath);
+                            LOG_INFO("GameApp", "Loaded player scene '%s'", pendingSceneName_.c_str());
+                        }
+                    }
+                }
+
                 auto* sc = SceneManager::instance().currentScene();
                 if (sc) {
                     // Parse class type from pending class name
@@ -2054,10 +2066,35 @@ void GameApp::onUpdate(float deltaTime) {
                         spawnSys->enabled = false;
                     }
 
-                    LOG_INFO("GameApp", "Local player created for '%s' (%s) at (%.0f, %.0f) with %zu components",
+                    // Apply pending server state (level, HP, XP, etc.) that arrived
+                    // before the player entity existed.
+                    if (hasPendingPlayerState_) {
+                        hasPendingPlayerState_ = false;
+                        auto* cs = player->getComponent<CharacterStatsComponent>();
+                        if (cs) {
+                            const auto& ps = pendingPlayerState_;
+                            cs->stats.level = ps.level;
+                            cs->stats.recalculateStats();
+                            cs->stats.recalculateXPRequirement();
+                            cs->stats.currentHP = ps.currentHP;
+                            cs->stats.maxHP = ps.maxHP;
+                            cs->stats.currentMP = ps.currentMP;
+                            cs->stats.maxMP = ps.maxMP;
+                            cs->stats.currentFury = ps.currentFury;
+                            cs->stats.currentXP = ps.currentXP;
+                        }
+                        auto* inv = player->getComponent<InventoryComponent>();
+                        if (inv && pendingPlayerState_.gold > 0) {
+                            inv->inventory.addGold(pendingPlayerState_.gold);
+                        }
+                    }
+
+                    auto* finalStats = player->getComponent<CharacterStatsComponent>();
+                    LOG_INFO("GameApp", "Local player created for '%s' (%s Lv%d) at (%.0f, %.0f) in %s",
                              pendingCharName_.c_str(), pendingClassName_.c_str(),
+                             finalStats ? finalStats->stats.level : 0,
                              pendingSpawnPos_.x, pendingSpawnPos_.y,
-                             player->componentCount());
+                             pendingSceneName_.c_str());
                 }
                 break; // Skip rest of first frame
             }
@@ -2065,10 +2102,56 @@ void GameApp::onUpdate(float deltaTime) {
             // Network: poll for server messages and send movement
             netTime_ += deltaTime;
             if (netClient_.isConnected()) {
-                netClient_.poll(netTime_);
+                bool editorPaused = Editor::instance().isPaused();
 
-                // Interpolate ghost entity positions
-                {
+                // Always poll to keep connection alive (heartbeats), but when
+                // paused, skip processing game messages (combat, entity updates)
+                // so the editor pause actually freezes gameplay.
+                if (!editorPaused) {
+                    netClient_.poll(netTime_);
+                } else {
+                    // Minimal poll: just send heartbeat to prevent server timeout
+                    netClient_.poll(netTime_);
+                    // Note: messages are still received and processed by poll().
+                    // TODO: add a message filter for pause mode. For now, the
+                    // server should not damage a paused player (see below).
+                }
+
+                // Process deferred zone transition (after poll completes safely)
+                if (pendingZoneTransition_) {
+                    pendingZoneTransition_ = false;
+
+                    // Clear ghost state before destroying the world
+                    ghostEntities_.clear();
+                    ghostInterpolation_.clear();
+
+                    std::string jsonPath = "assets/scenes/" + pendingZoneScene_ + ".json";
+                    auto* sc = SceneManager::instance().currentScene();
+                    if (sc) {
+                        Editor::instance().loadScene(&sc->world(), jsonPath);
+                        LOG_INFO("Client", "Loaded scene '%s' from %s",
+                                 pendingZoneScene_.c_str(), jsonPath.c_str());
+
+                        ClassType ct = ClassType::Warrior;
+                        if (pendingClassName_ == "Mage") ct = ClassType::Mage;
+                        else if (pendingClassName_ == "Archer") ct = ClassType::Archer;
+                        Entity* player = EntityFactory::createPlayer(
+                            sc->world(), pendingCharName_, ct, true, pendingFaction_);
+                        auto* t = player->getComponent<Transform>();
+                        if (t) t->position = pendingZoneSpawn_;
+
+                        if (auto* spawnSys = sc->world().getSystem<SpawnSystem>()) {
+                            spawnSys->enabled = false;
+                        }
+
+                        LOG_INFO("Client", "Player respawned at (%.0f, %.0f) in %s",
+                                 pendingZoneSpawn_.x, pendingZoneSpawn_.y,
+                                 pendingZoneScene_.c_str());
+                    }
+                }
+
+                // Interpolate ghost entity positions (skip when paused)
+                if (!editorPaused) {
                     auto* sc = SceneManager::instance().currentScene();
                     if (sc) {
                         for (auto& [pid, handle] : ghostEntities_) {
@@ -2082,8 +2165,8 @@ void GameApp::onUpdate(float deltaTime) {
                     }
                 }
 
-                // Send movement 30 times/sec max
-                if (netTime_ - lastMoveSendTime_ >= 1.0f / 30.0f) {
+                // Send movement 30 times/sec max (skip when paused)
+                if (!editorPaused && netTime_ - lastMoveSendTime_ >= 1.0f / 30.0f) {
                     auto* sc = SceneManager::instance().currentScene();
                     if (sc) {
                         sc->world().forEach<Transform, PlayerController>([&](Entity* entity, Transform* t, PlayerController* pc) {
@@ -2108,6 +2191,19 @@ void GameApp::onUpdate(float deltaTime) {
             // F1 HUD toggle removed — HUD is always on
             // F2 collision debug removed — now controlled via editor toolbar toggle
             auto& input = Input::instance();
+
+            // Update touch controls (injects D-pad/button state into ActionMap)
+            TouchControls::instance().update(
+                input.actionMap(),
+                GameViewport::x(), GameViewport::y(),
+                GameViewport::width(), GameViewport::height());
+
+            // F4 toggles touch controls overlay (desktop testing)
+            if (input.isKeyPressed(SDL_SCANCODE_F4)) {
+                auto& tc = TouchControls::instance();
+                tc.setEnabled(!tc.isEnabled());
+                LOG_INFO("App", "Touch controls: %s", tc.isEnabled() ? "ON" : "OFF");
+            }
 
             // UI toggles — action map suppresses these in Chat context automatically
             if (input.isActionPressed(ActionId::ToggleInventory) && !Editor::instance().wantsKeyboard()) {
@@ -2218,6 +2314,11 @@ void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
                     deathOverlayUI_.render(localPlayer);
                 }
             }
+
+            // Touch controls overlay (D-pad + action buttons)
+            TouchControls::instance().render(
+                GameViewport::x(), GameViewport::y(),
+                GameViewport::width(), GameViewport::height());
         }
     }
 
@@ -2252,16 +2353,27 @@ void GameApp::drawNetworkPanel() {
 
         if (ImGui::Button("Disconnect")) {
             netClient_.disconnect();
-            // Clean up ghost entities
             auto* scene = SceneManager::instance().currentScene();
             if (scene) {
+                // Clean up ghost entities
                 for (auto& [pid, handle] : ghostEntities_) {
                     scene->world().destroyEntity(handle);
                 }
+                // Destroy local player entity
+                scene->world().forEach<PlayerController>(
+                    [&](Entity* e, PlayerController* ctrl) {
+                        if (ctrl->isLocalPlayer) {
+                            scene->world().destroyEntity(e->handle());
+                        }
+                    }
+                );
                 scene->world().processDestroyQueue();
             }
             ghostEntities_.clear();
             ghostInterpolation_.clear();
+            localPlayerCreated_ = false;
+            connState_ = ConnectionState::LoginScreen;
+            loginScreen_.reset();
         }
     } else {
         ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Disconnected");
@@ -2480,6 +2592,17 @@ void GameApp::renderAggroRadius(SpriteBatch& batch, Camera& camera) {
 }
 
 void GameApp::onShutdown() {
+    // Disconnect from server before shutdown so the server saves the correct
+    // player state immediately (alive, current position, XP). Without this,
+    // the server-side player entity stays alive and AFK — mobs kill it before
+    // the timeout fires, saving is_dead=true.
+    if (netClient_.isConnected()) {
+        netClient_.disconnect();
+        // Give the OS time to flush the UDP disconnect packets before
+        // the process exits and the socket is destroyed.
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
     tilemap_.reset();
     SDFText::instance().shutdown();
     delete renderSystem_;
