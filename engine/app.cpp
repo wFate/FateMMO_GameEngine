@@ -33,6 +33,7 @@ bool App::init(const AppConfig& config) {
         LOG_FATAL("App", "SDL_Init failed: %s", SDL_GetError());
         return false;
     }
+    sdlInitialized_ = true;
 
     // Register lifecycle event filter — catches mobile background/foreground
     // events before the main event loop (critical for iOS 5-second deadline)
@@ -438,6 +439,7 @@ void App::render() {
 void App::shutdown() {
     if (shutdownComplete_) return;
     shutdownComplete_ = true;
+    if (!sdlInitialized_) return;
     LOG_INFO("App", "Shutting down...");
 #if defined(ENGINE_MEMORY_DEBUG)
     AllocatorRegistry::instance().remove("FrameArena");
