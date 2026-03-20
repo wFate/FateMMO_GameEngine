@@ -128,13 +128,15 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Skill Bar UI | Done | 5 slots x 4 pages (20 total) on right side, K toggle, [/] page switch, drag-to-assign, cooldown overlay, right-click clear |
 | HUD Bars | Done | HP (green, top-left) / MP (blue, top-right) / XP (gold, bottom-center), positions adjustable in F3 editor HUD Layout panel |
 | Debug Info Panel | Done | FPS, pos, entities, player stats — shown only in F3 editor (moved out of F1 HUD) |
-| NPC Dialogue UI | Done | Click NPC to open, greeting + role buttons, quest accept/decline/complete, branching story dialogue |
-| Shop UI | Done | Merchant buy/sell grid, gold display, buy checks player gold |
+| NPC Dialogue UI | Done | Click NPC to open, greeting + role buttons, quest accept/decline/complete, branching story dialogue. Wired to open Shop/Trainer/Bank/Teleporter UIs via callbacks |
+| Shop UI | Done | Merchant buy/sell grid, gold display, buy checks player gold. Opens from NPC dialogue |
 | Quest Log UI | Done | L key toggle, active quests with objective progress, abandon button, completed section |
-| Skill Trainer UI | Done | Lists learnable skills, level/gold/SP requirements, greyed out if not met |
-| Bank Storage UI | Done | Deposit/withdraw items and gold, fee display |
-| Teleporter UI | Done | Destination list with costs and level requirements |
+| Skill Trainer UI | Done | Lists learnable skills, level/gold/SP requirements, greyed out if not met. Opens from NPC dialogue |
+| Bank Storage UI | Done | Deposit/withdraw items and gold, fee display. Opens from NPC dialogue |
+| Teleporter UI | Done | Destination list with costs and level requirements. Opens from NPC dialogue, triggers zone transition |
+| Death Overlay UI | Done | "You have died" panel with 3 respawn options (Town/Map Spawn/Phoenix Down), countdown timer, XP/Honor loss display |
 | Chat UI | Done | Chat button (top-right, unread indicator), panel locked to bottom 25% of viewport. 7-tab filter (All/Map/Global/Trade/Party/Guild/Private). Party/Guild blocked if not in one. Private requires `/username message`. System messages show on all tabs. Per-channel colors. All positioned via GameViewport |
+| Login Screen | Done | Username/password login, registration with character name, class selection (Warrior/Mage/Archer), faction selection (Xyros/Fenor/Zethos/Solis), server host/port config |
 | D-Pad | Planned | Mobile touch control, bottom-left |
 | Action Buttons | Planned | Attack + skill circular buttons, bottom-right |
 
@@ -193,6 +195,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | BankStorageComponent | Done | Wraps BankStorage (persistent bank item/gold storage) |
 | FactionComponent | Done | Player faction (Xyros/Fenor/Zethos/Solis), permanent, set at creation |
 | PetComponent | Done | Equipped pet instance, auto-loot radius, hasPet() check |
+| SpawnPointComponent | Done | Player respawn marker (isTownSpawn flag), placed in scenes via editor |
 
 ### Systems
 | System | Status | Notes |
@@ -201,7 +204,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | AnimationSystem | Done | Timer-based frame updates |
 | CameraFollowSystem | Done | Locked to local player, smooth (no pixel-snap jitter) |
 | SpriteRenderSystem | Done | Frustum culled, depth sorted, respects sprite enabled flag |
-| GameplaySystem | Done | Ticks StatusEffects, CrowdControl, HP/MP regen, PK decay, respawn, nameplates |
+| GameplaySystem | Done | Ticks StatusEffects, CrowdControl, HP/MP regen, PK decay, death visual (rotation + gray tint), respawn countdown, nameplates |
 | MobAISystem | Done | Ticks MobAI for all mobs, scans for players, applies movement, fires attacks |
 | CombatActionSystem | Done | TWOM Option B targeting, viewport-aware click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP, same-faction PvP block, home village PK exception check, mob HP bars always visible |
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment, deferred entity creation (safe during archetype iteration) |
@@ -214,7 +217,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 ### Entity Factory
 | Feature | Status | Notes |
 |---------|--------|-------|
-| createPlayer() | Done | Assembles player with all 21+ components (includes FactionComponent, PetComponent), faction-based spawn position |
+| createPlayer() | Done | Assembles player with all 24 components (includes FactionComponent, PetComponent), faction selected at character creation (Xyros/Fenor/Zethos/Solis) |
 | createMob() | Done | Assembles mob with EnemyStats, MobAI, StatusEffects, nameplate, procedural pixel art sprites (Slime/Goblin/Wolf/Mushroom/Forest Golem), trigger colliders |
 | createNPC() | Done | Assembles NPC from NPCTemplate with composable role components (quest/shop/trainer/bank/guild/teleporter/story) |
 | Class Configuration | Done | Warrior/Mage/Archer stats from CLAUDE.md class table (HP, STR, per-level gains) |
@@ -268,7 +271,7 @@ All 27 game systems from the C#/Unity prototype have been converted to C++ and l
 ### NPC & Quest System (New — TWOM-Inspired)
 | System | Files | Notes |
 |--------|-------|-------|
-| Quest Manager | `quest_manager.h/.cpp` | Quest progress tracking, accept/abandon/turn-in, 5 objective types (Kill/Collect/Deliver/TalkTo/PvP), max 10 active quests, prerequisite chains |
+| Quest Manager | `quest_manager.h/.cpp` | Quest progress tracking, accept/abandon/turn-in, 5 objective types (Kill/Collect/Deliver/TalkTo/PvP), max 10 active quests, prerequisite chains, client-side state sync (markCompleted/setProgress from server) |
 | Quest Data | `quest_data.h` | Hardcoded quest registry with 6 starter quests, 4 TWOM tiers (Starter/Novice/Apprentice/Adept) |
 | NPC Types | `npc_types.h` | NPCTemplate, ShopItem, TrainableSkill, TeleportDestination structs |
 | Dialogue Tree | `dialogue_tree.h` | Branching dialogue with enum-based actions (GiveItem/GiveXP/GiveGold/SetFlag/Heal) and conditions (HasFlag/MinLevel/HasItem/HasClass) |
@@ -289,7 +292,7 @@ See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 | Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(DB wired — full session flow: initiate/addItem/lock/confirm/execute/cancel, atomic item+gold transfer)** |
 | Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(DB wired — list/buy/cancel, 2% tax to jackpot, offline seller credit, expiry maintenance)** |
 | Gauntlet | `gauntlet.h/.cpp` | ~850 | GauntletManager + GauntletInstance + GauntletTeam + GauntletRegistry + GauntletConfig (10 files) | Full event scheduler (2hr cycle, 10min signup), division-based matchmaking, GauntletTeam per-team scoring/MVP, GauntletRegistry signup queues, BasicWaveConfig/BossSpawnConfig/LevelMobMapping for wave spawning, reward configs (winner/loser/performance), consolation for overflow, announcement callbacks, debug commands **(DB wired — config loaded at startup, ticked every frame, CmdGauntlet register/unregister/status, mob kill notifications routed)** |
-| Faction System | `faction.h` | ~130 | FactionRegistry + FactionChatGarbler | 4 factions (Xyros/Fenor/Zethos/Solis), registry, deterministic chat garbling, same-faction checks |
+| Faction System | `faction.h` | ~130 | FactionRegistry + FactionChatGarbler | 4 factions (Xyros/Fenor/Zethos/Solis), registry, deterministic chat garbling, same-faction checks, faction picker on registration screen |
 | Pet System | `pet_system.h/.cpp` | ~120 | PetDefinition + PetInstance + PetSystem | Leveling, rarity-tiered stats (HP/Crit/XP bonus), XP sharing (50%), player-level cap |
 | Stat Enchant System | `stat_enchant_system.h` | ~70 | StatEnchantSystem | Accessory enchanting (Belt/Ring/Necklace/Cloak), 6-tier roll table, HP/MP x10 scaling |
 | Bounty System | `bounty_system.h` | ~200 | NetworkBountyManager + BountyService + BountyRepository | PvE bounty board (max 10 active, 50K-500M gold, 48hr expiry), 2% tax, guild-mate protection, 12hr guild-leave cooldown, party split on claim, cancel/refund, expiration processing **(DB wired — place/cancel handlers + expiry maintenance)** |
@@ -348,6 +351,35 @@ pvpDamage = baseDamage * 0.05
 ---
 
 ## Changelog
+
+### March 19, 2026 - Death/Respawn System, NPC UI Wiring, Faction Selection
+
+**Death & Respawn (client-side):**
+- Death/respawn protocol messages (`SvDeathNotifyMsg`, `CmdRespawnMsg`, `SvRespawnMsg`) with packet types 0xA0, 0xA1, 0x1B
+- `SpawnPointComponent` for player respawn locations (distinct from BossSpawnPointComponent)
+- `DeathOverlayUI` — centered panel with "You have died" text, XP/Honor loss display, 5-second countdown, 3 respawn options (Town, Map Spawn, Phoenix Down with inventory check)
+- Death visual: sprite rotation (-PI/2 lay-down), gray tint (0.3 alpha), animation stop
+- Movement blocked when dead, skill bar grayed out, combat already blocked
+- `NetClient` wiring: `sendRespawn()`, `onDeathNotify`/`onRespawn` callbacks
+- `respawn()` now restores both HP and MP to full
+- GameplaySystem no longer auto-respawns — player-initiated via DeathOverlayUI
+- Server-side death triggering is a separate in-progress task
+
+**NPC Interaction UI Wiring:**
+- NPCDialogueUI now has callbacks: `onOpenShop`, `onOpenSkillTrainer`, `onOpenBank`, `onOpenGuildCreation`, `onTeleport`
+- All 5 TODO stubs in dialogue replaced with callback invocations
+- ShopUI, SkillTrainerUI, BankStorageUI, TeleporterUI added as GameApp members with render calls
+- Clicking NPC dialogue buttons opens the correct sub-UI and closes the dialogue
+- Guild creation checks level requirement and gold cost
+- Teleporter validates gold client-side and sends zone transition request to server
+
+**Faction Selection:**
+- Color-coded faction radio buttons on registration screen (Xyros red, Fenor blue, Zethos green, Solis gold)
+- `pendingFaction_` member on GameApp, stored on register submit
+- All 3 hardcoded `Faction::Xyros` in `createPlayer` calls replaced with selected faction
+
+**Quest Manager:**
+- Added `markCompleted(questId)` and `setProgress(questId, currentCount, targetCount)` for client-side state sync from server messages
 
 ### March 18, 2026 - Loot Drop, Ground Items, Boss Spawning, Starter Equipment
 
@@ -1411,7 +1443,7 @@ game/
 - [x] Inventory UI (grid, equipment panel, tooltips, drag-and-drop, stats tab)
 - [x] Skill Bar UI (5 slots x 4 pages on right side, K toggle, [/] pages, drag-to-assign, cooldown overlay)
 - [x] Skills Tab (learned skills list, drag-to-assign to bar, activate rank with skill points)
-- [ ] Chat System UI (channel tabs, scrolling text buffer)
+- [x] Chat System UI (channel tabs, scrolling text buffer, faction-scoped garbling)
 - [x] Mob Nameplates (level-colored by difficulty, HP bars when damaged)
 - [x] Player Nameplates (name + level + PK color + guild name)
 - [x] Ground loot on mob kill (items + gold as entity type 3, pickup via CmdAction)
