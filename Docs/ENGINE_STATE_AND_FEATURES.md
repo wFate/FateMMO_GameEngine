@@ -352,6 +352,23 @@ pvpDamage = baseDamage * 0.05
 
 ## Changelog
 
+### March 19, 2026 - Stability Tests + Skill Bar Client Wiring
+
+**95 new tests (261 → 356) covering critical stability gaps:**
+- Network robustness: empty buffers, truncated messages, oversized strings, garbage values, double-read past end (14 tests)
+- Inventory: full inventory, gold overflow/underflow, stacking, trade locking, out-of-bounds, callbacks (24 tests)
+- Enemy stats: threat table multi-attacker, top threat, respawn clears, scaling, damage/death/heal edge cases (30 tests)
+- CC precedence: shorter stun no-override, stun overrides root/freeze, invulnerability blocks CC, stun immunity, min duration, tick expiry (14 tests)
+- Skill null safety: null casterStats/SEM/CC, both targets null, range 0, self-buff, rank validation (13 tests)
+
+**Bug found and fixed:** `executeSkill(skillId, 0, ctx)` caused vector out-of-bounds (`ri = rank-1 = -1`). Now rejects rank < 1.
+
+**Skill bar client wiring:**
+- `onSkillActivated` callback on SkillBarUI, fired on left-click of assigned skill (not on cooldown)
+- GameApp wires callback to look up target PersistentId from ghostEntities_ and call `netClient_.sendUseSkill()`
+- `getTargetEntityId()` accessor added to CombatActionSystem
+- Full end-to-end pipeline: SkillBarUI click → NetClient → Server processUseSkill → executeSkill → broadcast SvSkillResult → client floating text
+
 ### March 19, 2026 - Server Wiring: Shop, Inventory, Skills, Protocol
 
 **Shop buy fix:**
