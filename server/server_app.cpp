@@ -1693,13 +1693,26 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
 
             // Transition allowed — send SvZoneTransition back to client
             LOG_INFO("Server", "Client %d zone transition -> '%s'", clientId, cmd.targetScene.c_str());
+
+            // Look up spawn position from scene cache
+            float spawnX = 0.0f, spawnY = 0.0f;
+            auto* targetSceneDef = sceneCache_.get(cmd.targetScene);
+            if (targetSceneDef) {
+                spawnX = targetSceneDef->defaultSpawnX;
+                spawnY = targetSceneDef->defaultSpawnY;
+            }
+
             SvZoneTransitionMsg resp;
             resp.targetScene = cmd.targetScene;
-            resp.spawnX = 0; // default spawn; portals override via PortalComponent::targetSpawnPos
-            resp.spawnY = 0;
+            resp.spawnX = spawnX;
+            resp.spawnY = spawnY;
             uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
             resp.write(w);
             server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvZoneTransition, buf, w.size());
+
+            // Update movement tracking for the new scene position
+            lastValidPositions_[clientId] = {spawnX, spawnY};
+            lastMoveTime_[clientId] = gameTime_;
 
             // Save updated scene to DB asynchronously
             savePlayerToDBAsync(clientId);
@@ -1716,13 +1729,15 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             if (!e) break;
 
             auto* sc = e->getComponent<CharacterStatsComponent>();
-            if (!sc || !sc->stats.isDead) {
-                LOG_WARN("Server", "Client %d sent CmdRespawn but is not dead", clientId);
-                break;
-            }
+            if (!sc) break;
+
+            // Accept respawn even if server doesn't think player is dead —
+            // server-side mob→player combat isn't implemented yet, so death
+            // only happens client-side. Once server combat is added, re-enable:
+            // if (!sc->stats.isDead) { LOG_WARN(...); break; }
 
             // Check timer for type 0 (town) and type 1 (map spawn)
-            if (msg.respawnType <= 1 && sc->stats.respawnTimeRemaining > 0.0f) {
+            if (sc->stats.isDead && msg.respawnType <= 1 && sc->stats.respawnTimeRemaining > 0.0f) {
                 LOG_WARN("Server", "Client %d respawn rejected: timer still %.1fs",
                          clientId, sc->stats.respawnTimeRemaining);
                 break;
@@ -1766,8 +1781,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             // Type 2 (Phoenix Down): respawnPos stays at death position
 
             // Execute respawn
-            sc->stats.respawn();
+            if (sc->stats.isDead) sc->stats.respawn();
             if (t) t->position = respawnPos;
+            // Update movement tracking so server doesn't rubber-band after teleport
+            lastValidPositions_[clientId] = respawnPos;
+            lastMoveTime_[clientId] = gameTime_;
 
             // Send SvRespawnMsg to client
             SvRespawnMsg resp;
