@@ -43,6 +43,16 @@ FetchContent_Declare(
 set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(json)
 
+# spdlog (fast logging with per-subsystem loggers)
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.15.1
+    GIT_SHALLOW    TRUE
+)
+set(SPDLOG_FMT_EXTERNAL OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(spdlog)
+
 # stb (for stb_image.h)
 FetchContent_Declare(
     stb
@@ -186,6 +196,7 @@ target_link_libraries(fate_engine PUBLIC
     ${OPENGL_LIB}
     TracyClient
     OpenSSL::SSL OpenSSL::Crypto
+    spdlog::spdlog
 )
 
 if(WIN32)
@@ -230,7 +241,7 @@ file(GLOB_RECURSE SERVER_SOURCES server/*.cpp server/*.h)
 file(GLOB_RECURSE SERVER_SHARED_SOURCES game/shared/*.cpp)
 if(SERVER_SOURCES)
     add_executable(FateServer ${SERVER_SOURCES} ${SERVER_SHARED_SOURCES})
-    target_link_libraries(FateServer PRIVATE fate_engine pqxx PostgreSQL::PostgreSQL bcrypt_lib OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(FateServer PRIVATE fate_engine pqxx PostgreSQL::PostgreSQL bcrypt_lib OpenSSL::SSL OpenSSL::Crypto spdlog::spdlog)
     target_include_directories(FateServer PRIVATE ${CMAKE_SOURCE_DIR})
     if(WIN32)
         target_link_libraries(FateServer PRIVATE winmm)
@@ -249,7 +260,7 @@ file(GLOB_RECURSE TEST_SOURCES tests/*.cpp)
 file(GLOB_RECURSE GAME_SHARED_SOURCES game/shared/*.cpp)
 if(TEST_SOURCES)
     add_executable(fate_tests ${TEST_SOURCES} ${GAME_SHARED_SOURCES})
-    target_link_libraries(fate_tests PRIVATE fate_engine doctest::doctest)
+    target_link_libraries(fate_tests PRIVATE fate_engine doctest::doctest spdlog::spdlog)
     target_include_directories(fate_tests PRIVATE ${CMAKE_SOURCE_DIR})
 endif()
 
