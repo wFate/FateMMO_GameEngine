@@ -760,17 +760,38 @@ public:
         return entity;
     }
 
-    /// Create a ghost (remote) mob entity — minimal visual representation.
-    static Entity* createGhostMob(World& world, const std::string& name, Vec2 position) {
+    /// Create a ghost (remote) mob entity — full visual representation from server data.
+    static Entity* createGhostMob(World& world, const std::string& name, Vec2 position,
+                                   const std::string& mobDefId = "", int level = 1,
+                                   int currentHP = 100, int maxHP = 100,
+                                   bool isBoss = false) {
         Entity* entity = world.createEntity(name);
-        entity->setTag("ghost");
+        entity->setTag("mob");
         auto* t = entity->addComponent<Transform>(position);
         t->depth = 1.0f;
+
         auto* sprite = entity->addComponent<SpriteComponent>();
+        if (!mobDefId.empty()) {
+            std::string path = "assets/sprites/mob_" + mobDefId + ".png";
+            sprite->texture = TextureCache::instance().load(path);
+        }
         sprite->size = {32.0f, 32.0f};
+
+        auto* es = entity->addComponent<EnemyStatsComponent>();
+        es->stats.enemyName = name;
+        es->stats.enemyId = mobDefId;
+        es->stats.level = level;
+        es->stats.currentHP = currentHP;
+        es->stats.maxHP = maxHP;
+        es->stats.isAlive = currentHP > 0;
+        es->stats.isBoss = isBoss;
+
         auto* np = entity->addComponent<MobNameplateComponent>();
         np->displayName = name;
+        np->level = level;
+        np->isBoss = isBoss;
         np->visible = true;
+
         return entity;
     }
 

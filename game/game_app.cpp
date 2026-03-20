@@ -801,7 +801,10 @@ void GameApp::onInit() {
             ghost = EntityFactory::createGhostPlayer(world, msg.name, msg.position);
         } else if (msg.entityType == 3) { // dropped item
             ghost = EntityFactory::createGhostDroppedItem(world, msg.name, msg.position);
-        } else { // mob or npc
+        } else if (msg.entityType == 1) { // mob
+            ghost = EntityFactory::createGhostMob(world, msg.name, msg.position,
+                msg.mobDefId, msg.level, msg.currentHP, msg.maxHP, msg.isBoss != 0);
+        } else { // npc or unknown
             ghost = EntityFactory::createGhostMob(world, msg.name, msg.position);
         }
         if (ghost) {
@@ -841,6 +844,19 @@ void GameApp::onInit() {
         if (msg.fieldMask & 0x04) { // flipX
             auto* s = ghost->getComponent<SpriteComponent>();
             if (s) s->flipX = (msg.flipX != 0);
+        }
+        // Sync mob/ghost HP from server
+        if (msg.fieldMask & 0x08) { // bit 3 = currentHP
+            auto* es = ghost->getComponent<EnemyStatsComponent>();
+            if (es) {
+                es->stats.currentHP = msg.currentHP;
+                es->stats.isAlive = msg.currentHP > 0;
+                // Hide sprite when mob dies
+                if (!es->stats.isAlive) {
+                    auto* spr = ghost->getComponent<SpriteComponent>();
+                    if (spr) spr->enabled = false;
+                }
+            }
         }
     };
 
@@ -1986,6 +2002,11 @@ void GameApp::onUpdate(float deltaTime) {
                     // Set saved position from DB (sent via auth response)
                     auto* t = player->getComponent<Transform>();
                     if (t) t->position = pendingSpawnPos_;
+
+                    // Disable local mob spawning — server replicates mobs
+                    if (auto* spawnSys = sc->world().getSystem<SpawnSystem>()) {
+                        spawnSys->enabled = false;
+                    }
 
                     LOG_INFO("GameApp", "Local player created for '%s' (%s) at (%.0f, %.0f) with %zu components",
                              pendingCharName_.c_str(), pendingClassName_.c_str(),
