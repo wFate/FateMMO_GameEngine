@@ -845,10 +845,60 @@ void GameApp::onInit() {
     };
 
     netClient_.onCombatEvent = [this](const SvCombatEventMsg& msg) {
-        LOG_INFO("Combat", "Damage: %d to entity %llu%s%s",
-                 msg.damage, (unsigned long long)msg.targetId,
-                 msg.isCrit ? " (CRIT)" : "",
-                 msg.isKill ? " (KILL)" : "");
+        if (!combatSystem_) return;
+        auto* scene = SceneManager::instance().currentScene();
+        if (!scene) return;
+
+        // Find target entity position for floating text
+        Vec2 targetPos{0, 0};
+        bool foundTarget = false;
+
+        // Check if target is the local player
+        scene->world().forEach<PlayerController, Transform>(
+            [&](Entity*, PlayerController* ctrl, Transform* t) {
+                if (!ctrl->isLocalPlayer || foundTarget) return;
+                // Compute local player's PersistentId (same as server: hash of characterName)
+                // For now just assume any player→player combat event targets us
+                targetPos = t->position;
+                foundTarget = true;
+            }
+        );
+
+        // Check if target is a mob (match by checking ghost entities or mobs)
+        if (!foundTarget) {
+            auto it = ghostEntities_.find(msg.targetId);
+            if (it != ghostEntities_.end()) {
+                Entity* ghost = scene->world().getEntity(it->second);
+                if (ghost) {
+                    auto* t = ghost->getComponent<Transform>();
+                    if (t) { targetPos = t->position; foundTarget = true; }
+                }
+            }
+        }
+
+        // Also check mobs — they're registered via entity enter with persistentId
+        // Mobs have EnemyStatsComponent, try matching entity handle value
+        if (!foundTarget) {
+            scene->world().forEach<EnemyStatsComponent, Transform>(
+                [&](Entity* e, EnemyStatsComponent*, Transform* t) {
+                    if (foundTarget) return;
+                    // Entity handle value may match the persistent ID for locally-known mobs
+                    if (static_cast<uint64_t>(e->handle().value) == msg.targetId) {
+                        targetPos = t->position;
+                        foundTarget = true;
+                    }
+                }
+            );
+        }
+
+        if (!foundTarget) return;
+
+        // Spawn floating text
+        if (msg.damage == 0) {
+            combatSystem_->showMissText(targetPos);
+        } else {
+            combatSystem_->showDamageText(targetPos, msg.damage, msg.isCrit != 0);
+        }
     };
 
     netClient_.onPlayerState = [this](const SvPlayerStateMsg& msg) {

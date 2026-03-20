@@ -305,6 +305,10 @@ public:
         vpWidth_ = w; vpHeight_ = h; vpOffset_ = offset;
     }
 
+    // Public floating text spawning — used by GameApp::onCombatEvent for server-driven combat
+    void showDamageText(Vec2 pos, int damage, bool isCrit) { spawnDamageText(pos, damage, isCrit); }
+    void showMissText(Vec2 pos) { spawnMissText(pos); }
+
 private:
     int vpWidth_ = 1280;
     int vpHeight_ = 720;
