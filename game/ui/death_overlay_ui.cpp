@@ -29,8 +29,10 @@ static bool drawFgButton(ImDrawList* dl, const char* label, ImVec2 pos, ImVec2 s
     ImVec2 min = pos;
     ImVec2 max = ImVec2(pos.x + size.x, pos.y + size.y);
 
-    bool hovered = enabled && ImGui::IsMouseHoveringRect(min, max);
-    bool clicked = hovered && ImGui::IsMouseClicked(0);
+    // Use raw IO mouse state — ImGui::IsMouseClicked gets consumed by windows underneath
+    ImVec2 mp = ImGui::GetIO().MousePos;
+    bool hovered = enabled && mp.x >= min.x && mp.x <= max.x && mp.y >= min.y && mp.y <= max.y;
+    bool clicked = hovered && ImGui::GetIO().MouseClicked[0];
 
     ImU32 bg = (hovered && enabled) ? hoverCol : bgCol;
     if (!enabled) bg = IM_COL32(40, 40, 50, 180);
