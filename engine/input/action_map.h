@@ -99,6 +99,22 @@ public:
         }
     }
 
+    // --- programmatic input injection (touch controls, gamepad, etc.) -------
+
+    void setActionPressed(ActionId id) {
+        size_t i = static_cast<size_t>(id);
+        pressed_[i] = true;
+        held_[i] = true;
+    }
+    void setActionReleased(ActionId id) {
+        size_t i = static_cast<size_t>(id);
+        released_[i] = true;
+        held_[i] = false;
+    }
+    void setActionHeld(ActionId id, bool held) {
+        held_[static_cast<size_t>(id)] = held;
+    }
+
     // --- queries ------------------------------------------------------------
 
     bool isPressed(ActionId id)  const { return pressed_[static_cast<size_t>(id)]; }
