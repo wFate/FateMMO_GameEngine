@@ -28,6 +28,12 @@ struct AppConfig {
     std::string assetsDir;  // absolute path to assets/ directory (set by game)
 };
 
+enum class AppLifecycleState {
+    Active,         // Game is running normally
+    Background,     // App is backgrounded (mobile) or minimized (desktop)
+    Suspended       // App is about to be terminated (iOS only)
+};
+
 // Base application class - game inherits from this
 class App {
 public:
@@ -44,6 +50,18 @@ public:
     virtual void onFixedUpdate(float fixedDeltaTime) {}
     virtual void onRender(SpriteBatch& batch, Camera& camera) {}
     virtual void onShutdown() {}
+
+    // Mobile lifecycle callbacks — override in game for custom behavior
+    virtual void onEnterBackground() {}
+    virtual void onEnterForeground() {}
+    virtual void onLowMemory() {}
+
+    // Lifecycle state queries
+    AppLifecycleState lifecycleState() const { return lifecycleState_; }
+    bool isBackgrounded() const { return lifecycleState_ != AppLifecycleState::Active; }
+
+    // Public for testing — dispatches lifecycle events to state + callbacks
+    void handleLifecycleEvent(const SDL_Event& event);
 
     // Accessors
     SpriteBatch& spriteBatch() { return spriteBatch_; }
@@ -80,6 +98,8 @@ private:
     FileWatcher fileWatcher_;
     float elapsedTime_ = 0.0f;  // for reload debounce timestamps
     std::string assetsDir_;     // cached from config
+    AppLifecycleState lifecycleState_ = AppLifecycleState::Active;
+    static int SDLCALL lifecycleEventFilter(void* userdata, SDL_Event* event);
 
     void processEvents();
     void update();
