@@ -242,7 +242,7 @@ void CharacterStats::addXP(int64_t amount) {
 
     currentXP += amount;
 
-    while (currentXP >= xpToNextLevel) {
+    while (currentXP >= xpToNextLevel && xpToNextLevel > 0) {
         currentXP -= xpToNextLevel;
         level++;
 

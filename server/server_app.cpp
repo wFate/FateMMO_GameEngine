@@ -2278,7 +2278,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             // Award XP to the killer
             if (casterStatsComp) {
                 int xp = es.xpReward;
-                casterStatsComp->stats.currentXP += xp;
+                casterStatsComp->stats.addXP(xp);
                 LOG_INFO("Server", "Client %d gained %d XP from '%s'",
                          clientId, xp, es.enemyName.c_str());
             }
@@ -2483,7 +2483,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             // Award XP to the killer
             if (charStats) {
                 int xp = es.xpReward;
-                charStats->stats.currentXP += xp;
+                charStats->stats.addXP(xp);
                 LOG_INFO("Server", "Client %d gained %d XP from '%s'",
                          clientId, xp, es.enemyName.c_str());
             }

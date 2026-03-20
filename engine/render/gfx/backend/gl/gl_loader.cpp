@@ -1,7 +1,23 @@
-// gl_loader.cpp - Load OpenGL 3.3 function pointers via SDL
+// gl_loader.cpp - Load OpenGL function pointers
+// Desktop: Load via SDL_GL_GetProcAddress at runtime
+// iOS (GLES): All functions linked statically — loadGLFunctions() is a no-op
+//
 // NOTE: We must NOT include gl_loader.h here because it #defines GL function
 // names to our _fp pointers, which would break the LOAD macro expansion.
 // Instead we include SDL directly and redeclare what we need.
+
+#include "engine/core/logger.h"
+
+#ifdef FATEMMO_GLES
+
+namespace fate {
+bool loadGLFunctions() {
+    // All GL ES functions are linked statically on iOS
+    return true;
+}
+} // namespace fate
+
+#else // Desktop GL — runtime loading via SDL
 
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
@@ -10,7 +26,6 @@
 
 #include <SDL.h>
 #include <SDL_opengl.h>
-#include "engine/core/logger.h"
 
 // ============================================================================
 // Define all function pointers (initially null)
@@ -129,3 +144,5 @@ bool loadGLFunctions() {
 }
 
 } // namespace fate
+
+#endif // FATEMMO_GLES

@@ -1,9 +1,16 @@
 #pragma once
 // ============================================================================
-// Minimal OpenGL 3.3 Core Function Loader
-// Uses SDL_GL_GetProcAddress - no GLAD/GLEW dependency needed
-// SDL_opengl_glext.h provides all PFN* typedefs, we just load the pointers
+// Minimal OpenGL 3.3 Core / OpenGL ES 3.0 Function Loader
+// Desktop: Uses SDL_GL_GetProcAddress - no GLAD/GLEW dependency needed
+// iOS:     All GL ES functions are linked statically — no runtime loading
 // ============================================================================
+
+#ifdef FATEMMO_GLES
+    #include <OpenGLES/ES3/gl.h>
+    #include <OpenGLES/ES3/glext.h>
+    // On iOS, all GL ES functions are linked statically — no runtime loading needed
+    #define FATEMMO_GL_STATIC_LINK
+#else
 
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
@@ -150,6 +157,8 @@ extern PFNGLFRAMEBUFFERRENDERBUFFERPROC    glFramebufferRenderbuffer_fp;
 #define glBindRenderbuffer         glBindRenderbuffer_fp
 #define glRenderbufferStorage      glRenderbufferStorage_fp
 #define glFramebufferRenderbuffer  glFramebufferRenderbuffer_fp
+
+#endif // !FATEMMO_GLES
 
 // ============================================================================
 // Loader function (call after creating SDL GL context)

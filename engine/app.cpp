@@ -39,13 +39,19 @@ bool App::init(const AppConfig& config) {
     // events before the main event loop (critical for iOS 5-second deadline)
     SDL_SetEventFilter(lifecycleEventFilter, this);
 
+#ifdef FATEMMO_GLES
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+#else
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+#endif
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
 
-    Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED;
+    Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_ALLOW_HIGHDPI;
     if (config.fullscreen) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
     window_ = SDL_CreateWindow(
@@ -66,6 +72,15 @@ bool App::init(const AppConfig& config) {
     }
 
     SDL_GL_SetSwapInterval(config.vsync ? 1 : 0);
+
+#ifdef FATEMMO_GLES
+    // On iOS with Retina displays, the drawable size differs from the window size
+    int drawW, drawH;
+    SDL_GL_GetDrawableSize(window_, &drawW, &drawH);
+    config_.windowWidth = drawW;
+    config_.windowHeight = drawH;
+    LOG_INFO("App", "Drawable size: %dx%d", drawW, drawH);
+#endif
 
     if (!loadGLFunctions()) {
         LOG_FATAL("App", "Failed to load OpenGL functions");
