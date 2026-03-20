@@ -352,6 +352,28 @@ pvpDamage = baseDamage * 0.05
 
 ## Changelog
 
+### March 19, 2026 - Server Wiring: Shop, Inventory, Skills, Protocol
+
+**Shop buy fix:**
+- Shop buy button now creates ItemInstance from ShopItem, adds to inventory. Refunds gold if inventory full.
+
+**Inventory load from DB on connect:**
+- `inventoryRepo_->loadInventory()` called in `onClientConnected()` after gold loading
+- Converts InventorySlotRecord → ItemInstance with rolled stats, sockets, display name + rarity from ItemDefinitionCache
+
+**Skill definitions loaded from DB:**
+- `convertCachedToSkillDef()` converts CachedSkillDef + CachedSkillRank rows → SkillDefinition
+- All skills for player's class registered on SkillManager during connect
+- Enables executeSkill to look up damage, cooldowns, effects, passive bonuses
+
+**CmdUseSkill protocol + server handler:**
+- New packet types: CmdUseSkill (0x1C), SvSkillResult (0xA2)
+- CmdUseSkillMsg carries skillId (string), rank, targetId (PersistentId)
+- SvSkillResultMsg carries damage, isCrit, isKill, wasMiss for floating text
+- Server `processUseSkill()` builds SkillExecutionContext from ECS components, calls executeSkill, broadcasts result, handles mob death (loot/gold/gauntlet) and PvP death
+- Client `onSkillResult` callback displays floating damage/miss text on target
+- NetClient::sendUseSkill() for client → server skill requests
+
 ### March 19, 2026 - Skill System Completion (Full Unity Port)
 
 **Skill execution pipeline (`executeSkill` + `executeSkillAOE`):**
