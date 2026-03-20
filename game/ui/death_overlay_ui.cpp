@@ -22,7 +22,10 @@ void DeathOverlayUI::render(Entity* player) {
         return;
     }
 
-    if (!active_) return;
+    // Auto-activate when player dies locally (before server sends SvDeathNotifyMsg)
+    if (!active_) {
+        onDeath(0, 0, 5.0f);
+    }
 
     // Tick local countdown
     float dt = ImGui::GetIO().DeltaTime;
