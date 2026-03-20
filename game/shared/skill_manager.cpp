@@ -73,11 +73,28 @@ bool SkillManager::learnSkill(const std::string& skillId, int rank) {
         return false;
     }
 
+    // If a definition is registered, validate class and level requirements
+    const SkillDefinition* def = getSkillDefinition(skillId);
+    if (def) {
+        // Class restriction: must match player class name or be "Any"
+        if (def->className != "Any" && stats && def->className != stats->className) {
+            return false;
+        }
+        // Level requirement
+        if (stats && stats->level < def->levelRequirement) {
+            return false;
+        }
+    }
+
     // Check if we already know this skill
     for (auto& skill : learnedSkills) {
         if (skill.skillId == skillId) {
             // Already known — only upgrade if the new rank is higher
             if (rank <= skill.unlockedRank) {
+                return false;
+            }
+            // Sequential unlock: rank N requires rank N-1 already unlocked
+            if (rank > skill.unlockedRank + 1) {
                 return false;
             }
             skill.unlockedRank = rank;
@@ -89,12 +106,19 @@ bool SkillManager::learnSkill(const std::string& skillId, int rank) {
         }
     }
 
-    // New skill
+    // New skill — must start at rank 1
+    if (rank != 1) {
+        return false;
+    }
+
     LearnedSkill newSkill;
     newSkill.skillId      = skillId;
     newSkill.unlockedRank = rank;
     newSkill.activatedRank = 0;
     learnedSkills.push_back(std::move(newSkill));
+
+    // Auto-assign to skill bar on first learn
+    autoAssignToSkillBar(skillId);
 
     if (onSkillLearned) {
         onSkillLearned(skillId, rank);
@@ -214,6 +238,58 @@ std::string SkillManager::getSkillInSlot(int globalSlotIndex) const {
         return "";
     }
     return skillBarSlots[globalSlotIndex];
+}
+
+void SkillManager::clearSkillSlot(int globalSlotIndex) {
+    if (globalSlotIndex < 0 || globalSlotIndex >= SKILL_BAR_SLOTS) {
+        return;
+    }
+    skillBarSlots[globalSlotIndex] = "";
+}
+
+void SkillManager::swapSkillSlots(int slotA, int slotB) {
+    if (slotA < 0 || slotA >= SKILL_BAR_SLOTS) return;
+    if (slotB < 0 || slotB >= SKILL_BAR_SLOTS) return;
+    std::swap(skillBarSlots[slotA], skillBarSlots[slotB]);
+}
+
+bool SkillManager::autoAssignToSkillBar(const std::string& skillId) {
+    if (!hasSkill(skillId)) {
+        return false;
+    }
+
+    // Check if already assigned somewhere
+    for (int i = 0; i < SKILL_BAR_SLOTS; ++i) {
+        if (skillBarSlots[i] == skillId) {
+            return true;
+        }
+    }
+
+    // Find first empty slot
+    for (int i = 0; i < SKILL_BAR_SLOTS; ++i) {
+        if (skillBarSlots[i].empty()) {
+            skillBarSlots[i] = skillId;
+            return true;
+        }
+    }
+
+    return false;  // No empty slot available
+}
+
+// ============================================================================
+// Skill Definition Registry
+// ============================================================================
+
+void SkillManager::registerSkillDefinition(const SkillDefinition& def) {
+    skillDefinitions_[def.skillId] = def;
+}
+
+const SkillDefinition* SkillManager::getSkillDefinition(const std::string& skillId) const {
+    auto it = skillDefinitions_.find(skillId);
+    if (it == skillDefinitions_.end()) {
+        return nullptr;
+    }
+    return &it->second;
 }
 
 // ============================================================================

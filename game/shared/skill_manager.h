@@ -53,6 +53,48 @@ struct SkillDefinition {
     std::vector<float> damagePerRank;
     std::vector<float> cooldownPerRank;
     std::vector<float> costPerRank;
+
+    // ---- Resource & Scaling ----
+    ResourceType resourceType = ResourceType::Mana;
+    bool  canCrit            = true;
+    bool  usesHitRate        = true;
+    float furyOnHit          = 0.0f;
+    bool  scalesWithResource = false;
+
+    // ---- Effect Application Flags ----
+    bool appliesBleed  = false;
+    bool appliesBurn   = false;
+    bool appliesPoison = false;
+    bool appliesSlow   = false;
+    bool appliesFreeze = false;
+
+    std::vector<float> stunDurationPerRank;
+    std::vector<float> effectDurationPerRank;
+    std::vector<float> effectValuePerRank;
+
+    // ---- Passive Bonuses (per-rank) ----
+    std::vector<float> passiveDamageReductionPerRank;
+    std::vector<float> passiveCritBonusPerRank;
+    std::vector<float> passiveSpeedBonusPerRank;
+    std::vector<int>   passiveHPBonusPerRank;
+    std::vector<int>   passiveStatBonusPerRank;
+
+    // ---- Special Mechanics ----
+    bool isUltimate = false;
+    std::vector<float> executeThresholdPerRank;
+
+    bool  grantsInvulnerability = false;
+    bool  removesDebuffs        = false;
+    bool  grantsStunImmunity    = false;
+    bool  grantsCritGuarantee   = false;
+
+    float aoeRadius = 0.0f;
+    std::vector<int> maxTargetsPerRank;
+
+    float teleportDistance     = 0.0f;
+    float dashDistance         = 0.0f;
+    float transformDamageMult  = 0.0f;
+    float transformSpeedBonus  = 0.0f;
 };
 
 // ============================================================================
@@ -88,6 +130,9 @@ public:
     // ---- Skill Bar (4 pages x 5 slots = 20) ----
     bool        assignSkillToSlot(const std::string& skillId, int globalSlotIndex);  // 0-19
     [[nodiscard]] std::string getSkillInSlot(int globalSlotIndex) const;
+    void clearSkillSlot(int globalSlotIndex);
+    void swapSkillSlots(int slotA, int slotB);
+    bool autoAssignToSkillBar(const std::string& skillId);
 
     // ---- Tick ----
     void tick(float currentGameTime);  // Update cooldown tracking
@@ -114,10 +159,15 @@ public:
         totalSpentPoints = spent;
     }
 
+    // ---- Skill Definition Registry ----
+    void registerSkillDefinition(const SkillDefinition& def);
+    const SkillDefinition* getSkillDefinition(const std::string& skillId) const;
+
 private:
     std::vector<LearnedSkill>                 learnedSkills;
     std::vector<std::string>                  skillBarSlots;        // 20 slots
     std::unordered_map<std::string, float>    cooldownEndTimes;     // Server-only
+    std::unordered_map<std::string, SkillDefinition> skillDefinitions_;
 
     int availableSkillPoints = 0;
     int totalEarnedPoints    = 0;
