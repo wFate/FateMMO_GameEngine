@@ -20,6 +20,7 @@
 #include "game/systems/spawn_system.h"  // SpawnZoneComponent
 #include "engine/particle/particle_emitter_component.h"
 #include "engine/render/point_light_component.h"
+#include "game/components/spawn_point_component.h"
 
 #include <nlohmann/json.hpp>
 
@@ -159,6 +160,11 @@ template<> struct component_traits<DroppedItemComponent> {
 template<> struct component_traits<BossSpawnPointComponent> {
     static constexpr ComponentFlags flags =
         ComponentFlags::Serializable | ComponentFlags::Persistent;
+};
+
+// --- SpawnPointComponent: serialized (placed in scene editor as respawn marker) ---
+template<> struct component_traits<SpawnPointComponent> {
+    static constexpr ComponentFlags flags = ComponentFlags::Serializable;
 };
 
 // All other components keep the default (Serializable).
@@ -1011,6 +1017,9 @@ inline void registerAllComponents() {
 
     // ----- Boss spawn point component -----
     reg.registerComponent<BossSpawnPointComponent>();
+
+    // ----- Player respawn point component -----
+    reg.registerComponent<SpawnPointComponent>();
 
     // ----- Backward-compat aliases -----
     reg.registerAlias("Sprite", "SpriteComponent");
