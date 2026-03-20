@@ -1,259 +1,243 @@
 # FateMMO Game Engine — Production Readiness Review
 
-**Date:** 2026-03-16
-**Scope:** Full codebase review (~19,100 lines across 116 files, 4 commits)
-**Verdict:** **4.5 / 10 — NOT PRODUCTION READY**
+**Date:** 2026-03-20 (Updated)
+**Previous Review:** 2026-03-16 (Score: 4.5/10)
+**Scope:** Full codebase audit (~56,100 lines across 327 files, 315 commits)
+**Verdict:** **7.0 / 10 — APPROACHING PRODUCTION READY (Multiplayer Alpha)**
 
 ---
 
 ## Executive Summary
 
-The FateMMO engine demonstrates **strong foundational game logic** with a clean ECS architecture, well-ported combat/skill/inventory systems from the Unity prototype, and a functional editor with ImGui integration. However, **critical gaps in security, networking, persistence, thread safety, and error resilience** prevent production deployment. The codebase is suitable for **single-player prototyping and development testing** only.
+The FateMMO engine has undergone a **transformative expansion** since the March 16 review. What was a single-player prototype with stub networking and no persistence is now a **functional multiplayer game engine** with custom reliable UDP transport, entity replication with AOI delta compression, PostgreSQL persistence across 15 repositories (65 tables), TLS-secured authentication, server-authoritative combat/inventory/economy, and a 356-test suite. The engine is suitable for **closed multiplayer alpha testing**. Remaining gaps are in server-side rate limiting, editor security hardening, and stress testing at scale.
 
 ---
 
 ## Overall Score Breakdown
 
-| Category                | Score | Weight | Notes |
-|-------------------------|-------|--------|-------|
-| Architecture & Design   | 6/10  | 15%    | Clean ECS, but monolithic build, no async, O(n) queries |
-| Code Quality            | 5/10  | 15%    | Good structure but memory leaks, missing validation |
-| Security                | 2/10  | 20%    | Command injection, client-authoritative, no sanitization |
-| Feature Completeness    | 4/10  | 15%    | Game logic ported; no networking, no persistence |
-| Thread Safety           | 2/10  | 10%    | Static mutable state without locks across systems |
-| Error Handling          | 4/10  | 10%    | Silent failures, optional callbacks, no recovery |
-| Performance             | 6/10  | 10%    | Spatial hash good; sprite sorting & ECS queries need work |
-| UI/UX                   | 5/10  | 5%     | Functional but hardcoded paths, no responsive layout |
-| **Weighted Total**      | **4.5/10** | | |
+| Category                | Previous | Current | Weight | Notes |
+|-------------------------|----------|---------|--------|-------|
+| Architecture & Design   | 6/10     | **8/10**  | 15%  | Archetype ECS, fiber job system, scene streaming, arena allocators |
+| Code Quality            | 5/10     | **7/10**  | 15%  | Smart pointers, RAII, bounded string ops; minor gameplay bugs remain |
+| Security                | 2/10     | **6/10**  | 20%  | Server-authoritative economy, parameterized SQL; rate limiting missing |
+| Feature Completeness    | 4/10     | **8/10**  | 15%  | Full networking, persistence, auth, mob spawning, combat over wire |
+| Thread Safety           | 2/10     | **8/10**  | 10%  | Mutexes on all shared state, lock-free MPMC queue, atomics correct |
+| Error Handling          | 4/10     | **5/10**  | 10%  | DB layer has try-catch; no global error recovery strategy |
+| Performance             | 6/10     | **8/10**  | 10%  | Delta replication, spatial grid, arena memory, dirty-flag sort |
+| UI/UX                   | 5/10     | **6/10**  | 5%   | GameViewport enforced; no dynamic scaling beyond letterbox |
+| **Weighted Total**      | **4.5/10** | **7.0/10** | | **+2.5 points since last review** |
 
 ---
 
-## CRITICAL Issues (Must Fix — Launch Blockers)
+## Issues Resolved Since Last Review
+
+### Resolved CRITICAL Issues
+
+| # | Issue | Status | Evidence |
+|---|-------|--------|----------|
+| 2 | Client-authoritative inventory & economy | **FIXED** | `server_app.cpp` validates all market/trade/inventory ops server-side; atomic DB transactions |
+| 4 | Static mutable state without synchronization | **FIXED** | `HonorSystem`: `std::mutex`; `Logger`: `std::recursive_mutex`; `DbPool`/`AuthServer`/`LogViewer`: all mutex-protected |
+| 5 | No networking layer | **FIXED** | Custom reliable UDP (22 files, 3,202 lines); 40 message types; entity replication with AOI |
+| 6 | No database persistence | **FIXED** | 15 repositories (4,310 lines); 65-table PostgreSQL schema; async dispatcher via fiber jobs |
+| 7 | Path traversal vulnerabilities | **FIXED** | Asset browser scans predefined directories only; `std::filesystem` prevents `../` escapes |
+
+### Resolved HIGH Issues
+
+| # | Issue | Status | Evidence |
+|---|-------|--------|----------|
+| 9  | O(n) entity lookups in ECS | **FIXED** | Archetype ECS with SoA storage, O(matching) iteration, cached queries |
+| 12 | Honor system key collision | **FIXED** | `makeKey()` now uses null-byte separator (`'\0'`); collision-proof |
+| 16 | StatusEffect callback during iteration | **FIXED** | Uses `it = activeEffects_.erase(it)` pattern; `rebuildLookup()` after modifications |
+
+### Resolved MEDIUM Issues
+
+| # | Issue | Status | Evidence |
+|---|-------|--------|----------|
+| 19 | Sprite batch sorts every frame | **FIXED** | FNV-1a hash-based dirty flag; skips sort when draw order stable |
+| 25 | Logger race condition | **FIXED** | `std::recursive_mutex` protects all log operations |
+| 26 | Fixed char buffer overflows | **FIXED** | `strncpy()` with proper null termination throughout; `snprintf()` used consistently |
+
+---
+
+## Remaining CRITICAL Issues (Must Fix — Launch Blockers)
 
 ### 1. Security: Command Injection in Editor Asset Browser
-- **File:** `engine/editor/editor.cpp:479-491`
-- **Problem:** `system()` called with unsanitized user-controlled file paths
-- **Risk:** Remote code execution via malicious filenames (e.g., `file";rm -rf /"`)
-- **Fix:** Use `ShellExecuteEx` (Windows) / `fork()+execvp()` (Unix), never `system()`
+- **File:** `engine/editor/editor.cpp:1077-1088`
+- **Problem:** `system()` called with unsanitized file paths for "Open in VS Code" and "Show in Explorer"
+- **Risk:** Crafted filenames (e.g., `$(malicious).png`) execute arbitrary shell commands
+- **Mitigating factor:** Editor-only code, not in production game client; paths from local filesystem scan
+- **Fix:** Replace `system()` with `ShellExecuteW()` (Windows) / `fork()+execvp()` (Unix)
 
-### 2. Security: Client-Authoritative Inventory & Economy
-- **Files:** `inventory.cpp`, `trade_manager.cpp`, `market_manager.cpp`
-- **Problem:** All item ownership, gold amounts, and trade validation is client-side only
-- **Risk:** Memory hacking allows infinite gold, item duplication, trade fraud
-- **Fix:** Server-authoritative inventory; client sends intents, server validates and applies
+### 2. No Server-Side Rate Limiting
+- **Files:** `server/server_app.cpp` (all command handlers)
+- **Problem:** No per-client throttling on chat, market, trade, bounty, guild, or skill operations
+- **Risk:** Spam flooding, market manipulation via rapid list/cancel cycles, chat abuse
+- **Note:** Move rate limiting exists (30/sec cap mentioned in code) but not enforced for other commands
+- **Fix:** Add per-client timestamp tracking with configurable limits per message type
 
-### 3. Security: No Input Sanitization for Chat
-- **File:** `chat_manager.cpp:46-62`
-- **Problem:** `validateMessage()` only checks length — no SQL injection, XSS, or profanity filtering
-- **Fix:** Server-side sanitization pipeline; never trust client data
-
-### 4. Thread Safety: Static Mutable State Without Synchronization
-- **Files:** `honor_system.cpp:6-7` (static `unordered_map`), all social managers, `logger.h:45-49`
-- **Problem:** Shared data modified concurrently without mutexes
-- **Risk:** Data corruption, crashes under multiplayer load
-- **Fix:** Add `std::mutex` or use single-threaded message queue architecture
-
-### 5. No Networking Layer
-- **All social systems** (Party, Guild, Trade, Market, Chat, Friends) have detailed TODO blocks for ENet integration but **zero actual network code**
-- **Impact:** Multiplayer is non-functional; this is an MMO engine with no multiplayer
-
-### 6. No Database Persistence
-- **All stateful systems** mention libpqxx tables but have **no persistence implementation**
-- **Impact:** All character data, inventory, guilds, and economy lost on restart
-
-### 7. Path Traversal Vulnerabilities
-- **Files:** `prefab.cpp:28`, `scene.cpp:15`
-- **Problem:** File paths accepted without validation; can load files outside game directory
-- **Fix:** Whitelist allowed directories, validate paths before file I/O
+### 3. Inventory Slot Overwrite Without Warning
+- **File:** `game/shared/inventory.cpp:98-106`
+- **Problem:** `addItemToSlot()` silently overwrites occupied slots — potential item loss
+- **Note:** `addItem()` correctly finds empty slots; only direct slot targeting is unsafe
+- **Fix:** Check `!slots_[slotIndex].isValid()` before assignment, or rename to `setSlot()` for explicit replace semantics
 
 ---
 
-## HIGH Priority Issues (Should Fix Before Beta)
+## HIGH Priority Issues (Should Fix Before Open Beta)
 
-### 8. Memory Leaks in Initialization Failure Paths
-- **File:** `app.cpp:23-51` — SDL window not freed if GL context creation fails
-- **File:** `game_app.cpp:75` — `renderSystem_` raw `new` without RAII
-- **Fix:** Use `std::unique_ptr` and proper cleanup in error paths
+### 4. Gauntlet Tiebreaker Flag Bug
+- **File:** `game/shared/gauntlet.cpp:271-289`
+- **Problem:** `completeMatch()` captures `wasTiebreaker` from current state, but if `completeMatch()` is called without going through the Tiebreaker state path, the flag is false even when scores are tied
+- **Fix:** `bool wasTiebreaker = (state == GauntletInstanceState::Tiebreaker) || (teamAScore == teamBScore);`
 
-### 9. O(n) Entity Lookups in ECS
-- **File:** `world.cpp:29-47` — `getEntity()`, `findByName()`, `findByTag()` all linear scan
-- **Impact:** Unacceptable with 1000+ entities (common in MMO zones)
-- **Fix:** Use `unordered_map<EntityId, Entity*>` for O(1) lookups
+### 5. Trade Gold Validation Incomplete (Client-Side)
+- **File:** `game/shared/trade_manager.cpp:130-133`
+- **Problem:** Client-side `setGoldOffer()` only checks `amount < 0`; does not validate against player balance
+- **Mitigating factor:** Server-side trade handler in `server_app.cpp:1718-1720` validates gold before execution
+- **Risk:** Client displays invalid state until server rejects; confusing UX
+- **Fix:** Add client-side balance check for immediate feedback
 
-### 10. Inventory Slot Overwrite Without Warning
-- **File:** `inventory.cpp:98-106`
-- **Problem:** `addItemToSlot()` silently overwrites occupied slot — potential item loss/duplication
-- **Fix:** Check slot empty first; return false or implement explicit swap
+### 6. Honor System Multi-Account Abuse
+- **File:** `game/shared/honor_system.cpp:37-47`
+- **Problem:** Tracks kills by character ID; 5-kill-per-hour cap per pair mitigates but doesn't prevent alt farming
+- **Fix:** Track by account ID (requires schema change); consider IP/device fingerprinting
 
-### 11. Trade Gold Offer Not Validated Against Balance
-- **File:** `trade_manager.cpp:130-133`
-- **Problem:** Player can offer gold they don't have; no ownership check
-- **Fix:** Server validates gold balance before accepting offer
+### 7. Chat Lacks Profanity Filter and Rate Limit
+- **File:** `game/shared/chat_manager.cpp:48-64`
+- **Problem:** `validateMessage()` checks length only; no profanity filtering, no server-enforced rate limit
+- **Documented TODOs:** "0.5s rate limiting (server enforced)", "Profanity filter integration" (lines 14-16)
+- **Fix:** Implement rate limit in server command handler; add configurable word filter
 
-### 12. Honor System Key Collision
-- **File:** `honor_system.cpp:14`
-- **Problem:** `makeKey(attackerId, victimId)` concatenates without separator — `"a"+"a1"` == `"aa"+"1"`
-- **Fix:** Use `attackerId + "_" + victimId`
-
-### 13. Honor System Multi-Account Abuse
-- **File:** `honor_system.cpp:27-45`
-- **Problem:** Tracks kills by character ID, not account ID
-- **Risk:** Alt accounts can farm honor infinitely
-- **Fix:** Track by account ID
-
-### 14. Gauntlet Tiebreaker Flag Bug
-- **File:** `gauntlet.cpp:225`
-- **Problem:** Checks `state == Tiebreaker` after state is already set to `Completed` — flag is **always false**
-- **Fix:** Save tiebreaker flag at transition time (line 205), not in final result
-
-### 15. Hardcoded Windows Font Path
-- **Files:** `game_app.cpp:82-83`, `text_renderer.h:51`
-- **Problem:** `"C:/Windows/Fonts/consola.ttf"` — fails on Linux/macOS
-- **Fix:** Embed default font or use platform-agnostic resolution
-
-### 16. StatusEffect Callback During Iteration
-- **File:** `status_effects.cpp:317-347`
-- **Problem:** `onDoTTick` callback could call `removeEffect()`, invalidating iterator
-- **Fix:** Defer callbacks until after iteration loop
+### 8. Texture Cache Never Evicts
+- **File:** `engine/render/texture.cpp`
+- **Problem:** `TextureCache` holds `shared_ptr`s with no LRU eviction or size limits
+- **Impact:** VRAM grows unbounded in long sessions with many zone transitions
+- **Fix:** Implement size-capped LRU eviction or switch to `weak_ptr` references
 
 ---
 
 ## MEDIUM Priority Issues
 
-### 17. Damage Calculation Overflow
-- **Files:** `combat_system.cpp:185`, `character_stats.cpp:170`
-- **Problem:** No overflow protection on damage * multiplier chains
-- **Fix:** Use `std::clamp` or 64-bit intermediates
+### 9. No Runtime OpenGL Error Polling
+- **File:** `engine/render/gfx/backend/gl/gl_device.cpp`
+- **Problem:** Shader compilation errors checked; runtime `glGetError()` not polled after draw calls
+- **Impact:** Silent rendering failures hard to diagnose
+- **Fix:** Add `glGetError()` polling in debug builds after state-changing GL calls
 
-### 18. Block Chance Reduction Exceeds 100%
-- **File:** `combat_system.cpp:222-232`
-- **Problem:** At high STR/DEX (1000+), reduction exceeds 1.0 before `std::max(0, ...)` clamp
-- **Fix:** Clamp reduction to `[0, 1]` before applying
+### 10. Skill Lookup is O(n) Per Call
+- **File:** `game/shared/skill_manager.cpp:55-66`
+- **Problem:** `hasSkill()`, `getLearnedSkill()` use linear scan on `learnedSkills` vector
+- **Mitigating factor:** Players learn 10-30 skills max; not called per-frame
+- **Fix:** Optional `unordered_map<skillId, LearnedSkill*>` secondary index if profiling shows need
 
-### 19. Sprite Batch Sorts Every Frame
-- **File:** `sprite_batch.cpp:149-153`
-- **Problem:** Full sort of all entries every frame, even when unchanged
-- **Fix:** Add dirty flag; skip sort when batch unchanged
+### 11. PvP Balance: 5% Damage Multiplier
+- **File:** `game/shared/combat_system.h:29`
+- **Problem:** `pvpDamageMultiplier = 0.05f` makes PvP fights extremely long
+- **Recommendation:** Increase to 0.25-0.5x after playtesting; make configurable via server config
 
-### 20. Font Atlas Wastes 4x VRAM
-- **File:** `text_renderer.cpp:50-104`
-- **Problem:** Grayscale→RGBA conversion; fixed 512×512 atlas
-- **Fix:** Use `GL_RED` format with swizzle
+### 12. Async Asset Loading Not Fully Threaded
+- **File:** `engine/asset/asset_registry.cpp`
+- **Problem:** Job system and reload queue exist, but `load()` and `processReloads()` are main-thread-only
+- **Impact:** Large scene transitions may hitch; chunk double-buffer staging prepared but not async
+- **Fix:** Move asset deserialization to fiber jobs; main thread only for GPU upload
 
-### 21. Texture Cache Never Evicts
-- **File:** `texture.cpp:63-81`
-- **Problem:** `TextureCache` holds shared_ptrs forever; no LRU eviction
-- **Fix:** Implement eviction policy or weak_ptr references
-
-### 22. Skill Lookup is O(n) Per Call
-- **File:** `skill_manager.cpp:54-65`
-- **Problem:** `learnedSkills` is a vector scanned linearly on every lookup
-- **Fix:** Use `unordered_map<string, LearnedSkill>`
-
-### 23. Hand-Rolled JSON Parser is Fragile
-- **File:** `item_stat_roller.cpp:131-208`
-- **Problem:** Doesn't handle escaped quotes, no number bounds validation
-- **Fix:** Use nlohmann/json or RapidJSON
-
-### 24. No OpenGL Error Checking
-- **File:** `shader.cpp:83-105`
-- **Problem:** All `glUniform*` calls ignore errors; silent rendering failures
-- **Fix:** Wrap GL calls with error checking in debug builds
-
-### 25. Logger Race Condition
-- **File:** `logger.h:45-49`
-- **Problem:** Buffer formatted *before* lock acquired — concurrent calls corrupt buffer
-- **Fix:** Move `vsnprintf` inside lock scope, or use thread-local buffers
-
-### 26. Fixed Char Buffer Overflows
-- **Files:** `text_renderer.cpp:178`, `editor.cpp:466`
-- **Problem:** `char key[256]` / `char menuId[128]` overflow with long paths
-- **Fix:** Use `std::string`
-
-### 27. PvP Balance: 5% Damage Multiplier
-- **File:** `combat_system.h:29`
-- **Problem:** `pvpDamageMultiplier = 0.05f` makes PvP meaningless
-- **Recommendation:** Increase to 0.25–0.5x minimum
+### 13. No CI/CD Pipeline
+- **Problem:** 356 tests exist but no automated test runner on push (no `.github/workflows/`)
+- **Impact:** Regressions can merge undetected
+- **Fix:** Add GitHub Actions workflow for build + test on push/PR
 
 ---
 
-## Architecture Gaps for MMO Scale
+## Architecture Status for MMO Scale
 
-| Gap | Impact | Effort |
-|-----|--------|--------|
-| No networking layer (ENet stubs only) | Multiplayer impossible | 3-4 weeks |
-| No database persistence (libpqxx stubs only) | Data lost on restart | 2-3 weeks |
-| No async asset loading | Scene transitions freeze game | 1-2 weeks |
-| No server-authoritative game state | Exploitable by cheaters | 2-3 weeks |
-| Single-threaded rendering pipeline | Can't scale to large zones | 2-4 weeks |
-| No entity archetype system | O(n) queries for all systems | 1-2 weeks |
-| No scene streaming/chunking | Can't handle large worlds | 2 weeks |
-| No serialization interface defined | Inconsistent save/load | 1 week |
-| No test suite | Regressions undetectable | Ongoing |
+| Capability | Previous Status | Current Status | Notes |
+|------------|----------------|----------------|-------|
+| Networking layer | None (stubs only) | **Complete** | Custom reliable UDP, 40 message types, 0xFA7E protocol |
+| Database persistence | None (stubs only) | **Complete** | 15 repos, 65 tables, async dispatcher, connection pool |
+| Server-authoritative state | None | **Complete** | Combat, inventory, trade, market all server-validated |
+| Entity replication | None | **Complete** | AOI with hysteresis (320px/384px), delta compression, ~6.2 KB/sec/player |
+| Authentication | None | **Complete** | TLS auth server (port 7778), bcrypt passwords, session tokens |
+| Archetype ECS | None | **Complete** | SoA storage, O(matching) iteration, compile-time CompId |
+| Scene streaming/chunking | None | **Complete** | 7-state lifecycle, concentric ring loading, rate-limited transitions |
+| Zone arena memory | None | **Complete** | 256 MB per scene, O(1) reset, pool allocator on arena |
+| Fiber job system | None | **Complete** | Lock-free MPMC queue, 4 worker threads, async DB dispatch |
+| Test suite | None | **Complete** | 356 tests, 1,304 assertions (doctest), 48 test files |
+| Async asset loading | None | Partial | Job system ready; load path still main-thread |
+| Server-side rate limiting | None | Partial | Move rate cap exists; other commands unthrottled |
+| Multi-zone sharding | None | Not started | Single zone server; architecture supports multi-instance |
+| Load/stress testing | None | Not started | No automated load tests with 1000+ concurrent entities |
 
 ---
 
 ## What's Done Well
 
-- **Clean ECS architecture** — Entity/Component/System separation is solid
-- **Comprehensive game systems** — Combat, skills, inventory, enchanting, crowd control, mob AI, gauntlet mode all have working logic
-- **Spatial hashing** — Good approach for proximity queries (`spatial_hash.h`)
+### Foundation (Unchanged)
+- **Clean ECS architecture** — Archetype-based SoA storage with compile-time component IDs
+- **Comprehensive game systems** — Combat, skills, inventory, enchanting, crowd control, mob AI, gauntlet, PK system, pets, quests, guilds, bounties, market, trading, banking
 - **Editor with undo/redo** — Functional level editor with ImGui, entity manipulation, asset browser
-- **Sprite batching** — Proper draw call minimization with texture sorting
-- **Prefab system** — JSON-based entity templates with component configuration
-- **Detailed documentation** — `ENGINE_STATE_AND_FEATURES.md` is thorough
-- **Modern C++20** — Uses ranges, `std::erase_if`, structured bindings throughout
+- **Sprite batching** — Draw call minimization with hash-based dirty-flag sort skip
+- **Modern C++20** — Ranges, `std::erase_if`, structured bindings, `std::jthread`
 
-### What's Been Addressed (March 17, 2026 Upgrade)
-- **Archetype ECS replaces O(n) queries** — contiguous SoA storage, O(matching) iteration, cached archetype matching
-- **Sprite batch sort optimization** — dirty-flag hash-based skip, near-zero cost on static scenes
-- **Zone arena memory** — O(1) bulk deallocation, no fragmentation, pool allocator on arena
-- **Spatial grid** — power-of-two bitshift lookup, zero hash computation for bounded worlds
-- **7-state chunk lifecycle** — ticket system, rate-limited transitions, double-buffered staging
-- **Tracy profiler** — on-demand instrumentation, named zones, memory tracking
-- **Multiplayer groundwork** — AOI visibility sets, ghost entity scaffold, persistent IDs, zone snapshots
-- **Unit test suite** — 32 tests, 740 assertions (doctest)
-- **Component type system** — compile-time CompId, no RTTI, Hot/Warm/Cold tiers
+### Infrastructure (New Since March 16)
+- **Custom reliable UDP transport** — 0xFA7E protocol, session tokens, ACK bitfield, 200ms retransmit, RTT estimation
+- **Entity replication** — AOI-based visibility with hysteresis, delta-compressed updates (~10 bytes/entity/tick), per-client last-acked state
+- **PostgreSQL persistence** — 15 fully-implemented repositories, connection pooling (5-50 connections), RAII guards, parameterized queries throughout
+- **TLS authentication** — Separate auth server, bcrypt password hashing, async background worker
+- **Fiber job system** — Vyukov lock-free MPMC queue, fiber-based concurrency, async DB dispatch
+- **Server tick loop** — Fixed 20 Hz simulation, per-tick packet draining, staggered auto-save (5-minute intervals)
+- **Movement validation** — Server-side rubber-banding (max 160 px/sec, 200px threshold, 30 moves/sec cap)
+- **Mob spawning** — Server-side `SpawnManager` with scene-aware spatial queries, DB-backed respawn state
+- **Thread safety** — Mutexes on all shared state, lock-free structures where appropriate, thread-local RNGs
+- **Dual spatial systems** — Mueller counting-sort hash (unbounded) + power-of-two bitshift grid (bounded worlds)
+- **356-test suite** — Gameplay (220), networking (43), core (58), rendering (19), specialized (16); doctest framework
 
 ---
 
 ## Recommended Fix Priority (Road to Production)
 
-### Phase 1: Security & Stability (Weeks 1-3)
-1. Fix command injection in editor
-2. Add path validation for all file I/O
-3. Add thread safety (mutexes or message queues) to all shared state
-4. Fix memory leaks in init failure paths
-5. Replace hand-rolled JSON parser
-6. Fix buffer overflow risks
+### Phase 1: Security Hardening (1-2 weeks)
+1. ~~Fix command injection in editor~~ Replace `system()` with `ShellExecuteW()` in editor asset browser
+2. ~~Add path validation~~ **DONE** (std::filesystem, predefined scan directories)
+3. ~~Add thread safety to shared state~~ **DONE** (mutexes on all shared state)
+4. ~~Fix buffer overflow risks~~ **DONE** (strncpy/snprintf throughout)
+5. Add server-side rate limiting for chat, market, trade, bounty, guild commands
+6. Add chat profanity filter and server-enforced message throttle
+7. Fix inventory `addItemToSlot()` overwrite bug
 
-### Phase 2: Core Infrastructure (Weeks 4-8)
-1. Implement ENet networking layer for all social systems
-2. Implement libpqxx persistence for all stateful systems
-3. Make game state server-authoritative
-4. Add server-side input validation and rate limiting
-5. Implement async asset loading
+### Phase 2: Stability & Polish (2-3 weeks)
+1. ~~Implement networking layer~~ **DONE** (custom reliable UDP, 40 message types)
+2. ~~Implement database persistence~~ **DONE** (15 repositories, 65 tables)
+3. ~~Make game state server-authoritative~~ **DONE** (combat, inventory, trade, market)
+4. Fix gauntlet tiebreaker flag bug
+5. Add client-side trade gold balance validation
+6. Add texture cache LRU eviction
+7. Add CI/CD pipeline (GitHub Actions: build + test on push)
 
-### Phase 3: Performance & Polish (Weeks 9-12)
-1. ~~Replace O(n) ECS queries with archetype system~~ **DONE** (archetype ECS with cached queries)
-2. ~~Optimize sprite batch sorting (dirty flag)~~ **DONE** (hash-based sort skip)
-3. Fix font atlas VRAM waste
-4. Add texture cache eviction
-5. Cross-platform font loading
-6. Responsive UI layout
-7. Game balance pass (PvP multiplier, armor formula audit)
+### Phase 3: Scale & Performance (3-4 weeks)
+1. ~~Archetype ECS~~ **DONE**
+2. ~~Sprite batch sort optimization~~ **DONE**
+3. ~~Arena memory allocators~~ **DONE**
+4. Thread asset deserialization via fiber jobs
+5. Add `glGetError()` polling in debug builds
+6. Load test with 100+ concurrent clients
+7. PvP damage multiplier balance pass
+8. Multi-zone sharding architecture (if player count demands)
 
 ### Phase 4: Quality Assurance (Ongoing)
-1. Unit tests for combat formulas with boundary cases
-2. Load tests with 1000+ concurrent entities
-3. Fuzzing on JSON parsing and network packets
-4. Economy simulation across level ranges
-5. PvP balance testing at all level brackets
+1. ~~Unit tests for combat/skill/inventory~~ **DONE** (220 gameplay tests)
+2. ~~Network protocol tests~~ **DONE** (43 networking tests)
+3. Load/stress tests with 1000+ concurrent entities
+4. Fuzzing on network packet handlers
+5. Economy simulation across level ranges
+6. Gauntlet and PvP balance testing at all level brackets
+7. Database migration testing and rollback procedures
 
 ---
 
 ## Conclusion
 
-The FateMMO engine has a **strong foundation** with well-structured game logic and a functional editor. The code demonstrates competent C++ and good architectural instincts. However, it is fundamentally a **single-player prototype** at this stage. The two largest gaps — **no networking and no persistence** — mean the "MMO" in FateMMO doesn't yet exist at the infrastructure level.
+The FateMMO engine has evolved from a **single-player prototype** (4.5/10) to a **functional multiplayer game engine** (7.0/10) in four days of intensive development. The two largest gaps from the original review — **networking and persistence** — are now fully implemented with production-quality patterns (reliable UDP with delta compression, connection pooling with async DB dispatch, server-authoritative validation).
 
-**Score: 4.5/10** — Solid prototype, not production ready. With focused effort on the critical security fixes and core infrastructure (networking + database), this could reach a testable multiplayer alpha in approximately 8-12 weeks.
+The engine is now suitable for **closed multiplayer alpha testing**. The remaining gaps are operational rather than architectural: server-side rate limiting, CI/CD automation, load testing at scale, and minor gameplay bugs (inventory slot overwrite, gauntlet tiebreaker). No fundamental architectural rework is needed to reach open beta.
+
+**Score: 7.0/10** — Functional multiplayer alpha. With rate limiting, the editor security fix, and a CI pipeline, this reaches beta readiness (~8/10) within 2-3 weeks of focused effort.
