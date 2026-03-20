@@ -241,9 +241,18 @@ bool SkillDefCache::has(const std::string& skillId) const {
 
 bool SceneCache::initialize(pqxx::connection& conn) {
     try {
+        // Auto-migrate: add spawn point columns if they don't exist
+        {
+            pqxx::work migrateTxn(conn);
+            migrateTxn.exec("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS default_spawn_x REAL DEFAULT 0.0");
+            migrateTxn.exec("ALTER TABLE scenes ADD COLUMN IF NOT EXISTS default_spawn_y REAL DEFAULT 0.0");
+            migrateTxn.commit();
+        }
+
         pqxx::work txn(conn);
         auto result = txn.exec(
-            "SELECT scene_id, scene_name, scene_type, min_level, is_dungeon, pvp_enabled "
+            "SELECT scene_id, scene_name, scene_type, min_level, is_dungeon, pvp_enabled, "
+            "default_spawn_x, default_spawn_y "
             "FROM scenes");
         txn.commit();
 
@@ -256,6 +265,8 @@ bool SceneCache::initialize(pqxx::connection& conn) {
             s.minLevel   = row["min_level"].is_null() ? 1 : row["min_level"].as<int>();
             s.isDungeon  = row["is_dungeon"].is_null() ? false : row["is_dungeon"].as<bool>();
             s.pvpEnabled = row["pvp_enabled"].is_null() ? false : row["pvp_enabled"].as<bool>();
+            s.defaultSpawnX = row["default_spawn_x"].is_null() ? 0.0f : row["default_spawn_x"].as<float>();
+            s.defaultSpawnY = row["default_spawn_y"].is_null() ? 0.0f : row["default_spawn_y"].as<float>();
             scenes_[s.sceneId] = std::move(s);
         }
 

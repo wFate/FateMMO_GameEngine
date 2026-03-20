@@ -1736,10 +1736,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                 LOG_INFO("Server", "Client %d used Phoenix Down to respawn", clientId);
             }
 
-            // Determine respawn position
-            // Server doesn't load scene JSON files, so SpawnPointComponent entities
-            // don't exist here. Use hardcoded spawn positions per scene.
-            // TODO: Move spawn coordinates to scene_definitions DB table.
+            // Determine respawn position from DB-cached scene definitions
             auto* t = e->getComponent<Transform>();
             Vec2 respawnPos = t ? t->position : Vec2{0, 0};
 
@@ -1747,16 +1744,17 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             std::string sceneName = currentScene ? currentScene->name() : "WhisperingWoods";
 
             if (msg.respawnType == 0) {
-                // Town respawn — always go to Town scene spawn
-                respawnPos = {0.0f, 0.0f};  // Town spawn point
+                // Town respawn — use Town scene's default spawn from DB
+                auto* townScene = sceneCache_.getByName("Town");
+                if (townScene) {
+                    respawnPos = {townScene->defaultSpawnX, townScene->defaultSpawnY};
+                }
                 // TODO: send SvZoneTransition if player is not already in Town
             } else if (msg.respawnType == 1) {
-                // Map spawn — use current scene's default spawn
-                if (sceneName == "Town") {
-                    respawnPos = {0.0f, 0.0f};
-                } else {
-                    // WhisperingWoods and any other scene
-                    respawnPos = {128.0f, 128.0f};
+                // Map spawn — use current scene's default spawn from DB
+                auto* scene = sceneCache_.getByName(sceneName);
+                if (scene) {
+                    respawnPos = {scene->defaultSpawnX, scene->defaultSpawnY};
                 }
             }
             // Type 2 (Phoenix Down): respawnPos stays at death position

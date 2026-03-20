@@ -77,6 +77,10 @@ bool NetClient::connectWithToken(const std::string& host, uint16_t port, const A
 
 void NetClient::disconnect() {
     if (connected_) {
+        // Send Disconnect multiple times (unreliable) to maximize delivery chance
+        // before we close the socket — can't use Reliable since socket closes immediately
+        sendPacket(Channel::Unreliable, PacketType::Disconnect);
+        sendPacket(Channel::Unreliable, PacketType::Disconnect);
         sendPacket(Channel::Unreliable, PacketType::Disconnect);
     }
     socket_.close();
