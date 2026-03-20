@@ -143,6 +143,17 @@ void NetClient::sendRespawn(uint8_t respawnType) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdRespawn, w.data(), w.size());
 }
 
+void NetClient::sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdUseSkillMsg msg;
+    msg.skillId = skillId;
+    msg.rank = rank;
+    msg.targetId = targetPersistentId;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdUseSkill, w.data(), w.size());
+}
+
 void NetClient::handlePacket(const uint8_t* data, int size) {
     if (size < static_cast<int>(PACKET_HEADER_SIZE)) return;
 
@@ -286,6 +297,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             ByteReader payload(data + r.position(), hdr.payloadSize);
             auto msg = SvRespawnMsg::read(payload);
             if (onRespawn) onRespawn(msg);
+            break;
+        }
+        case PacketType::SvSkillResult: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvSkillResultMsg::read(payload);
+            if (onSkillResult) onSkillResult(msg);
             break;
         }
         default:

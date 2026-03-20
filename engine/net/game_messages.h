@@ -330,4 +330,60 @@ struct SvRespawnMsg {
     }
 };
 
+// ============================================================================
+// Client -> Server: CmdUseSkill (string-based skill ID)
+// ============================================================================
+struct CmdUseSkillMsg {
+    std::string skillId;
+    uint8_t rank = 1;
+    uint64_t targetId = 0;  // PersistentId of target
+
+    void write(ByteWriter& w) const {
+        w.writeString(skillId);
+        w.writeU8(rank);
+        detail::writeU64(w, targetId);
+    }
+    static CmdUseSkillMsg read(ByteReader& r) {
+        CmdUseSkillMsg m;
+        m.skillId  = r.readString();
+        m.rank     = r.readU8();
+        m.targetId = detail::readU64(r);
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvSkillResult (skill execution outcome)
+// ============================================================================
+struct SvSkillResultMsg {
+    uint64_t casterId = 0;   // PersistentId
+    uint64_t targetId = 0;   // PersistentId
+    std::string skillId;
+    int32_t damage = 0;
+    uint8_t isCrit = 0;
+    uint8_t isKill = 0;
+    uint8_t wasMiss = 0;
+
+    void write(ByteWriter& w) const {
+        detail::writeU64(w, casterId);
+        detail::writeU64(w, targetId);
+        w.writeString(skillId);
+        w.writeI32(damage);
+        w.writeU8(isCrit);
+        w.writeU8(isKill);
+        w.writeU8(wasMiss);
+    }
+    static SvSkillResultMsg read(ByteReader& r) {
+        SvSkillResultMsg m;
+        m.casterId = detail::readU64(r);
+        m.targetId = detail::readU64(r);
+        m.skillId  = r.readString();
+        m.damage   = r.readI32();
+        m.isCrit   = r.readU8();
+        m.isKill   = r.readU8();
+        m.wasMiss  = r.readU8();
+        return m;
+    }
+};
+
 } // namespace fate
