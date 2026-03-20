@@ -229,6 +229,12 @@ private:
     // Console command
     char consoleCmdBuf_[256] = "";
 
+    // Delete confirmation state
+    bool pendingDeleteFile_ = false;
+    std::string pendingDeletePath_;
+    bool pendingDeletePrefab_ = false;
+    std::string pendingDeletePrefabName_;
+
     // Grid shader (lazy-loaded)
     Shader gridShader_;
     bool gridShaderLoaded_ = false;
