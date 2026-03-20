@@ -161,7 +161,7 @@ void InventoryUI::drawItemSlot(Inventory* inv, int slotIndex, float size) {
 
     // Rarity border
     if (hasItem) {
-        ImVec4 rarityCol = getRarityColor(ItemRarity::Common /* TODO: from item def cache */);
+        ImVec4 rarityCol = getRarityColor(item.rarity);
         ImGui::PushStyleColor(ImGuiCol_Button, bgColor);
         ImGui::PushStyleColor(ImGuiCol_Border, rarityCol);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2.0f);
@@ -243,7 +243,7 @@ void InventoryUI::drawEquipmentSlot(Inventory* inv, EquipmentSlot slot, const ch
     ImVec4 bgColor = hasItem ? ImVec4(0.15f, 0.18f, 0.25f, 1.0f) : ImVec4(0.08f, 0.08f, 0.1f, 1.0f);
 
     if (hasItem) {
-        ImVec4 rarityCol = getRarityColor(ItemRarity::Common /* TODO: from item def cache */);
+        ImVec4 rarityCol = getRarityColor(item.rarity);
         ImGui::PushStyleColor(ImGuiCol_Button, bgColor);
         ImGui::PushStyleColor(ImGuiCol_Border, rarityCol);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2.0f);
@@ -311,15 +311,16 @@ void InventoryUI::drawItemTooltip(const ItemInstance& item) {
     ImGui::BeginTooltip();
 
     // Item name with rarity color
-    ImVec4 rarityCol = getRarityColor(ItemRarity::Common /* TODO: from item def cache */);
-    std::string name = item.itemId;
+    ImVec4 rarityCol = getRarityColor(item.rarity);
+    const std::string& baseName = item.displayName.empty() ? item.itemId : item.displayName;
+    std::string name = baseName;
     if (item.enchantLevel > 0) {
         char buf[128];
-        snprintf(buf, sizeof(buf), "%s +%d", item.itemId.c_str(), item.enchantLevel);
+        snprintf(buf, sizeof(buf), "%s +%d", baseName.c_str(), item.enchantLevel);
         name = buf;
     }
     ImGui::TextColored(rarityCol, "%s", name.c_str());
-    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1), "%s", getRarityName(ItemRarity::Common /* TODO: from item def cache */));
+    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1), "%s", getRarityName(item.rarity));
 
     ImGui::Separator();
 

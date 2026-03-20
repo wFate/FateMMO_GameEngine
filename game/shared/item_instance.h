@@ -37,6 +37,8 @@ struct ItemSocket {
 struct ItemInstance {
     std::string instanceId;          // UUID
     std::string itemId;              // references item_definitions.item_id
+    std::string displayName;         // from item_definitions (for UI display)
+    ItemRarity rarity = ItemRarity::Common;  // from item_definitions (for UI coloring)
     int quantity = 0;
     int enchantLevel = 0;
     std::vector<RolledStat> rolledStats;

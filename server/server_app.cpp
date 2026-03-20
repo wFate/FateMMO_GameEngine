@@ -1111,6 +1111,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         boughtItem.quantity      = listing->quantity;
                         boughtItem.enchantLevel = listing->enchantLevel;
                         boughtItem.rolledStats  = ItemStatRoller::parseRolledStats(listing->rolledStatsJson);
+                        // Look up display info from item definition cache
+                        if (auto* def = itemDefCache_.getDefinition(listing->itemId)) {
+                            boughtItem.displayName = def->displayName;
+                            boughtItem.rarity = parseItemRarity(def->rarity);
+                        }
                         inv->inventory.addItem(boughtItem);
 
                         // Credit seller gold (update DB directly — seller may be offline)
@@ -1745,14 +1750,15 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
 
             if (msg.respawnType == 0) {
                 // Town respawn — use Town scene's default spawn from DB
-                auto* townScene = sceneCache_.getByName("Town");
+                // sceneCache_.get() matches on scene_id, not scene_name
+                auto* townScene = sceneCache_.get("Town");
                 if (townScene) {
                     respawnPos = {townScene->defaultSpawnX, townScene->defaultSpawnY};
                 }
                 // TODO: send SvZoneTransition if player is not already in Town
             } else if (msg.respawnType == 1) {
                 // Map spawn — use current scene's default spawn from DB
-                auto* scene = sceneCache_.getByName(sceneName);
+                auto* scene = sceneCache_.get(sceneName);
                 if (scene) {
                     respawnPos = {scene->defaultSpawnX, scene->defaultSpawnY};
                 }
@@ -1978,6 +1984,8 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             pickupMsg.goldAmount = dropComp->goldAmount;
             pickupMsg.displayName = "Gold";
         } else {
+            const auto* def = itemDefCache_.getDefinition(dropComp->itemId);
+
             ItemInstance item;
             item.instanceId = std::to_string(
                 std::chrono::steady_clock::now().time_since_epoch().count());
@@ -1985,13 +1993,13 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             item.quantity = dropComp->quantity;
             item.enchantLevel = dropComp->enchantLevel;
             item.rolledStats = ItemStatRoller::parseRolledStats(dropComp->rolledStatsJson);
+            item.rarity = parseItemRarity(dropComp->rarity);
+            item.displayName = def ? def->displayName : dropComp->itemId;
             inv->inventory.addItem(item);
 
             pickupMsg.itemId = dropComp->itemId;
             pickupMsg.quantity = dropComp->quantity;
             pickupMsg.rarity = dropComp->rarity;
-
-            const auto* def = itemDefCache_.getDefinition(dropComp->itemId);
             pickupMsg.displayName = def ? def->displayName : dropComp->itemId;
             if (dropComp->enchantLevel > 0) {
                 pickupMsg.displayName += " +" + std::to_string(dropComp->enchantLevel);

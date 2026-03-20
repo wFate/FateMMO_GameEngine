@@ -909,6 +909,8 @@ void GameApp::onInit() {
                     std::snprintf(instId, sizeof(instId), "loot_%d", ++lootCounter);
 
                     ItemInstance item = ItemInstance::createSimple(instId, msg.itemId, msg.quantity);
+                    item.displayName = msg.displayName;
+                    item.rarity = parseItemRarity(msg.rarity);
                     if (invComp->inventory.addItem(item)) {
                         char buf[128];
                         std::snprintf(buf, sizeof(buf), "Picked up %s x%d.",

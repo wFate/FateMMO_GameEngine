@@ -111,6 +111,15 @@ enum class ItemRarity : uint8_t {
     Unique = 5
 };
 
+inline ItemRarity parseItemRarity(const std::string& s) {
+    if (s == "Uncommon")  return ItemRarity::Uncommon;
+    if (s == "Rare")      return ItemRarity::Rare;
+    if (s == "Epic")      return ItemRarity::Epic;
+    if (s == "Legendary") return ItemRarity::Legendary;
+    if (s == "Unique" || s == "Mythic") return ItemRarity::Unique;
+    return ItemRarity::Common;
+}
+
 enum class ItemCategory : uint8_t {
     None = 0,
     Equipment = 1,
