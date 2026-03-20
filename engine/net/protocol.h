@@ -278,6 +278,9 @@ struct SvPlayerStateMsg {
     int64_t currentXP   = 0;
     int64_t gold        = 0;
     int32_t level       = 0;
+    int32_t honor       = 0;
+    int32_t pvpKills    = 0;
+    int32_t pvpDeaths   = 0;
 
     void write(ByteWriter& w) const {
         w.writeI32(currentHP);
@@ -288,6 +291,9 @@ struct SvPlayerStateMsg {
         detail::writeI64(w, currentXP);
         detail::writeI64(w, gold);
         w.writeI32(level);
+        w.writeI32(honor);
+        w.writeI32(pvpKills);
+        w.writeI32(pvpDeaths);
     }
 
     static SvPlayerStateMsg read(ByteReader& r) {
@@ -300,6 +306,9 @@ struct SvPlayerStateMsg {
         m.currentXP   = detail::readI64(r);
         m.gold        = detail::readI64(r);
         m.level       = r.readI32();
+        m.honor       = r.readI32();
+        m.pvpKills    = r.readI32();
+        m.pvpDeaths   = r.readI32();
         return m;
     }
 };

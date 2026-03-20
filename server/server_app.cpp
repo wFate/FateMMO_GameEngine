@@ -235,11 +235,12 @@ void ServerApp::tick(float dt) {
     for (auto& [id, count] : moveCountThisTick_) count = 0;
     for (auto& [id, count] : skillCommandsThisTick_) count = 0;
 
-    // 1. Drain incoming packets
-    server_.poll(gameTime_);
-
-    // 2. Drain auth results
+    // 1. Drain auth results first — pending sessions must be stored BEFORE
+    //    poll() processes Connect packets, otherwise the token lookup fails.
     consumePendingSessions();
+
+    // 2. Drain incoming packets (Connect packets match pending sessions)
+    server_.poll(gameTime_);
 
     // 3. World update (systems)
     world_.update(dt);
@@ -583,7 +584,9 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         s.pvpKills     = rec.pvp_kills;
         s.pvpDeaths    = rec.pvp_deaths;
         s.isDead       = rec.is_dead;
-        s.currentScene = rec.current_scene;
+        // Fix legacy "Scene2" default — migrate to real scene name
+        s.currentScene = (rec.current_scene == "Scene2" || rec.current_scene.empty())
+            ? "WhisperingWoods" : rec.current_scene;
 
         // Recalculate derived stats (resets currentHP/MP to max)
         s.recalculateStats();
@@ -847,9 +850,12 @@ void ServerApp::savePlayerToDB(uint16_t clientId) {
         rec.position_y = tilePos.y;
     }
 
-    // Save current scene name
-    auto* sc = SceneManager::instance().currentScene();
-    rec.current_scene = sc ? sc->name() : "Scene2";
+    // Save current scene from the player's own stats (not SceneManager, which
+    // is a client-side concept — the server has no loaded scene).
+    auto* statsForScene = e->getComponent<CharacterStatsComponent>();
+    rec.current_scene = (statsForScene && !statsForScene->stats.currentScene.empty())
+        ? statsForScene->stats.currentScene
+        : "WhisperingWoods";
 
     auto* inv = e->getComponent<InventoryComponent>();
     if (inv) {
@@ -977,8 +983,10 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId) {
         rec.position_y = tilePos.y;
     }
 
-    auto* sc = SceneManager::instance().currentScene();
-    rec.current_scene = sc ? sc->name() : "Scene2";
+    auto* statsForScene2 = e->getComponent<CharacterStatsComponent>();
+    rec.current_scene = (statsForScene2 && !statsForScene2->stats.currentScene.empty())
+        ? statsForScene2->stats.currentScene
+        : "WhisperingWoods";
 
     auto* inv = e->getComponent<InventoryComponent>();
     if (inv) rec.gold = inv->inventory.getGold();
@@ -1956,6 +1964,18 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         auto* sc = e->getComponent<CharacterStatsComponent>();
                         if (sc) sc->stats.currentScene = cmd.targetScene;
                     }
+
+                    // Clear AOI state so the replication system sends fresh
+                    // SvEntityEnter messages for all entities near the new position.
+                    // Without this, entities in both old and new AOI stay in "stayed"
+                    // and only get SvEntityUpdate (which the client ignores because
+                    // it cleared its ghostEntities_ on zone transition).
+                    client->aoi.previous.clear();
+                    client->aoi.current.clear();
+                    client->aoi.entered.clear();
+                    client->aoi.left.clear();
+                    client->aoi.stayed.clear();
+                    client->lastAckedState.clear();
                 }
             }
 
@@ -2009,8 +2029,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             auto* t = e->getComponent<Transform>();
             Vec2 respawnPos = t ? t->position : Vec2{0, 0};
 
-            auto* currentScene = SceneManager::instance().currentScene();
-            std::string sceneName = currentScene ? currentScene->name() : "WhisperingWoods";
+            // Use player's actual currentScene (not SceneManager which is a client concept)
+            std::string sceneName = sc->stats.currentScene.empty() ? "WhisperingWoods" : sc->stats.currentScene;
 
             if (msg.respawnType == 0 && sceneName != "Town") {
                 // Town respawn from another scene — zone transition + respawn
@@ -2019,9 +2039,18 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                 float spY = townScene ? townScene->defaultSpawnY : 0.0f;
 
                 if (sc->stats.isDead) sc->stats.respawn();
+                sc->stats.currentScene = "Town";
                 if (t) t->position = {spX, spY};
                 lastValidPositions_[clientId] = {spX, spY};
                 lastMoveTime_[clientId] = gameTime_;
+
+                // Clear AOI so client gets fresh SvEntityEnter in the new scene
+                client->aoi.previous.clear();
+                client->aoi.current.clear();
+                client->aoi.entered.clear();
+                client->aoi.left.clear();
+                client->aoi.stayed.clear();
+                client->lastAckedState.clear();
 
                 // Send zone transition to Town
                 SvZoneTransitionMsg ztResp;
@@ -2246,6 +2275,14 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             auto* targetTransform = target->getComponent<Transform>();
             Vec2 deathPos = targetTransform ? targetTransform->position : Vec2{0, 0};
 
+            // Award XP to the killer
+            if (casterStatsComp) {
+                int xp = es.xpReward;
+                casterStatsComp->stats.currentXP += xp;
+                LOG_INFO("Server", "Client %d gained %d XP from '%s'",
+                         clientId, xp, es.enemyName.c_str());
+            }
+
             // Determine top damager for loot ownership
             uint32_t topDamagerId = casterHandle.value;
             int topDamage = 0;
@@ -2443,6 +2480,14 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             EnemyStats& es = targetEnemyStats->stats;
             Vec2 deathPos = targetTransform ? targetTransform->position : Vec2{0, 0};
 
+            // Award XP to the killer
+            if (charStats) {
+                int xp = es.xpReward;
+                charStats->stats.currentXP += xp;
+                LOG_INFO("Server", "Client %d gained %d XP from '%s'",
+                         clientId, xp, es.enemyName.c_str());
+            }
+
             // Determine top damager for loot ownership
             uint32_t topDamagerId = attackerHandle.value;
             int topDamage = 0;
@@ -2633,6 +2678,9 @@ void ServerApp::sendPlayerState(uint16_t clientId) {
     msg.currentXP   = s.currentXP;
     msg.gold        = gold;
     msg.level       = s.level;
+    msg.honor       = s.honor;
+    msg.pvpKills    = s.pvpKills;
+    msg.pvpDeaths   = s.pvpDeaths;
 
     uint8_t buf[64];
     ByteWriter w(buf, sizeof(buf));

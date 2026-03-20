@@ -955,6 +955,9 @@ void GameApp::onInit() {
                     stats->stats.recalculateXPRequirement();
                 }
                 stats->stats.level = msg.level;
+                stats->stats.honor = msg.honor;
+                stats->stats.pvpKills = msg.pvpKills;
+                stats->stats.pvpDeaths = msg.pvpDeaths;
             }
         );
     };

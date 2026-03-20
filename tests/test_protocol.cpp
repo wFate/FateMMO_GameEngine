@@ -166,6 +166,34 @@ TEST_CASE("SvPlayerStateMsg round-trip with large int64 values") {
     CHECK(dst.level       == 99);
 }
 
+TEST_CASE("SvPlayerStateMsg honor fields round-trip") {
+    fate::SvPlayerStateMsg src;
+    src.currentHP = 100;
+    src.maxHP = 200;
+    src.level = 50;
+    src.honor = 1500;
+    src.pvpKills = 42;
+    src.pvpDeaths = 10;
+    src.currentXP = 99999;
+    src.gold = 50000;
+
+    uint8_t buf[256];
+    fate::ByteWriter w(buf, sizeof(buf));
+    src.write(w);
+    CHECK_FALSE(w.overflowed());
+
+    fate::ByteReader r(buf, w.size());
+    auto dst = fate::SvPlayerStateMsg::read(r);
+    CHECK_FALSE(r.overflowed());
+    CHECK(r.remaining() == 0);
+
+    CHECK(dst.honor == 1500);
+    CHECK(dst.pvpKills == 42);
+    CHECK(dst.pvpDeaths == 10);
+    CHECK(dst.level == 50);
+    CHECK(dst.currentXP == 99999);
+}
+
 TEST_CASE("SvEntityUpdateMsg round-trip with updateSeq") {
     uint8_t buf[256];
     fate::SvEntityUpdateMsg src;
