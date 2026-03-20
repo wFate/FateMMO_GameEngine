@@ -1,5 +1,3 @@
-#version 330 core
-
 out vec2 v_uv;
 
 void main() {

@@ -1,4 +1,3 @@
-#version 330 core
 in vec2 v_uv;
 in vec4 v_color;
 in float v_renderType;

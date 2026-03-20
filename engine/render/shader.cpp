@@ -7,6 +7,21 @@
 
 namespace fate {
 
+namespace {
+    const char* getShaderPreamble(bool isFragment) {
+#ifdef FATEMMO_GLES
+        if (isFragment) {
+            return "#version 300 es\nprecision mediump float;\nprecision mediump sampler2D;\n";
+        } else {
+            return "#version 300 es\n";
+        }
+#else
+        (void)isFragment;
+        return "#version 330 core\n";
+#endif
+    }
+} // anonymous namespace
+
 Shader::~Shader() {
     if (gfxHandle_.valid()) {
         gfx::Device::instance().destroy(gfxHandle_);
@@ -30,9 +45,12 @@ bool Shader::loadFromFile(const std::string& vertPath, const std::string& fragPa
     vertStream << vertFile.rdbuf();
     fragStream << fragFile.rdbuf();
 
+    std::string vertSrc = std::string(getShaderPreamble(false)) + vertStream.str();
+    std::string fragSrc = std::string(getShaderPreamble(true)) + fragStream.str();
+
     vertPath_ = vertPath;
     fragPath_ = fragPath;
-    return loadFromSource(vertStream.str(), fragStream.str());
+    return loadFromSource(vertSrc, fragSrc);
 }
 
 bool Shader::reloadFromFile(const std::string& vertPath, const std::string& fragPath) {
@@ -47,13 +65,16 @@ bool Shader::reloadFromFile(const std::string& vertPath, const std::string& frag
     vertStream << vertFile.rdbuf();
     fragStream << fragFile.rdbuf();
 
+    std::string vertSrc = std::string(getShaderPreamble(false)) + vertStream.str();
+    std::string fragSrc = std::string(getShaderPreamble(true)) + fragStream.str();
+
     // Save old handle in case loadFromSource fails
     gfx::ShaderHandle oldHandle = gfxHandle_;
     unsigned int oldProgram = programId_;
     gfxHandle_ = {};
     programId_ = 0;
 
-    if (!loadFromSource(vertStream.str(), fragStream.str())) {
+    if (!loadFromSource(vertSrc, fragSrc)) {
         // Restore old handle — loadFromSource already logged the error
         gfxHandle_ = oldHandle;
         programId_ = oldProgram;
