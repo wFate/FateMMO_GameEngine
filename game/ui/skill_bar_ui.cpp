@@ -57,6 +57,7 @@ void SkillBarUI::draw(World* world) {
         ImGui::End();
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar(2);
+        if (playerDead) ImGui::EndDisabled();
         return;
     }
 
