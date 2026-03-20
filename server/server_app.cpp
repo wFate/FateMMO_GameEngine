@@ -1763,14 +1763,36 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             auto* currentScene = SceneManager::instance().currentScene();
             std::string sceneName = currentScene ? currentScene->name() : "WhisperingWoods";
 
-            if (msg.respawnType == 0) {
-                // Town respawn — use Town scene's default spawn from DB
-                // sceneCache_.get() matches on scene_id, not scene_name
+            if (msg.respawnType == 0 && sceneName != "Town") {
+                // Town respawn from another scene — zone transition + respawn
+                auto* townScene = sceneCache_.get("Town");
+                float spX = townScene ? townScene->defaultSpawnX : 0.0f;
+                float spY = townScene ? townScene->defaultSpawnY : 0.0f;
+
+                if (sc->stats.isDead) sc->stats.respawn();
+                if (t) t->position = {spX, spY};
+                lastValidPositions_[clientId] = {spX, spY};
+                lastMoveTime_[clientId] = gameTime_;
+
+                // Send zone transition to Town
+                SvZoneTransitionMsg ztResp;
+                ztResp.targetScene = "Town";
+                ztResp.spawnX = spX;
+                ztResp.spawnY = spY;
+                uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                ztResp.write(w);
+                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvZoneTransition, buf, w.size());
+
+                LOG_INFO("Server", "Client %d town-respawned via zone transition to Town at (%.0f, %.0f)",
+                         clientId, spX, spY);
+                savePlayerToDBAsync(clientId);
+                break;
+            } else if (msg.respawnType == 0) {
+                // Already in Town — just respawn at Town's spawn point
                 auto* townScene = sceneCache_.get("Town");
                 if (townScene) {
                     respawnPos = {townScene->defaultSpawnX, townScene->defaultSpawnY};
                 }
-                // TODO: send SvZoneTransition if player is not already in Town
             } else if (msg.respawnType == 1) {
                 // Map spawn — use current scene's default spawn from DB
                 auto* scene = sceneCache_.get(sceneName);
