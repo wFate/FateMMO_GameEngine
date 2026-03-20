@@ -4,6 +4,7 @@
 #include "game/components/transform.h"
 #include "game/components/player_controller.h"
 #include "engine/core/logger.h"
+#include "game/components/animator.h"
 
 #include <algorithm>
 #include <unordered_map>
@@ -72,26 +73,29 @@ public:
             [&](Entity* entity, CharacterStatsComponent* statsComp, PlayerController*) {
                 auto& stats = statsComp->stats;
 
-                // -- Respawn countdown --
+                // -- Death state management --
                 if (stats.isDead) {
-                    // Set respawn timer if not already counting
+                    // Initialize death visual on first frame of death
                     if (stats.respawnTimeRemaining <= 0.0f) {
                         stats.respawnTimeRemaining = respawnCooldown;
                         stats.currentHP = 0;
-                        // Gray out sprite while dead
                         auto* spr = entity->getComponent<SpriteComponent>();
                         if (spr) spr->tint = Color(0.3f, 0.3f, 0.3f, 0.6f);
+                        // Lay down: rotate -PI/2 radians (Transform uses radians)
+                        auto* t = entity->getComponent<Transform>();
+                        if (t) t->rotation = -1.5708f;
+                        auto* anim = entity->getComponent<Animator>();
+                        if (anim) anim->stop();
                     }
 
-                    stats.respawnTimeRemaining -= dt;
-                    if (stats.respawnTimeRemaining <= 0.0f) {
-                        stats.respawnTimeRemaining = 0.0f;
-                        stats.respawn();
-                        // Restore sprite tint
-                        auto* spr = entity->getComponent<SpriteComponent>();
-                        if (spr) spr->tint = Color::white();
+                    // Tick countdown (DeathOverlayUI reads this for button activation)
+                    if (stats.respawnTimeRemaining > 0.0f) {
+                        stats.respawnTimeRemaining -= dt;
+                        if (stats.respawnTimeRemaining < 0.0f)
+                            stats.respawnTimeRemaining = 0.0f;
                     }
-                    // Skip regen / PK decay while dead
+
+                    // Do NOT auto-respawn — player chooses via DeathOverlayUI
                     syncNameplate(entity, stats);
                     return;
                 }

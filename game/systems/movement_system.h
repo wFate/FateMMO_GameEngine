@@ -6,6 +6,7 @@
 #include "game/components/sprite_component.h"
 #include "game/components/animator.h"
 #include "game/components/box_collider.h"
+#include "game/components/game_components.h"
 #include "engine/core/logger.h"
 
 namespace fate {
@@ -25,6 +26,13 @@ public:
                 // Other entities with PlayerController (prefab copies, other players)
                 // will be controlled by the server/AI, not keyboard input
                 if (!ctrl->isLocalPlayer) return;
+
+                // Dead players cannot move
+                auto* statsComp = entity->getComponent<CharacterStatsComponent>();
+                if (statsComp && statsComp->stats.isDead) {
+                    ctrl->isMoving = false;
+                    return;
+                }
 
                 ctrl->isMoving = (dir != Direction::None);
 
