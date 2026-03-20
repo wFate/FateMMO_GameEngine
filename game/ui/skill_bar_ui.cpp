@@ -18,6 +18,16 @@ void SkillBarUI::draw(World* world) {
     SkillManager* skills = findPlayerSkills(world);
     if (!skills) return;
 
+    // Find local player's death state
+    bool playerDead = false;
+    world->forEach<PlayerController, CharacterStatsComponent>(
+        [&](Entity*, PlayerController* ctrl, CharacterStatsComponent* sc) {
+            if (ctrl->isLocalPlayer) playerDead = sc->stats.isDead;
+        }
+    );
+
+    if (playerDead) ImGui::BeginDisabled();
+
     float slotSize = 40.0f;
     float spacing = 4.0f;
     float panelW = slotSize + 16.0f;  // slot + padding
@@ -92,6 +102,8 @@ void SkillBarUI::draw(World* world) {
     float textW = ImGui::CalcTextSize(pageBuf).x;
     ImGui::SetCursorPosX((panelW - textW) * 0.5f);
     ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.65f, 1.0f), "%s", pageBuf);
+
+    if (playerDead) ImGui::EndDisabled();
 
     ImGui::End();
     ImGui::PopStyleColor(2);
