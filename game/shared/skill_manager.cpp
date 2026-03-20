@@ -363,7 +363,11 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                                 const SkillExecutionContext& ctx) {
     // ---- Validation Phase ----
 
-    // 1. Check skill learned and activated
+    // 1. Check skill learned and activated (rank must be >= 1)
+    if (rank < 1) {
+        if (onSkillFailed) onSkillFailed(skillId, "Invalid rank");
+        return 0;
+    }
     const LearnedSkill* learned = getLearnedSkill(skillId);
     if (!learned || learned->activatedRank < rank) {
         if (onSkillFailed) onSkillFailed(skillId, "Skill not learned or rank not activated");

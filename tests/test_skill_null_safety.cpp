@@ -534,3 +534,34 @@ TEST_CASE("Skill: executeSkill with fury cost when not enough fury") {
     CHECK(dmg == 0);
     CHECK(failReason == "Not enough resources");
 }
+
+TEST_CASE("Skill: executeSkill with rank 0 rejects as invalid rank") {
+    CharacterStats stats = makeFullStats();
+    stats.currentMP = 100;
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeDamageSkill("test_skill");
+    sm.registerSkillDefinition(def);
+    sm.learnSkill("test_skill", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("test_skill");
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    EnemyStats enemy;
+    enemy.level = 10; enemy.maxHP = 99999; enemy.currentHP = 99999;
+    ctx.targetMobStats = &enemy;
+    ctx.targetLevel = 10;
+
+    std::string failReason;
+    sm.onSkillFailed = [&](const std::string&, std::string reason) {
+        failReason = reason;
+    };
+
+    CHECK(sm.executeSkill("test_skill", 0, ctx) == 0);
+    CHECK(failReason == "Invalid rank");
+}
