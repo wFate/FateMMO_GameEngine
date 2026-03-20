@@ -850,43 +850,29 @@ void GameApp::onInit() {
         if (!scene) return;
 
         // Find target entity position for floating text
+        // Strategy: check if attackerId or targetId matches known entities
         Vec2 targetPos{0, 0};
         bool foundTarget = false;
 
-        // Check if target is the local player
-        scene->world().forEach<PlayerController, Transform>(
-            [&](Entity*, PlayerController* ctrl, Transform* t) {
-                if (!ctrl->isLocalPlayer || foundTarget) return;
-                // Compute local player's PersistentId (same as server: hash of characterName)
-                // For now just assume any player→player combat event targets us
-                targetPos = t->position;
-                foundTarget = true;
-            }
-        );
-
-        // Check if target is a mob (match by checking ghost entities or mobs)
-        if (!foundTarget) {
-            auto it = ghostEntities_.find(msg.targetId);
-            if (it != ghostEntities_.end()) {
-                Entity* ghost = scene->world().getEntity(it->second);
-                if (ghost) {
-                    auto* t = ghost->getComponent<Transform>();
-                    if (t) { targetPos = t->position; foundTarget = true; }
-                }
+        // Check ghost entities (replicated remote players/mobs from server)
+        auto it = ghostEntities_.find(msg.targetId);
+        if (it != ghostEntities_.end()) {
+            Entity* ghost = scene->world().getEntity(it->second);
+            if (ghost) {
+                auto* t = ghost->getComponent<Transform>();
+                if (t) { targetPos = t->position; foundTarget = true; }
             }
         }
 
-        // Also check mobs — they're registered via entity enter with persistentId
-        // Mobs have EnemyStatsComponent, try matching entity handle value
+        // If target not found in ghosts, check if a mob is attacking US (local player)
+        // When mob attacks player: attackerId = mob PID, targetId = player PID
+        // The local player isn't in ghostEntities_, so if targetId wasn't found, it's us
         if (!foundTarget) {
-            scene->world().forEach<EnemyStatsComponent, Transform>(
-                [&](Entity* e, EnemyStatsComponent*, Transform* t) {
-                    if (foundTarget) return;
-                    // Entity handle value may match the persistent ID for locally-known mobs
-                    if (static_cast<uint64_t>(e->handle().value) == msg.targetId) {
-                        targetPos = t->position;
-                        foundTarget = true;
-                    }
+            scene->world().forEach<PlayerController, Transform>(
+                [&](Entity*, PlayerController* ctrl, Transform* t) {
+                    if (!ctrl->isLocalPlayer || foundTarget) return;
+                    targetPos = t->position;
+                    foundTarget = true;
                 }
             );
         }
