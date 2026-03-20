@@ -18,6 +18,7 @@
 #include "game/systems/quest_system.h"
 #include "game/components/faction_component.h"
 #include "game/components/zone_component.h"
+#include "game/shared/pk_system.h"
 
 #include <vector>
 #include <limits>
@@ -449,10 +450,19 @@ private:
             LOG_INFO("Combat", "Click-target: %s (Lv %d)",
                      hitMob->name().c_str(), getTargetLevel());
         } else {
-            // Clicked on empty space — clear target
-            if (currentTargetId_ != INVALID_ENTITY) {
-                clearTarget();
-                LOG_INFO("Combat", "Target cleared");
+            // No mob found — try to find a player (ghost) under the click
+            Entity* hitPlayer = findPlayerAtPoint(worldClick);
+            if (hitPlayer) {
+                currentTargetId_ = hitPlayer->id();
+                autoAttackEnabled_ = false;
+                LOG_INFO("Combat", "Click-target player: %s (Lv %d)",
+                         hitPlayer->name().c_str(), getTargetLevel());
+            } else {
+                // Clicked on empty space — clear target
+                if (currentTargetId_ != INVALID_ENTITY) {
+                    clearTarget();
+                    LOG_INFO("Combat", "Target cleared");
+                }
             }
         }
     }
@@ -492,10 +502,17 @@ private:
                         clearTarget();
                     } else {
                         auto* enemyComp = target->getComponent<EnemyStatsComponent>();
-                        if (!enemyComp || !enemyComp->stats.isAlive) {
+                        auto* targetCharStats = target->getComponent<CharacterStatsComponent>();
+                        bool targetAlive = false;
+                        if (enemyComp) {
+                            targetAlive = enemyComp->stats.isAlive;
+                        } else if (targetCharStats) {
+                            targetAlive = !targetCharStats->stats.isDead;
+                        }
+                        if (!targetAlive) {
                             clearTarget();
                         } else if (camera) {
-                            // Clear target if mob is off screen
+                            // Clear target if target is off screen
                             auto* targetT = target->getComponent<Transform>();
                             if (targetT) {
                                 Rect view = camera->getVisibleBounds();
@@ -904,6 +921,29 @@ private:
         float rangePixels = rangeTiles * Coords::TILE_SIZE;
         EntityId id = mobGrid_.findNearest(playerPos, rangePixels);
         return (id != INVALID_ENTITY) ? world_->getEntity(id) : nullptr;
+    }
+
+    // ------------------------------------------------------------------
+    // findPlayerAtPoint — find a ghost player entity under a click position
+    // ------------------------------------------------------------------
+    Entity* findPlayerAtPoint(Vec2 worldClick) {
+        if (!world_) return nullptr;
+        Entity* hit = nullptr;
+        world_->forEach<Transform, NameplateComponent>(
+            [&](Entity* e, Transform* t, NameplateComponent* np) {
+                if (hit || !np->visible) return;
+                auto* spr = e->getComponent<SpriteComponent>();
+                if (!spr || !spr->enabled) return;
+                Vec2 half = spr->size * 0.5f;
+                if (worldClick.x >= t->position.x - half.x &&
+                    worldClick.x <= t->position.x + half.x &&
+                    worldClick.y >= t->position.y - half.y &&
+                    worldClick.y <= t->position.y + half.y) {
+                    hit = e;
+                }
+            }
+        );
+        return hit;
     }
 
     // ------------------------------------------------------------------

@@ -108,9 +108,10 @@ EntityHandle ServerSpawnManager::createMob(
 
     // MobAIComponent — initialize AI with home position and ranges from def
     auto* aiComp = mob->addComponent<MobAIComponent>();
-    aiComp->ai.acquireRadius  = def->aggroRange;
-    aiComp->ai.attackRange    = def->attackRange;
-    aiComp->ai.contactRadius  = def->leashRadius;
+    // Convert tile ranges to pixel ranges (32px per tile)
+    aiComp->ai.acquireRadius  = def->aggroRange * 32.0f;
+    aiComp->ai.attackRange    = def->attackRange * 32.0f;
+    aiComp->ai.contactRadius  = def->leashRadius * 32.0f;
     aiComp->ai.attackCooldown = def->attackSpeed;
     aiComp->ai.isPassive      = !def->isAggressive;
     // moveSpeed: convert tiles/sec to px/sec (assume 32px per tile)
