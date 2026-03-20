@@ -3,20 +3,22 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 namespace fate {
 
 // ==========================================================================
 // Zone Snapshot — data structures for zone state serialization
 //
-// These are skeleton types. The actual serialize/deserialize logic will be
-// implemented when persistence is wired up. For now, just the data layout.
+// Entity snapshots use JSON for component data (same format as scene files),
+// enabling reuse of PrefabLibrary::jsonToEntity() for deserialization.
 // ==========================================================================
 
 // Serialized snapshot of a single entity's component data.
 struct EntitySnapshot {
-    PersistentId persistentId;
-    std::vector<uint8_t> componentData; // opaque serialized components
+    std::string entityName;
+    std::string entityTag;
+    nlohmann::json entityJson; // full entity JSON (name, tag, components) — same format as scene files
 };
 
 // Tracked mob state within a spawn zone (position, health, respawn timer).

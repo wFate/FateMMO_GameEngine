@@ -151,7 +151,20 @@ void Scene::onEnter() {
     if (snapshot_ && snapshot_->hasData()) {
         LOG_INFO("Scene", "Restoring zone snapshot for '%s' (%zu entities, %zu spawn zones)",
                  name_.c_str(), snapshot_->entities.size(), snapshot_->spawnZones.size());
-        // TODO: actual deserialization — for now just acknowledge the snapshot exists
+
+        size_t restored = 0;
+        for (const auto& entitySnap : snapshot_->entities) {
+            if (entitySnap.entityJson.empty()) continue;
+
+            // Skip player entities — they are created by the auth/connect flow
+            if (entitySnap.entityTag == "player") continue;
+
+            Entity* entity = PrefabLibrary::jsonToEntity(entitySnap.entityJson, world_);
+            if (entity) {
+                ++restored;
+            }
+        }
+        LOG_INFO("Scene", "Restored %zu entities from snapshot", restored);
     }
 
     loadProgress_ = 1.0f;
@@ -161,10 +174,26 @@ void Scene::onEnter() {
 void Scene::onExit() {
     LOG_INFO("Scene", "Exiting scene: %s", name_.c_str());
 
-    // Placeholder: save zone state to snapshot.
-    // Full implementation will serialize spawn/mob state into snapshot_.
-    // For now, just clear the world to release ECS resources.
-    // (World destructor handles cleanup when Scene is destroyed.)
+    // Serialize non-player entities into snapshot for zone reload
+    if (snapshot_) {
+        snapshot_->clear();
+        snapshot_->zoneName = name_;
+
+        world_.forEachEntity([&](Entity* entity) {
+            if (!entity || !entity->isActive()) return;
+            // Skip player entities — they're managed by auth/connect flow
+            if (entity->tag() == "player") return;
+
+            EntitySnapshot snap;
+            snap.entityName = entity->name();
+            snap.entityTag = entity->tag();
+            snap.entityJson = PrefabLibrary::entityToJson(entity);
+            snapshot_->entities.push_back(std::move(snap));
+        });
+
+        LOG_INFO("Scene", "Saved %zu entities to snapshot for '%s'",
+                 snapshot_->entities.size(), name_.c_str());
+    }
 
     // Reset the zone arena — all zone-level allocations are freed in O(1)
     zoneArena_.reset();
