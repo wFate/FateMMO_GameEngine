@@ -7,7 +7,6 @@
 #include "game/shared/combat_system.h"
 #include "game/shared/xp_calculator.h"
 #include "engine/core/logger.h"
-#include "engine/render/sdf_text.h"
 #include "engine/render/sprite_batch.h"
 #include "game/ui/game_viewport.h"
 #include "engine/render/camera.h"
@@ -102,19 +101,29 @@ public:
         }
 
         // --- Nameplates above entities (ImGui screen-space overlay) ---
-        auto& sdfText = SDFText::instance();
         // Use GameViewport for screen-space positioning (accounts for letterboxing)
         float gvpX = GameViewport::x();
         float gvpY = GameViewport::y();
         float gvpW = GameViewport::width();
         float gvpH = GameViewport::height();
 
+        // Check if local player is dead — skip ForegroundDrawList overlays
+        // so they don't render on top of the death respawn UI
+        bool localPlayerDead = false;
+        if (world_) {
+            world_->forEach<PlayerController, CharacterStatsComponent>(
+                [&](Entity*, PlayerController* ctrl, CharacterStatsComponent* sc) {
+                    if (ctrl->isLocalPlayer && sc->stats.isDead) localPlayerDead = true;
+                }
+            );
+        }
+
         // Clip nameplate text to the game viewport bounds
         auto* fgDL = ImGui::GetForegroundDrawList();
         fgDL->PushClipRect(
             ImVec2(gvpX, gvpY),
             ImVec2(gvpX + gvpW, gvpY + gvpH), true);
-        if (world_) {
+        if (world_ && !localPlayerDead) {
             // Player nameplates
             world_->forEach<Transform, NameplateComponent>(
                 [&](Entity* entity, Transform* t, NameplateComponent* np) {
@@ -229,18 +238,32 @@ public:
             );
         }
 
-        // --- Floating damage/XP text ---
+        // --- Floating damage/XP text (ImGui overlay, same pattern as nameplates) ---
         for (auto& ft : floatingTexts_) {
             float alpha = 1.0f - (ft.elapsed / ft.lifetime);
             if (alpha <= 0.0f) continue;
 
-            Color c = ft.color;
-            c.a = alpha;
+            float scale = ft.isCrit ? 1.3f : 1.0f;
+            Vec2 screenPos = camera.worldToScreen(ft.position,
+                static_cast<int>(gvpW), static_cast<int>(gvpH));
 
-            float fontSize = ft.isCrit ? 1.3f * 16.0f : 16.0f;
-            TextStyle style = ft.isCrit ? TextStyle::Glow : TextStyle::Shadow;
+            ImFont* font = ImGui::GetFont();
+            float fontSize = font->FontSize * scale;
+            ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, ft.text.c_str());
+            ImVec2 drawPos(gvpX + screenPos.x - textSize.x * 0.5f,
+                           gvpY + screenPos.y - textSize.y * 0.5f);
 
-            sdfText.drawWorld(batch, ft.text, ft.position, fontSize, c, 90.0f, style);
+            ImU32 textCol = IM_COL32(
+                (int)(ft.color.r * 255), (int)(ft.color.g * 255),
+                (int)(ft.color.b * 255), (int)(alpha * 255));
+            ImU32 outlineCol = IM_COL32(0, 0, 0, (int)(alpha * 200));
+
+            for (int ox = -1; ox <= 1; ++ox)
+                for (int oy = -1; oy <= 1; ++oy)
+                    if (ox || oy)
+                        fgDL->AddText(font, fontSize, ImVec2(drawPos.x + ox, drawPos.y + oy),
+                                      outlineCol, ft.text.c_str());
+            fgDL->AddText(font, fontSize, drawPos, textCol, ft.text.c_str());
         }
 
         fgDL->PopClipRect();

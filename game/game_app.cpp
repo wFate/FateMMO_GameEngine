@@ -30,6 +30,7 @@
 #include "game/ui/skill_bar_ui.h"
 #include "game/ui/hud_bars_ui.h"
 #include "game/shared/npc_types.h"
+#include "game/components/spawn_point_component.h"
 #include "imgui.h"
 #include <cstdio>
 #include <cmath>
@@ -1033,7 +1034,43 @@ void GameApp::onInit() {
     };
 
     deathOverlayUI_.onRespawnRequested = [this](uint8_t respawnType) {
-        netClient_.sendRespawn(respawnType);
+        // Send to server (for when server-side handling is implemented)
+        if (netClient_.isConnected()) {
+            netClient_.sendRespawn(respawnType);
+        }
+
+        // Local respawn (immediate feedback until server handles it)
+        auto* scene = SceneManager::instance().currentScene();
+        if (!scene) return;
+
+        scene->world().forEach<PlayerController, CharacterStatsComponent>(
+            [&](Entity* entity, PlayerController* ctrl, CharacterStatsComponent* sc) {
+                if (!ctrl->isLocalPlayer) return;
+                sc->stats.respawn();
+                // Restore visual
+                auto* spr = entity->getComponent<SpriteComponent>();
+                if (spr) spr->tint = Color::white();
+                auto* t = entity->getComponent<Transform>();
+                if (t) t->rotation = 0.0f;
+                auto* anim = entity->getComponent<Animator>();
+                if (anim) anim->play("idle");
+
+                if (respawnType == 1 && t) {
+                    // Map spawn: find SpawnPointComponent (not town)
+                    scene->world().forEach<SpawnPointComponent, Transform>(
+                        [&](Entity*, SpawnPointComponent* sp, Transform* spT) {
+                            if (!sp->isTownSpawn && t) {
+                                t->position = spT->position;
+                            }
+                        }
+                    );
+                }
+                // Type 0 (town) and type 2 (here) just respawn at current position for now
+                // Town zone transition will work once server handles CmdRespawn
+            }
+        );
+
+        LOG_INFO("Client", "Local respawn (type %d)", respawnType);
     };
 
     netClient_.onZoneTransition = [this](const SvZoneTransitionMsg& msg) {
