@@ -846,11 +846,13 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     if (client && client->playerEntityId != 0) {
         PersistentId pid(client->playerEntityId);
         EntityHandle h = replication_.getEntityHandle(pid);
+        // Unregister from replication BEFORE destroying — prevents dangling
+        // handle in spatial index on next tick's rebuildSpatialIndex()
+        replication_.unregisterEntity(h);
         if (h) {
             world_.destroyEntity(h);
             world_.processDestroyQueue();
         }
-        replication_.unregisterEntity(h);
     }
 
     // Clean up tracking maps
