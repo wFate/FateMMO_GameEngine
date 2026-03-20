@@ -133,16 +133,20 @@ void DeathOverlayUI::render(Entity* player) {
     }
     y += buttonH + 4.0f;
 
-    // Phoenix Down
+    // Phoenix Down — always visible, disabled (darkened) when count is 0
     auto* invComp = player->getComponent<InventoryComponent>();
     int phoenixCount = invComp ? invComp->inventory.countItem("phoenix_down") : 0;
 
-    if (phoenixCount > 0) {
+    {
         char label[64];
-        std::snprintf(label, sizeof(label), "Respawn Here (Phoenix Down x%d)", phoenixCount);
+        if (phoenixCount > 0) {
+            std::snprintf(label, sizeof(label), "Respawn Here (Phoenix Down x%d)", phoenixCount);
+        } else {
+            std::snprintf(label, sizeof(label), "Respawn Here (No Phoenix Down)");
+        }
         if (drawFgButton(dl, label, ImVec2(buttonX, y), ImVec2(buttonW, buttonH),
                          IM_COL32(153, 102, 25, 255), IM_COL32(179, 128, 38, 255), IM_COL32(255, 255, 255, 255),
-                         font, fontSize, true)) {
+                         font, fontSize, phoenixCount > 0)) {
             if (onRespawnRequested) onRespawnRequested(2);
         }
     }

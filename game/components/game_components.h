@@ -40,6 +40,7 @@ struct CombatControllerComponent {
 
     float baseAttackCooldown = 1.5f;  // Seconds between attacks
     float attackCooldownRemaining = 0.0f;
+    bool showAttackRange = false;     // Editor toggle: draw attack range circle in viewport
     // Note: targeting and auto-attack state are managed by CombatActionSystem,
     // not stored here. This component holds per-entity combat config only.
 };
@@ -247,7 +248,8 @@ FATE_REFLECT_EMPTY(fate::CharacterStatsComponent)
 
 FATE_REFLECT(fate::CombatControllerComponent,
     FATE_FIELD(baseAttackCooldown, Float),
-    FATE_FIELD(attackCooldownRemaining, Float)
+    FATE_FIELD(attackCooldownRemaining, Float),
+    FATE_FIELD(showAttackRange, Bool)
 )
 
 // Marker component — no data fields

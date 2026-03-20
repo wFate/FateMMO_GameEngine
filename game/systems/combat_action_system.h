@@ -100,6 +100,42 @@ public:
             }
         }
 
+        // --- Attack range circle (editor debug visualization) ---
+        if (world_) {
+            world_->forEach<CombatControllerComponent, Transform>(
+                [&](Entity* entity, CombatControllerComponent* combat, Transform* t) {
+                    if (!combat->showAttackRange) return;
+
+                    // Determine range in pixels
+                    auto* statsComp = entity->getComponent<CharacterStatsComponent>();
+                    float rangeTiles = 1.0f;
+                    if (statsComp) {
+                        bool isMage = (statsComp->stats.classDef.classType == ClassType::Mage);
+                        rangeTiles = isMage ? kMageRange : statsComp->stats.classDef.attackRange;
+                    }
+                    float rangePixels = rangeTiles * Coords::TILE_SIZE;
+
+                    // Draw circle as line segments
+                    constexpr int segments = 32;
+                    Color rangeColor(0.2f, 0.8f, 1.0f, 0.4f);
+                    float depth = 96.0f;
+                    for (int i = 0; i < segments; ++i) {
+                        float a0 = (float)i / segments * 6.2832f;
+                        float a1 = (float)(i + 1) / segments * 6.2832f;
+                        Vec2 p0 = {t->position.x + std::cos(a0) * rangePixels,
+                                   t->position.y + std::sin(a0) * rangePixels};
+                        Vec2 p1 = {t->position.x + std::cos(a1) * rangePixels,
+                                   t->position.y + std::sin(a1) * rangePixels};
+                        // Draw each segment as a thin rect between p0 and p1
+                        Vec2 mid = {(p0.x + p1.x) * 0.5f, (p0.y + p1.y) * 0.5f};
+                        float dx = p1.x - p0.x, dy = p1.y - p0.y;
+                        float len = std::sqrt(dx * dx + dy * dy);
+                        batch.drawRect(mid, {len, 1.0f}, rangeColor, depth);
+                    }
+                }
+            );
+        }
+
         // --- Nameplates above entities (ImGui screen-space overlay) ---
         // Use GameViewport for screen-space positioning (accounts for letterboxing)
         float gvpX = GameViewport::x();
