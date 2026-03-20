@@ -3257,35 +3257,47 @@ void Editor::executeCommand(World* world, const std::string& cmd) {
     }
     else if (args[0] == "delete" && args.size() > 1) {
         if (!world) return;
-        EntityId id = (EntityId)std::stoul(args[1]);
-        auto* e = world->getEntity(id);
-        if (e) {
-            LOG_INFO("Console", "Deleted entity %u (%s)", id, e->name().c_str());
-            world->destroyEntity(id);
-        } else {
-            LOG_WARN("Console", "Entity %u not found", id);
+        try {
+            EntityId id = (EntityId)std::stoul(args[1]);
+            auto* e = world->getEntity(id);
+            if (e) {
+                LOG_INFO("Console", "Deleted entity %u (%s)", id, e->name().c_str());
+                world->destroyEntity(id);
+            } else {
+                LOG_WARN("Console", "Entity %u not found", id);
+            }
+        } catch (const std::exception&) {
+            LOG_WARN("Console", "Invalid entity id: %s", args[1].c_str());
         }
     }
     else if (args[0] == "spawn" && args.size() > 3) {
         if (!world) return;
-        float x = std::stof(args[2]);
-        float y = std::stof(args[3]);
-        auto* e = PrefabLibrary::instance().spawn(args[1], *world, {x, y});
-        if (e) LOG_INFO("Console", "Spawned '%s' at (%.0f, %.0f) id=%u", args[1].c_str(), x, y, e->id());
-        else LOG_WARN("Console", "Prefab '%s' not found", args[1].c_str());
+        try {
+            float x = std::stof(args[2]);
+            float y = std::stof(args[3]);
+            auto* e = PrefabLibrary::instance().spawn(args[1], *world, {x, y});
+            if (e) LOG_INFO("Console", "Spawned '%s' at (%.0f, %.0f) id=%u", args[1].c_str(), x, y, e->id());
+            else LOG_WARN("Console", "Prefab '%s' not found", args[1].c_str());
+        } catch (const std::exception&) {
+            LOG_WARN("Console", "Invalid coordinates for spawn");
+        }
     }
     else if (args[0] == "tp" && args.size() > 2) {
         if (!world) return;
-        float x = std::stof(args[1]);
-        float y = std::stof(args[2]);
-        world->forEach<Transform, PlayerController>(
-            [&](Entity*, Transform* t, PlayerController* p) {
-                if (p->isLocalPlayer) {
-                    t->position = {x, y};
-                    LOG_INFO("Console", "Teleported player to (%.0f, %.0f)", x, y);
+        try {
+            float x = std::stof(args[1]);
+            float y = std::stof(args[2]);
+            world->forEach<Transform, PlayerController>(
+                [&](Entity*, Transform* t, PlayerController* p) {
+                    if (p->isLocalPlayer) {
+                        t->position = {x, y};
+                        LOG_INFO("Console", "Teleported player to (%.0f, %.0f)", x, y);
+                    }
                 }
-            }
-        );
+            );
+        } catch (const std::exception&) {
+            LOG_WARN("Console", "Invalid coordinates for tp");
+        }
     }
     else {
         LOG_WARN("Console", "Unknown command: %s (type 'help')", args[0].c_str());
