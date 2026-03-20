@@ -547,6 +547,13 @@ private:
 
         if (!es.isAlive) { clearTarget(); return; }
 
+        // ---- CC check: crowd-controlled players cannot attack ----
+        auto* playerCCComp = player->getComponent<CrowdControlComponent>();
+        if (playerCCComp && !playerCCComp->cc.canAct()) {
+            LOG_DEBUG("Combat", "Cannot attack — crowd controlled");
+            return;
+        }
+
         // ---- Range check (in tiles) ----
         float distPixels = playerT->position.distance(targetT->position);
         float distTiles  = distPixels / Coords::TILE_SIZE;
@@ -572,6 +579,11 @@ private:
 
         Vec2 textPos = targetT->position;
 
+        // ---- Get status effect components for attacker and target ----
+        auto* playerSEComp = player->getComponent<StatusEffectComponent>();
+        auto* targetSEComp = target->getComponent<StatusEffectComponent>();
+        auto* targetCCComp = target->getComponent<CrowdControlComponent>();
+
         if (isMage) {
             // ---- Spell attack ----
             bool resisted = CombatSystem::rollSpellResist(
@@ -585,10 +597,70 @@ private:
 
             // Calculate spell damage
             bool isCrit = false;
-            int damage = ps.calculateDamage(false, isCrit);
+
+            // Check guaranteed crit from player status effects
+            bool forceCrit = false;
+            if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
+                forceCrit = true;
+                playerSEComp->effects.consumeGuaranteedCrit();
+            }
+
+            int damage = ps.calculateDamage(forceCrit, isCrit);
+
+            // Apply attacker damage multiplier (AttackUp, Transform)
+            if (playerSEComp) {
+                damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
+            }
+
+            // Apply magic resist reduction
+            float mrReduction = CombatSystem::getMobMagicDamageReduction(es.magicResist);
+            damage = static_cast<int>(damage * (1.0f - mrReduction));
+
+            // Apply Hunter's Mark bonus damage from target
+            if (targetSEComp) {
+                float markBonus = targetSEComp->effects.getBonusDamageTaken();
+                if (markBonus > 0.0f) {
+                    damage = static_cast<int>(damage * (1.0f + markBonus));
+                }
+            }
+
+            // Apply Bewitch multiplier from target
+            if (targetSEComp) {
+                float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
+                if (bewitchMult > 0.0f) {
+                    damage = static_cast<int>(damage * bewitchMult);
+                }
+            }
+
+            // Apply shield absorption from target
+            if (targetSEComp) {
+                damage = targetSEComp->effects.absorbDamage(damage);
+            }
+
+            // Ensure minimum 1 damage
+            if (damage < 1) damage = 1;
 
             es.takeDamageFrom(player->id(), damage);
             spawnDamageText(textPos, damage, isCrit);
+
+            // Break freeze on target when taking damage
+            if (targetCCComp) {
+                targetCCComp->cc.breakFreeze();
+            }
+
+            // Lifesteal
+            if (ps.equipBonusLifesteal > 0.0f) {
+                int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
+                if (healAmount > 0) {
+                    ps.heal(healAmount);
+                    spawnHealText(playerT->position, healAmount);
+                }
+            }
+
+            // Armor shred on crit
+            if (isCrit && targetSEComp) {
+                targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
+            }
 
             LOG_DEBUG("Combat", "Spell hit %s for %d%s",
                       es.enemyName.c_str(), damage, isCrit ? " (CRIT)" : "");
@@ -610,11 +682,79 @@ private:
                 return;
             }
 
+            // Block check (target must have block chance)
+            if (CombatSystem::rollBlock(ps.classDef.classType,
+                                        ps.getStrength(), ps.getDexterity(),
+                                        0.0f /* mob block chance */)) {
+                spawnBlockText(textPos);
+                LOG_DEBUG("Combat", "Attack blocked by %s", es.enemyName.c_str());
+                return;
+            }
+
             bool isCrit = false;
-            int damage = ps.calculateDamage(false, isCrit);
+
+            // Check guaranteed crit from player status effects
+            bool forceCrit = false;
+            if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
+                forceCrit = true;
+                playerSEComp->effects.consumeGuaranteedCrit();
+            }
+
+            int damage = ps.calculateDamage(forceCrit, isCrit);
+
+            // Apply attacker damage multiplier (AttackUp, Transform)
+            if (playerSEComp) {
+                damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
+            }
+
+            // Apply armor reduction
+            damage = CombatSystem::applyArmorReduction(damage, es.armor);
+
+            // Apply Hunter's Mark bonus damage from target
+            if (targetSEComp) {
+                float markBonus = targetSEComp->effects.getBonusDamageTaken();
+                if (markBonus > 0.0f) {
+                    damage = static_cast<int>(damage * (1.0f + markBonus));
+                }
+            }
+
+            // Apply Bewitch multiplier from target
+            if (targetSEComp) {
+                float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
+                if (bewitchMult > 0.0f) {
+                    damage = static_cast<int>(damage * bewitchMult);
+                }
+            }
+
+            // Apply shield absorption from target
+            if (targetSEComp) {
+                damage = targetSEComp->effects.absorbDamage(damage);
+            }
+
+            // Ensure minimum 1 damage
+            if (damage < 1) damage = 1;
 
             es.takeDamageFrom(player->id(), damage);
             spawnDamageText(textPos, damage, isCrit);
+
+            // Break freeze on target when taking damage
+            if (targetCCComp) {
+                targetCCComp->cc.breakFreeze();
+            }
+
+            // Lifesteal
+            if (ps.equipBonusLifesteal > 0.0f) {
+                int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
+                if (healAmount > 0) {
+                    ps.heal(healAmount);
+                    spawnHealText(playerT->position, healAmount);
+                }
+            }
+
+            // Armor shred on crit
+            if (isCrit && targetSEComp) {
+                targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
+            }
 
             // Fury generation
             float furyGain = isCrit

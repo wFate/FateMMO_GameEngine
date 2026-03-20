@@ -34,11 +34,25 @@ public:
                     return;
                 }
 
+                // CC check: crowd-controlled players cannot move
+                auto* ccComp = entity->getComponent<CrowdControlComponent>();
+                if (ccComp && !ccComp->cc.canMove()) {
+                    ctrl->isMoving = false;
+                    return;
+                }
+
                 ctrl->isMoving = (dir != Direction::None);
 
                 if (ctrl->isMoving) {
                     ctrl->facing = dir;
-                    Vec2 move = directionToVec(dir) * ctrl->moveSpeed * dt;
+
+                    // Apply speed modifier from status effects (Slow, SpeedUp, etc.)
+                    float speedMod = 1.0f;
+                    auto* seComp = entity->getComponent<StatusEffectComponent>();
+                    if (seComp) {
+                        speedMod = seComp->effects.getSpeedModifier();
+                    }
+                    Vec2 move = directionToVec(dir) * ctrl->moveSpeed * speedMod * dt;
 
                     Vec2 newPos = transform->position + move;
                     bool blocked = false;
