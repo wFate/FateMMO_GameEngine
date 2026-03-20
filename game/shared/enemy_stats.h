@@ -17,6 +17,7 @@ public:
     std::string enemyId;                        // from mob_definitions
     std::string enemyName    = "Enemy";
     std::string monsterType  = "Normal";        // Normal, MiniBoss, Boss, RaidBoss
+    std::string sceneId;                        // which scene this mob belongs to
 
     // ---- Combat Stats ----
     int   baseDamage         = 10;

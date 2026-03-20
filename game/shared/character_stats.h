@@ -19,6 +19,7 @@ public:
     std::string characterId;
     std::string characterName;
     std::string className;
+    std::string currentScene;  // Server tracks which scene this player is in
     ClassDefinition classDef;
     int level = 1;
 

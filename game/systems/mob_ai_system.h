@@ -127,6 +127,14 @@ public:
                     nearestPlayer = world_->getEntity(result.value());
                 }
 
+                // Scene check: only interact with players in the same scene as this mob
+                if (nearestPlayer && !stats.sceneId.empty()) {
+                    auto* playerStats = nearestPlayer->getComponent<CharacterStatsComponent>();
+                    if (playerStats && playerStats->stats.currentScene != stats.sceneId) {
+                        nearestPlayer = nullptr;  // different scene, ignore
+                    }
+                }
+
                 Vec2 targetPos;
                 Vec2* targetPosPtr = nullptr;
                 if (nearestPlayer) {
@@ -371,6 +379,9 @@ private:
 
         auto& playerStats = playerStatsComp->stats;
         if (!playerStats.isAlive()) return;
+
+        // Scene check: don't attack players in a different scene
+        if (!mobStats.sceneId.empty() && playerStats.currentScene != mobStats.sceneId) return;
 
         // Hit/miss roll (matches Unity CombatHitRateSystem.RollMobVsPlayerHit)
         bool hit = CombatSystem::rollToHit(

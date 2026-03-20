@@ -84,6 +84,7 @@ EntityHandle ServerSpawnManager::createMob(
     EnemyStats& es = esComp->stats;
     es.enemyId          = def->mobDefId;
     es.enemyName        = def->displayName;
+    es.sceneId          = row.config.sceneId;
     es.level            = level;
     es.baseDamage       = def->getDamageForLevel(level);
     es.maxHP            = def->getHPForLevel(level);

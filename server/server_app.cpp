@@ -582,6 +582,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         s.pvpKills     = rec.pvp_kills;
         s.pvpDeaths    = rec.pvp_deaths;
         s.isDead       = rec.is_dead;
+        s.currentScene = rec.current_scene;
 
         // Recalculate derived stats (resets currentHP/MP to max)
         s.recalculateStats();
@@ -1941,9 +1942,24 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             resp.write(w);
             server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvZoneTransition, buf, w.size());
 
+            // Update player's current scene on the entity
+            {
+                auto* client = server_.connections().findById(clientId);
+                if (client && client->playerEntityId != 0) {
+                    PersistentId pid(client->playerEntityId);
+                    EntityHandle h = replication_.getEntityHandle(pid);
+                    Entity* e = world_.getEntity(h);
+                    if (e) {
+                        auto* sc = e->getComponent<CharacterStatsComponent>();
+                        if (sc) sc->stats.currentScene = cmd.targetScene;
+                    }
+                }
+            }
+
             // Update movement tracking for the new scene position
             lastValidPositions_[clientId] = {spawnX, spawnY};
             lastMoveTime_[clientId] = gameTime_;
+            needsFirstMoveSync_.insert(clientId);
 
             // Save updated scene to DB asynchronously
             savePlayerToDBAsync(clientId);
