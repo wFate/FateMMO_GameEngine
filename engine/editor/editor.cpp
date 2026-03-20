@@ -5,6 +5,11 @@
 #include "engine/render/fullscreen_quad.h"
 #include "engine/input/input.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_sdl2.h"
@@ -1074,18 +1079,25 @@ void Editor::drawAssetBrowser(World* world, Camera* camera) {
                             }
                             if (asset.type == AssetType::Script || asset.type == AssetType::Shader) {
                                 if (ImGui::MenuItem("Open in VS Code")) {
-                                    std::string cmd = "code \"" + asset.fullPath + "\"";
-                                    system(cmd.c_str());
+#ifdef _WIN32
+                                    int wlen = MultiByteToWideChar(CP_UTF8, 0, asset.fullPath.c_str(), -1, nullptr, 0);
+                                    std::wstring wpath(wlen, L'\0');
+                                    MultiByteToWideChar(CP_UTF8, 0, asset.fullPath.c_str(), -1, wpath.data(), wlen);
+                                    ShellExecuteW(nullptr, L"open", L"code", wpath.c_str(), nullptr, SW_SHOWNORMAL);
+#endif
                                 }
                             }
                             if (ImGui::MenuItem("Show in Explorer")) {
+#ifdef _WIN32
                                 std::string dir = asset.fullPath;
                                 size_t lastSlash = dir.find_last_of("/\\");
                                 if (lastSlash != std::string::npos) dir = dir.substr(0, lastSlash);
-                                std::string cmd = "explorer \"" + dir + "\"";
-                                // Convert forward slashes to backslashes for Windows
-                                for (auto& c : cmd) if (c == '/') c = '\\';
-                                system(cmd.c_str());
+                                for (auto& c : dir) if (c == '/') c = '\\';
+                                int wlen = MultiByteToWideChar(CP_UTF8, 0, dir.c_str(), -1, nullptr, 0);
+                                std::wstring wdir(wlen, L'\0');
+                                MultiByteToWideChar(CP_UTF8, 0, dir.c_str(), -1, wdir.data(), wlen);
+                                ShellExecuteW(nullptr, L"open", L"explorer", wdir.c_str(), nullptr, SW_SHOWNORMAL);
+#endif
                             }
                             if (ImGui::MenuItem("Copy Path")) {
                                 SDL_SetClipboardText(asset.fullPath.c_str());
