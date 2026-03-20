@@ -155,6 +155,20 @@ bool SkillManager::activateSkillRank(const std::string& skillId) {
             }
 
             skill.activatedRank = nextRank;
+
+            const SkillDefinition* def = getSkillDefinition(skillId);
+            if (def && def->skillType == SkillType::Passive) {
+                int ri = nextRank - 1;
+                if (ri >= 0) {
+                    if (ri < (int)def->passiveHPBonusPerRank.size()) passiveHPBonus_ += def->passiveHPBonusPerRank[ri];
+                    if (ri < (int)def->passiveCritBonusPerRank.size()) passiveCritBonus_ += def->passiveCritBonusPerRank[ri];
+                    if (ri < (int)def->passiveSpeedBonusPerRank.size()) passiveSpeedBonus_ += def->passiveSpeedBonusPerRank[ri];
+                    if (ri < (int)def->passiveDamageReductionPerRank.size()) passiveDamageReduction_ += def->passiveDamageReductionPerRank[ri];
+                    if (ri < (int)def->passiveStatBonusPerRank.size()) passiveStatBonus_ += def->passiveStatBonusPerRank[ri];
+                    applyPassiveBonusesToStats();
+                }
+            }
+
             availableSkillPoints--;
             totalSpentPoints++;
 
@@ -324,6 +338,20 @@ void SkillManager::activateDoubleCast(const std::string& sourceSkillId, float wi
 void SkillManager::consumeDoubleCast() {
     doubleCastReady_ = false;
     doubleCastSourceSkillId_.clear();
+}
+
+// ============================================================================
+// Passive Bonus Application
+// ============================================================================
+
+void SkillManager::applyPassiveBonusesToStats() {
+    if (!stats) return;
+    stats->passiveHPBonus         = passiveHPBonus_;
+    stats->passiveCritBonus       = passiveCritBonus_;
+    stats->passiveSpeedBonus      = passiveSpeedBonus_;
+    stats->passiveDamageReduction = passiveDamageReduction_;
+    stats->passiveStatBonus       = passiveStatBonus_;
+    stats->recalculateStats();
 }
 
 } // namespace fate

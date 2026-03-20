@@ -233,6 +233,151 @@ TEST_CASE("skill definition registry: stores and retrieves") {
     CHECK(retrieved->damagePerRank[0] == doctest::Approx(120.0f));
 }
 
+// ============================================================================
+// Passive Skill Bonuses
+// ============================================================================
+
+TEST_CASE("Passive: increases maxHP") {
+    auto stats = makeTestStats("Warrior", ClassType::Warrior, 1);
+    SkillManager mgr;
+    mgr.initialize(&stats);
+
+    SkillDefinition def;
+    def.skillId = "iron_body";
+    def.skillName = "Iron Body";
+    def.className = "Warrior";
+    def.skillType = SkillType::Passive;
+    def.levelRequirement = 1;
+    def.passiveHPBonusPerRank = {50, 100, 200};
+    mgr.registerSkillDefinition(def);
+
+    int baseHP = stats.maxHP;  // 120 for level 1 warrior
+    mgr.grantSkillPoint();
+    CHECK(mgr.learnSkill("iron_body", 1));
+    CHECK(mgr.activateSkillRank("iron_body"));
+    CHECK(stats.maxHP == baseHP + 50);
+}
+
+TEST_CASE("Passive: increases crit rate") {
+    auto stats = makeTestStats("Archer", ClassType::Archer, 1);
+    SkillManager mgr;
+    mgr.initialize(&stats);
+
+    SkillDefinition def;
+    def.skillId = "keen_eye";
+    def.skillName = "Keen Eye";
+    def.className = "Archer";
+    def.skillType = SkillType::Passive;
+    def.levelRequirement = 1;
+    def.passiveCritBonusPerRank = {0.05f, 0.05f, 0.10f};
+    mgr.registerSkillDefinition(def);
+
+    float baseCrit = stats.getCritRate();
+    mgr.grantSkillPoint();
+    CHECK(mgr.learnSkill("keen_eye", 1));
+    CHECK(mgr.activateSkillRank("keen_eye"));
+    CHECK(stats.getCritRate() == doctest::Approx(baseCrit + 0.05f));
+}
+
+TEST_CASE("Passive: increases move speed") {
+    auto stats = makeTestStats("Warrior", ClassType::Warrior, 1);
+    SkillManager mgr;
+    mgr.initialize(&stats);
+
+    SkillDefinition def;
+    def.skillId = "swift_feet";
+    def.skillName = "Swift Feet";
+    def.className = "Warrior";
+    def.skillType = SkillType::Passive;
+    def.levelRequirement = 1;
+    def.passiveSpeedBonusPerRank = {0.05f, 0.10f, 0.15f};
+    mgr.registerSkillDefinition(def);
+
+    float baseSpeed = stats.getSpeed();  // 1.0 with no equip bonuses
+    mgr.grantSkillPoint();
+    CHECK(mgr.learnSkill("swift_feet", 1));
+    CHECK(mgr.activateSkillRank("swift_feet"));
+    CHECK(stats.getSpeed() == doctest::Approx(baseSpeed * 1.05f));
+}
+
+TEST_CASE("Passive: increases primary stat (Warrior STR)") {
+    auto stats = makeTestStats("Warrior", ClassType::Warrior, 1);
+    SkillManager mgr;
+    mgr.initialize(&stats);
+
+    SkillDefinition def;
+    def.skillId = "brute_force";
+    def.skillName = "Brute Force";
+    def.className = "Warrior";
+    def.skillType = SkillType::Passive;
+    def.levelRequirement = 1;
+    def.passiveStatBonusPerRank = {5, 10, 15};
+    mgr.registerSkillDefinition(def);
+
+    int baseStr = stats.getStrength();
+    mgr.grantSkillPoint();
+    CHECK(mgr.learnSkill("brute_force", 1));
+    CHECK(mgr.activateSkillRank("brute_force"));
+    CHECK(stats.getStrength() == baseStr + 5);
+}
+
+TEST_CASE("Passive: accumulates across ranks") {
+    auto stats = makeTestStats("Warrior", ClassType::Warrior, 1);
+    SkillManager mgr;
+    mgr.initialize(&stats);
+
+    SkillDefinition def;
+    def.skillId = "iron_body";
+    def.skillName = "Iron Body";
+    def.className = "Warrior";
+    def.skillType = SkillType::Passive;
+    def.levelRequirement = 1;
+    def.passiveHPBonusPerRank = {50, 100, 200};
+    mgr.registerSkillDefinition(def);
+
+    int baseHP = stats.maxHP;
+
+    // Learn all 3 ranks via skillbooks
+    CHECK(mgr.learnSkill("iron_body", 1));
+    CHECK(mgr.learnSkill("iron_body", 2));
+    CHECK(mgr.learnSkill("iron_body", 3));
+
+    // Activate rank 1
+    mgr.grantSkillPoint();
+    CHECK(mgr.activateSkillRank("iron_body"));
+    CHECK(stats.maxHP == baseHP + 50);
+
+    // Activate rank 2
+    mgr.grantSkillPoint();
+    CHECK(mgr.activateSkillRank("iron_body"));
+    CHECK(stats.maxHP == baseHP + 150);
+
+    // Activate rank 3
+    mgr.grantSkillPoint();
+    CHECK(mgr.activateSkillRank("iron_body"));
+    CHECK(stats.maxHP == baseHP + 350);
+}
+
+TEST_CASE("Active skill: does NOT add passive bonuses") {
+    auto stats = makeTestStats("Warrior", ClassType::Warrior, 1);
+    SkillManager mgr;
+    mgr.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("slash", "Warrior", 1);
+    def.skillType = SkillType::Active;
+    def.passiveHPBonusPerRank = {50, 100, 200};
+    mgr.registerSkillDefinition(def);
+
+    int baseHP = stats.maxHP;
+    mgr.grantSkillPoint();
+    CHECK(mgr.learnSkill("slash", 1));
+    CHECK(mgr.activateSkillRank("slash"));
+
+    // Active skill should NOT change HP via passive bonuses
+    CHECK(stats.maxHP == baseHP);
+    CHECK(mgr.getPassiveHPBonus() == 0);
+}
+
 TEST_CASE("SkillDefinition: new fields default correctly") {
     SkillDefinition def;
     CHECK(def.canCrit == true);

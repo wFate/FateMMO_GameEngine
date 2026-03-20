@@ -163,6 +163,13 @@ public:
     void registerSkillDefinition(const SkillDefinition& def);
     const SkillDefinition* getSkillDefinition(const std::string& skillId) const;
 
+    // ---- Passive Bonus Accumulators ----
+    [[nodiscard]] int   getPassiveHPBonus() const         { return passiveHPBonus_; }
+    [[nodiscard]] float getPassiveCritBonus() const       { return passiveCritBonus_; }
+    [[nodiscard]] float getPassiveSpeedBonus() const      { return passiveSpeedBonus_; }
+    [[nodiscard]] float getPassiveDamageReduction() const { return passiveDamageReduction_; }
+    [[nodiscard]] int   getPassiveStatBonus() const       { return passiveStatBonus_; }
+
 private:
     std::vector<LearnedSkill>                 learnedSkills;
     std::vector<std::string>                  skillBarSlots;        // 20 slots
@@ -175,6 +182,14 @@ private:
 
     CharacterStats* stats       = nullptr;  // Non-owning pointer
     float           currentTime = 0.0f;     // Updated externally via tick()
+
+    // ---- Passive bonus accumulators ----
+    int   passiveHPBonus_         = 0;
+    float passiveCritBonus_       = 0.0f;
+    float passiveSpeedBonus_      = 0.0f;
+    float passiveDamageReduction_ = 0.0f;
+    int   passiveStatBonus_       = 0;
+    void applyPassiveBonusesToStats();
 
     // ---- Double-cast state (transient, not serialized) ----
     bool doubleCastReady_          = false;

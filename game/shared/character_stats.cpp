@@ -39,6 +39,7 @@ void CharacterStats::recalculateStats() {
     int baseHP = static_cast<int>(std::round(classDef.baseMaxHP + classDef.hpPerLevel * (level - 1)));
     float vitalityMultiplier = 1.0f + (_bonusVitality * 0.01f);
     maxHP = static_cast<int>(std::round(baseHP * vitalityMultiplier)) + equipBonusHP;
+    maxHP += passiveHPBonus;
 
     // --- MP ---
     maxMP = static_cast<int>(std::round(classDef.baseMaxMP + classDef.mpPerLevel * (level - 1))) + equipBonusMP;
@@ -74,9 +75,11 @@ void CharacterStats::recalculateStats() {
     if (classDef.classType == ClassType::Archer) {
         _critRate += _bonusDexterity * 0.005f;
     }
+    _critRate += passiveCritBonus;
 
     // --- Speed ---
     _speed = 1.0f + equipBonusMoveSpeed;
+    _speed *= (1.0f + passiveSpeedBonus);
 
     // --- Damage Multiplier (class-dependent) ---
     switch (classDef.classType) {
@@ -89,6 +92,15 @@ void CharacterStats::recalculateStats() {
         case ClassType::Archer:
             _damageMultiplier = 1.0f + _bonusDexterity * 0.02f;
             break;
+    }
+
+    // --- Passive stat bonus (primary stat based on class) ---
+    if (passiveStatBonus != 0) {
+        switch (classDef.classType) {
+            case ClassType::Warrior:  _strength += passiveStatBonus; _bonusStrength += passiveStatBonus; break;
+            case ClassType::Mage:     _intelligence += passiveStatBonus; _bonusIntelligence += passiveStatBonus; break;
+            case ClassType::Archer:   _dexterity += passiveStatBonus; _bonusDexterity += passiveStatBonus; break;
+        }
     }
 
     // --- Fury cap ---
