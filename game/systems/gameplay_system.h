@@ -44,6 +44,14 @@ public:
             }
         );
 
+        // ---- Skill Manager: tick cooldowns ----
+        gameTime_ += dt;
+        world_->forEach<SkillManagerComponent>(
+            [&](Entity*, SkillManagerComponent* sc) {
+                sc->skills.tick(gameTime_);
+            }
+        );
+
         // ---- Party invite expiry (player entities) ----
         world_->forEach<PartyComponent>(
             [&](Entity*, PartyComponent* partyComp) {
@@ -143,6 +151,7 @@ private:
     // ---- Timers ----
     float regenTimer_   = 0.0f;
     float mpRegenTimer_ = 0.0f;
+    float gameTime_     = 0.0f;
 
     // ---- Intervals ----
     static constexpr float kHPRegenInterval = 10.0f;
