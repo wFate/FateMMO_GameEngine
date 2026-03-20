@@ -1119,11 +1119,8 @@ void Editor::drawAssetBrowser(World* world, Camera* camera) {
                             }
                             ImGui::Separator();
                             if (ImGui::MenuItem("Delete File")) {
-                                if (fs::exists(asset.fullPath)) {
-                                    fs::remove(asset.fullPath);
-                                    LOG_INFO("Editor", "Deleted: %s", asset.fullPath.c_str());
-                                    scanAssets(); // refresh
-                                }
+                                pendingDeleteFile_ = true;
+                                pendingDeletePath_ = asset.fullPath;
                             }
                             ImGui::EndPopup();
                         }
@@ -1291,6 +1288,32 @@ void Editor::drawAssetBrowser(World* world, Camera* camera) {
             ImGui::EndTabBar();
         }
     }
+
+    if (pendingDeleteFile_) {
+        ImGui::OpenPopup("Delete File?");
+        pendingDeleteFile_ = false;
+    }
+    if (ImGui::BeginPopupModal("Delete File?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Delete this file?");
+        ImGui::TextWrapped("%s", pendingDeletePath_.c_str());
+        ImGui::Separator();
+        if (ImGui::Button("Delete", ImVec2(120, 0))) {
+            if (fs::exists(pendingDeletePath_)) {
+                fs::remove(pendingDeletePath_);
+                LOG_INFO("Editor", "Deleted: %s", pendingDeletePath_.c_str());
+                scanAssets();
+            }
+            pendingDeletePath_.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            pendingDeletePath_.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
     ImGui::End();
 }
 
