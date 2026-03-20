@@ -513,13 +513,14 @@ void InventoryUI::drawSkillsTab(World* world, Entity* player) {
 // ============================================================================
 
 ImVec4 InventoryUI::getRarityColor(ItemRarity rarity) {
+    // Colors match Unity prototype RarityColors (ItemEnums.cs)
     switch (rarity) {
-        case ItemRarity::Common:    return {0.8f, 0.8f, 0.8f, 1.0f};
-        case ItemRarity::Uncommon:  return {0.2f, 0.9f, 0.2f, 1.0f};
-        case ItemRarity::Rare:      return {0.3f, 0.5f, 1.0f, 1.0f};
-        case ItemRarity::Epic:      return {0.7f, 0.3f, 1.0f, 1.0f};
-        case ItemRarity::Legendary: return {1.0f, 0.6f, 0.1f, 1.0f};
-        case ItemRarity::Unique:    return {1.0f, 0.2f, 0.2f, 1.0f};
+        case ItemRarity::Common:    return {1.0f, 1.0f, 1.0f, 1.0f};       // #FFFFFF
+        case ItemRarity::Uncommon:  return {0.290f, 0.871f, 0.502f, 1.0f};  // #4ADE80
+        case ItemRarity::Rare:      return {0.376f, 0.647f, 0.980f, 1.0f};  // #60A5FA
+        case ItemRarity::Epic:      return {0.659f, 0.333f, 0.969f, 1.0f};  // #A855F7
+        case ItemRarity::Legendary: return {0.984f, 0.573f, 0.235f, 1.0f};  // #FB923C
+        case ItemRarity::Unique:    return {0.937f, 0.267f, 0.267f, 1.0f};  // #EF4444
         default: return {0.5f, 0.5f, 0.5f, 1.0f};
     }
 }
