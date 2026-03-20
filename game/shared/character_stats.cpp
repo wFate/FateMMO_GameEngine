@@ -207,6 +207,12 @@ int CharacterStats::takeDamage(int amount) {
     float reductionPct = (std::min)(75.0f, _armor * 0.5f) / 100.0f;
     int actualDamage = (std::max)(1, static_cast<int>(std::round(amount * (1.0f - reductionPct))));
 
+    // Passive damage reduction from skills (capped at 90%)
+    if (passiveDamageReduction > 0.0f) {
+        float pdr = (std::min)(0.90f, passiveDamageReduction);
+        actualDamage = (std::max)(1, static_cast<int>(std::round(actualDamage * (1.0f - pdr))));
+    }
+
     currentHP = (std::max)(0, currentHP - actualDamage);
 
     if (onDamaged) {
