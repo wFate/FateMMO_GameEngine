@@ -204,9 +204,9 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | AnimationSystem | Done | Timer-based frame updates |
 | CameraFollowSystem | Done | Locked to local player, smooth (no pixel-snap jitter) |
 | SpriteRenderSystem | Done | Frustum culled, depth sorted, respects sprite enabled flag |
-| GameplaySystem | Done | Ticks StatusEffects, CrowdControl, HP/MP regen, PK decay, death visual (rotation + gray tint), respawn countdown, nameplates |
+| GameplaySystem | Done | Ticks StatusEffects, CrowdControl, SkillManager cooldowns, HP/MP regen, PK decay, death visual (rotation + gray tint), respawn countdown, nameplates |
 | MobAISystem | Done | Ticks MobAI for all mobs, scans for players, applies movement, fires attacks |
-| CombatActionSystem | Done | TWOM Option B targeting, viewport-aware click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP, same-faction PvP block, home village PK exception check, mob HP bars always visible |
+| CombatActionSystem | Done | TWOM Option B targeting (mobs + PvP players), viewport-aware click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP, PvP with 0.05x multiplier + faction check + PK status, CC/block/shield/lifesteal/status effects wired, mob HP bars always visible |
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment, deferred entity creation (safe during archetype iteration) |
 | NPCInteractionSystem | Done | Click-to-interact with NPCs, viewport-aware screen-to-world, range check, dialogue open/close, click consumption (prevents combat targeting) |
 | QuestSystem | Done | Routes mob kills/item pickups/NPC talks to quest progress, event-driven quest marker updates on all NPCs |
@@ -351,6 +351,26 @@ pvpDamage = baseDamage * 0.05
 ---
 
 ## Changelog
+
+### March 20, 2026 - PvP Combat, Scene Snapshots, Skill Cooldown Fix
+
+**PvP auto-attack targeting:**
+- Ghost player entities now have CharacterStatsComponent, FactionComponent, DamageableComponent, PlayerController(isLocalPlayer=false)
+- `processClickTargeting()` finds both mobs and players under click via new `findPlayerAtPoint()` helper
+- `tryAttackTarget()` refactored with two paths: mob (unchanged PvE) and player (PvP)
+- PvP path: faction check (same faction blocked), 0.05x damage multiplier, target's evasion/block/armor/MR used, PKSystem::processPvPAttack() for White→Purple transition
+- Target info accessors (name/HP/level) fall back to CharacterStatsComponent when no EnemyStatsComponent present
+- No XP/gold on player kill, fury generation preserved
+
+**Scene snapshot save/restore:**
+- `onExit()` serializes non-player entities to ZoneSnapshot via `PrefabLibrary::entityToJson()`
+- `onEnter()` restores entities via `PrefabLibrary::jsonToEntity()`
+- EntitySnapshot changed from opaque bytes to JSON (reuses existing component registry deserialization)
+- Player entities skipped (managed by auth/connect flow)
+
+**Skill cooldown client-side fix:**
+- GameplaySystem now ticks `SkillManager::tick()` each frame with accumulated game time
+- Cooldowns properly expire client-side (skill bar buttons ungray after cooldown ends)
 
 ### March 19, 2026 - Stability Tests + Skill Bar Client Wiring
 
