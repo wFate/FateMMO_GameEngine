@@ -13,6 +13,21 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # =============================================================================
+# Platform Detection
+# =============================================================================
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    add_compile_definitions(FATEMMO_PLATFORM_IOS FATEMMO_MOBILE)
+elseif(ANDROID)
+    add_compile_definitions(FATEMMO_PLATFORM_ANDROID FATEMMO_MOBILE)
+elseif(WIN32)
+    add_compile_definitions(FATEMMO_PLATFORM_WINDOWS)
+elseif(APPLE)
+    add_compile_definitions(FATEMMO_PLATFORM_MACOS)
+elseif(UNIX)
+    add_compile_definitions(FATEMMO_PLATFORM_LINUX)
+endif()
+
+# =============================================================================
 # Dependencies via FetchContent (zero external installs required)
 # =============================================================================
 include(FetchContent)
