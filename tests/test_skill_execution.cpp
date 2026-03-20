@@ -760,3 +760,306 @@ TEST_CASE("SkillManager: executeSkill fires onSkillUsed callback") {
     CHECK(usedSkillId == "slash");
     CHECK(usedRank == 1);
 }
+
+// ============================================================================
+// Task 6 Tests: Effects, CC, Self-Buffs, AOE
+// ============================================================================
+
+TEST_CASE("SkillManager: executeSkill applies bleed to target") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    stats.currentMP = 100;
+    stats.weaponDamageMin = 50;
+    stats.weaponDamageMax = 50;
+    stats.recalculateStats();
+    stats.currentHP = stats.maxHP;
+    stats.currentMP = 100;
+
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("rend", "Warrior", 1);
+    def.usesHitRate = false;
+    def.appliesBleed = true;
+    def.effectDurationPerRank = {5.0f, 7.0f, 10.0f};
+    def.effectValuePerRank = {10.0f, 15.0f, 20.0f};
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("rend", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("rend");
+
+    EnemyStats enemy;
+    enemy.level = 10;
+    enemy.maxHP = 99999;
+    enemy.currentHP = 99999;
+
+    StatusEffectManager targetSEM;
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.casterEntityId = 1;
+    ctx.targetMobStats = &enemy;
+    ctx.targetSEM = &targetSEM;
+    ctx.targetLevel = enemy.level;
+    ctx.targetMaxHP = enemy.maxHP;
+    ctx.targetCurrentHP = enemy.currentHP;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    int damage = sm.executeSkill("rend", 1, ctx);
+    CHECK(damage > 0);
+    CHECK(targetSEM.hasEffect(EffectType::Bleed));
+}
+
+TEST_CASE("SkillManager: executeSkill applies stun to target") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    stats.currentMP = 100;
+    stats.weaponDamageMin = 50;
+    stats.weaponDamageMax = 50;
+    stats.recalculateStats();
+    stats.currentHP = stats.maxHP;
+    stats.currentMP = 100;
+
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("bash", "Warrior", 1);
+    def.usesHitRate = false;
+    def.stunDurationPerRank = {2.0f, 3.0f, 4.0f};
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("bash", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("bash");
+
+    EnemyStats enemy;
+    enemy.level = 10;
+    enemy.maxHP = 99999;
+    enemy.currentHP = 99999;
+
+    StatusEffectManager targetSEM;
+    CrowdControlSystem targetCC;
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.casterEntityId = 1;
+    ctx.targetMobStats = &enemy;
+    ctx.targetSEM = &targetSEM;
+    ctx.targetCC = &targetCC;
+    ctx.targetLevel = enemy.level;
+    ctx.targetMaxHP = enemy.maxHP;
+    ctx.targetCurrentHP = enemy.currentHP;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    sm.executeSkill("bash", 1, ctx);
+    CHECK(targetCC.isStunned());
+}
+
+TEST_CASE("SkillManager: executeSkill grants invulnerability to caster") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    stats.currentMP = 100;
+
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def;
+    def.skillId = "divine_shield";
+    def.skillName = "Divine Shield";
+    def.className = "Warrior";
+    def.skillType = SkillType::Active;
+    def.targetType = SkillTargetType::Self;
+    def.levelRequirement = 1;
+    def.maxRank = 3;
+    def.costPerRank = {10.0f, 10.0f, 10.0f};
+    def.cooldownPerRank = {30.0f, 25.0f, 20.0f};
+    def.usesHitRate = false;
+    def.grantsInvulnerability = true;
+    def.effectDurationPerRank = {3.0f, 5.0f, 7.0f};
+    // No damage arrays — self buff only
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("divine_shield", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("divine_shield");
+
+    StatusEffectManager casterSEM;
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.casterEntityId = 1;
+    ctx.casterSEM = &casterSEM;
+    ctx.targetAlive = true;
+
+    sm.executeSkill("divine_shield", 1, ctx);
+    CHECK(casterSEM.isInvulnerable());
+}
+
+TEST_CASE("SkillManager: AOE hits multiple targets capped by maxTargets") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    stats.currentMP = 100;
+    stats.weaponDamageMin = 50;
+    stats.weaponDamageMax = 50;
+    stats.recalculateStats();
+    stats.currentHP = stats.maxHP;
+    stats.currentMP = 100;
+
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("whirlwind", "Warrior", 1);
+    def.usesHitRate = false;
+    def.aoeRadius = 5.0f;
+    def.maxTargetsPerRank = {3, 5, 8};
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("whirlwind", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("whirlwind");
+
+    // Create 5 enemies
+    EnemyStats enemies[5];
+    StatusEffectManager sems[5];
+    std::vector<SkillExecutionContext> targets;
+
+    for (int i = 0; i < 5; ++i) {
+        enemies[i].level = 10;
+        enemies[i].maxHP = 99999;
+        enemies[i].currentHP = 99999;
+
+        SkillExecutionContext tctx;
+        tctx.targetMobStats = &enemies[i];
+        tctx.targetSEM = &sems[i];
+        tctx.targetLevel = 10;
+        tctx.targetMaxHP = 99999;
+        tctx.targetCurrentHP = 99999;
+        tctx.targetAlive = true;
+        targets.push_back(tctx);
+    }
+
+    SkillExecutionContext primaryCtx;
+    primaryCtx.casterStats = &stats;
+    primaryCtx.casterEntityId = 1;
+
+    int totalDamage = sm.executeSkillAOE("whirlwind", 1, primaryCtx, targets);
+    CHECK(totalDamage > 0);
+
+    // maxTargets at rank 1 is 3, so only first 3 should take damage
+    int hitCount = 0;
+    for (int i = 0; i < 5; ++i) {
+        if (enemies[i].currentHP < 99999) {
+            hitCount++;
+        }
+    }
+    CHECK(hitCount == 3);
+}
+
+TEST_CASE("SkillManager: Cataclysm scales damage with mana spent") {
+    CharacterStats stats = makeTestStats("Mage", ClassType::Mage, 10);
+    stats.currentMP = 200;
+    stats.weaponDamageMin = 10;
+    stats.weaponDamageMax = 10;
+    stats.recalculateStats();
+    stats.currentHP = stats.maxHP;
+    stats.currentMP = 200;
+
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def;
+    def.skillId = "cataclysm";
+    def.skillName = "Cataclysm";
+    def.className = "Mage";
+    def.skillType = SkillType::Active;
+    def.targetType = SkillTargetType::SingleEnemy;
+    def.damageType = DamageType::Magic;
+    def.levelRequirement = 1;
+    def.maxRank = 3;
+    def.damagePerRank = {150.0f, 200.0f, 300.0f};
+    def.costPerRank = {50.0f, 75.0f, 100.0f};
+    def.cooldownPerRank = {10.0f, 10.0f, 10.0f};
+    def.resourceType = ResourceType::Mana;
+    def.scalesWithResource = true;
+    def.usesHitRate = false;
+    def.canCrit = false;  // no crit for predictability
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("cataclysm", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("cataclysm");
+
+    EnemyStats enemy;
+    enemy.level = 10;
+    enemy.maxHP = 99999;
+    enemy.currentHP = 99999;
+    enemy.magicResist = 0;
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.casterEntityId = 1;
+    ctx.targetMobStats = &enemy;
+    ctx.targetLevel = enemy.level;
+    ctx.targetArmor = 0;
+    ctx.targetMagicResist = 0;
+    ctx.targetMaxHP = enemy.maxHP;
+    ctx.targetCurrentHP = enemy.currentHP;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    int damage = sm.executeSkill("cataclysm", 1, ctx);
+    // Should have spent all 200 mana, and damage scaled by 200/50 = 4x
+    CHECK(stats.currentMP == 0);
+    CHECK(damage > 0);
+}
+
+TEST_CASE("SkillManager: double-cast skips cost and cooldown") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    stats.currentMP = 100;
+    stats.weaponDamageMin = 50;
+    stats.weaponDamageMax = 50;
+    stats.recalculateStats();
+    stats.currentHP = stats.maxHP;
+    stats.currentMP = 100;
+
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("double_arrow", "Warrior", 1);
+    def.usesHitRate = false;
+    def.enablesDoubleCast = true;
+    def.doubleCastWindow = 2.0f;
+    def.costPerRank = {20.0f, 25.0f, 30.0f};
+    def.cooldownPerRank = {5.0f, 4.0f, 3.0f};
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("double_arrow", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("double_arrow");
+
+    EnemyStats enemy;
+    enemy.level = 10;
+    enemy.maxHP = 99999;
+    enemy.currentHP = 99999;
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.casterEntityId = 1;
+    ctx.targetMobStats = &enemy;
+    ctx.targetLevel = enemy.level;
+    ctx.targetMaxHP = enemy.maxHP;
+    ctx.targetCurrentHP = enemy.currentHP;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    // First cast: costs mana and starts cooldown
+    int mp_before = stats.currentMP;
+    sm.executeSkill("double_arrow", 1, ctx);
+    CHECK(stats.currentMP == mp_before - 20);
+    CHECK(sm.isDoubleCastReady());
+
+    // Second cast (double-cast): free — no cost, no cooldown check
+    int mp_before2 = stats.currentMP;
+    sm.executeSkill("double_arrow", 1, ctx);
+    CHECK(stats.currentMP == mp_before2);  // no mana spent
+    CHECK_FALSE(sm.isDoubleCastReady());   // consumed
+}

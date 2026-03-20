@@ -469,7 +469,7 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
     if (def->teleportDistance > 0.0f || def->dashDistance > 0.0f) {
         // Movement is handled by the caller (system layer)
         // Fire callback and return
-        if (def->enablesDoubleCast) {
+        if (def->enablesDoubleCast && !isFreeCast) {
             activateDoubleCast(skillId, def->doubleCastWindow);
         }
         if (onSkillUsed) onSkillUsed(skillId, rank);
@@ -478,9 +478,39 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
 
     // Handle self-only buff skills (no damage)
     if (def->targetType == SkillTargetType::Self && def->damagePerRank.empty()) {
-        // Apply self-buffs (handled in Task 6 section)
-        // For now, just fire callback
-        if (def->enablesDoubleCast) {
+        // Apply self-buffs
+        if (ctx.casterSEM) {
+            if (def->grantsInvulnerability) {
+                float effectDuration = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                                       ? def->effectDurationPerRank[ri] : 3.0f;
+                ctx.casterSEM->applyInvulnerability(effectDuration, ctx.casterEntityId);
+            }
+            if (def->removesDebuffs) {
+                ctx.casterSEM->removeAllDebuffs();
+                if (ctx.casterCC) {
+                    ctx.casterCC->removeAllCC();
+                }
+            }
+            if (def->grantsStunImmunity) {
+                float effectDuration = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                                       ? def->effectDurationPerRank[ri] : 5.0f;
+                ctx.casterSEM->applyEffect(EffectType::StunImmune, effectDuration,
+                                            1.0f, 0.0f, ctx.casterEntityId);
+            }
+            if (def->grantsCritGuarantee) {
+                float effectDuration = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                                       ? def->effectDurationPerRank[ri] : 5.0f;
+                ctx.casterSEM->applyEffect(EffectType::GuaranteedCrit, effectDuration,
+                                            1.0f, 0.0f, ctx.casterEntityId);
+            }
+            if (def->transformDamageMult > 0.0f) {
+                float effectDuration = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                                       ? def->effectDurationPerRank[ri] : 10.0f;
+                ctx.casterSEM->applyTransform(effectDuration, def->transformDamageMult,
+                                               def->transformSpeedBonus, ctx.casterEntityId);
+            }
+        }
+        if (def->enablesDoubleCast && !isFreeCast) {
             activateDoubleCast(skillId, def->doubleCastWindow);
         }
         if (onSkillUsed) onSkillUsed(skillId, rank);
@@ -652,8 +682,79 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
         ctx.targetCC->breakFreeze();
     }
 
-    // Steps 13-18 (effects, CC, self-buffs, lifesteal, fury, armor shred)
-    // are implemented in Task 6.
+    // 13. Apply status effects to target
+    if (ctx.targetSEM && actualDamage > 0) {
+        float effectDuration = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                               ? def->effectDurationPerRank[ri] : 0.0f;
+        float effectValue = (ri < static_cast<int>(def->effectValuePerRank.size()))
+                            ? def->effectValuePerRank[ri] : 0.0f;
+
+        if (def->appliesBleed && effectDuration > 0.0f) {
+            ctx.targetSEM->applyDoT(EffectType::Bleed, effectDuration,
+                                     effectValue, ctx.casterEntityId);
+        }
+        if (def->appliesBurn && effectDuration > 0.0f) {
+            ctx.targetSEM->applyDoT(EffectType::Burn, effectDuration,
+                                     effectValue, ctx.casterEntityId);
+        }
+        if (def->appliesPoison && effectDuration > 0.0f) {
+            ctx.targetSEM->applyDoT(EffectType::Poison, effectDuration,
+                                     effectValue, ctx.casterEntityId);
+        }
+        if (def->appliesSlow && effectDuration > 0.0f) {
+            ctx.targetSEM->applyEffect(EffectType::Slow, effectDuration,
+                                        effectValue, 0.0f, ctx.casterEntityId);
+        }
+        if (def->appliesFreeze && effectDuration > 0.0f && ctx.targetCC) {
+            ctx.targetCC->applyFreeze(effectDuration, ctx.targetSEM, ctx.casterEntityId);
+        }
+    }
+
+    // 14. Apply crowd control (stun)
+    if (ctx.targetCC && ctx.targetSEM && actualDamage > 0) {
+        float stunDuration = (ri < static_cast<int>(def->stunDurationPerRank.size()))
+                             ? def->stunDurationPerRank[ri] : 0.0f;
+        if (stunDuration > 0.0f) {
+            if (def->appliesFreeze) {
+                ctx.targetCC->applyFreeze(stunDuration, ctx.targetSEM, ctx.casterEntityId);
+            } else {
+                ctx.targetCC->applyStun(stunDuration, ctx.targetSEM, ctx.casterEntityId);
+            }
+        }
+    }
+
+    // 15. Apply self-buffs
+    if (ctx.casterSEM) {
+        if (def->grantsInvulnerability) {
+            float effectDuration = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                                   ? def->effectDurationPerRank[ri] : 3.0f;
+            ctx.casterSEM->applyInvulnerability(effectDuration, ctx.casterEntityId);
+        }
+        if (def->removesDebuffs) {
+            ctx.casterSEM->removeAllDebuffs();
+            if (ctx.casterCC) {
+                ctx.casterCC->removeAllCC();
+            }
+        }
+        if (def->grantsStunImmunity) {
+            float effectDuration = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                                   ? def->effectDurationPerRank[ri] : 5.0f;
+            ctx.casterSEM->applyEffect(EffectType::StunImmune, effectDuration,
+                                        1.0f, 0.0f, ctx.casterEntityId);
+        }
+        if (def->grantsCritGuarantee) {
+            float effectDuration = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                                   ? def->effectDurationPerRank[ri] : 5.0f;
+            ctx.casterSEM->applyEffect(EffectType::GuaranteedCrit, effectDuration,
+                                        1.0f, 0.0f, ctx.casterEntityId);
+        }
+        if (def->transformDamageMult > 0.0f) {
+            float effectDuration = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                                   ? def->effectDurationPerRank[ri] : 10.0f;
+            ctx.casterSEM->applyTransform(effectDuration, def->transformDamageMult,
+                                           def->transformSpeedBonus, ctx.casterEntityId);
+        }
+    }
 
     // 16. Lifesteal
     if (stats && stats->equipBonusLifesteal > 0.0f && actualDamage > 0) {
@@ -677,8 +778,8 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                                     armorShredValue, 0.0f, ctx.casterEntityId);
     }
 
-    // Enable double-cast window if applicable
-    if (def->enablesDoubleCast) {
+    // Enable double-cast window if applicable (only on normal cast, not the free cast itself)
+    if (def->enablesDoubleCast && !isFreeCast) {
         activateDoubleCast(skillId, def->doubleCastWindow);
     }
 
@@ -687,6 +788,262 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
 
     // 20. Return actual damage dealt
     return actualDamage;
+}
+
+// ============================================================================
+// AOE Skill Execution
+// ============================================================================
+
+int SkillManager::executeSkillAOE(const std::string& skillId, int rank,
+                                   const SkillExecutionContext& primaryCtx,
+                                   std::vector<SkillExecutionContext>& targets) {
+    // Validate using primary context (resource cost, cooldown, CC check)
+    const LearnedSkill* learned = getLearnedSkill(skillId);
+    if (!learned || learned->activatedRank < rank) {
+        if (onSkillFailed) onSkillFailed(skillId, "Skill not learned or rank not activated");
+        return 0;
+    }
+
+    if (primaryCtx.casterCC && !primaryCtx.casterCC->canAct()) {
+        if (onSkillFailed) onSkillFailed(skillId, "Crowd controlled");
+        return 0;
+    }
+
+    bool isFreeCast = false;
+    if (isDoubleCastReady() && doubleCastSourceSkillId_ == skillId) {
+        isFreeCast = true;
+    }
+
+    if (!isFreeCast && isOnCooldown(skillId)) {
+        if (onSkillFailed) onSkillFailed(skillId, "On cooldown");
+        return 0;
+    }
+
+    const SkillDefinition* def = getSkillDefinition(skillId);
+    if (!def) {
+        if (onSkillFailed) onSkillFailed(skillId, "Unknown skill definition");
+        return 0;
+    }
+
+    int ri = rank - 1;
+    float cost = (ri < static_cast<int>(def->costPerRank.size()))
+                 ? def->costPerRank[ri] : 0.0f;
+
+    // Check resources
+    if (!isFreeCast && cost > 0.0f) {
+        if (def->resourceType == ResourceType::Mana) {
+            if (!stats || stats->currentMP < static_cast<int>(cost)) {
+                if (onSkillFailed) onSkillFailed(skillId, "Not enough resources");
+                return 0;
+            }
+        } else if (def->resourceType == ResourceType::Fury) {
+            if (!stats || stats->currentFury < cost) {
+                if (onSkillFailed) onSkillFailed(skillId, "Not enough resources");
+                return 0;
+            }
+        }
+    }
+
+    // Deduct cost once
+    if (!isFreeCast && stats) {
+        if (def->scalesWithResource && def->resourceType == ResourceType::Mana) {
+            cost = static_cast<float>(stats->currentMP);
+            stats->spendMana(stats->currentMP);
+        } else if (cost > 0.0f) {
+            if (def->resourceType == ResourceType::Mana) {
+                stats->spendMana(static_cast<int>(cost));
+            } else {
+                stats->spendFury(cost);
+            }
+        }
+    }
+
+    if (isFreeCast) {
+        consumeDoubleCast();
+    }
+
+    // Start cooldown once
+    if (!isFreeCast) {
+        float cd = (ri < static_cast<int>(def->cooldownPerRank.size()))
+                   ? def->cooldownPerRank[ri] : def->cooldownSeconds;
+        startCooldown(skillId, cd);
+    }
+
+    // Cap targets
+    int maxTargets = (ri < static_cast<int>(def->maxTargetsPerRank.size()))
+                     ? def->maxTargetsPerRank[ri] : static_cast<int>(targets.size());
+    int targetCount = (std::min)(static_cast<int>(targets.size()), maxTargets);
+
+    int totalDamage = 0;
+
+    // Execute against each target (skip resource/cooldown validation per-target)
+    for (int i = 0; i < targetCount; ++i) {
+        auto& tctx = targets[i];
+
+        // Hit roll per target
+        bool missed = false;
+        if (def->usesHitRate && stats) {
+            bool isMage = (stats->classDef.classType == ClassType::Mage);
+            if (isMage) {
+                missed = CombatSystem::rollSpellResist(
+                    stats->level, stats->getIntelligence(),
+                    tctx.targetLevel, tctx.targetMagicResist);
+            } else {
+                missed = !CombatSystem::rollToHit(
+                    stats->level, static_cast<int>(stats->getHitRate()),
+                    tctx.targetLevel, 0);
+            }
+        }
+        if (missed) continue;
+
+        // Calculate damage per target
+        bool isCrit = false;
+        bool forceCrit = (def->canCrit && primaryCtx.casterSEM && primaryCtx.casterSEM->hasGuaranteedCrit());
+        int damage = stats ? stats->calculateDamage(forceCrit, isCrit) : 0;
+        if (forceCrit && isCrit && primaryCtx.casterSEM) {
+            primaryCtx.casterSEM->consumeGuaranteedCrit();
+        }
+
+        float skillPercent = (ri < static_cast<int>(def->damagePerRank.size()))
+                             ? def->damagePerRank[ri] : 100.0f;
+        damage = static_cast<int>(std::round(damage * skillPercent / 100.0f));
+
+        if (primaryCtx.casterSEM) {
+            damage = static_cast<int>(std::round(damage * primaryCtx.casterSEM->getDamageMultiplier()));
+        }
+
+        if (!tctx.targetIsPlayer && stats) {
+            damage = static_cast<int>(std::round(damage *
+                CombatSystem::calculateDamageMultiplier(stats->level, tctx.targetLevel)));
+        }
+        if (tctx.targetIsPlayer) {
+            damage = static_cast<int>(std::round(damage * 0.30f));
+        }
+
+        // Cataclysm scaling
+        if (def->scalesWithResource && !isFreeCast) {
+            float baseCost = (ri < static_cast<int>(def->costPerRank.size()))
+                             ? def->costPerRank[ri] : 1.0f;
+            if (baseCost > 0.0f) {
+                damage = static_cast<int>(std::round(damage * (cost / baseCost)));
+            }
+        }
+
+        // Defense pipeline
+        if (tctx.targetSEM) {
+            damage = tctx.targetSEM->absorbDamage(damage);
+        }
+
+        bool isMagicDamage = (def->damageType == DamageType::Magic ||
+                              def->damageType == DamageType::Fire ||
+                              def->damageType == DamageType::Water ||
+                              def->damageType == DamageType::Lightning ||
+                              def->damageType == DamageType::Void);
+
+        if (def->damageType != DamageType::True && damage > 0) {
+            if (isMagicDamage) {
+                float mr = tctx.targetIsPlayer
+                    ? CombatSystem::getPlayerMagicDamageReduction(tctx.targetMagicResist)
+                    : CombatSystem::getMobMagicDamageReduction(tctx.targetMagicResist);
+                damage = static_cast<int>(std::round(damage * (1.0f - mr)));
+            } else {
+                damage = CombatSystem::applyArmorReduction(damage, tctx.targetArmor);
+            }
+        }
+
+        if (tctx.targetSEM) {
+            float bonus = tctx.targetSEM->getBonusDamageTaken();
+            if (bonus > 0.0f) damage = static_cast<int>(std::round(damage * (1.0f + bonus)));
+        }
+
+        damage = (std::max)(1, damage);
+
+        // Apply damage
+        int actualDamage = damage;
+        if (tctx.targetMobStats) {
+            tctx.targetMobStats->takeDamageFrom(primaryCtx.casterEntityId, damage);
+        } else if (tctx.targetPlayerStats) {
+            actualDamage = tctx.targetPlayerStats->takeDamage(damage);
+        }
+
+        if (tctx.targetCC) tctx.targetCC->breakFreeze();
+
+        // Apply effects per target
+        if (tctx.targetSEM) {
+            float eDur = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                         ? def->effectDurationPerRank[ri] : 0.0f;
+            float eVal = (ri < static_cast<int>(def->effectValuePerRank.size()))
+                         ? def->effectValuePerRank[ri] : 0.0f;
+
+            if (def->appliesBleed && eDur > 0.0f)
+                tctx.targetSEM->applyDoT(EffectType::Bleed, eDur, eVal, primaryCtx.casterEntityId);
+            if (def->appliesBurn && eDur > 0.0f)
+                tctx.targetSEM->applyDoT(EffectType::Burn, eDur, eVal, primaryCtx.casterEntityId);
+            if (def->appliesPoison && eDur > 0.0f)
+                tctx.targetSEM->applyDoT(EffectType::Poison, eDur, eVal, primaryCtx.casterEntityId);
+            if (def->appliesSlow && eDur > 0.0f)
+                tctx.targetSEM->applyEffect(EffectType::Slow, eDur, eVal, 0.0f, primaryCtx.casterEntityId);
+        }
+        if (tctx.targetCC && tctx.targetSEM) {
+            float stunDur = (ri < static_cast<int>(def->stunDurationPerRank.size()))
+                            ? def->stunDurationPerRank[ri] : 0.0f;
+            if (stunDur > 0.0f) {
+                if (def->appliesFreeze)
+                    tctx.targetCC->applyFreeze(stunDur, tctx.targetSEM, primaryCtx.casterEntityId);
+                else
+                    tctx.targetCC->applyStun(stunDur, tctx.targetSEM, primaryCtx.casterEntityId);
+            }
+        }
+
+        totalDamage += actualDamage;
+    }
+
+    // Self-buffs (once, not per-target)
+    if (primaryCtx.casterSEM) {
+        if (def->grantsInvulnerability) {
+            float dur = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                        ? def->effectDurationPerRank[ri] : 3.0f;
+            primaryCtx.casterSEM->applyInvulnerability(dur, primaryCtx.casterEntityId);
+        }
+        if (def->removesDebuffs) {
+            primaryCtx.casterSEM->removeAllDebuffs();
+            if (primaryCtx.casterCC) primaryCtx.casterCC->removeAllCC();
+        }
+        if (def->grantsStunImmunity) {
+            float dur = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                        ? def->effectDurationPerRank[ri] : 5.0f;
+            primaryCtx.casterSEM->applyEffect(EffectType::StunImmune, dur, 1.0f, 0.0f, primaryCtx.casterEntityId);
+        }
+        if (def->grantsCritGuarantee) {
+            float dur = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                        ? def->effectDurationPerRank[ri] : 5.0f;
+            primaryCtx.casterSEM->applyEffect(EffectType::GuaranteedCrit, dur, 1.0f, 0.0f, primaryCtx.casterEntityId);
+        }
+        if (def->transformDamageMult > 0.0f) {
+            float dur = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                        ? def->effectDurationPerRank[ri] : 10.0f;
+            primaryCtx.casterSEM->applyTransform(dur, def->transformDamageMult,
+                                                  def->transformSpeedBonus, primaryCtx.casterEntityId);
+        }
+    }
+
+    // Lifesteal on total damage
+    if (stats && stats->equipBonusLifesteal > 0.0f && totalDamage > 0) {
+        int heal = static_cast<int>(std::round(stats->equipBonusLifesteal * totalDamage));
+        if (heal > 0) stats->heal(heal);
+    }
+
+    // Fury on hit
+    if (stats && def->furyOnHit > 0.0f) {
+        stats->addFury(def->furyOnHit);
+    }
+
+    if (def->enablesDoubleCast) {
+        activateDoubleCast(skillId, def->doubleCastWindow);
+    }
+
+    if (onSkillUsed) onSkillUsed(skillId, rank);
+    return totalDamage;
 }
 
 } // namespace fate

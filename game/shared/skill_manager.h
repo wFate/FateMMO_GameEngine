@@ -178,6 +178,13 @@ public:
     // ---- Skill Execution ----
     int executeSkill(const std::string& skillId, int rank, const SkillExecutionContext& ctx);
 
+    /// Execute an AOE skill. Returns total damage dealt across all targets.
+    /// The caller is responsible for gathering entities within aoeRadius and
+    /// populating the targets vector with SkillExecutionContext per target.
+    int executeSkillAOE(const std::string& skillId, int rank,
+                        const SkillExecutionContext& primaryCtx,
+                        std::vector<SkillExecutionContext>& targets);
+
     // ---- Accessors ----
     [[nodiscard]] int availablePoints() const { return availableSkillPoints; }
     [[nodiscard]] int earnedPoints()    const { return totalEarnedPoints; }
