@@ -1,6 +1,7 @@
 #include "game/ui/shop_ui.h"
 #include "game/ui/game_viewport.h"
 #include "game/components/game_components.h"
+#include "game/shared/item_instance.h"
 #include "engine/core/logger.h"
 #include "imgui.h"
 #include <cstdio>
@@ -113,11 +114,22 @@ void ShopUI::render(Entity* player) {
 
                 if (ImGui::SmallButton("Buy") && canAfford && inStock) {
                     if (inv.removeGold(shopItem.buyPrice)) {
-                        // Placeholder: add item to player inventory
-                        // TODO: inv.addItem(ItemInstance from shopItem.itemId)
-                        if (shopItem.stock > 0) shopItem.stock--;
-                        LOG_INFO("ShopUI", "Bought %s for %lld gold",
-                                 shopItem.itemName.c_str(), (long long)shopItem.buyPrice);
+                        static int shopBuyCounter = 0;
+                        char instId[32];
+                        std::snprintf(instId, sizeof(instId), "shop_%d", ++shopBuyCounter);
+
+                        ItemInstance item = ItemInstance::createSimple(instId, shopItem.itemId, 1);
+                        item.displayName = shopItem.itemName;
+                        if (inv.addItem(item)) {
+                            if (shopItem.stock > 0) shopItem.stock--;
+                            LOG_INFO("ShopUI", "Bought %s for %lld gold",
+                                     shopItem.itemName.c_str(), (long long)shopItem.buyPrice);
+                        } else {
+                            // Inventory full — refund gold
+                            inv.addGold(shopItem.buyPrice);
+                            LOG_INFO("ShopUI", "Inventory full, refunded %lld gold",
+                                     (long long)shopItem.buyPrice);
+                        }
                     }
                 }
 
