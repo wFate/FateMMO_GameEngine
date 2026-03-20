@@ -34,6 +34,10 @@ bool App::init(const AppConfig& config) {
         return false;
     }
 
+    // Register lifecycle event filter — catches mobile background/foreground
+    // events before the main event loop (critical for iOS 5-second deadline)
+    SDL_SetEventFilter(lifecycleEventFilter, this);
+
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -148,6 +152,12 @@ void App::run() {
         if (deltaTime_ > 0.1f) deltaTime_ = 0.1f;
         fps_ = (deltaTime_ > 0.0f) ? 1.0f / deltaTime_ : 0.0f;
 
+        // Skip update/render when backgrounded (mobile power saving)
+        if (lifecycleState_ != AppLifecycleState::Active) {
+            SDL_Delay(100);
+            continue;
+        }
+
         processEvents();
         update();
         render();
@@ -201,6 +211,14 @@ void App::processEvents() {
                     config_.windowHeight = event.window.data2;
                     glViewport(0, 0, config_.windowWidth, config_.windowHeight);
                 }
+                break;
+
+            case SDL_APP_WILLENTERBACKGROUND:
+            case SDL_APP_DIDENTERBACKGROUND:
+            case SDL_APP_WILLENTERFOREGROUND:
+            case SDL_APP_DIDENTERFOREGROUND:
+            case SDL_APP_LOWMEMORY:
+                handleLifecycleEvent(event);
                 break;
 
             case SDL_KEYDOWN:
@@ -462,6 +480,60 @@ void App::shutdown() {
 
     SDL_Quit();
     Logger::instance().shutdown();
+}
+
+int SDLCALL App::lifecycleEventFilter(void* userdata, SDL_Event* event) {
+    App* app = static_cast<App*>(userdata);
+    if (!app) return 1;
+
+    switch (event->type) {
+        case SDL_APP_WILLENTERBACKGROUND:
+            LOG_INFO("App", "Lifecycle: entering background");
+            app->handleLifecycleEvent(*event);
+            return 0;
+
+        case SDL_APP_DIDENTERBACKGROUND:
+            LOG_INFO("App", "Lifecycle: entered background");
+            return 0;
+
+        case SDL_APP_WILLENTERFOREGROUND:
+            LOG_INFO("App", "Lifecycle: entering foreground");
+            return 0;
+
+        case SDL_APP_DIDENTERFOREGROUND:
+            LOG_INFO("App", "Lifecycle: entered foreground");
+            app->handleLifecycleEvent(*event);
+            return 0;
+
+        case SDL_APP_LOWMEMORY:
+            LOG_WARN("App", "Lifecycle: low memory warning");
+            app->handleLifecycleEvent(*event);
+            return 0;
+
+        default:
+            return 1;
+    }
+}
+
+void App::handleLifecycleEvent(const SDL_Event& event) {
+    switch (event.type) {
+        case SDL_APP_WILLENTERBACKGROUND:
+            lifecycleState_ = AppLifecycleState::Background;
+            onEnterBackground();
+            break;
+
+        case SDL_APP_DIDENTERFOREGROUND:
+            lifecycleState_ = AppLifecycleState::Active;
+            onEnterForeground();
+            break;
+
+        case SDL_APP_LOWMEMORY:
+            onLowMemory();
+            break;
+
+        default:
+            break;
+    }
 }
 
 } // namespace fate
