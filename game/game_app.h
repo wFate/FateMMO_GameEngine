@@ -12,6 +12,10 @@
 #include "game/ui/login_screen.h"
 #include "game/ui/chat_ui.h"
 #include "game/ui/death_overlay_ui.h"
+#include "game/ui/shop_ui.h"
+#include "game/ui/skill_trainer_ui.h"
+#include "game/ui/bank_storage_ui.h"
+#include "game/ui/teleporter_ui.h"
 #include "game/ui/game_viewport.h"
 #include <memory>
 #include <unordered_map>
@@ -52,6 +56,10 @@ private:
     QuestLogUI questLogUI_;
     ChatUI chatUI_;
     DeathOverlayUI deathOverlayUI_;
+    ShopUI shopUI_;
+    SkillTrainerUI skillTrainerUI_;
+    BankStorageUI bankStorageUI_;
+    TeleporterUI teleporterUI_;
     NetClient netClient_;
     InterpolationManager ghostInterpolation_;
     std::unordered_map<uint64_t, EntityHandle> ghostEntities_; // PersistentId -> local ghost

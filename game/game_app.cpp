@@ -1073,6 +1073,67 @@ void GameApp::onInit() {
         LOG_INFO("Client", "Local respawn (type %d)", respawnType);
     };
 
+    // --- NPC sub-UI callbacks ---
+    npcDialogueUI_.onOpenShop = [this](Entity* npc) {
+        shopUI_.open(npc);
+        if (npcInteractionSystem_) npcInteractionSystem_->closeDialogue();
+    };
+
+    npcDialogueUI_.onOpenSkillTrainer = [this](Entity* npc) {
+        skillTrainerUI_.open(npc);
+        if (npcInteractionSystem_) npcInteractionSystem_->closeDialogue();
+    };
+
+    npcDialogueUI_.onOpenBank = [this](Entity* npc) {
+        Entity* player = npcInteractionSystem_ ? npcInteractionSystem_->localPlayer : nullptr;
+        bankStorageUI_.open(npc, player);
+        if (npcInteractionSystem_) npcInteractionSystem_->closeDialogue();
+    };
+
+    npcDialogueUI_.onOpenGuildCreation = [this](Entity* npc) {
+        auto* guildNPC = npc->getComponent<GuildNPCComponent>();
+        Entity* player = npcInteractionSystem_ ? npcInteractionSystem_->localPlayer : nullptr;
+        if (guildNPC && player) {
+            auto* guildComp = player->getComponent<GuildComponent>();
+            auto* statsComp = player->getComponent<CharacterStatsComponent>();
+            auto* invComp = player->getComponent<InventoryComponent>();
+            if (guildComp && statsComp) {
+                if (statsComp->stats.level < guildNPC->requiredLevel) {
+                    chatUI_.addMessage(6, "[Guild]", "You don't meet the level requirement.", 0);
+                } else {
+                    // Pass mutable gold ref so createGuild can deduct cost
+                    int64_t gold = invComp ? invComp->inventory.getGold() : 0;
+                    if (guildComp->guild.createGuild(statsComp->stats.characterName + "'s Guild", gold)) {
+                        // Sync deducted gold back to inventory
+                        if (invComp) {
+                            int64_t spent = invComp->inventory.getGold() - gold;
+                            if (spent > 0) invComp->inventory.removeGold(spent);
+                        }
+                        chatUI_.addMessage(6, "[Guild]", "Guild created!", 0);
+                    }
+                    // createGuild fires onGuildResult callback with error messages
+                }
+            }
+        }
+    };
+
+    npcDialogueUI_.onTeleport = [this](const TeleportDestination& dest) {
+        if (npcInteractionSystem_) npcInteractionSystem_->closeDialogue();
+        // Check gold cost client-side (server validates too)
+        Entity* player = npcInteractionSystem_ ? npcInteractionSystem_->localPlayer : nullptr;
+        if (player && dest.cost > 0) {
+            auto* invComp = player->getComponent<InventoryComponent>();
+            if (invComp && invComp->inventory.getGold() < dest.cost) {
+                chatUI_.addMessage(6, "[Teleport]", "Not enough gold.", 0);
+                return;
+            }
+        }
+        // Send zone transition request — server handles positioning and gold deduction
+        if (!dest.sceneId.empty()) {
+            netClient_.sendZoneTransition(dest.sceneId);
+        }
+    };
+
     netClient_.onZoneTransition = [this](const SvZoneTransitionMsg& msg) {
         LOG_INFO("Client", "Zone transition to '%s' at (%.1f, %.1f)",
                  msg.targetScene.c_str(), msg.spawnX, msg.spawnY);
@@ -1975,6 +2036,15 @@ void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
                     npcInteractionSystem_->localPlayer,
                     npcInteractionSystem_,
                     questSystem_);
+            }
+
+            // NPC sub-UIs (shop, trainer, bank, teleporter)
+            {
+                Entity* localPlayer = npcInteractionSystem_ ? npcInteractionSystem_->localPlayer : nullptr;
+                if (shopUI_.isOpen && localPlayer) shopUI_.render(localPlayer);
+                if (skillTrainerUI_.isOpen && localPlayer) skillTrainerUI_.render(localPlayer);
+                if (bankStorageUI_.isOpen && localPlayer) bankStorageUI_.render(localPlayer);
+                if (teleporterUI_.isOpen && localPlayer) teleporterUI_.render(localPlayer);
             }
 
             // Quest log UI

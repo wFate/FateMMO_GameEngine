@@ -255,8 +255,7 @@ void NPCDialogueUI::renderShopButton(Entity* npc, NPCInteractionSystem* /*npcSys
     char label[64];
     snprintf(label, sizeof(label), "Shop — %s", shop->shopName.c_str());
     if (ImGui::Button(label, ImVec2(-1, 0))) {
-        // TODO: Open shop UI
-        LOG_INFO("DialogueUI", "Shop clicked: %s", shop->shopName.c_str());
+        if (onOpenShop) onOpenShop(npc);
     }
 }
 
@@ -270,8 +269,7 @@ void NPCDialogueUI::renderSkillTrainerButton(Entity* npc, NPCInteractionSystem* 
 
     ImGui::Spacing();
     if (ImGui::Button("Learn Skills", ImVec2(-1, 0))) {
-        // TODO: Open skill trainer UI
-        LOG_INFO("DialogueUI", "Skill trainer clicked");
+        if (onOpenSkillTrainer) onOpenSkillTrainer(npc);
     }
 }
 
@@ -285,8 +283,7 @@ void NPCDialogueUI::renderBankerButton(Entity* npc, NPCInteractionSystem* /*npcS
 
     ImGui::Spacing();
     if (ImGui::Button("Open Storage", ImVec2(-1, 0))) {
-        // TODO: Open bank storage UI
-        LOG_INFO("DialogueUI", "Bank storage clicked (%d slots)", banker->storageSlots);
+        if (onOpenBank) onOpenBank(npc);
     }
 }
 
@@ -308,9 +305,7 @@ void NPCDialogueUI::renderGuildNPCButton(Entity* npc, Entity* player,
         snprintf(label, sizeof(label), "Create Guild (%lld Gold)",
                  (long long)guildNPC->creationCost);
         if (ImGui::Button(label, ImVec2(-1, 0))) {
-            // TODO: Open guild creation dialog with name input
-            LOG_INFO("DialogueUI", "Create guild clicked (cost: %lld)",
-                     (long long)guildNPC->creationCost);
+            if (onOpenGuildCreation) onOpenGuildCreation(npc);
         }
         if (guildNPC->requiredLevel > 0) {
             ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
@@ -368,9 +363,7 @@ void NPCDialogueUI::renderTeleporterOptions(Entity* npc, Entity* player,
         }
 
         if (ImGui::Button(label, ImVec2(-1, 0)) && meetsLevel) {
-            // TODO: Teleport player to destination
-            LOG_INFO("DialogueUI", "Teleport to %s (scene: %s)",
-                     dest.destinationName.c_str(), dest.sceneId.c_str());
+            if (onTeleport) onTeleport(dest);
         }
 
         if (!meetsLevel) {

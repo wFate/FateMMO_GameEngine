@@ -1,5 +1,7 @@
 #pragma once
 #include "engine/ecs/entity.h"
+#include "game/shared/npc_types.h"
+#include <functional>
 
 namespace fate {
 
@@ -9,6 +11,13 @@ class QuestSystem;
 class NPCDialogueUI {
 public:
     void render(Entity* npc, Entity* player, NPCInteractionSystem* npcSystem, QuestSystem* questSystem);
+
+    // Callbacks wired by GameApp to open sub-UIs
+    std::function<void(Entity* npc)> onOpenShop;
+    std::function<void(Entity* npc)> onOpenSkillTrainer;
+    std::function<void(Entity* npc)> onOpenBank;
+    std::function<void(Entity* npc)> onOpenGuildCreation;
+    std::function<void(const TeleportDestination& dest)> onTeleport;
 
 private:
     uint32_t currentDialogueNodeId_ = 0;
