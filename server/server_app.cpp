@@ -501,6 +501,45 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     auto* inv = player->getComponent<InventoryComponent>();
     if (inv) {
         inv->inventory.addGold(rec.gold);
+
+        // Load inventory items from DB
+        auto invSlots = inventoryRepo_->loadInventory(session.character_id);
+        for (const auto& slot : invSlots) {
+            ItemInstance item;
+            item.instanceId   = slot.instance_id;
+            item.itemId       = slot.item_id;
+            item.quantity      = slot.quantity;
+            item.enchantLevel = slot.enchant_level;
+            item.isProtected  = slot.is_protected;
+            item.isSoulbound  = slot.is_soulbound;
+            item.rolledStats  = ItemStatRoller::parseRolledStats(slot.rolled_stats);
+
+            // Look up display info from item definition cache
+            const auto* def = itemDefCache_.getDefinition(slot.item_id);
+            if (def) {
+                item.displayName = def->displayName;
+                item.rarity = parseItemRarity(def->rarity);
+            }
+
+            // Socket
+            if (!slot.socket_stat.empty() && slot.socket_value > 0) {
+                item.socket.statType = ItemStatRoller::getStatType(slot.socket_stat);
+                item.socket.value = slot.socket_value;
+                item.socket.isEmpty = false;
+            }
+
+            if (slot.is_equipped && !slot.equipped_slot.empty()) {
+                // Equipped items go into inventory — equipment slot mapping is a follow-up
+                inv->inventory.addItem(item);
+            } else if (slot.slot_index >= 0) {
+                // Place in specific inventory slot
+                inv->inventory.addItemToSlot(slot.slot_index, item);
+            } else {
+                inv->inventory.addItem(item);
+            }
+        }
+        LOG_INFO("Server", "Loaded %zu inventory items for %s",
+                 invSlots.size(), rec.character_name.c_str());
     }
 
     // Assign persistent ID based on hash of character_id
