@@ -568,6 +568,19 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     // Send initial player state
     sendPlayerState(clientId);
 
+    // If player reconnects while dead, notify client so death overlay shows
+    if (rec.is_dead) {
+        SvDeathNotifyMsg deathMsg;
+        deathMsg.deathSource = 0;
+        deathMsg.respawnTimer = 0.0f;  // timer already expired, can respawn immediately
+        deathMsg.xpLost = 0;           // penalty was already applied on original death
+        deathMsg.honorLost = 0;
+        uint8_t buf[32]; ByteWriter w(buf, sizeof(buf));
+        deathMsg.write(w);
+        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvDeathNotify, buf, w.size());
+        LOG_INFO("Server", "Client %d reconnected dead — sent death notification", clientId);
+    }
+
     LOG_INFO("Server", "Client %d connected: account=%d char='%s' level=%d guild=%d",
              clientId, session.account_id, rec.character_name.c_str(), rec.level,
              guildComp ? guildComp->guild.guildId : 0);
@@ -1724,25 +1737,29 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             }
 
             // Determine respawn position
+            // Server doesn't load scene JSON files, so SpawnPointComponent entities
+            // don't exist here. Use hardcoded spawn positions per scene.
+            // TODO: Move spawn coordinates to scene_definitions DB table.
             auto* t = e->getComponent<Transform>();
             Vec2 respawnPos = t ? t->position : Vec2{0, 0};
 
-            if (msg.respawnType == 1) {
-                // Map spawn: find SpawnPointComponent (not town)
-                world_.forEach<SpawnPointComponent, Transform>(
-                    [&](Entity*, SpawnPointComponent* sp, Transform* spT) {
-                        if (!sp->isTownSpawn) respawnPos = spT->position;
-                    }
-                );
-            }
-            // Type 0 (town) would need zone transition — for now respawn at map spawn
+            auto* currentScene = SceneManager::instance().currentScene();
+            std::string sceneName = currentScene ? currentScene->name() : "WhisperingWoods";
+
             if (msg.respawnType == 0) {
-                world_.forEach<SpawnPointComponent, Transform>(
-                    [&](Entity*, SpawnPointComponent* sp, Transform* spT) {
-                        if (!sp->isTownSpawn) respawnPos = spT->position;
-                    }
-                );
+                // Town respawn — always go to Town scene spawn
+                respawnPos = {0.0f, 0.0f};  // Town spawn point
+                // TODO: send SvZoneTransition if player is not already in Town
+            } else if (msg.respawnType == 1) {
+                // Map spawn — use current scene's default spawn
+                if (sceneName == "Town") {
+                    respawnPos = {0.0f, 0.0f};
+                } else {
+                    // WhisperingWoods and any other scene
+                    respawnPos = {128.0f, 128.0f};
+                }
             }
+            // Type 2 (Phoenix Down): respawnPos stays at death position
 
             // Execute respawn
             sc->stats.respawn();
