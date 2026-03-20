@@ -884,11 +884,21 @@ void GameApp::onInit() {
         // When mob attacks player: attackerId = mob PID, targetId = player PID
         // The local player isn't in ghostEntities_, so if targetId wasn't found, it's us
         if (!foundTarget) {
-            scene->world().forEach<PlayerController, Transform>(
-                [&](Entity*, PlayerController* ctrl, Transform* t) {
+            scene->world().forEach<PlayerController, CharacterStatsComponent>(
+                [&](Entity* entity, PlayerController* ctrl, CharacterStatsComponent* sc) {
                     if (!ctrl->isLocalPlayer || foundTarget) return;
-                    targetPos = t->position;
+                    auto* t = entity->getComponent<Transform>();
+                    if (t) targetPos = t->position;
                     foundTarget = true;
+
+                    // Apply damage to local player HP immediately
+                    // This ensures death is processed before any portal triggers
+                    if (msg.damage > 0 && sc->stats.isAlive()) {
+                        sc->stats.currentHP = (std::max)(0, sc->stats.currentHP - msg.damage);
+                        if (sc->stats.currentHP <= 0) {
+                            sc->stats.die(DeathSource::PvE);
+                        }
+                    }
                 }
             );
         }
