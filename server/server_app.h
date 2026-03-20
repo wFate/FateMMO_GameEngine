@@ -113,6 +113,7 @@ private:
     std::unordered_map<uint16_t, Vec2>  lastValidPositions_;
     std::unordered_map<uint16_t, float> lastMoveTime_;
     std::unordered_map<uint16_t, int>   moveCountThisTick_;
+    std::unordered_map<uint16_t, int>   skillCommandsThisTick_;
     std::unordered_set<uint16_t> needsFirstMoveSync_;  // accept first CmdMove unconditionally
 
     // Per-client auto-save tracking (staggered)

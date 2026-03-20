@@ -233,6 +233,7 @@ void ServerApp::shutdown() {
 void ServerApp::tick(float dt) {
     // Reset per-tick move counters
     for (auto& [id, count] : moveCountThisTick_) count = 0;
+    for (auto& [id, count] : skillCommandsThisTick_) count = 0;
 
     // 1. Drain incoming packets
     server_.poll(gameTime_);
@@ -778,6 +779,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     lastValidPositions_[clientId] = t ? t->position : Vec2{0.0f, 0.0f};
     lastMoveTime_[clientId] = gameTime_;
     moveCountThisTick_[clientId] = 0;
+    skillCommandsThisTick_[clientId] = 0;
     needsFirstMoveSync_.insert(clientId);
 
     // Stagger auto-save (offset by clientId to spread DB load)
@@ -1078,6 +1080,7 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     lastValidPositions_.erase(clientId);
     lastMoveTime_.erase(clientId);
     moveCountThisTick_.erase(clientId);
+    skillCommandsThisTick_.erase(clientId);
     nextAutoSaveTime_.erase(clientId);
     needsFirstMoveSync_.erase(clientId);
 }
@@ -2083,6 +2086,12 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     // Find caster's player entity
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
+
+    // Per-tick skill command cap: silently drop excess skill commands
+    skillCommandsThisTick_[clientId]++;
+    if (skillCommandsThisTick_[clientId] > 1) {
+        return; // Only 1 skill command per client per tick
+    }
 
     PersistentId casterPid(client->playerEntityId);
     EntityHandle casterHandle = replication_.getEntityHandle(casterPid);
