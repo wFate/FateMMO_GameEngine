@@ -1,6 +1,9 @@
 #include <doctest/doctest.h>
 #include "game/shared/skill_manager.h"
 #include "game/shared/character_stats.h"
+#include "game/shared/enemy_stats.h"
+#include "game/shared/crowd_control.h"
+#include "game/shared/status_effects.h"
 
 using namespace fate;
 
@@ -402,4 +405,358 @@ TEST_CASE("SkillDefinition: new fields default correctly") {
     CHECK(def.dashDistance == doctest::Approx(0.0f));
     CHECK(def.transformDamageMult == doctest::Approx(0.0f));
     CHECK(def.transformSpeedBonus == doctest::Approx(0.0f));
+}
+
+// ============================================================================
+// Task 5 Tests: Skill Execution - Validation
+// ============================================================================
+
+TEST_CASE("SkillManager: executeSkill rejects unlearned skill") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("slash", "Warrior", 1);
+    sm.registerSkillDefinition(def);
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    std::string failReason;
+    sm.onSkillFailed = [&](const std::string&, std::string reason) {
+        failReason = reason;
+    };
+
+    CHECK(sm.executeSkill("slash", 1, ctx) == 0);
+    CHECK(failReason.find("not learned") != std::string::npos);
+}
+
+TEST_CASE("SkillManager: executeSkill rejects when CC'd") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("slash", "Warrior", 1);
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("slash", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("slash");
+
+    CrowdControlSystem cc;
+    StatusEffectManager sem;
+    cc.applyStun(10.0f, &sem);
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.casterCC = &cc;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    std::string failReason;
+    sm.onSkillFailed = [&](const std::string&, std::string reason) {
+        failReason = reason;
+    };
+
+    CHECK(sm.executeSkill("slash", 1, ctx) == 0);
+    CHECK(failReason == "Crowd controlled");
+}
+
+TEST_CASE("SkillManager: executeSkill rejects on cooldown") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("slash", "Warrior", 1);
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("slash", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("slash");
+
+    // Manually start a cooldown
+    sm.startCooldown("slash", 10.0f);
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    EnemyStats enemy;
+    enemy.level = 10;
+    enemy.maxHP = 100;
+    enemy.currentHP = 100;
+    ctx.targetMobStats = &enemy;
+    ctx.targetLevel = enemy.level;
+    ctx.targetMaxHP = enemy.maxHP;
+    ctx.targetCurrentHP = enemy.currentHP;
+
+    std::string failReason;
+    sm.onSkillFailed = [&](const std::string&, std::string reason) {
+        failReason = reason;
+    };
+
+    CHECK(sm.executeSkill("slash", 1, ctx) == 0);
+    CHECK(failReason == "On cooldown");
+}
+
+TEST_CASE("SkillManager: executeSkill rejects insufficient mana") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    stats.currentMP = 0;  // No mana
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("slash", "Warrior", 1);
+    def.costPerRank = {10.0f, 15.0f, 20.0f};
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("slash", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("slash");
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    EnemyStats enemy;
+    enemy.level = 10;
+    enemy.maxHP = 100;
+    enemy.currentHP = 100;
+    ctx.targetMobStats = &enemy;
+    ctx.targetLevel = enemy.level;
+
+    std::string failReason;
+    sm.onSkillFailed = [&](const std::string&, std::string reason) {
+        failReason = reason;
+    };
+
+    CHECK(sm.executeSkill("slash", 1, ctx) == 0);
+    CHECK(failReason == "Not enough resources");
+}
+
+TEST_CASE("SkillManager: executeSkill rejects dead target") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("slash", "Warrior", 1);
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("slash", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("slash");
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.targetAlive = false;  // dead target
+    ctx.distanceToTarget = 1.0f;
+
+    std::string failReason;
+    sm.onSkillFailed = [&](const std::string&, std::string reason) {
+        failReason = reason;
+    };
+
+    CHECK(sm.executeSkill("slash", 1, ctx) == 0);
+    CHECK(failReason == "Target is dead");
+}
+
+TEST_CASE("SkillManager: executeSkill rejects out of range") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("slash", "Warrior", 1);
+    def.range = 3.0f;
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("slash", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("slash");
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 10.0f;  // way out of range
+
+    EnemyStats enemy;
+    enemy.level = 10;
+    ctx.targetMobStats = &enemy;
+    ctx.targetLevel = enemy.level;
+
+    std::string failReason;
+    sm.onSkillFailed = [&](const std::string&, std::string reason) {
+        failReason = reason;
+    };
+
+    CHECK(sm.executeSkill("slash", 1, ctx) == 0);
+    CHECK(failReason == "Out of range");
+}
+
+// ============================================================================
+// Task 5 Tests: Skill Execution - Damage
+// ============================================================================
+
+TEST_CASE("SkillManager: executeSkill deals damage scaled by skill percent") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    stats.currentMP = 100;
+    stats.weaponDamageMin = 50;
+    stats.weaponDamageMax = 50;  // fixed damage for predictability
+    stats.recalculateStats();
+    stats.currentHP = stats.maxHP;
+    stats.currentMP = 100;
+
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("slash", "Warrior", 1);
+    def.damagePerRank = {200.0f, 300.0f, 400.0f};  // 200% at rank 1
+    def.costPerRank = {5.0f, 8.0f, 12.0f};
+    def.cooldownPerRank = {3.0f, 2.5f, 2.0f};
+    def.usesHitRate = false;  // guaranteed hit for test
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("slash", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("slash");
+
+    EnemyStats enemy;
+    enemy.level = 10;
+    enemy.maxHP = 99999;
+    enemy.currentHP = 99999;
+    enemy.armor = 0;
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.casterEntityId = 1;
+    ctx.targetMobStats = &enemy;
+    ctx.targetLevel = enemy.level;
+    ctx.targetArmor = enemy.armor;
+    ctx.targetMaxHP = enemy.maxHP;
+    ctx.targetCurrentHP = enemy.currentHP;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    int damage = sm.executeSkill("slash", 1, ctx);
+    // Damage should be > 0 (base damage * 200%)
+    CHECK(damage > 0);
+}
+
+TEST_CASE("SkillManager: executeSkill starts cooldown") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    stats.currentMP = 100;
+
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("slash", "Warrior", 1);
+    def.usesHitRate = false;
+    def.cooldownPerRank = {5.0f, 4.0f, 3.0f};
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("slash", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("slash");
+
+    EnemyStats enemy;
+    enemy.level = 10;
+    enemy.maxHP = 99999;
+    enemy.currentHP = 99999;
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.casterEntityId = 1;
+    ctx.targetMobStats = &enemy;
+    ctx.targetLevel = enemy.level;
+    ctx.targetMaxHP = enemy.maxHP;
+    ctx.targetCurrentHP = enemy.currentHP;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    CHECK_FALSE(sm.isOnCooldown("slash"));
+    sm.executeSkill("slash", 1, ctx);
+    CHECK(sm.isOnCooldown("slash"));
+    CHECK(sm.getRemainingCooldown("slash") == doctest::Approx(5.0f));
+}
+
+TEST_CASE("SkillManager: executeSkill deducts mana") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    stats.currentMP = 100;
+
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("slash", "Warrior", 1);
+    def.usesHitRate = false;
+    def.costPerRank = {15.0f, 20.0f, 25.0f};
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("slash", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("slash");
+
+    EnemyStats enemy;
+    enemy.level = 10;
+    enemy.maxHP = 99999;
+    enemy.currentHP = 99999;
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.casterEntityId = 1;
+    ctx.targetMobStats = &enemy;
+    ctx.targetLevel = enemy.level;
+    ctx.targetMaxHP = enemy.maxHP;
+    ctx.targetCurrentHP = enemy.currentHP;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    sm.executeSkill("slash", 1, ctx);
+    CHECK(stats.currentMP == 85);  // 100 - 15
+}
+
+TEST_CASE("SkillManager: executeSkill fires onSkillUsed callback") {
+    CharacterStats stats = makeTestStats("Warrior", ClassType::Warrior, 10);
+    stats.currentMP = 100;
+
+    SkillManager sm;
+    sm.initialize(&stats);
+
+    SkillDefinition def = makeTestSkillDef("slash", "Warrior", 1);
+    def.usesHitRate = false;
+    sm.registerSkillDefinition(def);
+
+    sm.learnSkill("slash", 1);
+    sm.grantSkillPoint();
+    sm.activateSkillRank("slash");
+
+    bool callbackFired = false;
+    std::string usedSkillId;
+    int usedRank = 0;
+    sm.onSkillUsed = [&](const std::string& id, int r) {
+        callbackFired = true;
+        usedSkillId = id;
+        usedRank = r;
+    };
+
+    EnemyStats enemy;
+    enemy.level = 10;
+    enemy.maxHP = 99999;
+    enemy.currentHP = 99999;
+
+    SkillExecutionContext ctx;
+    ctx.casterStats = &stats;
+    ctx.casterEntityId = 1;
+    ctx.targetMobStats = &enemy;
+    ctx.targetLevel = enemy.level;
+    ctx.targetMaxHP = enemy.maxHP;
+    ctx.targetCurrentHP = enemy.currentHP;
+    ctx.targetAlive = true;
+    ctx.distanceToTarget = 1.0f;
+
+    sm.executeSkill("slash", 1, ctx);
+    CHECK(callbackFired);
+    CHECK(usedSkillId == "slash");
+    CHECK(usedRank == 1);
 }

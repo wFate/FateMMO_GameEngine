@@ -1,6 +1,10 @@
 #pragma once
 #include "game/shared/game_types.h"
 #include "game/shared/character_stats.h"
+#include "game/shared/combat_system.h"
+#include "game/shared/enemy_stats.h"
+#include "game/shared/status_effects.h"
+#include "game/shared/crowd_control.h"
 
 #include <string>
 #include <vector>
@@ -98,6 +102,35 @@ struct SkillDefinition {
 };
 
 // ============================================================================
+// SkillExecutionContext — everything needed to execute a skill
+// ============================================================================
+struct SkillExecutionContext {
+    uint32_t casterEntityId = 0;
+    uint32_t targetEntityId = 0;
+    CharacterStats* casterStats = nullptr;
+
+    // Target can be either a player or mob
+    CharacterStats* targetPlayerStats = nullptr;  // non-null if target is player
+    EnemyStats*     targetMobStats = nullptr;      // non-null if target is mob
+
+    // Status effect managers (may be null)
+    StatusEffectManager* casterSEM = nullptr;
+    StatusEffectManager* targetSEM = nullptr;
+    CrowdControlSystem*  casterCC = nullptr;
+    CrowdControlSystem*  targetCC = nullptr;
+
+    float distanceToTarget = 0.0f;
+    bool  targetIsPlayer = false;
+    bool  targetIsBoss = false;
+    int   targetLevel = 1;
+    int   targetArmor = 0;
+    int   targetMagicResist = 0;
+    int   targetCurrentHP = 0;
+    int   targetMaxHP = 0;
+    bool  targetAlive = true;
+};
+
+// ============================================================================
 // SkillManager — server-authoritative skill logic for a single character
 // ============================================================================
 class SkillManager {
@@ -141,6 +174,9 @@ public:
     void activateDoubleCast(const std::string& sourceSkillId, float windowDuration);
     void consumeDoubleCast();
     [[nodiscard]] bool isDoubleCastReady() const { return doubleCastReady_; }
+
+    // ---- Skill Execution ----
+    int executeSkill(const std::string& skillId, int rank, const SkillExecutionContext& ctx);
 
     // ---- Accessors ----
     [[nodiscard]] int availablePoints() const { return availableSkillPoints; }
