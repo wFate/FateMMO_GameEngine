@@ -130,6 +130,15 @@ void NetClient::poll(float currentTime) {
     }
 }
 
+void NetClient::sendRespawn(uint8_t respawnType) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdRespawnMsg msg;
+    msg.respawnType = respawnType;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdRespawn, w.data(), w.size());
+}
+
 void NetClient::handlePacket(const uint8_t* data, int size) {
     if (size < static_cast<int>(PACKET_HEADER_SIZE)) return;
 
@@ -261,6 +270,18 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             ByteReader payload(data + r.position(), hdr.payloadSize);
             auto msg = SvZoneTransitionMsg::read(payload);
             if (onZoneTransition) onZoneTransition(msg);
+            break;
+        }
+        case PacketType::SvDeathNotify: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvDeathNotifyMsg::read(payload);
+            if (onDeathNotify) onDeathNotify(msg);
+            break;
+        }
+        case PacketType::SvRespawn: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvRespawnMsg::read(payload);
+            if (onRespawn) onRespawn(msg);
             break;
         }
         default:
