@@ -116,6 +116,10 @@ struct SvEntityEnterMsg {
     int32_t     enchantLevel = 0;
     std::string rarity;
 
+    // Mob fields (only serialized when entityType == 1)
+    std::string mobDefId;
+    uint8_t     isBoss = 0;
+
     void write(ByteWriter& w) const {
         detail::writeU64(w, persistentId);
         w.writeU8(entityType);
@@ -132,6 +136,10 @@ struct SvEntityEnterMsg {
             w.writeI32(goldAmount);
             w.writeI32(enchantLevel);
             w.writeString(rarity);
+        }
+        if (entityType == 1) {
+            w.writeString(mobDefId);
+            w.writeU8(isBoss);
         }
     }
 
@@ -152,6 +160,10 @@ struct SvEntityEnterMsg {
             m.goldAmount   = r.readI32();
             m.enchantLevel = r.readI32();
             m.rarity       = r.readString();
+        }
+        if (m.entityType == 1) {
+            m.mobDefId = r.readString();
+            m.isBoss   = r.readU8();
         }
         return m;
     }
