@@ -809,6 +809,9 @@ void GameApp::onInit() {
         }
         if (ghost) {
             ghostEntities_[msg.persistentId] = ghost->handle();
+            // Seed interpolation buffer with initial position so ghosts don't
+            // snap to (0,0) before the first SvEntityUpdate arrives.
+            ghostInterpolation_.onEntityUpdate(msg.persistentId, msg.position);
         }
     };
 
@@ -820,11 +823,21 @@ void GameApp::onInit() {
                 sc->world().destroyEntity(it->second);
             }
             ghostEntities_.erase(it);
+            ghostUpdateSeqs_.erase(msg.persistentId);
         }
         ghostInterpolation_.removeEntity(msg.persistentId);
     };
 
     netClient_.onEntityUpdate = [this](const SvEntityUpdateMsg& msg) {
+        // Reject stale updates via sequence counter (wrapping comparison)
+        // First update for any entity is accepted unconditionally (no entry yet).
+        auto seqIt = ghostUpdateSeqs_.find(msg.persistentId);
+        if (seqIt != ghostUpdateSeqs_.end()) {
+            int8_t diff = static_cast<int8_t>(msg.updateSeq - seqIt->second);
+            if (diff <= 0) return; // stale or duplicate, discard
+        }
+        ghostUpdateSeqs_[msg.persistentId] = msg.updateSeq;
+
         auto it = ghostEntities_.find(msg.persistentId);
         if (it == ghostEntities_.end()) return;
 
@@ -2486,3 +2499,4 @@ void GameApp::onShutdown() {
 }
 
 } // namespace fate
+
