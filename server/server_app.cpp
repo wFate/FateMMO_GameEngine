@@ -619,10 +619,12 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     // Update last_online timestamp
     socialRepo_->updateLastOnline(rec.character_id);
 
-    // Initialize movement tracking — mark as needing sync (first move accepted unconditionally)
+    // Initialize movement tracking — first CmdMove accepted unconditionally
+    // (client position may differ from DB-saved position due to tile↔pixel rounding)
     lastValidPositions_[clientId] = t ? t->position : Vec2{0.0f, 0.0f};
     lastMoveTime_[clientId] = gameTime_;
     moveCountThisTick_[clientId] = 0;
+    needsFirstMoveSync_.insert(clientId);
 
     // Stagger auto-save (offset by clientId to spread DB load)
     float saveOffset = static_cast<float>(clientId % 60);
@@ -923,6 +925,7 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     lastMoveTime_.erase(clientId);
     moveCountThisTick_.erase(clientId);
     nextAutoSaveTime_.erase(clientId);
+    needsFirstMoveSync_.erase(clientId);
 }
 
 void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload) {
@@ -946,6 +949,16 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                 EntityHandle h = replication_.getEntityHandle(pid);
                 Entity* e = world_.getEntity(h);
                 if (!e) break;
+
+                // First move after connect: accept unconditionally (position desync)
+                if (needsFirstMoveSync_.count(clientId)) {
+                    needsFirstMoveSync_.erase(clientId);
+                    auto* t = e->getComponent<Transform>();
+                    if (t) t->position = move.position;
+                    lastValidPositions_[clientId] = move.position;
+                    lastMoveTime_[clientId] = gameTime_;
+                    break;
+                }
 
                 // Compute time delta since last move
                 float now = gameTime_;
@@ -1796,11 +1809,9 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             auto* sc = e->getComponent<CharacterStatsComponent>();
             if (!sc) break;
 
-            // Server-side mob combat now triggers die() — validate isDead
-            if (!sc->stats.isDead) {
-                LOG_WARN("Server", "Client %d sent CmdRespawn but is not dead", clientId);
-                break;
-            }
+            // TODO: Re-enable isDead check once server world has mob entities
+            // (currently mobs only exist in client world, so isDead is never set server-side)
+            // For now, accept respawn unconditionally to support client-side death
 
             // Check timer for type 0 (town) and type 1 (map spawn)
             if (msg.respawnType <= 1 && sc->stats.respawnTimeRemaining > 0.0f) {

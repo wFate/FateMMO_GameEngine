@@ -1,4 +1,5 @@
 #pragma once
+#include <unordered_set>
 #include "engine/net/net_server.h"
 #include "engine/net/replication.h"
 #include "engine/net/protocol.h"
@@ -105,6 +106,7 @@ private:
     std::unordered_map<uint16_t, Vec2>  lastValidPositions_;
     std::unordered_map<uint16_t, float> lastMoveTime_;
     std::unordered_map<uint16_t, int>   moveCountThisTick_;
+    std::unordered_set<uint16_t> needsFirstMoveSync_;  // accept first CmdMove unconditionally
 
     // Per-client auto-save tracking (staggered)
     std::unordered_map<uint16_t, float> nextAutoSaveTime_;

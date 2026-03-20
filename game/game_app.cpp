@@ -899,6 +899,11 @@ void GameApp::onInit() {
                 stats->stats.maxMP = msg.maxMP;
                 stats->stats.currentFury = msg.currentFury;
                 stats->stats.currentXP = msg.currentXP;
+                if (stats->stats.level != msg.level) {
+                    stats->stats.level = msg.level;
+                    stats->stats.recalculateStats();
+                    stats->stats.recalculateXPRequirement();
+                }
                 stats->stats.level = msg.level;
             }
         );
