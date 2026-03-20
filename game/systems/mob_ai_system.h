@@ -13,6 +13,7 @@
 #include <atomic>
 #include <cmath>
 #include <limits>
+#include <random>
 #include <vector>
 
 namespace fate {
@@ -153,6 +154,9 @@ public:
             }
         );
     }
+
+    // Callback fired after each mob→player attack resolves (for network broadcast)
+    std::function<void(Entity* mob, Entity* player, int damage, bool isCrit, bool isKill, bool isMiss)> onMobAttackResolved;
 
     // Deferred attack command — processed sequentially after parallel AI completes
     struct DeferredAttack {
@@ -368,10 +372,29 @@ private:
         auto& playerStats = playerStatsComp->stats;
         if (!playerStats.isAlive()) return;
 
-        // Roll mob damage
-        int rawDamage = mobStats.rollDamage();
+        // Hit/miss roll (matches Unity CombatHitRateSystem.RollMobVsPlayerHit)
+        bool hit = CombatSystem::rollToHit(
+            mobStats.level, static_cast<int>(mobStats.mobHitRate),
+            playerStats.level, 0);
 
-        // Apply armor reduction based on whether mob deals magic or physical
+        if (!hit) {
+            if (onMobAttackResolved) {
+                onMobAttackResolved(mobEntity, playerEntity, 0, false, false, true);
+            }
+            return;
+        }
+
+        // Roll mob damage with crit
+        int rawDamage = mobStats.rollDamage();
+        // Crit roll: simple random check against mob's crit rate
+        thread_local std::mt19937 critRng{std::random_device{}()};
+        std::uniform_real_distribution<float> critDist(0.0f, 1.0f);
+        bool isCrit = critDist(critRng) < mobStats.critRate;
+        if (isCrit) {
+            rawDamage = static_cast<int>(rawDamage * 1.95f);
+        }
+
+        // Apply armor/MR reduction based on whether mob deals magic or physical
         int finalDamage;
         if (mobStats.dealsMagicDamage) {
             float reduction = CombatSystem::getPlayerMagicDamageReduction(
@@ -382,10 +405,14 @@ private:
         }
 
         // Apply damage to player
+        bool wasDead = playerStats.isDead;
         playerStats.takeDamage(finalDamage);
+        bool isKill = !wasDead && playerStats.isDead;
 
-        // Track threat from this mob (useful for aggro management)
-        mobStats.takeDamageFrom(mobEntity->id(), 0);  // record interaction, 0 self-damage
+        // Fire callback for network broadcast
+        if (onMobAttackResolved) {
+            onMobAttackResolved(mobEntity, playerEntity, finalDamage, isCrit, isKill, false);
+        }
     }
 };
 

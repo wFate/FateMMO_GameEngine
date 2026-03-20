@@ -11,6 +11,7 @@
 #include "game/components/spawn_point_component.h"
 #include "game/shared/item_stat_roller.h"
 #include "game/components/pet_component.h"
+#include "game/systems/mob_ai_system.h"
 #include "engine/net/game_messages.h"
 
 #ifdef _WIN32
@@ -122,6 +123,68 @@ bool ServerApp::init(uint16_t port) {
 
 void ServerApp::run() {
     running_ = true;
+
+    // Wire mob→player combat broadcast callback
+    auto* mobAISys = world_.getSystem<MobAISystem>();
+    if (mobAISys) {
+        mobAISys->onMobAttackResolved = [this](Entity* mob, Entity* player,
+            int damage, bool isCrit, bool isKill, bool isMiss)
+        {
+            if (!mob || !player) return;
+
+            // Get persistent IDs via ReplicationManager
+            uint64_t mobPid = replication_.getPersistentId(mob->handle()).value();
+            uint64_t playerPid = replication_.getPersistentId(player->handle()).value();
+
+            // Broadcast SvCombatEventMsg to all clients
+            SvCombatEventMsg evt;
+            evt.attackerId = mobPid;
+            evt.targetId   = playerPid;
+            evt.damage     = isMiss ? 0 : damage;
+            evt.skillId    = 0;  // basic attack
+            evt.isCrit     = isCrit ? 1 : 0;
+            evt.isKill     = isKill ? 1 : 0;
+            uint8_t buf[64];
+            ByteWriter w(buf, sizeof(buf));
+            evt.write(w);
+            server_.broadcast(Channel::ReliableOrdered, PacketType::SvCombatEvent, buf, w.size());
+
+            // If player was killed, send SvDeathNotifyMsg to that player's client
+            if (isKill) {
+                auto* sc = player->getComponent<CharacterStatsComponent>();
+                int32_t xpLost = 0;
+                if (sc) {
+                    // Calculate XP that was lost (die() already applied the loss)
+                    float lossPct = CharacterStats::getXPLossPercent(sc->stats.level);
+                    // Approximate: lossPct * XP before death (currentXP is already reduced)
+                    xpLost = static_cast<int32_t>(sc->stats.currentXP * lossPct / (1.0f - lossPct));
+                }
+
+                // Find which client owns this player entity
+                uint16_t targetClientId = 0;
+                server_.connections().forEach([&](const ClientConnection& conn) {
+                    if (conn.playerEntityId == playerPid) {
+                        targetClientId = conn.clientId;
+                    }
+                });
+                if (targetClientId != 0) {
+                    SvDeathNotifyMsg deathMsg;
+                    deathMsg.deathSource = 0;  // PvE
+                    deathMsg.respawnTimer = 5.0f;
+                    deathMsg.xpLost = xpLost;
+                    deathMsg.honorLost = 0;
+                    uint8_t dbuf[32];
+                    ByteWriter dw(dbuf, sizeof(dbuf));
+                    deathMsg.write(dw);
+                    server_.sendTo(targetClientId, Channel::ReliableOrdered,
+                                   PacketType::SvDeathNotify, dbuf, dw.size());
+                    LOG_INFO("Server", "Mob killed player '%s' (client %d)",
+                             sc ? sc->stats.characterName.c_str() : "?", targetClientId);
+                }
+            }
+        };
+    }
+
     auto lastTick = std::chrono::high_resolution_clock::now();
 
 #ifdef _WIN32
@@ -1733,13 +1796,14 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             auto* sc = e->getComponent<CharacterStatsComponent>();
             if (!sc) break;
 
-            // Accept respawn even if server doesn't think player is dead —
-            // server-side mob→player combat isn't implemented yet, so death
-            // only happens client-side. Once server combat is added, re-enable:
-            // if (!sc->stats.isDead) { LOG_WARN(...); break; }
+            // Server-side mob combat now triggers die() — validate isDead
+            if (!sc->stats.isDead) {
+                LOG_WARN("Server", "Client %d sent CmdRespawn but is not dead", clientId);
+                break;
+            }
 
             // Check timer for type 0 (town) and type 1 (map spawn)
-            if (sc->stats.isDead && msg.respawnType <= 1 && sc->stats.respawnTimeRemaining > 0.0f) {
+            if (msg.respawnType <= 1 && sc->stats.respawnTimeRemaining > 0.0f) {
                 LOG_WARN("Server", "Client %d respawn rejected: timer still %.1fs",
                          clientId, sc->stats.respawnTimeRemaining);
                 break;
