@@ -276,4 +276,58 @@ struct SvZoneTransitionMsg {
     }
 };
 
+struct SvDeathNotifyMsg {
+    uint8_t deathSource  = 0;  // 0=PvE, 1=PvP, 2=Gauntlet, 3=Environment
+    float   respawnTimer = 5.0f;
+    int32_t xpLost       = 0;
+    int32_t honorLost    = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(deathSource);
+        w.writeFloat(respawnTimer);
+        w.writeI32(xpLost);
+        w.writeI32(honorLost);
+    }
+    static SvDeathNotifyMsg read(ByteReader& r) {
+        SvDeathNotifyMsg m;
+        m.deathSource  = r.readU8();
+        m.respawnTimer = r.readFloat();
+        m.xpLost       = r.readI32();
+        m.honorLost    = r.readI32();
+        return m;
+    }
+};
+
+struct CmdRespawnMsg {
+    uint8_t respawnType = 0;  // 0=town, 1=map spawn, 2=here (Phoenix Down)
+
+    void write(ByteWriter& w) const {
+        w.writeU8(respawnType);
+    }
+    static CmdRespawnMsg read(ByteReader& r) {
+        CmdRespawnMsg m;
+        m.respawnType = r.readU8();
+        return m;
+    }
+};
+
+struct SvRespawnMsg {
+    uint8_t respawnType = 0;
+    float   spawnX      = 0.0f;
+    float   spawnY      = 0.0f;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(respawnType);
+        w.writeFloat(spawnX);
+        w.writeFloat(spawnY);
+    }
+    static SvRespawnMsg read(ByteReader& r) {
+        SvRespawnMsg m;
+        m.respawnType = r.readU8();
+        m.spawnX      = r.readFloat();
+        m.spawnY      = r.readFloat();
+        return m;
+    }
+};
+
 } // namespace fate
