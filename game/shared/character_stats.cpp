@@ -303,6 +303,7 @@ void CharacterStats::applyPvEDeathXPLoss() {
 void CharacterStats::respawn() {
     isDead = false;
     currentHP = maxHP;
+    currentMP = maxMP;
     respawnTimeRemaining = 0.0f;
 
     if (onRespawned) {
