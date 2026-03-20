@@ -747,6 +747,8 @@ public:
     }
 
     /// Create a ghost (remote) player entity — minimal visual representation.
+    /// Includes CharacterStatsComponent, FactionComponent, and DamageableComponent
+    /// so the entity is targetable for PvP. Server syncs actual values via replication.
     static Entity* createGhostPlayer(World& world, const std::string& name, Vec2 position) {
         Entity* entity = world.createEntity(name);
         entity->setTag("ghost");
@@ -757,6 +759,23 @@ public:
         auto* np = entity->addComponent<NameplateComponent>();
         np->displayName = name;
         np->visible = true;
+
+        // PvP targeting components (defaults — server syncs real values)
+        auto* statsComp = entity->addComponent<CharacterStatsComponent>();
+        statsComp->stats.characterName = name;
+        statsComp->stats.level = 1;
+        statsComp->stats.currentHP = 100;
+        statsComp->stats.maxHP = 100;
+
+        auto* factionComp = entity->addComponent<FactionComponent>();
+        factionComp->faction = Faction::None;
+
+        entity->addComponent<DamageableComponent>();
+
+        // PlayerController (non-local) for target filtering
+        auto* controller = entity->addComponent<PlayerController>();
+        controller->isLocalPlayer = false;
+
         return entity;
     }
 

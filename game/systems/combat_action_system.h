@@ -308,6 +308,8 @@ public:
         if (!target) return "";
         auto* es = target->getComponent<EnemyStatsComponent>();
         if (es) return es->stats.enemyName;
+        auto* cs = target->getComponent<CharacterStatsComponent>();
+        if (cs) return cs->stats.characterName;
         return target->name();
     }
 
@@ -317,6 +319,8 @@ public:
         if (!target) return 0;
         auto* es = target->getComponent<EnemyStatsComponent>();
         if (es) return es->stats.currentHP;
+        auto* cs = target->getComponent<CharacterStatsComponent>();
+        if (cs) return cs->stats.currentHP;
         return 0;
     }
 
@@ -326,6 +330,8 @@ public:
         if (!target) return 0;
         auto* es = target->getComponent<EnemyStatsComponent>();
         if (es) return es->stats.maxHP;
+        auto* cs = target->getComponent<CharacterStatsComponent>();
+        if (cs) return cs->stats.maxHP;
         return 0;
     }
 
@@ -335,6 +341,8 @@ public:
         if (!target) return 0;
         auto* es = target->getComponent<EnemyStatsComponent>();
         if (es) return es->stats.level;
+        auto* cs = target->getComponent<CharacterStatsComponent>();
+        if (cs) return cs->stats.level;
         return 0;
     }
 
@@ -579,27 +587,38 @@ private:
     // tryAttackTarget — resolve one attack (physical or spell)
     // ------------------------------------------------------------------
     void tryAttackTarget(Entity* player, Entity* target) {
-        // ---- Faction check: block same-faction PvP ----
-        auto* attackerFaction = player->getComponent<FactionComponent>();
-        auto* targetFaction   = target->getComponent<FactionComponent>();
-        if (attackerFaction && targetFaction) {
-            if (FactionRegistry::isSameFaction(attackerFaction->faction, targetFaction->faction)) {
-                LOG_DEBUG("Combat", "Cannot attack same-faction player");
-                return;
-            }
-        }
-
         auto* statsComp = player->getComponent<CharacterStatsComponent>();
-        auto* enemyComp = target->getComponent<EnemyStatsComponent>();
         auto* playerT   = player->getComponent<Transform>();
         auto* targetT   = target->getComponent<Transform>();
 
-        if (!statsComp || !enemyComp || !playerT || !targetT) return;
+        if (!statsComp || !playerT || !targetT) return;
+
+        // Determine target type: mob or player
+        auto* enemyComp = target->getComponent<EnemyStatsComponent>();
+        auto* targetCharStats = target->getComponent<CharacterStatsComponent>();
+        bool targetIsMob = (enemyComp != nullptr);
+        bool targetIsPlayer = (!targetIsMob && targetCharStats != nullptr
+                               && target->getComponent<DamageableComponent>() != nullptr);
+
+        if (!targetIsMob && !targetIsPlayer) return;
+
+        // ---- Faction check: block same-faction PvP ----
+        if (targetIsPlayer) {
+            auto* attackerFaction = player->getComponent<FactionComponent>();
+            auto* targetFaction   = target->getComponent<FactionComponent>();
+            if (attackerFaction && targetFaction) {
+                if (FactionRegistry::isSameFaction(attackerFaction->faction, targetFaction->faction)) {
+                    LOG_DEBUG("Combat", "Cannot attack same-faction player");
+                    return;
+                }
+            }
+        }
 
         CharacterStats& ps = statsComp->stats;
-        EnemyStats&     es = enemyComp->stats;
 
-        if (!es.isAlive) { clearTarget(); return; }
+        // Check target alive
+        if (targetIsMob && !enemyComp->stats.isAlive) { clearTarget(); return; }
+        if (targetIsPlayer && targetCharStats->stats.isDead) { clearTarget(); return; }
 
         // ---- CC check: crowd-controlled players cannot attack ----
         auto* playerCCComp = player->getComponent<CrowdControlComponent>();
@@ -616,8 +635,6 @@ private:
         float requiredRange = isMage ? kMageRange : ps.classDef.attackRange;
 
         if (distTiles > requiredRange) {
-            // Out of range — disable auto-attack for melee/archer so they
-            // don't fire the instant they step back in range.
             if (!isMage) {
                 autoAttackEnabled_ = false;
                 LOG_INFO("Combat", "Target out of range (%.1f tiles > %.1f)",
@@ -638,192 +655,352 @@ private:
         auto* targetSEComp = target->getComponent<StatusEffectComponent>();
         auto* targetCCComp = target->getComponent<CrowdControlComponent>();
 
-        if (isMage) {
-            // ---- Spell attack ----
-            bool resisted = CombatSystem::rollSpellResist(
-                ps.level, ps.getIntelligence(), es.level, es.magicResist);
-
-            if (resisted) {
-                spawnResistText(textPos);
-                LOG_DEBUG("Combat", "Spell resisted by %s", es.enemyName.c_str());
-                return;
+        // ---- PK status transition on PvP attack ----
+        if (targetIsPlayer) {
+            PKAttackResult pkResult = PKSystem::processPvPAttack(ps.pkStatus);
+            if (pkResult.statusChanged) {
+                ps.pkStatus = pkResult.newAttackerStatus;
+                LOG_INFO("Combat", "PK status changed to %s",
+                         ps.pkStatus == PKStatus::Purple ? "Purple" : "Red");
             }
-
-            // Calculate spell damage
-            bool isCrit = false;
-
-            // Check guaranteed crit from player status effects
-            bool forceCrit = false;
-            if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
-                forceCrit = true;
-                playerSEComp->effects.consumeGuaranteedCrit();
-            }
-
-            int damage = ps.calculateDamage(forceCrit, isCrit);
-
-            // Apply attacker damage multiplier (AttackUp, Transform)
-            if (playerSEComp) {
-                damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
-            }
-
-            // Apply magic resist reduction
-            float mrReduction = CombatSystem::getMobMagicDamageReduction(es.magicResist);
-            damage = static_cast<int>(damage * (1.0f - mrReduction));
-
-            // Apply Hunter's Mark bonus damage from target
-            if (targetSEComp) {
-                float markBonus = targetSEComp->effects.getBonusDamageTaken();
-                if (markBonus > 0.0f) {
-                    damage = static_cast<int>(damage * (1.0f + markBonus));
-                }
-            }
-
-            // Apply Bewitch multiplier from target
-            if (targetSEComp) {
-                float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
-                if (bewitchMult > 0.0f) {
-                    damage = static_cast<int>(damage * bewitchMult);
-                }
-            }
-
-            // Apply shield absorption from target
-            if (targetSEComp) {
-                damage = targetSEComp->effects.absorbDamage(damage);
-            }
-
-            // Ensure minimum 1 damage
-            if (damage < 1) damage = 1;
-
-            es.takeDamageFrom(player->id(), damage);
-            spawnDamageText(textPos, damage, isCrit);
-
-            // Break freeze on target when taking damage
-            if (targetCCComp) {
-                targetCCComp->cc.breakFreeze();
-            }
-
-            // Lifesteal
-            if (ps.equipBonusLifesteal > 0.0f) {
-                int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
-                if (healAmount > 0) {
-                    ps.heal(healAmount);
-                    spawnHealText(playerT->position, healAmount);
-                }
-            }
-
-            // Armor shred on crit
-            if (isCrit && targetSEComp) {
-                targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
-            }
-
-            LOG_DEBUG("Combat", "Spell hit %s for %d%s",
-                      es.enemyName.c_str(), damage, isCrit ? " (CRIT)" : "");
-
-            // Mages use mana but do not spend it for basic attack
-            // No fury generation for mages
-
-        } else {
-            // ---- Physical attack (Warrior / Archer) ----
-            bool hit = CombatSystem::rollToHit(
-                ps.level,
-                static_cast<int>(ps.getHitRate()),
-                es.level,
-                0);
-
-            if (!hit) {
-                spawnMissText(textPos);
-                LOG_DEBUG("Combat", "Attack missed %s", es.enemyName.c_str());
-                return;
-            }
-
-            // Block check (target must have block chance)
-            if (CombatSystem::rollBlock(ps.classDef.classType,
-                                        ps.getStrength(), ps.getDexterity(),
-                                        0.0f /* mob block chance */)) {
-                spawnBlockText(textPos);
-                LOG_DEBUG("Combat", "Attack blocked by %s", es.enemyName.c_str());
-                return;
-            }
-
-            bool isCrit = false;
-
-            // Check guaranteed crit from player status effects
-            bool forceCrit = false;
-            if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
-                forceCrit = true;
-                playerSEComp->effects.consumeGuaranteedCrit();
-            }
-
-            int damage = ps.calculateDamage(forceCrit, isCrit);
-
-            // Apply attacker damage multiplier (AttackUp, Transform)
-            if (playerSEComp) {
-                damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
-            }
-
-            // Apply armor reduction
-            damage = CombatSystem::applyArmorReduction(damage, es.armor);
-
-            // Apply Hunter's Mark bonus damage from target
-            if (targetSEComp) {
-                float markBonus = targetSEComp->effects.getBonusDamageTaken();
-                if (markBonus > 0.0f) {
-                    damage = static_cast<int>(damage * (1.0f + markBonus));
-                }
-            }
-
-            // Apply Bewitch multiplier from target
-            if (targetSEComp) {
-                float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
-                if (bewitchMult > 0.0f) {
-                    damage = static_cast<int>(damage * bewitchMult);
-                }
-            }
-
-            // Apply shield absorption from target
-            if (targetSEComp) {
-                damage = targetSEComp->effects.absorbDamage(damage);
-            }
-
-            // Ensure minimum 1 damage
-            if (damage < 1) damage = 1;
-
-            es.takeDamageFrom(player->id(), damage);
-            spawnDamageText(textPos, damage, isCrit);
-
-            // Break freeze on target when taking damage
-            if (targetCCComp) {
-                targetCCComp->cc.breakFreeze();
-            }
-
-            // Lifesteal
-            if (ps.equipBonusLifesteal > 0.0f) {
-                int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
-                if (healAmount > 0) {
-                    ps.heal(healAmount);
-                    spawnHealText(playerT->position, healAmount);
-                }
-            }
-
-            // Armor shred on crit
-            if (isCrit && targetSEComp) {
-                targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
-            }
-
-            // Fury generation
-            float furyGain = isCrit
-                ? ps.classDef.furyPerCriticalHit
-                : ps.classDef.furyPerBasicAttack;
-            ps.addFury(furyGain);
-
-            LOG_DEBUG("Combat", "Hit %s for %d%s (+%.1f fury)",
-                      es.enemyName.c_str(), damage,
-                      isCrit ? " (CRIT)" : "", furyGain);
         }
 
-        // ---- Check for mob death ----
-        if (!es.isAlive) {
-            onMobDeath(player, target);
+        if (targetIsMob) {
+            // ================================================================
+            // MOB TARGET — existing PvE attack logic
+            // ================================================================
+            EnemyStats& es = enemyComp->stats;
+
+            if (isMage) {
+                // ---- Spell attack (PvE) ----
+                bool resisted = CombatSystem::rollSpellResist(
+                    ps.level, ps.getIntelligence(), es.level, es.magicResist);
+
+                if (resisted) {
+                    spawnResistText(textPos);
+                    LOG_DEBUG("Combat", "Spell resisted by %s", es.enemyName.c_str());
+                    return;
+                }
+
+                bool isCrit = false;
+                bool forceCrit = false;
+                if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
+                    forceCrit = true;
+                    playerSEComp->effects.consumeGuaranteedCrit();
+                }
+
+                int damage = ps.calculateDamage(forceCrit, isCrit);
+
+                if (playerSEComp) {
+                    damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
+                }
+
+                float mrReduction = CombatSystem::getMobMagicDamageReduction(es.magicResist);
+                damage = static_cast<int>(damage * (1.0f - mrReduction));
+
+                if (targetSEComp) {
+                    float markBonus = targetSEComp->effects.getBonusDamageTaken();
+                    if (markBonus > 0.0f) {
+                        damage = static_cast<int>(damage * (1.0f + markBonus));
+                    }
+                }
+
+                if (targetSEComp) {
+                    float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
+                    if (bewitchMult > 0.0f) {
+                        damage = static_cast<int>(damage * bewitchMult);
+                    }
+                }
+
+                if (targetSEComp) {
+                    damage = targetSEComp->effects.absorbDamage(damage);
+                }
+
+                if (damage < 1) damage = 1;
+
+                es.takeDamageFrom(player->id(), damage);
+                spawnDamageText(textPos, damage, isCrit);
+
+                if (targetCCComp) {
+                    targetCCComp->cc.breakFreeze();
+                }
+
+                if (ps.equipBonusLifesteal > 0.0f) {
+                    int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
+                    if (healAmount > 0) {
+                        ps.heal(healAmount);
+                        spawnHealText(playerT->position, healAmount);
+                    }
+                }
+
+                if (isCrit && targetSEComp) {
+                    targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
+                }
+
+                LOG_DEBUG("Combat", "Spell hit %s for %d%s",
+                          es.enemyName.c_str(), damage, isCrit ? " (CRIT)" : "");
+
+            } else {
+                // ---- Physical attack (PvE) ----
+                bool hit = CombatSystem::rollToHit(
+                    ps.level, static_cast<int>(ps.getHitRate()), es.level, 0);
+
+                if (!hit) {
+                    spawnMissText(textPos);
+                    LOG_DEBUG("Combat", "Attack missed %s", es.enemyName.c_str());
+                    return;
+                }
+
+                if (CombatSystem::rollBlock(ps.classDef.classType,
+                                            ps.getStrength(), ps.getDexterity(),
+                                            0.0f)) {
+                    spawnBlockText(textPos);
+                    LOG_DEBUG("Combat", "Attack blocked by %s", es.enemyName.c_str());
+                    return;
+                }
+
+                bool isCrit = false;
+                bool forceCrit = false;
+                if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
+                    forceCrit = true;
+                    playerSEComp->effects.consumeGuaranteedCrit();
+                }
+
+                int damage = ps.calculateDamage(forceCrit, isCrit);
+
+                if (playerSEComp) {
+                    damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
+                }
+
+                damage = CombatSystem::applyArmorReduction(damage, es.armor);
+
+                if (targetSEComp) {
+                    float markBonus = targetSEComp->effects.getBonusDamageTaken();
+                    if (markBonus > 0.0f) {
+                        damage = static_cast<int>(damage * (1.0f + markBonus));
+                    }
+                }
+
+                if (targetSEComp) {
+                    float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
+                    if (bewitchMult > 0.0f) {
+                        damage = static_cast<int>(damage * bewitchMult);
+                    }
+                }
+
+                if (targetSEComp) {
+                    damage = targetSEComp->effects.absorbDamage(damage);
+                }
+
+                if (damage < 1) damage = 1;
+
+                es.takeDamageFrom(player->id(), damage);
+                spawnDamageText(textPos, damage, isCrit);
+
+                if (targetCCComp) {
+                    targetCCComp->cc.breakFreeze();
+                }
+
+                if (ps.equipBonusLifesteal > 0.0f) {
+                    int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
+                    if (healAmount > 0) {
+                        ps.heal(healAmount);
+                        spawnHealText(playerT->position, healAmount);
+                    }
+                }
+
+                if (isCrit && targetSEComp) {
+                    targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
+                }
+
+                float furyGain = isCrit
+                    ? ps.classDef.furyPerCriticalHit
+                    : ps.classDef.furyPerBasicAttack;
+                ps.addFury(furyGain);
+
+                LOG_DEBUG("Combat", "Hit %s for %d%s (+%.1f fury)",
+                          es.enemyName.c_str(), damage,
+                          isCrit ? " (CRIT)" : "", furyGain);
+            }
+
+            // ---- Check for mob death ----
+            if (!enemyComp->stats.isAlive) {
+                onMobDeath(player, target);
+            }
+
+        } else {
+            // ================================================================
+            // PLAYER TARGET — PvP attack logic (0.05x damage multiplier)
+            // ================================================================
+            CharacterStats& ts = targetCharStats->stats;
+
+            if (isMage) {
+                // ---- Spell attack (PvP) ----
+                bool resisted = CombatSystem::rollSpellResist(
+                    ps.level, ps.getIntelligence(), ts.level, ts.getMagicResist());
+
+                if (resisted) {
+                    spawnResistText(textPos);
+                    LOG_DEBUG("Combat", "Spell resisted by %s", ts.characterName.c_str());
+                    return;
+                }
+
+                bool isCrit = false;
+                bool forceCrit = false;
+                if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
+                    forceCrit = true;
+                    playerSEComp->effects.consumeGuaranteedCrit();
+                }
+
+                int damage = ps.calculateDamage(forceCrit, isCrit);
+
+                if (playerSEComp) {
+                    damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
+                }
+
+                // PvP damage multiplier (0.05x)
+                damage = static_cast<int>(std::round(damage * CombatSystem::getPvPDamageMultiplier()));
+
+                // Player magic resist reduction
+                float mrReduction = CombatSystem::getPlayerMagicDamageReduction(ts.getMagicResist());
+                damage = static_cast<int>(damage * (1.0f - mrReduction));
+
+                if (targetSEComp) {
+                    float markBonus = targetSEComp->effects.getBonusDamageTaken();
+                    if (markBonus > 0.0f) {
+                        damage = static_cast<int>(damage * (1.0f + markBonus));
+                    }
+                }
+
+                if (targetSEComp) {
+                    float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
+                    if (bewitchMult > 0.0f) {
+                        damage = static_cast<int>(damage * bewitchMult);
+                    }
+                }
+
+                if (targetSEComp) {
+                    damage = targetSEComp->effects.absorbDamage(damage);
+                }
+
+                if (damage < 1) damage = 1;
+
+                ts.takeDamage(damage);
+                spawnDamageText(textPos, damage, isCrit);
+
+                if (targetCCComp) {
+                    targetCCComp->cc.breakFreeze();
+                }
+
+                if (ps.equipBonusLifesteal > 0.0f) {
+                    int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
+                    if (healAmount > 0) {
+                        ps.heal(healAmount);
+                        spawnHealText(playerT->position, healAmount);
+                    }
+                }
+
+                if (isCrit && targetSEComp) {
+                    targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
+                }
+
+                LOG_DEBUG("Combat", "PvP spell hit %s for %d%s",
+                          ts.characterName.c_str(), damage, isCrit ? " (CRIT)" : "");
+
+            } else {
+                // ---- Physical attack (PvP) ----
+                bool hit = CombatSystem::rollToHit(
+                    ps.level, static_cast<int>(ps.getHitRate()),
+                    ts.level, static_cast<int>(ts.getEvasion()));
+
+                if (!hit) {
+                    spawnMissText(textPos);
+                    LOG_DEBUG("Combat", "PvP attack missed %s", ts.characterName.c_str());
+                    return;
+                }
+
+                if (CombatSystem::rollBlock(ps.classDef.classType,
+                                            ps.getStrength(), ps.getDexterity(),
+                                            ts.getBlockChance())) {
+                    spawnBlockText(textPos);
+                    LOG_DEBUG("Combat", "PvP attack blocked by %s", ts.characterName.c_str());
+                    return;
+                }
+
+                bool isCrit = false;
+                bool forceCrit = false;
+                if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
+                    forceCrit = true;
+                    playerSEComp->effects.consumeGuaranteedCrit();
+                }
+
+                int damage = ps.calculateDamage(forceCrit, isCrit);
+
+                if (playerSEComp) {
+                    damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
+                }
+
+                // PvP damage multiplier (0.05x)
+                damage = static_cast<int>(std::round(damage * CombatSystem::getPvPDamageMultiplier()));
+
+                // Armor reduction using target player's armor
+                damage = CombatSystem::applyArmorReduction(damage, ts.getArmor());
+
+                if (targetSEComp) {
+                    float markBonus = targetSEComp->effects.getBonusDamageTaken();
+                    if (markBonus > 0.0f) {
+                        damage = static_cast<int>(damage * (1.0f + markBonus));
+                    }
+                }
+
+                if (targetSEComp) {
+                    float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
+                    if (bewitchMult > 0.0f) {
+                        damage = static_cast<int>(damage * bewitchMult);
+                    }
+                }
+
+                if (targetSEComp) {
+                    damage = targetSEComp->effects.absorbDamage(damage);
+                }
+
+                if (damage < 1) damage = 1;
+
+                ts.takeDamage(damage);
+                spawnDamageText(textPos, damage, isCrit);
+
+                if (targetCCComp) {
+                    targetCCComp->cc.breakFreeze();
+                }
+
+                if (ps.equipBonusLifesteal > 0.0f) {
+                    int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
+                    if (healAmount > 0) {
+                        ps.heal(healAmount);
+                        spawnHealText(playerT->position, healAmount);
+                    }
+                }
+
+                if (isCrit && targetSEComp) {
+                    targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
+                }
+
+                // Fury generation on PvP physical hit
+                float furyGain = isCrit
+                    ? ps.classDef.furyPerCriticalHit
+                    : ps.classDef.furyPerBasicAttack;
+                ps.addFury(furyGain);
+
+                LOG_DEBUG("Combat", "PvP hit %s for %d%s (+%.1f fury)",
+                          ts.characterName.c_str(), damage,
+                          isCrit ? " (CRIT)" : "", furyGain);
+            }
+
+            // ---- Check for player death (no XP/gold reward) ----
+            if (ts.isDead) {
+                LOG_INFO("Combat", "Player %s killed in PvP", ts.characterName.c_str());
+                clearTarget();
+            }
         }
     }
 
@@ -924,14 +1101,24 @@ private:
     }
 
     // ------------------------------------------------------------------
-    // findPlayerAtPoint — find a ghost player entity under a click position
+    // findPlayerAtPoint — find a targetable ghost player under click
+    // Skips the local player and entities without DamageableComponent.
     // ------------------------------------------------------------------
     Entity* findPlayerAtPoint(Vec2 worldClick) {
         if (!world_) return nullptr;
         Entity* hit = nullptr;
-        world_->forEach<Transform, NameplateComponent>(
-            [&](Entity* e, Transform* t, NameplateComponent* np) {
-                if (hit || !np->visible) return;
+        world_->forEach<Transform, CharacterStatsComponent>(
+            [&](Entity* e, Transform* t, CharacterStatsComponent* cs) {
+                if (hit) return;
+                // Must be damageable
+                if (!e->getComponent<DamageableComponent>()) return;
+                // Skip the local player
+                auto* pc = e->getComponent<PlayerController>();
+                if (pc && pc->isLocalPlayer) return;
+                // Skip dead players
+                if (cs->stats.isDead) return;
+                // Skip mobs (they have EnemyStatsComponent, handled separately)
+                if (e->getComponent<EnemyStatsComponent>()) return;
                 auto* spr = e->getComponent<SpriteComponent>();
                 if (!spr || !spr->enabled) return;
                 Vec2 half = spr->size * 0.5f;
