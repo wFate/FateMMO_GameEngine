@@ -8,6 +8,7 @@
 #include "game/components/game_components.h"
 #include "game/components/faction_component.h"
 #include "game/components/dropped_item_component.h"
+#include "game/components/spawn_point_component.h"
 #include "game/shared/item_stat_roller.h"
 #include "game/components/pet_component.h"
 #include "engine/net/game_messages.h"
@@ -337,15 +338,20 @@ void ServerApp::consumePendingSessions() {
             uint16_t oldClientId = existing->second;
             LOG_INFO("Server", "Duplicate login for account %d; kicking client %d",
                      result.session.account_id, oldClientId);
+            // Erase BEFORE calling onClientDisconnected to avoid double-erase
+            // and invalidated iterator (onClientDisconnected also erases this key)
+            activeAccountSessions_.erase(existing);
+
             savePlayerToDB(oldClientId);
 
             auto* oldClient = server_.connections().findById(oldClientId);
             if (oldClient) {
-                // Disconnect them
+                // onClientDisconnected handles entity cleanup + tracking map cleanup
+                // It will try to erase from activeAccountSessions_ again but the key
+                // is already gone, so that's a harmless no-op
                 if (server_.onClientDisconnected) server_.onClientDisconnected(oldClientId);
                 server_.connections().removeClient(oldClientId);
             }
-            activeAccountSessions_.erase(existing);
         }
 
         // Store pending session with 30s expiry
@@ -1679,6 +1685,80 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
 
             // Save updated scene to DB asynchronously
             savePlayerToDBAsync(clientId);
+            break;
+        }
+        case PacketType::CmdRespawn: {
+            auto msg = CmdRespawnMsg::read(payload);
+            auto* client = server_.connections().findById(clientId);
+            if (!client || client->playerEntityId == 0) break;
+
+            PersistentId pid(client->playerEntityId);
+            EntityHandle h = replication_.getEntityHandle(pid);
+            Entity* e = world_.getEntity(h);
+            if (!e) break;
+
+            auto* sc = e->getComponent<CharacterStatsComponent>();
+            if (!sc || !sc->stats.isDead) {
+                LOG_WARN("Server", "Client %d sent CmdRespawn but is not dead", clientId);
+                break;
+            }
+
+            // Check timer for type 0 (town) and type 1 (map spawn)
+            if (msg.respawnType <= 1 && sc->stats.respawnTimeRemaining > 0.0f) {
+                LOG_WARN("Server", "Client %d respawn rejected: timer still %.1fs",
+                         clientId, sc->stats.respawnTimeRemaining);
+                break;
+            }
+
+            // Type 2: Phoenix Down — validate and consume
+            if (msg.respawnType == 2) {
+                auto* invComp = e->getComponent<InventoryComponent>();
+                if (!invComp) break;
+                int slot = invComp->inventory.findItemById("phoenix_down");
+                if (slot < 0) {
+                    LOG_WARN("Server", "Client %d tried Phoenix Down respawn but has none", clientId);
+                    break;
+                }
+                invComp->inventory.removeItemQuantity(slot, 1);
+                LOG_INFO("Server", "Client %d used Phoenix Down to respawn", clientId);
+            }
+
+            // Determine respawn position
+            auto* t = e->getComponent<Transform>();
+            Vec2 respawnPos = t ? t->position : Vec2{0, 0};
+
+            if (msg.respawnType == 1) {
+                // Map spawn: find SpawnPointComponent (not town)
+                world_.forEach<SpawnPointComponent, Transform>(
+                    [&](Entity*, SpawnPointComponent* sp, Transform* spT) {
+                        if (!sp->isTownSpawn) respawnPos = spT->position;
+                    }
+                );
+            }
+            // Type 0 (town) would need zone transition — for now respawn at map spawn
+            if (msg.respawnType == 0) {
+                world_.forEach<SpawnPointComponent, Transform>(
+                    [&](Entity*, SpawnPointComponent* sp, Transform* spT) {
+                        if (!sp->isTownSpawn) respawnPos = spT->position;
+                    }
+                );
+            }
+
+            // Execute respawn
+            sc->stats.respawn();
+            if (t) t->position = respawnPos;
+
+            // Send SvRespawnMsg to client
+            SvRespawnMsg resp;
+            resp.respawnType = msg.respawnType;
+            resp.spawnX = respawnPos.x;
+            resp.spawnY = respawnPos.y;
+            uint8_t buf[32]; ByteWriter w(buf, sizeof(buf));
+            resp.write(w);
+            server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvRespawn, buf, w.size());
+
+            LOG_INFO("Server", "Client %d respawned (type %d) at (%.0f, %.0f)",
+                     clientId, msg.respawnType, respawnPos.x, respawnPos.y);
             break;
         }
         default:
