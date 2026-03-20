@@ -48,8 +48,8 @@ bool ServerApp::init(uint16_t port) {
         onPacketReceived(id, type, r);
     };
 
-    // Register server-side gameplay systems (no render, no movement — server only needs AI)
-    world_.addSystem<MobAISystem>();
+    // TODO: Add MobAISystem + SpawnSystem once server has DB-driven spawn zones
+    // Currently mobs only exist in client world — server needs its own mob entities first
 
     // Register existing mobs for replication
     world_.forEach<Transform, EnemyStatsComponent>([&](Entity* entity, Transform*, EnemyStatsComponent*) {
