@@ -23,6 +23,7 @@ public:
     void sendChat(uint8_t channel, const std::string& message, const std::string& target);
     void sendZoneTransition(const std::string& targetScene);
     void sendRespawn(uint8_t respawnType);
+    void sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId);
 
     bool isConnected() const { return connected_; }
     uint16_t clientId() const { return clientId_; }
@@ -48,6 +49,7 @@ public:
     std::function<void(const SvZoneTransitionMsg&)> onZoneTransition;
     std::function<void(const SvDeathNotifyMsg&)> onDeathNotify;
     std::function<void(const SvRespawnMsg&)> onRespawn;
+    std::function<void(const SvSkillResultMsg&)> onSkillResult;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:

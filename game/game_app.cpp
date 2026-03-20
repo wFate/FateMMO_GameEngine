@@ -1052,6 +1052,46 @@ void GameApp::onInit() {
         LOG_INFO("Client", "You died! Lost %d XP, %d Honor", msg.xpLost, msg.honorLost);
     };
 
+    netClient_.onSkillResult = [this](const SvSkillResultMsg& msg) {
+        if (!combatSystem_) return;
+        auto* scene = SceneManager::instance().currentScene();
+        if (!scene) return;
+
+        // Find target entity position for floating text
+        Vec2 targetPos{0, 0};
+        bool foundTarget = false;
+
+        // Check ghost entities (replicated remote players/mobs from server)
+        auto ghostIt = ghostEntities_.find(msg.targetId);
+        if (ghostIt != ghostEntities_.end()) {
+            Entity* ghost = scene->world().getEntity(ghostIt->second);
+            if (ghost) {
+                auto* t = ghost->getComponent<Transform>();
+                if (t) { targetPos = t->position; foundTarget = true; }
+            }
+        }
+
+        // If target not found in ghosts, check if it's the local player
+        if (!foundTarget) {
+            scene->world().forEach<PlayerController, Transform>(
+                [&](Entity*, PlayerController* ctrl, Transform* t) {
+                    if (!ctrl->isLocalPlayer || foundTarget) return;
+                    targetPos = t->position;
+                    foundTarget = true;
+                }
+            );
+        }
+
+        if (!foundTarget) return;
+
+        // Spawn appropriate floating text
+        if (msg.wasMiss) {
+            combatSystem_->showMissText(targetPos);
+        } else if (msg.damage > 0) {
+            combatSystem_->showDamageText(targetPos, msg.damage, msg.isCrit != 0);
+        }
+    };
+
     netClient_.onRespawn = [this](const SvRespawnMsg& msg) {
         auto* scene = SceneManager::instance().currentScene();
         if (!scene) return;

@@ -46,6 +46,7 @@ namespace PacketType {
     constexpr uint8_t CmdSocial        = 0x19;
     constexpr uint8_t CmdZoneTransition = 0x1A;
     constexpr uint8_t CmdRespawn       = 0x1B;
+    constexpr uint8_t CmdUseSkill     = 0x1C;
 
     // Server -> Client
     constexpr uint8_t SvEntityEnter        = 0x90;
@@ -66,6 +67,7 @@ namespace PacketType {
     constexpr uint8_t SvQuestUpdate        = 0x9F;
     constexpr uint8_t SvDeathNotify    = 0xA0;
     constexpr uint8_t SvRespawn        = 0xA1;
+    constexpr uint8_t SvSkillResult   = 0xA2;
 } // namespace PacketType
 
 // ============================================================================

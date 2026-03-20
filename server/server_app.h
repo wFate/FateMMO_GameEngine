@@ -3,6 +3,7 @@
 #include "engine/net/net_server.h"
 #include "engine/net/replication.h"
 #include "engine/net/protocol.h"
+#include "engine/net/game_messages.h"
 #include "engine/ecs/world.h"
 #include "server/auth/auth_server.h"
 #include "server/db/db_connection.h"
@@ -123,6 +124,7 @@ private:
     void onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload);
 
     void processAction(uint16_t clientId, const CmdAction& action);
+    void processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg);
     void sendPlayerState(uint16_t clientId);
     void consumePendingSessions();
     void savePlayerToDB(uint16_t clientId);

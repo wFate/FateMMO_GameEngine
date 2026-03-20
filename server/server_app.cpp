@@ -2045,10 +2045,298 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                      clientId, msg.respawnType, respawnPos.x, respawnPos.y);
             break;
         }
+        case PacketType::CmdUseSkill: {
+            auto msg = CmdUseSkillMsg::read(payload);
+            processUseSkill(clientId, msg);
+            break;
+        }
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;
     }
+}
+
+void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
+    // Find caster's player entity
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId casterPid(client->playerEntityId);
+    EntityHandle casterHandle = replication_.getEntityHandle(casterPid);
+    Entity* caster = world_.getEntity(casterHandle);
+    if (!caster) return;
+
+    auto* skillComp = caster->getComponent<SkillManagerComponent>();
+    if (!skillComp) {
+        LOG_WARN("Server", "Client %d has no SkillManagerComponent", clientId);
+        return;
+    }
+
+    auto* casterStatsComp = caster->getComponent<CharacterStatsComponent>();
+    if (!casterStatsComp) return;
+
+    // Check if caster is dead
+    if (casterStatsComp->stats.isDead) {
+        LOG_WARN("Server", "Client %d tried to use skill while dead", clientId);
+        return;
+    }
+
+    auto* casterTransform = caster->getComponent<Transform>();
+    if (!casterTransform) return;
+
+    // Caster status effect and crowd control components
+    auto* casterSEComp = caster->getComponent<StatusEffectComponent>();
+    auto* casterCCComp = caster->getComponent<CrowdControlComponent>();
+
+    // Build execution context
+    SkillExecutionContext ctx;
+    ctx.casterEntityId = casterHandle.value;
+    ctx.casterStats = &casterStatsComp->stats;
+    ctx.casterSEM = casterSEComp ? &casterSEComp->effects : nullptr;
+    ctx.casterCC = casterCCComp ? &casterCCComp->cc : nullptr;
+
+    // Find target if specified
+    Entity* target = nullptr;
+    PersistentId targetPid(msg.targetId);
+    bool targetIsPlayer = false;
+    bool targetIsBoss = false;
+
+    if (msg.targetId != 0) {
+        EntityHandle targetHandle = replication_.getEntityHandle(targetPid);
+        target = world_.getEntity(targetHandle);
+    }
+
+    if (target) {
+        ctx.targetEntityId = target->handle().value;
+
+        auto* targetTransform = target->getComponent<Transform>();
+        if (targetTransform && casterTransform) {
+            ctx.distanceToTarget = casterTransform->position.distance(targetTransform->position);
+        }
+
+        // Target status effects and CC
+        auto* targetSEComp = target->getComponent<StatusEffectComponent>();
+        auto* targetCCComp = target->getComponent<CrowdControlComponent>();
+        ctx.targetSEM = targetSEComp ? &targetSEComp->effects : nullptr;
+        ctx.targetCC = targetCCComp ? &targetCCComp->cc : nullptr;
+
+        // Determine target type: mob or player
+        auto* targetEnemyStats = target->getComponent<EnemyStatsComponent>();
+        auto* targetCharStats = target->getComponent<CharacterStatsComponent>();
+
+        if (targetEnemyStats) {
+            // Target is a mob
+            ctx.targetMobStats = &targetEnemyStats->stats;
+            ctx.targetIsPlayer = false;
+            ctx.targetLevel = targetEnemyStats->stats.level;
+            ctx.targetArmor = targetEnemyStats->stats.armor;
+            ctx.targetMagicResist = targetEnemyStats->stats.magicResist;
+            ctx.targetCurrentHP = targetEnemyStats->stats.currentHP;
+            ctx.targetMaxHP = targetEnemyStats->stats.maxHP;
+            ctx.targetAlive = targetEnemyStats->stats.isAlive;
+
+            // Check if target is a boss
+            auto* mobNameplate = target->getComponent<MobNameplateComponent>();
+            if (mobNameplate && mobNameplate->isBoss) {
+                ctx.targetIsBoss = true;
+                targetIsBoss = true;
+            }
+        } else if (targetCharStats) {
+            // Target is a player
+            ctx.targetPlayerStats = &targetCharStats->stats;
+            ctx.targetIsPlayer = true;
+            targetIsPlayer = true;
+            ctx.targetLevel = targetCharStats->stats.level;
+            ctx.targetArmor = targetCharStats->stats.getArmor();
+            ctx.targetMagicResist = targetCharStats->stats.getMagicResist();
+            ctx.targetCurrentHP = targetCharStats->stats.currentHP;
+            ctx.targetMaxHP = targetCharStats->stats.maxHP;
+            ctx.targetAlive = !targetCharStats->stats.isDead;
+        }
+    }
+
+    // Track whether the skill was a miss by hooking onSkillFailed temporarily
+    bool wasMiss = false;
+    auto prevOnFailed = skillComp->skills.onSkillFailed;
+    skillComp->skills.onSkillFailed = [&wasMiss, &prevOnFailed](const std::string& id, std::string reason) {
+        wasMiss = true;
+        if (prevOnFailed) prevOnFailed(id, reason);
+    };
+
+    // Execute the skill
+    int damage = skillComp->skills.executeSkill(msg.skillId, msg.rank, ctx);
+
+    // Restore callback
+    skillComp->skills.onSkillFailed = prevOnFailed;
+
+    // Determine crit: check if damage was dealt with a crit by comparing to base calculation
+    // Since executeSkill doesn't expose isCrit, we approximate: if damage > 0 and there's a
+    // crit buff active, we check the SEM. For simplicity, check the stat's last crit flag.
+    bool isCrit = false;
+    // The casterStats.calculateDamage sets internal state, but we can't access it after the fact.
+    // A reasonable heuristic: if caster has high crit rate and damage is notably above average,
+    // but this is imprecise. For now, we'll send isCrit=0 and rely on the client's existing
+    // combat event system for crit display from the SvCombatEvent path.
+    // TODO: Expose isCrit from executeSkill return value
+
+    // Determine if target was killed
+    bool isKill = false;
+    if (target) {
+        auto* targetEnemyStats = target->getComponent<EnemyStatsComponent>();
+        auto* targetCharStats = target->getComponent<CharacterStatsComponent>();
+        if (targetEnemyStats) {
+            isKill = !targetEnemyStats->stats.isAlive;
+        } else if (targetCharStats) {
+            isKill = targetCharStats->stats.isDead;
+        }
+    }
+
+    // Build and broadcast SvSkillResultMsg
+    SvSkillResultMsg result;
+    result.casterId = casterPid.value();
+    result.targetId = msg.targetId;
+    result.skillId = msg.skillId;
+    result.damage = damage;
+    result.isCrit = isCrit ? 1 : 0;
+    result.isKill = isKill ? 1 : 0;
+    result.wasMiss = (wasMiss && damage == 0) ? 1 : 0;
+
+    uint8_t buf[256];
+    ByteWriter w(buf, sizeof(buf));
+    result.write(w);
+    server_.broadcast(Channel::ReliableOrdered, PacketType::SvSkillResult, buf, w.size());
+
+    // Handle mob death (XP, loot, etc.) — same pattern as processAction kill path
+    if (isKill && target) {
+        auto* targetEnemyStats = target->getComponent<EnemyStatsComponent>();
+        if (targetEnemyStats) {
+            EnemyStats& es = targetEnemyStats->stats;
+            auto* targetTransform = target->getComponent<Transform>();
+            Vec2 deathPos = targetTransform ? targetTransform->position : Vec2{0, 0};
+
+            // Determine top damager for loot ownership
+            uint32_t topDamagerId = casterHandle.value;
+            int topDamage = 0;
+            for (const auto& [attackerId, totalDmg] : es.damageByAttacker) {
+                if (totalDmg > topDamage) {
+                    topDamage = totalDmg;
+                    topDamagerId = attackerId;
+                }
+            }
+
+            // Roll loot table
+            if (!es.lootTableId.empty()) {
+                auto drops = lootTableCache_.rollLoot(es.lootTableId);
+
+                constexpr float kItemSpacing = 10.0f;
+                constexpr int kMaxPerRow = 4;
+                thread_local std::mt19937 dropRng{std::random_device{}()};
+                std::uniform_real_distribution<float> jitter(-3.0f, 3.0f);
+
+                int totalDrops = static_cast<int>(drops.size());
+                int cols = std::min(totalDrops, kMaxPerRow);
+                float gridWidth = (cols - 1) * kItemSpacing;
+
+                for (size_t i = 0; i < drops.size(); ++i) {
+                    int col = static_cast<int>(i) % kMaxPerRow;
+                    int row = static_cast<int>(i) / kMaxPerRow;
+                    Vec2 offset = {
+                        (col * kItemSpacing) - (gridWidth * 0.5f) + jitter(dropRng),
+                        row * kItemSpacing + jitter(dropRng)
+                    };
+                    Vec2 dropPos = {deathPos.x + offset.x, deathPos.y + offset.y};
+
+                    Entity* dropEntity = EntityFactory::createDroppedItem(world_, dropPos, false);
+                    auto* dropComp = dropEntity->getComponent<DroppedItemComponent>();
+                    if (dropComp) {
+                        dropComp->itemId = drops[i].item.itemId;
+                        dropComp->quantity = drops[i].item.quantity;
+                        dropComp->enchantLevel = drops[i].item.enchantLevel;
+                        dropComp->rolledStatsJson = ItemStatRoller::rolledStatsToJson(drops[i].item.rolledStats);
+                        dropComp->ownerEntityId = topDamagerId;
+                        dropComp->spawnTime = gameTime_;
+
+                        const auto* def = itemDefCache_.getDefinition(drops[i].item.itemId);
+                        if (def) dropComp->rarity = def->rarity;
+                    }
+
+                    PersistentId dropPid = PersistentId::generate(1);
+                    replication_.registerEntity(dropEntity->handle(), dropPid);
+                }
+            }
+
+            // Roll gold drop
+            if (es.goldDropChance > 0.0f) {
+                thread_local std::mt19937 goldRng{std::random_device{}()};
+                std::uniform_real_distribution<float> chanceDist(0.0f, 1.0f);
+                if (chanceDist(goldRng) <= es.goldDropChance && es.maxGoldDrop > 0) {
+                    std::uniform_int_distribution<int> goldDist(es.minGoldDrop, es.maxGoldDrop);
+                    int goldAmount = goldDist(goldRng);
+
+                    Entity* goldEntity = EntityFactory::createDroppedItem(world_, deathPos, true);
+                    auto* goldComp = goldEntity->getComponent<DroppedItemComponent>();
+                    if (goldComp) {
+                        goldComp->isGold = true;
+                        goldComp->goldAmount = goldAmount;
+                        goldComp->ownerEntityId = topDamagerId;
+                        goldComp->spawnTime = gameTime_;
+                    }
+
+                    PersistentId goldPid = PersistentId::generate(1);
+                    replication_.registerEntity(goldEntity->handle(), goldPid);
+                }
+            }
+
+            // Hide mob sprite (SpawnSystem handles respawn)
+            auto* mobSprite = target->getComponent<SpriteComponent>();
+            if (mobSprite) mobSprite->enabled = false;
+
+            // Notify gauntlet of mob kill
+            if (gauntletManager_.isPlayerInActiveInstance(static_cast<uint32_t>(clientId))) {
+                auto* inst = gauntletManager_.getInstanceForPlayer(static_cast<uint32_t>(clientId));
+                if (inst) {
+                    bool isBoss = (es.monsterType == "Boss" || es.monsterType == "RaidBoss");
+                    gauntletManager_.notifyMobKill(static_cast<uint32_t>(clientId),
+                                                    es.level, isBoss, inst->divisionId);
+                }
+            }
+
+            LOG_INFO("Server", "Client %d killed mob '%s' with skill '%s'",
+                     clientId, es.enemyName.c_str(), msg.skillId.c_str());
+        }
+
+        // Handle player death (PvP)
+        auto* targetCharStats = target->getComponent<CharacterStatsComponent>();
+        if (targetCharStats && targetCharStats->stats.isDead) {
+            // Find which client owns the killed player entity
+            uint16_t targetClientId = 0;
+            server_.connections().forEach([&](const ClientConnection& conn) {
+                if (conn.playerEntityId == msg.targetId) {
+                    targetClientId = conn.clientId;
+                }
+            });
+            if (targetClientId != 0) {
+                SvDeathNotifyMsg deathMsg;
+                deathMsg.deathSource = 1;  // PvP
+                deathMsg.respawnTimer = 5.0f;
+                deathMsg.xpLost = 0;
+                deathMsg.honorLost = 0;
+
+                uint8_t deathBuf[32];
+                ByteWriter dw(deathBuf, sizeof(deathBuf));
+                deathMsg.write(dw);
+                server_.sendTo(targetClientId, Channel::ReliableOrdered,
+                               PacketType::SvDeathNotify, deathBuf, dw.size());
+            }
+        }
+    }
+
+    // Send updated player state (HP/MP/Fury may have changed)
+    sendPlayerState(clientId);
+
+    LOG_INFO("Server", "Client %d used skill '%s' rank %d -> dmg=%d kill=%d miss=%d",
+             clientId, msg.skillId.c_str(), msg.rank, damage, isKill ? 1 : 0,
+             result.wasMiss);
 }
 
 void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
