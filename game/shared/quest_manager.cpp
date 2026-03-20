@@ -192,6 +192,45 @@ void QuestManager::onDeliverAttempt(const std::string& npcId, Inventory& invento
     }
 }
 
+// ============================================================================
+// QuestManager — Client-side state updates
+// ============================================================================
+void QuestManager::markCompleted(uint32_t questId) {
+    activeQuests_.erase(
+        std::remove_if(activeQuests_.begin(), activeQuests_.end(),
+            [questId](const ActiveQuest& aq) { return aq.questId == questId; }),
+        activeQuests_.end()
+    );
+    if (!hasCompletedQuest(questId)) {
+        completedQuestIds_.push_back(questId);
+    }
+    if (onQuestCompleted) onQuestCompleted(questId);
+}
+
+void QuestManager::setProgress(uint32_t questId, int32_t currentCount, int32_t targetCount) {
+    for (auto& aq : activeQuests_) {
+        if (aq.questId != questId) continue;
+        const auto* def = QuestData::getQuest(questId);
+        if (!def) return;
+        // Match objective by requiredCount == targetCount
+        for (size_t i = 0; i < def->objectives.size() && i < aq.objectiveProgress.size(); ++i) {
+            if (def->objectives[i].requiredCount == static_cast<uint16_t>(targetCount)) {
+                aq.objectiveProgress[i] = static_cast<uint16_t>(currentCount);
+                if (onObjectiveProgress) {
+                    onObjectiveProgress(questId, static_cast<int>(i),
+                        static_cast<uint16_t>(currentCount), static_cast<uint16_t>(targetCount));
+                }
+                return;
+            }
+        }
+        // Fallback: update first objective
+        if (!aq.objectiveProgress.empty()) {
+            aq.objectiveProgress[0] = static_cast<uint16_t>(currentCount);
+        }
+        return;
+    }
+}
+
 void QuestManager::progressObjectives(ObjectiveType type, const std::string& targetId) {
     for (auto& aq : activeQuests_) {
         const auto* def = QuestData::getQuest(aq.questId);

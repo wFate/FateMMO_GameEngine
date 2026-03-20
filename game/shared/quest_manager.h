@@ -98,6 +98,10 @@ public:
     void onPvPKill();
     void onDeliverAttempt(const std::string& npcId, Inventory& inventory);
 
+    // ---- Client-side state updates (from server messages) ------------------
+    void markCompleted(uint32_t questId);
+    void setProgress(uint32_t questId, int32_t currentCount, int32_t targetCount);
+
     // ---- Serialization accessors -------------------------------------------
     [[nodiscard]] const std::vector<uint32_t>& getCompletedQuestIds() const { return completedQuestIds_; }
     void setSerializedState(std::vector<uint32_t> completed, std::vector<ActiveQuest> active) {
