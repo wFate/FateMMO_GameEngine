@@ -27,6 +27,8 @@ elseif(UNIX)
     add_compile_definitions(FATEMMO_PLATFORM_LINUX)
 endif()
 
+option(FATEMMO_BUILD_MOBILE "Build for mobile (iOS/Android)" OFF)
+
 # =============================================================================
 # Dependencies via FetchContent (zero external installs required)
 # =============================================================================
@@ -133,35 +135,44 @@ option(TRACY_ON_DEMAND "Enable Tracy on-demand mode" ON)
 option(ENGINE_MEMORY_DEBUG "Enable allocator debug visualization panels" ON)
 FetchContent_MakeAvailable(tracy)
 
-# OpenSSL (TLS for auth) — installed via vcpkg
-find_package(OpenSSL REQUIRED)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
+    # OpenSSL (TLS for auth) — installed via vcpkg
+    find_package(OpenSSL REQUIRED)
 
-# PostgreSQL client (libpq — required by libpqxx) — installed via vcpkg
-find_package(PostgreSQL REQUIRED)
+    # PostgreSQL client (libpq — required by libpqxx) — installed via vcpkg
+    find_package(PostgreSQL REQUIRED)
 
-# libpqxx (C++ PostgreSQL client, wraps libpq)
-FetchContent_Declare(
-    libpqxx
-    GIT_REPOSITORY https://github.com/jtv/libpqxx.git
-    GIT_TAG        7.9.2
-    GIT_SHALLOW    TRUE
-)
-set(SKIP_BUILD_TEST ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(libpqxx)
+    # libpqxx (C++ PostgreSQL client, wraps libpq)
+    FetchContent_Declare(
+        libpqxx
+        GIT_REPOSITORY https://github.com/jtv/libpqxx.git
+        GIT_TAG        7.9.2
+        GIT_SHALLOW    TRUE
+    )
+    set(SKIP_BUILD_TEST ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(libpqxx)
 
-# bcrypt (password hashing — OpenBSD implementation)
-file(GLOB BCRYPT_SOURCES third_party/bcrypt/*.c)
-if(BCRYPT_SOURCES)
-    add_library(bcrypt_lib STATIC ${BCRYPT_SOURCES})
-    target_include_directories(bcrypt_lib PUBLIC third_party/bcrypt)
-    if(MSVC)
-        target_compile_options(bcrypt_lib PRIVATE /wd4100 /wd4244 /wd4267 /wd4996)
+    # bcrypt (password hashing — OpenBSD implementation)
+    file(GLOB BCRYPT_SOURCES third_party/bcrypt/*.c)
+    if(BCRYPT_SOURCES)
+        add_library(bcrypt_lib STATIC ${BCRYPT_SOURCES})
+        target_include_directories(bcrypt_lib PUBLIC third_party/bcrypt)
+        if(MSVC)
+            target_compile_options(bcrypt_lib PRIVATE /wd4100 /wd4244 /wd4267 /wd4996)
+        endif()
     endif()
 endif()
 
-# Find OpenGL (cross-platform)
-if(WIN32)
+# Find OpenGL / OpenGL ES (cross-platform)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # iOS uses OpenGL ES 3.0 framework
+    find_library(OPENGLES_LIB OpenGLES)
+    set(OPENGL_LIB ${OPENGLES_LIB})
+    add_compile_definitions(FATEMMO_GLES)
+elseif(WIN32)
     set(OPENGL_LIB opengl32)
+elseif(APPLE)
+    find_library(OPENGL_LIB OpenGL)
 else()
     find_library(OPENGL_LIB GL PATHS /usr/lib/x86_64-linux-gnu /usr/lib)
     if(NOT OPENGL_LIB)
@@ -210,9 +221,11 @@ target_link_libraries(fate_engine PUBLIC
     imgui_lib
     ${OPENGL_LIB}
     TracyClient
-    OpenSSL::SSL OpenSSL::Crypto
     spdlog::spdlog
 )
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
+    target_link_libraries(fate_engine PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+endif()
 
 if(WIN32)
     target_link_libraries(fate_engine PUBLIC ws2_32)
@@ -242,43 +255,66 @@ target_compile_definitions(FateEngine PRIVATE
     FATE_DEV_TLS
 )
 
-# Copy assets to build directory on every build
-add_custom_command(TARGET FateEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_CURRENT_SOURCE_DIR}/assets
-    $<TARGET_FILE_DIR:FateEngine>/assets
-)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set_target_properties(FateEngine PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.fatemmo.game"
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/ios/Info.plist.in"
+        XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "iPhone Developer"
+        XCODE_ATTRIBUTE_DEVELOPMENT_TEAM ""
+        XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
+        XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
+        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "15.0"
+        RESOURCE "${CMAKE_SOURCE_DIR}/ios/LaunchScreen.storyboard"
+    )
 
-# =============================================================================
-# Server Executable (headless, no SDL window)
-# =============================================================================
-file(GLOB_RECURSE SERVER_SOURCES server/*.cpp server/*.h)
-file(GLOB_RECURSE SERVER_SHARED_SOURCES game/shared/*.cpp)
-if(SERVER_SOURCES)
-    add_executable(FateServer ${SERVER_SOURCES} ${SERVER_SHARED_SOURCES})
-    target_link_libraries(FateServer PRIVATE fate_engine pqxx PostgreSQL::PostgreSQL bcrypt_lib OpenSSL::SSL OpenSSL::Crypto spdlog::spdlog)
-    target_include_directories(FateServer PRIVATE ${CMAKE_SOURCE_DIR})
-    if(WIN32)
-        target_link_libraries(FateServer PRIVATE winmm)
-    endif()
-    if(MSVC)
-        target_compile_definitions(FateServer PRIVATE _CRT_SECURE_NO_WARNINGS)
-        target_compile_options(FateServer PRIVATE /W4 /wd4100 /wd4201 /wd4458 /MP)
-    endif()
+    # Bundle assets into the .app
+    file(GLOB_RECURSE IOS_ASSETS "${CMAKE_SOURCE_DIR}/assets/*")
+    set_source_files_properties(${IOS_ASSETS} PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources/assets"
+    )
+    target_sources(FateEngine PRIVATE ${IOS_ASSETS})
+else()
+    # Copy assets to build directory on every build (desktop only)
+    add_custom_command(TARGET FateEngine POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:FateEngine>/assets
+    )
 endif()
 
-# =============================================================================
-# Test Executable
-# =============================================================================
-file(GLOB_RECURSE TEST_SOURCES tests/*.cpp)
-# Some tests reference game/shared code (gitignored); include if present
-file(GLOB_RECURSE GAME_SHARED_SOURCES game/shared/*.cpp)
-# Game UI sources needed by tests (touch controls, etc.)
-set(GAME_UI_TEST_SOURCES game/ui/touch_controls.cpp)
-if(TEST_SOURCES)
-    add_executable(fate_tests ${TEST_SOURCES} ${GAME_SHARED_SOURCES} ${GAME_UI_TEST_SOURCES})
-    target_link_libraries(fate_tests PRIVATE fate_engine doctest::doctest spdlog::spdlog)
-    target_include_directories(fate_tests PRIVATE ${CMAKE_SOURCE_DIR})
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
+    # =============================================================================
+    # Server Executable (headless, no SDL window)
+    # =============================================================================
+    file(GLOB_RECURSE SERVER_SOURCES server/*.cpp server/*.h)
+    file(GLOB_RECURSE SERVER_SHARED_SOURCES game/shared/*.cpp)
+    if(SERVER_SOURCES)
+        add_executable(FateServer ${SERVER_SOURCES} ${SERVER_SHARED_SOURCES})
+        target_link_libraries(FateServer PRIVATE fate_engine pqxx PostgreSQL::PostgreSQL bcrypt_lib OpenSSL::SSL OpenSSL::Crypto spdlog::spdlog)
+        target_include_directories(FateServer PRIVATE ${CMAKE_SOURCE_DIR})
+        if(WIN32)
+            target_link_libraries(FateServer PRIVATE winmm)
+        endif()
+        if(MSVC)
+            target_compile_definitions(FateServer PRIVATE _CRT_SECURE_NO_WARNINGS)
+            target_compile_options(FateServer PRIVATE /W4 /wd4100 /wd4201 /wd4458 /MP)
+        endif()
+    endif()
+
+    # =============================================================================
+    # Test Executable
+    # =============================================================================
+    file(GLOB_RECURSE TEST_SOURCES tests/*.cpp)
+    # Some tests reference game/shared code (gitignored); include if present
+    file(GLOB_RECURSE GAME_SHARED_SOURCES game/shared/*.cpp)
+    # Game UI sources needed by tests (touch controls, etc.)
+    set(GAME_UI_TEST_SOURCES game/ui/touch_controls.cpp)
+    if(TEST_SOURCES)
+        add_executable(fate_tests ${TEST_SOURCES} ${GAME_SHARED_SOURCES} ${GAME_UI_TEST_SOURCES})
+        target_link_libraries(fate_tests PRIVATE fate_engine doctest::doctest spdlog::spdlog)
+        target_include_directories(fate_tests PRIVATE ${CMAKE_SOURCE_DIR})
+    endif()
 endif()
 
 # =============================================================================
