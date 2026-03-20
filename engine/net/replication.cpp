@@ -246,6 +246,8 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
         if (mobNameplate) {
             msg.name = mobNameplate->displayName;
         }
+        msg.mobDefId = enemyStats->stats.enemyId;  // enemyId stores the mob_def_id
+        msg.isBoss   = enemyStats->stats.isBoss ? 1 : 0;
     } else if (npcComp) {
         msg.entityType = 2; // npc
         msg.name = npcComp->displayName;
