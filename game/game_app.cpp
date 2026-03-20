@@ -890,8 +890,35 @@ void GameApp::onInit() {
     };
 
     netClient_.onLootPickup = [this](const SvLootPickupMsg& msg) {
-        LOG_INFO("Client", "Picked up: %s x%d", msg.displayName.c_str(),
-                 msg.isGold ? msg.goldAmount : msg.quantity);
+        auto* scene = SceneManager::instance().currentScene();
+        if (!scene) return;
+
+        scene->world().forEach<PlayerController, InventoryComponent>(
+            [&](Entity*, PlayerController* ctrl, InventoryComponent* invComp) {
+                if (!ctrl->isLocalPlayer) return;
+
+                if (msg.isGold) {
+                    invComp->inventory.addGold(msg.goldAmount);
+                    char buf[128];
+                    std::snprintf(buf, sizeof(buf), "Picked up %d gold.", msg.goldAmount);
+                    chatUI_.addMessage(6, "[Loot]", buf, 0);
+                } else {
+                    static int lootCounter = 0;
+                    char instId[32];
+                    std::snprintf(instId, sizeof(instId), "loot_%d", ++lootCounter);
+
+                    ItemInstance item = ItemInstance::createSimple(instId, msg.itemId, msg.quantity);
+                    if (invComp->inventory.addItem(item)) {
+                        char buf[128];
+                        std::snprintf(buf, sizeof(buf), "Picked up %s x%d.",
+                                      msg.displayName.c_str(), msg.quantity);
+                        chatUI_.addMessage(6, "[Loot]", buf, 0);
+                    } else {
+                        chatUI_.addMessage(6, "[Loot]", "Inventory full!", 0);
+                    }
+                }
+            }
+        );
     };
 
     netClient_.onTradeUpdate = [this](const SvTradeUpdateMsg& msg) {
@@ -930,6 +957,83 @@ void GameApp::onInit() {
 
     netClient_.onQuestUpdate = [this](const SvQuestUpdateMsg& msg) {
         chatUI_.addMessage(6, "[Quest]", msg.message, 0);
+
+        auto* scene = SceneManager::instance().currentScene();
+        if (!scene) return;
+
+        scene->world().forEach<PlayerController, QuestComponent>(
+            [&](Entity* entity, PlayerController* ctrl, QuestComponent* qc) {
+                if (!ctrl->isLocalPlayer) return;
+
+                uint32_t questId = 0;
+                try { questId = static_cast<uint32_t>(std::stoul(msg.questId)); }
+                catch (...) { return; }
+
+                switch (msg.updateType) {
+                    case 0: { // accepted
+                        auto* sc = entity->getComponent<CharacterStatsComponent>();
+                        int level = sc ? sc->stats.level : 1;
+                        qc->quests.acceptQuest(questId, level);
+                        break;
+                    }
+                    case 1: // progressUpdate
+                        qc->quests.setProgress(questId, msg.currentCount, msg.targetCount);
+                        break;
+                    case 2: // completed
+                        qc->quests.markCompleted(questId);
+                        break;
+                    case 3: // abandoned
+                        qc->quests.abandonQuest(questId);
+                        break;
+                    default: break;
+                }
+            }
+        );
+    };
+
+    netClient_.onDeathNotify = [this](const SvDeathNotifyMsg& msg) {
+        auto* scene = SceneManager::instance().currentScene();
+        if (!scene) return;
+
+        scene->world().forEach<PlayerController, CharacterStatsComponent>(
+            [&](Entity*, PlayerController* ctrl, CharacterStatsComponent* sc) {
+                if (!ctrl->isLocalPlayer) return;
+                sc->stats.isDead = true;
+                sc->stats.currentHP = 0;
+                sc->stats.respawnTimeRemaining = msg.respawnTimer;
+            }
+        );
+
+        deathOverlayUI_.onDeath(msg.xpLost, msg.honorLost, msg.respawnTimer);
+        LOG_INFO("Client", "You died! Lost %d XP, %d Honor", msg.xpLost, msg.honorLost);
+    };
+
+    netClient_.onRespawn = [this](const SvRespawnMsg& msg) {
+        auto* scene = SceneManager::instance().currentScene();
+        if (!scene) return;
+
+        scene->world().forEach<PlayerController, CharacterStatsComponent>(
+            [&](Entity* entity, PlayerController* ctrl, CharacterStatsComponent* sc) {
+                if (!ctrl->isLocalPlayer) return;
+                sc->stats.respawn();
+                // Restore visual
+                auto* spr = entity->getComponent<SpriteComponent>();
+                if (spr) spr->tint = Color::white();
+                auto* t = entity->getComponent<Transform>();
+                if (t) {
+                    t->rotation = 0.0f;
+                    t->position = {msg.spawnX, msg.spawnY};
+                }
+                auto* anim = entity->getComponent<Animator>();
+                if (anim) anim->play("idle");
+            }
+        );
+
+        LOG_INFO("Client", "Respawned at (%.0f, %.0f)", msg.spawnX, msg.spawnY);
+    };
+
+    deathOverlayUI_.onRespawnRequested = [this](uint8_t respawnType) {
+        netClient_.sendRespawn(respawnType);
     };
 
     netClient_.onZoneTransition = [this](const SvZoneTransitionMsg& msg) {
@@ -1843,6 +1947,20 @@ void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
 
             // Chat UI (positioned relative to viewport)
             chatUI_.render();
+
+            // Death overlay (renders on top when dead)
+            {
+                auto* scene = SceneManager::instance().currentScene();
+                if (scene) {
+                    Entity* localPlayer = nullptr;
+                    scene->world().forEach<PlayerController>(
+                        [&](Entity* e, PlayerController* ctrl) {
+                            if (ctrl->isLocalPlayer) localPlayer = e;
+                        }
+                    );
+                    deathOverlayUI_.render(localPlayer);
+                }
+            }
         }
     }
 

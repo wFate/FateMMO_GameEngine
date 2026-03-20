@@ -11,6 +11,7 @@
 #include "engine/net/auth_client.h"
 #include "game/ui/login_screen.h"
 #include "game/ui/chat_ui.h"
+#include "game/ui/death_overlay_ui.h"
 #include "game/ui/game_viewport.h"
 #include <memory>
 #include <unordered_map>
@@ -50,6 +51,7 @@ private:
     NPCDialogueUI npcDialogueUI_;
     QuestLogUI questLogUI_;
     ChatUI chatUI_;
+    DeathOverlayUI deathOverlayUI_;
     NetClient netClient_;
     InterpolationManager ghostInterpolation_;
     std::unordered_map<uint64_t, EntityHandle> ghostEntities_; // PersistentId -> local ghost
