@@ -2581,6 +2581,27 @@ void Editor::drawInspector() {
             }
         }
 
+        // Combat Controller
+        if (auto* cc = selectedEntity_->getComponent<CombatControllerComponent>()) {
+            bool open = ImGui::CollapsingHeader("Combat Controller");
+            if (ImGui::BeginPopupContextItem("##rmCombatCtrl")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<CombatControllerComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<CombatControllerComponent>()) {
+                ImGui::DragFloat("Attack Cooldown##cc", &cc->baseAttackCooldown, 0.05f, 0.1f, 10.0f, "%.2f sec");
+                ImGui::DragFloat("CD Remaining##cc", &cc->attackCooldownRemaining, 0.05f, 0.0f, 10.0f, "%.2f sec");
+                ImGui::Checkbox("Show Attack Range##cc", &cc->showAttackRange);
+                // Show current range for reference
+                auto* statsComp = selectedEntity_->getComponent<CharacterStatsComponent>();
+                if (statsComp) {
+                    bool isMage = (statsComp->stats.classDef.classType == ClassType::Mage);
+                    float range = isMage ? 7.0f : statsComp->stats.classDef.attackRange;
+                    ImGui::Text("Range: %.0f tiles (%.0f px)", range, range * Coords::TILE_SIZE);
+                }
+            }
+        }
+
         // Enemy Stats
         if (auto* es = selectedEntity_->getComponent<EnemyStatsComponent>()) {
             bool open = ImGui::CollapsingHeader("Enemy Stats");
