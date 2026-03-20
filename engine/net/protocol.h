@@ -192,8 +192,10 @@ struct SvEntityUpdateMsg {
     uint8_t animFrame = 0;     // bit 1
     uint8_t flipX     = 0;     // bit 2 (bool as u8)
     int32_t currentHP = 0;     // bit 3
+    uint8_t updateSeq = 0;      // monotonic per-entity, for stale update rejection
 
     void write(ByteWriter& w) const {
+        w.writeU8(updateSeq);
         detail::writeU64(w, persistentId);
         w.writeU16(fieldMask);
         if (fieldMask & (1 << 0)) w.writeVec2(position);
@@ -204,6 +206,7 @@ struct SvEntityUpdateMsg {
 
     static SvEntityUpdateMsg read(ByteReader& r) {
         SvEntityUpdateMsg m;
+        m.updateSeq    = r.readU8();
         m.persistentId = detail::readU64(r);
         m.fieldMask    = r.readU16();
         if (m.fieldMask & (1 << 0)) m.position  = r.readVec2();

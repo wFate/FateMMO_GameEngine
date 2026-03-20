@@ -90,8 +90,8 @@ TEST_CASE("SvEntityUpdateMsg partial fields (position + HP only)") {
     src.write(w);
     CHECK_FALSE(w.overflowed());
 
-    // Expected size: 8 (persistentId) + 2 (fieldMask) + 8 (Vec2) + 4 (i32) = 22
-    CHECK(w.size() == 22);
+    // Expected size: 1 (updateSeq) + 8 (persistentId) + 2 (fieldMask) + 8 (Vec2) + 4 (i32) = 23
+    CHECK(w.size() == 23);
 
     fate::ByteReader r(buf, w.size());
     auto dst = fate::SvEntityUpdateMsg::read(r);
@@ -164,4 +164,27 @@ TEST_CASE("SvPlayerStateMsg round-trip with large int64 values") {
     CHECK(dst.currentXP   == 1000000000LL);
     CHECK(dst.gold        == 9876543210LL);
     CHECK(dst.level       == 99);
+}
+
+TEST_CASE("SvEntityUpdateMsg round-trip with updateSeq") {
+    uint8_t buf[256];
+    fate::SvEntityUpdateMsg src;
+    src.persistentId = 0xCAFE;
+    src.fieldMask    = 0x000F;
+    src.position     = {10.0f, 20.0f};
+    src.animFrame    = 3;
+    src.flipX        = 1;
+    src.currentHP    = 500;
+    src.updateSeq    = 42;
+
+    fate::ByteWriter w(buf, sizeof(buf));
+    src.write(w);
+    CHECK_FALSE(w.overflowed());
+
+    fate::ByteReader r(buf, w.size());
+    auto dst = fate::SvEntityUpdateMsg::read(r);
+    CHECK_FALSE(r.overflowed());
+    CHECK(dst.updateSeq == 42);
+    CHECK(dst.position.x == doctest::Approx(10.0f));
+    CHECK(dst.currentHP == 500);
 }
