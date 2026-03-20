@@ -381,6 +381,26 @@ pvpDamage = baseDamage * 0.05
 **Quest Manager:**
 - Added `markCompleted(questId)` and `setProgress(questId, currentCount, targetCount)` for client-side state sync from server messages
 
+**Server-Side Death/Respawn:**
+- `CmdRespawn` handler validates timer, Phoenix Down, determines position from DB scene cache
+- Town respawn (type 0) sends `SvZoneTransitionMsg` to load Town scene (not just same-scene teleport)
+- Map spawn (type 1) teleports to `default_spawn_x`/`default_spawn_y` from `scenes` table
+- Phoenix Down (type 2) respawns at death position, consumes item server-side
+- Reconnect while dead: server sends `SvDeathNotifyMsg` with timer=0 on reconnect if `is_dead` in DB
+- DB migration 004: `default_spawn_x`/`default_spawn_y` columns on `scenes` table (auto-migrated on server start)
+
+**Server Bug Fixes:**
+- Duplicate login crash: `activeAccountSessions_.erase(existing)` used invalidated iterator after `onClientDisconnected()` — undefined behavior causing server exit. Fixed by erasing before disconnect callback.
+- Rubber-banding after respawn/zone transition: `lastValidPositions_` now updated on any teleport
+- Zone transitions now send DB-configured spawn positions instead of hardcoded (0,0)
+- Triple Disconnect send: client sends 3x unreliable Disconnect before socket close
+
+**Quick Fixes:**
+- Floating damage text converted to ImGui ForegroundDrawList (was SDF/SpriteBatch, invisible behind editor)
+- Loot pickup wired to InventoryUI (onLootPickup → addItem/addGold + chat notification)
+- Quest updates wired to QuestLogUI (onQuestUpdate → QuestComponent state sync)
+- `npc_default.png` placeholder sprite created (32x48, silences startup errors)
+
 ### March 18, 2026 - Loot Drop, Ground Items, Boss Spawning, Starter Equipment
 
 **Server-authoritative loot pipeline ported from C# prototype + starter gear on registration:**
