@@ -352,6 +352,34 @@ pvpDamage = baseDamage * 0.05
 
 ## Changelog
 
+### March 20, 2026 - Server Mob Spawning, Scene-Aware Combat, Combat Event HP Sync
+
+**Server-side mob spawning (DB-driven):**
+- `SpawnZoneCache` loads `spawn_zones` table (Migration 005), `ServerSpawnManager` creates mob entities with all stats from `MobDefCache`
+- `MobAISystem` added to server World — mobs roam, chase, attack players
+- `SvEntityEnterMsg` extended with `mobDefId` + `isBoss` for client sprite/nameplate
+- Client `createGhostMob` enhanced — loads `mob_<mobDefId>.png`, creates EnemyStatsComponent + MobNameplateComponent
+- Client `SpawnSystem` disabled when connected (server replicates mobs)
+- Mob AI radii converted from tiles→pixels (DB stores tiles, AI uses pixels)
+- 6 placeholder sprites generated for WhisperingWoods mobs
+
+**Scene-aware combat:**
+- `CharacterStats::currentScene` set on connect and zone transition
+- `EnemyStats::sceneId` set from spawn zone config
+- MobAISystem filters nearest player by scene match before targeting
+- `resolveAttack()` validates scene match as safety net
+- Prevents cross-scene attacks (e.g., WhisperingWoods mobs attacking Town players)
+
+**Combat event HP sync:**
+- Client `onCombatEvent` now applies damage to local player HP immediately
+- Previously only showed floating text — HP stayed unchanged, allowing portal traversal while at 0 HP
+- Now calls `die(DeathSource::PvE)` when HP reaches 0, blocking movement instantly
+
+**Attack range visualization:**
+- `showAttackRange` toggle on CombatControllerComponent
+- Draws cyan circle in viewport showing attack range in pixels
+- Combat Controller section added to editor inspector
+
 ### March 20, 2026 - PvP Combat, Scene Snapshots, Skill Cooldown Fix
 
 **PvP auto-attack targeting:**
