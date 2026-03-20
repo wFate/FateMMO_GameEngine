@@ -26,8 +26,6 @@ void SkillBarUI::draw(World* world) {
         }
     );
 
-    if (playerDead) ImGui::BeginDisabled();
-
     float slotSize = 40.0f;
     float spacing = 4.0f;
     float panelW = slotSize + 16.0f;  // slot + padding
@@ -57,9 +55,10 @@ void SkillBarUI::draw(World* world) {
         ImGui::End();
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar(2);
-        if (playerDead) ImGui::EndDisabled();
         return;
     }
+
+    if (playerDead) ImGui::BeginDisabled();
 
     // Page up arrow
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.22f, 0.9f));
