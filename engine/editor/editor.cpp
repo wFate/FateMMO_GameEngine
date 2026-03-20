@@ -44,6 +44,17 @@
 
 namespace fs = std::filesystem;
 
+namespace {
+    bool isValidAssetName(const char* name) {
+        if (!name || name[0] == '\0') return false;
+        for (const char* p = name; *p; ++p) {
+            if (*p == '/' || *p == '\\') return false;
+        }
+        if (strstr(name, "..") != nullptr) return false;
+        return true;
+    }
+} // anonymous namespace
+
 namespace fate {
 
 // ============================================================================
@@ -342,9 +353,13 @@ void Editor::drawDockSpace() {
                 static char saveNameBuf[64] = "WhisperingWoods";
                 ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
                 if (ImGui::Button("Save")) {
-                    std::string path = std::string("assets/scenes/") + saveNameBuf + ".json";
-                    saveScene(dockWorld_, path);
-                    ImGui::CloseCurrentPopup();
+                    if (isValidAssetName(saveNameBuf)) {
+                        std::string path = std::string("assets/scenes/") + saveNameBuf + ".json";
+                        saveScene(dockWorld_, path);
+                        ImGui::CloseCurrentPopup();
+                    } else {
+                        LOG_WARN("Editor", "Invalid scene name: %s", saveNameBuf);
+                    }
                 }
                 ImGui::EndMenu();
             }
@@ -1880,7 +1895,7 @@ void Editor::drawMenuBar(World* world) {
         }
         ImGui::InputText("Name", prefabNameBuf, sizeof(prefabNameBuf));
         ImGui::Spacing();
-        if (ImGui::Button("Save", ImVec2(120, 0)) && prefabNameBuf[0] != '\0') {
+        if (ImGui::Button("Save", ImVec2(120, 0)) && isValidAssetName(prefabNameBuf)) {
             PrefabLibrary::instance().save(prefabNameBuf, selectedEntity_);
             prefabNameBuf[0] = '\0';
             ImGui::CloseCurrentPopup();
