@@ -1248,17 +1248,8 @@ void Editor::drawAssetBrowser(World* world, Camera* camera) {
                             SDL_SetClipboardText(path.c_str());
                         }
                         if (ImGui::MenuItem("Delete Prefab")) {
-                            // Delete from runtime dir
-                            std::string path = "assets/prefabs/" + pname + ".json";
-                            if (fs::exists(path)) fs::remove(path);
-                            // Delete from source dir if set
-                            auto& plib = PrefabLibrary::instance();
-                            // The library knows both paths, just reload
-                            lib.loadAll();
-                            LOG_INFO("Editor", "Deleted prefab: %s", pname.c_str());
-                            ImGui::EndPopup();
-                            ImGui::PopID();
-                            break; // list changed, stop iterating
+                            pendingDeletePrefab_ = true;
+                            pendingDeletePrefabName_ = pname;
                         }
                         ImGui::EndPopup();
                     }
@@ -1275,6 +1266,29 @@ void Editor::drawAssetBrowser(World* world, Camera* camera) {
                     }
 
                     ImGui::PopID();
+                }
+
+                if (pendingDeletePrefab_) {
+                    ImGui::OpenPopup("Delete Prefab?");
+                    pendingDeletePrefab_ = false;
+                }
+                if (ImGui::BeginPopupModal("Delete Prefab?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                    ImGui::Text("Delete prefab '%s'?", pendingDeletePrefabName_.c_str());
+                    ImGui::Separator();
+                    if (ImGui::Button("Delete", ImVec2(120, 0))) {
+                        std::string path = "assets/prefabs/" + pendingDeletePrefabName_ + ".json";
+                        if (fs::exists(path)) fs::remove(path);
+                        PrefabLibrary::instance().loadAll();
+                        LOG_INFO("Editor", "Deleted prefab: %s", pendingDeletePrefabName_.c_str());
+                        pendingDeletePrefabName_.clear();
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+                        pendingDeletePrefabName_.clear();
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::EndPopup();
                 }
 
                 if (prefabNames.empty()) {
