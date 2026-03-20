@@ -48,8 +48,7 @@ bool ServerApp::init(uint16_t port) {
         onPacketReceived(id, type, r);
     };
 
-    // TODO: Add MobAISystem + SpawnSystem once server has DB-driven spawn zones
-    // Currently mobs only exist in client world — server needs its own mob entities first
+    world_.addSystem<MobAISystem>();
 
     // Register existing mobs for replication
     world_.forEach<Transform, EnemyStatsComponent>([&](Entity* entity, Transform*, EnemyStatsComponent*) {
@@ -104,10 +103,14 @@ bool ServerApp::init(uint16_t port) {
     mobDefCache_.initialize(gameDbConn_.connection());
     skillDefCache_.initialize(gameDbConn_.connection());
     sceneCache_.initialize(gameDbConn_.connection());
+    if (!spawnZoneCache_.initialize(gameDbConn_.connection())) {
+        LOG_WARN("Server", "Failed to load spawn zones");
+    }
     LOG_INFO("Server", "Caches loaded: %zu items, %zu loot tables, %d mobs, %d skills (%d ranks), %d scenes",
              itemDefCache_.size(), lootTableCache_.tableCount(),
              mobDefCache_.count(), skillDefCache_.skillCount(), skillDefCache_.rankCount(),
              sceneCache_.count());
+    LOG_INFO("Server", "Spawn zones: %d rules", spawnZoneCache_.count());
 
     // Initialize Gauntlet system
     initGauntlet();
@@ -185,6 +188,9 @@ void ServerApp::run() {
         };
     }
 
+    // Spawn server-side mobs from DB spawn zones
+    spawnManager_.initialize("WhisperingWoods", world_, replication_, spawnZoneCache_, mobDefCache_);
+
     auto lastTick = std::chrono::high_resolution_clock::now();
 
 #ifdef _WIN32
@@ -236,6 +242,7 @@ void ServerApp::tick(float dt) {
 
     // 3. World update (systems)
     world_.update(dt);
+    spawnManager_.tick(dt, gameTime_, world_, replication_);
 
     // Despawn expired ground items
     {

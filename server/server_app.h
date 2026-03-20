@@ -26,6 +26,8 @@
 #include "game/shared/gauntlet.h"
 #include "server/cache/item_definition_cache.h"
 #include "server/cache/loot_table_cache.h"
+#include "server/db/spawn_zone_cache.h"
+#include "server/server_spawn_manager.h"
 #include "engine/net/auth_protocol.h"
 #include <cstdint>
 #include <unordered_map>
@@ -98,6 +100,10 @@ private:
 
     // Gauntlet event system
     GauntletManager gauntletManager_;
+
+    // Spawn system
+    SpawnZoneCache spawnZoneCache_;
+    ServerSpawnManager spawnManager_;
 
     // Session tracking
     std::unordered_map<AuthToken, PendingSession, AuthTokenHash> pendingSessions_;
