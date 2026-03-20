@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include <string>
 #include <algorithm>
+#include <functional>
 
 namespace fate {
 
@@ -28,6 +29,9 @@ public:
 
     // Draw the skill bar (call every frame)
     void draw(World* world);
+
+    // Callback fired when player clicks a skill button (wired by GameApp)
+    std::function<void(const std::string& skillId, int rank)> onSkillActivated;
 
     static constexpr int SLOTS_PER_PAGE = 5;
     static constexpr int TOTAL_PAGES = 4;

@@ -1233,6 +1233,29 @@ void GameApp::onInit() {
         }
     };
 
+    // --- Skill bar activation callback ---
+    SkillBarUI::instance().onSkillActivated = [this](const std::string& skillId, int rank) {
+        if (!netClient_.isConnected()) return;
+
+        // Find target PersistentId from combat system's current target
+        uint64_t targetPid = 0;
+        if (combatSystem_ && combatSystem_->hasTarget()) {
+            EntityId targetEid = combatSystem_->getTargetEntityId();
+            // Reverse-lookup PersistentId from ghostEntities_
+            for (const auto& [pid, handle] : ghostEntities_) {
+                Entity* ghost = nullptr;
+                auto* scene = SceneManager::instance().currentScene();
+                if (scene) ghost = scene->world().getEntity(handle);
+                if (ghost && ghost->id() == targetEid) {
+                    targetPid = pid;
+                    break;
+                }
+            }
+        }
+
+        netClient_.sendUseSkill(skillId, static_cast<uint8_t>(rank), targetPid);
+    };
+
     netClient_.onZoneTransition = [this](const SvZoneTransitionMsg& msg) {
         LOG_INFO("Client", "Zone transition to '%s' at (%.1f, %.1f)",
                  msg.targetScene.c_str(), msg.spawnX, msg.spawnY);

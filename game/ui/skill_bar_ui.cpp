@@ -188,7 +188,16 @@ void SkillBarUI::drawSkillSlot(SkillManager* skills, int pageSlotIndex, float si
     }
 
     ImVec2 slotScreenPos = ImGui::GetCursorScreenPos();
-    ImGui::Button(label, ImVec2(size, size));
+    bool clicked = ImGui::Button(label, ImVec2(size, size));
+
+    // Left-click activates the skill (if assigned, not on cooldown)
+    if (clicked && hasSkill && !onCooldown && onSkillActivated) {
+        const LearnedSkill* ls = skills->getLearnedSkill(skillId);
+        int rank = ls ? ls->effectiveRank() : 1;
+        if (rank > 0) {
+            onSkillActivated(skillId, rank);
+        }
+    }
 
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(4);

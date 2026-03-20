@@ -299,6 +299,7 @@ public:
     // Target info accessors (for HUD)
     // ------------------------------------------------------------------
     bool hasTarget() const { return currentTargetId_ != INVALID_ENTITY; }
+    EntityId getTargetEntityId() const { return currentTargetId_; }
 
     std::string getTargetName() const {
         if (!hasTarget() || !world_) return "";
