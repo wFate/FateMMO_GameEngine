@@ -3,6 +3,7 @@
 #include "game/components/game_components.h"
 #include "imgui.h"
 #include <cstdio>
+#include <cmath>
 
 namespace fate {
 
@@ -11,6 +12,38 @@ void DeathOverlayUI::onDeath(int32_t xpLost, int32_t honorLost, float respawnTim
     countdown_ = respawnTimer;
     xpLost_ = xpLost;
     honorLost_ = honorLost;
+}
+
+// Helper: draw centered text on ForegroundDrawList, returns Y advance
+static float drawCenteredText(ImDrawList* dl, const char* text, float cx, float y,
+                              ImU32 col, ImFont* font, float fontSize) {
+    ImVec2 sz = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, text);
+    dl->AddText(font, fontSize, ImVec2(cx - sz.x * 0.5f, y), col, text);
+    return sz.y + 4.0f;
+}
+
+// Helper: draw a button on ForegroundDrawList, returns true if clicked
+static bool drawFgButton(ImDrawList* dl, const char* label, ImVec2 pos, ImVec2 size,
+                          ImU32 bgCol, ImU32 hoverCol, ImU32 textCol,
+                          ImFont* font, float fontSize, bool enabled) {
+    ImVec2 min = pos;
+    ImVec2 max = ImVec2(pos.x + size.x, pos.y + size.y);
+
+    bool hovered = enabled && ImGui::IsMouseHoveringRect(min, max);
+    bool clicked = hovered && ImGui::IsMouseClicked(0);
+
+    ImU32 bg = (hovered && enabled) ? hoverCol : bgCol;
+    if (!enabled) bg = IM_COL32(40, 40, 50, 180);
+
+    dl->AddRectFilled(min, max, bg, 4.0f);
+    dl->AddRect(min, max, IM_COL32(80, 80, 100, 200), 4.0f);
+
+    ImVec2 textSz = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, label);
+    dl->AddText(font, fontSize,
+        ImVec2(pos.x + (size.x - textSz.x) * 0.5f, pos.y + (size.y - textSz.y) * 0.5f),
+        enabled ? textCol : IM_COL32(120, 120, 120, 180), label);
+
+    return clicked && enabled;
 }
 
 void DeathOverlayUI::render(Entity* player) {
@@ -34,104 +67,83 @@ void DeathOverlayUI::render(Entity* player) {
         if (countdown_ < 0.0f) countdown_ = 0.0f;
     }
 
-    // Panel sizing and positioning via GameViewport
+    // Render entirely on ForegroundDrawList so it layers above nameplates
+    auto* dl = ImGui::GetForegroundDrawList();
+    ImFont* font = ImGui::GetFont();
+    float fontSize = font->FontSize;
+
     float panelW = 300.0f;
     float panelH = 220.0f;
-    ImVec2 center(GameViewport::centerX(), GameViewport::centerY());
+    float cx = GameViewport::centerX();
+    float cy = GameViewport::centerY();
+    ImVec2 panelMin(cx - panelW * 0.5f, cy - panelH * 0.5f);
+    ImVec2 panelMax(cx + panelW * 0.5f, cy + panelH * 0.5f);
 
-    ImGui::SetNextWindowPos(ImVec2(center.x - panelW * 0.5f, center.y - panelH * 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(panelW, panelH));
+    // Panel background
+    dl->AddRectFilled(panelMin, panelMax, IM_COL32(13, 5, 5, 217), 8.0f);
+    dl->AddRect(panelMin, panelMax, IM_COL32(128, 25, 25, 204), 8.0f);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.02f, 0.02f, 0.85f));
-    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.5f, 0.1f, 0.1f, 0.8f));
-
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-                             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNav;
-
-    if (!ImGui::Begin("##DeathOverlay", nullptr, flags)) {
-        ImGui::End();
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar();
-        return;
-    }
+    float y = panelMin.y + 14.0f;
 
     // "You have died."
-    ImVec2 titleSize = ImGui::CalcTextSize("You have died.");
-    ImGui::SetCursorPosX((panelW - titleSize.x) * 0.5f);
-    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "You have died.");
-    ImGui::Spacing();
+    y += drawCenteredText(dl, "You have died.", cx, y, IM_COL32(255, 77, 77, 255), font, fontSize * 1.1f);
+    y += 4.0f;
 
     // Penalty display
     if (xpLost_ > 0) {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "Lost %d XP", xpLost_);
-        ImVec2 sz = ImGui::CalcTextSize(buf);
-        ImGui::SetCursorPosX((panelW - sz.x) * 0.5f);
-        ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "%s", buf);
+        y += drawCenteredText(dl, buf, cx, y, IM_COL32(255, 153, 77, 255), font, fontSize);
     }
     if (honorLost_ > 0) {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "Lost %d Honor", honorLost_);
-        ImVec2 sz = ImGui::CalcTextSize(buf);
-        ImGui::SetCursorPosX((panelW - sz.x) * 0.5f);
-        ImGui::TextColored(ImVec4(0.8f, 0.4f, 0.8f, 1.0f), "%s", buf);
+        y += drawCenteredText(dl, buf, cx, y, IM_COL32(204, 102, 204, 255), font, fontSize);
     }
-
-    ImGui::Spacing();
 
     // Countdown
     bool timerReady = countdown_ <= 0.0f;
     if (!timerReady) {
         char buf[48];
         std::snprintf(buf, sizeof(buf), "Respawn available in %d...", (int)countdown_ + 1);
-        ImVec2 sz = ImGui::CalcTextSize(buf);
-        ImGui::SetCursorPosX((panelW - sz.x) * 0.5f);
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", buf);
+        y += drawCenteredText(dl, buf, cx, y, IM_COL32(179, 179, 179, 255), font, fontSize);
     }
 
-    ImGui::Spacing();
+    y += 8.0f;
+
     float buttonW = panelW - 40.0f;
+    float buttonH = 28.0f;
+    float buttonX = panelMin.x + 20.0f;
 
     // Respawn in Town
-    ImGui::SetCursorPosX(20.0f);
-    if (!timerReady) ImGui::BeginDisabled();
-    if (ImGui::Button("Respawn in Town", ImVec2(buttonW, 28.0f))) {
+    if (drawFgButton(dl, "Respawn in Town", ImVec2(buttonX, y), ImVec2(buttonW, buttonH),
+                     IM_COL32(50, 50, 70, 220), IM_COL32(70, 70, 100, 240), IM_COL32(255, 255, 255, 255),
+                     font, fontSize, timerReady)) {
         if (onRespawnRequested) onRespawnRequested(0);
     }
-    if (!timerReady) ImGui::EndDisabled();
+    y += buttonH + 4.0f;
 
     // Respawn at Spawn Point
-    ImGui::SetCursorPosX(20.0f);
-    if (!timerReady) ImGui::BeginDisabled();
-    if (ImGui::Button("Respawn at Spawn Point", ImVec2(buttonW, 28.0f))) {
+    if (drawFgButton(dl, "Respawn at Spawn Point", ImVec2(buttonX, y), ImVec2(buttonW, buttonH),
+                     IM_COL32(50, 50, 70, 220), IM_COL32(70, 70, 100, 240), IM_COL32(255, 255, 255, 255),
+                     font, fontSize, timerReady)) {
         if (onRespawnRequested) onRespawnRequested(1);
     }
-    if (!timerReady) ImGui::EndDisabled();
+    y += buttonH + 4.0f;
 
-    // Phoenix Down — only if player has the item
+    // Phoenix Down
     auto* invComp = player->getComponent<InventoryComponent>();
-    int phoenixCount = 0;
-    if (invComp) {
-        phoenixCount = invComp->inventory.countItem("phoenix_down");
-    }
+    int phoenixCount = invComp ? invComp->inventory.countItem("phoenix_down") : 0;
 
     if (phoenixCount > 0) {
-        ImGui::SetCursorPosX(20.0f);
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.4f, 0.1f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.5f, 0.15f, 1.0f));
         char label[64];
         std::snprintf(label, sizeof(label), "Respawn Here (Phoenix Down x%d)", phoenixCount);
-        if (ImGui::Button(label, ImVec2(buttonW, 28.0f))) {
+        if (drawFgButton(dl, label, ImVec2(buttonX, y), ImVec2(buttonW, buttonH),
+                         IM_COL32(153, 102, 25, 255), IM_COL32(179, 128, 38, 255), IM_COL32(255, 255, 255, 255),
+                         font, fontSize, true)) {
             if (onRespawnRequested) onRespawnRequested(2);
         }
-        ImGui::PopStyleColor(2);
     }
-
-    ImGui::End();
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar();
 }
 
 } // namespace fate

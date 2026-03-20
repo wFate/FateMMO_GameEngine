@@ -107,23 +107,12 @@ public:
         float gvpW = GameViewport::width();
         float gvpH = GameViewport::height();
 
-        // Check if local player is dead — skip ForegroundDrawList overlays
-        // so they don't render on top of the death respawn UI
-        bool localPlayerDead = false;
-        if (world_) {
-            world_->forEach<PlayerController, CharacterStatsComponent>(
-                [&](Entity*, PlayerController* ctrl, CharacterStatsComponent* sc) {
-                    if (ctrl->isLocalPlayer && sc->stats.isDead) localPlayerDead = true;
-                }
-            );
-        }
-
         // Clip nameplate text to the game viewport bounds
         auto* fgDL = ImGui::GetForegroundDrawList();
         fgDL->PushClipRect(
             ImVec2(gvpX, gvpY),
             ImVec2(gvpX + gvpW, gvpY + gvpH), true);
-        if (world_ && !localPlayerDead) {
+        if (world_) {
             // Player nameplates
             world_->forEach<Transform, NameplateComponent>(
                 [&](Entity* entity, Transform* t, NameplateComponent* np) {
