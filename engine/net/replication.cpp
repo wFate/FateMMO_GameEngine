@@ -37,6 +37,7 @@ void ReplicationManager::rebuildSpatialIndex(World& world) {
 void ReplicationManager::registerEntity(EntityHandle handle, PersistentId pid) {
     handleToPid_[handle.value] = pid;
     pidToHandle_[pid.value()] = handle;
+    entitySeqCounters_[handle.value] = 0;
 }
 
 void ReplicationManager::unregisterEntity(EntityHandle handle) {
@@ -45,6 +46,7 @@ void ReplicationManager::unregisterEntity(EntityHandle handle) {
         pidToHandle_.erase(it->second.value());
         handleToPid_.erase(it);
     }
+    entitySeqCounters_.erase(handle.value);
 }
 
 PersistentId ReplicationManager::getPersistentId(EntityHandle handle) const {
@@ -141,7 +143,9 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
                       writer.data(), writer.size());
 
         // Initialize last acked state
-        client.lastAckedState[pid.value()] = buildCurrentState(world, entity, pid);
+        auto state = buildCurrentState(world, entity, pid);
+        state.updateSeq = entitySeqCounters_[handle.value];
+        client.lastAckedState[pid.value()] = state;
     }
 
     // Process left entities
@@ -190,6 +194,9 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
 
         if (dirtyMask == 0) continue; // Nothing changed
 
+        uint8_t& seq = entitySeqCounters_[handle.value];
+        seq++; // wraps naturally at 255->0
+
         SvEntityUpdateMsg deltaMsg;
         deltaMsg.persistentId = pid.value();
         deltaMsg.fieldMask = dirtyMask;
@@ -197,6 +204,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         deltaMsg.animFrame = current.animFrame;
         deltaMsg.flipX = current.flipX;
         deltaMsg.currentHP = current.currentHP;
+        deltaMsg.updateSeq = seq;
 
         uint8_t buf[MAX_PAYLOAD_SIZE];
         ByteWriter writer(buf, sizeof(buf));
@@ -206,7 +214,8 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
                       writer.data(), writer.size());
 
         // Update last acked state
-        client.lastAckedState[pid.value()] = current;
+        lastIt->second = current;
+        lastIt->second.updateSeq = seq;
     }
 }
 

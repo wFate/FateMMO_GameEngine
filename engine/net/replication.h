@@ -41,6 +41,9 @@ private:
     // Spatial index for registered entities, rebuilt each tick
     SpatialHashEngine spatialIndex_{128.0f, 4096};
 
+    // Per-entity monotonic sequence counter for unreliable update ordering
+    std::unordered_map<uint32_t, uint8_t> entitySeqCounters_; // key = EntityHandle packed value
+
     // Rebuild the spatial index with current positions of all registered entities
     void rebuildSpatialIndex(World& world);
 
