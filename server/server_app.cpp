@@ -423,6 +423,102 @@ void ServerApp::consumePendingSessions() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Convert CachedSkillDef + per-rank DB rows → SkillDefinition for SkillManager
+// ---------------------------------------------------------------------------
+static SkillDefinition convertCachedToSkillDef(const CachedSkillDef& src,
+                                                 const std::vector<CachedSkillRank>& ranks) {
+    SkillDefinition def;
+    def.skillId   = src.skillId;
+    def.skillName = src.skillName;
+    def.className = src.classRequired;
+
+    // SkillType
+    if (src.skillType == "Passive") def.skillType = SkillType::Passive;
+    else                            def.skillType = SkillType::Active;
+
+    // SkillTargetType
+    if      (src.targetType == "Self")           def.targetType = SkillTargetType::Self;
+    else if (src.targetType == "SingleAlly")     def.targetType = SkillTargetType::SingleAlly;
+    else if (src.targetType == "AreaAroundSelf") def.targetType = SkillTargetType::AreaAroundSelf;
+    else if (src.targetType == "AreaAtTarget")   def.targetType = SkillTargetType::AreaAtTarget;
+    else if (src.targetType == "Cone")           def.targetType = SkillTargetType::Cone;
+    else if (src.targetType == "Line")           def.targetType = SkillTargetType::Line;
+    else                                         def.targetType = SkillTargetType::SingleEnemy;
+
+    // DamageType
+    if      (src.damageType == "Magic")     def.damageType = DamageType::Magic;
+    else if (src.damageType == "Fire")      def.damageType = DamageType::Fire;
+    else if (src.damageType == "Water")     def.damageType = DamageType::Water;
+    else if (src.damageType == "Lightning") def.damageType = DamageType::Lightning;
+    else if (src.damageType == "Poison")    def.damageType = DamageType::Poison;
+    else if (src.damageType == "Void")      def.damageType = DamageType::Void;
+    else if (src.damageType == "True")      def.damageType = DamageType::True;
+    else                                    def.damageType = DamageType::Physical;
+
+    // ResourceType
+    if (src.resourceType == "Fury") def.resourceType = ResourceType::Fury;
+    else                            def.resourceType = ResourceType::Mana;
+
+    // Scalar fields
+    def.range            = src.range;
+    def.levelRequirement = src.levelRequired;
+    def.castTime         = src.castTime;
+    def.aoeRadius        = src.aoeRadius;
+    def.canCrit          = src.canCrit;
+    def.usesHitRate      = src.usesHitRate;
+    def.furyOnHit        = src.furyOnHit;
+    def.scalesWithResource = src.scalesWithResource;
+    def.isUltimate       = src.isUltimate;
+    def.description      = src.description;
+
+    // Boolean flags
+    def.appliesBleed  = src.appliesBleed;
+    def.appliesBurn   = src.appliesBurn;
+    def.appliesPoison = src.appliesPoison;
+    def.appliesSlow   = src.appliesSlow;
+    def.appliesFreeze = src.appliesFreeze;
+
+    def.grantsInvulnerability = src.grantsInvulnerability;
+    def.grantsStunImmunity    = src.grantsStunImmunity;
+    def.grantsCritGuarantee   = src.grantsCritGuarantee;
+    def.removesDebuffs        = src.removesDebuffs;
+
+    def.teleportDistance    = src.teleportDistance;
+    def.dashDistance        = src.dashDistance;
+    def.transformDamageMult = 0.0f;
+    def.transformSpeedBonus = 0.0f;
+
+    // Per-rank arrays from DB skill_ranks rows
+    def.maxRank = static_cast<int>(ranks.size());
+    for (const auto& r : ranks) {
+        def.costPerRank.push_back(static_cast<float>(r.resourceCost));
+        def.cooldownPerRank.push_back(r.cooldownSeconds);
+        def.damagePerRank.push_back(static_cast<float>(r.damagePercent));
+        def.maxTargetsPerRank.push_back(r.maxTargets);
+        def.stunDurationPerRank.push_back(r.stunDuration);
+        def.effectDurationPerRank.push_back(r.effectDuration);
+        def.effectValuePerRank.push_back(r.effectValue);
+        def.executeThresholdPerRank.push_back(r.executeThreshold);
+        def.passiveDamageReductionPerRank.push_back(r.passiveDamageReduction);
+        def.passiveCritBonusPerRank.push_back(r.passiveCritBonus);
+        def.passiveSpeedBonusPerRank.push_back(r.passiveSpeedBonus);
+        def.passiveHPBonusPerRank.push_back(static_cast<int>(r.passiveHPBonus));
+        def.passiveStatBonusPerRank.push_back(r.passiveStatBonus);
+    }
+
+    // Fill scalar convenience fields from rank 1 if available
+    if (!ranks.empty()) {
+        def.mpCost          = ranks[0].resourceCost;
+        def.cooldownSeconds = ranks[0].cooldownSeconds;
+        def.baseDamage      = ranks[0].damagePercent;
+        def.transformDamageMult = ranks[0].transformDamageMult;
+        def.transformSpeedBonus = ranks[0].transformSpeedBonus;
+    }
+
+    return def;
+}
+
 void ServerApp::onClientConnected(uint16_t clientId) {
     auto* client = server_.connections().findById(clientId);
     if (!client) return;
@@ -575,6 +671,17 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         // Restore earned skill points; activateSkillRank above already consumed spent ones
         for (int i = 0; i < sp.totalEarned; ++i)
             skillComp->skills.grantSkillPoint();
+
+        // Register all skill definitions so executeSkill can look them up.
+        // getSkillsForClass returns class-specific + classless skills.
+        auto classDefs = skillDefCache_.getSkillsForClass(rec.class_name);
+        for (const auto* cached : classDefs) {
+            auto ranks = skillDefCache_.getRanks(cached->skillId);
+            skillComp->skills.registerSkillDefinition(
+                convertCachedToSkillDef(*cached, ranks));
+        }
+        LOG_INFO("Server", "Registered %zu skill definitions for %s (%s)",
+                 classDefs.size(), rec.character_name.c_str(), rec.class_name.c_str());
     }
 
     // Load guild membership
