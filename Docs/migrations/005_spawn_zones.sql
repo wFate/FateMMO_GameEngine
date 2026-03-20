@@ -11,3 +11,12 @@ CREATE TABLE IF NOT EXISTS spawn_zones (
     target_count INT DEFAULT 3,       -- how many of this mob to maintain
     respawn_override_seconds INT      -- NULL = use mob_definitions.respawn_seconds
 );
+
+-- WhisperingWoods: 3 sub-zones, level 1-6 progression
+INSERT INTO spawn_zones (scene_id, zone_name, center_x, center_y, radius, mob_def_id, target_count) VALUES
+('WhisperingWoods', 'Starter Meadow', 0, 0, 150, 'squirrel', 3),
+('WhisperingWoods', 'Starter Meadow', 0, 0, 150, 'giant_rat', 2),
+('WhisperingWoods', 'Forest Edge', -100, 50, 120, 'horned_hare', 2),
+('WhisperingWoods', 'Forest Edge', -100, 50, 120, 'timber_wolf', 2),
+('WhisperingWoods', 'Deep Woods', 100, -80, 100, 'grizzly_bear', 2),
+('WhisperingWoods', 'Deep Woods', 100, -80, 100, 'timber_alpha', 1);
