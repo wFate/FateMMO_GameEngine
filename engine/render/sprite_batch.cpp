@@ -532,7 +532,7 @@ void SpriteBatch::setBlendMode(BlendMode mode) {
 }
 
 void SpriteBatch::setPalette(const Color* colors, int count) {
-    count = std::min(count, 16);
+    count = (std::min)(count, 16);
     shader_.bind();
     shader_.setFloat("u_paletteSize", static_cast<float>(count));
     for (int i = 0; i < count; ++i) {

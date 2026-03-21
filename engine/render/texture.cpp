@@ -161,7 +161,7 @@ void TextureCache::requestAsyncLoad(const std::string& path) {
 
     // Insert placeholder immediately so subsequent requests don't re-queue
     ensurePlaceholder();
-    cache_[path] = placeholderTexture_;
+    cache_[path] = CacheEntry{placeholderTexture_};
 
     // Spawn a detached thread to decode the image
     // (In production, this would use the fiber job system instead)
@@ -189,7 +189,7 @@ void TextureCache::processUploads(int maxPerFrame) {
     std::vector<PendingUpload> batch;
     {
         std::lock_guard<std::mutex> lock(uploadMutex_);
-        int count = std::min(maxPerFrame, static_cast<int>(pendingUploads_.size()));
+        int count = (std::min)(maxPerFrame, static_cast<int>(pendingUploads_.size()));
         if (count == 0) return;
         batch.assign(
             std::make_move_iterator(pendingUploads_.begin()),
@@ -202,7 +202,7 @@ void TextureCache::processUploads(int maxPerFrame) {
         auto tex = std::make_shared<Texture>();
         if (tex->loadFromMemory(upload.pixelData.data(), upload.width, upload.height, upload.channels)) {
             // Replace placeholder entry
-            cache_[upload.path] = tex;
+            cache_[upload.path] = CacheEntry{tex};
             LOG_DEBUG("Texture", "Async uploaded %s (%dx%d)", upload.path.c_str(), upload.width, upload.height);
         } else {
             LOG_ERROR("Texture", "Async upload failed for %s", upload.path.c_str());
