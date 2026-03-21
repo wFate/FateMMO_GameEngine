@@ -2906,6 +2906,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             processStatEnchant(clientId, msg);
             break;
         }
+        case PacketType::CmdUseConsumable: {
+            auto msg = CmdUseConsumableMsg::read(payload);
+            processUseConsumable(clientId, msg);
+            break;
+        }
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;

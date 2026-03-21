@@ -206,6 +206,7 @@ private:
     void processBank(uint16_t clientId, const CmdBankMsg& msg);
     void processSocketItem(uint16_t clientId, const CmdSocketItemMsg& msg);
     void processStatEnchant(uint16_t clientId, const CmdStatEnchantMsg& msg);
+    void processUseConsumable(uint16_t clientId, const CmdUseConsumableMsg& msg);
     void broadcastBossKillNotification(const EnemyStats& es,
                                        const EnemyStats::LootOwnerResult& lootResult,
                                        const std::string& scene);
