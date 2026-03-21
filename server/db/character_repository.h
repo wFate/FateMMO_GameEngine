@@ -18,7 +18,7 @@ struct CharacterRecord {
     int xp_to_next_level = 100;
 
     // Position
-    std::string current_scene = "Scene2";
+    std::string current_scene = "WhisperingWoods";
     float position_x = 0.0f;
     float position_y = 0.0f;
 

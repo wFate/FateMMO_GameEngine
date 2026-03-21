@@ -113,11 +113,14 @@ EntityHandle ServerSpawnManager::createMob(
     aiComp->ai.acquireRadius  = def->aggroRange * 32.0f;
     aiComp->ai.attackRange    = def->attackRange * 32.0f;
     aiComp->ai.contactRadius  = def->leashRadius * 32.0f;
-    aiComp->ai.attackCooldown = def->attackSpeed;
-    aiComp->ai.isPassive      = !def->isAggressive;
+    aiComp->ai.attackCooldown  = def->attackSpeed;
+    aiComp->ai.isPassive       = !def->isAggressive;
     // moveSpeed: convert tiles/sec to px/sec (assume 32px per tile)
-    aiComp->ai.baseChaseSpeed = def->moveSpeed * 32.0f;
-    aiComp->ai.baseRoamSpeed  = def->moveSpeed * 32.0f * 0.6f;
+    aiComp->ai.baseChaseSpeed  = def->moveSpeed * 32.0f;
+    aiComp->ai.baseReturnSpeed = def->moveSpeed * 32.0f;
+    aiComp->ai.baseRoamSpeed   = def->moveSpeed * 32.0f * 0.6f;
+    // roamRadius: 40% of zone's radius (already in pixels from DB)
+    aiComp->ai.roamRadius      = row.config.radius * 0.4f;
     aiComp->ai.initialize(pos);  // sets homePos and initial position
 
     // MobNameplateComponent — for replication buildEnterMessage
@@ -210,3 +213,4 @@ Vec2 ServerSpawnManager::randomPositionInZone(const SpawnZoneRow& zone) {
 }
 
 } // namespace fate
+

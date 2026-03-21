@@ -415,14 +415,13 @@ private:
             finalDamage = CombatSystem::applyArmorReduction(rawDamage, playerStats.getArmor());
         }
 
-        // Apply damage only on server (where onMobAttackResolved is wired).
-        // Client receives authoritative damage via SvCombatEventMsg instead.
-        bool isKill = false;
+        // Apply damage to player
+        bool wasDead = playerStats.isDead;
+        playerStats.takeDamage(finalDamage);
+        bool isKill = !wasDead && playerStats.isDead;
+
+        // Fire callback for network broadcast
         if (onMobAttackResolved) {
-            // Server path: apply damage, check kill, broadcast
-            bool wasDead = playerStats.isDead;
-            playerStats.takeDamage(finalDamage);
-            isKill = !wasDead && playerStats.isDead;
             onMobAttackResolved(mobEntity, playerEntity, finalDamage, isCrit, isKill, false);
         }
     }

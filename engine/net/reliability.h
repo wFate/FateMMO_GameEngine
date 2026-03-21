@@ -29,6 +29,15 @@ public:
     size_t pendingReliableCount() const { return pending_.size(); }
     float rtt() const { return rtt_; }
 
+    void reset() {
+        localSequence_ = 0;
+        remoteSequence_ = 0;
+        receivedAny_ = false;
+        receivedBits_ = 0;
+        pending_.clear();
+        rtt_ = 0.1f;
+    }
+
 private:
     uint16_t localSequence_ = 0;
     uint16_t remoteSequence_ = 0;

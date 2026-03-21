@@ -102,6 +102,7 @@ public:
     void toggle() { open_ = !open_; }
     bool isPaused() const { return paused_; }
     void setPaused(bool p) { paused_ = p; }
+    const std::string& currentScenePath() const { return currentScenePath_; }
 
     bool wantsInput() const { return open_ && (wantsKeyboard_ || wantsMouse_); }
     bool wantsKeyboard() const { return open_ && wantsKeyboard_; }

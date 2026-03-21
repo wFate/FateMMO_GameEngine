@@ -142,6 +142,7 @@ struct AuthResponse {
     int32_t level = 0;
     float spawnX = 0.0f;  // pixel coords — saved position from DB
     float spawnY = 0.0f;
+    std::string sceneName;  // scene the player should load into
 
     void write(ByteWriter& w) const {
         w.writeU8(success ? 1 : 0);
@@ -153,6 +154,7 @@ struct AuthResponse {
             w.writeI32(level);
             w.writeFloat(spawnX);
             w.writeFloat(spawnY);
+            w.writeString(sceneName);
         }
     }
 
@@ -167,6 +169,7 @@ struct AuthResponse {
             m.level         = r.readI32();
             m.spawnX        = r.readFloat();
             m.spawnY        = r.readFloat();
+            m.sceneName     = r.readString();
         }
         return m;
     }

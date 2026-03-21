@@ -508,6 +508,7 @@ void AuthServer::processRegister(const RegisterRequest& req, AuthResponse& resp)
     resp.characterName = req.characterName;
     resp.className = req.className;
     resp.level = 1;
+    resp.sceneName = "WhisperingWoods";  // New characters start here
 
     LOG_INFO("AuthServer", "Registered account '%s' (id=%d), character '%s'",
              req.username.c_str(), accountId, req.characterName.c_str());
@@ -579,6 +580,9 @@ void AuthServer::processLogin(const LoginRequest& req, AuthResponse& resp) {
     // Send saved position in pixel coords so client spawns at the right place
     resp.spawnX = character->position_x * Coords::TILE_SIZE;
     resp.spawnY = character->position_y * Coords::TILE_SIZE;
+    // Fix legacy "Scene2" default, then send the scene name
+    resp.sceneName = (character->current_scene == "Scene2" || character->current_scene.empty())
+        ? "WhisperingWoods" : character->current_scene;
 
     LOG_INFO("AuthServer", "Login successful: '%s' (id=%d), character '%s' level %d",
              req.username.c_str(), account->account_id,
