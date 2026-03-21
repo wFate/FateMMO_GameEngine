@@ -1,6 +1,7 @@
 #include "engine/net/net_client.h"
 #include "engine/net/game_messages.h"
 #include "engine/core/logger.h"
+#include <cstring>
 
 namespace fate {
 
@@ -23,7 +24,9 @@ bool NetClient::connect(const std::string& host, uint16_t port) {
     serverAddress_ = addr;
 
     // Send Connect packet (reliable)
-    sendPacket(Channel::ReliableOrdered, PacketType::Connect);
+    // Send protocol version even without token
+    uint8_t versionByte = PROTOCOL_VERSION;
+    sendPacket(Channel::ReliableOrdered, PacketType::Connect, &versionByte, 1);
     waitingForAccept_ = true;
     connectStartTime_ = 0.0f; // will be set on first poll
 
@@ -50,8 +53,11 @@ bool NetClient::connectWithToken(const std::string& host, uint16_t port, const A
     serverAddress_ = addr;
     authToken_ = token;
 
-    // Send Connect packet with auth token as payload
-    sendPacket(Channel::ReliableOrdered, PacketType::Connect, token.data(), 16);
+    // Prepend protocol version byte before auth token
+    uint8_t connectPayload[17]; // 1 byte version + 16 byte token
+    connectPayload[0] = PROTOCOL_VERSION;
+    std::memcpy(connectPayload + 1, token.data(), 16);
+    sendPacket(Channel::ReliableOrdered, PacketType::Connect, connectPayload, 17);
     waitingForAccept_ = true;
     connectStartTime_ = 0.0f;
 
