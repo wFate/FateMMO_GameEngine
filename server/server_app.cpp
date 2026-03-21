@@ -2514,6 +2514,13 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
 
+    if (action.targetId != 0) {
+        if (!TargetValidator::isInAOI(client->aoi, action.targetId)) {
+            LOG_WARN("Net", "Client %u targeted entity %llu not in AOI", clientId, action.targetId);
+            return;
+        }
+    }
+
     PersistentId attackerPid(client->playerEntityId);
     EntityHandle attackerHandle = replication_.getEntityHandle(attackerPid);
     Entity* attacker = world_.getEntity(attackerHandle);

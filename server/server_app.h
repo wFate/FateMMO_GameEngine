@@ -23,6 +23,7 @@
 #include "server/db/pet_repository.h"
 #include "server/db/zone_mob_state_repository.h"
 #include "server/db/definition_caches.h"
+#include "server/rate_limiter.h"
 #include "game/shared/gauntlet.h"
 #include "server/cache/item_definition_cache.h"
 #include "server/cache/loot_table_cache.h"
@@ -121,6 +122,9 @@ private:
 
     // Per-client auto-attack cooldown tracking
     std::unordered_map<uint16_t, float> lastAutoAttackTime_;
+
+    // Per-client token bucket rate limiters
+    std::unordered_map<uint16_t, ClientRateLimiter> rateLimiters_;
 
     // Per-client skill cooldown tracking: clientId -> skillId -> last cast gameTime
     std::unordered_map<uint16_t, std::unordered_map<std::string, float>> skillCooldowns_;
