@@ -960,10 +960,16 @@ void Editor::handleSceneDrag(Camera* camera, const Vec2& screenPos,
 
     Vec2 newPos = dragStartEntityPos_ + delta;
 
-    // Only grid-snap ground tiles; other entities move freely
+    // Only grid-snap ground tiles; other entities move freely.
+    // Detect the tile's grid offset from its original position (some scenes
+    // use center-aligned tiles at +16, others use corner-aligned at +0).
     if (gridSnap_ && selectedEntity_->tag() == "ground") {
-        newPos.x = std::round(newPos.x / gridSize_) * gridSize_;
-        newPos.y = std::round(newPos.y / gridSize_) * gridSize_;
+        float offX = std::fmod(dragStartEntityPos_.x, gridSize_);
+        float offY = std::fmod(dragStartEntityPos_.y, gridSize_);
+        if (offX < 0) offX += gridSize_;
+        if (offY < 0) offY += gridSize_;
+        newPos.x = std::round((newPos.x - offX) / gridSize_) * gridSize_ + offX;
+        newPos.y = std::round((newPos.y - offY) / gridSize_) * gridSize_ + offY;
     }
 
     t->position = newPos;
