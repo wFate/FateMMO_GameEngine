@@ -210,6 +210,13 @@ file(GLOB_RECURSE ENGINE_SOURCES
     engine/*.h
 )
 
+# Exclude platform-specific fiber backends that don't apply to the current target
+if(WIN32 AND NOT FATEMMO_BUILD_MOBILE)
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "fiber_minicoro\.cpp$")
+else()
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "fiber_win32\.cpp$")
+endif()
+
 add_library(fate_engine STATIC ${ENGINE_SOURCES})
 target_include_directories(fate_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -325,8 +332,10 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     file(GLOB_RECURSE GAME_SHARED_SOURCES game/shared/*.cpp)
     # Game UI sources needed by tests (touch controls, etc.)
     set(GAME_UI_TEST_SOURCES game/ui/touch_controls.cpp)
+    # Server sources needed by tests (WAL, etc.)
+    file(GLOB_RECURSE SERVER_TEST_SOURCES server/wal/*.cpp)
     if(TEST_SOURCES)
-        add_executable(fate_tests ${TEST_SOURCES} ${GAME_SHARED_SOURCES} ${GAME_UI_TEST_SOURCES})
+        add_executable(fate_tests ${TEST_SOURCES} ${GAME_SHARED_SOURCES} ${GAME_UI_TEST_SOURCES} ${SERVER_TEST_SOURCES})
         target_link_libraries(fate_tests PRIVATE fate_engine doctest::doctest spdlog::spdlog)
         target_include_directories(fate_tests PRIVATE ${CMAKE_SOURCE_DIR})
     endif()
