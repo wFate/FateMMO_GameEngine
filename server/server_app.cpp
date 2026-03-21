@@ -2003,9 +2003,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             auto* sc = e->getComponent<CharacterStatsComponent>();
             if (!sc) break;
 
-            // TODO: Re-enable isDead check once server world has mob entities
-            // (currently mobs only exist in client world, so isDead is never set server-side)
-            // For now, accept respawn unconditionally to support client-side death
+            // Reject respawn if player is not actually dead (prevents double-respawn exploits)
+            if (!sc->stats.isDead) {
+                LOG_WARN("Server", "Client %d respawn rejected: not dead", clientId);
+                break;
+            }
 
             // Check timer for type 0 (town) and type 1 (map spawn)
             if (msg.respawnType <= 1 && sc->stats.respawnTimeRemaining > 0.0f) {
