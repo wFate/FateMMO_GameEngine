@@ -4,6 +4,7 @@
 #include "engine/render/sdf_text.h"
 #include "engine/net/net_client.h"
 #include "engine/net/interpolation.h"
+#include "engine/net/protocol.h"
 #include "engine/ecs/entity_handle.h"
 #include "game/systems/render_system.h"
 #include "game/ui/npc_dialogue_ui.h"
@@ -77,8 +78,18 @@ private:
     std::string pendingCharName_;
     std::string pendingClassName_;
     Vec2 pendingSpawnPos_ = {0.0f, 0.0f};
+    std::string pendingSceneName_;
     Faction pendingFaction_ = Faction::Xyros;
     bool localPlayerCreated_ = false;
+    bool hasPendingPlayerState_ = false;
+    SvPlayerStateMsg pendingPlayerState_;
+    bool hasPendingDeathNotify_ = false;
+
+    // Deferred zone transition — set by onZoneTransition callback, processed
+    // after poll() completes to avoid destroying the world mid-frame.
+    bool pendingZoneTransition_ = false;
+    std::string pendingZoneScene_;
+    Vec2 pendingZoneSpawn_ = {0.0f, 0.0f};
 
     // Network config UI
     char serverHost_[64] = "127.0.0.1";

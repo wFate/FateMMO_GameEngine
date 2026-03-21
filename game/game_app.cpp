@@ -1218,7 +1218,13 @@ void GameApp::onInit() {
     };
 
     netClient_.onDeathNotify = [this](const SvDeathNotifyMsg& msg) {
-        if (Editor::instance().isPaused()) return; // Don't die while paused
+        if (Editor::instance().isPaused()) return;
+        // If player entity doesn't exist yet (first frame after connect),
+        // store pending death and apply after player creation.
+        if (!localPlayerCreated_) {
+            hasPendingDeathNotify_ = true;
+            return;
+        }
         auto* scene = SceneManager::instance().currentScene();
         if (!scene) return;
 
@@ -2195,6 +2201,17 @@ void GameApp::onUpdate(float deltaTime) {
                              finalStats ? finalStats->stats.level : 0,
                              pendingSpawnPos_.x, pendingSpawnPos_.y,
                              pendingSceneName_.c_str());
+
+                    // Apply pending death notification that arrived before player existed
+                    if (hasPendingDeathNotify_) {
+                        hasPendingDeathNotify_ = false;
+                        if (finalStats) {
+                            finalStats->stats.isDead = true;
+                            finalStats->stats.currentHP = 0;
+                        }
+                        deathOverlayUI_.onDeath(0, 0, 0.0f);
+                        LOG_INFO("Client", "Applied pending death state on connect");
+                    }
                 }
                 break; // Skip rest of first frame
             }
