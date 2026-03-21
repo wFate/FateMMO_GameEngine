@@ -473,3 +473,21 @@ TEST_CASE("SvArenaUpdateMsg round-trip") {
     CHECK(d.enemyAlive == 1);
     CHECK(d.honorReward == 30);
 }
+
+TEST_CASE("CmdPetMsg round-trip") {
+    fate::CmdPetMsg orig; orig.action = 0; orig.petDbId = 42;
+    uint8_t buf[16]; fate::ByteWriter w(buf, sizeof(buf)); orig.write(w);
+    fate::ByteReader r(buf, w.size()); auto d = fate::CmdPetMsg::read(r);
+    CHECK(d.action == 0); CHECK(d.petDbId == 42);
+}
+
+TEST_CASE("SvPetUpdateMsg round-trip") {
+    fate::SvPetUpdateMsg orig;
+    orig.equipped = 1; orig.petDefId = "pet_wolf"; orig.petName = "Fang";
+    orig.level = 5; orig.currentXP = 1200; orig.xpToNextLevel = 1250;
+    uint8_t buf[256]; fate::ByteWriter w(buf, sizeof(buf)); orig.write(w);
+    fate::ByteReader r(buf, w.size()); auto d = fate::SvPetUpdateMsg::read(r);
+    CHECK(d.equipped == 1); CHECK(d.petDefId == "pet_wolf");
+    CHECK(d.petName == "Fang"); CHECK(d.level == 5);
+    CHECK(d.currentXP == 1200); CHECK(d.xpToNextLevel == 1250);
+}
