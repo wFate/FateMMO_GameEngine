@@ -434,6 +434,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onRepairResult) onRepairResult(msg);
             break;
         }
+        case PacketType::SvExtractResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvExtractResultMsg::read(payload);
+            if (onExtractResult) onExtractResult(msg);
+            break;
+        }
         default:
             break;
     }
