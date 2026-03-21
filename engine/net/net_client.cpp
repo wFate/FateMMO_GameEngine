@@ -470,6 +470,18 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onBankResult) onBankResult(msg);
             break;
         }
+        case PacketType::SvSocketResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvSocketResultMsg::read(payload);
+            if (onSocketResult) onSocketResult(msg);
+            break;
+        }
+        case PacketType::SvStatEnchantResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvStatEnchantResultMsg::read(payload);
+            if (onStatEnchantResult) onStatEnchantResult(msg);
+            break;
+        }
         default:
             break;
     }
