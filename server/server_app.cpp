@@ -2433,6 +2433,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             processExtractCore(clientId, msg);
             break;
         }
+        case PacketType::CmdCraft: {
+            auto msg = CmdCraftMsg::read(payload);
+            processCraft(clientId, msg);
+            break;
+        }
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;
@@ -4208,6 +4213,136 @@ void ServerApp::processExtractCore(uint16_t clientId, const CmdExtractCoreMsg& m
 
     LOG_INFO("Server", "Client %d extracted core from slot %d -> %dx %s",
              clientId, msg.itemSlot, coreResult.quantity, coreResult.coreItemId.c_str());
+}
+
+// ============================================================================
+// getCombineBookTier — map combine book item ID to tier level
+// ============================================================================
+static int getCombineBookTier(const std::string& itemId) {
+    if (itemId == "item_combine_novice")  return 0;
+    if (itemId == "item_combine_book_1") return 1;
+    if (itemId == "item_combine_book_2") return 2;
+    if (itemId == "item_combine_book_3") return 3;
+    return -1;
+}
+
+// ============================================================================
+// processCraft — validate recipe and produce crafted item
+// ============================================================================
+void ServerApp::processCraft(uint16_t clientId, const CmdCraftMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* player = world_.getEntity(h);
+    if (!player) return;
+
+    auto* charStats = player->getComponent<CharacterStatsComponent>();
+    auto* inv       = player->getComponent<InventoryComponent>();
+    if (!charStats || !inv) return;
+
+    // Helper: send craft result back to client
+    auto sendResult = [&](bool success, const std::string& itemId, uint8_t qty, const std::string& message) {
+        SvCraftResultMsg result;
+        result.success        = success ? 1 : 0;
+        result.resultItemId   = itemId;
+        result.resultQuantity = qty;
+        result.message        = message;
+        uint8_t buf[256];
+        ByteWriter w(buf, sizeof(buf));
+        result.write(w);
+        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvCraftResult, buf, w.size());
+    };
+
+    // 1. Look up recipe
+    auto* recipe = recipeCache_.getRecipe(msg.recipeId);
+    if (!recipe) { sendResult(false, "", 0, "Unknown recipe"); return; }
+
+    // 2. Validate combine book tier — player needs a book with tier >= recipe tier
+    int playerMaxBookTier = -1;
+    int slotCount = inv->inventory.totalSlots();
+    for (int i = 0; i < slotCount; ++i) {
+        auto slot = inv->inventory.getSlot(i);
+        if (!slot.isValid()) continue;
+        int tier = getCombineBookTier(slot.itemId);
+        if (tier > playerMaxBookTier) playerMaxBookTier = tier;
+    }
+    if (playerMaxBookTier < recipe->bookTier) {
+        sendResult(false, "", 0, "Need a higher-tier Combine Book"); return;
+    }
+
+    // 3. Validate level
+    if (charStats->stats.level < recipe->levelReq) {
+        sendResult(false, "", 0, "Level too low"); return;
+    }
+
+    // 4. Validate class (if recipe has class requirement)
+    if (!recipe->classReq.empty()) {
+        std::string playerClass = charStats->stats.classDef.displayName;
+        if (playerClass != recipe->classReq && recipe->classReq != "All") {
+            sendResult(false, "", 0, "Wrong class for this recipe"); return;
+        }
+    }
+
+    // 5. Validate ingredients
+    for (const auto& ing : recipe->ingredients) {
+        if (inv->inventory.countItem(ing.itemId) < ing.quantity) {
+            sendResult(false, "", 0, "Missing ingredient: " + ing.itemId); return;
+        }
+    }
+
+    // 6. Validate gold
+    if (inv->inventory.getGold() < recipe->goldCost) {
+        sendResult(false, "", 0, "Not enough gold"); return;
+    }
+
+    // 7. WAL + consume gold
+    wal_.appendGoldChange(client->character_id, -recipe->goldCost);
+    inv->inventory.setGold(inv->inventory.getGold() - recipe->goldCost);
+
+    // 8. Consume ingredients
+    for (const auto& ing : recipe->ingredients) {
+        int remaining = ing.quantity;
+        while (remaining > 0) {
+            int slotIdx = inv->inventory.findItemById(ing.itemId);
+            if (slotIdx < 0) break;
+            auto slotItem = inv->inventory.getSlot(slotIdx);
+            int toRemove = (std::min)(remaining, slotItem.quantity);
+            inv->inventory.removeItemQuantity(slotIdx, toRemove);
+            remaining -= toRemove;
+        }
+    }
+
+    // 9. Create result item
+    ItemInstance resultItem;
+    resultItem.itemId    = recipe->resultItemId;
+    resultItem.quantity  = recipe->resultQuantity;
+
+    auto* resultDef = itemDefCache_.getDefinition(recipe->resultItemId);
+    if (resultDef) {
+        resultItem.displayName = resultDef->displayName;
+        if      (resultDef->rarity == "Common")    resultItem.rarity = ItemRarity::Common;
+        else if (resultDef->rarity == "Uncommon")  resultItem.rarity = ItemRarity::Uncommon;
+        else if (resultDef->rarity == "Rare")      resultItem.rarity = ItemRarity::Rare;
+        else if (resultDef->rarity == "Epic")      resultItem.rarity = ItemRarity::Epic;
+        else if (resultDef->rarity == "Legendary") resultItem.rarity = ItemRarity::Legendary;
+    }
+
+    // 10. Add to inventory
+    bool added = inv->inventory.addItem(resultItem);
+    if (!added) {
+        sendResult(false, "", 0, "Inventory full"); return;
+    }
+
+    // 11. Send result and sync inventory
+    std::string displayLabel = resultDef ? resultDef->displayName : recipe->resultItemId;
+    sendResult(true, recipe->resultItemId, static_cast<uint8_t>(recipe->resultQuantity),
+               "Crafted " + displayLabel);
+    sendInventorySync(clientId);
+
+    LOG_INFO("Server", "Client %d crafted %dx %s from recipe %s",
+             clientId, recipe->resultQuantity, recipe->resultItemId.c_str(), msg.recipeId.c_str());
 }
 
 } // namespace fate

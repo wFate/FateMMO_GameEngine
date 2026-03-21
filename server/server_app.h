@@ -160,6 +160,7 @@ private:
     void processEnchant(uint16_t clientId, const CmdEnchantMsg& msg);
     void processRepair(uint16_t clientId, const CmdRepairMsg& msg);
     void processExtractCore(uint16_t clientId, const CmdExtractCoreMsg& msg);
+    void processCraft(uint16_t clientId, const CmdCraftMsg& msg);
     void recalcEquipmentBonuses(Entity* player);
     void sendPlayerState(uint16_t clientId);
     void sendSkillSync(uint16_t clientId);
