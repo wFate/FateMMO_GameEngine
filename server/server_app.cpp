@@ -789,8 +789,11 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     float saveOffset = static_cast<float>(clientId % 60);
     nextAutoSaveTime_[clientId] = gameTime_ + saveOffset + AUTO_SAVE_INTERVAL;
 
-    // Send initial player state
+    // Send initial player state and full sync
     sendPlayerState(clientId);
+    sendSkillSync(clientId);
+    sendQuestSync(clientId);
+    sendInventorySync(clientId);
 
     // If player reconnects while dead, notify client so death overlay shows
     if (rec.is_dead) {
@@ -2795,6 +2798,128 @@ void ServerApp::sendPlayerState(uint16_t clientId) {
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvPlayerState, buf, w.size());
+}
+
+void ServerApp::sendSkillSync(uint16_t clientId) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* e = world_.getEntity(h);
+    if (!e) return;
+
+    auto* skillComp = e->getComponent<SkillManagerComponent>();
+    if (!skillComp) return;
+
+    SvSkillSyncMsg msg;
+    for (const auto& learned : skillComp->skills.getLearnedSkills()) {
+        SkillSyncEntry entry;
+        entry.skillId       = learned.skillId;
+        entry.unlockedRank  = static_cast<uint8_t>(learned.unlockedRank);
+        entry.activatedRank = static_cast<uint8_t>(learned.activatedRank);
+        msg.skills.push_back(entry);
+    }
+    msg.skillBar.resize(20);
+    for (int i = 0; i < 20; ++i) {
+        msg.skillBar[i] = skillComp->skills.getSkillInSlot(i);
+    }
+
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvSkillSync, buf, w.size());
+}
+
+void ServerApp::sendQuestSync(uint16_t clientId) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* e = world_.getEntity(h);
+    if (!e) return;
+
+    auto* questComp = e->getComponent<QuestComponent>();
+    if (!questComp) return;
+
+    SvQuestSyncMsg msg;
+    for (const auto& aq : questComp->quests.getActiveQuests()) {
+        QuestSyncEntry entry;
+        entry.questId = std::to_string(aq.questId);
+        entry.state   = 0; // active
+        for (uint16_t progress : aq.objectiveProgress) {
+            entry.objectives.push_back({static_cast<int32_t>(progress), 0});
+        }
+        msg.quests.push_back(std::move(entry));
+    }
+
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvQuestSync, buf, w.size());
+}
+
+void ServerApp::sendInventorySync(uint16_t clientId) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* e = world_.getEntity(h);
+    if (!e) return;
+
+    auto* invComp = e->getComponent<InventoryComponent>();
+    if (!invComp) return;
+
+    SvInventorySyncMsg msg;
+
+    const auto& slots = invComp->inventory.getSlots();
+    for (int i = 0; i < static_cast<int>(slots.size()); ++i) {
+        const auto& item = slots[i];
+        if (!item.isValid()) continue;
+        InventorySyncSlot s;
+        s.slotIndex    = i;
+        s.itemId       = item.itemId;
+        s.quantity     = item.quantity;
+        s.enchantLevel = item.enchantLevel;
+        s.rolledStats  = ItemStatRoller::rolledStatsToJson(item.rolledStats);
+        if (item.hasSocket()) {
+            switch (item.socket.statType) {
+                case StatType::Strength:     s.socketStat = "STR"; break;
+                case StatType::Dexterity:    s.socketStat = "DEX"; break;
+                case StatType::Intelligence: s.socketStat = "INT"; break;
+                default: break;
+            }
+            s.socketValue = item.socket.value;
+        }
+        msg.slots.push_back(std::move(s));
+    }
+
+    for (const auto& [slot, item] : invComp->inventory.getEquipmentMap()) {
+        if (!item.isValid()) continue;
+        InventorySyncEquip eq;
+        eq.slot        = static_cast<uint8_t>(slot);
+        eq.itemId      = item.itemId;
+        eq.quantity    = item.quantity;
+        eq.enchantLevel = item.enchantLevel;
+        eq.rolledStats  = ItemStatRoller::rolledStatsToJson(item.rolledStats);
+        if (item.hasSocket()) {
+            switch (item.socket.statType) {
+                case StatType::Strength:     eq.socketStat = "STR"; break;
+                case StatType::Dexterity:    eq.socketStat = "DEX"; break;
+                case StatType::Intelligence: eq.socketStat = "INT"; break;
+                default: break;
+            }
+            eq.socketValue = item.socket.value;
+        }
+        msg.equipment.push_back(std::move(eq));
+    }
+
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvInventorySync, buf, w.size());
 }
 
 void ServerApp::tickAutoSave(float /*dt*/) {

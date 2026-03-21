@@ -139,6 +139,9 @@ private:
     void processAction(uint16_t clientId, const CmdAction& action);
     void processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg);
     void sendPlayerState(uint16_t clientId);
+    void sendSkillSync(uint16_t clientId);
+    void sendQuestSync(uint16_t clientId);
+    void sendInventorySync(uint16_t clientId);
     void consumePendingSessions();
     void savePlayerToDB(uint16_t clientId);
     void savePlayerToDBAsync(uint16_t clientId);
