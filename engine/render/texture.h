@@ -4,6 +4,8 @@
 #include <unordered_map>
 #include <memory>
 #include <cstdint>
+#include <mutex>
+#include <vector>
 
 namespace fate {
 
@@ -54,6 +56,19 @@ public:
     size_t entryCount() const { return cache_.size(); }
     void advanceFrame() { ++frameCounter_; }
 
+    // Async loading: decode on worker, upload on main thread
+    struct PendingUpload {
+        std::string path;
+        std::vector<unsigned char> pixelData;
+        int width = 0;
+        int height = 0;
+        int channels = 0;
+    };
+
+    void requestAsyncLoad(const std::string& path);
+    void processUploads(int maxPerFrame = 2);
+    bool hasPendingLoads() const;
+
 private:
     struct CacheEntry {
         std::shared_ptr<Texture> texture;
@@ -65,6 +80,12 @@ private:
     size_t vramBudget_ = 512 * 1024 * 1024; // 512MB default
     size_t estimatedVRAM_ = 0;
     uint64_t frameCounter_ = 0;
+
+    std::mutex uploadMutex_;
+    std::vector<PendingUpload> pendingUploads_;
+    std::shared_ptr<Texture> placeholderTexture_;
+
+    void ensurePlaceholder();
 };
 
 } // namespace fate
