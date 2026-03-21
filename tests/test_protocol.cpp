@@ -237,6 +237,59 @@ TEST_CASE("SvBossLootOwnerMsg serialization round-trip") {
     CHECK(decoded.wasParty == 1);
 }
 
+TEST_CASE("SvEntityEnterMsg includes pkStatus for players") {
+    fate::SvEntityEnterMsg original;
+    original.entityType = 0; // player
+    original.persistentId = 12345;
+    original.name = "TestPlayer";
+    original.pkStatus = 2; // Red
+
+    uint8_t buf[512];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::SvEntityEnterMsg::read(r);
+
+    CHECK(decoded.entityType == 0);
+    CHECK(decoded.pkStatus == 2);
+}
+
+TEST_CASE("SvEntityEnterMsg mob does not carry pkStatus") {
+    fate::SvEntityEnterMsg original;
+    original.entityType = 1; // mob
+    original.persistentId = 99;
+    original.name = "Goblin";
+    original.pkStatus = 0;
+
+    uint8_t buf[512];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::SvEntityEnterMsg::read(r);
+
+    CHECK(decoded.entityType == 1);
+    CHECK(decoded.pkStatus == 0); // default, not serialized for mobs
+}
+
+TEST_CASE("SvEntityUpdateMsg bit 14 carries pkStatus") {
+    fate::SvEntityUpdateMsg original;
+    original.persistentId = 555;
+    original.fieldMask = (1 << 14); // only pkStatus
+    original.pkStatus = 3; // Black
+
+    uint8_t buf[256];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::SvEntityUpdateMsg::read(r);
+
+    CHECK((decoded.fieldMask & (1 << 14)) != 0);
+    CHECK(decoded.pkStatus == 3);
+}
+
 TEST_CASE("SvBossLootOwnerMsg empty winner name") {
     fate::SvBossLootOwnerMsg original;
     original.bossId = "boss_99";
