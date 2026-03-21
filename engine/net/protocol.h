@@ -122,6 +122,9 @@ struct SvEntityEnterMsg {
     std::string mobDefId;
     uint8_t     isBoss = 0;
 
+    // Player fields (only serialized when entityType == 0)
+    uint8_t pkStatus = 0; // PKStatus enum (only for entityType == 0, player)
+
     void write(ByteWriter& w) const {
         detail::writeU64(w, persistentId);
         w.writeU8(entityType);
@@ -131,6 +134,9 @@ struct SvEntityEnterMsg {
         w.writeI32(currentHP);
         w.writeI32(maxHP);
         w.writeU8(faction);
+        if (entityType == 0) { // player-specific fields
+            w.writeU8(pkStatus);
+        }
         if (entityType == 3) {
             w.writeString(itemId);
             w.writeI32(quantity);
@@ -155,6 +161,9 @@ struct SvEntityEnterMsg {
         m.currentHP    = r.readI32();
         m.maxHP        = r.readI32();
         m.faction      = r.readU8();
+        if (m.entityType == 0) {
+            m.pkStatus = r.readU8();
+        }
         if (m.entityType == 3) {
             m.itemId       = r.readString();
             m.quantity     = r.readI32();
@@ -218,7 +227,9 @@ struct SvEntityUpdateMsg {
     uint8_t faction = 0;
     // Bit 13: equipVisuals (uint32, 4B) — packed sprite/palette IDs
     uint32_t equipVisuals = 0;
-    // Bits 14-15: reserved
+    // Bit 14: pkStatus (uint8, 1B) — PK name color (0=White, 1=Purple, 2=Red, 3=Black)
+    uint8_t pkStatus = 0;
+    // Bit 15: reserved
 
     uint8_t updateSeq = 0;
 
@@ -240,6 +251,7 @@ struct SvEntityUpdateMsg {
         if (fieldMask & (1 << 11)) w.writeU8(level);
         if (fieldMask & (1 << 12)) w.writeU8(faction);
         if (fieldMask & (1 << 13)) w.writeU32(equipVisuals);
+        if (fieldMask & (1 << 14)) w.writeU8(pkStatus);
     }
 
     static SvEntityUpdateMsg read(ByteReader& r) {
@@ -261,6 +273,7 @@ struct SvEntityUpdateMsg {
         if (m.fieldMask & (1 << 11)) m.level = r.readU8();
         if (m.fieldMask & (1 << 12)) m.faction = r.readU8();
         if (m.fieldMask & (1 << 13)) m.equipVisuals = r.readU32();
+        if (m.fieldMask & (1 << 14)) m.pkStatus = r.readU8();
         return m;
     }
 };
