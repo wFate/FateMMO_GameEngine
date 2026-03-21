@@ -84,6 +84,11 @@ namespace PacketType {
     constexpr uint8_t CmdBattlefield  = 0x22;
     constexpr uint8_t CmdArena        = 0x23;
     constexpr uint8_t CmdPet          = 0x24;
+    constexpr uint8_t CmdBank         = 0x25;
+    constexpr uint8_t CmdSocketItem   = 0x26;
+    constexpr uint8_t CmdStatEnchant  = 0x27;
+    constexpr uint8_t CmdUseConsumable = 0x28;
+    constexpr uint8_t CmdRankingQuery = 0x29;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
@@ -93,6 +98,11 @@ namespace PacketType {
     constexpr uint8_t SvBattlefieldUpdate = 0xAC;
     constexpr uint8_t SvArenaUpdate       = 0xAD;
     constexpr uint8_t SvPetUpdate         = 0xAE;
+    constexpr uint8_t SvBankResult        = 0xAF;
+    constexpr uint8_t SvSocketResult      = 0xB0;
+    constexpr uint8_t SvStatEnchantResult = 0xB1;
+    constexpr uint8_t SvConsumeResult     = 0xB2;
+    constexpr uint8_t SvRankingResult     = 0xB3;
 } // namespace PacketType
 
 // ============================================================================
