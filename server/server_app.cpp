@@ -18,6 +18,7 @@
 #include "game/shared/profanity_filter.h"
 #include "game/shared/enchant_system.h"
 #include "game/shared/core_extraction.h"
+#include "game/shared/honor_system.h"
 #include "engine/net/game_messages.h"
 
 #ifdef _WIN32
@@ -3452,6 +3453,7 @@ void ServerApp::sendPlayerState(uint16_t clientId) {
     msg.speed       = s.getSpeed();
     msg.damageMult  = s.getDamageMultiplier();
     msg.pkStatus    = static_cast<uint8_t>(s.pkStatus);
+    msg.honorRank   = static_cast<uint8_t>(HonorSystem::getHonorRank(s.honor));
 
     uint8_t buf[128];
     ByteWriter w(buf, sizeof(buf));
