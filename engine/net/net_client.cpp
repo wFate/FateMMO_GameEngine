@@ -1,5 +1,6 @@
 #include "engine/net/net_client.h"
 #include "engine/net/game_messages.h"
+#include "engine/net/packet_crypto.h"
 #include "engine/core/logger.h"
 #include <cstring>
 
@@ -83,6 +84,7 @@ void NetClient::disconnect() {
     clientId_ = 0;
     sessionToken_ = 0;
     reliability_.reset();
+    crypto_.clearKeys();
     lastHeartbeatSent_ = 0.0f;
     lastPacketReceived_ = 0.0f;
     reconnectPhase_ = ReconnectPhase::None;
@@ -219,13 +221,31 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         return;
     }
 
+    // Decrypt incoming payload for non-system packets
+    uint8_t decryptedBuf[MAX_PACKET_SIZE];
+    const uint8_t* payloadData = data + r.position();
+    size_t payloadLen = hdr.payloadSize;
+
+    if (crypto_.hasKeys() && !isSystemPacket(hdr.packetType) && payloadLen > 0) {
+        if (payloadLen <= PacketCrypto::TAG_SIZE) {
+            return; // too short to contain tag — drop
+        }
+        size_t decryptedSize = payloadLen - PacketCrypto::TAG_SIZE;
+        if (!crypto_.decrypt(payloadData, payloadLen, hdr.sequence, decryptedBuf, sizeof(decryptedBuf))) {
+            return; // tampered or wrong key — silently drop
+        }
+        payloadData = decryptedBuf;
+        payloadLen = decryptedSize;
+    }
+
     switch (hdr.packetType) {
         case PacketType::ConnectAccept: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             clientId_ = payload.readU16();
             sessionToken_ = payload.readU32();
             connected_ = true;
             waitingForAccept_ = false;
+            crypto_.clearKeys(); // clear stale keys on reconnect
             if (reconnectPhase_ == ReconnectPhase::Reconnecting) {
                 LOG_INFO("NetClient", "Reconnected as client %d after %d attempts",
                          clientId_, reconnectAttempts_);
@@ -238,155 +258,166 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onConnected) onConnected();
             break;
         }
+        case PacketType::KeyExchange: {
+            ByteReader payload(payloadData, payloadLen);
+            PacketCrypto::Key txKey{}, rxKey{};
+            payload.readBytes(txKey.data(), 32);
+            payload.readBytes(rxKey.data(), 32);
+            if (payload.ok()) {
+                crypto_.setKeys(txKey, rxKey);
+                LOG_INFO("NetClient", "AEAD session keys received — encryption active");
+            }
+            break;
+        }
         case PacketType::ConnectReject: {
             waitingForAccept_ = false;
             socket_.close();
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             std::string reason = payload.readString();
             LOG_WARN("NetClient", "Connection rejected: %s", reason.c_str());
             if (onConnectRejected) onConnectRejected(reason);
             break;
         }
         case PacketType::SvEntityEnter: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvEntityEnterMsg::read(payload);
             if (onEntityEnter) onEntityEnter(msg);
             break;
         }
         case PacketType::SvEntityLeave: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvEntityLeaveMsg::read(payload);
             if (onEntityLeave) onEntityLeave(msg);
             break;
         }
         case PacketType::SvEntityUpdate: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvEntityUpdateMsg::read(payload);
             if (onEntityUpdate) onEntityUpdate(msg);
             break;
         }
         case PacketType::SvCombatEvent: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvCombatEventMsg::read(payload);
             if (onCombatEvent) onCombatEvent(msg);
             break;
         }
         case PacketType::SvChatMessage: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvChatMessageMsg::read(payload);
             if (onChatMessage) onChatMessage(msg);
             break;
         }
         case PacketType::SvPlayerState: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvPlayerStateMsg::read(payload);
             if (onPlayerState) onPlayerState(msg);
             break;
         }
         case PacketType::SvMovementCorrection: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvMovementCorrectionMsg::read(payload);
             if (onMovementCorrection) onMovementCorrection(msg);
             break;
         }
         case PacketType::SvLootPickup: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvLootPickupMsg::read(payload);
             if (onLootPickup) onLootPickup(msg);
             break;
         }
         case PacketType::SvTradeUpdate: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvTradeUpdateMsg::read(payload);
             if (onTradeUpdate) onTradeUpdate(msg);
             break;
         }
         case PacketType::SvMarketResult: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvMarketResultMsg::read(payload);
             if (onMarketResult) onMarketResult(msg);
             break;
         }
         case PacketType::SvBountyUpdate: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvBountyUpdateMsg::read(payload);
             if (onBountyUpdate) onBountyUpdate(msg);
             break;
         }
         case PacketType::SvGauntletUpdate: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvGauntletUpdateMsg::read(payload);
             if (onGauntletUpdate) onGauntletUpdate(msg);
             break;
         }
         case PacketType::SvGuildUpdate: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvGuildUpdateMsg::read(payload);
             if (onGuildUpdate) onGuildUpdate(msg);
             break;
         }
         case PacketType::SvSocialUpdate: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvSocialUpdateMsg::read(payload);
             if (onSocialUpdate) onSocialUpdate(msg);
             break;
         }
         case PacketType::SvQuestUpdate: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvQuestUpdateMsg::read(payload);
             if (onQuestUpdate) onQuestUpdate(msg);
             break;
         }
         case PacketType::SvZoneTransition: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvZoneTransitionMsg::read(payload);
             if (onZoneTransition) onZoneTransition(msg);
             break;
         }
         case PacketType::SvDeathNotify: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvDeathNotifyMsg::read(payload);
             if (onDeathNotify) onDeathNotify(msg);
             break;
         }
         case PacketType::SvRespawn: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvRespawnMsg::read(payload);
             if (onRespawn) onRespawn(msg);
             break;
         }
         case PacketType::SvSkillResult: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvSkillResultMsg::read(payload);
             if (onSkillResult) onSkillResult(msg);
             break;
         }
         case PacketType::SvLevelUp: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvLevelUpMsg::read(payload);
             if (onLevelUp) onLevelUp(msg);
             break;
         }
         case PacketType::SvSkillSync: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvSkillSyncMsg::read(payload);
             if (onSkillSync) onSkillSync(msg);
             break;
         }
         case PacketType::SvQuestSync: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvQuestSyncMsg::read(payload);
             if (onQuestSync) onQuestSync(msg);
             break;
         }
         case PacketType::SvInventorySync: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvInventorySyncMsg::read(payload);
             if (onInventorySync) onInventorySync(msg);
             break;
         }
         case PacketType::SvBossLootOwner: {
-            ByteReader payload(data + r.position(), hdr.payloadSize);
+            ByteReader payload(payloadData, payloadLen);
             auto msg = SvBossLootOwnerMsg::read(payload);
             if (onBossLootOwner) onBossLootOwner(msg);
             break;
@@ -485,11 +516,26 @@ void NetClient::sendPacket(Channel channel, uint8_t packetType,
     hdr.ackBits = ackBits;
     hdr.channel = channel;
     hdr.packetType = packetType;
-    hdr.payloadSize = static_cast<uint16_t>(payloadSize);
+
+    // Encrypt payload for non-system packets when keys are available
+    uint8_t encryptedBuf[MAX_PACKET_SIZE];
+    const uint8_t* sendPayload = payload;
+    size_t sendPayloadSize = payloadSize;
+
+    if (crypto_.hasKeys() && !isSystemPacket(packetType) && payload && payloadSize > 0) {
+        size_t encSize = payloadSize + PacketCrypto::TAG_SIZE;
+        if (encSize <= sizeof(encryptedBuf) &&
+            crypto_.encrypt(payload, payloadSize, hdr.sequence, encryptedBuf, sizeof(encryptedBuf))) {
+            sendPayload = encryptedBuf;
+            sendPayloadSize = encSize;
+        }
+    }
+
+    hdr.payloadSize = static_cast<uint16_t>(sendPayloadSize);
     hdr.write(w);
 
-    if (payload && payloadSize > 0) {
-        w.writeBytes(payload, payloadSize);
+    if (sendPayload && sendPayloadSize > 0) {
+        w.writeBytes(sendPayload, sendPayloadSize);
     }
 
     socket_.sendTo(buf, w.size(), serverAddress_);

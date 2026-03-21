@@ -19,6 +19,7 @@
 #include "game/ui/teleporter_ui.h"
 #include "game/ui/game_viewport.h"
 #include "game/shared/faction.h"
+#include "game/combat_prediction.h"
 #include <memory>
 #include <unordered_map>
 
@@ -87,6 +88,10 @@ private:
     SvPlayerStateMsg pendingPlayerState_;
     bool hasPendingDeathNotify_ = false;
     uint64_t localPlayerPid_ = 0; // Our PersistentId, learned from first SvCombatEvent we send
+
+    // Optimistic combat prediction tracking — records attacks sent to server so
+    // we can reconcile when SvCombatEvent / SvSkillResult responses arrive.
+    CombatPredictionBuffer combatPredictions_;
 
     // Deferred zone transition — set by onZoneTransition callback, processed
     // after poll() completes to avoid destroying the world mid-frame.

@@ -18,6 +18,7 @@
 #include "game/systems/quest_system.h"
 #include "game/components/faction_component.h"
 #include "game/components/zone_component.h"
+#include "game/components/animator.h"
 // pk_system.h no longer needed — server handles PK status via SvPlayerState
 
 #include <vector>
@@ -55,6 +56,25 @@ public:
     // Clear current combat target (called by GameApp when server confirms kill)
     void serverClearTarget() { currentTargetId_ = INVALID_ENTITY; autoAttackEnabled_ = false; }
 
+    // Trigger an optimistic attack flash on the local player sprite.
+    // Called by GameApp when a skill is activated via the skill bar so the same
+    // flash/decay logic applies as for auto-attacks.
+    void triggerAttackFlash(bool isSpell) {
+        if (!world_) return;
+        world_->forEach<PlayerController, SpriteComponent>(
+            [&](Entity* entity, PlayerController* ctrl, SpriteComponent* spr) {
+                if (!ctrl->isLocalPlayer) return;
+                spr->tint = isSpell ? Color(0.7f, 0.85f, 1.0f, 1.0f)
+                                    : Color(1.0f, 0.95f, 0.75f, 1.0f);
+                auto* anim = entity->getComponent<Animator>();
+                if (anim && anim->animations.count("attack")) {
+                    anim->play("attack");
+                }
+            }
+        );
+        attackFlashTimer_ = kAttackFlashDuration;
+    }
+
     void update(float dt) override {
         gameTime_ += dt;
 
@@ -68,6 +88,21 @@ public:
             }
         );
         mobGrid_.finalize();
+
+        // Decay optimistic attack flash on the local player sprite
+        if (attackFlashTimer_ > 0.0f) {
+            attackFlashTimer_ -= dt;
+            if (attackFlashTimer_ <= 0.0f) {
+                attackFlashTimer_ = 0.0f;
+                // Restore player sprite tint to white
+                world_->forEach<PlayerController, SpriteComponent>(
+                    [](Entity*, PlayerController* ctrl, SpriteComponent* spr) {
+                        if (!ctrl->isLocalPlayer) return;
+                        spr->tint = Color::white();
+                    }
+                );
+            }
+        }
 
         processClickTargeting();
         processPlayerCombat(dt);
@@ -391,6 +426,11 @@ private:
     bool autoAttackEnabled_ = false;
     float attackCooldownRemaining_ = 0.0f;
 
+    // Optimistic combat feedback — brief tint flash on the player sprite
+    // when an attack fires, giving instant visual response before server confirms.
+    float attackFlashTimer_ = 0.0f;
+    static constexpr float kAttackFlashDuration = 0.12f; // seconds
+
     // Spatial hash for mob lookups (rebuilt each frame)
     SpatialHash mobGrid_{128.0f};  // 4-tile cells
 
@@ -655,6 +695,22 @@ private:
         auto* combatCtrl = player->getComponent<CombatControllerComponent>();
         float cooldown = combatCtrl ? combatCtrl->baseAttackCooldown : 1.5f;
         attackCooldownRemaining_ = cooldown;
+
+        // ---- Optimistic attack flash — instant visual feedback ----
+        // Briefly tint the player sprite to signal the attack fired,
+        // eliminating the perceived 100-300ms latency to server response.
+        auto* playerSpr = player->getComponent<SpriteComponent>();
+        if (playerSpr) {
+            playerSpr->tint = isMage ? Color(0.7f, 0.85f, 1.0f, 1.0f)   // cool blue-white for spells
+                                     : Color(1.0f, 0.95f, 0.75f, 1.0f);  // warm yellow-white for melee
+            attackFlashTimer_ = kAttackFlashDuration;
+        }
+
+        // Play attack animation if the entity has one (safe no-op if absent)
+        auto* playerAnim = player->getComponent<Animator>();
+        if (playerAnim && playerAnim->animations.count("attack")) {
+            playerAnim->play("attack");
+        }
 
         Vec2 textPos = targetT->position;
 

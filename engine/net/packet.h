@@ -32,6 +32,7 @@ namespace PacketType {
     constexpr uint8_t Heartbeat     = 0x03;
     constexpr uint8_t ConnectAccept = 0x80;
     constexpr uint8_t ConnectReject = 0x81;
+    constexpr uint8_t KeyExchange  = 0x82;
 
     // Client -> Server
     constexpr uint8_t CmdMove          = 0x10;

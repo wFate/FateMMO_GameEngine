@@ -10,7 +10,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 **Target:** Windows (development), iOS (build pipeline ready, GLES 3.0), Android (build pipeline ready, NDK r27), Linux server (future)
 
-**Codebase:** ~59,300 lines across 334 files (engine/ ~18,300 LOC, game/ ~23,600 LOC, server/ ~9,000 LOC, tests/ ~8,400 LOC)
+**Codebase:** ~62,300 lines across 403 files (engine/ ~19,500 LOC, game/ ~24,000 LOC, server/ ~9,500 LOC, tests/ ~9,300 LOC)
 
 ### Build & Run
 
@@ -67,25 +67,34 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Post-Processing | Done | Bloom (extract + Gaussian blur + composite), vignette, color grading |
 | Fiber Job System | Done | Win32 fibers + minicoro (iOS/Android/Linux), 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas |
 | Graphics RHI | Done | gfx::Device + CommandList + Pipeline State Objects, GL backend, typed 32-bit handles, uniform cache |
-| Networking Transport | Done | Custom reliable UDP (Winsock2 + POSIX), ByteWriter/ByteReader (NaN/Inf rejection, string length cap, enum bounds, sticky error), 16-byte packet header, 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation, per-tick skill command cap, IPv6-ready via getaddrinfo (iOS DNS64/NAT64 compatible), protocol version handshake (rejects outdated clients with reason string) |
+| Networking Transport | Done | Custom reliable UDP (Winsock2 + POSIX), ByteWriter/ByteReader (NaN/Inf rejection, string length cap, enum bounds, sticky error), 16-byte packet header, 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation, per-tick skill command cap, **IPv6 dual-stack sockets** (sockaddr_storage, AF_INET6 with IPV6_V6ONLY=0, IPv4 fallback, DNS64/NAT64 compatible — iOS App Store mandatory), protocol version handshake (rejects outdated clients with reason string) |
+| AEAD Packet Encryption | Done | XChaCha20-Poly1305 via libsodium. Per-session key pair generated on connect, sent via KeyExchange (0x82) packet. All non-system payloads encrypted/authenticated. Sequence number as 24-byte nonce. Tampered packets silently dropped. Separate tx/rx keys prevent reflection attacks. Compiles in plaintext fallback mode without libsodium (`FATE_HAS_SODIUM` guard) |
+| Auto-Reconnect | Done | `ReconnectPhase` state machine in NetClient. Heartbeat timeout (5s) triggers auto-reconnect with stored auth token. Exponential backoff (1s→2s→4s...30s cap), 60s total timeout. ConnectAccept clears reconnect state. Anonymous connections skip auto-reconnect |
+| Economic Nonces | Done | `NonceManager` on server issues random uint64_t per-client nonces for trade/market actions. Single-use (replay rejected), wrong-client rejected, 60s expiry. Cleaned on disconnect and in maintenance tick. Infrastructure ready — protocol message nonce fields are next step |
 | Rate Limiting | Done | Per-client, per-message-type token buckets (O(1) per packet). Configurable burst/sustained rates per command (CmdMove: 65/60 for 60fps clients). Cumulative violation tracking with auto-disconnect threshold. Silent drop policy (never reveals limits to probers) |
 | Connection Cookies | Done | HMAC-based challenge cookie generator (FNV-1a keyed hash, 10s time-bucketed). Foundation for netcode.io-style stateless handshake to prevent spoofed-IP connection flooding |
-| Server Target Validation | Done | Every CmdAction/CmdUseSkill validates target exists in server-side AOI (binary search on sorted visibility set) and is within action range with latency tolerance |
+| Server Target Validation | Done | Every CmdAction/CmdUseSkill validates target exists in server-side AOI (binary search on sorted visibility set) and is within action range with latency tolerance. **Full PvP validation:** `canAttackPlayer()` checks safe zone → party member → dead/dying target → same-faction innocents → different factions. Same-faction players can only attack Red/Black (PK-flagged) targets |
 | Profanity Filter (Server) | Done | ProfanityFilter::filterChatMessage wired into CmdChat handler. Censor mode (asterisks) applied before broadcast. 50+ word list, leetspeak normalization, blocked phrases, max 200 char |
-| Mobile Reconnection | Done | ReconnectState machine: exponential backoff (1s→2s→4s...cap 30s), 60s timeout. Foundation for WiFi→cellular handoff recovery |
-| Entity Replication | Done | AOI-driven enter/leave/update, delta compression with 14-field bitmask (position, animFrame, flipX, currentHP, maxHP, moveState, animId, statusEffectMask, deathState, casting, targetEntityId, level, faction, equipVisuals), per-entity sequence counters (stale update rejection), distance-based tiered update frequency (Near 20Hz/Mid 7Hz/Far 4Hz/Edge 2Hz with HP-change priority override), ghost entities, client-side position interpolation, spatial-indexed visibility |
+| Mobile Reconnection | Done | ReconnectState machine: exponential backoff (1s→2s→4s...cap 30s), 60s timeout. **Wired into NetClient:** heartbeat timeout detection triggers auto-reconnect with stored auth token. ConnectAccept clears state |
+| Entity Replication | Done | AOI-driven enter/leave/update, delta compression with 15-field bitmask (position, animFrame, flipX, currentHP, maxHP, moveState, animId, statusEffectMask, deathState, casting, targetEntityId, level, faction, equipVisuals, **pkStatus**), per-entity sequence counters (stale update rejection), distance-based tiered update frequency (Near 20Hz/Mid 7Hz/Far 4Hz/Edge 2Hz with HP-change priority override), ghost entities, client-side position interpolation, spatial-indexed visibility |
 | Client-Server Architecture | Done | Headless 20 tick/sec server (FateServer), NetClient/NetServer, session tokens, heartbeat/timeout |
 | Platform Detection | Done | Compile-time defines: FATEMMO_PLATFORM_WINDOWS/IOS/ANDROID/MACOS/LINUX, FATEMMO_MOBILE, FATEMMO_GLES |
 | Mobile Lifecycle | Done | SDL event filter for background/foreground/low-memory, virtual callbacks (onEnterBackground/Foreground/LowMemory), game loop pause on background, 4 unit tests |
 | Touch Controls | Done | TWOM-style D-pad (bottom-left), attack + 5 skill buttons (bottom-right arc), tap-to-target, multi-finger support, F4 desktop toggle, ImGui ForegroundDrawList rendering |
-| iOS Build Pipeline | Done | CMake Xcode generator, Info.plist, LaunchScreen.storyboard, GLES 3.0 context, static GL linking, asset bundling, free Apple ID signing, build-ios.sh script |
-| Android Build Pipeline | Done | Gradle wrapper project (AGP 8.5, NDK r27, arm64-v8a), SDLActivity JNI bridge, GLES 3.0 required, INTERNET permission, shared assets dir, `./gradlew installDebug` one-command deploy |
+| iOS Build Pipeline | Done | CMake Xcode generator, Info.plist.in (CMake variables, landscape-only, fullscreen), LaunchScreen.storyboard, GLES 3.0 context, static GL linking, asset bundling, free Apple ID signing. **`ios/build.sh`** accepts `[debug/release] [build/device/testflight]` — generates Xcode project, builds, deploys to device via ios-deploy, or archives + uploads to TestFlight. ExportOptions.plist for App Store export |
+| Android Build Pipeline | Done | Gradle wrapper project (AGP 8.7, NDK r27, C++23, arm64-v8a), `FateMMOActivity` extends SDLActivity via JNI, GLES 3.0 required, INTERNET permission, 16KB page size support, shared assets dir, `./gradlew installDebug` one-command deploy, `android/build.sh` convenience script |
 | Write-Ahead Log | Done | Binary WAL with CRC32 per entry, batched fsync per tick. Journals gold/item/XP mutations. Replay on crash recovery. Truncate after successful DB checkpoint |
 | DB Circuit Breaker | Done | 3-state machine (Closed→Open→HalfOpen) on connection pool. 5 consecutive failures opens for 30s cooldown. Auto-probe on cooldown expiry. WAL queues writes during outage |
 | Per-Player Mutation Lock | Done | PlayerLockMap with unique_ptr<mutex> per character. Serializes concurrent inventory/gold mutations between game thread and async fiber DB operations. Consistent-order locking for two-player trades |
 | CI/CD | Done | GitHub Actions: 3-compiler matrix (MSVC windows-latest, GCC-13 ubuntu-24.04, Clang-17 ubuntu-24.04). Headless OpenGL via Xvfb + Mesa software renderer. vcpkg for Windows deps |
 | Structured Errors | Done | `EngineError` with 4 categories (Transient/Recoverable/Degraded/Fatal), `Result<T>` via `std::expected`, generic `CircuitBreaker` class (`engine/core/`) |
-| LRU Texture Cache | Done | VRAM-budgeted texture cache (512MB default), per-frame access tracking, automatic LRU eviction to 85%, skips in-use textures |
+| LRU Texture Cache | Done | VRAM-budgeted texture cache (512MB default, adjustable via DeviceInfo tier), per-frame access tracking, automatic LRU eviction to 85%, skips in-use textures |
+| PhysicsFS VFS | Done | Virtual filesystem via PhysicsFS. Mount directories or ZIP archives with overlay priority (later mounts win). API: init/mount/readFile/readText/exists/listDir. Enables asset packaging (.pak) and future mod support |
+| Telemetry Collector | Done | `TelemetryCollector` records named float metrics with epoch timestamps. `flushToJson()` serializes to JSON with session ID. `trySend()` placeholder for HTTPS POST. Ready for Cloudflare Worker or similar endpoint |
+| Palette Registry | Done | `PaletteRegistry` loads named 16-color palettes from JSON. `Color::fromHex(string)` overload parses hex color strings. 5 starter palettes (2 faction, 3 rarity). Connects to existing shader renderType 5 and SpriteBatch palette swap API |
+| Device Info | Done | `DeviceInfo` detects physical RAM (Windows/macOS/Linux/Android), classifies into Low (≤3GB, 200MB VRAM) / Medium (4-6GB, 350MB) / High (8GB+, 512MB) tiers. Thermal state polling (stubs for iOS/Android, TODO native bridges). Recommended FPS drops to 30 on serious/critical thermal |
+| Two-Tick Death | Done | `LifeState` enum (Alive→Dying→Dead). `takeDamage()` transitions to Dying (on-death procs fire). `advanceDeathTick()` transitions Dying→Dead on next server tick. Dying/Dead entities reject further damage. Replicated as 3-state deathState field |
+| Optimistic Combat | Done | Client plays attack animation immediately on input (no waiting for server RTT). `CombatPredictionBuffer` ring buffer (32 slots) tracks pending attacks. Attack flash: brief sprite tint (warm yellow melee, cool blue spell). Server response reconciles with final damage numbers |
 | Paper-Doll Rendering | Done | `CharacterAppearance` with 6 equipment layers, direction-aware draw order, per-layer depth offsets, palette index per slot |
 | Precompiled Headers | Done | CMake `target_precompile_headers` for 11 STL headers on `fate_engine` target |
 | PvP Balance Config | Done | Hot-reloadable JSON (`assets/data/pvp_balance.json`) for combat tuning: PvP multipliers, 3×3 class advantage matrix, hit rate table, crit config |
@@ -157,8 +166,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Death Overlay UI | Done | "You have died" panel with 3 respawn options (Town/Map Spawn/Phoenix Down), countdown timer, XP/Honor loss display |
 | Chat UI | Done | Chat button (top-right, unread indicator), panel locked to bottom 25% of viewport. 7-tab filter (All/Map/Global/Trade/Party/Guild/Private). Party/Guild blocked if not in one. Private requires `/username message`. System messages show on all tabs. Per-channel colors. All positioned via GameViewport |
 | Login Screen | Done | Username/password login, registration with character name, class selection (Warrior/Mage/Archer), faction selection (Xyros/Fenor/Zethos/Solis), server host/port config |
-| D-Pad | Planned | Mobile touch control, bottom-left |
-| Action Buttons | Planned | Attack + skill circular buttons, bottom-right |
+| D-Pad | Done | Mobile touch control, bottom-left, part of Touch Controls system |
+| Action Buttons | Done | Attack + 5 skill circular buttons, bottom-right arc, part of Touch Controls system |
 
 ### Zone/Portal System
 | Feature | Status | Notes |
@@ -226,7 +235,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | SpriteRenderSystem | Done | Frustum culled, depth sorted, respects sprite enabled flag |
 | GameplaySystem | Done | Ticks StatusEffects, CrowdControl, SkillManager cooldowns, HP/MP regen, PK decay, death visual (rotation + gray tint), respawn countdown, nameplates |
 | MobAISystem | Done | Ticks MobAI for all mobs, threat-based targeting (top damager holds aggro, overrides nearest-player when in leash range), applies movement, fires attacks. Matches Unity ServerZoneMobAI threat swap behavior |
-| CombatActionSystem | Done | **Prediction-only** — TWOM Option B targeting, viewport-aware click/touch-to-target, auto-clear off-screen. Shows predicted damage text immediately, sends CmdAction to server. Does NOT modify mob/player HP, award XP/gold/honor, or determine kills. All state changes come from server messages (SvCombatEvent, SvPlayerState). |
+| CombatActionSystem | Done | **Prediction-only with optimistic feedback** — viewport-aware click/touch-to-target, auto-clear off-screen. Plays attack animation + sprite flash immediately on input (no server wait). Shows predicted damage text, sends CmdAction to server. Does NOT modify mob/player HP, award XP/gold/honor, or determine kills. All state changes come from server messages (SvCombatEvent, SvPlayerState). CombatPredictionBuffer (32 slots) tracks pending attacks for reconciliation |
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment, deferred entity creation (safe during archetype iteration) |
 | NPCInteractionSystem | Done | Click-to-interact with NPCs, viewport-aware screen-to-world, range check, dialogue open/close, click consumption (prevents combat targeting) |
 | QuestSystem | Done | Routes mob kills/item pickups/NPC talks to quest progress, event-driven quest marker updates on all NPCs |
@@ -374,6 +383,56 @@ classBonus    = classAdvantageMatrix[attacker][defender] // default 1.0
 
 ## Changelog
 
+### March 21, 2026 - Engine Hardening, Mobile Platform, Infrastructure (Phase 9)
+
+Cross-referenced 9 research documents against the full engine codebase. Implemented 16 systems across 4 domains. Test count: 478 → 573 (+95 new tests, 3732 assertions).
+
+**Network Security:**
+- **AEAD packet encryption:** XChaCha20-Poly1305 via libsodium (vcpkg). Per-session key pair, KeyExchange (0x82) packet, sequence-as-nonce. All non-system payloads encrypted. Tampered packets silently dropped. Plaintext fallback without libsodium. 11 tests.
+- **IPv6 dual-stack sockets:** Refactored `NetAddress` from `uint32_t ip` to `sockaddr_storage`. Socket tries AF_INET6 with IPV6_V6ONLY=0 (dual-stack), falls back to AF_INET. Auto-converts IPv4-mapped IPv6 addresses. `toString()` for logging. iOS App Store mandatory since 2016. 7 tests.
+- **One-time economic nonces:** `NonceManager` issues random uint64 per-client, validates single-use, 60s expiry. Wired into server disconnect + maintenance. Infrastructure for trade/market replay prevention. 8 tests.
+- **Auto-reconnect wired:** NetClient detects heartbeat timeout (5s), auto-reconnects with stored auth token. Exponential backoff 1s→30s, 60s total timeout. ConnectAccept clears state. 4 tests.
+
+**Combat & PvP:**
+- **Two-tick death lifecycle:** `LifeState` enum (Alive→Dying→Dead). `takeDamage()` transitions to Dying (on-death procs fire). `advanceDeathTick()` called per server tick transitions Dying→Dead. Dying/Dead entities reject damage. Replication sends 3-state value. 11 tests.
+- **Full PvP target validation:** Replaced `canAttackPlayer()` stub with 4-parameter version checking safe zone → party → dead/dying → same-faction innocents → cross-faction. 10 tests.
+- **Inventory slot safety verified:** `addItemToSlot()` already had bounds + trade-lock + occupancy checks. 5 regression tests added.
+- **Optimistic combat feedback:** Client plays attack animation immediately on input. `CombatPredictionBuffer` ring buffer. Attack flash (warm yellow melee, cool blue spell). Server reconciles with final damage. No server changes needed.
+
+**Mobile Platform:**
+- **GLES shader preamble injection:** `loadFromSource()` prepends `#version 330 core` (desktop) or `#version 300 es` + precision qualifiers (mobile). Removed hardcoded `#version` from SpriteBatch fallback shaders.
+- **SDL lifecycle events:** Already existed — verified working (App class with virtual callbacks).
+- **Device info:** `DeviceInfo` detects RAM (Windows/macOS/Linux/Android), classifies Low/Medium/High tiers with VRAM budgets. Thermal state stubs. 5 tests.
+- **iOS build pipeline:** Updated Info.plist.in, LaunchScreen.storyboard. Created `ios/build.sh` (build/device/testflight modes) and ExportOptions.plist.
+- **Android Gradle project:** Updated to C++23, NDK r27, AGP 8.7, 16KB page sizes. Created `FateMMOActivity.java`, `android/build.sh`.
+
+**Engine Infrastructure:**
+- **PhysicsFS VFS:** Virtual filesystem with mount/overlay/read. FetchContent integration. 9 tests.
+- **Telemetry collector:** Records named float metrics, serializes to JSON with session ID. 5 tests.
+- **Palette swap registry:** `PaletteRegistry` loads named 16-color palettes from JSON. Added `Color::fromHex(string)`. 5 starter palettes. 5 tests.
+
+**Verified as already done:** Profanity filter server wiring, system() command injection (no system() calls found).
+
+**Files:** 69 changed, +2992/-197 lines, 19 new files created.
+
+### March 21, 2026 - Batch A Combat & Class Mechanics
+
+- Fury per-hit generation wired (0.5 normal, 1.0 crit, 0.2 on damage for Warriors)
+- SvBossLootOwnerMsg (0xA7): boss kill notification with top damager
+- pkStatus (bit 14) replicated to remote players for PK name colors
+- Double-cast end-to-end test verified
+
+### March 21, 2026 - Combat Sync Hardening & Equipment Wiring
+
+- Enriched SvSkillResultMsg (hitFlags bitmask, overkill, targetNewHP, cooldownMs, resourceCost)
+- Derived stats in SvPlayerStateMsg (armor, crit, speed, dmg mult, PK status)
+- SvLevelUpMsg packet with full stat snapshot
+- Equipment system fully wired server-side (CmdEquip, stat recalc, DB load into slots)
+- Status effect mask replication fixed (was hardcoded 0)
+- DoT ticking wired into server loop (was dead code)
+- PK transitions + decay timers on both skills AND auto-attacks
+- 6 edge-case bugs fixed (iterator invalidation, lifesteal cap, passive stat ordering, HP clamp ordering)
+
 ### March 20, 2026 - Party Loot, Mob Aggro, WAL Integration
 
 **Party-aware loot ownership:**
@@ -395,6 +454,27 @@ classBonus    = classAdvantageMatrix[attacker][defender] // default 1.0
 - Crash recovery on startup: reads/logs leftover entries, then truncates.
 
 **Test count:** 455 → 479 (24 new tests)
+
+### March 21, 2026 - Scenario Test Bot (TestBot + fate_scenario_tests)
+
+**Automated end-to-end gameplay testing infrastructure:**
+- **TestBot class** (`tests/scenarios/test_bot.h/.cpp`): Wraps `AuthClient` (TLS TCP login) + `NetClient` (UDP gameplay) into a synchronous test harness. Typed event queues for all 16 server message types. `waitFor<T>(timeout)` blocks until a matching event arrives. `pollFor(duration)` collects events without failing. Auto-generates timestamps for movement, maps `sendAttack()` to `sendAction(0, id, 0)`.
+- **ScenarioFixture** (`tests/scenarios/scenario_fixture.h`): doctest fixture that reads credentials from env vars (`TEST_USERNAME`, `TEST_PASSWORD`), auto-logins via TLS auth, and connects UDP per test case. Disconnects in destructor.
+- **Separate build target**: `fate_scenario_tests` executable, independent from `fate_tests` unit suite. Guarded by `if(NOT iOS AND NOT ANDROID)`. `tests/scenarios/` excluded from unit test glob via `list(FILTER ... EXCLUDE REGEX)`.
+
+**10 scenario test cases across 4 files:**
+- `test_login_stats.cpp` (3): Auth response validation, SvPlayerState cross-check (HP/MP/XP/gold/level), initial sync verification
+- `test_combat.cpp` (2): Attack mob → SvCombatEvent, entity update HP change verification
+- `test_zone_transition.cpp` (3): Server zone ack, stat preservation across scenes, connection stability
+- `test_movement.cpp` (2): Entity visibility on move, no rubber-band for valid movement
+
+**Test count:** 555 unit tests, 3,685 assertions + 10 scenario tests
+
+**AOI investigation — root cause of entity flickering documented:**
+- **Bug 1 (flickering):** Distance-based AOI with 640px activation / 768px deactivation caused entities at the boundary to oscillate visible/invisible when moving near the radius edge. The 128px hysteresis gap was too narrow for actively moving mobs.
+- **Bug 2 (combat broken, fixed in 4e7166e):** `TargetValidator::isInAOI()` checked `aoi.current` which is empty between ticks (cleared by `advance()`). All combat validation failed. Fixed by switching to `aoi.previous`.
+- **Current state:** Distance-based AOI disabled; scene-wide replication used instead. Spatial hash grid rebuilt every tick but never queried (dead code). This is the main scaling bottleneck — O(N²) replication per zone.
+- **Fix plan (deferred):** Wider hysteresis (500px/900px), minimum visibility duration (N ticks before entity can leave), use spatial hash for neighbor queries. Expected 3-5x capacity improvement when implemented.
 
 ### March 20, 2026 - Bugfixes & Auth Response Expansion
 

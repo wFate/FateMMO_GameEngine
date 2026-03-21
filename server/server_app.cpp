@@ -3,6 +3,7 @@
 #include "engine/core/logger.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/net/protocol.h"
+#include "engine/net/packet_crypto.h"
 #include "engine/ecs/persistent_id.h"
 #include "game/entity_factory.h"
 #include "game/shared/game_types.h"
@@ -41,6 +42,9 @@ bool ServerApp::init(uint16_t port) {
         LOG_ERROR("Server", "Failed to init network platform");
         return false;
     }
+
+    // Initialize AEAD crypto library (libsodium)
+    PacketCrypto::initLibrary();
 
     if (!server_.start(port)) {
         LOG_ERROR("Server", "Failed to start on port %d", port);
@@ -1003,6 +1007,21 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         deathMsg.write(w);
         server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvDeathNotify, buf, w.size());
         LOG_INFO("Server", "Client %d reconnected dead — sent death notification", clientId);
+    }
+
+    // Send AEAD encryption keys (KeyExchange)
+    if (PacketCrypto::isAvailable()) {
+        auto keys = PacketCrypto::generateSessionKeys();
+        // Server encrypts with rxKey, decrypts with txKey (mirror of client)
+        client->crypto.setKeys(keys.rxKey, keys.txKey);
+
+        // Send txKey (client's encrypt key) and rxKey (client's decrypt key)
+        uint8_t keyBuf[64];
+        ByteWriter kw(keyBuf, sizeof(keyBuf));
+        kw.writeBytes(keys.txKey.data(), 32);
+        kw.writeBytes(keys.rxKey.data(), 32);
+        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::KeyExchange, keyBuf, kw.size());
+        LOG_INFO("Server", "Sent AEAD session keys to client %d", clientId);
     }
 
     LOG_INFO("Server", "Client %d connected: account=%d char='%s' level=%d guild=%d",

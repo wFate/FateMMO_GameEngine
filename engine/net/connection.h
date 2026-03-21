@@ -4,6 +4,7 @@
 #include "engine/net/aoi.h"
 #include "engine/net/protocol.h"
 #include "engine/net/auth_protocol.h"
+#include "engine/net/packet_crypto.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -26,6 +27,7 @@ struct ClientConnection {
     int account_id = 0;
     std::string character_id;
     AuthToken authToken = {};  // populated from Connect packet payload
+    PacketCrypto crypto;       // AEAD encrypt/decrypt for this session
 };
 
 class ConnectionManager {
