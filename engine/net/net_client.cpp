@@ -422,6 +422,18 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onBossLootOwner) onBossLootOwner(msg);
             break;
         }
+        case PacketType::SvEnchantResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvEnchantResultMsg::read(payload);
+            if (onEnchantResult) onEnchantResult(msg);
+            break;
+        }
+        case PacketType::SvRepairResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvRepairResultMsg::read(payload);
+            if (onRepairResult) onRepairResult(msg);
+            break;
+        }
         default:
             break;
     }
