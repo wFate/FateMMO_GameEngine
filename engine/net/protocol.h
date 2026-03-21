@@ -593,4 +593,27 @@ struct SvInventorySyncMsg {
     }
 };
 
+struct SvBossLootOwnerMsg {
+    std::string bossId;       // mob definition ID string (matches EnemyStats::enemyId)
+    std::string winnerName;   // character name of top damager
+    int32_t     topDamage = 0;
+    uint8_t     wasParty  = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeString(bossId);
+        w.writeString(winnerName);
+        w.writeI32(topDamage);
+        w.writeU8(wasParty);
+    }
+
+    static SvBossLootOwnerMsg read(ByteReader& r) {
+        SvBossLootOwnerMsg m;
+        m.bossId      = r.readString();
+        m.winnerName  = r.readString();
+        m.topDamage   = r.readI32();
+        m.wasParty    = r.readU8();
+        return m;
+    }
+};
+
 } // namespace fate
