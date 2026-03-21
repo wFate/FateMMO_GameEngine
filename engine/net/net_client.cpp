@@ -440,6 +440,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onExtractResult) onExtractResult(msg);
             break;
         }
+        case PacketType::SvCraftResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCraftResultMsg::read(payload);
+            if (onCraftResult) onCraftResult(msg);
+            break;
+        }
         default:
             break;
     }
