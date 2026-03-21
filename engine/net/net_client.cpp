@@ -458,6 +458,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onArenaUpdate) onArenaUpdate(msg);
             break;
         }
+        case PacketType::SvPetUpdate: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvPetUpdateMsg::read(payload);
+            if (onPetUpdate) onPetUpdate(msg);
+            break;
+        }
         default:
             break;
     }
