@@ -80,4 +80,52 @@ TEST_CASE("Fury still generates on killing blow") {
     CHECK(stats.currentFury == doctest::Approx(0.5f));
 }
 
+TEST_CASE("Warrior gains fury when taking damage") {
+    CharacterStats stats;
+    stats.classDef.classType = ClassType::Warrior;
+    stats.classDef.primaryResource = ResourceType::Fury;
+    stats.classDef.furyPerDamageReceived = 0.2f;
+    stats.maxFury = 3;
+    stats.currentFury = 0.0f;
+    stats.currentHP = 100;
+    stats.maxHP = 100;
+    stats.level = 1;
+    stats.recalculateStats(); // sets armor from equipment bonuses (default 0)
+
+    int dealt = stats.takeDamage(10);
+    CHECK(dealt > 0);
+    CHECK(stats.currentFury == doctest::Approx(0.2f));
+}
+
+TEST_CASE("Ranger does NOT gain fury when taking damage") {
+    CharacterStats stats;
+    stats.classDef.classType = ClassType::Archer;
+    stats.classDef.primaryResource = ResourceType::Fury;
+    stats.classDef.furyPerDamageReceived = 0.0f; // Rangers: no fury on hit taken
+    stats.maxFury = 3;
+    stats.currentFury = 0.0f;
+    stats.currentHP = 100;
+    stats.maxHP = 100;
+    stats.level = 1;
+    stats.recalculateStats();
+
+    stats.takeDamage(10);
+    CHECK(stats.currentFury == doctest::Approx(0.0f));
+}
+
+TEST_CASE("No fury gained when damage is zero (dead)") {
+    CharacterStats stats;
+    stats.classDef.classType = ClassType::Warrior;
+    stats.classDef.primaryResource = ResourceType::Fury;
+    stats.classDef.furyPerDamageReceived = 0.2f;
+    stats.maxFury = 3;
+    stats.currentFury = 0.0f;
+    stats.currentHP = 0;
+    stats.lifeState = LifeState::Dead;
+
+    int dealt = stats.takeDamage(10);
+    CHECK(dealt == 0);
+    CHECK(stats.currentFury == doctest::Approx(0.0f));
+}
+
 } // TEST_SUITE

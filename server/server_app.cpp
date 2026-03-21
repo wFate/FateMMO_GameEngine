@@ -170,6 +170,22 @@ void ServerApp::run() {
             evt.write(w);
             server_.broadcast(Channel::ReliableOrdered, PacketType::SvCombatEvent, buf, w.size());
 
+            // Sync player state (HP/Fury) after mob damage — covers fury-on-hit for Warriors
+            {
+                auto* sc = player->getComponent<CharacterStatsComponent>();
+                if (sc && sc->stats.classDef.usesFury()) {
+                    uint16_t targetClientId = 0;
+                    server_.connections().forEach([&](const ClientConnection& conn) {
+                        if (conn.playerEntityId == playerPid) {
+                            targetClientId = conn.clientId;
+                        }
+                    });
+                    if (targetClientId != 0) {
+                        sendPlayerState(targetClientId);
+                    }
+                }
+            }
+
             // If player was killed, send SvDeathNotifyMsg to that player's client
             if (isKill) {
                 auto* sc = player->getComponent<CharacterStatsComponent>();
