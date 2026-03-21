@@ -164,6 +164,9 @@ private:
     void tickMaintenance(float dt);
     void initGauntlet();
     void processGauntletCommand(uint16_t clientId, ByteReader& payload);
+    void broadcastBossKillNotification(const EnemyStats& es,
+                                       const EnemyStats::LootOwnerResult& lootResult,
+                                       const std::string& scene);
 };
 
 } // namespace fate

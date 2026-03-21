@@ -2663,6 +2663,10 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             uint32_t baseOwner = lootResult.topDamagerId;
             if (baseOwner == 0) baseOwner = casterHandle.value;
 
+            std::string killScene;
+            if (casterStatsComp) killScene = casterStatsComp->stats.currentScene;
+            broadcastBossKillNotification(es, lootResult, killScene);
+
             // Prepare per-item random loot mode: collect all alive party members in scene
             std::vector<uint32_t> partyEntityIds;
             bool useRandomPerItem = false;
@@ -2945,6 +2949,10 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             auto lootResult = es.getTopDamagerPartyAware(partyLookup);
             uint32_t baseOwner = lootResult.topDamagerId;
             if (baseOwner == 0) baseOwner = attackerHandle.value;
+
+            std::string killScene;
+            if (charStats) killScene = charStats->stats.currentScene;
+            broadcastBossKillNotification(es, lootResult, killScene);
 
             // Prepare per-item random loot mode: collect all alive party members in scene
             std::vector<uint32_t> partyEntityIds;
@@ -3824,6 +3832,49 @@ void ServerApp::processGauntletCommand(uint16_t clientId, ByteReader& payload) {
             LOG_WARN("Server", "Unknown gauntlet sub-action %d from client %d", subAction, clientId);
             break;
     }
+}
+
+void ServerApp::broadcastBossKillNotification(const EnemyStats& es,
+                                               const EnemyStats::LootOwnerResult& lootResult,
+                                               const std::string& scene) {
+    if (es.monsterType == "Normal") return;
+
+    SvBossLootOwnerMsg bossMsg;
+    bossMsg.bossId = es.enemyId;
+    bossMsg.wasParty = lootResult.isParty ? 1 : 0;
+
+    // Get individual top damager's damage
+    auto it = es.damageByAttacker.find(lootResult.topDamagerId);
+    bossMsg.topDamage = (it != es.damageByAttacker.end()) ? it->second : 0;
+
+    // Look up winner name
+    EntityHandle winnerH(lootResult.topDamagerId);
+    auto* winnerEntity = world_.getEntity(winnerH);
+    if (winnerEntity) {
+        auto* winnerNameplate = winnerEntity->getComponent<NameplateComponent>();
+        if (winnerNameplate) {
+            bossMsg.winnerName = winnerNameplate->displayName;
+        }
+    }
+
+    if (bossMsg.winnerName.empty()) return; // Winner disconnected
+
+    uint8_t buf[256];
+    ByteWriter w(buf, sizeof(buf));
+    bossMsg.write(w);
+
+    // Scene-scoped broadcast: only send to clients in the same scene
+    server_.connections().forEach([&](ClientConnection& client) {
+        if (client.playerEntityId == 0) return;
+        EntityHandle ch(static_cast<uint32_t>(client.playerEntityId));
+        auto* ce = world_.getEntity(ch);
+        if (!ce) return;
+        auto* cs = ce->getComponent<CharacterStatsComponent>();
+        if (cs && cs->stats.currentScene == scene) {
+            server_.sendTo(client.clientId, Channel::ReliableOrdered,
+                          PacketType::SvBossLootOwner, buf, w.size());
+        }
+    });
 }
 
 } // namespace fate
