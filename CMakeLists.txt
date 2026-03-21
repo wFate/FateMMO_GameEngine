@@ -147,6 +147,51 @@ set(PHYSFS_BUILD_TEST OFF CACHE BOOL "" FORCE)
 set(PHYSFS_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(physfs)
 
+# SoLoud audio library
+FetchContent_Declare(
+    soloud
+    GIT_REPOSITORY https://github.com/jarikomppa/soloud.git
+    GIT_TAG        RELEASE_20200207
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(soloud)
+
+set(SOLOUD_SRC_DIR ${soloud_SOURCE_DIR}/src)
+add_library(soloud_lib STATIC
+    ${SOLOUD_SRC_DIR}/core/soloud.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_audiosource.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_bus.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_core_3d.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_core_basicops.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_core_faderops.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_core_filterops.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_core_getters.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_core_setters.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_core_voicegroup.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_core_voiceops.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_fft.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_fft_lut.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_file.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_filter.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_misc.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_queue.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_thread.cpp
+    ${SOLOUD_SRC_DIR}/audiosource/wav/soloud_wav.cpp
+    ${SOLOUD_SRC_DIR}/audiosource/wav/soloud_wavstream.cpp
+    ${SOLOUD_SRC_DIR}/audiosource/wav/stb_vorbis.c
+    ${SOLOUD_SRC_DIR}/audiosource/wav/dr_impl.cpp
+    ${SOLOUD_SRC_DIR}/backend/sdl2_static/soloud_sdl2_static.cpp
+    ${SOLOUD_SRC_DIR}/backend/null/soloud_null.cpp
+)
+target_include_directories(soloud_lib PUBLIC ${soloud_SOURCE_DIR}/include)
+target_compile_definitions(soloud_lib PUBLIC WITH_SDL2_STATIC WITH_NULL)
+target_link_libraries(soloud_lib PRIVATE SDL2::SDL2-static)
+if(MSVC)
+    target_compile_options(soloud_lib PRIVATE /W0)
+else()
+    target_compile_options(soloud_lib PRIVATE -w)
+endif()
+
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     # OpenSSL (TLS for auth) — installed via vcpkg
     find_package(OpenSSL REQUIRED)
@@ -249,6 +294,7 @@ target_link_libraries(fate_engine PUBLIC
     TracyClient
     spdlog::spdlog
     physfs-static
+    soloud_lib
 )
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     target_link_libraries(fate_engine PUBLIC OpenSSL::SSL OpenSSL::Crypto)
