@@ -12,6 +12,7 @@
 #include "game/shared/item_stat_roller.h"
 #include "game/components/pet_component.h"
 #include "game/systems/mob_ai_system.h"
+#include "game/shared/xp_calculator.h"
 #include "engine/net/game_messages.h"
 
 #ifdef _WIN32
@@ -1084,6 +1085,31 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
         if (h) {
             world_.destroyEntity(h);
             world_.processDestroyQueue();
+        }
+    }
+
+    // Cancel any active trade session for the disconnecting player
+    if (client && !client->character_id.empty()) {
+        auto tradeSession = tradeRepo_->getActiveSession(client->character_id);
+        if (tradeSession) {
+            tradeRepo_->cancelSession(tradeSession->sessionId);
+            // Notify the other player that the trade was cancelled
+            std::string otherCharId = (client->character_id == tradeSession->playerACharacterId)
+                ? tradeSession->playerBCharacterId : tradeSession->playerACharacterId;
+            server_.connections().forEach([&](ClientConnection& c) {
+                if (c.character_id == otherCharId) {
+                    SvTradeUpdateMsg cancelMsg;
+                    cancelMsg.updateType = 6; // cancelled
+                    cancelMsg.resultCode = 9; // partner disconnected
+                    cancelMsg.otherPlayerName = "Trade cancelled — other player disconnected";
+                    uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                    cancelMsg.write(w);
+                    server_.sendTo(c.clientId, Channel::ReliableOrdered,
+                                   PacketType::SvTradeUpdate, buf, w.size());
+                }
+            });
+            LOG_INFO("Server", "Cancelled trade session %d due to client %d disconnect",
+                     tradeSession->sessionId, clientId);
         }
     }
 
@@ -2174,6 +2200,12 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
         target = world_.getEntity(targetHandle);
     }
 
+    // Reject skill if target was specified but no longer exists (died/disconnected)
+    if (msg.targetId != 0 && !target) {
+        LOG_WARN("Server", "Client %d used skill on non-existent target %llu", clientId, msg.targetId);
+        return;
+    }
+
     if (target) {
         ctx.targetEntityId = target->handle().value;
 
@@ -2296,12 +2328,19 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             auto* targetTransform = target->getComponent<Transform>();
             Vec2 deathPos = targetTransform ? targetTransform->position : Vec2{0, 0};
 
-            // Award XP to the killer
+            // Award XP to the killer (scaled by level gap)
             if (casterStatsComp) {
-                int xp = es.xpReward;
-                casterStatsComp->stats.addXP(xp);
-                LOG_INFO("Server", "Client %d gained %d XP from '%s'",
-                         clientId, xp, es.enemyName.c_str());
+                int xp = XPCalculator::calculateXPReward(
+                    es.xpReward, es.level, casterStatsComp->stats.level);
+                if (xp > 0) {
+                    casterStatsComp->stats.addXP(xp);
+                    LOG_INFO("Server", "Client %d gained %d XP from '%s' (base=%d, mob Lv%d, player Lv%d)",
+                             clientId, xp, es.enemyName.c_str(), es.xpReward,
+                             es.level, casterStatsComp->stats.level);
+                } else {
+                    LOG_INFO("Server", "Client %d: trivial mob '%s' Lv%d — no XP (player Lv%d)",
+                             clientId, es.enemyName.c_str(), es.level, casterStatsComp->stats.level);
+                }
             }
 
             // Determine top damager for loot ownership
@@ -2518,12 +2557,19 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             EnemyStats& es = targetEnemyStats->stats;
             Vec2 deathPos = targetTransform ? targetTransform->position : Vec2{0, 0};
 
-            // Award XP to the killer
+            // Award XP to the killer (scaled by level gap)
             if (charStats) {
-                int xp = es.xpReward;
-                charStats->stats.addXP(xp);
-                LOG_INFO("Server", "Client %d gained %d XP from '%s'",
-                         clientId, xp, es.enemyName.c_str());
+                int xp = XPCalculator::calculateXPReward(
+                    es.xpReward, es.level, charStats->stats.level);
+                if (xp > 0) {
+                    charStats->stats.addXP(xp);
+                    LOG_INFO("Server", "Client %d gained %d XP from '%s' (base=%d, mob Lv%d, player Lv%d)",
+                             clientId, xp, es.enemyName.c_str(), es.xpReward,
+                             es.level, charStats->stats.level);
+                } else {
+                    LOG_INFO("Server", "Client %d: trivial mob '%s' Lv%d — no XP (player Lv%d)",
+                             clientId, es.enemyName.c_str(), es.level, charStats->stats.level);
+                }
             }
 
             // Determine top damager for loot ownership
