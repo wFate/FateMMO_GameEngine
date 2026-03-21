@@ -68,6 +68,9 @@ CharacterRecord CharacterRepository::rowToRecord(const pqxx::row& row) {
 
     rec.total_playtime_seconds = row["total_playtime_seconds"].is_null() ? 0 : row["total_playtime_seconds"].as<int64_t>();
 
+    rec.pk_status              = row["pk_status"].is_null() ? 0 : row["pk_status"].as<int>();
+    rec.faction                = row["faction"].is_null() ? 0 : row["faction"].as<int>();
+
     return rec;
 }
 
@@ -83,7 +86,8 @@ std::optional<CharacterRecord> CharacterRepository::loadCharacter(const std::str
             "gold, honor, pvp_kills, pvp_deaths, "
             "is_dead, death_timestamp, "
             "gender, hairstyle, hair_color, "
-            "total_playtime_seconds "
+            "total_playtime_seconds, "
+            "pk_status, faction "
             "FROM characters WHERE character_id = $1",
             characterId);
         txn.commit();
@@ -107,7 +111,8 @@ std::optional<CharacterRecord> CharacterRepository::loadCharacterByAccount(int a
             "gold, honor, pvp_kills, pvp_deaths, "
             "is_dead, death_timestamp, "
             "gender, hairstyle, hair_color, "
-            "total_playtime_seconds "
+            "total_playtime_seconds, "
+            "pk_status, faction "
             "FROM characters WHERE account_id = $1 LIMIT 1",
             accountId);
         txn.commit();
@@ -133,6 +138,7 @@ bool CharacterRepository::saveCharacter(const CharacterRecord& rec) {
             "honor = $19, pvp_kills = $20, pvp_deaths = $21, "
             "is_dead = $22, death_timestamp = $23, "
             "total_playtime_seconds = $24, "
+            "pk_status = $25, faction = $26, "
             "last_saved_at = NOW() "
             "WHERE character_id = $1",
             rec.character_id,
@@ -144,7 +150,8 @@ bool CharacterRepository::saveCharacter(const CharacterRecord& rec) {
             rec.gold,
             rec.honor, rec.pvp_kills, rec.pvp_deaths,
             rec.is_dead, rec.death_timestamp,
-            rec.total_playtime_seconds);
+            rec.total_playtime_seconds,
+            rec.pk_status, rec.faction);
         txn.commit();
         return true;
     } catch (const std::exception& e) {

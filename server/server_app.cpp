@@ -993,6 +993,8 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         s.pvpDeaths    = rec.pvp_deaths;
         s.isDead       = rec.is_dead;
         s.lifeState    = rec.is_dead ? LifeState::Dead : LifeState::Alive;
+        s.pkStatus     = static_cast<PKStatus>(rec.pk_status);
+        s.faction      = static_cast<Faction>(rec.faction);
         // Fix legacy "Scene2" default — migrate to real scene name
         s.currentScene = (rec.current_scene == "Scene2" || rec.current_scene.empty())
             ? "WhisperingWoods" : rec.current_scene;
@@ -1404,6 +1406,8 @@ void ServerApp::savePlayerToDB(uint16_t clientId) {
         rec.pvp_kills        = s.pvpKills;
         rec.pvp_deaths       = s.pvpDeaths;
         rec.is_dead          = s.isDead;
+        rec.pk_status        = static_cast<int>(s.pkStatus);
+        rec.faction          = static_cast<int>(s.faction);
     }
 
     auto* t = e->getComponent<Transform>();
@@ -1538,6 +1542,8 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId) {
         rec.pvp_kills        = s.pvpKills;
         rec.pvp_deaths       = s.pvpDeaths;
         rec.is_dead          = s.isDead;
+        rec.pk_status        = static_cast<int>(s.pkStatus);
+        rec.faction          = static_cast<int>(s.faction);
     }
 
     auto* t = e->getComponent<Transform>();

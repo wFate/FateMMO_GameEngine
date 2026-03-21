@@ -55,6 +55,10 @@ struct CharacterRecord {
 
     // Playtime
     int64_t total_playtime_seconds = 0;
+
+    // PK & Faction (persisted across sessions)
+    int pk_status = 0;   // 0=White, 1=Purple, 2=Red, 3=Black
+    int faction = 0;     // 0=None, 1=Xyros, 2=Fenor, 3=Zethos, 4=Solis
 };
 
 class CharacterRepository {
