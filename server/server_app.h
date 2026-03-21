@@ -26,6 +26,7 @@
 #include "server/rate_limiter.h"
 #include "server/wal/write_ahead_log.h"
 #include "server/player_lock.h"
+#include "server/nonce_manager.h"
 #include "game/shared/gauntlet.h"
 #include "server/cache/item_definition_cache.h"
 #include "server/cache/loot_table_cache.h"
@@ -133,6 +134,9 @@ private:
 
     // Per-client skill cooldown tracking: clientId -> skillId -> last cast gameTime
     std::unordered_map<uint16_t, std::unordered_map<std::string, float>> skillCooldowns_;
+
+    // One-time nonces for economic actions (trade/market replay prevention)
+    NonceManager nonceManager_;
 
     // Per-player mutex for serializing game-thread mutations vs async fiber DB saves
     PlayerLockMap playerLocks_;

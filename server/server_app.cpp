@@ -1325,6 +1325,7 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     lastAutoAttackTime_.erase(clientId);
     skillCooldowns_.erase(clientId);
     rateLimiters_.erase(clientId);
+    nonceManager_.removeClient(clientId);
 }
 
 void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload) {
@@ -3580,6 +3581,9 @@ void ServerApp::tickMaintenance(float dt) {
             LOG_INFO("Server", "Cleaned %d stale trade sessions", cleaned);
         }
     }
+
+    // Expire stale economic nonces (>60s old)
+    nonceManager_.expireAll(gameTime_);
 }
 
 // ============================================================================
