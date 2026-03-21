@@ -148,6 +148,10 @@ private:
     // Per-client skill cooldown tracking: clientId -> skillId -> last cast gameTime
     std::unordered_map<uint16_t, std::unordered_map<std::string, float>> skillCooldowns_;
 
+    // Server-side HP/MP regen timers
+    float regenTimer_ = 0.0f;
+    float mpRegenTimer_ = 0.0f;
+
     // One-time nonces for economic actions (trade/market replay prevention)
     NonceManager nonceManager_;
 

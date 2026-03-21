@@ -572,7 +572,33 @@ void ServerApp::tick(float dt) {
         cs->stats.tickTimers(dt);
     });
 
-    // 3d. Process Dying → Dead transitions (two-tick death lifecycle)
+    // 3d. HP/MP regen tick (server-authoritative)
+    regenTimer_ += dt;
+    mpRegenTimer_ += dt;
+    if (regenTimer_ >= 10.0f || mpRegenTimer_ >= 5.0f) {
+        bool doHP = regenTimer_ >= 10.0f;
+        bool doMP = mpRegenTimer_ >= 5.0f;
+        world_.forEach<CharacterStatsComponent>([&](Entity*, CharacterStatsComponent* cs) {
+            if (!cs->stats.isAlive()) return;
+            // HP regen: 1% maxHP + equipment bonus, every 10 seconds
+            if (doHP && cs->stats.currentHP < cs->stats.maxHP) {
+                int amount = std::max(1, static_cast<int>(
+                    cs->stats.maxHP * 0.01f + cs->stats.equipBonusHPRegen));
+                cs->stats.heal(amount);
+            }
+            // MP regen: WIS-based + equipment bonus, every 5 seconds (mana classes only)
+            if (doMP && cs->stats.classDef.usesMana()
+                && cs->stats.currentMP < cs->stats.maxMP) {
+                int amount = std::max(1, static_cast<int>(
+                    cs->stats.getWisdom() * 0.5f + cs->stats.equipBonusMPRegen));
+                cs->stats.currentMP = std::min(cs->stats.maxMP, cs->stats.currentMP + amount);
+            }
+        });
+        if (doHP) regenTimer_ -= 10.0f;
+        if (doMP) mpRegenTimer_ -= 5.0f;
+    }
+
+    // 3e. Process Dying → Dead transitions (two-tick death lifecycle)
     world_.forEach<CharacterStatsComponent>([](Entity*, CharacterStatsComponent* cs) {
         cs->stats.advanceDeathTick();
     });
