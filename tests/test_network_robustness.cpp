@@ -2,6 +2,7 @@
 #include "engine/net/byte_stream.h"
 #include "engine/net/protocol.h"
 #include "engine/net/game_messages.h"
+#include "engine/net/net_client.h"
 #include "game/shared/game_types.h"
 
 TEST_SUITE("Network Robustness") {
@@ -285,6 +286,37 @@ TEST_CASE("Zero-length string round-trip") {
     CHECK(s.empty());
     CHECK_FALSE(r.overflowed());
     CHECK(r.remaining() == 0);
+}
+
+// ============================================================================
+// NetClient reconnect state machine
+// ============================================================================
+
+TEST_CASE("NetClient reconnect state starts as None") {
+    fate::NetClient client;
+    CHECK_FALSE(client.isReconnecting());
+    CHECK_FALSE(client.reconnectFailed());
+    CHECK(client.reconnectAttempts() == 0);
+}
+
+TEST_CASE("NetClient isConnected starts false") {
+    fate::NetClient client;
+    CHECK_FALSE(client.isConnected());
+}
+
+TEST_CASE("NetClient clientId starts as 0") {
+    fate::NetClient client;
+    CHECK(client.clientId() == 0);
+}
+
+TEST_CASE("NetClient disconnect resets reconnect state") {
+    fate::NetClient client;
+    // Calling disconnect on a fresh client should not crash and should stay clean
+    client.disconnect();
+    CHECK_FALSE(client.isReconnecting());
+    CHECK_FALSE(client.reconnectFailed());
+    CHECK(client.reconnectAttempts() == 0);
+    CHECK_FALSE(client.isConnected());
 }
 
 } // TEST_SUITE

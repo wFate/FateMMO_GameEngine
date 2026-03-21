@@ -28,6 +28,11 @@ public:
     bool isConnected() const { return connected_; }
     uint16_t clientId() const { return clientId_; }
 
+    // Reconnect state queries
+    bool isReconnecting() const;
+    bool reconnectFailed() const;
+    int reconnectAttempts() const;
+
     // Callbacks
     std::function<void()> onConnected;
     std::function<void()> onDisconnected;
@@ -68,7 +73,23 @@ private:
     float connectStartTime_ = 0.0f;
     bool waitingForAccept_ = false;
     float lastHeartbeatSent_ = 0.0f;
+    float lastPacketReceived_ = 0.0f;
     AuthToken authToken_ = {};
+
+    // Reconnect state machine
+    enum class ReconnectPhase : uint8_t { None, Reconnecting, Failed };
+    ReconnectPhase reconnectPhase_ = ReconnectPhase::None;
+    int reconnectAttempts_ = 0;
+    float reconnectTimer_ = 0.0f;
+    float reconnectDelay_ = 1.0f;
+    float reconnectElapsed_ = 0.0f;
+    static constexpr float RECONNECT_TIMEOUT = 60.0f;
+    static constexpr float MAX_RECONNECT_DELAY = 30.0f;
+    static constexpr float HEARTBEAT_TIMEOUT = 5.0f;
+    std::string lastHost_;
+    uint16_t lastPort_ = 0;
+
+    void startReconnect();
 
     void sendPacket(Channel channel, uint8_t packetType,
                     const uint8_t* payload = nullptr, size_t payloadSize = 0);
