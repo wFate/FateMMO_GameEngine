@@ -107,7 +107,7 @@ void NetServer::handleConnect(const NetAddress& from, const uint8_t* payload, si
             std::string reason = "Version mismatch: server=" + std::to_string(PROTOCOL_VERSION)
                                + " client=" + std::to_string(clientVersion);
             sendConnectReject(from, reason);
-            LOG_WARN("NetServer", "%s from %u:%u", reason.c_str(), from.ip, from.port);
+            LOG_WARN("NetServer", "%s from %s", reason.c_str(), from.toString().c_str());
             return;
         }
         // Skip version byte for auth token extraction below
@@ -145,7 +145,7 @@ void NetServer::handleConnect(const NetAddress& from, const uint8_t* payload, si
 
     if (onClientConnected) onClientConnected(clientId);
 
-    LOG_INFO("NetServer", "Client %d connected from %u:%u", clientId, from.ip, from.port);
+    LOG_INFO("NetServer", "Client %d connected from %s", clientId, from.toString().c_str());
 }
 
 void NetServer::sendConnectReject(const NetAddress& to, const std::string& reason) {

@@ -17,7 +17,7 @@ TEST_CASE("NetServer: client connect and receive accept") {
     // Client sends Connect
     NetSocket clientSock;
     REQUIRE(clientSock.open(0));
-    NetAddress serverAddr{0x7F000001, server.port()};
+    NetAddress serverAddr = NetAddress::makeIPv4(0x7F000001, server.port());
 
     uint8_t buf[MAX_PACKET_SIZE];
     ByteWriter w(buf, sizeof(buf));

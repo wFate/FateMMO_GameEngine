@@ -21,7 +21,7 @@ TEST_CASE("NetSocket: send and receive loopback") {
     CHECK(receiver.open(0));
 
     uint8_t sendBuf[] = {0xDE, 0xAD, 0xBE, 0xEF};
-    NetAddress loopback{0x7F000001, receiver.port()};
+    NetAddress loopback = NetAddress::makeIPv4(0x7F000001, receiver.port());
 
     int sent = sender.sendTo(sendBuf, 4, loopback);
     CHECK(sent == 4);

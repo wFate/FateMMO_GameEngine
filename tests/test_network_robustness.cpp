@@ -319,4 +319,58 @@ TEST_CASE("NetClient disconnect resets reconnect state") {
     CHECK_FALSE(client.isConnected());
 }
 
+// ============================================================================
+// IPv6 dual-stack: NetAddress resolve and equality
+// ============================================================================
+
+TEST_CASE("NetAddress resolves IPv4 localhost") {
+    fate::NetAddress addr;
+    CHECK(fate::NetAddress::resolve("127.0.0.1", 7777, addr));
+    CHECK(addr.port == 7777);
+    CHECK(addr.family() == AF_INET);
+}
+
+TEST_CASE("NetAddress resolves by hostname") {
+    fate::NetAddress addr;
+    CHECK(fate::NetAddress::resolve("localhost", 7777, addr));
+    CHECK(addr.port == 7777);
+    // family may be AF_INET or AF_INET6 depending on system config
+    CHECK((addr.family() == AF_INET || addr.family() == AF_INET6));
+}
+
+TEST_CASE("NetAddress equality") {
+    fate::NetAddress a, b;
+    fate::NetAddress::resolve("127.0.0.1", 7777, a);
+    fate::NetAddress::resolve("127.0.0.1", 7777, b);
+    CHECK(a == b);
+}
+
+TEST_CASE("NetAddress inequality on different ports") {
+    fate::NetAddress a, b;
+    fate::NetAddress::resolve("127.0.0.1", 7777, a);
+    fate::NetAddress::resolve("127.0.0.1", 7778, b);
+    CHECK(a != b);
+}
+
+TEST_CASE("NetAddress toString for IPv4") {
+    fate::NetAddress addr;
+    fate::NetAddress::resolve("127.0.0.1", 9999, addr);
+    std::string s = addr.toString();
+    CHECK(s == "127.0.0.1:9999");
+}
+
+TEST_CASE("NetAddress default is unknown family") {
+    fate::NetAddress addr;
+    // Default-constructed has zero storage (ss_family=0)
+    CHECK(addr.family() == 0);
+    CHECK(addr.port == 0);
+    std::string s = addr.toString();
+    CHECK(s == "unknown:0");
+}
+
+TEST_CASE("NetAddress resolve fails for invalid host") {
+    fate::NetAddress addr;
+    CHECK_FALSE(fate::NetAddress::resolve("this.host.definitely.does.not.exist.example", 7777, addr));
+}
+
 } // TEST_SUITE

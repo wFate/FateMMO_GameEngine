@@ -16,7 +16,7 @@ TEST_CASE("Net Integration: reliable connect handshake via loopback") {
     REQUIRE(serverSock.open(0));
     REQUIRE(clientSock.open(0));
 
-    NetAddress serverAddr{0x7F000001, serverSock.port()};
+    NetAddress serverAddr = NetAddress::makeIPv4(0x7F000001, serverSock.port());
 
     // Client sends Connect
     ReliabilityLayer clientRel;

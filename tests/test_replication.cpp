@@ -89,7 +89,7 @@ TEST_CASE("AOI: mob within activation radius appears in entered set") {
     ReplicationManager repl;
     NetServer server;
     REQUIRE(server.start(0));
-    NetAddress serverAddr{0x7F000001, server.port()};
+    NetAddress serverAddr = NetAddress::makeIPv4(0x7F000001, server.port());
 
     // Create a player entity at (100, 100)
     Entity* player = world.createEntity("Player");
@@ -155,7 +155,7 @@ TEST_CASE("AOI: unregistered mob does not appear in visibility") {
     ReplicationManager repl;
     NetServer server;
     REQUIRE(server.start(0));
-    NetAddress serverAddr{0x7F000001, server.port()};
+    NetAddress serverAddr = NetAddress::makeIPv4(0x7F000001, server.port());
 
     // Create a player entity at origin
     Entity* player = world.createEntity("Player");
@@ -213,7 +213,7 @@ TEST_CASE("AOI: clearing client AOI causes re-enter on next tick") {
     ReplicationManager repl;
     NetServer server;
     REQUIRE(server.start(0));
-    NetAddress serverAddr{0x7F000001, server.port()};
+    NetAddress serverAddr = NetAddress::makeIPv4(0x7F000001, server.port());
 
     // Player at origin
     Entity* player = world.createEntity("Player");
@@ -309,7 +309,7 @@ TEST_CASE("Replication sends SvEntityEnter for newly visible entities") {
     ReplicationManager repl;
     NetServer server;
     REQUIRE(server.start(0));
-    NetAddress serverAddr{0x7F000001, server.port()};
+    NetAddress serverAddr = NetAddress::makeIPv4(0x7F000001, server.port());
 
     // Player at origin
     Entity* player = world.createEntity("Player");

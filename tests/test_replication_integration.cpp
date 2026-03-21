@@ -19,7 +19,7 @@ TEST_CASE("Replication Integration: two clients see each other") {
     NetServer server;
     REQUIRE(server.start(0));
 
-    NetAddress serverAddr{0x7F000001, server.port()};
+    NetAddress serverAddr = NetAddress::makeIPv4(0x7F000001, server.port());
 
     // Track entity enter messages received
     std::vector<SvEntityEnterMsg> client1Enters, client2Enters;

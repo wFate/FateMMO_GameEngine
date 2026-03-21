@@ -18,7 +18,7 @@ TEST_CASE("Gameplay Integration: client attacks mob via server") {
     ReplicationManager replication;
     NetServer server;
     REQUIRE(server.start(0));
-    NetAddress serverAddr{0x7F000001, server.port()};
+    NetAddress serverAddr = NetAddress::makeIPv4(0x7F000001, server.port());
 
     // Create mob entity near origin
     Entity* mob = world.createEntity("Slime");
