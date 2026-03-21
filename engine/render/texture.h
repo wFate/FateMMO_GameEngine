@@ -3,6 +3,8 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
+#include <mutex>
+#include <vector>
 
 namespace fate {
 
@@ -44,8 +46,27 @@ public:
     std::shared_ptr<Texture> get(const std::string& path) const;
     void clear();
 
+    // Async loading: decode on worker, upload on main thread
+    struct PendingUpload {
+        std::string path;
+        std::vector<unsigned char> pixelData;
+        int width = 0;
+        int height = 0;
+        int channels = 0;
+    };
+
+    void requestAsyncLoad(const std::string& path);
+    void processUploads(int maxPerFrame = 2);
+    bool hasPendingLoads() const;
+
 private:
     std::unordered_map<std::string, std::shared_ptr<Texture>> cache_;
+
+    std::mutex uploadMutex_;
+    std::vector<PendingUpload> pendingUploads_;
+    std::shared_ptr<Texture> placeholderTexture_;
+
+    void ensurePlaceholder();
 };
 
 } // namespace fate

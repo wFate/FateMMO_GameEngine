@@ -4,6 +4,7 @@
 #include "engine/core/logger.h"
 #include "engine/asset/asset_registry.h"
 #include "stb_image.h"
+#include <thread>
 
 namespace fate {
 
@@ -109,6 +110,75 @@ std::shared_ptr<Texture> TextureCache::get(const std::string& path) const {
 
 void TextureCache::clear() {
     cache_.clear();
+}
+
+void TextureCache::ensurePlaceholder() {
+    if (placeholderTexture_) return;
+    placeholderTexture_ = std::make_shared<Texture>();
+    // Create 1x1 magenta pixel as placeholder
+    unsigned char magenta[] = {255, 0, 255, 255};
+    placeholderTexture_->loadFromMemory(magenta, 1, 1, 4);
+}
+
+void TextureCache::requestAsyncLoad(const std::string& path) {
+    // If already cached, nothing to do
+    auto it = cache_.find(path);
+    if (it != cache_.end()) return;
+
+    // Insert placeholder immediately so subsequent requests don't re-queue
+    ensurePlaceholder();
+    cache_[path] = placeholderTexture_;
+
+    // Spawn a detached thread to decode the image
+    // (In production, this would use the fiber job system instead)
+    std::thread([this, path]() {
+        int w, h, ch;
+        stbi_set_flip_vertically_on_load(true);
+        // stbi_load is thread-safe for different files
+        unsigned char* data = stbi_load(path.c_str(), &w, &h, &ch, 4); // force RGBA
+        if (!data) return;
+
+        PendingUpload upload;
+        upload.path = path;
+        upload.width = w;
+        upload.height = h;
+        upload.channels = 4;
+        upload.pixelData.assign(data, data + (w * h * 4));
+        stbi_image_free(data);
+
+        std::lock_guard<std::mutex> lock(uploadMutex_);
+        pendingUploads_.push_back(std::move(upload));
+    }).detach();
+}
+
+void TextureCache::processUploads(int maxPerFrame) {
+    std::vector<PendingUpload> batch;
+    {
+        std::lock_guard<std::mutex> lock(uploadMutex_);
+        int count = std::min(maxPerFrame, static_cast<int>(pendingUploads_.size()));
+        if (count == 0) return;
+        batch.assign(
+            std::make_move_iterator(pendingUploads_.begin()),
+            std::make_move_iterator(pendingUploads_.begin() + count)
+        );
+        pendingUploads_.erase(pendingUploads_.begin(), pendingUploads_.begin() + count);
+    }
+
+    for (auto& upload : batch) {
+        auto tex = std::make_shared<Texture>();
+        if (tex->loadFromMemory(upload.pixelData.data(), upload.width, upload.height, upload.channels)) {
+            // Replace placeholder entry
+            cache_[upload.path] = tex;
+            LOG_DEBUG("Texture", "Async uploaded %s (%dx%d)", upload.path.c_str(), upload.width, upload.height);
+        } else {
+            LOG_ERROR("Texture", "Async upload failed for %s", upload.path.c_str());
+        }
+    }
+}
+
+bool TextureCache::hasPendingLoads() const {
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(uploadMutex_));
+    return !pendingUploads_.empty();
 }
 
 } // namespace fate
