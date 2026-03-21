@@ -2886,6 +2886,14 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         evt.write(w);
         server_.broadcast(Channel::ReliableOrdered, PacketType::SvCombatEvent, buf, w.size());
 
+        // Fury generation on auto-attack hit
+        if (charStats && charStats->stats.classDef.primaryResource == ResourceType::Fury && damage > 0) {
+            float furyGain = isCrit ? charStats->stats.classDef.furyPerCriticalHit
+                                    : charStats->stats.classDef.furyPerBasicAttack;
+            charStats->stats.addFury(furyGain);
+            sendPlayerState(clientId);
+        }
+
         if (killed) {
             auto* targetEnemyStats = target->getComponent<EnemyStatsComponent>();
             EnemyStats& es = targetEnemyStats->stats;
@@ -3105,6 +3113,14 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             ByteWriter pvpW(pvpBuf, sizeof(pvpBuf));
             pvpEvt.write(pvpW);
             server_.broadcast(Channel::ReliableOrdered, PacketType::SvCombatEvent, pvpBuf, pvpW.size());
+
+            // Fury generation on auto-attack hit
+            if (charStats && charStats->stats.classDef.primaryResource == ResourceType::Fury && damage > 0) {
+                float furyGain = isCrit ? charStats->stats.classDef.furyPerCriticalHit
+                                        : charStats->stats.classDef.furyPerBasicAttack;
+                charStats->stats.addFury(furyGain);
+                sendPlayerState(clientId);
+            }
 
             if (killed) {
                 // Award PvP kill to attacker
