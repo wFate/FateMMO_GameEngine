@@ -164,6 +164,7 @@ add_library(soloud_lib STATIC
     ${SOLOUD_SRC_DIR}/core/soloud_core_3d.cpp
     ${SOLOUD_SRC_DIR}/core/soloud_core_basicops.cpp
     ${SOLOUD_SRC_DIR}/core/soloud_core_faderops.cpp
+    ${SOLOUD_SRC_DIR}/core/soloud_fader.cpp
     ${SOLOUD_SRC_DIR}/core/soloud_core_filterops.cpp
     ${SOLOUD_SRC_DIR}/core/soloud_core_getters.cpp
     ${SOLOUD_SRC_DIR}/core/soloud_core_setters.cpp
@@ -418,6 +419,9 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
         target_compile_definitions(fate_tests PRIVATE
             FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         )
+        if(MSVC)
+            target_compile_options(fate_tests PRIVATE /EHsc /W4 /wd4100 /wd4201 /wd4458 /MP)
+        endif()
     endif()
 
     # =============================================================================
