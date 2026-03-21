@@ -321,6 +321,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onInventorySync) onInventorySync(msg);
             break;
         }
+        case PacketType::SvBossLootOwner: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvBossLootOwnerMsg::read(payload);
+            if (onBossLootOwner) onBossLootOwner(msg);
+            break;
+        }
         default:
             break;
     }
