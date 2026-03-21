@@ -20,6 +20,16 @@ struct DroppedItemComponent {
     uint32_t ownerEntityId = 0;  // 0 = free for all
     float spawnTime = 0.0f;
     float despawnAfter = 120.0f; // 2 minutes
+
+    uint32_t claimedBy = 0;  // 0 = unclaimed
+
+    bool tryClaim(uint32_t claimantEntityId) {
+        if (claimedBy != 0) return false;
+        claimedBy = claimantEntityId;
+        return true;
+    }
+
+    void releaseClaim() { claimedBy = 0; }
 };
 
 } // namespace fate

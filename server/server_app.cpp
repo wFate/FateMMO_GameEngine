@@ -1,4 +1,5 @@
 #include "server/server_app.h"
+#include "server/target_validator.h"
 #include "engine/core/logger.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/net/protocol.h"
@@ -13,6 +14,7 @@
 #include "game/components/pet_component.h"
 #include "game/systems/mob_ai_system.h"
 #include "game/shared/xp_calculator.h"
+#include "game/shared/profanity_filter.h"
 #include "engine/net/game_messages.h"
 
 #ifdef _WIN32
@@ -589,15 +591,24 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         s.currentScene = (rec.current_scene == "Scene2" || rec.current_scene.empty())
             ? "WhisperingWoods" : rec.current_scene;
 
-        // Recalculate derived stats (resets currentHP/MP to max)
+        // Recalculate derived stats from level (maxHP/maxMP are authoritative)
         s.recalculateStats();
+        s.recalculateXPRequirement();
 
-        // Re-apply saved HP/MP after recalc
-        s.currentHP    = rec.current_hp;
-        s.currentMP    = rec.current_mp;
-        s.currentFury  = rec.current_fury;
-        s.maxHP        = rec.max_hp;
-        s.maxMP        = rec.max_mp;
+        // Restore saved HP/MP clamped to recalculated max.
+        // DB maxHP may be stale (saved at lower level or without equipment),
+        // so always use the recalculated value.
+        s.currentHP   = (std::min)(static_cast<int>(rec.current_hp), s.maxHP);
+        s.currentMP   = (std::min)(static_cast<int>(rec.current_mp), s.maxMP);
+        s.currentFury = rec.current_fury;
+
+        // If player was not dead but DB has HP=0 (stale save), heal to full
+        if (!s.isDead && s.currentHP <= 0) {
+            s.currentHP = s.maxHP;
+            s.currentMP = s.maxMP;
+            LOG_INFO("Server", "Healed '%s' to full HP on connect (stale DB HP=0)",
+                     rec.character_name.c_str());
+        }
     }
 
     // Set position (DB stores tile coords, engine uses pixel coords)
@@ -1122,9 +1133,25 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     needsFirstMoveSync_.erase(clientId);
     lastAutoAttackTime_.erase(clientId);
     skillCooldowns_.erase(clientId);
+    rateLimiters_.erase(clientId);
 }
 
 void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload) {
+    // Token bucket rate limiting — checked before any packet processing
+    {
+        double now = static_cast<double>(gameTime_);
+        auto result = rateLimiters_[clientId].check(type, now);
+        if (result == RateLimitResult::Disconnect) {
+            LOG_WARN("Server", "Client %d disconnected for rate limit abuse (type=0x%02X)", clientId, type);
+            server_.connections().removeClient(clientId);
+            onClientDisconnected(clientId);
+            return;
+        }
+        if (result == RateLimitResult::Dropped) {
+            return;
+        }
+    }
+
     // Handle game packets — stub for now, will be implemented in Phase 6C/6D
     switch (type) {
         case PacketType::CmdMove: {
@@ -1195,6 +1222,13 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
         }
         case PacketType::CmdChat: {
             auto chat = CmdChat::read(payload);
+
+            // Server-side profanity filter
+            if (chat.message.empty() || chat.message.size() > 200) return;
+
+            auto filterResult = ProfanityFilter::filterChatMessage(chat.message, FilterMode::Censor);
+            chat.message = filterResult.filteredText;
+
             LOG_INFO("Server", "Chat from client %d (ch=%d): %s",
                      clientId, chat.channel, chat.message.c_str());
 
@@ -2149,6 +2183,13 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
 
+    if (msg.targetId != 0) {
+        if (!TargetValidator::isInAOI(client->aoi, msg.targetId)) {
+            LOG_WARN("Net", "Client %u targeted entity %llu not in AOI", clientId, msg.targetId);
+            return;
+        }
+    }
+
     // Per-tick skill command cap: silently drop excess skill commands
     skillCommandsThisTick_[clientId]++;
     if (skillCommandsThisTick_[clientId] > 1) {
@@ -2758,6 +2799,12 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             return;
         }
 
+        // Claim the drop atomically (single-threaded: simple bool flag prevents
+        // two pickups of the same item in the same tick)
+        if (!dropComp->tryClaim(attackerHandle.value)) {
+            return; // Already claimed by another player this tick
+        }
+
         // Process pickup
         auto* inv = attacker->getComponent<InventoryComponent>();
         if (!inv) return;
@@ -2781,7 +2828,10 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             item.rolledStats = ItemStatRoller::parseRolledStats(dropComp->rolledStatsJson);
             item.rarity = parseItemRarity(dropComp->rarity);
             item.displayName = def ? def->displayName : dropComp->itemId;
-            inv->inventory.addItem(item);
+            if (!inv->inventory.addItem(item)) {
+                dropComp->releaseClaim();
+                return;
+            }
 
             pickupMsg.itemId = dropComp->itemId;
             pickupMsg.quantity = dropComp->quantity;
