@@ -2434,15 +2434,17 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                 }
             }
 
-            // Determine top damager for loot ownership
-            uint32_t topDamagerId = casterHandle.value;
-            int topDamage = 0;
-            for (const auto& [attackerId, totalDmg] : es.damageByAttacker) {
-                if (totalDmg > topDamage) {
-                    topDamage = totalDmg;
-                    topDamagerId = attackerId;
-                }
-            }
+            // Determine top damager for loot ownership (party-aware)
+            auto partyLookup = [this](uint32_t entityId) -> int {
+                EntityHandle h(entityId);
+                auto* entity = world_.getEntity(h);
+                if (!entity) return -1;
+                auto* pc = entity->getComponent<PartyComponent>();
+                if (!pc || !pc->party.isInParty()) return -1;
+                return pc->party.partyId;
+            };
+            uint32_t topDamagerId = es.getTopDamagerPartyAware(partyLookup);
+            if (topDamagerId == 0) topDamagerId = casterHandle.value;
 
             // Roll loot table
             if (!es.lootTableId.empty()) {
@@ -2673,15 +2675,17 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 }
             }
 
-            // Determine top damager for loot ownership
-            uint32_t topDamagerId = attackerHandle.value;
-            int topDamage = 0;
-            for (const auto& [attackerId, totalDmg] : es.damageByAttacker) {
-                if (totalDmg > topDamage) {
-                    topDamage = totalDmg;
-                    topDamagerId = attackerId;
-                }
-            }
+            // Determine top damager for loot ownership (party-aware)
+            auto partyLookup = [this](uint32_t entityId) -> int {
+                EntityHandle h(entityId);
+                auto* entity = world_.getEntity(h);
+                if (!entity) return -1;
+                auto* pc = entity->getComponent<PartyComponent>();
+                if (!pc || !pc->party.isInParty()) return -1;
+                return pc->party.partyId;
+            };
+            uint32_t topDamagerId = es.getTopDamagerPartyAware(partyLookup);
+            if (topDamagerId == 0) topDamagerId = attackerHandle.value;
 
             // Roll loot table
             if (!es.lootTableId.empty()) {
@@ -2854,9 +2858,22 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         float dist = playerT->position.distance(itemT->position);
         if (dist > 48.0f) return;
 
-        // Validate loot rights
+        // Validate loot rights — allow owner or any member of the owner's party
         if (dropComp->ownerEntityId != 0 && dropComp->ownerEntityId != attackerHandle.value) {
-            return;
+            bool sameParty = false;
+            auto* attackerParty = attacker->getComponent<PartyComponent>();
+            if (attackerParty && attackerParty->party.isInParty()) {
+                EntityHandle ownerHandle(dropComp->ownerEntityId);
+                auto* ownerEntity = world_.getEntity(ownerHandle);
+                if (ownerEntity) {
+                    auto* ownerParty = ownerEntity->getComponent<PartyComponent>();
+                    if (ownerParty && ownerParty->party.isInParty()
+                        && ownerParty->party.partyId == attackerParty->party.partyId) {
+                        sameParty = true;
+                    }
+                }
+            }
+            if (!sameParty) return;
         }
 
         // Claim the drop atomically (single-threaded: simple bool flag prevents
