@@ -99,6 +99,10 @@ void ReplicationManager::buildVisibility(World& world, ClientConnection& client)
             // Check player scene (CharacterStatsComponent::currentScene)
             auto* otherCs = entity->getComponent<CharacterStatsComponent>();
             if (otherCs && !otherCs->stats.currentScene.empty() && otherCs->stats.currentScene != clientScene) continue;
+
+            // Check dropped item scene (DroppedItemComponent::sceneId)
+            auto* drop = entity->getComponent<DroppedItemComponent>();
+            if (drop && !drop->sceneId.empty() && drop->sceneId != clientScene) continue;
         }
 
         client.aoi.current.push_back(EntityHandle(handleValue));
