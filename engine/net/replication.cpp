@@ -6,6 +6,7 @@
 namespace fate {
 
 void ReplicationManager::update(World& world, NetServer& server) {
+    ++tickCounter_;
     // Rebuild spatial index once per tick with all registered entity positions
     rebuildSpatialIndex(world);
 
@@ -128,6 +129,18 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
     }
 
     // Process stayed entities (delta updates)
+
+    // Compute client player position once for tier checks
+    Vec2 clientPos{};
+    {
+        auto clientHandle = getEntityHandle(PersistentId(client.playerEntityId));
+        Entity* clientEntity = world.getEntity(clientHandle);
+        if (clientEntity) {
+            auto* ct = clientEntity->getComponent<Transform>();
+            if (ct) clientPos = ct->position;
+        }
+    }
+
     for (const auto& handle : client.aoi.stayed) {
         PersistentId pid = getPersistentId(handle);
         if (pid.isNull()) continue;
@@ -142,6 +155,21 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         if (lastIt == client.lastAckedState.end()) continue;
 
         const SvEntityUpdateMsg& last = lastIt->second;
+
+        // Tiered update frequency — skip if not this entity's turn
+        auto* entityTransform = entity->getComponent<Transform>();
+        if (entityTransform) {
+            float dx = entityTransform->position.x - clientPos.x;
+            float dy = entityTransform->position.y - clientPos.y;
+            float dist = std::sqrt(dx * dx + dy * dy);
+            UpdateTier tier = getUpdateTier(dist);
+
+            // Always send HP changes regardless of tier
+            bool hasHPChange = (current.currentHP != last.currentHP);
+            if (!hasHPChange && !shouldSendUpdate(tier, tickCounter_)) {
+                continue;
+            }
+        }
         uint16_t dirtyMask = 0;
 
         if (current.position.x != last.position.x || current.position.y != last.position.y)
