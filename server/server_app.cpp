@@ -310,6 +310,104 @@ bool ServerApp::init(uint16_t port) {
         battlefieldManager_.reset();
     });
 
+    // Wire ArenaManager callbacks
+    arenaManager_.onMatchEnd = [this](uint32_t matchId, bool teamAWins, bool tie) {
+        auto* match = arenaManager_.getMatch(matchId);
+        if (!match) return;
+
+        for (auto& [eid, stats] : match->players) {
+            bool onTeamA = false;
+            for (uint32_t id : match->teamA) {
+                if (id == eid) { onTeamA = true; break; }
+            }
+
+            bool won = (onTeamA && teamAWins) || (!onTeamA && !teamAWins && !tie);
+            int honor = 0;
+            if (stats.damageDealt > 0) {
+                honor = tie ? ArenaMatch::HONOR_TIE
+                            : (won ? ArenaMatch::HONOR_WIN : ArenaMatch::HONOR_LOSS);
+            }
+
+            // Apply honor to player entity
+            uint16_t targetClientId = 0;
+            server_.connections().forEach([&](ClientConnection& conn) {
+                if (static_cast<uint32_t>(conn.playerEntityId) == eid) {
+                    targetClientId = conn.clientId;
+                }
+            });
+
+            if (targetClientId != 0) {
+                auto* client = server_.connections().findById(targetClientId);
+                if (client && client->playerEntityId != 0) {
+                    PersistentId pid(client->playerEntityId);
+                    EntityHandle h = replication_.getEntityHandle(pid);
+                    Entity* e = world_.getEntity(h);
+                    if (e) {
+                        auto* sc = e->getComponent<CharacterStatsComponent>();
+                        if (sc) {
+                            sc->stats.honor += honor;
+                            // Teleport back to return scene
+                            sc->stats.currentScene = stats.returnScene;
+                        }
+                    }
+
+                    // Send zone transition back to return scene
+                    float retX = stats.returnPosition.x;
+                    float retY = stats.returnPosition.y;
+                    if (retX == 0.0f && retY == 0.0f) {
+                        auto* sceneDef = sceneCache_.get(stats.returnScene);
+                        if (sceneDef) { retX = sceneDef->defaultSpawnX; retY = sceneDef->defaultSpawnY; }
+                    }
+                    SvZoneTransitionMsg zt;
+                    zt.targetScene = stats.returnScene;
+                    zt.spawnX = retX;
+                    zt.spawnY = retY;
+                    uint8_t ztBuf[256]; ByteWriter ztW(ztBuf, sizeof(ztBuf));
+                    zt.write(ztW);
+                    server_.sendTo(targetClientId, Channel::ReliableOrdered,
+                                   PacketType::SvZoneTransition, ztBuf, ztW.size());
+
+                    // Clear AOI state
+                    if (client) {
+                        client->aoi.previous.clear();
+                        client->aoi.current.clear();
+                        client->aoi.entered.clear();
+                        client->aoi.left.clear();
+                        client->aoi.stayed.clear();
+                        client->lastAckedState.clear();
+                    }
+
+                    // Send SvArenaUpdate with match result
+                    SvArenaUpdateMsg arenaMsg;
+                    arenaMsg.state = static_cast<uint8_t>(ArenaMatchState::Ended);
+                    arenaMsg.timeRemaining = 0;
+                    arenaMsg.teamAlive = 0;
+                    arenaMsg.enemyAlive = 0;
+                    arenaMsg.result = tie ? 2 : (won ? 1 : 0); // 0=loss, 1=win, 2=tie
+                    arenaMsg.honorReward = honor;
+                    uint8_t arBuf[32]; ByteWriter arW(arBuf, sizeof(arBuf));
+                    arenaMsg.write(arW);
+                    server_.sendTo(targetClientId, Channel::ReliableOrdered,
+                                   PacketType::SvArenaUpdate, arBuf, arW.size());
+                }
+            }
+
+            playerEventLocks_.erase(eid);
+        }
+    };
+
+    arenaManager_.onGroupUnregistered = [this](const std::vector<uint32_t>& playerIds,
+                                               const std::string& reason) {
+        for (uint32_t eid : playerIds) {
+            playerEventLocks_.erase(eid);
+        }
+        LOG_INFO("Server", "Arena group unregistered: %s", reason.c_str());
+    };
+
+    arenaManager_.onPlayerForfeited = [this](uint32_t entityId, const std::string& reason) {
+        LOG_INFO("Server", "Arena player %u forfeited: %s", entityId, reason.c_str());
+    };
+
     // Auth server startup (warning only — game server can run without auth in dev)
     if (!authServer_.start(authPort_, tlsCertPath_, tlsKeyPath_, dbConnectionString_)) {
         LOG_WARN("Server", "Auth server failed to start on port %d; continuing without auth", authPort_);
@@ -615,7 +713,80 @@ void ServerApp::tick(float dt) {
     // 5d. Battlefield event scheduler
     eventScheduler_.tick(gameTime_);
 
-    // 5e. Auto-save and periodic maintenance
+    // 5e. Arena matchmaking (every 20 ticks = ~1 second)
+    arenaTickCounter_++;
+    if (arenaTickCounter_ % 20 == 0) {
+        auto newMatches = arenaManager_.tryMatchmaking();
+        for (uint32_t matchId : newMatches) {
+            auto* match = arenaManager_.getMatch(matchId);
+            if (!match) continue;
+            LOG_INFO("Server", "Arena match %u created (mode %d)", matchId,
+                     static_cast<int>(match->mode));
+            for (auto& [eid, stats] : match->players) {
+                // Store return position/scene from current player entity state
+                uint16_t targetClientId = 0;
+                server_.connections().forEach([&](ClientConnection& conn) {
+                    if (static_cast<uint32_t>(conn.playerEntityId) == eid) {
+                        targetClientId = conn.clientId;
+                    }
+                });
+                if (targetClientId == 0) continue;
+                auto* client = server_.connections().findById(targetClientId);
+                if (!client || client->playerEntityId == 0) continue;
+
+                PersistentId pid(client->playerEntityId);
+                EntityHandle h = replication_.getEntityHandle(pid);
+                Entity* player = world_.getEntity(h);
+                if (!player) continue;
+
+                auto* sc = player->getComponent<CharacterStatsComponent>();
+                auto* transform = player->getComponent<Transform>();
+                if (sc) {
+                    stats.returnScene = sc->stats.currentScene;
+                    stats.returnPosition = transform ? transform->position : Vec2{0.0f, 0.0f};
+                    // Teleport player to arena scene
+                    sc->stats.currentScene = "arena";
+                }
+
+                float spawnX = 0.0f, spawnY = 0.0f;
+                auto* sceneDef = sceneCache_.get("arena");
+                if (sceneDef) { spawnX = sceneDef->defaultSpawnX; spawnY = sceneDef->defaultSpawnY; }
+
+                SvZoneTransitionMsg zt;
+                zt.targetScene = "arena";
+                zt.spawnX = spawnX;
+                zt.spawnY = spawnY;
+                uint8_t ztBuf[256]; ByteWriter ztW(ztBuf, sizeof(ztBuf));
+                zt.write(ztW);
+                server_.sendTo(targetClientId, Channel::ReliableOrdered,
+                               PacketType::SvZoneTransition, ztBuf, ztW.size());
+
+                // Clear AOI state
+                client->aoi.previous.clear();
+                client->aoi.current.clear();
+                client->aoi.entered.clear();
+                client->aoi.left.clear();
+                client->aoi.stayed.clear();
+                client->lastAckedState.clear();
+
+                // Notify client of countdown state
+                SvArenaUpdateMsg arenaMsg;
+                arenaMsg.state = static_cast<uint8_t>(ArenaMatchState::Countdown);
+                arenaMsg.timeRemaining = static_cast<uint16_t>(ArenaMatch::COUNTDOWN_DURATION);
+                arenaMsg.teamAlive = 0;
+                arenaMsg.enemyAlive = 0;
+                arenaMsg.result = 0;
+                arenaMsg.honorReward = 0;
+                uint8_t arBuf[32]; ByteWriter arW(arBuf, sizeof(arBuf));
+                arenaMsg.write(arW);
+                server_.sendTo(targetClientId, Channel::ReliableOrdered,
+                               PacketType::SvArenaUpdate, arBuf, arW.size());
+            }
+        }
+    }
+    arenaManager_.tickMatches(gameTime_);
+
+    // 5g. Auto-save and periodic maintenance
     tickAutoSave(dt);
     tickMaintenance(dt);
     wal_.flush();
@@ -1473,6 +1644,7 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     if (client && client->playerEntityId != 0) {
         uint32_t eid = static_cast<uint32_t>(client->playerEntityId);
         battlefieldManager_.removePlayer(eid);
+        arenaManager_.onPlayerDisconnect(eid);
         playerEventLocks_.erase(eid);
 
         PersistentId pid(client->playerEntityId);
@@ -2611,6 +2783,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
         case PacketType::CmdBattlefield: {
             auto msg = CmdBattlefieldMsg::read(payload);
             processBattlefield(clientId, msg);
+            break;
+        }
+        case PacketType::CmdArena: {
+            auto msg = CmdArenaMsg::read(payload);
+            processArena(clientId, msg);
             break;
         }
         default:
@@ -4522,6 +4699,69 @@ void ServerApp::processCraft(uint16_t clientId, const CmdCraftMsg& msg) {
 }
 
 // ============================================================================
+// processArena — handle client arena queue registration/unregistration
+// ============================================================================
+
+void ServerApp::processArena(uint16_t clientId, const CmdArenaMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    uint32_t entityId = static_cast<uint32_t>(client->playerEntityId);
+
+    if (msg.action == 0) { // Register
+        // Validate not already in another event
+        if (playerEventLocks_.count(entityId)) {
+            LOG_INFO("Server", "Client %d already registered for event '%s', cannot join arena",
+                     clientId, playerEventLocks_[entityId].c_str());
+            return;
+        }
+
+        auto mode = static_cast<ArenaMode>(msg.mode);
+
+        PersistentId pid(client->playerEntityId);
+        EntityHandle h = replication_.getEntityHandle(pid);
+        Entity* player = world_.getEntity(h);
+        if (!player) return;
+
+        auto* charStats = player->getComponent<CharacterStatsComponent>();
+        auto* factionComp = player->getComponent<FactionComponent>();
+        auto* partyComp = player->getComponent<PartyComponent>();
+        if (!charStats || !factionComp) return;
+
+        int requiredSize = static_cast<int>(mode);
+        std::vector<uint32_t> groupIds;
+        std::vector<int> levels;
+
+        if (requiredSize == 1) {
+            // Solo: just this player
+            groupIds.push_back(entityId);
+            levels.push_back(charStats->stats.level);
+        } else {
+            // Duo/Team: need party of exact size
+            if (!partyComp || !partyComp->party.isInParty()) return;
+            if (static_cast<int>(partyComp->party.members.size()) != requiredSize) return;
+
+            for (const auto& member : partyComp->party.members) {
+                groupIds.push_back(member.netId);
+                levels.push_back(member.level);
+            }
+        }
+
+        Faction faction = factionComp->faction;
+
+        if (arenaManager_.registerGroup(groupIds, faction, mode, levels, gameTime_)) {
+            for (uint32_t id : groupIds) {
+                playerEventLocks_[id] = "arena";
+            }
+            LOG_INFO("Server", "Client %d registered for arena (mode %d, %zu players)",
+                     clientId, msg.mode, groupIds.size());
+        }
+    } else { // Unregister
+        arenaManager_.unregisterGroup(entityId);
+        // playerEventLocks_ cleared via onGroupUnregistered callback
+    }
+}
+
 // processBattlefield — handle client battlefield registration/unregistration
 // ============================================================================
 

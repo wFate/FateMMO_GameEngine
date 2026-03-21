@@ -8,6 +8,13 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+// Neutralize Windows.h min/max macros that break std:: calls in this header
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
 
 namespace fate {
 
@@ -423,7 +430,7 @@ private:
         // tickMatches will fire it at COUNTDOWN_DURATION seconds from now.
         // Best approach: use 0.0 as "creation time" anchor and let tickMatches
         // compare. We store the current (latest) queue time + COUNTDOWN_DURATION.
-        float createdAt = std::max(groupA.queuedAt, groupB.queuedAt);
+        float createdAt = (groupA.queuedAt > groupB.queuedAt) ? groupA.queuedAt : groupB.queuedAt;
         match.countdownEnd = createdAt + ArenaMatch::COUNTDOWN_DURATION;
         match.startTime = 0.0f;
         match.teamA = groupA.playerIds;

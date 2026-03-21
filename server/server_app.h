@@ -29,6 +29,7 @@
 #include "server/nonce_manager.h"
 #include "game/shared/gauntlet.h"
 #include "game/shared/battlefield_manager.h"
+#include "game/shared/arena_manager.h"
 #include "game/shared/event_scheduler.h"
 #include "server/cache/item_definition_cache.h"
 #include "server/cache/loot_table_cache.h"
@@ -116,6 +117,10 @@ private:
     BattlefieldManager battlefieldManager_;
     EventScheduler eventScheduler_;
 
+    // Arena matchmaking system
+    ArenaManager arenaManager_;
+    uint32_t arenaTickCounter_ = 0;
+
     // Spawn system
     SpawnZoneCache spawnZoneCache_;
     ServerSpawnManager spawnManager_;
@@ -184,6 +189,7 @@ private:
     void initGauntlet();
     void processGauntletCommand(uint16_t clientId, ByteReader& payload);
     void processBattlefield(uint16_t clientId, const CmdBattlefieldMsg& msg);
+    void processArena(uint16_t clientId, const CmdArenaMsg& msg);
     void broadcastBossKillNotification(const EnemyStats& es,
                                        const EnemyStats::LootOwnerResult& lootResult,
                                        const std::string& scene);
