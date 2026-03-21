@@ -17,6 +17,7 @@
 #include "game/shared/xp_calculator.h"
 #include "game/shared/profanity_filter.h"
 #include "game/shared/enchant_system.h"
+#include "game/shared/core_extraction.h"
 #include "engine/net/game_messages.h"
 
 #ifdef _WIN32
@@ -2422,6 +2423,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             processRepair(clientId, msg);
             break;
         }
+        case PacketType::CmdExtractCore: {
+            auto msg = CmdExtractCoreMsg::read(payload);
+            processExtractCore(clientId, msg);
+            break;
+        }
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;
@@ -4122,6 +4128,81 @@ void ServerApp::processRepair(uint16_t clientId, const CmdRepairMsg& msg) {
 
     LOG_INFO("Server", "Client %d repaired slot %d -> enchant +%d",
              clientId, msg.inventorySlot, item.enchantLevel);
+}
+
+// ============================================================================
+// processExtractCore — extract a core material from an inventory item
+// ============================================================================
+void ServerApp::processExtractCore(uint16_t clientId, const CmdExtractCoreMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* player = world_.getEntity(h);
+    if (!player) return;
+
+    auto* charStats = player->getComponent<CharacterStatsComponent>();
+    auto* inv       = player->getComponent<InventoryComponent>();
+    if (!charStats || !inv) return;
+
+    // Helper: send extract result back to client
+    auto sendResult = [&](bool success, const std::string& coreId, uint8_t qty, const std::string& message) {
+        SvExtractResultMsg result;
+        result.success      = success ? 1 : 0;
+        result.coreItemId   = coreId;
+        result.coreQuantity = qty;
+        result.message      = message;
+        uint8_t buf[256];
+        ByteWriter w(buf, sizeof(buf));
+        result.write(w);
+        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvExtractResult, buf, w.size());
+    };
+
+    // 1. Validate item in inventory slot
+    auto item = inv->inventory.getSlot(msg.itemSlot);
+    if (!item.isValid()) { sendResult(false, "", 0, "Invalid item"); return; }
+    if (item.isBroken)   { sendResult(false, "", 0, "Cannot extract broken items"); return; }
+
+    // 2. Check rarity — Common cannot be extracted
+    if (item.rarity == ItemRarity::Common) {
+        sendResult(false, "", 0, "Common items cannot be extracted"); return;
+    }
+
+    // 3. Validate scroll
+    auto scroll = inv->inventory.getSlot(msg.scrollSlot);
+    if (!scroll.isValid() || scroll.itemId != "item_extraction_scroll") {
+        sendResult(false, "", 0, "Missing extraction scroll"); return;
+    }
+
+    // 4. Determine core result
+    auto* itemDef = itemDefCache_.getDefinition(item.itemId);
+    int itemLevel = itemDef ? itemDef->levelReq : 1;
+    auto coreResult = CoreExtraction::determineCoreResult(item.rarity, itemLevel, item.enchantLevel);
+    if (!coreResult.success) {
+        sendResult(false, "", 0, "Extraction failed"); return;
+    }
+
+    // 5. WAL + consume item and scroll
+    wal_.appendItemRemove(client->character_id, msg.itemSlot);
+    inv->inventory.removeItem(msg.itemSlot);
+    inv->inventory.removeItemQuantity(msg.scrollSlot, 1);
+
+    // 6. Add cores to inventory
+    ItemInstance coreItem;
+    coreItem.itemId      = coreResult.coreItemId;
+    coreItem.displayName = coreResult.coreItemId;
+    coreItem.quantity    = coreResult.quantity;
+    coreItem.rarity      = ItemRarity::Common;
+    inv->inventory.addItem(coreItem);
+
+    // 7. Send result and sync
+    sendResult(true, coreResult.coreItemId, static_cast<uint8_t>(coreResult.quantity),
+               "Extracted " + std::to_string(coreResult.quantity) + "x core");
+    sendInventorySync(clientId);
+
+    LOG_INFO("Server", "Client %d extracted core from slot %d -> %dx %s",
+             clientId, msg.itemSlot, coreResult.quantity, coreResult.coreItemId.c_str());
 }
 
 } // namespace fate
