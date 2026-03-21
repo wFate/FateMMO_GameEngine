@@ -105,6 +105,30 @@ struct Color {
             ((hex)       & 0xFF) / 255.0f
         };
     }
+
+    // Parse "#RRGGBB" or "#RRGGBBAA" hex string into Color
+    static Color fromHex(const std::string& hex) {
+        std::string h = hex;
+        if (!h.empty() && h[0] == '#') h = h.substr(1);
+        uint32_t val = 0;
+        for (char c : h) {
+            val <<= 4;
+            if (c >= '0' && c <= '9') val |= (c - '0');
+            else if (c >= 'a' && c <= 'f') val |= (c - 'a' + 10);
+            else if (c >= 'A' && c <= 'F') val |= (c - 'A' + 10);
+        }
+        if (h.size() <= 6) {
+            // #RRGGBB -> shift to RRGGBBAA with full alpha
+            return {
+                ((val >> 16) & 0xFF) / 255.0f,
+                ((val >> 8)  & 0xFF) / 255.0f,
+                ((val)       & 0xFF) / 255.0f,
+                1.0f
+            };
+        }
+        // #RRGGBBAA
+        return fromHex(val);
+    }
 };
 
 // ============================================================================
