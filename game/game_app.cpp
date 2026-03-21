@@ -961,6 +961,17 @@ void GameApp::onInit() {
             if (ghost) {
                 auto* t = ghost->getComponent<Transform>();
                 if (t) { targetPos = t->position; foundTarget = true; }
+
+                // On kill: set HP to 0 immediately. The server destroys the
+                // mob entity before the next SvEntityUpdate (HP=0) can be sent,
+                // so we must apply the final HP here from the combat event.
+                if (msg.isKill) {
+                    auto* es = ghost->getComponent<EnemyStatsComponent>();
+                    if (es) {
+                        es->stats.currentHP = 0;
+                        es->stats.isAlive = false;
+                    }
+                }
             }
         }
 
