@@ -2470,18 +2470,20 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
 
         // Check target is a living enemy
         auto* enemyStats = target->getComponent<EnemyStatsComponent>();
-        if (!enemyStats || !enemyStats->stats.isAlive) return;
 
-        // Same-scene check: player and mob must be in the same scene
-        if (charStats && !enemyStats->stats.sceneId.empty() &&
-            charStats->stats.currentScene != enemyStats->stats.sceneId) return;
-
-        // Validate auto-attack cooldown
+        // Validate auto-attack cooldown (shared for both PvE and PvP)
         float weaponSpeed = charStats ? charStats->stats.weaponAttackSpeed : 1.0f;
         float cooldown = (weaponSpeed > 0.0f) ? (1.0f / weaponSpeed) : 1.5f;
         auto lastIt = lastAutoAttackTime_.find(clientId);
         if (lastIt != lastAutoAttackTime_.end() && gameTime_ - lastIt->second < cooldown * 0.8f) return;
         lastAutoAttackTime_[clientId] = gameTime_;
+
+        if (enemyStats) {
+        if (!enemyStats->stats.isAlive) return;
+
+        // Same-scene check: player and mob must be in the same scene
+        if (charStats && !enemyStats->stats.sceneId.empty() &&
+            charStats->stats.currentScene != enemyStats->stats.sceneId) return;
 
         // Calculate damage
         int damage = 10; // default
@@ -2614,6 +2616,77 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
 
         // Send updated player state (XP, HP may have changed)
         sendPlayerState(clientId);
+        } else {
+        // PvP auto-attack: target is another player
+        auto* targetCharStats = target->getComponent<CharacterStatsComponent>();
+        if (targetCharStats && !targetCharStats->stats.isDead) {
+            // Same-scene check
+            if (charStats && !charStats->stats.currentScene.empty() &&
+                charStats->stats.currentScene != targetCharStats->stats.currentScene) return;
+
+            // Calculate PvP damage using shared formulas
+            int damage = 10;
+            bool isCrit = false;
+            if (charStats) {
+                damage = charStats->stats.calculateDamage(false, isCrit);
+            }
+
+            // Apply PvP damage multiplier (0.05x)
+            damage = static_cast<int>(std::round(damage * CombatSystem::getPvPDamageMultiplier()));
+            if (damage < 1) damage = 1;
+
+            // Apply armor reduction on target
+            damage = CombatSystem::applyArmorReduction(damage, targetCharStats->stats.getArmor());
+
+            // Apply damage
+            targetCharStats->stats.takeDamage(damage);
+            bool killed = targetCharStats->stats.isDead;
+
+            // Broadcast SvCombatEvent
+            SvCombatEventMsg pvpEvt;
+            pvpEvt.attackerId = attackerPid.value();
+            pvpEvt.targetId   = targetPid.value();
+            pvpEvt.damage     = damage;
+            pvpEvt.skillId    = 0;
+            pvpEvt.isCrit     = isCrit ? 1 : 0;
+            pvpEvt.isKill     = killed ? 1 : 0;
+            uint8_t pvpBuf[64];
+            ByteWriter pvpW(pvpBuf, sizeof(pvpBuf));
+            pvpEvt.write(pvpW);
+            server_.broadcast(Channel::ReliableOrdered, PacketType::SvCombatEvent, pvpBuf, pvpW.size());
+
+            if (killed) {
+                // Award PvP kill to attacker
+                if (charStats) {
+                    charStats->stats.pvpKills++;
+                }
+                // Record PvP death on target
+                targetCharStats->stats.pvpDeaths++;
+
+                // Send death notification to the killed player
+                uint16_t targetClientId = 0;
+                server_.connections().forEach([&](const ClientConnection& conn) {
+                    if (conn.playerEntityId == targetPid.value()) targetClientId = conn.clientId;
+                });
+                if (targetClientId != 0) {
+                    SvDeathNotifyMsg deathMsg;
+                    deathMsg.deathSource = 1; // PvP
+                    deathMsg.xpLost = 0;
+                    deathMsg.honorLost = 0;
+                    deathMsg.respawnTimer = 5.0f;
+                    uint8_t dbuf[64];
+                    ByteWriter dw(dbuf, sizeof(dbuf));
+                    deathMsg.write(dw);
+                    server_.sendTo(targetClientId, Channel::ReliableOrdered,
+                                   PacketType::SvDeathNotify, dbuf, dw.size());
+                }
+
+                LOG_INFO("Server", "Client %d killed player in PvP", clientId);
+            }
+
+            sendPlayerState(clientId);
+        }
+        } // end else (PvP branch)
     } else if (action.actionType == 3) {
         // Pickup
         PersistentId itemPid(action.targetId);

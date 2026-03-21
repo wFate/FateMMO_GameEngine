@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "game/shared/character_stats.h"
+#include "game/shared/combat_system.h"
 using namespace fate;
 
 TEST_CASE("addXP awards XP and triggers level-up with overflow") {
@@ -69,4 +70,14 @@ TEST_CASE("Skill cooldown tracking rejects rapid cast") {
     // After cooldown expires, should pass
     float laterTime = gameTime + 3.0f;
     CHECK(laterTime - cooldowns["fireball"] >= cooldownDuration * 0.8f); // should pass
+}
+
+TEST_CASE("PvP damage multiplier is applied") {
+    float pvpMult = CombatSystem::getPvPDamageMultiplier();
+    CHECK(pvpMult > 0.0f);
+    CHECK(pvpMult < 1.0f); // PvP should reduce damage
+    int baseDmg = 100;
+    int pvpDmg = static_cast<int>(std::round(baseDmg * pvpMult));
+    CHECK(pvpDmg < baseDmg);
+    CHECK(pvpDmg > 0);
 }
