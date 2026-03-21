@@ -1129,6 +1129,22 @@ void ServerApp::onClientConnected(uint16_t clientId) {
                 } else {
                     inv->inventory.addItem(item); // fallback
                 }
+            } else if (slot.bag_slot_index >= 0 && slot.bag_item_slot >= 0) {
+                // Item inside a bag — place into bag contents
+                // Ensure bag capacity is initialized for this bag slot
+                if (inv->inventory.bagSlotCount(slot.bag_slot_index) == 0) {
+                    // Determine bag capacity from the bag item in that slot
+                    auto bagItem = inv->inventory.getSlot(slot.bag_slot_index);
+                    int capacity = 6; // default
+                    if (bagItem.isValid()) {
+                        const auto* bagDef = itemDefCache_.getDefinition(bagItem.itemId);
+                        if (bagDef) {
+                            capacity = std::clamp(bagDef->attributes.value("slot_count", 6), 1, 10);
+                        }
+                    }
+                    inv->inventory.setBagCapacity(slot.bag_slot_index, capacity);
+                }
+                inv->inventory.addItemToBag(slot.bag_slot_index, item);
             } else if (slot.slot_index >= 0) {
                 // Place in specific inventory slot
                 inv->inventory.addItemToSlot(slot.slot_index, item);
@@ -1676,20 +1692,67 @@ void ServerApp::saveInventoryForClient(uint16_t clientId) {
     if (!inv) return;
 
     std::vector<InventorySlotRecord> slots;
+
+    // Helper to build a record from an ItemInstance
+    auto buildRecord = [&](const ItemInstance& item, int slotIdx, int bagSlotIdx, int bagItemSlot) {
+        InventorySlotRecord s;
+        s.instance_id   = item.instanceId;
+        s.character_id  = client->character_id;
+        s.item_id       = item.itemId;
+        s.slot_index    = slotIdx;
+        s.bag_slot_index = bagSlotIdx;
+        s.bag_item_slot  = bagItemSlot;
+        s.rolled_stats  = ItemStatRoller::rolledStatsToJson(item.rolledStats);
+        s.enchant_level = item.enchantLevel;
+        s.is_protected  = item.isProtected;
+        s.is_soulbound  = item.isSoulbound;
+        s.is_broken     = item.isBroken;
+        s.quantity      = item.quantity;
+        // Socket data
+        if (item.hasSocket()) {
+            switch (item.socket.statType) {
+                case StatType::Strength:     s.socket_stat = "STR"; break;
+                case StatType::Dexterity:    s.socket_stat = "DEX"; break;
+                case StatType::Intelligence: s.socket_stat = "INT"; break;
+                default: break;
+            }
+            s.socket_value = item.socket.value;
+        }
+        return s;
+    };
+
+    // Save main inventory slots (0-14)
     const auto& items = inv->inventory.getSlots();
     for (int i = 0; i < static_cast<int>(items.size()); ++i) {
         if (!items[i].isValid()) continue;
-        InventorySlotRecord s;
-        s.instance_id   = items[i].instanceId;
-        s.character_id  = client->character_id;
-        s.item_id       = items[i].itemId;
-        s.slot_index    = i;
-        s.rolled_stats  = ItemStatRoller::rolledStatsToJson(items[i].rolledStats);
-        s.enchant_level = items[i].enchantLevel;
-        s.is_protected  = items[i].isProtected;
-        s.is_soulbound  = items[i].isSoulbound;
-        s.is_broken     = items[i].isBroken;
-        s.quantity      = items[i].quantity;
+        slots.push_back(buildRecord(items[i], i, -1, -1));
+
+        // Save bag contents for this slot (if any)
+        const auto& bagItems = inv->inventory.getBagContents(i);
+        for (int j = 0; j < static_cast<int>(bagItems.size()); ++j) {
+            if (!bagItems[j].isValid()) continue;
+            slots.push_back(buildRecord(bagItems[j], -1, i, j));
+        }
+    }
+
+    // Save equipped items
+    for (const auto& [eqSlot, item] : inv->inventory.getEquipmentMap()) {
+        if (!item.isValid()) continue;
+        InventorySlotRecord s = buildRecord(item, -1, -1, -1);
+        s.is_equipped = true;
+        switch (eqSlot) {
+            case EquipmentSlot::Weapon:    s.equipped_slot = "Weapon"; break;
+            case EquipmentSlot::SubWeapon: s.equipped_slot = "SubWeapon"; break;
+            case EquipmentSlot::Hat:       s.equipped_slot = "Hat"; break;
+            case EquipmentSlot::Armor:     s.equipped_slot = "Armor"; break;
+            case EquipmentSlot::Gloves:    s.equipped_slot = "Gloves"; break;
+            case EquipmentSlot::Shoes:     s.equipped_slot = "Shoes"; break;
+            case EquipmentSlot::Belt:      s.equipped_slot = "Belt"; break;
+            case EquipmentSlot::Cloak:     s.equipped_slot = "Cloak"; break;
+            case EquipmentSlot::Ring:      s.equipped_slot = "Ring"; break;
+            case EquipmentSlot::Necklace:  s.equipped_slot = "Necklace"; break;
+            default: break;
+        }
         slots.push_back(std::move(s));
     }
 
