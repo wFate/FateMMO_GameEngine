@@ -60,6 +60,13 @@ public:
 
     void setBlendMode(BlendMode mode);
 
+    // Palette swap support (RenderType 5)
+    void setPalette(const Color* colors, int count);
+    void clearPalette();
+    void drawPaletteSwapped(std::shared_ptr<Texture>& texture,
+                            const SpriteDrawParams& params,
+                            const Color* palette, int paletteSize);
+
     // Set the CommandList for gfx-abstracted drawing; nullptr = direct GL fallback
     void setCommandList(gfx::CommandList* cmd) { cmdList_ = cmd; }
 
