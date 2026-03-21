@@ -135,6 +135,18 @@ option(TRACY_ON_DEMAND "Enable Tracy on-demand mode" ON)
 option(ENGINE_MEMORY_DEBUG "Enable allocator debug visualization panels" ON)
 FetchContent_MakeAvailable(tracy)
 
+# PhysicsFS (virtual filesystem with ZIP/archive mount support)
+FetchContent_Declare(
+    physfs
+    GIT_REPOSITORY https://github.com/icculus/physfs.git
+    GIT_TAG        main
+    GIT_SHALLOW    TRUE
+)
+set(PHYSFS_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(PHYSFS_BUILD_TEST OFF CACHE BOOL "" FORCE)
+set(PHYSFS_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(physfs)
+
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     # OpenSSL (TLS for auth) — installed via vcpkg
     find_package(OpenSSL REQUIRED)
@@ -236,6 +248,7 @@ target_link_libraries(fate_engine PUBLIC
     ${OPENGL_LIB}
     TracyClient
     spdlog::spdlog
+    physfs-static
 )
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     target_link_libraries(fate_engine PUBLIC OpenSSL::SSL OpenSSL::Crypto)
@@ -345,6 +358,9 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
         add_executable(fate_tests ${TEST_SOURCES} ${GAME_SHARED_SOURCES} ${GAME_UI_TEST_SOURCES} ${SERVER_TEST_SOURCES})
         target_link_libraries(fate_tests PRIVATE fate_engine doctest::doctest spdlog::spdlog)
         target_include_directories(fate_tests PRIVATE ${CMAKE_SOURCE_DIR})
+        target_compile_definitions(fate_tests PRIVATE
+            FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        )
     endif()
 endif()
 
