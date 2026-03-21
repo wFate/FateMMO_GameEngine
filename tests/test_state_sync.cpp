@@ -65,3 +65,14 @@ TEST_CASE("SvInventorySyncMsg round-trip") {
     CHECK(dst.equipment.size() == 1);
     CHECK(dst.equipment[0].itemId == "iron_helm");
 }
+
+TEST_CASE("Empty SvSkillSyncMsg round-trip") {
+    SvSkillSyncMsg src;
+    uint8_t buf[256];
+    ByteWriter w(buf, sizeof(buf));
+    src.write(w);
+    ByteReader r(buf, w.size());
+    auto dst = SvSkillSyncMsg::read(r);
+    CHECK(dst.skills.empty());
+    CHECK(dst.skillBar.empty());
+}
