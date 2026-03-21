@@ -345,7 +345,7 @@ SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* en
 
     // Death state from character/enemy stats
     if (charStats) {
-        msg.deathState = charStats->stats.isDead ? 2 : 0; // 0=alive, 2=dead
+        msg.deathState = charStats->stats.isAlive() ? 0 : static_cast<uint8_t>(charStats->stats.lifeState); // 0=alive, 1=dying, 2=dead
     } else {
         auto* es2 = entity->getComponent<EnemyStatsComponent>();
         msg.deathState = (es2 && !es2->stats.isAlive) ? 2 : 0;
