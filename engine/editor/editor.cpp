@@ -838,10 +838,10 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
         }
 
         if (t && (s || szComp)) {
-            // Resize handles are always active — if the user clicks a visible handle,
-            // resize regardless of the active tool (handles are always drawn)
-            bool allowResize = true;
-            float handleZone = 12.0f / camera->zoom();
+            // Only check resize handles when Scale tool is active (E key).
+            // This prevents accidental resizing when trying to move tiles.
+            bool allowResize = (currentTool_ == EditorTool::Scale);
+            float handleZone = 6.0f / camera->zoom(); // tighter hit zone
 
             if (allowResize) {
                 Vec2 handles[8] = {
