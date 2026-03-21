@@ -100,6 +100,21 @@ void NetServer::handleConnect(const NetAddress& from, const uint8_t* payload, si
         return;
     }
 
+    // Check protocol version (first byte of payload)
+    if (payloadSize >= 1 && payload) {
+        uint8_t clientVersion = payload[0];
+        if (clientVersion != PROTOCOL_VERSION) {
+            std::string reason = "Version mismatch: server=" + std::to_string(PROTOCOL_VERSION)
+                               + " client=" + std::to_string(clientVersion);
+            sendConnectReject(from, reason);
+            LOG_WARN("NetServer", "%s from %u:%u", reason.c_str(), from.ip, from.port);
+            return;
+        }
+        // Skip version byte for auth token extraction below
+        payload += 1;
+        payloadSize -= 1;
+    }
+
     // Add new client
     uint16_t clientId = connections_.addClient(from);
     ClientConnection* client = connections_.findById(clientId);
