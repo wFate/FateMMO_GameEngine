@@ -4004,69 +4004,15 @@ void ServerApp::processEquip(uint16_t clientId, const CmdEquipMsg& msg) {
 
     auto targetSlot = static_cast<EquipmentSlot>(msg.equipSlot);
 
-    // Helper: determine bag slot count from item definition
-    auto getBagSlots = [this](const std::string& itemId) -> int {
-        auto* def = itemDefCache_.getDefinition(itemId);
-        if (!def) return 0;
-        if (def->itemType != "Bag" && def->itemType != "bag") return 0;
-        int slots = def->getIntAttribute("slot_count", 6);
-        return std::clamp(slots, 1, 20);
-    };
-
     bool success = false;
-    int bagSlotDelta = 0;  // positive = expand, negative = shrink
 
     if (msg.action == 0) {
-        // Equip: get the item before it moves from inventory to equipment
-        auto item = inv->inventory.getSlot(msg.inventorySlot);
-        int bagSlots = item.isValid() ? getBagSlots(item.itemId) : 0;
-
         success = inv->inventory.equipItem(msg.inventorySlot, targetSlot);
-        if (success && bagSlots > 0) {
-            // Check if a bag was swapped out (equipItem swaps when slot occupied)
-            // The old equipped item is now in the inventory slot
-            auto swappedOut = inv->inventory.getSlot(msg.inventorySlot);
-            int swappedBagSlots = swappedOut.isValid() ? getBagSlots(swappedOut.itemId) : 0;
-            bagSlotDelta = bagSlots - swappedBagSlots;
-        }
     } else {
-        // Unequip: check if removing a bag, validate items fit in reduced slots
-        auto equipped = inv->inventory.getEquipment(targetSlot);
-        int bagSlots = equipped.isValid() ? getBagSlots(equipped.itemId) : 0;
-
-        if (bagSlots > 0) {
-            int currentUsed = inv->inventory.usedSlots();
-            int newTotal = inv->inventory.totalSlots() - bagSlots;
-            if (newTotal < InventoryConstants::BASE_INVENTORY_SLOTS)
-                newTotal = InventoryConstants::BASE_INVENTORY_SLOTS;
-            // +1 because unequip itself puts the bag into an inventory slot
-            if (currentUsed + 1 > newTotal) {
-                // Reject: inventory too full to unequip this bag
-                SvChatMessageMsg errMsg;
-                errMsg.channel    = static_cast<uint8_t>(ChatChannel::System);
-                errMsg.senderName = "System";
-                errMsg.message    = "Clear inventory slots before unequipping bag.";
-                errMsg.faction    = 0;
-                uint8_t buf[512]; ByteWriter w(buf, sizeof(buf));
-                errMsg.write(w);
-                server_.sendTo(clientId, Channel::ReliableOrdered,
-                               PacketType::SvChatMessage, buf, w.size());
-                return;
-            }
-            bagSlotDelta = -bagSlots;
-        }
-
         success = inv->inventory.unequipItem(targetSlot);
     }
 
     if (success) {
-        // Apply bag slot expansion/shrink
-        if (bagSlotDelta > 0) {
-            inv->inventory.expandSlots(bagSlotDelta);
-        } else if (bagSlotDelta < 0) {
-            inv->inventory.shrinkSlots(-bagSlotDelta);
-        }
-
         recalcEquipmentBonuses(player);
         sendPlayerState(clientId);
         sendInventorySync(clientId);

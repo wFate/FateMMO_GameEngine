@@ -27,9 +27,18 @@ public:
     [[nodiscard]] int freeSlots() const;
     [[nodiscard]] int64_t getGold() const;
 
-    // ---- Bag Expansion -----------------------------------------------------
-    void expandSlots(int count);
-    bool shrinkSlots(int count);
+    // ---- Bag Contents (nested storage) ------------------------------------
+    // A bag item in a main slot can contain sub-items.
+    // bagContents_[slotIndex] = vector of sub-items (max determined by bag's slotCount)
+    bool addItemToBag(int bagSlot, const ItemInstance& item);
+    bool removeItemFromBag(int bagSlot, int subSlot);
+    [[nodiscard]] ItemInstance getBagItem(int bagSlot, int subSlot) const;
+    [[nodiscard]] int bagSlotCount(int bagSlot) const;      // max sub-slots for this bag (0 if not a bag)
+    [[nodiscard]] int bagUsedSlots(int bagSlot) const;       // how many sub-slots are used
+    [[nodiscard]] int bagFreeSlots(int bagSlot) const;
+    [[nodiscard]] const std::vector<ItemInstance>& getBagContents(int bagSlot) const;
+    void setBagCapacity(int bagSlot, int capacity);          // set max sub-slots (called when bag item placed)
+    void clearBagContents(int bagSlot);                       // clear all sub-items
 
     // ---- Item Operations ---------------------------------------------------
     bool addItem(const ItemInstance& item);
@@ -81,6 +90,7 @@ public:
 private:
     std::vector<ItemInstance> slots_;
     std::unordered_map<EquipmentSlot, ItemInstance> equipment_;
+    std::unordered_map<int, std::vector<ItemInstance>> bagContents_;
     int64_t gold_ = 0;
     std::string characterId_;
     std::unordered_set<int> lockedTradeSlots_;

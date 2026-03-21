@@ -1,204 +1,173 @@
 #include <doctest/doctest.h>
 #include "game/shared/inventory.h"
 #include "game/shared/item_instance.h"
-#include "game/shared/game_types.h"
 #include "game/shared/bag_definition.h"
-
 using namespace fate;
 
-static ItemInstance makeItem(const std::string& instanceId,
-                             const std::string& itemId,
-                             int quantity = 1) {
-    return ItemInstance::createSimple(instanceId, itemId, quantity);
+static ItemInstance makeItem(const std::string& id, const std::string& itemId, int qty = 1) {
+    return ItemInstance::createSimple(id, itemId, qty);
 }
 
-TEST_SUITE("Bag Expansion") {
+TEST_SUITE("Bag System - Nested Containers") {
 
-// ============================================================================
-// expandSlots
-// ============================================================================
-
-TEST_CASE("expandSlots adds extra inventory slots") {
+TEST_CASE("inventory is always exactly 15 slots") {
     Inventory inv;
-    inv.initialize("test_char", 0);
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS);
-
-    inv.expandSlots(6);
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 6);
-    CHECK(inv.freeSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 6);
+    inv.initialize("test", 0);
+    CHECK(inv.totalSlots() == 15);
 }
 
-TEST_CASE("expandSlots with zero does nothing") {
+TEST_CASE("setBagCapacity creates sub-slots") {
     Inventory inv;
-    inv.initialize("test_char", 0);
-    inv.expandSlots(0);
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS);
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("bag_1", "leather_bag"));
+    inv.setBagCapacity(0, 6);
+    CHECK(inv.bagSlotCount(0) == 6);
+    CHECK(inv.bagUsedSlots(0) == 0);
+    CHECK(inv.bagFreeSlots(0) == 6);
 }
 
-TEST_CASE("expandSlots with negative does nothing") {
+TEST_CASE("setBagCapacity clamps to max 10") {
     Inventory inv;
-    inv.initialize("test_char", 0);
-    inv.expandSlots(-5);
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS);
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("bag_1", "big_bag"));
+    inv.setBagCapacity(0, 20);
+    CHECK(inv.bagSlotCount(0) == 10);
 }
 
-TEST_CASE("expandSlots caps at BASE + MAX_BAG_SLOTS") {
+TEST_CASE("addItemToBag places item in first empty sub-slot") {
     Inventory inv;
-    inv.initialize("test_char", 0);
-    int maxTotal = InventoryConstants::BASE_INVENTORY_SLOTS + InventoryConstants::MAX_BAG_SLOTS;
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("bag_1", "leather_bag"));
+    inv.setBagCapacity(0, 4);
 
-    inv.expandSlots(100);
-    CHECK(inv.totalSlots() == maxTotal);
+    CHECK(inv.addItemToBag(0, makeItem("sword_1", "iron_sword")));
+    CHECK(inv.bagUsedSlots(0) == 1);
+    CHECK(inv.getBagItem(0, 0).itemId == "iron_sword");
 }
 
-TEST_CASE("expandSlots cumulative from multiple bags") {
+TEST_CASE("addItemToBag to full bag fails") {
     Inventory inv;
-    inv.initialize("test_char", 0);
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("bag_1", "tiny_bag"));
+    inv.setBagCapacity(0, 2);
 
-    inv.expandSlots(4);
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 4);
-
-    inv.expandSlots(6);
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 10);
+    CHECK(inv.addItemToBag(0, makeItem("i1", "item_a")));
+    CHECK(inv.addItemToBag(0, makeItem("i2", "item_b")));
+    CHECK_FALSE(inv.addItemToBag(0, makeItem("i3", "item_c"))); // full
 }
 
-TEST_CASE("expanded slots can hold items") {
+TEST_CASE("addItemToBag to non-bag slot fails") {
     Inventory inv;
-    inv.initialize("test_char", 0);
-    inv.expandSlots(5);
-
-    // Fill base slots
-    for (int i = 0; i < InventoryConstants::BASE_INVENTORY_SLOTS; ++i) {
-        CHECK(inv.addItem(makeItem("inst_" + std::to_string(i), "item_" + std::to_string(i))));
-    }
-    CHECK(inv.freeSlots() == 5);
-
-    // Fill expanded slots
-    for (int i = 0; i < 5; ++i) {
-        CHECK(inv.addItem(makeItem("bag_inst_" + std::to_string(i), "bag_item_" + std::to_string(i))));
-    }
-    CHECK(inv.freeSlots() == 0);
-    CHECK(inv.usedSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 5);
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("sword_1", "iron_sword")); // not a bag
+    CHECK_FALSE(inv.addItemToBag(0, makeItem("i1", "potion")));
 }
 
-// ============================================================================
-// shrinkSlots
-// ============================================================================
-
-TEST_CASE("shrinkSlots removes empty expanded slots") {
+TEST_CASE("removeItemFromBag clears sub-slot") {
     Inventory inv;
-    inv.initialize("test_char", 0);
-    inv.expandSlots(6);
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 6);
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("bag_1", "leather_bag"));
+    inv.setBagCapacity(0, 4);
+    inv.addItemToBag(0, makeItem("i1", "iron_sword"));
 
-    CHECK(inv.shrinkSlots(6));
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS);
+    CHECK(inv.removeItemFromBag(0, 0));
+    CHECK(inv.bagUsedSlots(0) == 0);
+    CHECK_FALSE(inv.getBagItem(0, 0).isValid());
 }
 
-TEST_CASE("shrinkSlots rejects when extended slots contain items") {
+TEST_CASE("removeItemFromBag invalid sub-slot fails") {
     Inventory inv;
-    inv.initialize("test_char", 0);
-    inv.expandSlots(4);
-
-    // Fill all slots including expanded ones
-    for (int i = 0; i < InventoryConstants::BASE_INVENTORY_SLOTS + 4; ++i) {
-        inv.addItem(makeItem("inst_" + std::to_string(i), "item_" + std::to_string(i)));
-    }
-
-    CHECK_FALSE(inv.shrinkSlots(4));
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 4);
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("bag_1", "leather_bag"));
+    inv.setBagCapacity(0, 4);
+    CHECK_FALSE(inv.removeItemFromBag(0, 99));
+    CHECK_FALSE(inv.removeItemFromBag(0, -1));
 }
 
-TEST_CASE("shrinkSlots with zero returns false") {
+TEST_CASE("cannot remove bag slot if bag has contents") {
     Inventory inv;
-    inv.initialize("test_char", 0);
-    inv.expandSlots(6);
-    CHECK_FALSE(inv.shrinkSlots(0));
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 6);
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("bag_1", "leather_bag"));
+    inv.setBagCapacity(0, 4);
+    inv.addItemToBag(0, makeItem("i1", "iron_sword"));
+
+    CHECK_FALSE(inv.removeItem(0)); // bag not empty
+    CHECK(inv.getSlot(0).itemId == "leather_bag"); // still there
 }
 
-TEST_CASE("shrinkSlots with negative returns false") {
+TEST_CASE("can remove bag slot after emptying contents") {
     Inventory inv;
-    inv.initialize("test_char", 0);
-    inv.expandSlots(6);
-    CHECK_FALSE(inv.shrinkSlots(-3));
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 6);
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("bag_1", "leather_bag"));
+    inv.setBagCapacity(0, 4);
+    inv.addItemToBag(0, makeItem("i1", "iron_sword"));
+    inv.removeItemFromBag(0, 0); // empty the bag
+
+    CHECK(inv.removeItem(0)); // now it works
+    CHECK_FALSE(inv.getSlot(0).isValid());
+    CHECK(inv.bagSlotCount(0) == 0); // bag contents cleared
 }
 
-TEST_CASE("shrinkSlots does not go below BASE_INVENTORY_SLOTS") {
+TEST_CASE("clearBagContents removes all sub-items") {
     Inventory inv;
-    inv.initialize("test_char", 0);
-    inv.expandSlots(4);
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("bag_1", "leather_bag"));
+    inv.setBagCapacity(0, 4);
+    inv.addItemToBag(0, makeItem("i1", "item_a"));
+    inv.addItemToBag(0, makeItem("i2", "item_b"));
 
-    // Try to shrink more than expanded
-    CHECK(inv.shrinkSlots(10));
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS);
+    inv.clearBagContents(0);
+    CHECK(inv.bagSlotCount(0) == 0);
 }
 
-TEST_CASE("shrinkSlots partial: only empty tail removed") {
-    Inventory inv;
-    inv.initialize("test_char", 0);
-    inv.expandSlots(8);
-
-    // Put an item in expanded slot 16 (index 15 is first expanded)
-    inv.addItemToSlot(InventoryConstants::BASE_INVENTORY_SLOTS, makeItem("inst_X", "item_X"));
-
-    // Can shrink by 7 (slots 16-22 are empty) but not by 8 (slot 15 has item)
-    CHECK(inv.shrinkSlots(7));
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 1);
-
-    // Cannot shrink further since that slot has an item
-    CHECK_FALSE(inv.shrinkSlots(1));
-}
-
-// ============================================================================
-// BagDefinition validation
-// ============================================================================
-
-TEST_CASE("BagDefinition validate clamps slotCount") {
+TEST_CASE("BagDefinition validates slotCount 1-10") {
     BagDefinition bag;
     bag.slotCount = 0;
     bag.validate();
     CHECK(bag.slotCount == 1);
 
-    bag.slotCount = 25;
-    bag.validate();
-    CHECK(bag.slotCount == 20);
-
-    bag.slotCount = 10;
+    bag.slotCount = 15;
     bag.validate();
     CHECK(bag.slotCount == 10);
+
+    bag.slotCount = 7;
+    bag.validate();
+    CHECK(bag.slotCount == 7);
 }
 
-// ============================================================================
-// totalSlots reflects actual vector size
-// ============================================================================
-
-TEST_CASE("totalSlots returns actual slots vector size") {
+TEST_CASE("getBagContents returns sub-items") {
     Inventory inv;
-    inv.initialize("test_char", 0);
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS);
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("bag_1", "leather_bag"));
+    inv.setBagCapacity(0, 3);
+    inv.addItemToBag(0, makeItem("i1", "item_a"));
+    inv.addItemToBag(0, makeItem("i2", "item_b"));
 
-    inv.expandSlots(5);
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 5);
-
-    inv.shrinkSlots(3);
-    CHECK(inv.totalSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 2);
+    auto& contents = inv.getBagContents(0);
+    CHECK(contents.size() == 3);
+    CHECK(contents[0].itemId == "item_a");
+    CHECK(contents[1].itemId == "item_b");
+    CHECK_FALSE(contents[2].isValid()); // empty sub-slot
 }
 
-// ============================================================================
-// freeSlots with expansion
-// ============================================================================
-
-TEST_CASE("freeSlots reflects expansion correctly") {
+TEST_CASE("multiple bags in different slots") {
     Inventory inv;
-    inv.initialize("test_char", 0);
+    inv.initialize("test", 0);
+    inv.addItemToSlot(0, makeItem("bag_1", "small_bag"));
+    inv.addItemToSlot(1, makeItem("bag_2", "large_bag"));
+    inv.setBagCapacity(0, 4);
+    inv.setBagCapacity(1, 8);
 
-    inv.addItem(makeItem("inst_1", "item_1"));
-    CHECK(inv.freeSlots() == InventoryConstants::BASE_INVENTORY_SLOTS - 1);
+    CHECK(inv.bagSlotCount(0) == 4);
+    CHECK(inv.bagSlotCount(1) == 8);
 
-    inv.expandSlots(6);
-    CHECK(inv.freeSlots() == InventoryConstants::BASE_INVENTORY_SLOTS + 6 - 1);
+    inv.addItemToBag(0, makeItem("i1", "potion"));
+    inv.addItemToBag(1, makeItem("i2", "sword"));
+
+    CHECK(inv.bagUsedSlots(0) == 1);
+    CHECK(inv.bagUsedSlots(1) == 1);
+    CHECK(inv.getBagItem(0, 0).itemId == "potion");
+    CHECK(inv.getBagItem(1, 0).itemId == "sword");
 }
 
 } // TEST_SUITE
