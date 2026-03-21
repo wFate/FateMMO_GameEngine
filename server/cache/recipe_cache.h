@@ -3,6 +3,8 @@
 #include <vector>
 #include <unordered_map>
 
+namespace pqxx { class connection; }
+
 namespace fate {
 
 struct RecipeIngredient {
@@ -24,6 +26,8 @@ struct CachedRecipe {
 
 class RecipeCache {
 public:
+    bool loadFromDatabase(pqxx::connection& conn);
+
     void addRecipe(const CachedRecipe& recipe) {
         recipes_[recipe.recipeId] = recipe;
     }

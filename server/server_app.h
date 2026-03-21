@@ -30,6 +30,7 @@
 #include "game/shared/gauntlet.h"
 #include "server/cache/item_definition_cache.h"
 #include "server/cache/loot_table_cache.h"
+#include "server/cache/recipe_cache.h"
 #include "server/db/spawn_zone_cache.h"
 #include "server/server_spawn_manager.h"
 #include "engine/net/auth_protocol.h"
@@ -104,6 +105,7 @@ private:
     MobDefCache mobDefCache_;
     SkillDefCache skillDefCache_;
     SceneCache sceneCache_;
+    RecipeCache recipeCache_;
 
     // Gauntlet event system
     GauntletManager gauntletManager_;

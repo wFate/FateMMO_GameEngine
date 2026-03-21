@@ -133,6 +133,11 @@ bool ServerApp::init(uint16_t port) {
     if (!spawnZoneCache_.initialize(gameDbConn_.connection())) {
         LOG_WARN("Server", "Failed to load spawn zones");
     }
+    if (recipeCache_.loadFromDatabase(gameDbConn_.connection())) {
+        LOG_INFO("Server", "Loaded %zu crafting recipes", recipeCache_.size());
+    } else {
+        LOG_WARN("Server", "Failed to load crafting recipes (table may not exist yet)");
+    }
     LOG_INFO("Server", "Caches loaded: %zu items, %zu loot tables, %d mobs, %d skills (%d ranks), %d scenes",
              itemDefCache_.size(), lootTableCache_.tableCount(),
              mobDefCache_.count(), skillDefCache_.skillCount(), skillDefCache_.rankCount(),
