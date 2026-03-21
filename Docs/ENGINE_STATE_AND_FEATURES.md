@@ -4,13 +4,13 @@
 
 Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landscape gameplay with a built-in Unity-style editor for scene building, tile painting, and rapid iteration. All game systems from the Unity/C# prototype have been ported to C++ as server-authoritative logic.
 
-**Tech Stack:** C++23, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImGuizmo, ImPlot, Tracy Profiler, spdlog, nlohmann/json, stb_image, stb_truetype, Winsock2 + POSIX sockets
+**Tech Stack:** C++23, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImGuizmo, ImPlot, SoLoud (audio), Tracy Profiler, spdlog, nlohmann/json, stb_image, stb_truetype, Winsock2 + POSIX sockets
 
 **Build System:** CMake with FetchContent (auto-downloads all dependencies)
 
 **Target:** Windows (development), iOS (build pipeline ready, GLES 3.0), Android (build pipeline ready, NDK r27), Linux server (future)
 
-**Codebase:** ~62,300 lines across 403 files (engine/ ~19,500 LOC, game/ ~24,000 LOC, server/ ~9,500 LOC, tests/ ~9,300 LOC)
+**Codebase:** ~75,200 lines across 425 files (engine/ ~23,200 LOC, game/ ~27,800 LOC, server/ ~11,800 LOC, tests/ ~12,400 LOC)
 
 ### Build & Run
 
@@ -63,6 +63,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Ghost Entity Scaffold | Done | GhostFlag component, dedicated GhostArena for cross-zone proxy entities |
 | Render Graph | Done | 10-pass pipeline: GroundTiles→Entities→Particles→SDFText→DebugOverlays→Lighting→BloomExtract→BloomBlur→PostProcess→Blit |
 | Particle System | Done | CPU emitters, spawn rate/burst, gravity, per-particle lifetime/rotation/color lerp |
+| Audio System | Done | SoLoud engine (SDL2 backend, null driver fallback). SFX: preloaded WAV/OGG, fire-and-forget `playSFX(name)`, directory batch loading. Music: OGG streaming with looping, crossfade on zone change. 2D spatial audio: distance-based volume falloff + stereo pan. 3 volume buses (master/SFX/music), all clamped 0-1. Max 32 active voices (SoLoud auto-virtualizes overflow). Missing files warn once then silence. 10 game events wired: combat hit/crit/miss/kill, skill results, death, loot, respawn, zone music, chat |
 | 2D Lighting | Done | Ambient + point lights, light map FBO, additive accumulation, multiplicative composite |
 | Post-Processing | Done | Bloom (extract + Gaussian blur + composite), vignette, color grading |
 | Fiber Job System | Done | Win32 fibers + minicoro (iOS/Android/Linux), 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas |
@@ -76,7 +77,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Server Target Validation | Done | Every CmdAction/CmdUseSkill validates target exists in server-side AOI (binary search on sorted visibility set) and is within action range with latency tolerance. **Full PvP validation:** `canAttackPlayer()` checks safe zone → party member → dead/dying target → same-faction innocents → different factions. Same-faction players can only attack Red/Black (PK-flagged) targets |
 | Profanity Filter (Server) | Done | ProfanityFilter::filterChatMessage wired into CmdChat handler. Censor mode (asterisks) applied before broadcast. 50+ word list, leetspeak normalization, blocked phrases, max 200 char |
 | Mobile Reconnection | Done | ReconnectState machine: exponential backoff (1s→2s→4s...cap 30s), 60s timeout. **Wired into NetClient:** heartbeat timeout detection triggers auto-reconnect with stored auth token. ConnectAccept clears state |
-| Entity Replication | Done | AOI-driven enter/leave/update, delta compression with 15-field bitmask (position, animFrame, flipX, currentHP, maxHP, moveState, animId, statusEffectMask, deathState, casting, targetEntityId, level, faction, equipVisuals, **pkStatus**), per-entity sequence counters (stale update rejection), distance-based tiered update frequency (Near 20Hz/Mid 7Hz/Far 4Hz/Edge 2Hz with HP-change priority override), ghost entities, client-side position interpolation, spatial-indexed visibility |
+| Entity Replication | Done | AOI-driven enter/leave/update, delta compression with 16-field bitmask (position, animFrame, flipX, currentHP, maxHP, moveState, animId, statusEffectMask, deathState, casting, targetEntityId, level, faction, equipVisuals, pkStatus, **honorRank**), per-entity sequence counters (stale update rejection), distance-based tiered update frequency (Near 20Hz/Mid 7Hz/Far 4Hz/Edge 2Hz with HP-change priority override), ghost entities, client-side position interpolation, spatial-indexed visibility |
 | Client-Server Architecture | Done | Headless 20 tick/sec server (FateServer), NetClient/NetServer, session tokens, heartbeat/timeout |
 | Platform Detection | Done | Compile-time defines: FATEMMO_PLATFORM_WINDOWS/IOS/ANDROID/MACOS/LINUX, FATEMMO_MOBILE, FATEMMO_GLES |
 | Mobile Lifecycle | Done | SDL event filter for background/foreground/low-memory, virtual callbacks (onEnterBackground/Foreground/LowMemory), game loop pause on background, 4 unit tests |
@@ -98,6 +99,11 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Paper-Doll Rendering | Done | `CharacterAppearance` with 6 equipment layers, direction-aware draw order, per-layer depth offsets, palette index per slot |
 | Precompiled Headers | Done | CMake `target_precompile_headers` for 11 STL headers on `fate_engine` target |
 | PvP Balance Config | Done | Hot-reloadable JSON (`assets/data/pvp_balance.json`) for combat tuning: PvP multipliers, 3×3 class advantage matrix, hit rate table, crit config |
+| Arena System | Done | 1v1/2v2/3v3 PvP arena with queue-based matchmaking, AFK detection (30s), 3-min matches, honor rewards (Win=30/Loss=5/Tie=5), party sync, return-position tracking |
+| Battlefield System | Done | 4-faction PvP battlefield, per-faction kill tracking, personal K/D, winning faction determination, no death penalties, EventScheduler-driven |
+| Event Scheduler | Done | FSM for timed events (Idle→Signup→Active), configurable intervals/durations, 4 callback hooks, drives Arena and Battlefield cycles |
+| Core Extraction | Done | Equipment disassembly into 7-tier crafting cores, rarity/level-based tier, enchant-level bonus quantity |
+| Crafting (Server) | Done | Recipe cache with tier-based lookup (Novice/Book I/II/III), ingredient validation, level/class/gold requirements, DB-loaded at startup |
 | DB Backup Script | Done | `scripts/backup_db.sh` — pg_dump custom format, 14-day retention, backup verification |
 
 ### Editor (Dear ImGui)
@@ -124,7 +130,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Scene Load | Done | File > Load Scene lists all .json scenes, click to load |
 | New Scene | Done | File > New Scene clears all entities |
 | Save as Prefab | Done | Entity menu, modal dialog with name input |
-| Remove Components | Done | Right-click any component header to remove it (all 24+ component types) |
+| Remove Components | Done | Right-click any component header to remove it (all 38+ component types) |
 | Resize Handles | Done | 8 drag handles (4 corners + 4 edges), E key for resize tool mode |
 | Source Rect Editor | Done | UV region editing in Sprite inspector for tileset splicing |
 | Undo/Redo | Done | Ctrl+Z/Ctrl+Y, 200 action history, tracks move/resize/delete/duplicate/tile paint |
@@ -189,6 +195,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | PlayerController | Done | Cardinal movement, speed, facing, isLocalPlayer flag |
 | BoxCollider | Done | AABB with offset, trigger/static flags, "Fit to Sprite" button |
 | PolygonCollider | Done | SAT collision, vertex editing, make box/circle presets (auto-sized to sprite) |
+| ParticleEmitterComponent | Done | CPU particle emitter config (spawn rate, burst, gravity, lifetime, color lerp) |
+| PointLightComponent | Done | Point light for 2D lighting system (radius, color, intensity) |
 
 ### Components (Game — attached to player/mob entities)
 | Component | Status | Notes |
@@ -225,6 +233,11 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | FactionComponent | Done | Player faction (Xyros/Fenor/Zethos/Solis), permanent, set at creation |
 | PetComponent | Done | Equipped pet instance, auto-loot radius, hasPet() check |
 | SpawnPointComponent | Done | Player respawn marker (isTownSpawn flag), placed in scenes via editor |
+| ZoneComponent | Done | Named region with size, level range, PvP flag, zone type (town/zone/dungeon) |
+| PortalComponent | Done | Trigger area, target scene/zone/spawn pos, fade transition |
+| SpawnZoneComponent | Done | Region-based mob spawning config with per-mob rules, tick interval, zone containment |
+| DroppedItemComponent | Done | Ground loot entity data — itemId, rarity, owner, despawn timer, atomic tryClaim() |
+| BossSpawnPointComponent | Done | Fixed-position boss spawning from coordinate lists, respawn at different position |
 
 ### Systems
 | System | Status | Notes |
@@ -239,14 +252,13 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment, deferred entity creation (safe during archetype iteration) |
 | NPCInteractionSystem | Done | Click-to-interact with NPCs, viewport-aware screen-to-world, range check, dialogue open/close, click consumption (prevents combat targeting) |
 | QuestSystem | Done | Routes mob kills/item pickups/NPC talks to quest progress, event-driven quest marker updates on all NPCs |
-| SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment |
 | ZoneSystem | Done | Zone transitions, portal detection, fade effects |
 | ParticleSystem | Done | CPU particle emitters, registered as ECS system |
 
 ### Entity Factory
 | Feature | Status | Notes |
 |---------|--------|-------|
-| createPlayer() | Done | Assembles player with all 24 components (includes FactionComponent, PetComponent), faction selected at character creation (Xyros/Fenor/Zethos/Solis) |
+| createPlayer() | Done | Assembles player with all 23 components (includes FactionComponent, PetComponent), faction selected at character creation (Xyros/Fenor/Zethos/Solis) |
 | createMob() | Done | Assembles mob with EnemyStats, MobAI, StatusEffects, nameplate, procedural pixel art sprites (Slime/Goblin/Wolf/Mushroom/Forest Golem), trigger colliders |
 | createNPC() | Done | Assembles NPC from NPCTemplate with composable role components (quest/shop/trainer/bank/guild/teleporter/story) |
 | Class Configuration | Done | Warrior/Mage/Archer stats from CLAUDE.md class table (HP, STR, per-level gains) |
@@ -278,7 +290,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 ## Game Systems (Ported from Unity Prototype)
 
-All 27 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`. Total: **45 files, ~7,800 lines**, all compile with zero errors (197 test cases, 1777 assertions). Database repositories exist for all systems in `server/db/` (13 repos). All major systems are DB wired with message handlers, load-on-connect, save-on-disconnect, periodic maintenance, and async auto-save. Combat formula matches Unity prototype exactly (off-by-one fixed). Inventory saves after market/trade mutations prevent item duplication. Gauntlet has 3 divisions with real mob data.
+All 37 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`, plus 4 new systems (Arena, Battlefield, Event Scheduler, Core Extraction). Total: **65 files, ~12,200 lines**, all compile with zero errors (698 test cases). Database repositories exist for all systems in `server/db/` (13 repos). All major systems are DB wired with message handlers, load-on-connect, save-on-disconnect, periodic maintenance, and async auto-save. Combat formula matches Unity prototype exactly (off-by-one fixed). Inventory saves after market/trade mutations prevent item duplication. Gauntlet has 3 divisions with real mob data.
 
 ### Core Gameplay (Fully Ported — Logic Identical to C#)
 | System | Files | Lines | C# Source | Notes |
@@ -292,10 +304,11 @@ All 27 game systems from the C#/Unity prototype have been converted to C++ and l
 | Crowd Control | `crowd_control.h/.cpp` | 218 | CrowdControlSystem (433L) | Stun/freeze/root/taunt with priority hierarchy, immunity checks |
 | XP Calculator | `xp_calculator.h` | 49 | XPCalculator (158L) | Gray-through-red level scaling, 0%-130% XP multipliers |
 | Honor System | `honor_system.h/.cpp` | 145 | HonorSystem (329L) | PvP honor gain/loss tables, 5-kills/hour tracking per player pair |
-| Enchantment | `enchant_system.h` | 224 | EnchantmentSystem (601L) | +1 to +12 with success rates, protection scrolls, secret bonuses, stone tiers |
+| Enchantment | `enchant_system.h` | 224 | EnchantmentSystem (601L) | +1 to +15 with success rates (+1-8 safe, +9-15 risky: 50%/40%/30%/20%/10%/5%/2%), protection scrolls, secret bonuses (+11/+12/+15), stone tiers, gold costs per level |
 | Item Instance | `item_instance.h` | 121 | ItemInstance (403L) | Item data with rolled stats, sockets, enchant, soulbound |
 | Item Stat Roller | `item_stat_roller.h/.cpp` | 340 | ItemStatRoller (399L) | Weighted stat rolling, exponential decay distribution, JSON serialization |
 | Socket System | `socket_system.h` | ~170 | SocketSystem (351L) | Accessory socketing (Ring/Necklace/Cloak), weighted probability rolls (+1: 25%…+10: 0.5%), stat scroll validation, server-authoritative trySocket with re-socket support |
+| PK System | `pk_system.h/.cpp` | ~120 | PKSystem | PvP status transitions (White→Purple on attack, Red on innocent kill, Red→Black when PKer is killed), attack/kill result processing, decay timers per status, cooldowns |
 
 ### NPC & Quest System (New — TWOM-Inspired)
 | System | Files | Notes |
@@ -309,7 +322,7 @@ All 27 game systems from the C#/Unity prototype have been converted to C++ and l
 
 See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 
-### Game Systems (Ported — Needs Database Wiring)
+### Game Systems (Ported — Most DB Wired)
 | System | Files | Lines | C# Source | Notes |
 |--------|-------|-------|-----------|-------|
 | Inventory | `inventory.h/.cpp` | 410 | NetworkInventory | 15 slots, equipment map, gold, trade slot locking, stack/swap **(DB wired)** |
@@ -322,7 +335,7 @@ See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 | Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(DB wired — list/buy/cancel, 2% tax to jackpot, offline seller credit, expiry maintenance)** |
 | Gauntlet | `gauntlet.h/.cpp` | ~850 | GauntletManager + GauntletInstance + GauntletTeam + GauntletRegistry + GauntletConfig (10 files) | Full event scheduler (2hr cycle, 10min signup), division-based matchmaking, GauntletTeam per-team scoring/MVP, GauntletRegistry signup queues, BasicWaveConfig/BossSpawnConfig/LevelMobMapping for wave spawning, reward configs (winner/loser/performance), consolation for overflow, announcement callbacks, debug commands **(DB wired — config loaded at startup, ticked every frame, CmdGauntlet register/unregister/status, mob kill notifications routed)** |
 | Faction System | `faction.h` | ~130 | FactionRegistry + FactionChatGarbler | 4 factions (Xyros/Fenor/Zethos/Solis), registry, deterministic chat garbling, same-faction checks, faction picker on registration screen |
-| Pet System | `pet_system.h/.cpp` | ~120 | PetDefinition + PetInstance + PetSystem | Leveling, rarity-tiered stats (HP/Crit/XP bonus), XP sharing (50%), player-level cap |
+| Pet System | `pet_system.h/.cpp` | ~120 | PetDefinition + PetInstance + PetSystem | Leveling, rarity-tiered stats (HP/Crit/XP bonus), XP sharing (50%), player-level cap, equip/unequip wired with stat bonuses applied to CharacterStats **(DB wired — load/save on connect/disconnect, PetDefinitionCache on server)** |
 | Stat Enchant System | `stat_enchant_system.h` | ~70 | StatEnchantSystem | Accessory enchanting (Belt/Ring/Necklace/Cloak), 6-tier roll table, HP/MP x10 scaling |
 | Bounty System | `bounty_system.h` | ~200 | NetworkBountyManager + BountyService + BountyRepository | PvE bounty board (max 10 active, 50K-500M gold, 48hr expiry), 2% tax, guild-mate protection, 12hr guild-leave cooldown, party split on claim, cancel/refund, expiration processing **(DB wired — place/cancel handlers + expiry maintenance)** |
 | Ranking System | `ranking_system.h` | ~170 | NetworkRankingManager + RankingRepository | Global/class/guild/honor leaderboards, paginated (50/page), 60s cache, PlayerRankInfo (global+class+guild rank), K/D ratio, honor rankings **(repo built, needs integration)** |
@@ -330,6 +343,12 @@ See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 | Input Validator | `input_validator.h` | ~75 | InputValidator (76L) | Chat/Name validation modes, per-character rejection, username (3-20 alphanumeric+underscore) and password (8-128) validation, delegates to ProfanityFilter |
 | Consumable Definition | `consumable_definition.h` | ~105 | ConsumableDefinition (127L) | 16 effect types (HP/MP restore, 8 buff types, teleport, skill book, stat reset), cooldown groups, safe-zone/combat restrictions, effects description builder |
 | Bag Definition | `bag_definition.h` | ~30 | BagDefinition (23L) | Inventory expansion bags (1-20 slots per bag), rarity, validation |
+| PK System | `pk_system.h/.cpp` | ~120 | PKSystem | PvP status transitions (White→Purple→Red→Black), attack/kill processing, decay timers, cooldowns |
+| Arena Manager | `arena_manager.h` | ~200 | *New* | 1v1/2v2/3v3 arena modes, queue-based matchmaking, AFK detection (30s), 3-min matches, countdown, honor rewards (Win=30/Loss=5/Tie=5), party sync, return-position tracking |
+| Battlefield Manager | `battlefield_manager.h` | ~90 | *New* | 4-faction PvP battlefield, per-faction kill tracking, personal K/D, winning faction determination, minimum 2-faction requirement, no death penalties |
+| Event Scheduler | `event_scheduler.h` | ~80 | *New* | FSM for timed events (Idle→Signup→Active), configurable intervals/durations, 4 callback hooks (OnSignupStart/OnEventStart/OnEventEnd/OnTick), drives Arena and Battlefield cycles |
+| Core Extraction | `core_extraction.h` | ~40 | *New* | Equipment disassembly into crafting cores, rarity-based tier (1st-7th), level-based tier for Uncommon, bonus quantity from enchant level (+1 per 3 enchant levels), Common items cannot be extracted |
+| Crafting (Server) | `server/cache/recipe_cache.h` | ~60 | *New* | Recipe cache with tier-based lookup (Novice/Book I/Book II/Book III), ingredients with quantities, level/class requirements, gold costs, loaded from DB at startup |
 
 ### Key Formulas Preserved (Exact Match to C# Prototype)
 ```
@@ -363,11 +382,13 @@ maxFury = 3 + floor(level / 10)
 
 // Enchant weapon damage
 multiplier = 1 + (enchantLevel * 0.125)
-+11 secret: *1.05, +12 secret: *1.10 (stacks)
++11 secret: *1.05, +12 secret: *1.10, +15 secret: additional scaling (stacks)
 +12 max damage bonus: +30%
+// Enchant gold costs
++1-3: 100g, +4-6: 500g, +7-8: 2,000g, +9: 10K, +10: 25K, +11: 50K, +12: 100K, +13: 500K, +14: 1M, +15: 2M
 
-// Enchant success rates
-+1 to +8: 100%, +9: 40%, +10: 15%, +11: 10%, +12: 5%
+// Enchant success rates (MAX_ENCHANT_LEVEL = 15)
++1 to +8: 100% (safe), +9: 50%, +10: 40%, +11: 30%, +12: 20%, +13: 10%, +14: 5%, +15: 2%
 
 // Socket value probabilities (weighted roll 1-10)
 +1: 25%, +2: 20%, +3: 17%, +4: 13%, +5: 10%
@@ -382,6 +403,152 @@ classBonus    = classAdvantageMatrix[attacker][defender] // default 1.0
 ---
 
 ## Changelog
+
+### March 21, 2026 - Batch E: Pet System Wiring
+
+Pet system end-to-end wiring: equip/unequip, stat bonuses, XP sharing. Test count: 693 → 698 (+5 tests).
+
+**Pet equip/unequip:**
+- `CmdPetMsg` / `SvPetUpdateMsg` protocol messages for equip/unequip actions
+- `PetDefinitionCache` on server with hardcoded pet lookup (3 starter pets)
+- Server handler validates pet ownership, applies stat bonuses via `PetSystem::applyToEquipBonuses()`
+- Client receives `SvPetUpdate` with pet instance data, updates PetComponent
+
+**Stat bonuses & XP sharing:**
+- Equipped pet bonuses (HP, CritRate, ExpBonus) applied to CharacterStats on equip, removed on unequip
+- 50% XP sharing: player XP gain sends proportional XP to pet via `PetSystem::addXP()`
+- Pet level capped at player level
+
+**Database:**
+- Migration 008: `pet_definitions` table with 3 starter pets
+- `PetRepository` load/save on connect/disconnect
+
+**Server fixes:**
+- HP/MP regen tick now server-authoritative (was client-only, server HP overrode regen)
+- `pk_status` and `faction` now persisted to database across sessions
+
+### March 21, 2026 - Batch D: Protocol Message Expansion
+
+Added protocol messages for 5 remaining systems that lacked client↔server communication.
+
+**New protocol messages:**
+- `CmdBankMsg` / `SvBankUpdateMsg` — deposit/withdraw items and gold
+- `CmdSocketItemMsg` / `SvSocketResultMsg` — accessory socket rolling
+- `CmdStatEnchantMsg` / `SvStatEnchantResultMsg` — accessory stat enchanting
+- `CmdUseConsumableMsg` / `SvConsumeResultMsg` — consumable item usage with 16 effect types
+- `CmdRankingQueryMsg` / `SvRankingResultMsg` — leaderboard queries (global/class/guild/honor)
+
+### March 21, 2026 - Batch C: PvP Events & Rankings
+
+Added arena, battlefield, event scheduler, and honor ranking systems. Test count: 635 → 693 (+58 tests).
+
+**Event Scheduler:**
+- `EventScheduler` FSM with 3 states (Idle→Signup→Active), configurable intervals/durations
+- 4 callback hooks (OnSignupStart/OnEventStart/OnEventEnd/OnTick)
+- Drives both Battlefield and Arena event cycles
+
+**Battlefield:**
+- `BattlefieldManager` with 4-faction PvP (Xyros/Fenor/Zethos/Solis)
+- Per-faction kill tracking, personal K/D stats, winning faction determination
+- Minimum 2-faction requirement, no death penalties (DeathSource::Battlefield)
+- Integrated with EventScheduler for registration and rewards
+- Protocol: `CmdBattlefieldMsg` / `SvBattlefieldUpdateMsg`
+
+**Arena (1v1 / 2v2 / 3v3):**
+- `ArenaManager` with queue-based matchmaking by mode and level bracket
+- `ArenaMode` enum: Solo (1v1), Duo (2v2), Team (3v3)
+- 3-second countdown, 3-minute match duration, AFK detection (30s timeout)
+- Honor rewards: Win=30, Loss=5, Tie=5
+- Party sync for duo/team modes, return-position tracking
+- Protocol: `CmdArenaMsg` / `SvArenaUpdateMsg`
+
+**Honor Ranking:**
+- Honor badges replicated to all players via delta compression bit 15 (`honorRank` field)
+- Integrated with arena honor rewards
+
+**Infrastructure:**
+- `DeathSource` enum expanded: PvE=0, PvP=1, Arena=2, Environment=3, Battlefield=4
+- New packet IDs for battlefield and arena commands/responses
+- Event lock system prevents simultaneous event participation
+
+### March 21, 2026 - Batch B: Enchant +15, Core Extraction, Crafting
+
+Extended enchant system, added item disassembly and crafting. Test count: 635.
+
+**Enchant system extended to +15:**
+- `MAX_ENCHANT_LEVEL` raised from 12 to 15
+- New success rates: +9=50%, +10=40%, +11=30%, +12=20%, +13=10%, +14=5%, +15=2%
+- Gold costs for +13-15: 500K, 1M, 2M
+- Secret bonuses at +15 with additional stat scaling
+- Break mechanic: failed enchant above safe level can set `isBroken = true` on item
+- Migration 007: `is_broken` column + crafting book tiers
+
+**Core extraction:**
+- `CoreExtraction::determineCoreResult()` — rarity-based tier determination (1st-7th cores)
+- Uncommon items: tier by item level (1st-5th). Rare: 6th. Epic+: 7th
+- Bonus quantity from enchant level (+1 per 3 enchant levels)
+- Common items cannot be extracted
+- Server handler + client callback wired
+
+**Crafting system:**
+- `RecipeCache` loads recipes from database with tier-based lookup (Novice/Book I/II/III)
+- `CachedRecipe` with ingredients, level/class requirements, gold costs
+- Server handler validates ingredients, gold, level/class, produces result item
+- Protocol: `CmdCraftMsg` / `SvCraftResultMsg`
+
+**Item pipeline:**
+- `isBroken` field added to ItemInstance, DB schema, and sync messages
+- Broken items cannot be traded or marketed (`isMarketable()` checks `!isBroken`)
+- Client callbacks for enchant and repair results (UI feedback)
+- Server enchant and repair handlers with break mechanic
+
+### March 21, 2026 - Audio Integration (SoLoud)
+
+Integrated SoLoud audio library providing SFX, music streaming, spatial audio, and volume control. Test count: 573 → 635 (+62 tests).
+
+**SoLoud integration:**
+- Added via FetchContent (RELEASE_20200207), built as static library with SDL2 + null backends
+- `AudioManager` class in `engine/audio/audio_manager.h/cpp` wrapping SoLoud engine
+- AUTO backend detection with NULLDRIVER fallback (headless/CI environments)
+- Max 32 active voices, SoLoud auto-virtualizes overflow by priority/distance
+
+**SFX system:**
+- `loadSFX(name, path)` preloads WAV/OGG into memory for low-latency playback
+- `loadSFXDirectory(dirPath)` batch-loads all .wav/.ogg files with filename stem as key
+- `playSFX(name, volume)` fire-and-forget playback with SFX volume bus multiplier
+- `playSFXSpatial(name, worldX, worldY, listenerX, listenerY, maxDistance)` for distance-based volume + stereo pan
+- Missing sounds warn once per unique name, then silently skip
+
+**Music system:**
+- `playMusic(path, fadeIn)` streams OGG with automatic looping and crossfade
+- Crossfade: fades out current track over half the fade duration, fades in new track
+- Music voice is protected from priority stealing (`setProtectVoice`)
+- `stopMusic(fadeOut)` with graceful fade or immediate stop
+
+**Volume buses:**
+- Master volume → SoLoud global volume
+- SFX volume → multiplied into each playSFX call
+- Music volume → applied to music voice handle
+- All clamped 0-1, real-time adjustable
+
+**Game integration (10 hooks in game_app.cpp):**
+- `onCombatEvent`: hit_melee, hit_crit, miss, kill (local); spatial audio (remote)
+- `onSkillResult`: hit_skill, hit_crit, miss, kill (via HitFlags bitmask)
+- `onDeathNotify`: death SFX
+- `onLootPickup`: loot_gold, loot_item
+- `onRespawn`: respawn SFX
+- `onZoneTransition`: zone music (assets/audio/music/{zoneName}.ogg)
+- Chat send: chat_send SFX
+- `onUpdate`: audioManager_.update(dt) ticked each frame
+
+**Expected SFX files** (drop into `assets/audio/sfx/`):
+hit_melee.wav, hit_crit.wav, hit_skill.wav, miss.wav, kill.wav, death.wav, loot_item.wav, loot_gold.wav, respawn.wav, chat_send.wav
+
+**Expected music files** (drop into `assets/audio/music/`):
+{zoneName}.ogg (e.g., WhisperingWoods.ogg)
+
+**Tests:** 27 new in test_audio_manager.cpp (lifecycle, volume clamping, spatial math, safety edge cases)
+**Files:** 3 new (audio_manager.h/cpp, test), 2 modified (CMakeLists.txt, game_app.h/cpp)
 
 ### March 21, 2026 - Engine Hardening, Mobile Platform, Infrastructure (Phase 9)
 
@@ -500,7 +667,7 @@ Cross-referenced 9 research documents against the full engine codebase. Implemen
 - **Blob-47 autotiling (#23):** `engine/tilemap/autotile.h` — 8-bit neighbor bitmask with diagonal gating (NE only counts if both N and E are same terrain). `applyDiagonalGating()` reduces 256 raw masks to 47 unique configurations. `autotileLookup()` uses a precomputed 256-entry O(1) table. `computeAutotileMask()` template queries neighbors via user-provided lambda. 4 tests, 262 assertions.
 
 **Networking & replication:**
-- **Expanded delta compression (#24):** `SvEntityUpdateMsg` expanded from 4 to 14 fields — added maxHP, moveState, animId, statusEffectMask, deathState, castingSkillId+castingProgress, targetEntityId, level, faction, equipVisuals (bits 4-13). Wire format is self-describing via 16-bit bitmask — only dirty fields are sent. Common position-only delta remains ~15 bytes. `buildCurrentState()` and `sendDiffs()` updated. 3 tests, 27 assertions.
+- **Expanded delta compression (#24):** `SvEntityUpdateMsg` expanded from 4 to 16 fields — added maxHP, moveState, animId, statusEffectMask, deathState, castingSkillId+castingProgress, targetEntityId, level, faction, equipVisuals, pkStatus, honorRank (bits 4-15). Wire format is self-describing via 16-bit bitmask — only dirty fields are sent. Common position-only delta remains ~15 bytes. `buildCurrentState()` and `sendDiffs()` updated. 3 tests, 27 assertions.
 - **Tiered update frequency (#25):** Distance-based update throttling in `engine/net/update_frequency.h`. Near (≤10 tiles): every tick (20Hz). Mid (10-25 tiles): every 3rd tick (~7Hz). Far (25-40 tiles): every 5th (4Hz). Edge (40+ tiles): every 10th (2Hz). HP changes bypass throttling and always send immediately. Integrated into `ReplicationManager::sendDiffs()` with per-client distance computation. 3 tests.
 - **Protocol version handshake (#29):** Client now prepends `PROTOCOL_VERSION` byte to Connect payload (before auth token). Server validates version before allocating a client slot — rejects mismatched clients with `sendConnectReject()` and descriptive reason string. Prevents stale client builds from corrupting sessions. 2 tests.
 - **POSIX socket abstraction (#30):** `engine/net/socket_posix.cpp` implements the full `NetSocket` interface using POSIX APIs — `fcntl(O_NONBLOCK)`, `EAGAIN`/`EWOULDBLOCK` mapping, `socklen_t`. CMakeLists.txt filters `socket_posix.cpp` on Windows and `socket_win32.cpp` on POSIX. Enables iOS/Android/Linux server builds.
@@ -939,7 +1106,7 @@ Cross-referenced 9 research documents against the full engine codebase. Implemen
 - **Data Migration**: Migrated game data from `fate_mmo` (Unity prod DB) to `fate_engine_dev` via CSV export/import. FK dependency order: loot_tables before loot_drops, item_definitions before loot_drops, skill_definitions before skill_ranks. See `Docs/DATABASE_REFERENCE.md` for full schema reference.
 - **Database Reference Doc** (`Docs/DATABASE_REFERENCE.md`): Complete reference for all 65 tables with column names/types, FK relationships, migration history, C++ query patterns, and connection details.
 
-**Data loaded into fate_engine_dev:** 748 items, 73 mobs, 60 skills, 174 skill ranks, 72 loot tables, 835 loot drops, 3 scenes.
+**Data loaded into fate_engine_dev:** 748 items, 73 mobs, 60 skills, 174 skill ranks, 72 loot tables, 835 loot drops, 3 scenes, 3 pet definitions, crafting recipes.
 
 ### March 18, 2026 - Bounty, Ranking, Profanity, Consumables, Bags, Input Validation
 
@@ -1730,13 +1897,25 @@ server/                          # Headless Server (Phase 6+7)
 │   └── auth_server.h/.cpp      # TLS auth (bcrypt, register+login, starter equipment)
 ├── cache/
 │   ├── item_definition_cache.h/.cpp  # 748 items from item_definitions (possible_stats, attributes)
-│   └── loot_table_cache.h/.cpp       # 72 loot tables from loot_drops (rollLoot, enchant rolling)
+│   ├── loot_table_cache.h/.cpp       # 72 loot tables from loot_drops (rollLoot, enchant rolling)
+│   ├── recipe_cache.h/.cpp           # Crafting recipes with tier-based lookup
+│   └── pet_definition_cache.h        # Pet definitions (3 starter pets)
 └── db/
     ├── db_connection.h/.cpp    # pqxx wrapper with reconnect
     ├── db_pool.h/.cpp          # Thread-safe connection pool (5-50)
+    ├── db_dispatcher.h         # Fiber-based async DB dispatch
     ├── account_repository.h/.cpp     # Account CRUD
     ├── character_repository.h/.cpp   # Character load/save
     ├── inventory_repository.h/.cpp   # Inventory load/save
+    ├── skill_repository.h/.cpp       # Skills, skill bar, skill points
+    ├── guild_repository.h/.cpp       # Guild lifecycle, members, XP
+    ├── social_repository.h/.cpp      # Friends, blocks, online status
+    ├── market_repository.h/.cpp      # Listings, transactions, jackpot
+    ├── trade_repository.h/.cpp       # Trade sessions, item transfer
+    ├── bounty_repository.h/.cpp      # Bounties, contributions, expiry
+    ├── quest_repository.h/.cpp       # Quest progress, completed quests
+    ├── bank_repository.h/.cpp        # Bank items, gold
+    ├── pet_repository.h/.cpp         # Pet state, equip/unequip
     └── zone_mob_state_repository.h/.cpp  # Boss death persistence (zone_mob_deaths)
 
 game/
@@ -1749,7 +1928,12 @@ game/
 │   ├── faction.h                # Faction enum, FactionRegistry, FactionChatGarbler
 │   ├── pet_system.h/.cpp        # PetDefinition, PetInstance, PetSystem (leveling, stats)
 │   ├── stat_enchant_system.h    # StatEnchantSystem (accessory enchanting, 6-tier rolls)
-│   ├── (16 more systems...)     # Inventory, skills, social, etc.
+│   ├── arena_manager.h          # 1v1/2v2/3v3 arena matchmaking
+│   ├── battlefield_manager.h   # 4-faction PvP battlefield
+│   ├── event_scheduler.h       # FSM for timed events
+│   ├── core_extraction.h       # Equipment disassembly into cores
+│   ├── pk_system.h/.cpp         # PvP status transitions + decay
+│   ├── (20+ more systems...)    # Inventory, skills, social, bounty, etc.
 │   └── gauntlet.h/.cpp          # Wave PvPvE instance
 │
 ├── components/                  # ECS component wrappers
@@ -1759,7 +1943,7 @@ game/
 │   ├── box_collider.h           # AABB collision
 │   ├── polygon_collider.h       # SAT collision
 │   ├── animator.h               # Animation state machine
-│   ├── game_components.h        # 20 game logic wrappers
+│   ├── game_components.h        # 30+ game logic wrappers
 │   ├── faction_component.h      # FactionComponent (player faction)
 │   ├── pet_component.h          # PetComponent (equipped pet, auto-loot)
 │   ├── dropped_item_component.h # DroppedItemComponent (ground loot, despawn, ownership)
@@ -1790,7 +1974,7 @@ game/
 
 ### Database Integration (Phase 7)
 
-**Connection:** PostgreSQL on DigitalOcean (`fate_engine_dev`, 65 tables). Two separate pqxx connections — game thread and auth thread. Connection pool (5-50) available for future scaling.
+**Connection:** PostgreSQL on DigitalOcean (`fate_engine_dev`, 68+ tables). Two separate pqxx connections — game thread and auth thread. Connection pool (5-50) available for future scaling.
 
 **Server Startup Caches (loaded once, read-only):**
 | Cache | Table | Records | Key Lookup |
@@ -1800,6 +1984,8 @@ game/
 | `MobDefinitionCache` | `mob_definitions` | 73 | by mob_def_id |
 | `SkillDefinitionCache` | `skill_definitions` + `skill_ranks` | 60 skills, 174 ranks | by skill ID, by class |
 | `SceneCache` | `scenes` | 3 | PvP status queries |
+| `RecipeCache` | `crafting_recipes` + `recipe_ingredients` | varies | tier-based recipe lookup (Novice/Book I/II/III) |
+| `PetDefinitionCache` | `pet_definitions` | 3 | `getDefinition(petDefId)` → `PetDefinition*` |
 
 **Repositories (read/write per-request):**
 | Repository | Tables | Operations |
@@ -1808,6 +1994,15 @@ game/
 | `CharacterRepository` | `characters` | createDefaultCharacter, loadCharacter, saveCharacter |
 | `InventoryRepository` | `character_inventory` | loadInventory, saveInventory |
 | `ZoneMobStateRepository` | `zone_mob_deaths` | saveZoneDeaths, loadZoneDeaths, clearZoneDeaths, cleanupExpired |
+| `SkillRepository` | `character_skills`, `character_skill_bar`, `character_skill_points` | load/save learned skills, 20-slot skill bar, skill points |
+| `GuildRepository` | `guilds`, `guild_members`, `guild_invites` | create, disband, add/remove members, rank, XP, ownership transfer |
+| `SocialRepository` | `friends`, `blocked_players` | friend send/accept/decline/remove, block/unblock, online status |
+| `MarketRepository` | `market_listings`, `market_transactions`, `jackpot_pool` | create/cancel/deactivate listings, transactions, jackpot |
+| `TradeRepository` | `trade_sessions`, `trade_offers`, `trade_history` | session lifecycle, item transfer, gold transfer, history |
+| `BountyRepository` | `bounties`, `bounty_contributions`, `bounty_history` | place/cancel/claim bounties, expiry processing, guild cooldown |
+| `QuestRepository` | `character_quests`, `character_completed_quests` | load/save active quest progress + completed IDs |
+| `BankRepository` | `character_bank`, `character_bank_gold` | deposit/withdraw items and gold |
+| `PetRepository` | `character_pets` | load all pets, equip/unequip, save state, add XP |
 
 **Key DB Tables for Loot Pipeline:**
 - `item_definitions` — 748 items. `possible_stats` JSONB has two formats: `{"stat":"hp","weighted":true}` and legacy `{"name":"int","weight":1.0}` (both parsed). `attributes` JSONB for bonus stats (mp_bonus, lifesteal, move_speed_pct, etc.).
@@ -1829,7 +2024,7 @@ game/
 ## Future Implementation Plan
 
 ### Near-Term (Engine Foundation)
-- [ ] Audio/sound system (SDL_mixer - music per zone, SFX for combat/UI)
+- [x] Audio/sound system (SoLoud - music per zone, SFX for combat/UI, spatial audio)
 - [ ] Sprite animation testing with real spritesheets
 - [x] Scene transitions with loading screen and zone portals
 - [x] Undo/Redo in editor
@@ -1837,7 +2032,7 @@ game/
 - [x] Eraser tool for tile painting
 - [ ] Auto-load last scene on startup (once real sprites replace procedural)
 - [x] Persistence & authentication (PostgreSQL character saves, login flow)
-- [ ] Mobile build (iOS/Android via SDL2, touch input, D-Pad)
+- [x] Mobile build (iOS/Android build pipelines ready, touch controls, D-Pad)
 
 ### Game Systems (Port from Unity Prototype)
 - [x] CharacterStats (HP, MP, XP, level, stats, fury, death, respawn)
@@ -1851,7 +2046,7 @@ game/
 - [x] ItemStatRoller (drop tables, stat rolling)
 - [x] XPCalculator (level scaling, party bonus, damage-based distribution)
 - [x] HonorSystem (PvP kills, PK status colors)
-- [x] EnchantSystem (+1 to +12 enhancement)
+- [x] EnchantSystem (+1 to +15 enhancement, break mechanic)
 - [x] PartyManager (3-player, cross-scene XP bonus)
 - [x] GuildManager (ranks, 16x16 pixel symbols, leveling)
 - [x] FriendsManager (friends/block lists, profile inspection)
@@ -1864,13 +2059,26 @@ game/
 - [x] PetSystem (leveling, rarity-tiered stats, XP sharing, auto-loot, tradable)
 - [x] StatEnchantSystem (accessory enchanting, 6-tier rolls, no break risk)
 - [x] Mage Double-Cast (hidden instant-cast window, castTime field on SkillDefinition)
+- [x] BountySystem (PvE bounty board, max 10 active, 48hr expiry, 2% tax, guild protection)
+- [x] RankingSystem (global/class/guild/honor leaderboards, paginated, 60s cache)
+- [x] ProfanityFilter (leetspeak normalization, 50+ words, 3 filter modes)
+- [x] InputValidator (username/password validation, delegates to ProfanityFilter)
+- [x] ConsumableDefinition (16 effect types, cooldown groups, safe-zone/combat restrictions)
+- [x] BagDefinition (inventory expansion, 1-20 slots)
+- [x] SocketSystem (accessory socketing, weighted probability rolls +1-10)
+- [x] PKSystem (PvP status transitions, decay timers, cooldowns)
+- [x] ArenaManager (1v1/2v2/3v3, queue matchmaking, AFK detection, honor rewards)
+- [x] BattlefieldManager (4-faction PvP, per-faction kill tracking, EventScheduler-driven)
+- [x] EventScheduler (FSM for timed events, drives Arena and Battlefield)
+- [x] CoreExtraction (equipment disassembly into 7-tier crafting cores)
+- [x] CraftingSystem (recipe cache, tier-based lookup, ingredient validation)
 
 ### ECS Integration
-- [x] Component wrappers for all 20 game systems (game_components.h)
+- [x] Component wrappers for all game systems (38+ components registered)
 - [x] GameplaySystem (tick StatusEffects, CC, regen, PK decay, respawn)
 - [x] MobAISystem (tick MobAI, player scanning, attack wiring)
 - [x] CombatActionSystem (TWOM Option B attacks, damage/XP/respawn)
-- [x] EntityFactory (createPlayer with all 17+ components, createMob)
+- [x] EntityFactory (createPlayer with all 23 components, createMob, createNPC)
 - [x] Game loop integration (systems registered, test mobs spawning)
 - [x] HUD showing live player stats (HP/MP/Level/Class/XP/Fury)
 - [x] HUD target info (name, level, HP when target selected)
@@ -1882,7 +2090,7 @@ game/
 - [x] Boss spawn points (fixed-position, death persistence, respawn timer)
 - [x] Starter equipment on character creation (class-specific weapon + shared armor)
 - [ ] Event bus for cross-system communication (party XP sharing)
-- [ ] Timer/scheduler utility for periodic game events
+- [x] Timer/scheduler utility for periodic game events (EventScheduler FSM)
 
 ### UI Systems
 - [x] HUD text (HP/MP/XP/Level/Class/Fury stats display + target info)
@@ -1906,23 +2114,23 @@ game/
 - [x] Session tokens, heartbeat/timeout connection management
 - [ ] Client-side prediction and server reconciliation
 - [x] Authentication and login flow (TLS auth, bcrypt, auth token bridging)
-- [ ] Wire up remaining game/shared/ systems to networking messages
+- [x] Wire up remaining game/shared/ systems to networking messages (Batch D protocol expansion)
 
 ### Database Integration
 - [x] PostgreSQL via libpqxx (same schema as Unity prototype)
 - [x] Connection pooling (min 5, max 50, RAII Guard)
 - [x] Definition caches (mob, item, skill, loot table)
 - [x] Character persistence (save/load on connect/disconnect)
-- [ ] Async queries for non-critical operations
-- [ ] Wire up all game/shared/ systems to database layer
+- [x] Async queries for non-critical operations (DbDispatcher + fiber workers)
+- [x] Wire up all game/shared/ systems to database layer (13 repositories)
 
 ### Mobile & Platform
-- [ ] iOS build (SDL2 + Xcode)
-- [ ] Android build (SDL2 + NDK)
-- [ ] Touch input (D-Pad, action button, tap-to-target)
+- [x] iOS build (SDL2 + Xcode, ios/build.sh, GLES 3.0)
+- [x] Android build (SDL2 + NDK r27, Gradle, arm64-v8a)
+- [x] Touch input (D-Pad, action buttons, tap-to-target, F4 toggle)
 - [ ] Safe area handling (notch, navigation bar)
-- [ ] Battery/memory optimization
-- [ ] 30 FPS cap on mobile, 60 on PC
+- [x] Battery/memory optimization (DeviceInfo tiers, background sleep, thermal polling stubs)
+- [x] 30 FPS cap on mobile (DeviceInfo thermal-based FPS drop)
 
 ### Advanced Engine
 - [x] Particle system (CPU emitters, spawn rate/burst, gravity, per-particle lifetime/rotation/color lerp)
@@ -1939,7 +2147,7 @@ game/
 - [x] Compile-time component type system (CompId, Hot/Warm/Cold tiers, no RTTI)
 - [ ] SIMD intrinsics for spatial queries (future optimization)
 - [ ] C++20 coroutines for async chunk I/O (structured for future drop-in)
-- [x] Unit test suite (doctest, 120 test cases, 1241 assertions)
+- [x] Unit test suite (doctest, 698 test cases + 10 scenario tests)
 - [x] Action map input system (23 actions, input buffering, chat mode switching)
 - [x] SDF text rendering (uber-shader, outlined/glow/shadow effects, UTF-8, replaces bitmap font)
 - [x] Reflection system (FATE_REFLECT macro, auto-generated JSON serializers)

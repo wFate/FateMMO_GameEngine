@@ -70,6 +70,9 @@ public:
         configure(PacketType::CmdQuestAction,    5.0f,  2.0f,   50);
         configure(PacketType::CmdZoneTransition, 2.0f,  0.5f,   20);
         configure(PacketType::CmdRespawn,        2.0f,  0.33f,  20);
+        configure(PacketType::CmdBank,           3.0f,  1.0f,   30);
+        configure(PacketType::CmdSocketItem,      2.0f,  0.5f,   30);
+        configure(PacketType::CmdStatEnchant,     2.0f,  0.5f,   30);
     }
 
     // Check a packet. Updates internal state and returns Ok/Dropped/Disconnect.

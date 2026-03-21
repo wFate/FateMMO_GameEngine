@@ -38,6 +38,7 @@ public:
     [[nodiscard]] ItemInstance getEquipment(EquipmentSlot slot) const;
     bool equipItem(int inventorySlot, EquipmentSlot targetSlot);
     bool unequipItem(EquipmentSlot slot);
+    bool setEquipment(EquipmentSlot slot, const ItemInstance& item);
 
     // ---- Slot Movement -----------------------------------------------------
     bool moveItem(int fromSlot, int toSlot);

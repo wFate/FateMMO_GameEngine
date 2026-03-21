@@ -38,6 +38,7 @@
 #include "server/db/spawn_zone_cache.h"
 #include "server/server_spawn_manager.h"
 #include "engine/net/auth_protocol.h"
+#include "server/gm_commands.h"
 #include <cstdint>
 #include <unordered_map>
 #include <memory>
@@ -127,6 +128,10 @@ private:
     SpawnZoneCache spawnZoneCache_;
     ServerSpawnManager spawnManager_;
 
+    // GM command system
+    GMCommandRegistry gmCommands_;
+    std::unordered_map<uint16_t, int> clientAdminRoles_; // clientId -> admin_role
+
     // Session tracking
     std::unordered_map<AuthToken, PendingSession, AuthTokenHash> pendingSessions_;
     std::unordered_map<int, uint16_t> activeAccountSessions_; // account_id -> clientId
@@ -199,9 +204,13 @@ private:
     void processPetCommand(uint16_t clientId, const CmdPetMsg& msg);
     void sendPetUpdate(uint16_t clientId, Entity* player);
     void processBank(uint16_t clientId, const CmdBankMsg& msg);
+    void processSocketItem(uint16_t clientId, const CmdSocketItemMsg& msg);
+    void processStatEnchant(uint16_t clientId, const CmdStatEnchantMsg& msg);
     void broadcastBossKillNotification(const EnemyStats& es,
                                        const EnemyStats::LootOwnerResult& lootResult,
                                        const std::string& scene);
+    void initGMCommands();
+    uint16_t findClientByCharacterName(const std::string& name);
 };
 
 } // namespace fate

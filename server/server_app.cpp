@@ -20,6 +20,8 @@
 #include "game/shared/enchant_system.h"
 #include "game/shared/core_extraction.h"
 #include "game/shared/honor_system.h"
+#include "game/shared/socket_system.h"
+#include "game/shared/stat_enchant_system.h"
 #include "engine/net/game_messages.h"
 
 #ifdef _WIN32
@@ -431,6 +433,9 @@ bool ServerApp::init(uint16_t port) {
     arenaManager_.onPlayerForfeited = [this](uint32_t entityId, const std::string& reason) {
         LOG_INFO("Server", "Arena player %u forfeited: %s", entityId, reason.c_str());
     };
+
+    // Initialize GM commands
+    initGMCommands();
 
     // Auth server startup (warning only — game server can run without auth in dev)
     if (!authServer_.start(authPort_, tlsCertPath_, tlsKeyPath_, dbConnectionString_)) {
@@ -1164,6 +1169,9 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     // Track active account session
     activeAccountSessions_[session.account_id] = clientId;
 
+    // Default admin_role to 0 (no GM); real role requires DB account lookup
+    clientAdminRoles_[clientId] = 0;
+
     // Load skills from DB
     auto* skillComp = player->getComponent<SkillManagerComponent>();
     if (skillComp) {
@@ -1755,6 +1763,7 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     skillCooldowns_.erase(clientId);
     rateLimiters_.erase(clientId);
     nonceManager_.removeClient(clientId);
+    clientAdminRoles_.erase(clientId);
 }
 
 void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload) {
@@ -1843,6 +1852,37 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
         }
         case PacketType::CmdChat: {
             auto chat = CmdChat::read(payload);
+
+            // GM command intercept — check before profanity filter and broadcast
+            {
+                auto parsed = GMCommandParser::parse(chat.message);
+                if (parsed.isCommand) {
+                    auto sendSystemMsg = [this](uint16_t targetClientId, const std::string& text) {
+                        SvChatMessageMsg sysMsg;
+                        sysMsg.channel    = static_cast<uint8_t>(ChatChannel::System);
+                        sysMsg.senderName = "System";
+                        sysMsg.message    = text;
+                        sysMsg.faction    = 0;
+                        uint8_t buf[512]; ByteWriter w(buf, sizeof(buf));
+                        sysMsg.write(w);
+                        server_.sendTo(targetClientId, Channel::ReliableOrdered,
+                                       PacketType::SvChatMessage, buf, w.size());
+                    };
+
+                    auto* cmd = gmCommands_.findCommand(parsed.commandName);
+                    if (!cmd) {
+                        sendSystemMsg(clientId, "Unknown command: /" + parsed.commandName);
+                        break;
+                    }
+                    int role = clientAdminRoles_.count(clientId) ? clientAdminRoles_[clientId] : 0;
+                    if (!GMCommandRegistry::hasPermission(role, cmd->minRole)) {
+                        sendSystemMsg(clientId, "Insufficient permission.");
+                        break;
+                    }
+                    cmd->handler(clientId, parsed.args);
+                    break; // don't broadcast GM commands as chat
+                }
+            }
 
             // Server-side profanity filter
             if (chat.message.empty() || chat.message.size() > 200) return;
@@ -2854,6 +2894,16 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
         case PacketType::CmdBank: {
             auto msg = CmdBankMsg::read(payload);
             processBank(clientId, msg);
+            break;
+        }
+        case PacketType::CmdSocketItem: {
+            auto msg = CmdSocketItemMsg::read(payload);
+            processSocketItem(clientId, msg);
+            break;
+        }
+        case PacketType::CmdStatEnchant: {
+            auto msg = CmdStatEnchantMsg::read(payload);
+            processStatEnchant(clientId, msg);
             break;
         }
         default:
@@ -5196,6 +5246,428 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
             LOG_WARN("Server", "Client %d sent unknown bank action %d", clientId, msg.action);
             break;
     }
+}
+
+// ============================================================================
+// processSocketItem — socket an accessory with a stat scroll
+// ============================================================================
+void ServerApp::processSocketItem(uint16_t clientId, const CmdSocketItemMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* player = world_.getEntity(h);
+    if (!player) return;
+
+    auto* charStats = player->getComponent<CharacterStatsComponent>();
+    auto* inv       = player->getComponent<InventoryComponent>();
+    if (!charStats || !inv) return;
+
+    // Dead players cannot socket items
+    if (charStats->stats.isDead) return;
+
+    // Helper: send socket result back to client
+    auto sendResult = [&](bool success, uint8_t rolledValue, uint8_t previousValue,
+                          bool wasResocket, const std::string& msg_str) {
+        SvSocketResultMsg res;
+        res.success       = success ? 1 : 0;
+        res.rolledValue   = rolledValue;
+        res.previousValue = previousValue;
+        res.wasResocket   = wasResocket ? 1 : 0;
+        res.message       = msg_str;
+        uint8_t buf[256];
+        ByteWriter w(buf, sizeof(buf));
+        res.write(w);
+        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvSocketResult, buf, w.size());
+    };
+
+    // 1. Validate equipment slot enum range
+    auto equipSlot = static_cast<EquipmentSlot>(msg.equipSlot);
+
+    // 2. Validate slot is socketable (Ring, Necklace, Cloak only)
+    if (!SocketSystem::isSocketable(equipSlot)) {
+        sendResult(false, 0, 0, false, "This item slot cannot be socketed");
+        return;
+    }
+
+    // 3. Get equipped item from the slot
+    ItemInstance item = inv->inventory.getEquipment(equipSlot);
+    if (!item.isValid()) {
+        sendResult(false, 0, 0, false, "No item equipped in that slot");
+        return;
+    }
+
+    // 4. Map scroll ID to StatType
+    StatType statType{};
+    if (!SocketSystem::getStatFromScrollId(msg.scrollItemId, statType)) {
+        sendResult(false, 0, 0, false, "Invalid stat scroll");
+        return;
+    }
+
+    // 5. Find scroll in inventory
+    int scrollSlot = inv->inventory.findItemById(msg.scrollItemId);
+    if (scrollSlot < 0) {
+        sendResult(false, 0, 0, false, "Scroll not found in inventory");
+        return;
+    }
+
+    // 6. Call SocketSystem::trySocket — modifies item in-place
+    SocketResultData result = SocketSystem::trySocket(item, statType, equipSlot);
+
+    if (!result.wasSuccessful()) {
+        sendResult(false, 0, 0, false, "Socket operation failed");
+        return;
+    }
+
+    // 7. Consume scroll
+    inv->inventory.removeItemQuantity(scrollSlot, 1);
+
+    // 8. Write modified item back to equipment
+    inv->inventory.setEquipment(equipSlot, item);
+
+    // 9. Recalculate equipment bonuses
+    recalcEquipmentBonuses(player);
+
+    // 10. Save inventory
+    saveInventoryForClient(clientId);
+
+    // 11. Send results to client
+    sendResult(true,
+               static_cast<uint8_t>(result.rolledValue),
+               static_cast<uint8_t>(result.previousValue),
+               result.wasResocket,
+               result.wasResocket ? "Socket replaced!" : "Socket applied!");
+    sendPlayerState(clientId);
+    sendInventorySync(clientId);
+
+    LOG_INFO("Server", "Client %d socketed %s slot %d with %s -> +%d (prev +%d, resocket=%d)",
+             clientId, item.itemId.c_str(), msg.equipSlot, msg.scrollItemId.c_str(),
+             result.rolledValue, result.previousValue, result.wasResocket ? 1 : 0);
+}
+
+// ============================================================================
+// processStatEnchant — enchant an accessory with a stat bonus (tier 0-5)
+// ============================================================================
+void ServerApp::processStatEnchant(uint16_t clientId, const CmdStatEnchantMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* player = world_.getEntity(h);
+    if (!player) return;
+
+    auto* charStats = player->getComponent<CharacterStatsComponent>();
+    auto* inv       = player->getComponent<InventoryComponent>();
+    if (!charStats || !inv) return;
+
+    // Dead players cannot stat-enchant
+    if (charStats->stats.isDead) return;
+
+    // Helper: send stat enchant result back to client
+    auto sendResult = [&](bool success, uint8_t tier, int32_t value, const std::string& msg_str) {
+        SvStatEnchantResultMsg res;
+        res.success = success ? 1 : 0;
+        res.tier    = tier;
+        res.value   = value;
+        res.message = msg_str;
+        uint8_t buf[256];
+        ByteWriter w(buf, sizeof(buf));
+        res.write(w);
+        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvStatEnchantResult, buf, w.size());
+    };
+
+    // 1. Validate equipment slot enum range
+    auto equipSlot = static_cast<EquipmentSlot>(msg.equipSlot);
+
+    // 2. Get equipped item from the slot
+    ItemInstance item = inv->inventory.getEquipment(equipSlot);
+    if (!item.isValid()) {
+        sendResult(false, 0, 0, "No item equipped in that slot");
+        return;
+    }
+
+    // 3. Validate slot is stat-enchantable (Belt, Ring, Necklace, Cloak)
+    if (!StatEnchantSystem::canStatEnchant(equipSlot)) {
+        sendResult(false, 0, 0, "This item slot cannot be stat-enchanted");
+        return;
+    }
+
+    // 4. Parse stat type from scroll
+    auto statType = static_cast<StatType>(msg.scrollStatType);
+
+    // 5. Roll tier (0-5; 0 = fail)
+    int tier = StatEnchantSystem::rollStatEnchant();
+
+    // 6. Get the stat value for this tier
+    int value = StatEnchantSystem::getStatValue(statType, tier);
+
+    // 7. Apply stat enchant — modifies item in-place (tier 0 clears enchant)
+    StatEnchantSystem::applyStatEnchant(item, statType, tier);
+
+    // 8. Write modified item back to equipment
+    inv->inventory.setEquipment(equipSlot, item);
+
+    // 9. Recalculate equipment bonuses
+    recalcEquipmentBonuses(player);
+
+    // 10. Save inventory
+    saveInventoryForClient(clientId);
+
+    // 11. Send results to client
+    if (tier > 0) {
+        sendResult(true, static_cast<uint8_t>(tier), static_cast<int32_t>(value),
+                   "Stat enchant success! Tier " + std::to_string(tier));
+    } else {
+        sendResult(false, 0, 0, "Enchant failed");
+    }
+    sendPlayerState(clientId);
+    sendInventorySync(clientId);
+
+    LOG_INFO("Server", "Client %d stat-enchanted slot %d with stat %d -> tier %d value %d",
+             clientId, msg.equipSlot, msg.scrollStatType, tier, value);
+}
+
+// ============================================================================
+// GM Commands
+// ============================================================================
+
+uint16_t ServerApp::findClientByCharacterName(const std::string& name) {
+    uint16_t result = 0;
+    server_.connections().forEach([&](ClientConnection& client) {
+        if (result != 0) return;
+        if (client.playerEntityId == 0) return;
+        PersistentId pid(client.playerEntityId);
+        EntityHandle h = replication_.getEntityHandle(pid);
+        Entity* entity = world_.getEntity(h);
+        if (!entity) return;
+        auto* nameplate = entity->getComponent<NameplateComponent>();
+        if (nameplate && nameplate->displayName == name) {
+            result = client.clientId;
+        }
+    });
+    return result;
+}
+
+void ServerApp::initGMCommands() {
+    // Helper: send a system chat message to a single client
+    auto sendSystemMsg = [this](uint16_t targetClientId, const std::string& text) {
+        SvChatMessageMsg sysMsg;
+        sysMsg.channel    = static_cast<uint8_t>(ChatChannel::System);
+        sysMsg.senderName = "System";
+        sysMsg.message    = text;
+        sysMsg.faction    = 0;
+        uint8_t buf[512]; ByteWriter w(buf, sizeof(buf));
+        sysMsg.write(w);
+        server_.sendTo(targetClientId, Channel::ReliableOrdered,
+                       PacketType::SvChatMessage, buf, w.size());
+    };
+
+    // /kick <player> — GM (role 1)
+    gmCommands_.registerCommand({"kick", 1, [this, sendSystemMsg](uint16_t callerId, const std::vector<std::string>& args) {
+        if (args.empty()) { sendSystemMsg(callerId, "Usage: /kick <player>"); return; }
+        auto targetId = findClientByCharacterName(args[0]);
+        if (targetId == 0) { sendSystemMsg(callerId, "Player not found: " + args[0]); return; }
+        server_.connections().removeClient(targetId);
+        if (server_.onClientDisconnected) server_.onClientDisconnected(targetId);
+        sendSystemMsg(callerId, "Kicked: " + args[0]);
+        LOG_INFO("GM", "Client %d kicked '%s'", callerId, args[0].c_str());
+    }});
+
+    // /ban <player> <minutes> [reason] — GM (role 1)
+    gmCommands_.registerCommand({"ban", 1, [this, sendSystemMsg](uint16_t callerId, const std::vector<std::string>& args) {
+        if (args.size() < 2) { sendSystemMsg(callerId, "Usage: /ban <player> <minutes> [reason]"); return; }
+        int minutes = std::atoi(args[1].c_str());
+        std::string reason = args.size() > 2 ? args[2] : "No reason";
+        auto targetId = findClientByCharacterName(args[0]);
+        if (targetId != 0) {
+            server_.connections().removeClient(targetId);
+            if (server_.onClientDisconnected) server_.onClientDisconnected(targetId);
+        }
+        sendSystemMsg(callerId, "Banned: " + args[0] + " for " + std::to_string(minutes) + " min");
+        LOG_INFO("GM", "Client %d banned '%s' for %d min: %s", callerId, args[0].c_str(), minutes, reason.c_str());
+    }});
+
+    // /unban <player> — GM (role 1)
+    gmCommands_.registerCommand({"unban", 1, [this, sendSystemMsg](uint16_t callerId, const std::vector<std::string>& args) {
+        if (args.empty()) { sendSystemMsg(callerId, "Usage: /unban <player>"); return; }
+        sendSystemMsg(callerId, "Unbanned: " + args[0] + " (DB update required for full effect)");
+        LOG_INFO("GM", "Client %d unbanned '%s'", callerId, args[0].c_str());
+    }});
+
+    // /tp <player> — teleport self to target — GM (role 1)
+    gmCommands_.registerCommand({"tp", 1, [this, sendSystemMsg](uint16_t callerId, const std::vector<std::string>& args) {
+        if (args.empty()) { sendSystemMsg(callerId, "Usage: /tp <player>"); return; }
+        auto targetId = findClientByCharacterName(args[0]);
+        if (targetId == 0) { sendSystemMsg(callerId, "Player not found: " + args[0]); return; }
+
+        auto* targetClient = server_.connections().findById(targetId);
+        auto* callerClient = server_.connections().findById(callerId);
+        if (!targetClient || !callerClient) return;
+
+        Entity* targetEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(targetClient->playerEntityId)));
+        Entity* callerEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(callerClient->playerEntityId)));
+        if (!targetEntity || !callerEntity) return;
+
+        auto* targetTransform = targetEntity->getComponent<Transform>();
+        auto* targetStats    = targetEntity->getComponent<CharacterStatsComponent>();
+        auto* callerTransform = callerEntity->getComponent<Transform>();
+        auto* callerStats    = callerEntity->getComponent<CharacterStatsComponent>();
+        if (!targetTransform || !targetStats || !callerTransform || !callerStats) return;
+
+        if (callerStats->stats.currentScene != targetStats->stats.currentScene) {
+            callerStats->stats.currentScene = targetStats->stats.currentScene;
+            callerClient->aoi.previous.clear();
+            callerClient->aoi.current.clear();
+            callerClient->aoi.entered.clear();
+            callerClient->aoi.left.clear();
+            callerClient->aoi.stayed.clear();
+            callerClient->lastAckedState.clear();
+            SvZoneTransitionMsg zt;
+            zt.targetScene = targetStats->stats.currentScene;
+            zt.spawnX = targetTransform->position.x;
+            zt.spawnY = targetTransform->position.y;
+            uint8_t buf[256]; ByteWriter w(buf, sizeof(buf)); zt.write(w);
+            server_.sendTo(callerId, Channel::ReliableOrdered, PacketType::SvZoneTransition, buf, w.size());
+        }
+        callerTransform->position = targetTransform->position;
+        sendSystemMsg(callerId, "Teleported to: " + args[0]);
+        LOG_INFO("GM", "Client %d teleported to '%s'", callerId, args[0].c_str());
+    }});
+
+    // /tphere <player> — summon target to self — GM (role 1)
+    gmCommands_.registerCommand({"tphere", 1, [this, sendSystemMsg](uint16_t callerId, const std::vector<std::string>& args) {
+        if (args.empty()) { sendSystemMsg(callerId, "Usage: /tphere <player>"); return; }
+        auto targetId = findClientByCharacterName(args[0]);
+        if (targetId == 0) { sendSystemMsg(callerId, "Player not found: " + args[0]); return; }
+
+        auto* callerClient = server_.connections().findById(callerId);
+        auto* targetClient = server_.connections().findById(targetId);
+        if (!callerClient || !targetClient) return;
+
+        Entity* callerEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(callerClient->playerEntityId)));
+        Entity* targetEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(targetClient->playerEntityId)));
+        if (!callerEntity || !targetEntity) return;
+
+        auto* callerTransform = callerEntity->getComponent<Transform>();
+        auto* callerStats    = callerEntity->getComponent<CharacterStatsComponent>();
+        auto* targetTransform = targetEntity->getComponent<Transform>();
+        auto* targetStats    = targetEntity->getComponent<CharacterStatsComponent>();
+        if (!callerTransform || !callerStats || !targetTransform || !targetStats) return;
+
+        if (targetStats->stats.currentScene != callerStats->stats.currentScene) {
+            targetStats->stats.currentScene = callerStats->stats.currentScene;
+            targetClient->aoi.previous.clear();
+            targetClient->aoi.current.clear();
+            targetClient->aoi.entered.clear();
+            targetClient->aoi.left.clear();
+            targetClient->aoi.stayed.clear();
+            targetClient->lastAckedState.clear();
+            SvZoneTransitionMsg zt;
+            zt.targetScene = callerStats->stats.currentScene;
+            zt.spawnX = callerTransform->position.x;
+            zt.spawnY = callerTransform->position.y;
+            uint8_t buf[256]; ByteWriter w(buf, sizeof(buf)); zt.write(w);
+            server_.sendTo(targetId, Channel::ReliableOrdered, PacketType::SvZoneTransition, buf, w.size());
+        }
+        targetTransform->position = callerTransform->position;
+        sendSystemMsg(callerId, "Summoned: " + args[0]);
+        LOG_INFO("GM", "Client %d summoned '%s'", callerId, args[0].c_str());
+    }});
+
+    // /announce <message> — GM (role 1)
+    gmCommands_.registerCommand({"announce", 1, [this, sendSystemMsg](uint16_t callerId, const std::vector<std::string>& args) {
+        if (args.empty()) { sendSystemMsg(callerId, "Usage: /announce <message>"); return; }
+        std::string msg;
+        for (const auto& a : args) { if (!msg.empty()) msg += " "; msg += a; }
+        SvChatMessageMsg chatMsg;
+        chatMsg.channel    = static_cast<uint8_t>(ChatChannel::System);
+        chatMsg.senderName = "[GM]";
+        chatMsg.message    = msg;
+        chatMsg.faction    = 0;
+        uint8_t buf[512]; ByteWriter w(buf, sizeof(buf));
+        chatMsg.write(w);
+        server_.broadcast(Channel::ReliableOrdered, PacketType::SvChatMessage, buf, w.size());
+        LOG_INFO("GM", "Client %d announced: %s", callerId, msg.c_str());
+    }});
+
+    // /setlevel <player> <level> — Admin (role 2)
+    gmCommands_.registerCommand({"setlevel", 2, [this, sendSystemMsg](uint16_t callerId, const std::vector<std::string>& args) {
+        if (args.size() < 2) { sendSystemMsg(callerId, "Usage: /setlevel <player> <level>"); return; }
+        auto targetId = findClientByCharacterName(args[0]);
+        if (targetId == 0) { sendSystemMsg(callerId, "Player not found: " + args[0]); return; }
+        int level = std::atoi(args[1].c_str());
+        if (level < 1 || level > 50) { sendSystemMsg(callerId, "Level must be 1-50"); return; }
+
+        auto* targetClient = server_.connections().findById(targetId);
+        if (!targetClient) return;
+        Entity* targetEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(targetClient->playerEntityId)));
+        if (!targetEntity) return;
+        auto* charStats = targetEntity->getComponent<CharacterStatsComponent>();
+        if (!charStats) return;
+
+        charStats->stats.level = level;
+        charStats->stats.recalculateStats();
+        recalcEquipmentBonuses(targetEntity);
+        sendPlayerState(targetId);
+        sendSystemMsg(callerId, "Set " + args[0] + " to level " + std::to_string(level));
+        LOG_INFO("GM", "Client %d set '%s' to level %d", callerId, args[0].c_str(), level);
+    }});
+
+    // /additem <player> <itemId> [quantity] — Admin (role 2)
+    gmCommands_.registerCommand({"additem", 2, [this, sendSystemMsg](uint16_t callerId, const std::vector<std::string>& args) {
+        if (args.size() < 2) { sendSystemMsg(callerId, "Usage: /additem <player> <itemId> [qty]"); return; }
+        auto targetId = findClientByCharacterName(args[0]);
+        if (targetId == 0) { sendSystemMsg(callerId, "Player not found: " + args[0]); return; }
+        const std::string& itemId = args[1];
+        int qty = args.size() > 2 ? std::atoi(args[2].c_str()) : 1;
+        if (qty < 1) qty = 1;
+
+        const auto* itemDef = itemDefCache_.getDefinition(itemId);
+        if (!itemDef) { sendSystemMsg(callerId, "Unknown item: " + itemId); return; }
+
+        auto* targetClient = server_.connections().findById(targetId);
+        if (!targetClient) return;
+        Entity* targetEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(targetClient->playerEntityId)));
+        if (!targetEntity) return;
+        auto* inv = targetEntity->getComponent<InventoryComponent>();
+        if (!inv) return;
+
+        ItemInstance item;
+        item.itemId      = itemId;
+        item.displayName = itemDef->displayName;
+        item.quantity    = qty;
+        item.rarity      = parseItemRarity(itemDef->rarity);
+        inv->inventory.addItem(item);
+        sendInventorySync(targetId);
+        sendSystemMsg(callerId, "Gave " + args[0] + " " + std::to_string(qty) + "x " + itemId);
+        LOG_INFO("GM", "Client %d gave '%s' %dx '%s'", callerId, args[0].c_str(), qty, itemId.c_str());
+    }});
+
+    // /addgold <player> <amount> — Admin (role 2)
+    gmCommands_.registerCommand({"addgold", 2, [this, sendSystemMsg](uint16_t callerId, const std::vector<std::string>& args) {
+        if (args.size() < 2) { sendSystemMsg(callerId, "Usage: /addgold <player> <amount>"); return; }
+        auto targetId = findClientByCharacterName(args[0]);
+        if (targetId == 0) { sendSystemMsg(callerId, "Player not found: " + args[0]); return; }
+        int64_t amount = std::atoll(args[1].c_str());
+        if (amount <= 0) { sendSystemMsg(callerId, "Amount must be positive"); return; }
+
+        auto* targetClient = server_.connections().findById(targetId);
+        if (!targetClient) return;
+        Entity* targetEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(targetClient->playerEntityId)));
+        if (!targetEntity) return;
+        auto* inv = targetEntity->getComponent<InventoryComponent>();
+        if (!inv) return;
+
+        inv->inventory.setGold(inv->inventory.getGold() + amount);
+        sendPlayerState(targetId);
+        sendSystemMsg(callerId, "Gave " + args[0] + " " + std::to_string(amount) + " gold");
+        LOG_INFO("GM", "Client %d gave '%s' %lld gold", callerId, args[0].c_str(),
+                 static_cast<long long>(amount));
+    }});
+
+    LOG_INFO("Server", "Registered %zu GM commands", gmCommands_.size());
 }
 
 } // namespace fate

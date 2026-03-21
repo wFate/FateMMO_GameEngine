@@ -83,3 +83,18 @@ assets/scenes/
 # Custom art assets
 assets/sprites/
 assets/tiles/
+
+# Audio assets & engine wrapper
+engine/audio/audio_manager.h
+engine/audio/audio_manager.cpp
+assets/audio/sfx/
+assets/audio/music/
+
+# All assets (superset — covers sprites, tiles, audio, etc.)
+assets/
+
+# Internal docs & tooling
+Docs/superpowers/
+Docs/migrations/
+Docs/ENGINE_STATE_AND_FEATURES.md
+.claude/
