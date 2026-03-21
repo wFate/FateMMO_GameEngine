@@ -15,20 +15,12 @@ bool NetClient::connect(const std::string& host, uint16_t port) {
         }
     }
 
-    // Parse host to IP (support "127.0.0.1" dotted-quad format)
-    uint32_t ip = 0;
-    {
-        unsigned a = 0, b = 0, c = 0, d = 0;
-        if (sscanf(host.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d) == 4) {
-            ip = (a << 24) | (b << 16) | (c << 8) | d;
-        } else {
-            LOG_ERROR("NetClient", "Invalid host: %s (only dotted-quad IPs supported)", host.c_str());
-            return false;
-        }
+    NetAddress addr;
+    if (!NetAddress::resolve(host.c_str(), port, addr)) {
+        LOG_ERROR("NetClient", "Failed to resolve host: %s", host.c_str());
+        return false;
     }
-
-    serverAddress_.ip = ip;
-    serverAddress_.port = port;
+    serverAddress_ = addr;
 
     // Send Connect packet (reliable)
     sendPacket(Channel::ReliableOrdered, PacketType::Connect);
@@ -50,20 +42,12 @@ bool NetClient::connectWithToken(const std::string& host, uint16_t port, const A
         }
     }
 
-    // Parse host to IP (support "127.0.0.1" dotted-quad format)
-    uint32_t ip = 0;
-    {
-        unsigned a = 0, b = 0, c = 0, d = 0;
-        if (sscanf(host.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d) == 4) {
-            ip = (a << 24) | (b << 16) | (c << 8) | d;
-        } else {
-            LOG_ERROR("NetClient", "Invalid host: %s", host.c_str());
-            return false;
-        }
+    NetAddress addr;
+    if (!NetAddress::resolve(host.c_str(), port, addr)) {
+        LOG_ERROR("NetClient", "Failed to resolve host: %s", host.c_str());
+        return false;
     }
-
-    serverAddress_.ip = ip;
-    serverAddress_.port = port;
+    serverAddress_ = addr;
     authToken_ = token;
 
     // Send Connect packet with auth token as payload

@@ -9,6 +9,9 @@ struct NetAddress {
     uint16_t port = 0;    // host byte order
     bool operator==(const NetAddress& o) const { return ip == o.ip && port == o.port; }
     bool operator!=(const NetAddress& o) const { return !(*this == o); }
+
+    /// Resolve hostname via getaddrinfo (supports IPv4, iOS DNS64/NAT64 compatible)
+    static bool resolve(const char* host, uint16_t port, NetAddress& out);
 };
 
 class NetSocket {
