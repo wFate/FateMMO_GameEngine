@@ -348,6 +348,7 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     # Test Executable
     # =============================================================================
     file(GLOB_RECURSE TEST_SOURCES tests/*.cpp)
+    list(FILTER TEST_SOURCES EXCLUDE REGEX "tests/scenarios/")
     # Some tests reference game/shared code (gitignored); include if present
     file(GLOB_RECURSE GAME_SHARED_SOURCES game/shared/*.cpp)
     # Game UI sources needed by tests (touch controls, etc.)
@@ -361,6 +362,20 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
         target_compile_definitions(fate_tests PRIVATE
             FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         )
+    endif()
+
+    # =============================================================================
+    # Scenario Tests (require running FateServer + database)
+    # =============================================================================
+    file(GLOB SCENARIO_TEST_SOURCES tests/scenarios/*.cpp)
+    if(SCENARIO_TEST_SOURCES)
+        add_executable(fate_scenario_tests ${SCENARIO_TEST_SOURCES})
+        target_link_libraries(fate_scenario_tests PRIVATE fate_engine doctest::doctest spdlog::spdlog)
+        target_include_directories(fate_scenario_tests PRIVATE ${CMAKE_SOURCE_DIR})
+        if(MSVC)
+            target_compile_definitions(fate_scenario_tests PRIVATE _CRT_SECURE_NO_WARNINGS FATE_DEV_TLS)
+            target_compile_options(fate_scenario_tests PRIVATE /W4 /wd4100 /wd4201 /wd4458 /MP)
+        endif()
     endif()
 endif()
 
