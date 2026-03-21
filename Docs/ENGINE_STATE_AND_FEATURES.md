@@ -4,13 +4,13 @@
 
 Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landscape gameplay with a built-in Unity-style editor for scene building, tile painting, and rapid iteration. All game systems from the Unity/C# prototype have been ported to C++ as server-authoritative logic.
 
-**Tech Stack:** C++20, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImGuizmo, ImPlot, Tracy Profiler, nlohmann/json, stb_image, stb_truetype, Winsock2
+**Tech Stack:** C++20, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImGuizmo, ImPlot, Tracy Profiler, spdlog, nlohmann/json, stb_image, stb_truetype, Winsock2
 
 **Build System:** CMake with FetchContent (auto-downloads all dependencies)
 
-**Target:** Windows (development), iOS/Android (future), Linux server (future)
+**Target:** Windows (development), iOS (build pipeline ready, GLES 3.0), Android (future), Linux server (future)
 
-**Codebase:** ~37,600 lines across 225 files (engine/ 17,500 LOC, game/ 20,100 LOC)
+**Codebase:** ~59,300 lines across 334 files (engine/ ~18,300 LOC, game/ ~23,600 LOC, server/ ~9,000 LOC, tests/ ~8,400 LOC)
 
 ### Build & Run
 
@@ -34,12 +34,12 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Feature | Status | Notes |
 |---------|--------|-------|
 | SDL2 Window | Done | 1280x720 default, resizable |
-| OpenGL 3.3 Rendering | Done | Custom function loader, no GLAD dependency |
+| OpenGL 3.3 Rendering | Done | Custom function loader, no GLAD dependency, shader preamble injection for GL/GLES portability |
 | Batched Sprite Renderer | Done | Sorts by depth + texture, 10k capacity, dirty-flag sort skip (hash-based) |
 | 2D Orthographic Camera | Done | 480x270 virtual resolution (pixel art scale), 0.05x-8x zoom |
 | Archetype ECS | Done | Contiguous SoA component storage, O(matching) forEach queries, generational handles, command buffer for deferred structural changes |
-| Action Map Input | Done | 23 logical ActionIds, hardcoded WASD+arrow bindings, Gameplay/Chat context switching, 6-frame input buffer for combat skill queuing |
-| Structured Logging | Done | Timestamped, categorized, console + file output |
+| Action Map Input | Done | 23 logical ActionIds, hardcoded WASD+arrow bindings, Gameplay/Chat context switching, 6-frame input buffer for combat skill queuing, programmatic injection API for touch/gamepad |
+| Structured Logging | Done | spdlog-backed, per-subsystem named loggers, rotating file sink (5MB/3 files), backtrace ring buffer (64 entries), callback sink for LogViewer, Android logcat ready |
 | SDF Text Rendering | Done | MTSDF uber-shader (normal/outlined/glow/shadow styles), runtime atlas generation from TTF, UTF-8 decode, resolution-independent at any zoom |
 | Tilemap System | Done | Tiled JSON loader, frustum-culled, collision layers |
 | Coordinate System | Done | Tile-based coords (32px grid), pixel-to-tile conversion |
@@ -67,9 +67,13 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Post-Processing | Done | Bloom (extract + Gaussian blur + composite), vignette, color grading |
 | Fiber Job System | Done | Win32 fibers, 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas |
 | Graphics RHI | Done | gfx::Device + CommandList + Pipeline State Objects, GL backend, typed 32-bit handles, uniform cache |
-| Networking Transport | Done | Custom reliable UDP (Winsock2), ByteWriter/ByteReader, 16-byte packet header, 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation |
-| Entity Replication | Done | AOI-driven enter/leave/update, delta compression with field bitmasks, ghost entities, client-side position interpolation, spatial-indexed visibility |
+| Networking Transport | Done | Custom reliable UDP (Winsock2), ByteWriter/ByteReader (NaN/Inf rejection, string length cap, enum bounds, sticky error), 16-byte packet header, 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation, per-tick skill command cap |
+| Entity Replication | Done | AOI-driven enter/leave/update, delta compression with field bitmasks, per-entity sequence counters (stale update rejection), ghost entities, client-side position interpolation, spatial-indexed visibility |
 | Client-Server Architecture | Done | Headless 20 tick/sec server (FateServer), NetClient/NetServer, session tokens, heartbeat/timeout |
+| Platform Detection | Done | Compile-time defines: FATEMMO_PLATFORM_WINDOWS/IOS/ANDROID/MACOS/LINUX, FATEMMO_MOBILE, FATEMMO_GLES |
+| Mobile Lifecycle | Done | SDL event filter for background/foreground/low-memory, virtual callbacks (onEnterBackground/Foreground/LowMemory), game loop pause on background, 4 unit tests |
+| Touch Controls | Done | TWOM-style D-pad (bottom-left), attack + 5 skill buttons (bottom-right arc), tap-to-target, multi-finger support, F4 desktop toggle, ImGui ForegroundDrawList rendering |
+| iOS Build Pipeline | Done | CMake Xcode generator, Info.plist, LaunchScreen.storyboard, GLES 3.0 context, static GL linking, asset bundling, free Apple ID signing, build-ios.sh script |
 
 ### Editor (Dear ImGui)
 | Feature | Status | Notes |
@@ -77,7 +81,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Toggle with F3 | Done | Auto-pauses game when opened |
 | Entity Hierarchy | Done | Grouped by name+tag (collapsible), color-coded (player/ground/obstacle/mob/boss), error badges |
 | Inspector Panel | Done | Edit all engine + game component properties live, sprite preview thumbnail, reflection-driven generic fallback |
-| Project Browser | Done | Tabs: Sprites, Scripts, Scenes, Shaders, Prefabs |
+| Project Browser | Done | Tabs: Sprites, Scripts, Scenes, Shaders, Prefabs. Delete confirmation dialogs, path traversal validation on save |
 | Right-Click Context Menus | Done | Open in VS Code, Show in Explorer, Copy Path, Delete |
 | Asset Placement | Done | Click sprite thumbnail, click scene to stamp entities |
 | Tile Palette | Done | Collapsible panel, load tilesets (recursive subdirectory scan), scrollable tile grid, paint/drag to place |
@@ -206,7 +210,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | SpriteRenderSystem | Done | Frustum culled, depth sorted, respects sprite enabled flag |
 | GameplaySystem | Done | Ticks StatusEffects, CrowdControl, SkillManager cooldowns, HP/MP regen, PK decay, death visual (rotation + gray tint), respawn countdown, nameplates |
 | MobAISystem | Done | Ticks MobAI for all mobs, scans for players, applies movement, fires attacks |
-| CombatActionSystem | Done | TWOM Option B targeting (mobs + PvP players), viewport-aware click/touch-to-target, auto-clear off-screen, player attacks, damage text, mob death/XP, PvP with 0.05x multiplier + faction check + PK status, CC/block/shield/lifesteal/status effects wired, mob HP bars always visible |
+| CombatActionSystem | Done | **Prediction-only** — TWOM Option B targeting, viewport-aware click/touch-to-target, auto-clear off-screen. Shows predicted damage text immediately, sends CmdAction to server. Does NOT modify mob/player HP, award XP/gold/honor, or determine kills. All state changes come from server messages (SvCombatEvent, SvPlayerState). |
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment, deferred entity creation (safe during archetype iteration) |
 | NPCInteractionSystem | Done | Click-to-interact with NPCs, viewport-aware screen-to-world, range check, dialogue open/close, click consumption (prevents combat targeting) |
 | QuestSystem | Done | Routes mob kills/item pickups/NPC talks to quest progress, event-driven quest marker updates on all NPCs |
@@ -351,6 +355,107 @@ pvpDamage = baseDamage * 0.05
 ---
 
 ## Changelog
+
+### March 20, 2026 - Server Authority Overhaul, Replication Fixes, Session Management
+
+**Server authority overhaul (13 tasks, 400 tests):**
+- **Auto-attacks server-authoritative:** CombatActionSystem stripped of all state changes (335 lines removed). Client predicts damage text, sends CmdAction to server. Server validates (alive, range, cooldown, same-scene), calculates damage, applies to mob/player HP, determines kill, awards XP, rolls loot. Client never modifies CharacterStats or EnemyStats directly.
+- **PvP auto-attacks server-authoritative:** New server-side PvP path in processAction() — applies 0.05x PvP damage multiplier, armor reduction, handles PvP death/honor/kills, broadcasts SvCombatEvent, sends SvDeathNotifyMsg to killed player.
+- **Server skill cooldown validation:** Per-client skill cooldown tracking (skillCooldowns_ map). Server rejects CmdUseSkill if cast within 80% of cooldown duration.
+- **Server auto-attack cooldown:** Per-client tracking (lastAutoAttackTime_ map). Rejects CmdAction spam faster than weapon attack speed.
+- **Respawn server-gated:** Client sends CmdRespawn, waits for SvRespawnMsg before clearing death state. Local respawn() removed. Death overlay shows "Respawning..." pending state with 5s retry timeout.
+- **isDead guard re-enabled:** CmdRespawn handler rejects if player not dead (prevents double-respawn exploits).
+- **Server-side XP with level-up:** addXP() handles level-up with overflow carry, recalculateStats(), recalculateXPRequirement(). Both processAction and processUseSkill kill paths use addXP().
+- **sendPlayerState after kill:** processAction now sends updated XP/HP/gold to client immediately after mob kill.
+- **Honor in SvPlayerStateMsg:** Added honor, pvpKills, pvpDeaths fields to SvPlayerState — synced to client on every state update.
+- **Double damage text suppressed:** onCombatEvent skips floating text when attackerId is the local player (prediction already showed it).
+
+**Full state sync on connect:**
+- **SvSkillSyncMsg (new):** Server sends all learned skills, activated ranks, and 20-slot skill bar layout.
+- **SvQuestSyncMsg (new):** Server sends active quests with per-objective progress.
+- **SvInventorySyncMsg (new):** Server sends full inventory slots + equipped items (with rolled stats, sockets, enchant levels).
+- All three sent after sendPlayerState() on connect via ReliableOrdered channel.
+- Client applies sync to SkillManagerComponent, QuestComponent, InventoryComponent.
+- Pending player state pattern: SvPlayerState that arrives before player entity creation is stored and applied after EntityFactory::createPlayer().
+
+**Replication overhaul:**
+- **Scene-based visibility replaces distance-based AOI:** buildVisibility() now includes ALL registered entities regardless of distance. Eliminated invisible mob bugs caused by AOI activation/deactivation hysteresis. At current scale (12 mobs + few players per zone), bandwidth is negligible.
+- **AOI cleared on zone transition:** Server clears client.aoi.previous and lastAckedState on CmdZoneTransition and town-respawn. Forces fresh SvEntityEnter for all entities in the new scene.
+- **Deferred zone transitions:** onZoneTransition callback stores pendingZoneScene_ instead of loading scene mid-poll(). Scene load happens after poll() completes, preventing use-after-free crashes from accessing destroyed world entities.
+- **Ghost interpolation seeded on enter:** ghostInterpolation_.onEntityUpdate() called immediately in onEntityEnter handler — prevents brief snap to (0,0).
+
+**Session management fixes:**
+- **Reconnect reliability:** ReliabilityLayer::reset() added — clears sequence numbers on disconnect so reconnect's ConnectAccept isn't treated as duplicate.
+- **Auth race fix:** consumePendingSessions() runs before server_.poll() so auth token exists when Connect packet arrives.
+- **Connect timeout 5s→15s:** Remote DB on DigitalOcean takes ~10s to load character; client no longer times out.
+- **Disconnect on shutdown:** GameApp::onShutdown() calls netClient_.disconnect() with 50ms flush — server saves correct state (alive, position, XP) instead of timing out while mobs kill AFK entity.
+- **Disconnect cleans up local player:** Disconnect button and onDisconnected callback destroy the local player entity and reset localPlayerCreated_.
+- **Scene-aware player save:** Server saves CharacterStats::currentScene instead of broken SceneManager::instance().currentScene() (which returns nullptr on server). Legacy "Scene2" default migrated to "WhisperingWoods".
+- **Auth response includes sceneName:** Client loads the correct scene on connect regardless of what the editor has open. Skips reload if already in the right scene.
+- **Editor pause gates combat:** onCombatEvent and onDeathNotify return early when Editor::isPaused(), preventing mobs from killing paused players.
+
+**Mob AI fixes:**
+- **roamRadius set from zone data:** Was stuck at 3px default (header value in tile units used in pixel space). Now set to 40% of zone radius.
+- **baseReturnSpeed set:** Was stuck at 3px/s default. Now set to moveSpeed * 32.
+
+**Test count:** 356 → 400 (44 new tests, 2955 assertions)
+
+### March 20, 2026 - Security Hardening, Protocol Improvements, Mobile Prep
+
+**Network security hardening:**
+- ByteReader: NaN/Inf float rejection, string length cap (default 4096), `readEnum<E>()` with bounds checking, `ok()` alias — prevents malicious packet crashes
+- Per-tick skill command cap: max 1 `CmdUseSkill` per client per tick prevents cooldown bypass exploits
+- Replaced `system()` calls in editor with `ShellExecuteW` (UTF-8 safe via `MultiByteToWideChar`) — eliminates command injection vector
+
+**Entity replication improvements:**
+- Per-entity `uint8_t updateSeq` counter on all `SvEntityUpdate` packets (unreliable channel)
+- Server increments seq per-entity per update in `ReplicationManager::sendDiffs()`
+- Client-side wrapping comparison rejects stale/out-of-order updates — prevents phantom HP bar flickering
+- First update per entity accepted unconditionally (avoids false-reject when server seq > 127 at client join)
+
+**Editor safety:**
+- `isValidAssetName()` rejects path separators and `..` in Scene Save As and Prefab Save dialogs
+- Delete File and Delete Prefab now show confirmation modal popups instead of deleting immediately
+- Console commands (`delete`, `spawn`, `tp`) wrapped in try-catch — invalid input logs warning instead of crashing
+
+**Shader preamble injection (GLES portability):**
+- `#version` lines stripped from all 9 shader files (sprite, fullscreen_quad, blit, grid, light, postprocess, bloom_extract, blur)
+- `getShaderPreamble()` in `shader.cpp` injects `#version 330 core` on desktop, `#version 300 es` + precision qualifiers on mobile (`FATEMMO_GLES`)
+- Applied in both `loadFromFile()` and `reloadFromFile()` — hot-reload preserved
+
+**spdlog logging replacement:**
+- Custom `Logger` singleton replaced with spdlog wrapper — same `LOG_INFO(cat, fmt, ...)` macro interface, zero changes to 51 calling files
+- Per-subsystem named loggers created on first use (e.g., `spdlog::get("Net")`, `"Shader"`, `"ECS"`)
+- Rotating file sink (5MB max, 3 rotated files), stdout color sink, callback sink for editor LogViewer
+- Backtrace ring buffer (64 entries) for crash breadcrumbs
+- Android logcat sink ready via `FATEMMO_PLATFORM_ANDROID` define
+
+**Mobile lifecycle handling:**
+- Platform detection defines: `FATEMMO_PLATFORM_WINDOWS`/`IOS`/`ANDROID`/`MACOS`/`LINUX`, `FATEMMO_MOBILE`, `FATEMMO_GLES`
+- SDL event filter registered via `SDL_SetEventFilter()` catches `SDL_APP_WILLENTERBACKGROUND`, `SDL_APP_DIDENTERFOREGROUND`, `SDL_APP_LOWMEMORY` before main loop (iOS 5-second deadline safe)
+- `AppLifecycleState` enum (Active/Background/Suspended) with `isBackgrounded()` query
+- Virtual callbacks `onEnterBackground()`/`onEnterForeground()`/`onLowMemory()` for game-specific save/reconnect
+- Game loop skips update/render when backgrounded (sleeps 100ms for battery saving)
+- 4 unit tests covering state machine transitions
+
+**TWOM-style touch controls:**
+- `ActionMap` gains `setActionPressed()`/`setActionReleased()`/`setActionHeld()` for programmatic input injection
+- Virtual D-pad (bottom-left): 18% viewport height radius, 25% dead zone, cardinal direction snapping
+- Attack button (larger, red tint) + 5 skill buttons in arc (bottom-right): individual press/release tracking per finger
+- Multi-finger support: move + attack simultaneously via independent finger ID tracking
+- Tap-to-target: touches not claimed by D-pad or buttons register as world taps
+- Rendered via `ImGui::GetForegroundDrawList()` using `GameViewport` coordinates
+- F4 toggle on desktop for testing; auto-enabled on `FATEMMO_MOBILE`
+- 8 unit tests covering hit detection, D-pad classification, and action injection
+
+**iOS build pipeline:**
+- `ios/Info.plist.in`: landscape-only, fullscreen, arm64 + GLES 3.0 required, no encryption flag
+- `ios/LaunchScreen.storyboard`: minimal black launch screen
+- `ios/build-ios.sh`: one-command CMake Xcode generator script
+- `CMakeLists.txt`: iOS target with GLES framework linking, `FATEMMO_GLES` define, server deps skipped, asset bundling into .app, Automatic code signing
+- `gl_loader.h/cpp`: conditional `<OpenGLES/ES3/gl.h>` headers on iOS, `loadGLFunctions()` no-op (static linking)
+- `app.cpp`: `SDL_GL_CONTEXT_PROFILE_ES` for GLES, `SDL_WINDOW_ALLOW_HIGHDPI`, `SDL_GL_GetDrawableSize()` for Retina
+- Deploy path: push repo → clone on MacBook → `./ios/build-ios.sh` → open Xcode → Cmd+R to iPhone
 
 ### March 20, 2026 - Server Mob Spawning, Scene-Aware Combat, Combat Event HP Sync
 
