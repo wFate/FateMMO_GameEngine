@@ -217,6 +217,13 @@ else()
     list(FILTER ENGINE_SOURCES EXCLUDE REGEX "fiber_win32\.cpp$")
 endif()
 
+# Platform-specific socket implementation
+if(WIN32)
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "socket_posix\\.cpp$")
+else()
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "socket_win32\\.cpp$")
+endif()
+
 add_library(fate_engine STATIC ${ENGINE_SOURCES})
 target_include_directories(fate_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
