@@ -2472,6 +2472,10 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         auto* enemyStats = target->getComponent<EnemyStatsComponent>();
         if (!enemyStats || !enemyStats->stats.isAlive) return;
 
+        // Same-scene check: player and mob must be in the same scene
+        if (charStats && !enemyStats->stats.sceneId.empty() &&
+            charStats->stats.currentScene != enemyStats->stats.sceneId) return;
+
         // Validate auto-attack cooldown
         float weaponSpeed = charStats ? charStats->stats.weaponAttackSpeed : 1.0f;
         float cooldown = (weaponSpeed > 0.0f) ? (1.0f / weaponSpeed) : 1.5f;
@@ -2607,6 +2611,9 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
 
             LOG_INFO("Server", "Client %d killed mob '%s'", clientId, es.enemyName.c_str());
         }
+
+        // Send updated player state (XP, HP may have changed)
+        sendPlayerState(clientId);
     } else if (action.actionType == 3) {
         // Pickup
         PersistentId itemPid(action.targetId);
