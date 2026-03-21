@@ -108,11 +108,11 @@ TEST_CASE("ClientRateLimiter movement has higher burst") {
     ClientRateLimiter limiter;
     double now = 3000.0;
 
-    // CmdMove burst=25
-    for (int i = 0; i < 25; ++i) {
+    // CmdMove burst=65 (raised for 60fps client sends)
+    for (int i = 0; i < 65; ++i) {
         CHECK(limiter.check(PacketType::CmdMove, now) == RateLimitResult::Ok);
     }
-    // 26th should be dropped
+    // 66th should be dropped
     CHECK(limiter.check(PacketType::CmdMove, now) == RateLimitResult::Dropped);
 }
 

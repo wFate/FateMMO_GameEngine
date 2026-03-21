@@ -132,6 +132,6 @@ TEST_CASE("Auth message serialization") {
         CHECK(decoded.errorReason == "Invalid password");
         // Preview fields should be default (not serialized on failure)
         CHECK(decoded.characterName == "");
-        CHECK(decoded.level == 0);
+        CHECK(decoded.level == 1); // default level is 1 (not 0)
     }
 }
