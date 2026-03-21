@@ -200,6 +200,8 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
             dirtyMask |= (1 << 12);
         if (current.equipVisuals != last.equipVisuals)
             dirtyMask |= (1 << 13);
+        if (current.pkStatus != last.pkStatus)
+            dirtyMask |= (1 << 14);
 
         if (dirtyMask == 0) continue; // Nothing changed
 
@@ -224,6 +226,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         deltaMsg.level           = current.level;
         deltaMsg.faction         = current.faction;
         deltaMsg.equipVisuals    = current.equipVisuals;
+        deltaMsg.pkStatus        = current.pkStatus;
         deltaMsg.updateSeq       = seq;
 
         uint8_t buf[MAX_PAYLOAD_SIZE];
@@ -260,6 +263,7 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
         msg.level = charStats->stats.level;
         msg.currentHP = charStats->stats.currentHP;
         msg.maxHP = charStats->stats.maxHP;
+        msg.pkStatus = static_cast<uint8_t>(charStats->stats.pkStatus);
 
         auto* nameplate = entity->getComponent<NameplateComponent>();
         if (nameplate) {
@@ -303,7 +307,7 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
 SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* entity, PersistentId pid) {
     SvEntityUpdateMsg msg;
     msg.persistentId = pid.value();
-    msg.fieldMask = 0x3FFF; // all 14 bits set
+    msg.fieldMask = 0x7FFF; // all 15 bits set
 
     // Position
     auto* transform = entity->getComponent<Transform>();
@@ -324,6 +328,7 @@ SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* en
         msg.currentHP = charStats->stats.currentHP;
         msg.maxHP     = charStats->stats.maxHP;
         msg.level     = static_cast<uint8_t>(charStats->stats.level);
+        msg.pkStatus  = static_cast<uint8_t>(charStats->stats.pkStatus);
     } else {
         auto* enemyStats = entity->getComponent<EnemyStatsComponent>();
         if (enemyStats) {
