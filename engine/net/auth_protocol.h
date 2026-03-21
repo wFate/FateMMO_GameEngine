@@ -136,13 +136,34 @@ struct AuthResponse {
     bool success = false;
     AuthToken authToken = {};
     std::string errorReason;
-    // Preview data (only meaningful on login success — for UI display during transition)
+
+    // Full character snapshot — client uses this to initialize without waiting for SvPlayerState
     std::string characterName;
     std::string className;
-    int32_t level = 0;
-    float spawnX = 0.0f;  // pixel coords — saved position from DB
+    std::string sceneName;
+    float spawnX = 0.0f;
     float spawnY = 0.0f;
-    std::string sceneName;  // scene the player should load into
+
+    // Progression
+    int32_t level = 1;
+    int64_t currentXP = 0;
+    int64_t gold = 0;
+
+    // Vitals
+    int32_t currentHP = 100;
+    int32_t maxHP = 100;
+    int32_t currentMP = 50;
+    int32_t maxMP = 50;
+    float   currentFury = 0.0f;
+
+    // PvP
+    int32_t honor = 0;
+    int32_t pvpKills = 0;
+    int32_t pvpDeaths = 0;
+
+    // State
+    uint8_t isDead = 0;
+    uint8_t faction = 0;
 
     void write(ByteWriter& w) const {
         w.writeU8(success ? 1 : 0);
@@ -151,10 +172,22 @@ struct AuthResponse {
         if (success) {
             w.writeString(characterName);
             w.writeString(className);
-            w.writeI32(level);
+            w.writeString(sceneName);
             w.writeFloat(spawnX);
             w.writeFloat(spawnY);
-            w.writeString(sceneName);
+            w.writeI32(level);
+            detail::writeI64(w, currentXP);
+            detail::writeI64(w, gold);
+            w.writeI32(currentHP);
+            w.writeI32(maxHP);
+            w.writeI32(currentMP);
+            w.writeI32(maxMP);
+            w.writeFloat(currentFury);
+            w.writeI32(honor);
+            w.writeI32(pvpKills);
+            w.writeI32(pvpDeaths);
+            w.writeU8(isDead);
+            w.writeU8(faction);
         }
     }
 
@@ -166,10 +199,22 @@ struct AuthResponse {
         if (m.success) {
             m.characterName = r.readString();
             m.className     = r.readString();
-            m.level         = r.readI32();
+            m.sceneName     = r.readString();
             m.spawnX        = r.readFloat();
             m.spawnY        = r.readFloat();
-            m.sceneName     = r.readString();
+            m.level         = r.readI32();
+            m.currentXP     = detail::readI64(r);
+            m.gold          = detail::readI64(r);
+            m.currentHP     = r.readI32();
+            m.maxHP         = r.readI32();
+            m.currentMP     = r.readI32();
+            m.maxMP         = r.readI32();
+            m.currentFury   = r.readFloat();
+            m.honor         = r.readI32();
+            m.pvpKills      = r.readI32();
+            m.pvpDeaths     = r.readI32();
+            m.isDead        = r.readU8();
+            m.faction       = r.readU8();
         }
         return m;
     }
