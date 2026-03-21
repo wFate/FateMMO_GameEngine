@@ -1047,6 +1047,20 @@ public:
     }
 
     /// Create a ghost (remote) mob entity — full visual representation from server data.
+    // Ensures a mob sprite PNG exists — if not, creates a temporary local-only
+    // mob entity to trigger procedural generation, then discards it.
+    static void ensureMobSprite(World& world, const std::string& mobId, bool isBoss) {
+        std::string path = "assets/sprites/mob_" + mobId + ".png";
+        if (TextureCache::instance().load(path)) return; // already exists
+
+        // Create a throwaway mob to trigger procedural sprite generation in createMob()
+        Entity* tmp = createMob(world, mobId, 1, 1, 1, {-9999, -9999}, false, isBoss);
+        if (tmp) {
+            world.destroyEntity(tmp->handle());
+            world.processDestroyQueue();
+        }
+    }
+
     static Entity* createGhostMob(World& world, const std::string& name, Vec2 position,
                                    const std::string& mobDefId = "", int level = 1,
                                    int currentHP = 100, int maxHP = 100,
@@ -1060,8 +1074,13 @@ public:
         if (!mobDefId.empty()) {
             std::string path = "assets/sprites/mob_" + mobDefId + ".png";
             sprite->texture = TextureCache::instance().load(path);
+            if (!sprite->texture) {
+                // Trigger procedural generation via createMob, then reload
+                ensureMobSprite(world, mobDefId, isBoss);
+                sprite->texture = TextureCache::instance().load(path);
+            }
         }
-        sprite->size = {32.0f, 32.0f};
+        sprite->size = isBoss ? Vec2{48.0f, 48.0f} : Vec2{32.0f, 32.0f};
 
         auto* es = entity->addComponent<EnemyStatsComponent>();
         es->stats.enemyName = name;
