@@ -50,6 +50,7 @@ public:
     std::function<void(const SvDeathNotifyMsg&)> onDeathNotify;
     std::function<void(const SvRespawnMsg&)> onRespawn;
     std::function<void(const SvSkillResultMsg&)> onSkillResult;
+    std::function<void(const SvLevelUpMsg&)> onLevelUp;
     std::function<void(const SvSkillSyncMsg&)> onSkillSync;
     std::function<void(const SvQuestSyncMsg&)> onQuestSync;
     std::function<void(const SvInventorySyncMsg&)> onInventorySync;

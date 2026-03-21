@@ -339,11 +339,21 @@ SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* en
         msg.faction = static_cast<uint8_t>(factionComp->faction);
     }
 
+    // Status effect mask from active effects
+    auto* seComp = entity->getComponent<StatusEffectComponent>();
+    msg.statusEffectMask = seComp ? seComp->effects.getActiveEffectMask() : 0;
+
+    // Death state from character/enemy stats
+    if (charStats) {
+        msg.deathState = charStats->stats.isDead ? 2 : 0; // 0=alive, 2=dead
+    } else {
+        auto* es2 = entity->getComponent<EnemyStatsComponent>();
+        msg.deathState = (es2 && !es2->stats.isAlive) ? 2 : 0;
+    }
+
     // Placeholders for fields not yet driven by components
     msg.moveState        = 0;
     msg.animId           = 0;
-    msg.statusEffectMask = 0;
-    msg.deathState       = 0;
     msg.castingSkillId   = 0;
     msg.castingProgress  = 0;
     msg.targetEntityId   = 0;

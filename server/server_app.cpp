@@ -268,6 +268,19 @@ void ServerApp::tick(float dt) {
     world_.update(dt);
     spawnManager_.tick(dt, gameTime_, world_, replication_);
 
+    // 3b. Tick status effects (DoTs, buffs/debuffs) and crowd control for all entities
+    world_.forEach<StatusEffectComponent>([&](Entity* entity, StatusEffectComponent* seComp) {
+        seComp->effects.tick(dt);
+    });
+    world_.forEach<CrowdControlComponent>([&](Entity*, CrowdControlComponent* ccComp) {
+        ccComp->cc.tick(dt);
+    });
+
+    // 3c. Tick player timers (PK decay, combat timer, respawn invuln)
+    world_.forEach<CharacterStatsComponent>([&](Entity*, CharacterStatsComponent* cs) {
+        cs->stats.tickTimers(dt);
+    });
+
     // Despawn expired ground items
     {
         std::vector<EntityHandle> toDestroy;
@@ -611,24 +624,13 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         s.currentScene = (rec.current_scene == "Scene2" || rec.current_scene.empty())
             ? "WhisperingWoods" : rec.current_scene;
 
-        // Recalculate derived stats from level (maxHP/maxMP are authoritative)
+        // Initial stat calc (without equipment — equipment loaded below)
         s.recalculateStats();
         s.recalculateXPRequirement();
 
-        // Restore saved HP/MP clamped to recalculated max.
-        // DB maxHP may be stale (saved at lower level or without equipment),
-        // so always use the recalculated value.
-        s.currentHP   = (std::min)(static_cast<int>(rec.current_hp), s.maxHP);
-        s.currentMP   = (std::min)(static_cast<int>(rec.current_mp), s.maxMP);
+        // Stash DB HP/MP/fury values; actual clamping happens AFTER equipment
+        // bonuses are applied (equipment can raise maxHP/maxMP).
         s.currentFury = rec.current_fury;
-
-        // If player was not dead but DB has HP=0 (stale save), heal to full
-        if (!s.isDead && s.currentHP <= 0) {
-            s.currentHP = s.maxHP;
-            s.currentMP = s.maxMP;
-            LOG_INFO("Server", "Healed '%s' to full HP on connect (stale DB HP=0)",
-                     rec.character_name.c_str());
-        }
     }
 
     // Set position (DB stores tile coords, engine uses pixel coords)
@@ -669,8 +671,30 @@ void ServerApp::onClientConnected(uint16_t clientId) {
             }
 
             if (slot.is_equipped && !slot.equipped_slot.empty()) {
-                // Equipped items go into inventory — equipment slot mapping is a follow-up
-                inv->inventory.addItem(item);
+                // Parse equipment slot name to enum and equip directly
+                EquipmentSlot eqSlot = EquipmentSlot::None;
+                const auto& s = slot.equipped_slot;
+                if (s == "Weapon")    eqSlot = EquipmentSlot::Weapon;
+                else if (s == "SubWeapon") eqSlot = EquipmentSlot::SubWeapon;
+                else if (s == "Hat")       eqSlot = EquipmentSlot::Hat;
+                else if (s == "Armor")     eqSlot = EquipmentSlot::Armor;
+                else if (s == "Gloves")    eqSlot = EquipmentSlot::Gloves;
+                else if (s == "Shoes")     eqSlot = EquipmentSlot::Shoes;
+                else if (s == "Belt")      eqSlot = EquipmentSlot::Belt;
+                else if (s == "Cloak")     eqSlot = EquipmentSlot::Cloak;
+                else if (s == "Ring")      eqSlot = EquipmentSlot::Ring;
+                else if (s == "Necklace")  eqSlot = EquipmentSlot::Necklace;
+
+                if (eqSlot != EquipmentSlot::None) {
+                    // Place directly into equipment slot (bypasses callbacks during load)
+                    auto equipMap = inv->inventory.getEquipmentMap();
+                    equipMap[eqSlot] = item;
+                    inv->inventory.setSerializedState(inv->inventory.getGold(),
+                        std::vector<ItemInstance>(inv->inventory.getSlots()),
+                        std::move(equipMap));
+                } else {
+                    inv->inventory.addItem(item); // fallback
+                }
             } else if (slot.slot_index >= 0) {
                 // Place in specific inventory slot
                 inv->inventory.addItemToSlot(slot.slot_index, item);
@@ -680,6 +704,24 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         }
         LOG_INFO("Server", "Loaded %zu inventory items for %s",
                  invSlots.size(), rec.character_name.c_str());
+
+        // Apply equipment bonuses from equipped items, then recalculate derived stats
+        recalcEquipmentBonuses(player);
+    }
+
+    // Now that equipment bonuses are applied, clamp HP/MP to final maxHP/maxMP
+    if (charStatsComp) {
+        CharacterStats& s = charStatsComp->stats;
+        s.currentHP = (std::min)(static_cast<int>(rec.current_hp), s.maxHP);
+        s.currentMP = (std::min)(static_cast<int>(rec.current_mp), s.maxMP);
+
+        // If player was not dead but DB has HP=0 (stale save), heal to full
+        if (!s.isDead && s.currentHP <= 0) {
+            s.currentHP = s.maxHP;
+            s.currentMP = s.maxMP;
+            LOG_INFO("Server", "Healed '%s' to full HP on connect (stale DB HP=0)",
+                     rec.character_name.c_str());
+        }
     }
 
     // Assign persistent ID based on hash of character_id
@@ -820,6 +862,104 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     // Stagger auto-save (offset by clientId to spread DB load)
     float saveOffset = static_cast<float>(clientId % 60);
     nextAutoSaveTime_[clientId] = gameTime_ + saveOffset + AUTO_SAVE_INTERVAL;
+
+    // Wire onEquipmentChanged callback: recalculate stats when equipment changes
+    if (inv) {
+        inv->inventory.onEquipmentChanged = [this, clientId](EquipmentSlot) {
+            auto* cl = server_.connections().findById(clientId);
+            if (!cl || cl->playerEntityId == 0) return;
+            PersistentId p(cl->playerEntityId);
+            EntityHandle eh = replication_.getEntityHandle(p);
+            Entity* ent = world_.getEntity(eh);
+            if (!ent) return;
+            recalcEquipmentBonuses(ent);
+            sendPlayerState(clientId);
+        };
+    }
+
+    // Wire onDied callback: clear all effects on death
+    if (charStatsComp) {
+        auto* deathSEComp = player->getComponent<StatusEffectComponent>();
+        auto* deathCCComp = player->getComponent<CrowdControlComponent>();
+        charStatsComp->stats.onDied = [deathSEComp, deathCCComp]() {
+            if (deathSEComp) deathSEComp->effects.removeAllEffects();
+            if (deathCCComp) deathCCComp->cc.removeAllCC();
+        };
+    }
+
+    // Wire DoT tick callback: apply DoT damage to this player entity
+    auto* seComp = player->getComponent<StatusEffectComponent>();
+    if (seComp && charStatsComp) {
+        seComp->effects.onDoTTick = [this, clientId](EffectType type, int damage) {
+            auto* cl = server_.connections().findById(clientId);
+            if (!cl || cl->playerEntityId == 0) return;
+            PersistentId p(cl->playerEntityId);
+            EntityHandle eh = replication_.getEntityHandle(p);
+            Entity* ent = world_.getEntity(eh);
+            if (!ent) return;
+            auto* cs = ent->getComponent<CharacterStatsComponent>();
+            if (!cs || cs->stats.isDead) return;
+
+            cs->stats.currentHP = (std::max)(0, cs->stats.currentHP - damage);
+
+            // Broadcast DoT damage as a combat event
+            SvCombatEventMsg evt;
+            evt.attackerId = 0; // DoT source — could track via StatusEffect.sourceEntityId
+            evt.targetId   = cl->playerEntityId;
+            evt.damage     = damage;
+            evt.skillId    = 0;
+            evt.isCrit     = 0;
+            evt.isKill     = cs->stats.currentHP <= 0 ? 1 : 0;
+            uint8_t buf[64]; ByteWriter w(buf, sizeof(buf));
+            evt.write(w);
+            server_.broadcast(Channel::Unreliable, PacketType::SvCombatEvent, buf, w.size());
+
+            if (cs->stats.currentHP <= 0) {
+                cs->stats.die(DeathSource::PvE);
+                SvDeathNotifyMsg deathMsg;
+                deathMsg.deathSource = 0; // PvE
+                deathMsg.respawnTimer = 5.0f;
+                deathMsg.xpLost = 0;
+                deathMsg.honorLost = 0;
+                uint8_t dbuf[32]; ByteWriter dw(dbuf, sizeof(dbuf));
+                deathMsg.write(dw);
+                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvDeathNotify, dbuf, dw.size());
+            }
+        };
+    }
+
+    // Wire level-up callback: send SvLevelUpMsg + full state on level-up
+    if (charStatsComp) {
+        charStatsComp->stats.onLevelUp = [this, clientId]() {
+            auto* cl = server_.connections().findById(clientId);
+            if (!cl || cl->playerEntityId == 0) return;
+            PersistentId p(cl->playerEntityId);
+            EntityHandle eh = replication_.getEntityHandle(p);
+            Entity* ent = world_.getEntity(eh);
+            if (!ent) return;
+            auto* cs = ent->getComponent<CharacterStatsComponent>();
+            if (!cs) return;
+            const auto& st = cs->stats;
+
+            SvLevelUpMsg lvl;
+            lvl.newLevel     = st.level;
+            lvl.newMaxHP     = st.maxHP;
+            lvl.newMaxMP     = st.maxMP;
+            lvl.newCurrentHP = st.currentHP;
+            lvl.newCurrentMP = st.currentMP;
+            lvl.newArmor     = st.getArmor();
+            lvl.newCritRate  = st.getCritRate();
+            lvl.newSpeed     = st.getSpeed();
+            lvl.newDamageMult = st.getDamageMultiplier();
+
+            uint8_t buf[64]; ByteWriter w(buf, sizeof(buf));
+            lvl.write(w);
+            server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvLevelUp, buf, w.size());
+
+            // Also send full player state
+            sendPlayerState(clientId);
+        };
+    }
 
     // Send initial player state and full sync
     sendPlayerState(clientId);
@@ -2219,6 +2359,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             processUseSkill(clientId, msg);
             break;
         }
+        case PacketType::CmdEquip: {
+            auto msg = CmdEquipMsg::read(payload);
+            processEquip(clientId, msg);
+            break;
+        }
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;
@@ -2371,42 +2516,75 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     // Restore callback
     skillComp->skills.onSkillFailed = prevOnFailed;
 
-    // Determine crit: check if damage was dealt with a crit by comparing to base calculation
-    // Since executeSkill doesn't expose isCrit, we approximate: if damage > 0 and there's a
-    // crit buff active, we check the SEM. For simplicity, check the stat's last crit flag.
-    bool isCrit = false;
-    // The casterStats.calculateDamage sets internal state, but we can't access it after the fact.
-    // A reasonable heuristic: if caster has high crit rate and damage is notably above average,
-    // but this is imprecise. For now, we'll send isCrit=0 and rely on the client's existing
-    // combat event system for crit display from the SvCombatEvent path.
-    // TODO: Expose isCrit from executeSkill return value
-
-    // Determine if target was killed
+    // Determine kill state and build hitFlags
     bool isKill = false;
+    int32_t targetNewHP = 0;
+    int32_t overkill = 0;
     if (target) {
-        auto* targetEnemyStats = target->getComponent<EnemyStatsComponent>();
-        auto* targetCharStats = target->getComponent<CharacterStatsComponent>();
-        if (targetEnemyStats) {
-            isKill = !targetEnemyStats->stats.isAlive;
-        } else if (targetCharStats) {
-            isKill = targetCharStats->stats.isDead;
+        auto* tgtEnemyStats = target->getComponent<EnemyStatsComponent>();
+        auto* tgtCharStats = target->getComponent<CharacterStatsComponent>();
+        if (tgtEnemyStats) {
+            isKill = !tgtEnemyStats->stats.isAlive;
+            targetNewHP = tgtEnemyStats->stats.currentHP;
+            if (isKill && damage > 0)
+                overkill = damage - (ctx.targetCurrentHP > 0 ? ctx.targetCurrentHP : 0);
+        } else if (tgtCharStats) {
+            isKill = tgtCharStats->stats.isDead;
+            targetNewHP = tgtCharStats->stats.currentHP;
+            if (isKill && damage > 0)
+                overkill = damage - (ctx.targetCurrentHP > 0 ? ctx.targetCurrentHP : 0);
         }
     }
 
+    // Build hitFlags bitmask
+    uint8_t hitFlags = 0;
+    if (wasMiss && damage == 0) {
+        hitFlags |= HitFlags::MISS;
+    } else if (damage > 0) {
+        hitFlags |= HitFlags::HIT;
+    }
+    if (isKill) hitFlags |= HitFlags::KILLED;
+    // TODO: expose isCrit from executeSkill return value; for now crit flag not set
+
+    // Resolve authoritative cooldown duration
+    const CachedSkillRank* rankInfo = skillDefCache_.getRank(msg.skillId, msg.rank);
+    uint16_t cooldownMs = 0;
+    if (rankInfo) cooldownMs = static_cast<uint16_t>(rankInfo->cooldownSeconds * 1000.0f);
+
     // Build and broadcast SvSkillResultMsg
     SvSkillResultMsg result;
-    result.casterId = casterPid.value();
-    result.targetId = msg.targetId;
-    result.skillId = msg.skillId;
-    result.damage = damage;
-    result.isCrit = isCrit ? 1 : 0;
-    result.isKill = isKill ? 1 : 0;
-    result.wasMiss = (wasMiss && damage == 0) ? 1 : 0;
+    result.casterId     = casterPid.value();
+    result.targetId     = msg.targetId;
+    result.skillId      = msg.skillId;
+    result.damage       = damage;
+    result.overkill     = (std::max)(0, static_cast<int>(overkill));
+    result.targetNewHP  = targetNewHP;
+    result.hitFlags     = hitFlags;
+    result.resourceCost = 0; // resource already deducted inside executeSkill
+    result.cooldownMs   = cooldownMs;
+    result.casterNewMP  = static_cast<uint16_t>(casterStatsComp->stats.currentMP);
 
     uint8_t buf[256];
     ByteWriter w(buf, sizeof(buf));
     result.write(w);
     server_.broadcast(Channel::ReliableOrdered, PacketType::SvSkillResult, buf, w.size());
+
+    // PK status transition: flag caster as aggressor if attacking an innocent player
+    if (targetIsPlayer && damage > 0) {
+        casterStatsComp->stats.enterCombat();
+        auto* tgtCS = target->getComponent<CharacterStatsComponent>();
+        if (tgtCS) {
+            tgtCS->stats.enterCombat();
+            // Attacker becomes Aggressor if target is innocent
+            if (tgtCS->stats.pkStatus == PKStatus::White) {
+                casterStatsComp->stats.flagAsAggressor();
+            }
+            // If attacker kills a non-flagged player → Murderer
+            if (isKill && tgtCS->stats.pkStatus == PKStatus::White) {
+                casterStatsComp->stats.flagAsMurderer();
+            }
+        }
+    }
 
     // Handle mob death (XP, loot, etc.) — same pattern as processAction kill path
     if (isKill && target) {
@@ -2592,7 +2770,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
 
     LOG_INFO("Server", "Client %d used skill '%s' rank %d -> dmg=%d kill=%d miss=%d",
              clientId, msg.skillId.c_str(), msg.rank, damage, isKill ? 1 : 0,
-             result.wasMiss);
+             wasMiss ? 1 : 0);
 }
 
 void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
@@ -2864,6 +3042,18 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             targetCharStats->stats.takeDamage(damage);
             bool killed = targetCharStats->stats.isDead;
 
+            // PK status transitions for auto-attacks (same as skill path)
+            if (charStats) {
+                charStats->stats.enterCombat();
+                targetCharStats->stats.enterCombat();
+                if (targetCharStats->stats.pkStatus == PKStatus::White) {
+                    charStats->stats.flagAsAggressor();
+                }
+                if (killed && targetCharStats->stats.pkStatus == PKStatus::White) {
+                    charStats->stats.flagAsMurderer();
+                }
+            }
+
             // Broadcast SvCombatEvent
             SvCombatEventMsg pvpEvt;
             pvpEvt.attackerId = attackerPid.value();
@@ -3014,6 +3204,82 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
     }
 }
 
+void ServerApp::recalcEquipmentBonuses(Entity* player) {
+    auto* charStats = player->getComponent<CharacterStatsComponent>();
+    auto* inv = player->getComponent<InventoryComponent>();
+    if (!charStats || !inv) return;
+
+    charStats->stats.clearEquipmentBonuses();
+
+    for (const auto& [slot, item] : inv->inventory.getEquipmentMap()) {
+        if (!item.isValid()) continue;
+
+        // Look up base stats from item definition
+        const auto* def = itemDefCache_.getDefinition(item.itemId);
+        int baseWeaponMin = 0, baseWeaponMax = 0, baseArmor = 0;
+        float baseAttackSpeed = 0.0f;
+        if (def) {
+            baseWeaponMin = def->damageMin;
+            baseWeaponMax = def->damageMax;
+            baseArmor = def->armor;
+            baseAttackSpeed = def->getFloatAttribute("attack_speed", 0.0f);
+        }
+
+        charStats->stats.applyItemBonuses(item, baseWeaponMin, baseWeaponMax,
+                                           baseArmor, baseAttackSpeed);
+    }
+
+    charStats->stats.recalculateStats();
+
+    // Clamp HP/MP to new max (unequipping can lower maxHP below currentHP)
+    if (charStats->stats.currentHP > charStats->stats.maxHP)
+        charStats->stats.currentHP = charStats->stats.maxHP;
+    if (charStats->stats.currentMP > charStats->stats.maxMP)
+        charStats->stats.currentMP = charStats->stats.maxMP;
+}
+
+void ServerApp::processEquip(uint16_t clientId, const CmdEquipMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* player = world_.getEntity(h);
+    if (!player) return;
+
+    auto* charStats = player->getComponent<CharacterStatsComponent>();
+    auto* inv = player->getComponent<InventoryComponent>();
+    if (!charStats || !inv) return;
+
+    // Block equipment changes during combat
+    if (charStats->stats.isInCombat()) {
+        LOG_WARN("Server", "Client %d tried to change equipment in combat", clientId);
+        return;
+    }
+
+    // Block equipment changes while dead
+    if (charStats->stats.isDead) return;
+
+    auto targetSlot = static_cast<EquipmentSlot>(msg.equipSlot);
+
+    bool success = false;
+    if (msg.action == 0) {
+        // Equip
+        success = inv->inventory.equipItem(msg.inventorySlot, targetSlot);
+    } else {
+        // Unequip
+        success = inv->inventory.unequipItem(targetSlot);
+    }
+
+    if (success) {
+        recalcEquipmentBonuses(player);
+        sendPlayerState(clientId);
+        sendInventorySync(clientId);
+        LOG_INFO("Server", "Client %d %s slot %d",
+                 clientId, msg.action == 0 ? "equipped" : "unequipped", msg.equipSlot);
+    }
+}
+
 void ServerApp::sendPlayerState(uint16_t clientId) {
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
@@ -3046,7 +3312,17 @@ void ServerApp::sendPlayerState(uint16_t clientId) {
     msg.pvpKills    = s.pvpKills;
     msg.pvpDeaths   = s.pvpDeaths;
 
-    uint8_t buf[64];
+    // Derived stats (server-authoritative snapshot)
+    msg.armor       = s.getArmor();
+    msg.magicResist = s.getMagicResist();
+    msg.critRate    = s.getCritRate();
+    msg.hitRate     = s.getHitRate();
+    msg.evasion     = s.getEvasion();
+    msg.speed       = s.getSpeed();
+    msg.damageMult  = s.getDamageMultiplier();
+    msg.pkStatus    = static_cast<uint8_t>(s.pkStatus);
+
+    uint8_t buf[128];
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvPlayerState, buf, w.size());

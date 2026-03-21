@@ -594,15 +594,23 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
         }
     }
 
-    // 7. Execute check
-    if (!def->executeThresholdPerRank.empty() && !ctx.targetIsBoss) {
-        float threshold = (ri < static_cast<int>(def->executeThresholdPerRank.size()))
-                          ? def->executeThresholdPerRank[ri] : 0.0f;
-        if (threshold > 0.0f && ctx.targetMaxHP > 0) {
+    // 7. Execute check (skill threshold + equipment threshold stack)
+    if (!ctx.targetIsBoss && ctx.targetMaxHP > 0) {
+        float skillThreshold = 0.0f;
+        if (!def->executeThresholdPerRank.empty()) {
+            skillThreshold = (ri < static_cast<int>(def->executeThresholdPerRank.size()))
+                             ? def->executeThresholdPerRank[ri] : 0.0f;
+        }
+        float equipThreshold = stats ? stats->equipExecuteThreshold : 0.0f;
+        float totalThreshold = skillThreshold + equipThreshold;
+
+        if (totalThreshold > 0.0f) {
             float hpPercent = static_cast<float>(ctx.targetCurrentHP) /
                               static_cast<float>(ctx.targetMaxHP);
-            if (hpPercent <= threshold) {
-                damage = ctx.targetCurrentHP;  // instant kill
+            if (hpPercent <= totalThreshold) {
+                // Execute: deal remaining HP as damage, boosted by equipment execute bonus
+                float execBonus = 1.0f + (stats ? stats->equipExecuteDamageBonus : 0.0f);
+                damage = static_cast<int>(std::round(ctx.targetCurrentHP * execBonus));
             }
         }
     }
@@ -760,9 +768,15 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
         }
     }
 
-    // 16. Lifesteal
+    // 16. Lifesteal (capped at HP target actually had before THIS hit)
+    //     After takeDamage, target HP = (pre-hit HP - actualDamage). So pre-hit HP
+    //     for this specific hit = current HP + actualDamage. Cap lifesteal at that.
     if (stats && stats->equipBonusLifesteal > 0.0f && actualDamage > 0) {
-        int healAmount = static_cast<int>(std::round(stats->equipBonusLifesteal * actualDamage));
+        int preHitHP = 0;
+        if (ctx.targetMobStats) preHitHP = ctx.targetMobStats->currentHP + actualDamage;
+        else if (ctx.targetPlayerStats) preHitHP = ctx.targetPlayerStats->currentHP + actualDamage;
+        int effectiveDamage = (std::min)(actualDamage, preHitHP);
+        int healAmount = static_cast<int>(std::round(stats->equipBonusLifesteal * effectiveDamage));
         if (healAmount > 0) {
             stats->heal(healAmount);
         }

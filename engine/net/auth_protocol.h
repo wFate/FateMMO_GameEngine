@@ -5,6 +5,7 @@
 #include <cstring>
 #include <random>
 #include "engine/net/byte_stream.h"
+#include "engine/net/protocol.h"
 
 namespace fate {
 

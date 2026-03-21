@@ -71,6 +71,10 @@ namespace PacketType {
     constexpr uint8_t SvSkillSync     = 0xA3;
     constexpr uint8_t SvQuestSync     = 0xA4;
     constexpr uint8_t SvInventorySync = 0xA5;
+    constexpr uint8_t SvLevelUp       = 0xA6;
+
+    // Client -> Server: Equipment
+    constexpr uint8_t CmdEquip        = 0x1D;
 } // namespace PacketType
 
 // ============================================================================

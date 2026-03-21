@@ -2,6 +2,7 @@
 #include "engine/net/byte_stream.h"
 #include "engine/net/protocol.h"
 #include "engine/net/game_messages.h"
+#include "game/shared/game_types.h"
 
 TEST_SUITE("Network Robustness") {
 
@@ -183,13 +184,16 @@ TEST_CASE("CmdUseSkillMsg truncated after skillId") {
 TEST_CASE("SvSkillResultMsg round-trip") {
     uint8_t buf[256];
     fate::SvSkillResultMsg src;
-    src.casterId = 1001;
-    src.targetId = 2002;
-    src.skillId  = "power_strike";
-    src.damage   = 450;
-    src.isCrit   = 1;
-    src.isKill   = 0;
-    src.wasMiss  = 0;
+    src.casterId     = 1001;
+    src.targetId     = 2002;
+    src.skillId      = "power_strike";
+    src.damage       = 450;
+    src.overkill     = 50;
+    src.targetNewHP  = 0;
+    src.hitFlags     = fate::HitFlags::HIT | fate::HitFlags::CRIT | fate::HitFlags::KILLED;
+    src.resourceCost = 30;
+    src.cooldownMs   = 5000;
+    src.casterNewMP  = 170;
 
     fate::ByteWriter w(buf, sizeof(buf));
     src.write(w);
@@ -204,9 +208,12 @@ TEST_CASE("SvSkillResultMsg round-trip") {
     CHECK(dst.targetId == 2002);
     CHECK(dst.skillId == "power_strike");
     CHECK(dst.damage == 450);
-    CHECK(dst.isCrit == 1);
-    CHECK(dst.isKill == 0);
-    CHECK(dst.wasMiss == 0);
+    CHECK(dst.overkill == 50);
+    CHECK(dst.targetNewHP == 0);
+    CHECK(dst.hitFlags == (fate::HitFlags::HIT | fate::HitFlags::CRIT | fate::HitFlags::KILLED));
+    CHECK(dst.resourceCost == 30);
+    CHECK(dst.cooldownMs == 5000);
+    CHECK(dst.casterNewMP == 170);
 }
 
 // ============================================================================

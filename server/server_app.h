@@ -150,6 +150,8 @@ private:
 
     void processAction(uint16_t clientId, const CmdAction& action);
     void processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg);
+    void processEquip(uint16_t clientId, const CmdEquipMsg& msg);
+    void recalcEquipmentBonuses(Entity* player);
     void sendPlayerState(uint16_t clientId);
     void sendSkillSync(uint16_t clientId);
     void sendQuestSync(uint16_t clientId);
