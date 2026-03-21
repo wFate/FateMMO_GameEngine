@@ -18,6 +18,7 @@ struct InventorySlotRecord {
     int enchant_level = 0;
     bool is_protected = false;
     bool is_soulbound = false;
+    bool is_broken = false;
     bool is_equipped = false;
     std::string equipped_slot;
     int quantity = 1;

@@ -683,6 +683,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
             item.enchantLevel = slot.enchant_level;
             item.isProtected  = slot.is_protected;
             item.isSoulbound  = slot.is_soulbound;
+            item.isBroken     = slot.is_broken;
             item.rolledStats  = ItemStatRoller::parseRolledStats(slot.rolled_stats);
 
             // Look up display info from item definition cache
@@ -1276,6 +1277,7 @@ void ServerApp::saveInventoryForClient(uint16_t clientId) {
         s.enchant_level = items[i].enchantLevel;
         s.is_protected  = items[i].isProtected;
         s.is_soulbound  = items[i].isSoulbound;
+        s.is_broken     = items[i].isBroken;
         s.quantity      = items[i].quantity;
         slots.push_back(std::move(s));
     }

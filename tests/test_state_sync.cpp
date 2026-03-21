@@ -48,9 +48,9 @@ TEST_CASE("SvQuestSyncMsg round-trip") {
 
 TEST_CASE("SvInventorySyncMsg round-trip") {
     SvInventorySyncMsg src;
-    src.slots.push_back({0, "iron_sword", 1, 3, "{}", "strength", 5});
-    src.slots.push_back({5, "health_potion", 10, 0, "", "", 0});
-    src.equipment.push_back({1, "iron_helm", 1, 0, "", "", 0});
+    src.slots.push_back({0, "iron_sword", 1, 3, "{}", "strength", 5, 0});
+    src.slots.push_back({5, "health_potion", 10, 0, "", "", 0, 0});
+    src.equipment.push_back({1, "iron_helm", 1, 0, "", "", 0, 0});
 
     uint8_t buf[1024];
     ByteWriter w(buf, sizeof(buf));
