@@ -1,4 +1,5 @@
 #include "server/wal/write_ahead_log.h"
+#include "engine/core/logger.h"
 #include <cstring>
 #include <chrono>
 
@@ -193,6 +194,14 @@ void WriteAheadLog::appendEntry(WalEntryType type,
                                 int64_t intVal,
                                 const std::string& strVal) {
     if (!file_) return;
+
+    if (file_) {
+        long pos = ftell(file_);
+        if (pos > 0 && static_cast<size_t>(pos) >= MAX_WAL_SIZE) {
+            LOG_WARN("WAL", "WAL exceeded %zu bytes, force-truncating (possible auto-save failure)", MAX_WAL_SIZE);
+            truncate();
+        }
+    }
 
     ++sequence_;
 

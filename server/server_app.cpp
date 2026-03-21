@@ -86,6 +86,21 @@ bool ServerApp::init(uint16_t port) {
     }
     dbDispatcher_.init(&dbPool_);
 
+    // Open WAL for crash recovery; replay any entries left from a previous crash
+    if (!wal_.open("server_wal.bin")) {
+        LOG_ERROR("Server", "Failed to open WAL file");
+    } else {
+        auto walEntries = wal_.readAll();
+        if (!walEntries.empty()) {
+            LOG_WARN("Server", "WAL recovery: %zu entries found from previous crash", walEntries.size());
+            for (const auto& e : walEntries) {
+                LOG_INFO("WAL", "Recovery entry: seq=%llu type=%d char=%s val=%lld",
+                         e.sequence, static_cast<int>(e.type), e.characterId.c_str(), e.intValue);
+            }
+            wal_.truncate(); // Clear after logging
+        }
+    }
+
     // Create repositories (all use gameDbConn_ for synchronous operations)
     characterRepo_ = std::make_unique<CharacterRepository>(gameDbConn_.connection());
     inventoryRepo_ = std::make_unique<InventoryRepository>(gameDbConn_.connection());
@@ -224,6 +239,7 @@ void ServerApp::shutdown() {
         savePlayerToDB(c.clientId);
     });
 
+    wal_.close();
     authServer_.stop();
     dbPool_.shutdown();
     gameDbConn_.disconnect();
@@ -388,6 +404,7 @@ void ServerApp::tick(float dt) {
     // 5d. Auto-save and periodic maintenance
     tickAutoSave(dt);
     tickMaintenance(dt);
+    wal_.flush();
 
     // 6. Check timeouts
     auto timedOut = server_.checkTimeouts(gameTime_);
@@ -1351,6 +1368,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         category, subtype, rarity, itemLevel);
 
                     if (listingId > 0) {
+                        // WAL: record item removal before mutating inventory
+                        wal_.appendItemRemove(client->character_id, slot);
                         // Remove from inventory
                         inv->inventory.removeItem(slot);
 
@@ -1421,6 +1440,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         int64_t tax = static_cast<int64_t>(listing->priceGold * MarketConstants::TAX_RATE);
                         int64_t sellerReceived = listing->priceGold - tax;
 
+                        // WAL: record gold deduction before mutating
+                        wal_.appendGoldChange(client->character_id, -listing->priceGold);
                         // Deduct buyer gold
                         inv->inventory.removeGold(listing->priceGold);
 
@@ -1436,6 +1457,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                             boughtItem.displayName = def->displayName;
                             boughtItem.rarity = parseItemRarity(def->rarity);
                         }
+                        // WAL: record item add (slot=-1 = auto-slot; recovery matches by instanceId)
+                        wal_.appendItemAdd(client->character_id, -1, boughtItem.instanceId);
                         inv->inventory.addItem(boughtItem);
 
                         // Credit seller gold (update DB directly — seller may be offline)
@@ -1555,6 +1578,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         if (e) {
                             auto* inv = e->getComponent<InventoryComponent>();
                             if (inv) {
+                                // WAL: record gold refund before mutating
+                                wal_.appendGoldChange(client->character_id, refund);
                                 inv->inventory.addGold(refund);
                                 sendPlayerState(clientId);
                             }
@@ -1597,6 +1622,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                                                            GuildConstants::DEFAULT_MAX_MEMBERS, dbResult);
                     SvGuildUpdateMsg resp;
                     if (dbResult == GuildDbResult::Success) {
+                        // WAL: record gold deduction before mutating
+                        wal_.appendGoldChange(client->character_id, -static_cast<int64_t>(GuildConstants::CREATION_COST));
                         inv->inventory.removeGold(GuildConstants::CREATION_COST);
                         auto* guildComp = e->getComponent<GuildComponent>();
                         if (guildComp) {
@@ -2394,6 +2421,9 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                 int xp = XPCalculator::calculateXPReward(
                     es.xpReward, es.level, casterStatsComp->stats.level);
                 if (xp > 0) {
+                    // WAL: record XP gain before mutating
+                    auto* casterClient = server_.connections().findById(clientId);
+                    if (casterClient) wal_.appendXPGain(casterClient->character_id, static_cast<int64_t>(xp));
                     casterStatsComp->stats.addXP(xp);
                     LOG_INFO("Server", "Client %d gained %d XP from '%s' (base=%d, mob Lv%d, player Lv%d)",
                              clientId, xp, es.enemyName.c_str(), es.xpReward,
@@ -2630,6 +2660,9 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 int xp = XPCalculator::calculateXPReward(
                     es.xpReward, es.level, charStats->stats.level);
                 if (xp > 0) {
+                    // WAL: record XP gain before mutating
+                    auto* attackerClient = server_.connections().findById(clientId);
+                    if (attackerClient) wal_.appendXPGain(attackerClient->character_id, static_cast<int64_t>(xp));
                     charStats->stats.addXP(xp);
                     LOG_INFO("Server", "Client %d gained %d XP from '%s' (base=%d, mob Lv%d, player Lv%d)",
                              clientId, xp, es.enemyName.c_str(), es.xpReward,
@@ -2839,6 +2872,11 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         SvLootPickupMsg pickupMsg;
 
         if (dropComp->isGold) {
+            // WAL: record gold pickup before mutating
+            {
+                auto* lootClient = server_.connections().findById(clientId);
+                if (lootClient) wal_.appendGoldChange(lootClient->character_id, static_cast<int64_t>(dropComp->goldAmount));
+            }
             inv->inventory.addGold(dropComp->goldAmount);
             pickupMsg.isGold = 1;
             pickupMsg.goldAmount = dropComp->goldAmount;
@@ -2855,6 +2893,11 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             item.rolledStats = ItemStatRoller::parseRolledStats(dropComp->rolledStatsJson);
             item.rarity = parseItemRarity(dropComp->rarity);
             item.displayName = def ? def->displayName : dropComp->itemId;
+            // WAL: record item pickup before mutating (slot=-1 = auto-slot)
+            {
+                auto* lootClient = server_.connections().findById(clientId);
+                if (lootClient) wal_.appendItemAdd(lootClient->character_id, -1, item.instanceId);
+            }
             if (!inv->inventory.addItem(item)) {
                 dropComp->releaseClaim();
                 return;
@@ -3058,6 +3101,9 @@ void ServerApp::tickAutoSave(float /*dt*/) {
         uint16_t clientId = c.clientId;
         savePlayerToDBAsync(clientId);
     });
+
+    // Truncate WAL after successful auto-save cycle — keeps the file tiny
+    wal_.truncate();
 }
 
 void ServerApp::tickMaintenance(float dt) {

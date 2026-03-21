@@ -776,15 +776,19 @@ void GameApp::onInit() {
         combatSystem_ = world.addSystem<CombatActionSystem>();
         combatSystem_->camera = &camera();
         combatSystem_->onSendAttack = [this](Entity* target) {
-            if (!netClient_.isConnected()) return;
-            // Reverse lookup: find PersistentId for this entity
+            if (!netClient_.isConnected() || !target) return;
+            // Reverse lookup: find PersistentId for this entity by comparing entity handles.
+            // Entity* pointer comparison can fail if getEntity(EntityId) and getEntity(EntityHandle)
+            // resolve through different paths, so compare handles directly.
+            EntityHandle targetHandle = target->handle();
             for (const auto& [pid, handle] : ghostEntities_) {
-                auto* sc = SceneManager::instance().currentScene();
-                if (sc && sc->world().getEntity(handle) == target) {
+                if (handle == targetHandle) {
                     netClient_.sendAction(0, pid, 0);
                     return;
                 }
             }
+            LOG_WARN("Combat", "onSendAttack: target '%s' (id=%u) not found in %zu ghosts",
+                     target->name().c_str(), target->id(), ghostEntities_.size());
         };
 
         questSystem_ = world.addSystem<QuestSystem>();

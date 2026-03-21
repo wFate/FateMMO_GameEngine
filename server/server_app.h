@@ -24,6 +24,7 @@
 #include "server/db/zone_mob_state_repository.h"
 #include "server/db/definition_caches.h"
 #include "server/rate_limiter.h"
+#include "server/wal/write_ahead_log.h"
 #include "server/player_lock.h"
 #include "game/shared/gauntlet.h"
 #include "server/cache/item_definition_cache.h"
@@ -64,6 +65,9 @@ private:
     ReplicationManager replication_;
     float gameTime_ = 0.0f;
     bool running_ = false;
+
+    // Write-Ahead Log for crash recovery
+    WriteAheadLog wal_;
 
     // Auth
     AuthServer authServer_;

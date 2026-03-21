@@ -25,6 +25,8 @@ struct WalEntry {
 
 class WriteAheadLog {
 public:
+    static constexpr size_t MAX_WAL_SIZE = 16 * 1024 * 1024; // 16 MB safety cap
+
     ~WriteAheadLog() { close(); }
 
     bool open(const char* path);
