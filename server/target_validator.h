@@ -10,17 +10,16 @@ namespace fate {
 struct TargetValidator {
     // Check if a PersistentId (64-bit) corresponds to an EntityHandle in the AOI.
     // Requires the replication manager to resolve PersistentId → EntityHandle.
+    // Check if a PersistentId is visible to a client.
+    // Uses aoi.previous because aoi.current is empty between ticks
+    // (advance() clears it after each replication update).
+    // Packets are processed in poll() BEFORE replication rebuilds visibility.
     static bool isInAOI(const VisibilitySet& aoi, uint64_t targetPersistentId,
                         const ReplicationManager& replication) {
         EntityHandle target = replication.getEntityHandle(PersistentId(targetPersistentId));
         if (target.isNull()) return false;
-        return std::binary_search(aoi.current.begin(), aoi.current.end(), target);
-    }
-
-    // Legacy overload — kept for backward compat but should be replaced at call sites
-    static bool isInAOI(const VisibilitySet& aoi, uint64_t targetId) {
-        EntityHandle target(static_cast<uint32_t>(targetId));
-        return std::binary_search(aoi.current.begin(), aoi.current.end(), target);
+        // previous is sorted (computeDiff sorts it) and holds last tick's visibility
+        return std::binary_search(aoi.previous.begin(), aoi.previous.end(), target);
     }
 
     static bool isInRange(Vec2 playerPos, Vec2 targetPos,

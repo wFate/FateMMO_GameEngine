@@ -57,7 +57,7 @@ public:
         }
 
         // Specific overrides
-        configure(PacketType::CmdMove,          25.0f, 20.0f,  200);
+        configure(PacketType::CmdMove,          65.0f, 60.0f,  300); // client sends at 60fps
         configure(PacketType::CmdAction,         5.0f,  2.0f,  100);
         configure(PacketType::CmdUseSkill,       3.0f,  1.0f,   50);
         configure(PacketType::CmdChat,           3.0f,  0.33f,  30);
