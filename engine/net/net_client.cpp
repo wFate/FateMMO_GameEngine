@@ -88,6 +88,8 @@ void NetClient::disconnect() {
     waitingForAccept_ = false;
     clientId_ = 0;
     sessionToken_ = 0;
+    reliability_.reset();
+    lastHeartbeatSent_ = 0.0f;
 
     if (onDisconnected) onDisconnected();
 
@@ -303,6 +305,24 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             ByteReader payload(data + r.position(), hdr.payloadSize);
             auto msg = SvSkillResultMsg::read(payload);
             if (onSkillResult) onSkillResult(msg);
+            break;
+        }
+        case PacketType::SvSkillSync: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvSkillSyncMsg::read(payload);
+            if (onSkillSync) onSkillSync(msg);
+            break;
+        }
+        case PacketType::SvQuestSync: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvQuestSyncMsg::read(payload);
+            if (onQuestSync) onQuestSync(msg);
+            break;
+        }
+        case PacketType::SvInventorySync: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvInventorySyncMsg::read(payload);
+            if (onInventorySync) onInventorySync(msg);
             break;
         }
         default:

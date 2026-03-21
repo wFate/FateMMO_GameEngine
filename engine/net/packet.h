@@ -68,6 +68,9 @@ namespace PacketType {
     constexpr uint8_t SvDeathNotify    = 0xA0;
     constexpr uint8_t SvRespawn        = 0xA1;
     constexpr uint8_t SvSkillResult   = 0xA2;
+    constexpr uint8_t SvSkillSync     = 0xA3;
+    constexpr uint8_t SvQuestSync     = 0xA4;
+    constexpr uint8_t SvInventorySync = 0xA5;
 } // namespace PacketType
 
 // ============================================================================
