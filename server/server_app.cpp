@@ -2481,7 +2481,23 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                 targetIsBoss = true;
             }
         } else if (targetCharStats) {
-            // Target is a player
+            // Target is a player — validate PvP rules
+            bool inSameParty = false;
+            auto* casterPartyComp = caster->getComponent<PartyComponent>();
+            auto* targetPartyComp = target->getComponent<PartyComponent>();
+            if (casterPartyComp && targetPartyComp
+                && casterPartyComp->party.isInParty() && targetPartyComp->party.isInParty()
+                && casterPartyComp->party.partyId == targetPartyComp->party.partyId) {
+                inSameParty = true;
+            }
+
+            bool inSafeZone = !casterStatsComp->stats.isInPvPZone;
+
+            if (!TargetValidator::canAttackPlayer(casterStatsComp->stats, targetCharStats->stats,
+                                                  inSameParty, inSafeZone)) {
+                return;
+            }
+
             ctx.targetPlayerStats = &targetCharStats->stats;
             ctx.targetIsPlayer = true;
             targetIsPlayer = true;
@@ -3025,7 +3041,24 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         } else {
         // PvP auto-attack: target is another player
         auto* targetCharStats = target->getComponent<CharacterStatsComponent>();
-        if (targetCharStats && targetCharStats->stats.isAlive()) {
+        if (targetCharStats) {
+            // Determine party membership for PvP validation
+            bool inSameParty = false;
+            auto* attackerPartyComp = attacker->getComponent<PartyComponent>();
+            auto* targetPartyComp = target->getComponent<PartyComponent>();
+            if (attackerPartyComp && targetPartyComp
+                && attackerPartyComp->party.isInParty() && targetPartyComp->party.isInParty()
+                && attackerPartyComp->party.partyId == targetPartyComp->party.partyId) {
+                inSameParty = true;
+            }
+
+            // Determine safe zone status
+            bool inSafeZone = !charStats->stats.isInPvPZone;
+
+            // Full PvP target validation (faction, party, safe zone, PK status, alive)
+            if (!TargetValidator::canAttackPlayer(charStats->stats, targetCharStats->stats,
+                                                  inSameParty, inSafeZone)) return;
+
             // Same-scene check
             if (charStats && !charStats->stats.currentScene.empty() &&
                 charStats->stats.currentScene != targetCharStats->stats.currentScene) return;

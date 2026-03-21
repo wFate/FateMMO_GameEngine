@@ -4,6 +4,7 @@
 #include "engine/core/types.h"
 #include "game/shared/game_types.h"
 #include "game/shared/character_stats.h"
+#include "game/shared/faction.h"
 #include <algorithm>
 #include <cmath>
 
@@ -31,14 +32,34 @@ struct TargetValidator {
 
     // Reject actions from dead players (posthumous action rejection)
     static bool isAttackerAlive(const CharacterStats& stats) {
-        return !stats.isDead;
+        return stats.isAlive();
     }
 
-    // Check if attacker can hit this PvP target (faction/party/guild checks)
-    static bool canAttackPlayer(const CharacterStats& /*attacker*/,
-                                const CharacterStats& /*target*/) {
-        // Cannot attack same-faction in safe zones (future)
-        // Cannot attack self (handled elsewhere)
+    // Check if attacker can hit this PvP target (faction/party/safe-zone/PK checks)
+    static bool canAttackPlayer(const CharacterStats& attacker,
+                                const CharacterStats& target,
+                                bool inSameParty,
+                                bool inSafeZone) {
+        // Cannot attack in safe zones
+        if (inSafeZone) return false;
+
+        // Cannot attack party members
+        if (inSameParty) return false;
+
+        // Cannot attack dead/dying targets
+        if (!target.isAlive()) return false;
+
+        // Faction-based rules
+        bool sameFaction = FactionRegistry::isSameFaction(attacker.faction, target.faction);
+        if (sameFaction) {
+            // Same faction AND target is Red or Black (PK flagged) → fair game
+            if (target.pkStatus == PKStatus::Red || target.pkStatus == PKStatus::Black)
+                return true;
+            // Same faction AND target is White/Purple → cannot attack innocents
+            return false;
+        }
+
+        // Different factions (or either is None) → always allowed in PvP zones
         return true;
     }
 };
