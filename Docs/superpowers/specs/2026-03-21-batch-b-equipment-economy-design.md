@@ -12,33 +12,33 @@
 
 ### Design
 
-**Safe thresholds (100% success, no break risk):**
-- Weapons (Sword, Bow, Wand): safe to **+6**
-- Armor (Head, Armor, Gloves, Boots, Shield/SubWeapon): safe to **+4**
+**Safe threshold: +8 for all enchantable equipment (100% success, no break risk).**
 
-**Success rates and gold costs (single table indexed by target enchant level):**
+No weapon/armor distinction — all enchantable slots (weapons and armor) are safe to +8. Break risk begins at +9.
 
-Both weapons and armor use the same rates at the same +level. The safe threshold determines when break risk starts, not the success rate. Levels at or below the item's safe threshold are always 100% success.
+**Success rates and gold costs:**
 
 | Target Level | Success Rate | Gold Cost | Break Risk |
 |---|---|---|---|
-| +1 | 100% | 100 | Never |
-| +2 | 100% | 100 | Never |
-| +3 | 100% | 100 | Never |
-| +4 | 100% | 500 | Never |
-| +5 | 100% (weapons) / 70% (armor) | 500 (weapons) / 5,000 (armor) | Armor only |
-| +6 | 100% (weapons) / 50% (armor) | 500 (weapons) / 10,000 (armor) | Armor only |
-| +7 | 70% | 5,000 | Yes |
-| +8 | 50% | 10,000 | Yes |
-| +9 | 30% | 25,000 | Yes |
-| +10 | 15% | 50,000 | Yes |
-| +11 | 8% | 100,000 | Yes |
-| +12 | 5% | 200,000 | Yes |
+| +1 | 100% | 100 | No |
+| +2 | 100% | 100 | No |
+| +3 | 100% | 100 | No |
+| +4 | 100% | 500 | No |
+| +5 | 100% | 500 | No |
+| +6 | 100% | 500 | No |
+| +7 | 100% | 2,000 | No |
+| +8 | 100% | 2,000 | No |
+| +9 | 40% | 10,000 | Yes |
+| +10 | 15% | 25,000 | Yes |
+| +11 | 8% | 50,000 | Yes |
+| +12 | 5% | 100,000 | Yes |
 | +13 | 2% | 500,000 | Yes |
 | +14 | 0.5% | 1,000,000 | Yes |
 | +15 | 0.1% | 2,000,000 | Yes |
 
-Implementation: `getSuccessRate(targetLevel, safeThreshold)` returns 1.0f if `targetLevel <= safeThreshold`, otherwise looks up the rate table. `getGoldCost(targetLevel, safeThreshold)` returns the below-safe cost if `targetLevel <= safeThreshold`, otherwise the above-safe cost. `hasBreakRisk(targetLevel, safeThreshold)` returns `targetLevel > safeThreshold`.
+`SAFE_ENCHANT_LEVEL = 8` — constant, same for all equipment types.
+
+Implementation: `getSuccessRate(targetLevel)` returns 1.0f if `targetLevel <= SAFE_ENCHANT_LEVEL`, otherwise looks up the rate table. `getGoldCost(targetLevel)` indexed directly from the table. `hasBreakRisk(targetLevel)` returns `targetLevel > SAFE_ENCHANT_LEVEL`.
 
 **Break mechanic:**
 - Failure above safe threshold WITHOUT protection stone → item breaks:
@@ -59,7 +59,7 @@ Implementation: `getSuccessRate(targetLevel, safeThreshold)` returns 1.0f if `ta
 - Requires a `CmdRepair` message (separate from enchant)
 - Repair Scroll item (`item_repair_scroll`) + 50,000 gold
 - Server validates: item exists, `isBroken == true`, player has scroll, player has gold
-- Repaired item's enchant level is set to a random level between +1 and the safe threshold for its type (+6 weapons, +4 armor)
+- Repaired item's enchant level is set to a random level between +1 and +8 (the safe threshold)
 - Repair removes `isBroken` flag but item remains soulbound
 - Scroll consumed, gold deducted via `setGold(currentGold - 50000)`
 - WAL entry logged before mutation
@@ -293,17 +293,14 @@ ALTER TABLE crafting_recipes ADD COLUMN book_tier INTEGER DEFAULT 0;
 
 | Test | Validates |
 |---|---|
-| Enchant +1 to +6 weapon: 100% success, no break | Safe threshold weapons |
-| Enchant +1 to +4 armor: 100% success, no break | Safe threshold armor |
-| Enchant armor +5 fails without protection: item breaks | Armor break at +5 |
-| Enchant +7 weapon fails without protection: item breaks | Break mechanic |
-| Enchant +7 weapon fails with protection: item stays, stone consumed | Protection stone failure |
-| Enchant +7 weapon succeeds with protection: item +8, stone consumed | Protection stone success |
-| Enchant +7 weapon succeeds without protection: item +8, no break | Normal success |
+| Enchant +1 to +8: 100% success, no break | Safe threshold |
+| Enchant +9 fails without protection: item breaks | Break mechanic |
+| Enchant +9 fails with protection: item stays at +8, stone consumed | Protection stone failure |
+| Enchant +9 succeeds with protection: item +9, stone consumed | Protection stone success |
+| Enchant +9 succeeds without protection: item +9, no break | Normal success |
 | Broken item cannot be equipped | Broken state |
 | Broken item cannot be extracted | Broken extraction guard |
-| Repair scroll restores broken weapon to random +1-6 | Repair mechanic |
-| Repair scroll restores broken armor to random +1-4 | Repair armor |
+| Repair scroll restores broken item to random +1-8 | Repair mechanic |
 | Repair consumes scroll + 50k gold | Repair resource consumption |
 | +15 enchant has 0.1% success rate | Max level rate |
 | Per-item maxEnchant < 15 enforced | Per-item cap |
