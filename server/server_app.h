@@ -198,6 +198,7 @@ private:
     void processArena(uint16_t clientId, const CmdArenaMsg& msg);
     void processPetCommand(uint16_t clientId, const CmdPetMsg& msg);
     void sendPetUpdate(uint16_t clientId, Entity* player);
+    void processBank(uint16_t clientId, const CmdBankMsg& msg);
     void broadcastBossKillNotification(const EnemyStats& es,
                                        const EnemyStats::LootOwnerResult& lootResult,
                                        const std::string& scene);

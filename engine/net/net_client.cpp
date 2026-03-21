@@ -464,6 +464,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onPetUpdate) onPetUpdate(msg);
             break;
         }
+        case PacketType::SvBankResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvBankResultMsg::read(payload);
+            if (onBankResult) onBankResult(msg);
+            break;
+        }
         default:
             break;
     }

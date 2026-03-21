@@ -2851,6 +2851,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             processPetCommand(clientId, msg);
             break;
         }
+        case PacketType::CmdBank: {
+            auto msg = CmdBankMsg::read(payload);
+            processBank(clientId, msg);
+            break;
+        }
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;
@@ -5007,6 +5012,189 @@ void ServerApp::processBattlefield(uint16_t clientId, const CmdBattlefieldMsg& m
         battlefieldManager_.unregisterPlayer(entityId);
         playerEventLocks_.erase(entityId);
         LOG_INFO("Server", "Client %d unregistered from battlefield", clientId);
+    }
+}
+
+// ============================================================================
+// processBank — deposit/withdraw gold and items to/from player bank
+// ============================================================================
+void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* player = world_.getEntity(h);
+    if (!player) return;
+
+    auto* charStats = player->getComponent<CharacterStatsComponent>();
+    auto* inv       = player->getComponent<InventoryComponent>();
+    auto* bankComp  = player->getComponent<BankStorageComponent>();
+    if (!charStats || !inv || !bankComp) return;
+
+    // Dead players cannot use bank
+    if (charStats->stats.isDead) return;
+
+    // Helper: send bank result back to client
+    auto sendResult = [&](uint8_t action, bool success, const std::string& message) {
+        SvBankResultMsg res;
+        res.action   = action;
+        res.success  = success ? 1 : 0;
+        res.bankGold = bankComp->storage.getStoredGold();
+        res.message  = message;
+        uint8_t buf[256];
+        ByteWriter w(buf, sizeof(buf));
+        res.write(w);
+        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvBankResult, buf, w.size());
+    };
+
+    switch (msg.action) {
+        case 0: { // Deposit item
+            if (msg.itemId.empty() || msg.itemCount == 0) {
+                sendResult(0, false, "Invalid item");
+                return;
+            }
+
+            // Find item in inventory and validate count
+            int slot = inv->inventory.findItemById(msg.itemId);
+            if (slot < 0) {
+                sendResult(0, false, "Item not found in inventory");
+                return;
+            }
+
+            int available = inv->inventory.countItem(msg.itemId);
+            if (available < msg.itemCount) {
+                sendResult(0, false, "Not enough items in inventory");
+                return;
+            }
+
+            // Try deposit into bank storage
+            if (!bankComp->storage.depositItem(msg.itemId, msg.itemCount)) {
+                sendResult(0, false, "Bank is full");
+                return;
+            }
+
+            // Remove from inventory
+            inv->inventory.removeItemQuantity(slot, msg.itemCount);
+
+            // Persist to DB
+            bankRepo_->depositItem(client->character_id, -1, msg.itemId,
+                                   msg.itemCount, "", "", 0, 0, false);
+
+            sendResult(0, true, "Item deposited");
+            sendInventorySync(clientId);
+
+            LOG_INFO("Server", "Client %d deposited %d x %s to bank",
+                     clientId, msg.itemCount, msg.itemId.c_str());
+            break;
+        }
+        case 1: { // Withdraw item
+            if (msg.itemId.empty() || msg.itemCount == 0) {
+                sendResult(1, false, "Invalid item");
+                return;
+            }
+
+            // Check inventory has space
+            if (inv->inventory.freeSlots() <= 0) {
+                sendResult(1, false, "Inventory is full");
+                return;
+            }
+
+            // Try withdraw from bank
+            if (!bankComp->storage.withdrawItem(msg.itemId, msg.itemCount)) {
+                sendResult(1, false, "Item not in bank or insufficient quantity");
+                return;
+            }
+
+            // Add to inventory
+            ItemInstance item;
+            item.itemId = msg.itemId;
+            item.quantity = msg.itemCount;
+            inv->inventory.addItem(item);
+
+            // Persist to DB: find slot index of item in bank (or -1 for removal)
+            // Bank items are saved on-demand; withdraw removes the slot
+            bankRepo_->withdrawItem(client->character_id, -1);
+
+            sendResult(1, true, "Item withdrawn");
+            sendInventorySync(clientId);
+
+            LOG_INFO("Server", "Client %d withdrew %d x %s from bank",
+                     clientId, msg.itemCount, msg.itemId.c_str());
+            break;
+        }
+        case 2: { // Deposit gold
+            int64_t amount = msg.goldAmount;
+            if (amount <= 0) {
+                sendResult(2, false, "Invalid amount");
+                return;
+            }
+
+            // Validate player has enough gold
+            int64_t playerGold = inv->inventory.getGold();
+            if (playerGold < amount) {
+                sendResult(2, false, "Not enough gold");
+                return;
+            }
+
+            // Try deposit with 2% fee
+            if (!bankComp->storage.depositGold(amount, 0.02f)) {
+                sendResult(2, false, "Deposit failed (fee exceeds amount)");
+                return;
+            }
+
+            // Deduct from inventory using setGold (server-authoritative)
+            inv->inventory.setGold(playerGold - amount);
+
+            // WAL: log gold deduction
+            wal_.appendGoldChange(client->character_id, -amount);
+
+            // Persist bank gold to DB
+            int64_t fee = static_cast<int64_t>(std::floor(amount * 0.02f));
+            int64_t deposited = amount - fee;
+            bankRepo_->depositGold(client->character_id, deposited);
+
+            sendResult(2, true, "Gold deposited");
+            sendPlayerState(clientId);
+            sendInventorySync(clientId);
+
+            LOG_INFO("Server", "Client %d deposited %lld gold to bank (fee %lld, net %lld)",
+                     clientId, static_cast<long long>(amount),
+                     static_cast<long long>(fee),
+                     static_cast<long long>(deposited));
+            break;
+        }
+        case 3: { // Withdraw gold
+            int64_t amount = msg.goldAmount;
+            if (amount <= 0) {
+                sendResult(3, false, "Invalid amount");
+                return;
+            }
+
+            // Try withdraw from bank
+            if (!bankComp->storage.withdrawGold(amount)) {
+                sendResult(3, false, "Not enough gold in bank");
+                return;
+            }
+
+            // Add to inventory using setGold (server-authoritative)
+            int64_t playerGold = inv->inventory.getGold();
+            inv->inventory.setGold(playerGold + amount);
+
+            // Persist bank gold withdrawal to DB
+            bankRepo_->withdrawGold(client->character_id, amount);
+
+            sendResult(3, true, "Gold withdrawn");
+            sendPlayerState(clientId);
+            sendInventorySync(clientId);
+
+            LOG_INFO("Server", "Client %d withdrew %lld gold from bank",
+                     clientId, static_cast<long long>(amount));
+            break;
+        }
+        default:
+            LOG_WARN("Server", "Client %d sent unknown bank action %d", clientId, msg.action);
+            break;
     }
 }
 
