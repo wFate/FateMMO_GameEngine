@@ -84,9 +84,9 @@ Implementation: `getSuccessRate(targetLevel)` returns 1.0f if `targetLevel <= SA
 - Base multiplier: `1.0 + (enchantLevel × 0.125)`
 - +11 secret bonus: additional 5% multiplier
 - +12 secret bonus: additional 10% multiplier (stacks)
-- +12 max damage bonus (30%): still applies at +13-15
+- +12 max damage bonus (30%): applied separately to max damage only via `getWeaponMaxDamageBonus()`, unchanged
 - +15 secret bonus: additional 15% multiplier (stacks with +11, +12)
-- +15 is therefore: 2.875 base × 1.05 × 1.10 × 1.30 × 1.15 = ~4.97× weapon damage
+- +15 base multiplier: 2.875 × 1.05 × 1.10 × 1.15 = ~3.82× (max damage gets additional 30% on top via separate function)
 
 **Armor bonuses (extended to +15):**
 - +1 to +8: +1 flat armor per level (total: +8)
@@ -302,11 +302,11 @@ ALTER TABLE crafting_recipes ADD COLUMN book_tier INTEGER DEFAULT 0;
 | Broken item cannot be extracted | Broken extraction guard |
 | Repair scroll restores broken item to random +1-8 | Repair mechanic |
 | Repair consumes scroll + 50k gold | Repair resource consumption |
-| +15 enchant has 0.1% success rate | Max level rate |
+| +15 enchant has 2% success rate | Max level rate |
 | Per-item maxEnchant < 15 enforced | Per-item cap |
 | MAX_ENCHANT_LEVEL = 15 enforced | Global cap |
 | Equipped item cannot be enchanted | Equip guard |
-| Weapon damage multiplier at +15 correct (~4.97×) | Damage formula |
+| Weapon damage multiplier at +15 correct (~3.82×) | Damage formula |
 | Armor bonus at +15 = +29 | Armor formula |
 | Gold deducted via setGold pattern | Server authority |
 | WAL entry logged before enchant mutation | Crash recovery |

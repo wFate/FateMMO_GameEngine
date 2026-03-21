@@ -84,8 +84,9 @@ TEST_CASE("Gold costs for risky levels") {
 
 TEST_CASE("Weapon damage multiplier at +15") {
     float mult = EnchantSystem::getWeaponDamageMultiplier(15);
-    // 2.875 base * 1.05 (+11) * 1.10 (+12) * 1.30 (+12 max dmg) * 1.15 (+15)
-    CHECK(mult == doctest::Approx(4.97f).epsilon(0.05f));
+    // 2.875 base * 1.05 (+11) * 1.10 (+12) * 1.15 (+15) = ~3.82
+    // Note: +12 max damage bonus (30%) is separate via getWeaponMaxDamageBonus()
+    CHECK(mult == doctest::Approx(3.82f).epsilon(0.05f));
 }
 
 TEST_CASE("Armor bonus at +15 is 29") {
@@ -130,6 +131,8 @@ In `game/shared/game_types.h`, update the `EnchantConstants` namespace:
 namespace EnchantConstants {
     constexpr int MAX_ENCHANT_LEVEL = 15;
     constexpr int SAFE_ENCHANT_LEVEL = 8;
+    // REMOVED: RISKY_ENCHANT_START (was 9). Search for all references and replace
+    // with SAFE_ENCHANT_LEVEL or remove. grep for "RISKY_ENCHANT_START" across the codebase.
 }
 ```
 
@@ -171,20 +174,20 @@ Update `game/shared/enchant_system.h`:
   }
   ```
 
-- Update `getWeaponDamageMultiplier()` to add +15 secret (×1.15) and keep +12 max damage bonus (×1.30):
+- Update `getWeaponDamageMultiplier()` to add +15 secret (×1.15). Do NOT fold the +12 max damage bonus (30%) into this multiplier — that is applied separately via `getWeaponMaxDamageBonus()` to max damage only. Keep that function unchanged.
   ```cpp
   static float getWeaponDamageMultiplier(int enchantLevel) {
       if (enchantLevel <= 0) return 1.0f;
       float mult = 1.0f + (enchantLevel * 0.125f);
       if (enchantLevel >= 11) mult *= 1.05f;
       if (enchantLevel >= 12) mult *= 1.10f;
-      if (enchantLevel >= 12) mult *= 1.30f; // +12 max damage bonus
       if (enchantLevel >= 15) mult *= 1.15f; // +15 secret
       return mult;
   }
   ```
+  The +12 max damage bonus (30%) is still handled by the existing `getWeaponMaxDamageBonus()` and `calculateEnchantedDamage()`. Do not modify those functions.
 
-- Update `getSecretBonusValue()` to accept enchant level and return doubled value at +15:
+- Update `getSecretBonusValue()` to accept enchant level and return doubled value at +15. **Audit all callers** — grep for `getSecretBonusValue` and ensure they pass the correct enchant level (the default parameter of 12 preserves old behavior):
   ```cpp
   static int getSecretBonusValue(EquipmentSlot slot, int enchantLevel = 12) {
       if (enchantLevel < 12) return 0;
@@ -591,7 +594,7 @@ void ServerApp::processEnchant(uint16_t clientId, const CmdEnchantMsg& msg) {
     }
 
     // 7. Roll success
-    bool success = EnchantSystem::rollSuccess(targetLevel);
+    bool success = EnchantSystem::tryEnchant(targetLevel);
 
     if (success) {
         item.enchantLevel = targetLevel;
@@ -611,13 +614,13 @@ void ServerApp::processEnchant(uint16_t clientId, const CmdEnchantMsg& msg) {
         }
     }
 
-    recalcEquipmentBonuses(player);
+    // No recalcEquipmentBonuses — item is in inventory, not equipped
     sendPlayerState(clientId);
     sendInventorySync(clientId);
 }
 ```
 
-Note: The implementer needs to find the correct method to update an `ItemInstance` in-place within the inventory. Check `inventory.h` for a `setSlot()` or `updateSlot()` method. If none exists, the implementer may need to `removeItem(slot)` then `addItemToSlot(slot, updatedItem)`.
+**Updating items in-place:** The `Inventory` class has no `setSlot()` method. To update an item: `inv->inventory.removeItem(msg.inventorySlot)` then `inv->inventory.addItemToSlot(msg.inventorySlot, updatedItem)`. If adding a `setSlot(int index, const ItemInstance& item)` method to `inventory.h` is simpler, do that instead (just assign `slots_[index] = item`).
 
 - [ ] **Step 4: Implement processRepair()**
 
@@ -1046,8 +1049,8 @@ public:
         return result;
     }
 
-    // Called at startup to load from DB
-    // bool loadFromDatabase(pqxx::connection& conn);
+    // DB loading is in recipe_cache.cpp (server-only, not linked into fate_tests)
+    bool loadFromDatabase(pqxx::connection& conn);
 
 private:
     std::unordered_map<std::string, CachedRecipe> recipes_;
@@ -1162,9 +1165,7 @@ git commit -m "feat: load crafting recipes from database at server startup"
 
 ```cpp
 struct CmdCraftMsg {
-    uint16_t recipeId = 0; // Note: recipeId is VARCHAR in DB, consider using string
-    // Actually, re-check: DB has recipe_id VARCHAR(64). Use std::string.
-    std::string recipeId;
+    std::string recipeId; // VARCHAR(64) in DB — use string, not uint16_t
     // write/read methods using writeString/readString
 };
 
