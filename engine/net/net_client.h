@@ -61,6 +61,8 @@ public:
     std::function<void(const SvQuestSyncMsg&)> onQuestSync;
     std::function<void(const SvInventorySyncMsg&)> onInventorySync;
     std::function<void(const SvBossLootOwnerMsg&)> onBossLootOwner;
+    std::function<void(const SvEnchantResultMsg&)> onEnchantResult;
+    std::function<void(const SvRepairResultMsg&)> onRepairResult;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:
