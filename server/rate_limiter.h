@@ -73,6 +73,8 @@ public:
         configure(PacketType::CmdBank,           3.0f,  1.0f,   30);
         configure(PacketType::CmdSocketItem,      2.0f,  0.5f,   30);
         configure(PacketType::CmdStatEnchant,     2.0f,  0.5f,   30);
+        configure(PacketType::CmdUseConsumable,    3.0f,  1.0f,   30);
+        configure(PacketType::CmdRankingQuery,     2.0f,  0.5f,   20);
     }
 
     // Check a packet. Updates internal state and returns Ok/Dropped/Disconnect.

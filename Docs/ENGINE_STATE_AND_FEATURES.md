@@ -204,7 +204,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | CharacterStatsComponent | Done | Wraps CharacterStats (HP/MP/XP/level/stats/fury/death/respawn) |
 | CombatControllerComponent | Done | Target tracking, auto-attack state, attack cooldown |
 | DamageableComponent | Done | Marker for entities that can receive damage |
-| InventoryComponent | Done | Wraps Inventory (15 slots, equipment, gold). addItemToSlot rejects occupied slots. DB UNIQUE index on (character_id, slot_index) |
+| InventoryComponent | Done | Wraps Inventory (15 fixed slots, equipment, gold, nested bag contents). addItemToSlot rejects occupied slots. DB UNIQUE index on (character_id, slot_index) |
 | SkillManagerComponent | Done | Wraps SkillManager (learning, cooldowns, 4x5 bar) |
 | StatusEffectComponent | Done | Wraps StatusEffectManager (buffs, debuffs, DoTs, shields) |
 | CrowdControlComponent | Done | Wraps CrowdControlSystem (stun/freeze/root/taunt) |
@@ -342,7 +342,7 @@ See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 | Profanity Filter | `profanity_filter.h` | ~260 | ProfanityFilter (351L) | Leetspeak normalization (8 mappings), 50+ word list (EN+ES), 4 blocked phrases, 3 modes (Validate/Censor/Remove), character/guild name validation, chat filtering, word-boundary logic for short words |
 | Input Validator | `input_validator.h` | ~75 | InputValidator (76L) | Chat/Name validation modes, per-character rejection, username (3-20 alphanumeric+underscore) and password (8-128) validation, delegates to ProfanityFilter |
 | Consumable Definition | `consumable_definition.h` | ~105 | ConsumableDefinition (127L) | 16 effect types (HP/MP restore, 8 buff types, teleport, skill book, stat reset), cooldown groups, safe-zone/combat restrictions, effects description builder |
-| Bag Definition | `bag_definition.h` | ~30 | BagDefinition (23L) | Inventory expansion bags (1-20 slots per bag), rarity, validation |
+| Bag Definition | `bag_definition.h` | ~30 | BagDefinition (23L) | Nested container bags (1-10 sub-slots per bag), rarity, validation |
 | PK System | `pk_system.h/.cpp` | ~120 | PKSystem | PvP status transitions (White→Purple→Red→Black), attack/kill processing, decay timers, cooldowns |
 | Arena Manager | `arena_manager.h` | ~200 | *New* | 1v1/2v2/3v3 arena modes, queue-based matchmaking, AFK detection (30s), 3-min matches, countdown, honor rewards (Win=30/Loss=5/Tie=5), party sync, return-position tracking |
 | Battlefield Manager | `battlefield_manager.h` | ~90 | *New* | 4-faction PvP battlefield, per-faction kill tracking, personal K/D, winning faction determination, minimum 2-faction requirement, no death penalties |
@@ -403,6 +403,51 @@ classBonus    = classAdvantageMatrix[attacker][defender] // default 1.0
 ---
 
 ## Changelog
+
+### March 21, 2026 - Batch D: Server Handler Wiring (6 systems)
+
+Wired 6 remaining game systems into the server with protocol messages, command handlers, validation, and DB persistence. Test count: 698 → 758 (+60 tests). Total server command handlers: 26. Total client callbacks: 37.
+
+**Bank system:**
+- `processBank()` handler with 4 actions: deposit gold (2% fee), withdraw gold, deposit item (stacks), withdraw item
+- Validates player alive, sufficient gold/items, bank capacity (30 slots)
+- DB persistence via `bankRepo_->depositGold()`, `withdrawGold()`, `depositItem()`, `withdrawItem()`
+- 16 new tests (gold fee calculation, edge cases, item stacking, serialization roundtrips)
+
+**Socket system:**
+- `processSocketItem()` handler: validates equipped accessory (Ring/Necklace/Cloak), consumes scroll from inventory, calls `SocketSystem::trySocket()` with weighted 1-10 roll
+- Added `Inventory::setEquipment()` for writing modified items back to equipment slots
+- Recalculates equipment bonuses after socketing
+
+**Stat enchant system:**
+- `processStatEnchant()` handler: validates accessory slot (Belt/Ring/Necklace/Cloak), rolls tier 0-5 (25%/30%/25%/12%/6%/2%), applies via `StatEnchantSystem::applyStatEnchant()`
+- Tier 0 = fail (clears existing enchant), tier 1-5 = success with stat value
+
+**Consumable system:**
+- `processUseConsumable()` handler: validates item is consumable type, 5-second cooldown, applies HP/MP restore
+- Looks up item definition for heal/mana amounts, falls back to itemId pattern matching
+- WAL logs item removal, consumes 1 unit
+
+**Ranking system:**
+- `processRankingQuery()` handler: 60-second DB cache, paginated 50/page, JSON serialized
+- Queries characters table ordered by level/XP, caches in `RankingManager`
+- Supports global, per-class, honor, and guild categories
+
+**Bag expansion:**
+- Integrated into existing `processEquip()` — detects bag items via item definition cache
+- Bags reworked from slot expansion to nested containers — bag item occupies one of 15 fixed inventory slots and contains up to 10 internal sub-items
+- `addItemToBag(bagSlot, item)`, `removeItemFromBag(bagSlot, subSlot)`, `getBagItem()`, `setBagCapacity()`
+- Cannot remove a bag from inventory until its contents are emptied
+- Handles bag-for-bag swaps with net delta calculation
+- 15 new tests for expand/shrink edge cases
+
+**Server-side HP/MP regen:**
+- Added to server tick loop between timer ticking and death transitions
+- HP: 1% maxHP + equipBonusHPRegen every 10 seconds
+- MP: WIS * 0.5 + equipBonusMPRegen every 5 seconds (mana classes only)
+
+**Files:** server_app.h/cpp, net_client.h/cpp, game_messages.h, packet.h, rate_limiter.h, inventory.h/cpp, 4 new test files
+**New protocol messages:** 10 (5 Cmd + 5 Sv results)
 
 ### March 21, 2026 - Batch E: Pet System Wiring
 
@@ -1117,7 +1162,7 @@ Cross-referenced 9 research documents against the full engine codebase. Implemen
 - **Profanity Filter** (`profanity_filter.h`): Full port from `ProfanityFilter.cs`. 3 modes (Validate/Censor/Remove), leetspeak normalization (8 char mappings), 50+ word list (English + Spanish), 4 blocked phrases, 11 blocked characters. Character name validation (1-16 chars, starts with letter), guild name validation (1-20 chars), chat message filtering (max 200 chars), per-character input validation. Word-boundary logic for short words (<=3 chars).
 - **Input Validator** (`input_validator.h`): Port from `InputValidator.cs`. Chat/Name validation modes, per-character rejection, username validation (3-20 chars, alphanumeric + underscore), password validation (8-128 chars). Delegates to ProfanityFilter for name/chat validation.
 - **Consumable Definition** (`consumable_definition.h`): Port from `ConsumableDefinition.cs`. 16 effect types: RestoreHealth/Mana/Both, 8 buff types (STR/INT/DEX/VIT/ATK/DEF/Speed/EXP), Teleport, RevealMap, SkillBook, StatReset. Cooldown groups, safe-zone-only/out-of-combat-only/while-moving flags, effects description builder.
-- **Bag Definition** (`bag_definition.h`): Port from `BagDefinition.cs`. Inventory expansion bags with 1-20 slot range, rarity, validation.
+- **Bag Definition** (`bag_definition.h`): Port from `BagDefinition.cs`. Nested container bags with 1-10 internal sub-slot range, rarity, validation.
 
 ### March 18, 2026 - Socket System Port & Gauntlet Expansion
 

@@ -31,6 +31,7 @@
 #include "game/shared/battlefield_manager.h"
 #include "game/shared/arena_manager.h"
 #include "game/shared/event_scheduler.h"
+#include "game/shared/ranking_system.h"
 #include "server/cache/item_definition_cache.h"
 #include "server/cache/loot_table_cache.h"
 #include "server/cache/recipe_cache.h"
@@ -120,6 +121,9 @@ private:
     BattlefieldManager battlefieldManager_;
     EventScheduler eventScheduler_;
 
+    // Ranking cache
+    RankingManager rankingMgr_;
+
     // Arena matchmaking system
     ArenaManager arenaManager_;
     uint32_t arenaTickCounter_ = 0;
@@ -207,6 +211,7 @@ private:
     void processSocketItem(uint16_t clientId, const CmdSocketItemMsg& msg);
     void processStatEnchant(uint16_t clientId, const CmdStatEnchantMsg& msg);
     void processUseConsumable(uint16_t clientId, const CmdUseConsumableMsg& msg);
+    void processRankingQuery(uint16_t clientId, const CmdRankingQueryMsg& msg);
     void broadcastBossKillNotification(const EnemyStats& es,
                                        const EnemyStats::LootOwnerResult& lootResult,
                                        const std::string& scene);

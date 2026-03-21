@@ -3,7 +3,7 @@
 [![CI](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
 ![Lines of Code](https://img.shields.io/badge/LOC-75%2C200-brightgreen)
-![Tests](https://img.shields.io/badge/tests-708-brightgreen)
+![Tests](https://img.shields.io/badge/tests-757-brightgreen)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20iOS%20%7C%20Android%20%7C%20Linux-orange)
 
 Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, zone-based arena memory, spatial grid with zero-hash cell lookup, server-authoritative netcode with AOI replication, AEAD-encrypted UDP transport, and a built-in Unity-style editor.
@@ -26,7 +26,7 @@ Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, 
 | **VFS** | PhysicsFS (mount/overlay for asset packaging) |
 | **Profiler** | Tracy (on-demand zones, frame marks, arena tracking) |
 | **Logging** | spdlog (per-subsystem, rotating file sink, Android logcat ready) |
-| **Tests** | doctest — 698 unit tests + 10 end-to-end scenario tests |
+| **Tests** | doctest — 757 unit tests + 10 end-to-end scenario tests |
 | **Build** | CMake 3.20+ with FetchContent (zero manual dependency setup) |
 | **CI/CD** | GitHub Actions — MSVC + GCC 13 + Clang 17 matrix, headless OpenGL via Xvfb |
 
@@ -58,14 +58,19 @@ Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, 
 - **Socket System** — accessory socketing with weighted probability rolls (+1: 25% … +10: 0.5%)
 - **Stat Enchant** — accessory enchanting, 6-tier roll table
 - **Core Extraction** — equipment disassembly into 7-tier crafting cores
+- **Consumables** — HP/MP potions with server-authoritative application, 5s cooldown, WAL logged
+- **Bags** — nested containers (bag item in inventory slot holds up to 10 sub-items inside it)
 - **XP Calculator** — gray-through-red level scaling, 0%–130% XP multipliers
+- **HP/MP Regen** — server-authoritative tick (HP: 1%/10s + equip bonus, MP: WIS/5s for mana classes)
 
 </details>
 
 <details>
 <summary><b>Economy & Social</b></summary>
 
-- **Inventory** — 15 slots, 10 equipment slots, drag-and-drop, soulbound, trade locking
+- **Inventory** — 15 fixed slots, 10 equipment slots, drag-and-drop, soulbound, trade locking
+- **Bags** — nested containers inside inventory slots (up to 10 sub-slots per bag), not equipped
+- **Bank/Vault** — deposit/withdraw gold (2% fee) and items (stacking), 30 slots, DB-persisted
 - **Market** — listings with 2% tax, jackpot pool, merchant pass, offline seller credit
 - **Trade** — peer-to-peer with two-step security (Lock → Confirm → Execute)
 - **Crafting** — recipe system with 4 book tiers, ingredient validation, level/class gates
@@ -74,6 +79,7 @@ Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, 
 - **Friends** — 50 friends, 100 blocks, online status tracking
 - **Chat** — 7 channels (Map/Global/Trade/Party/Guild/Private/System), cross-faction garbling
 - **Bounty** — PvE bounty board, 48hr expiry, 2% tax, guild-mate protection, party payout split
+- **Rankings** — paginated leaderboards (global, per-class, honor, guild), 60s DB cache
 
 </details>
 
