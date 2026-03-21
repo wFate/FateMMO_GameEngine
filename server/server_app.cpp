@@ -1028,8 +1028,12 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId) {
     std::string charId = client->character_id;
 
     // ---- Dispatch to fiber worker (non-blocking) ----
-    dbDispatcher_.dispatchVoid([rec, charId, skillRecords, skillEarned, skillSpent, skillBar]
+    // Acquire per-player lock inside the fiber to serialize against concurrent
+    // game-thread mutations (trade execution, loot, market) that may modify
+    // inventory/gold while the async save is writing state.
+    dbDispatcher_.dispatchVoid([this, rec, charId, skillRecords, skillEarned, skillSpent, skillBar]
                                (pqxx::connection& conn) {
+        std::lock_guard<std::mutex> lock(playerLocks_.get(charId));
         CharacterRepository charRepo(conn);
         charRepo.saveCharacter(rec);
 
@@ -1122,6 +1126,11 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
             LOG_INFO("Server", "Cancelled trade session %d due to client %d disconnect",
                      tradeSession->sessionId, clientId);
         }
+    }
+
+    // Release per-player mutex entry (after all synchronous saves complete)
+    if (client && !client->character_id.empty()) {
+        playerLocks_.erase(client->character_id);
     }
 
     // Clean up tracking maps
@@ -1826,6 +1835,14 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     // Reload session to check if both confirmed
                     session = tradeRepo_->loadSession(session->sessionId);
                     if (session && session->bothConfirmed()) {
+                        // Acquire both player locks in consistent address order to
+                        // prevent deadlocks, then execute the trade atomically.
+                        std::mutex& lockA = playerLocks_.get(session->playerACharacterId);
+                        std::mutex& lockB = playerLocks_.get(session->playerBCharacterId);
+                        std::scoped_lock tradeLock(
+                            (&lockA < &lockB) ? lockA : lockB,
+                            (&lockA < &lockB) ? lockB : lockA
+                        );
                         // Execute trade atomically
                         try {
                             auto guard = dbPool_.acquire_guard();

@@ -24,6 +24,7 @@
 #include "server/db/zone_mob_state_repository.h"
 #include "server/db/definition_caches.h"
 #include "server/rate_limiter.h"
+#include "server/player_lock.h"
 #include "game/shared/gauntlet.h"
 #include "server/cache/item_definition_cache.h"
 #include "server/cache/loot_table_cache.h"
@@ -128,6 +129,9 @@ private:
 
     // Per-client skill cooldown tracking: clientId -> skillId -> last cast gameTime
     std::unordered_map<uint16_t, std::unordered_map<std::string, float>> skillCooldowns_;
+
+    // Per-player mutex for serializing game-thread mutations vs async fiber DB saves
+    PlayerLockMap playerLocks_;
 
     // Periodic maintenance timers
     float bossTickTimer_ = 0.0f;
