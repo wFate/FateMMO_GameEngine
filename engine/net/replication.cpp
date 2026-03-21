@@ -64,12 +64,23 @@ EntityHandle ReplicationManager::getEntityHandle(PersistentId pid) const {
 }
 
 void ReplicationManager::buildVisibility(World& world, ClientConnection& client) {
-    // Scene-based visibility: replicate ALL registered entities to the client
-    // (except the client's own player). At current scale (12 mobs + few players
-    // per zone), distance-based AOI adds complexity and causes invisible-mob bugs
-    // without meaningful bandwidth savings. Re-add AOI only when zone populations
-    // justify it (100+ entities).
+    // Scene-filtered visibility: only replicate entities that share the client's
+    // current scene. Without this filter, mobs from other zones leak through
+    // as ghost entities (visible but non-interactive).
     client.aoi.current.clear();
+
+    // Determine the client's current scene from their player entity
+    std::string clientScene;
+    if (client.playerEntityId != 0) {
+        auto pit = pidToHandle_.find(client.playerEntityId);
+        if (pit != pidToHandle_.end()) {
+            Entity* playerEntity = world.getEntity(pit->second);
+            if (playerEntity) {
+                auto* cs = playerEntity->getComponent<CharacterStatsComponent>();
+                if (cs) clientScene = cs->stats.currentScene;
+            }
+        }
+    }
 
     for (const auto& [handleValue, pid] : handleToPid_) {
         // Exclude the client's own player entity
@@ -78,6 +89,17 @@ void ReplicationManager::buildVisibility(World& world, ClientConnection& client)
         // Verify entity still exists and is active
         Entity* entity = world.getEntity(EntityHandle(handleValue));
         if (!entity || !entity->isActive()) continue;
+
+        // Scene filter: only include entities in the same scene as the client
+        if (!clientScene.empty()) {
+            // Check mob scene (EnemyStatsComponent::sceneId)
+            auto* es = entity->getComponent<EnemyStatsComponent>();
+            if (es && !es->stats.sceneId.empty() && es->stats.sceneId != clientScene) continue;
+
+            // Check player scene (CharacterStatsComponent::currentScene)
+            auto* otherCs = entity->getComponent<CharacterStatsComponent>();
+            if (otherCs && !otherCs->stats.currentScene.empty() && otherCs->stats.currentScene != clientScene) continue;
+        }
 
         client.aoi.current.push_back(EntityHandle(handleValue));
     }
