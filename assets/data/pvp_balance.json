@@ -1,0 +1,30 @@
+{
+    "pvpDamageMultiplier": 0.05,
+    "skillPvpDamageMultiplier": 0.30,
+    "classAdvantageMatrix": {
+        "warrior_vs_warrior": 1.0,
+        "warrior_vs_mage": 1.15,
+        "warrior_vs_archer": 0.85,
+        "mage_vs_warrior": 0.85,
+        "mage_vs_mage": 1.0,
+        "mage_vs_archer": 1.15,
+        "archer_vs_warrior": 1.15,
+        "archer_vs_mage": 0.85,
+        "archer_vs_archer": 1.0
+    },
+    "levelScaling": {
+        "maxBonusPercent": 30,
+        "steepness": 0.15
+    },
+    "hitRate": {
+        "perLevelRequired": 2.0,
+        "sameLevel": 0.95,
+        "lowerLevel": 0.97,
+        "penaltyPerLevelWithinCoverage": 0.05,
+        "beyondCoverageHitChances": [0.50, 0.30, 0.15, 0.05, 0.0]
+    },
+    "crit": {
+        "baseCritRate": 0.05,
+        "archerDexCritPerPoint": 0.005
+    }
+}
