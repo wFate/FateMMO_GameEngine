@@ -339,4 +339,26 @@ TEST_CASE("findItemById finds first matching slot") {
     CHECK(inv.findItemById("nonexistent") == -1);
 }
 
+// ============================================================================
+// addItemToSlot: reject occupied slot
+// ============================================================================
+
+TEST_CASE("Inventory: addItemToSlot rejects occupied slot") {
+    Inventory inv;
+    ItemInstance sword;
+    sword.itemId = "sword_01";
+    sword.instanceId = "inst_001";
+    sword.quantity = 1;
+
+    CHECK(inv.addItemToSlot(0, sword) == true);
+
+    ItemInstance shield;
+    shield.itemId = "shield_01";
+    shield.instanceId = "inst_002";
+    shield.quantity = 1;
+
+    CHECK(inv.addItemToSlot(0, shield) == false); // occupied!
+    CHECK(inv.getSlot(0).itemId == "sword_01");   // original preserved
+}
+
 } // TEST_SUITE
