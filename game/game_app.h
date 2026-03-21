@@ -20,6 +20,7 @@
 #include "game/ui/game_viewport.h"
 #include "game/shared/faction.h"
 #include "game/combat_prediction.h"
+#include "engine/audio/audio_manager.h"
 #include <memory>
 #include <unordered_map>
 
@@ -64,6 +65,7 @@ private:
     BankStorageUI bankStorageUI_;
     TeleporterUI teleporterUI_;
     NetClient netClient_;
+    AudioManager audioManager_;
     InterpolationManager ghostInterpolation_;
     std::unordered_map<uint64_t, EntityHandle> ghostEntities_; // PersistentId -> local ghost
     std::unordered_map<uint64_t, uint8_t> ghostUpdateSeqs_; // PersistentId -> last applied seq

@@ -1003,6 +1003,20 @@ void GameApp::onInit() {
             }
             LOG_INFO("Combat", "Target killed by server");
         }
+
+        // Audio feedback
+        if (isLocalAttack) {
+            if (msg.isCrit) audioManager_.playSFX("hit_crit");
+            else if (msg.damage > 0) audioManager_.playSFX("hit_melee");
+            else audioManager_.playSFX("miss");
+            if (msg.isKill) audioManager_.playSFX("kill");
+        } else if (foundTarget) {
+            auto& cam = camera();
+            audioManager_.playSFXSpatial(
+                msg.damage > 0 ? "hit_melee" : "miss",
+                targetPos.x, targetPos.y,
+                cam.position().x, cam.position().y);
+        }
     };
 
     netClient_.onPlayerState = [this](const SvPlayerStateMsg& msg) {
@@ -1064,6 +1078,7 @@ void GameApp::onInit() {
 
     chatUI_.onSendMessage = [this](uint8_t channel, const std::string& message, const std::string& targetName) {
         netClient_.sendChat(channel, message, targetName);
+        audioManager_.playSFX("chat_send");
     };
 
     netClient_.onLootPickup = [this](const SvLootPickupMsg& msg) {
@@ -1079,6 +1094,7 @@ void GameApp::onInit() {
                     char buf[128];
                     std::snprintf(buf, sizeof(buf), "Picked up %d gold.", msg.goldAmount);
                     chatUI_.addMessage(6, "[Loot]", buf, 0);
+                    audioManager_.playSFX("loot_gold");
                 } else {
                     static int lootCounter = 0;
                     char instId[32];
@@ -1092,6 +1108,7 @@ void GameApp::onInit() {
                         std::snprintf(buf, sizeof(buf), "Picked up %s x%d.",
                                       msg.displayName.c_str(), msg.quantity);
                         chatUI_.addMessage(6, "[Loot]", buf, 0);
+                        audioManager_.playSFX("loot_item");
                     } else {
                         chatUI_.addMessage(6, "[Loot]", "Inventory full!", 0);
                     }
@@ -1302,6 +1319,7 @@ void GameApp::onInit() {
         );
 
         deathOverlayUI_.onDeath(msg.xpLost, msg.honorLost, msg.respawnTimer);
+        audioManager_.playSFX("death");
         LOG_INFO("Client", "You died! Lost %d XP, %d Honor", msg.xpLost, msg.honorLost);
     };
 
@@ -1351,6 +1369,18 @@ void GameApp::onInit() {
             combatSystem_->showDamageText(targetPos, msg.damage,
                                           (msg.hitFlags & HitFlags::CRIT) != 0);
         }
+
+        // Audio feedback
+        if (msg.hitFlags & HitFlags::MISS || msg.hitFlags & HitFlags::DODGE) {
+            audioManager_.playSFX("miss");
+        } else if (msg.hitFlags & HitFlags::CRIT) {
+            audioManager_.playSFX("hit_crit");
+        } else if (msg.damage > 0) {
+            audioManager_.playSFX("hit_skill");
+        }
+        if (msg.hitFlags & HitFlags::KILLED) {
+            audioManager_.playSFX("kill");
+        }
     };
 
     netClient_.onRespawn = [this](const SvRespawnMsg& msg) {
@@ -1375,6 +1405,7 @@ void GameApp::onInit() {
         );
 
         deathOverlayUI_.respawnPending = false;
+        audioManager_.playSFX("respawn");
         LOG_INFO("Client", "Respawned at (%.0f, %.0f)", msg.spawnX, msg.spawnY);
     };
 
@@ -1485,6 +1516,9 @@ void GameApp::onInit() {
         pendingZoneTransition_ = true;
         pendingZoneScene_ = msg.targetScene;
         pendingZoneSpawn_ = {msg.spawnX, msg.spawnY};
+
+        // Start zone music (crossfades from current track)
+        audioManager_.playMusic("assets/audio/music/" + msg.targetScene + ".ogg");
     };
 
     // Auth callbacks
@@ -1503,6 +1537,14 @@ void GameApp::onInit() {
             LOG_INFO("GameApp", "Disconnected, returning to login screen");
         }
     };
+
+    // Initialize audio
+    audioManager_.init();
+    {
+        std::string sfxDir = std::string(FATE_SOURCE_DIR) + "/assets/audio/sfx";
+        int loaded = audioManager_.loadSFXDirectory(sfxDir);
+        LOG_INFO("Audio", "Loaded %d SFX from %s", loaded, sfxDir.c_str());
+    }
 
     // Initialize SDF text rendering
     SDFText::instance().init("assets/fonts/default.png", "assets/fonts/default.json");
@@ -2401,6 +2443,9 @@ void GameApp::onUpdate(float deltaTime) {
                     }
                 }
 
+                // Update audio engine (fades, streaming, etc.)
+                audioManager_.update(deltaTime);
+
                 // Interpolate ghost entity positions (skip when paused)
                 if (!editorPaused) {
                     auto* sc = SceneManager::instance().currentScene();
@@ -2855,6 +2900,7 @@ void GameApp::onShutdown() {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
+    audioManager_.shutdown();
     tilemap_.reset();
     SDFText::instance().shutdown();
     delete renderSystem_;
