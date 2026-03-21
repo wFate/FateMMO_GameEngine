@@ -1302,11 +1302,16 @@ void GameApp::onInit() {
 
         if (!foundTarget) return;
 
-        // Spawn appropriate floating text
-        if (msg.wasMiss) {
+        // Spawn appropriate floating text using hitFlags bitmask
+        if (msg.hitFlags & HitFlags::MISS) {
             combatSystem_->showMissText(targetPos);
+        } else if (msg.hitFlags & HitFlags::DODGE) {
+            combatSystem_->showMissText(targetPos); // TODO: show "Dodge" text
+        } else if (msg.hitFlags & HitFlags::BLOCKED) {
+            combatSystem_->showMissText(targetPos); // TODO: show "Blocked" text
         } else if (msg.damage > 0) {
-            combatSystem_->showDamageText(targetPos, msg.damage, msg.isCrit != 0);
+            combatSystem_->showDamageText(targetPos, msg.damage,
+                                          (msg.hitFlags & HitFlags::CRIT) != 0);
         }
     };
 
@@ -2127,6 +2132,7 @@ void GameApp::onUpdate(float deltaTime) {
                     pendingAuthToken_ = resp.authToken;
                     pendingCharName_ = resp.characterName;
                     pendingClassName_ = resp.className;
+                    pendingLevel_ = resp.level;
                     pendingSpawnPos_ = {resp.spawnX, resp.spawnY};
                     pendingSceneName_ = resp.sceneName;
                     // Connect to game server via UDP with auth token
@@ -2195,6 +2201,16 @@ void GameApp::onUpdate(float deltaTime) {
                     // Set saved position from DB (sent via auth response)
                     auto* t = player->getComponent<Transform>();
                     if (t) t->position = pendingSpawnPos_;
+
+                    // Set level from auth response (avoids Lv1 flash before SvPlayerState arrives)
+                    if (pendingLevel_ > 1) {
+                        auto* cs = player->getComponent<CharacterStatsComponent>();
+                        if (cs) {
+                            cs->stats.level = pendingLevel_;
+                            cs->stats.recalculateStats();
+                            cs->stats.recalculateXPRequirement();
+                        }
+                    }
 
                     // Disable local mob spawning — server replicates mobs
                     if (auto* spawnSys = sc->world().getSystem<SpawnSystem>()) {
