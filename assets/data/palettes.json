@@ -1,0 +1,32 @@
+{
+    "warrior_siras": {
+        "colors": ["#1a1a2e", "#16213e", "#0f3460", "#e94560",
+                   "#533483", "#2b2d42", "#8d99ae", "#edf2f4",
+                   "#d90429", "#ef233c", "#2ec4b6", "#cbf3f0",
+                   "#ffffff", "#000000", "#ffbe0b", "#fb5607"]
+    },
+    "warrior_lanos": {
+        "colors": ["#2d3436", "#636e72", "#b2bec3", "#dfe6e9",
+                   "#0984e3", "#74b9ff", "#00cec9", "#81ecec",
+                   "#d63031", "#ff7675", "#fdcb6e", "#ffeaa7",
+                   "#ffffff", "#000000", "#6c5ce7", "#a29bfe"]
+    },
+    "leather_common": {
+        "colors": ["#8B4513", "#A0522D", "#D2691E", "#DEB887",
+                   "#F4A460", "#DAA520", "#B8860B", "#CD853F",
+                   "#D2B48C", "#F5DEB3", "#FAEBD7", "#FFF8DC",
+                   "#ffffff", "#000000", "#696969", "#A9A9A9"]
+    },
+    "leather_rare": {
+        "colors": ["#191970", "#4169E1", "#1E90FF", "#87CEEB",
+                   "#ADD8E6", "#B0C4DE", "#4682B4", "#5F9EA0",
+                   "#00CED1", "#48D1CC", "#40E0D0", "#AFEEEE",
+                   "#ffffff", "#000000", "#C0C0C0", "#778899"]
+    },
+    "leather_epic": {
+        "colors": ["#4B0082", "#800080", "#9400D3", "#DA70D6",
+                   "#EE82EE", "#DDA0DD", "#BA55D3", "#9370DB",
+                   "#8A2BE2", "#7B68EE", "#6A5ACD", "#483D8B",
+                   "#ffffff", "#000000", "#FFD700", "#FFA500"]
+    }
+}
