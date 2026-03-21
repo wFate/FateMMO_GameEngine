@@ -143,6 +143,9 @@ private:
     // Per-player mutex for serializing game-thread mutations vs async fiber DB saves
     PlayerLockMap playerLocks_;
 
+    // Per-player event lock: prevents double-enrollment across Battlefield/Arena events
+    std::unordered_map<uint32_t, std::string> playerEventLocks_; // entityId -> eventType
+
     // Periodic maintenance timers
     float bossTickTimer_ = 0.0f;
     float marketExpiryTimer_ = 0.0f;

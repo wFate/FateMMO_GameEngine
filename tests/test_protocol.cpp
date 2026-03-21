@@ -423,3 +423,53 @@ TEST_CASE("SvCraftResultMsg serialization round-trip") {
     CHECK(decoded.resultQuantity == 1);
     CHECK(decoded.message == "Crafted Iron Sword");
 }
+
+TEST_CASE("CmdBattlefieldMsg round-trip") {
+    fate::CmdBattlefieldMsg orig; orig.action = 0;
+    uint8_t buf[16]; fate::ByteWriter w(buf, sizeof(buf)); orig.write(w);
+    fate::ByteReader r(buf, w.size()); auto d = fate::CmdBattlefieldMsg::read(r);
+    CHECK(d.action == 0);
+}
+
+TEST_CASE("SvBattlefieldUpdateMsg round-trip with 2 factions") {
+    fate::SvBattlefieldUpdateMsg orig;
+    orig.state = 2; orig.timeRemaining = 450;
+    orig.factionCount = 2;
+    orig.factionIds = {1, 2};
+    orig.factionKills = {15, 23};
+    orig.personalKills = 5;
+    orig.result = 0;
+    uint8_t buf[64]; fate::ByteWriter w(buf, sizeof(buf)); orig.write(w);
+    fate::ByteReader r(buf, w.size()); auto d = fate::SvBattlefieldUpdateMsg::read(r);
+    CHECK(d.state == 2);
+    CHECK(d.timeRemaining == 450);
+    CHECK(d.factionCount == 2);
+    CHECK(d.factionIds.size() == 2);
+    CHECK(d.factionIds[0] == 1);
+    CHECK(d.factionIds[1] == 2);
+    CHECK(d.factionKills[0] == 15);
+    CHECK(d.factionKills[1] == 23);
+    CHECK(d.personalKills == 5);
+}
+
+TEST_CASE("CmdArenaMsg round-trip") {
+    fate::CmdArenaMsg orig; orig.action = 0; orig.mode = 3;
+    uint8_t buf[16]; fate::ByteWriter w(buf, sizeof(buf)); orig.write(w);
+    fate::ByteReader r(buf, w.size()); auto d = fate::CmdArenaMsg::read(r);
+    CHECK(d.action == 0);
+    CHECK(d.mode == 3);
+}
+
+TEST_CASE("SvArenaUpdateMsg round-trip") {
+    fate::SvArenaUpdateMsg orig;
+    orig.state = 2; orig.timeRemaining = 120;
+    orig.teamAlive = 2; orig.enemyAlive = 1;
+    orig.result = 0; orig.honorReward = 30;
+    uint8_t buf[32]; fate::ByteWriter w(buf, sizeof(buf)); orig.write(w);
+    fate::ByteReader r(buf, w.size()); auto d = fate::SvArenaUpdateMsg::read(r);
+    CHECK(d.state == 2);
+    CHECK(d.timeRemaining == 120);
+    CHECK(d.teamAlive == 2);
+    CHECK(d.enemyAlive == 1);
+    CHECK(d.honorReward == 30);
+}
