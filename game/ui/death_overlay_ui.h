@@ -8,6 +8,7 @@ namespace fate {
 class DeathOverlayUI {
 public:
     std::function<void(uint8_t respawnType)> onRespawnRequested;
+    bool respawnPending = false;
 
     void onDeath(int32_t xpLost, int32_t honorLost, float respawnTimer);
     void render(Entity* player);

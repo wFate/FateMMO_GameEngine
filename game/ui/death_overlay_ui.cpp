@@ -117,19 +117,29 @@ void DeathOverlayUI::render(Entity* player) {
     float buttonH = 28.0f;
     float buttonX = panelMin.x + 20.0f;
 
+    // If respawn is pending (waiting for server), show status text and disable all buttons
+    bool buttonsEnabled = timerReady && !respawnPending;
+
+    if (respawnPending) {
+        y += drawCenteredText(dl, "Respawning...", cx, y, IM_COL32(179, 230, 179, 255), font, fontSize);
+        y += 4.0f;
+    }
+
     // Respawn in Town
     if (drawFgButton(dl, "Respawn in Town", ImVec2(buttonX, y), ImVec2(buttonW, buttonH),
                      IM_COL32(50, 50, 70, 220), IM_COL32(70, 70, 100, 240), IM_COL32(255, 255, 255, 255),
-                     font, fontSize, timerReady)) {
+                     font, fontSize, buttonsEnabled)) {
         if (onRespawnRequested) onRespawnRequested(0);
+        respawnPending = true;
     }
     y += buttonH + 4.0f;
 
     // Respawn at Spawn Point
     if (drawFgButton(dl, "Respawn at Spawn Point", ImVec2(buttonX, y), ImVec2(buttonW, buttonH),
                      IM_COL32(50, 50, 70, 220), IM_COL32(70, 70, 100, 240), IM_COL32(255, 255, 255, 255),
-                     font, fontSize, timerReady)) {
+                     font, fontSize, buttonsEnabled)) {
         if (onRespawnRequested) onRespawnRequested(1);
+        respawnPending = true;
     }
     y += buttonH + 4.0f;
 
@@ -146,8 +156,9 @@ void DeathOverlayUI::render(Entity* player) {
         }
         if (drawFgButton(dl, label, ImVec2(buttonX, y), ImVec2(buttonW, buttonH),
                          IM_COL32(153, 102, 25, 255), IM_COL32(179, 128, 38, 255), IM_COL32(255, 255, 255, 255),
-                         font, fontSize, phoenixCount > 0)) {
+                         font, fontSize, buttonsEnabled && phoenixCount > 0)) {
             if (onRespawnRequested) onRespawnRequested(2);
+            respawnPending = true;
         }
     }
 }

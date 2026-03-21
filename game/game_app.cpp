@@ -1296,47 +1296,15 @@ void GameApp::onInit() {
             }
         );
 
+        deathOverlayUI_.respawnPending = false;
         LOG_INFO("Client", "Respawned at (%.0f, %.0f)", msg.spawnX, msg.spawnY);
     };
 
     deathOverlayUI_.onRespawnRequested = [this](uint8_t respawnType) {
-        // Send to server (for when server-side handling is implemented)
+        // Send respawn request to server; actual respawn handled by onRespawn callback
         if (netClient_.isConnected()) {
             netClient_.sendRespawn(respawnType);
         }
-
-        // Local respawn (immediate feedback until server handles it)
-        auto* scene = SceneManager::instance().currentScene();
-        if (!scene) return;
-
-        scene->world().forEach<PlayerController, CharacterStatsComponent>(
-            [&](Entity* entity, PlayerController* ctrl, CharacterStatsComponent* sc) {
-                if (!ctrl->isLocalPlayer) return;
-                sc->stats.respawn();
-                // Restore visual
-                auto* spr = entity->getComponent<SpriteComponent>();
-                if (spr) spr->tint = Color::white();
-                auto* t = entity->getComponent<Transform>();
-                if (t) t->rotation = 0.0f;
-                auto* anim = entity->getComponent<Animator>();
-                if (anim) anim->play("idle");
-
-                if (respawnType == 1 && t) {
-                    // Map spawn: find SpawnPointComponent (not town)
-                    scene->world().forEach<SpawnPointComponent, Transform>(
-                        [&](Entity*, SpawnPointComponent* sp, Transform* spT) {
-                            if (!sp->isTownSpawn && t) {
-                                t->position = spT->position;
-                            }
-                        }
-                    );
-                }
-                // Type 0 (town) and type 2 (here) just respawn at current position for now
-                // Town zone transition will work once server handles CmdRespawn
-            }
-        );
-
-        LOG_INFO("Client", "Local respawn (type %d)", respawnType);
     };
 
     // --- NPC sub-UI callbacks ---
