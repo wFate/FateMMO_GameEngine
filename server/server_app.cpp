@@ -22,7 +22,10 @@
 #include "game/shared/honor_system.h"
 #include "game/shared/socket_system.h"
 #include "game/shared/stat_enchant_system.h"
+#include "game/shared/ranking_system.h"
+#include "game/shared/bag_definition.h"
 #include "engine/net/game_messages.h"
+#include <nlohmann/json.hpp>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -2911,6 +2914,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             processUseConsumable(clientId, msg);
             break;
         }
+        case PacketType::CmdRankingQuery: {
+            auto msg = CmdRankingQueryMsg::read(payload);
+            processRankingQuery(clientId, msg);
+            break;
+        }
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;
@@ -3996,16 +4004,69 @@ void ServerApp::processEquip(uint16_t clientId, const CmdEquipMsg& msg) {
 
     auto targetSlot = static_cast<EquipmentSlot>(msg.equipSlot);
 
+    // Helper: determine bag slot count from item definition
+    auto getBagSlots = [this](const std::string& itemId) -> int {
+        auto* def = itemDefCache_.getDefinition(itemId);
+        if (!def) return 0;
+        if (def->itemType != "Bag" && def->itemType != "bag") return 0;
+        int slots = def->getIntAttribute("slot_count", 6);
+        return std::clamp(slots, 1, 20);
+    };
+
     bool success = false;
+    int bagSlotDelta = 0;  // positive = expand, negative = shrink
+
     if (msg.action == 0) {
-        // Equip
+        // Equip: get the item before it moves from inventory to equipment
+        auto item = inv->inventory.getSlot(msg.inventorySlot);
+        int bagSlots = item.isValid() ? getBagSlots(item.itemId) : 0;
+
         success = inv->inventory.equipItem(msg.inventorySlot, targetSlot);
+        if (success && bagSlots > 0) {
+            // Check if a bag was swapped out (equipItem swaps when slot occupied)
+            // The old equipped item is now in the inventory slot
+            auto swappedOut = inv->inventory.getSlot(msg.inventorySlot);
+            int swappedBagSlots = swappedOut.isValid() ? getBagSlots(swappedOut.itemId) : 0;
+            bagSlotDelta = bagSlots - swappedBagSlots;
+        }
     } else {
-        // Unequip
+        // Unequip: check if removing a bag, validate items fit in reduced slots
+        auto equipped = inv->inventory.getEquipment(targetSlot);
+        int bagSlots = equipped.isValid() ? getBagSlots(equipped.itemId) : 0;
+
+        if (bagSlots > 0) {
+            int currentUsed = inv->inventory.usedSlots();
+            int newTotal = inv->inventory.totalSlots() - bagSlots;
+            if (newTotal < InventoryConstants::BASE_INVENTORY_SLOTS)
+                newTotal = InventoryConstants::BASE_INVENTORY_SLOTS;
+            // +1 because unequip itself puts the bag into an inventory slot
+            if (currentUsed + 1 > newTotal) {
+                // Reject: inventory too full to unequip this bag
+                SvChatMessageMsg errMsg;
+                errMsg.channel    = static_cast<uint8_t>(ChatChannel::System);
+                errMsg.senderName = "System";
+                errMsg.message    = "Clear inventory slots before unequipping bag.";
+                errMsg.faction    = 0;
+                uint8_t buf[512]; ByteWriter w(buf, sizeof(buf));
+                errMsg.write(w);
+                server_.sendTo(clientId, Channel::ReliableOrdered,
+                               PacketType::SvChatMessage, buf, w.size());
+                return;
+            }
+            bagSlotDelta = -bagSlots;
+        }
+
         success = inv->inventory.unequipItem(targetSlot);
     }
 
     if (success) {
+        // Apply bag slot expansion/shrink
+        if (bagSlotDelta > 0) {
+            inv->inventory.expandSlots(bagSlotDelta);
+        } else if (bagSlotDelta < 0) {
+            inv->inventory.shrinkSlots(-bagSlotDelta);
+        }
+
         recalcEquipmentBonuses(player);
         sendPlayerState(clientId);
         sendInventorySync(clientId);
@@ -5673,6 +5734,336 @@ void ServerApp::initGMCommands() {
     }});
 
     LOG_INFO("Server", "Registered %zu GM commands", gmCommands_.size());
+}
+
+// ============================================================================
+// processUseConsumable — consume a potion/scroll from inventory
+// ============================================================================
+void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* player = world_.getEntity(h);
+    if (!player) return;
+
+    auto* charStats = player->getComponent<CharacterStatsComponent>();
+    auto* inv       = player->getComponent<InventoryComponent>();
+    if (!charStats || !inv) return;
+
+    // Helper: send consume result back to client
+    auto sendResult = [&](bool success, const std::string& msg_str) {
+        SvConsumeResultMsg res;
+        res.success = success ? 1 : 0;
+        res.message = msg_str;
+        uint8_t buf[256];
+        ByteWriter w(buf, sizeof(buf));
+        res.write(w);
+        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvConsumeResult, buf, w.size());
+    };
+
+    // 1. Dead players cannot use consumables
+    if (charStats->stats.isDead) {
+        sendResult(false, "Cannot use items while dead");
+        return;
+    }
+
+    // 2. Get item from inventory slot
+    int slotIndex = static_cast<int>(msg.inventorySlot);
+    ItemInstance item = inv->inventory.getSlot(slotIndex);
+    if (!item.isValid()) {
+        sendResult(false, "No item in that slot");
+        return;
+    }
+
+    // 3. Determine if item is consumable using definition cache
+    bool isConsumable = false;
+    std::string subtype;
+    int healAmount = 0;
+    int manaAmount = 0;
+
+    const CachedItemDefinition* def = itemDefCache_.getDefinition(item.itemId);
+    if (def) {
+        // Check itemType from the definition cache
+        if (def->itemType != "Consumable") {
+            sendResult(false, "This item is not consumable");
+            return;
+        }
+        isConsumable = true;
+        subtype = def->subtype;
+
+        // Try to get amounts from attributes JSON, fall back to defaults
+        if (subtype == "hp_potion" || subtype == "HpPotion") {
+            healAmount = def->getIntAttribute("heal_amount", 50);
+        } else if (subtype == "mp_potion" || subtype == "MpPotion") {
+            manaAmount = def->getIntAttribute("mana_amount", 30);
+        } else if (subtype == "hp_mp_potion" || subtype == "HpMpPotion") {
+            healAmount = def->getIntAttribute("heal_amount", 50);
+            manaAmount = def->getIntAttribute("mana_amount", 30);
+        } else {
+            // Generic consumable — try attributes for any heal/mana values
+            healAmount = def->getIntAttribute("heal_amount", 0);
+            manaAmount = def->getIntAttribute("mana_amount", 0);
+        }
+    } else {
+        // No cache entry — fallback: check item ID for common patterns
+        const std::string& id = item.itemId;
+        if (id.find("hp") != std::string::npos || id.find("health") != std::string::npos ||
+            id.find("HP") != std::string::npos || id.find("Health") != std::string::npos) {
+            isConsumable = true;
+            healAmount = 50;
+        } else if (id.find("mp") != std::string::npos || id.find("mana") != std::string::npos ||
+                   id.find("MP") != std::string::npos || id.find("Mana") != std::string::npos) {
+            isConsumable = true;
+            manaAmount = 30;
+        } else if (id.find("potion_") == 0 || id.find("Potion_") == 0) {
+            isConsumable = true;
+            healAmount = 50;  // default to HP potion
+        }
+    }
+
+    if (!isConsumable) {
+        sendResult(false, "Cannot use this item");
+        return;
+    }
+
+    // 4. Check cooldown (5 seconds, reusing skillCooldowns_ map)
+    static constexpr float CONSUMABLE_COOLDOWN = 5.0f;
+    auto& cooldowns = skillCooldowns_[clientId];
+    auto cdIt = cooldowns.find(item.itemId);
+    if (cdIt != cooldowns.end()) {
+        float elapsed = gameTime_ - cdIt->second;
+        if (elapsed < CONSUMABLE_COOLDOWN) {
+            sendResult(false, "Still on cooldown");
+            return;
+        }
+    }
+
+    // 5. If no effect can be determined, reject
+    if (healAmount <= 0 && manaAmount <= 0) {
+        sendResult(false, "Cannot use this item");
+        return;
+    }
+
+    // 6. Apply effects
+    std::string effectMsg;
+    if (healAmount > 0) {
+        charStats->stats.currentHP = std::min(
+            charStats->stats.currentHP + healAmount,
+            charStats->stats.maxHP);
+        effectMsg = "Restored " + std::to_string(healAmount) + " HP";
+    }
+    if (manaAmount > 0) {
+        charStats->stats.currentMP = std::min(
+            charStats->stats.currentMP + manaAmount,
+            charStats->stats.maxMP);
+        if (!effectMsg.empty()) effectMsg += ", ";
+        effectMsg += "Restored " + std::to_string(manaAmount) + " MP";
+    }
+
+    // 7. Consume one unit of the item
+    inv->inventory.removeItemQuantity(slotIndex, 1);
+
+    // 8. Update cooldown
+    cooldowns[item.itemId] = gameTime_;
+
+    // 9. WAL log the item removal
+    wal_.appendItemRemove(client->character_id, slotIndex);
+
+    // 10. Send results
+    sendResult(true, effectMsg);
+    sendPlayerState(clientId);
+    sendInventorySync(clientId);
+
+    LOG_INFO("Server", "Client %d used consumable '%s' from slot %d: %s",
+             clientId, item.itemId.c_str(), slotIndex, effectMsg.c_str());
+}
+
+// ============================================================================
+// processRankingQuery — paginated leaderboard with 60s DB cache
+// ============================================================================
+void ServerApp::processRankingQuery(uint16_t clientId, const CmdRankingQueryMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    auto category = static_cast<RankingCategory>(msg.category);
+
+    // Validate category
+    if (msg.category > static_cast<uint8_t>(RankingCategory::Honor)) {
+        LOG_WARN("Server", "Client %d sent invalid ranking category %d", clientId, msg.category);
+        return;
+    }
+
+    // Refresh cache from DB if stale
+    if (!rankingMgr_.isCacheValid(gameTime_)) {
+        try {
+            if (gameDbConn_.isConnected()) {
+                pqxx::work txn(gameDbConn_.connection());
+
+                // --- Player rankings (global, by level/xp) ---
+                auto playerResult = txn.exec(
+                    "SELECT character_name, class_name, level, current_xp, honor, pvp_kills, pvp_deaths "
+                    "FROM characters ORDER BY level DESC, current_xp DESC LIMIT 500"
+                );
+
+                std::vector<PlayerRankingEntry> globalEntries;
+                std::vector<PlayerRankingEntry> warriorEntries;
+                std::vector<PlayerRankingEntry> mageEntries;
+                std::vector<PlayerRankingEntry> archerEntries;
+
+                int globalRank = 1;
+                int warriorRank = 1;
+                int mageRank = 1;
+                int archerRank = 1;
+
+                for (const auto& row : playerResult) {
+                    PlayerRankingEntry entry;
+                    entry.characterName = row["character_name"].as<std::string>("");
+                    entry.classType     = row["class_name"].as<std::string>("");
+                    entry.level         = row["level"].as<int>(1);
+                    entry.characterId   = globalRank; // use rank as ID placeholder
+                    entry.rankPosition  = globalRank++;
+                    globalEntries.push_back(entry);
+
+                    // Class-filtered lists
+                    if (entry.classType == "Warrior") {
+                        PlayerRankingEntry ce = entry;
+                        ce.rankPosition = warriorRank++;
+                        warriorEntries.push_back(ce);
+                    } else if (entry.classType == "Mage") {
+                        PlayerRankingEntry ce = entry;
+                        ce.rankPosition = mageRank++;
+                        mageEntries.push_back(ce);
+                    } else if (entry.classType == "Archer") {
+                        PlayerRankingEntry ce = entry;
+                        ce.rankPosition = archerRank++;
+                        archerEntries.push_back(ce);
+                    }
+                }
+
+                rankingMgr_.setPlayerRankings(RankingCategory::PlayersGlobal, std::move(globalEntries));
+                rankingMgr_.setPlayerRankings(RankingCategory::PlayersWarrior, std::move(warriorEntries));
+                rankingMgr_.setPlayerRankings(RankingCategory::PlayersMage, std::move(mageEntries));
+                rankingMgr_.setPlayerRankings(RankingCategory::PlayersArcher, std::move(archerEntries));
+
+                // --- Honor rankings ---
+                auto honorResult = txn.exec(
+                    "SELECT character_name, class_name, level, honor, pvp_kills, pvp_deaths "
+                    "FROM characters ORDER BY honor DESC LIMIT 500"
+                );
+
+                std::vector<HonorRankingEntry> honorEntries;
+                int honorRank = 1;
+                for (const auto& row : honorResult) {
+                    HonorRankingEntry entry;
+                    entry.characterName = row["character_name"].as<std::string>("");
+                    entry.classType     = row["class_name"].as<std::string>("");
+                    entry.level         = row["level"].as<int>(1);
+                    entry.honor         = row["honor"].as<int>(0);
+                    entry.pvpKills      = row["pvp_kills"].as<int>(0);
+                    entry.pvpDeaths     = row["pvp_deaths"].as<int>(0);
+                    entry.characterId   = std::to_string(honorRank);
+                    entry.rankPosition  = honorRank++;
+                    honorEntries.push_back(entry);
+                }
+                rankingMgr_.setHonorRankings(std::move(honorEntries));
+
+                // --- Guild rankings ---
+                auto guildResult = txn.exec(
+                    "SELECT g.id, g.name, g.level, "
+                    "(SELECT COUNT(*) FROM guild_members gm WHERE gm.guild_id = g.id) as member_count, "
+                    "(SELECT c.character_name FROM characters c "
+                    " JOIN guild_members gm2 ON gm2.character_id = c.id "
+                    " WHERE gm2.guild_id = g.id AND gm2.rank = 0 LIMIT 1) as owner_name "
+                    "FROM guilds g ORDER BY g.level DESC LIMIT 500"
+                );
+
+                std::vector<GuildRankingEntry> guildEntries;
+                int guildRank = 1;
+                for (const auto& row : guildResult) {
+                    GuildRankingEntry entry;
+                    entry.guildId     = row["id"].as<int>(0);
+                    entry.guildName   = row["name"].as<std::string>("");
+                    entry.guildLevel  = row["level"].as<int>(1);
+                    entry.memberCount = row["member_count"].as<int>(0);
+                    entry.ownerName   = row["owner_name"].as<std::string>("");
+                    entry.rankPosition = guildRank++;
+                    guildEntries.push_back(entry);
+                }
+                rankingMgr_.setGuildRankings(std::move(guildEntries));
+
+                txn.commit();
+                rankingMgr_.setCacheTime(gameTime_);
+
+                LOG_INFO("Server", "Ranking cache refreshed from DB");
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR("Server", "Failed to refresh ranking cache: %s", e.what());
+            // Serve stale data — better than nothing
+        }
+    }
+
+    // Build JSON response from cached data
+    nlohmann::json jsonEntries = nlohmann::json::array();
+    uint16_t totalEntries = 0;
+
+    if (category == RankingCategory::Guilds) {
+        auto entries = rankingMgr_.getGuildRankings(msg.page);
+        totalEntries = static_cast<uint16_t>(entries.size());
+        for (const auto& e : entries) {
+            jsonEntries.push_back({
+                {"rank", e.rankPosition},
+                {"guildId", e.guildId},
+                {"guildName", e.guildName},
+                {"guildLevel", e.guildLevel},
+                {"memberCount", e.memberCount},
+                {"ownerName", e.ownerName}
+            });
+        }
+    } else if (category == RankingCategory::Honor) {
+        auto entries = rankingMgr_.getHonorRankings(msg.page);
+        totalEntries = static_cast<uint16_t>(entries.size());
+        for (const auto& e : entries) {
+            jsonEntries.push_back({
+                {"rank", e.rankPosition},
+                {"characterName", e.characterName},
+                {"classType", e.classType},
+                {"level", e.level},
+                {"honor", e.honor},
+                {"pvpKills", e.pvpKills},
+                {"pvpDeaths", e.pvpDeaths},
+                {"kdRatio", e.getKDRatio()}
+            });
+        }
+    } else {
+        // PlayersGlobal, PlayersWarrior, PlayersMage, PlayersArcher
+        auto entries = rankingMgr_.getPlayerRankings(category, msg.page);
+        totalEntries = static_cast<uint16_t>(entries.size());
+        for (const auto& e : entries) {
+            jsonEntries.push_back({
+                {"rank", e.rankPosition},
+                {"characterName", e.characterName},
+                {"classType", e.classType},
+                {"level", e.level}
+            });
+        }
+    }
+
+    // Send response
+    SvRankingResultMsg result;
+    result.category     = msg.category;
+    result.page         = msg.page;
+    result.totalEntries = totalEntries;
+    result.entriesJson  = jsonEntries.dump();
+
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    result.write(w);
+    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvRankingResult, buf, w.size());
+
+    LOG_INFO("Server", "Client %d queried rankings cat=%d page=%d (%d entries)",
+             clientId, msg.category, msg.page, totalEntries);
 }
 
 } // namespace fate

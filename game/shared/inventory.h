@@ -27,6 +27,10 @@ public:
     [[nodiscard]] int freeSlots() const;
     [[nodiscard]] int64_t getGold() const;
 
+    // ---- Bag Expansion -----------------------------------------------------
+    void expandSlots(int count);
+    bool shrinkSlots(int count);
+
     // ---- Item Operations ---------------------------------------------------
     bool addItem(const ItemInstance& item);
     bool addItemToSlot(int slotIndex, const ItemInstance& item);
