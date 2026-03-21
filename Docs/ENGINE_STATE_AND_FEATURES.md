@@ -68,7 +68,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Fiber Job System | Done | Win32 fibers + minicoro (iOS/Android/Linux), 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas |
 | Graphics RHI | Done | gfx::Device + CommandList + Pipeline State Objects, GL backend, typed 32-bit handles, uniform cache |
 | Networking Transport | Done | Custom reliable UDP (Winsock2 + POSIX), ByteWriter/ByteReader (NaN/Inf rejection, string length cap, enum bounds, sticky error), 16-byte packet header, 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation, per-tick skill command cap, IPv6-ready via getaddrinfo (iOS DNS64/NAT64 compatible), protocol version handshake (rejects outdated clients with reason string) |
-| Rate Limiting | Done | Per-client, per-message-type token buckets (O(1) per packet). Configurable burst/sustained rates per command. Cumulative violation tracking with auto-disconnect threshold. Silent drop policy (never reveals limits to probers) |
+| Rate Limiting | Done | Per-client, per-message-type token buckets (O(1) per packet). Configurable burst/sustained rates per command (CmdMove: 65/60 for 60fps clients). Cumulative violation tracking with auto-disconnect threshold. Silent drop policy (never reveals limits to probers) |
 | Connection Cookies | Done | HMAC-based challenge cookie generator (FNV-1a keyed hash, 10s time-bucketed). Foundation for netcode.io-style stateless handshake to prevent spoofed-IP connection flooding |
 | Server Target Validation | Done | Every CmdAction/CmdUseSkill validates target exists in server-side AOI (binary search on sorted visibility set) and is within action range with latency tolerance |
 | Profanity Filter (Server) | Done | ProfanityFilter::filterChatMessage wired into CmdChat handler. Censor mode (asterisks) applied before broadcast. 50+ word list, leetspeak normalization, blocked phrases, max 200 char |
@@ -225,7 +225,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | CameraFollowSystem | Done | Locked to local player, smooth (no pixel-snap jitter) |
 | SpriteRenderSystem | Done | Frustum culled, depth sorted, respects sprite enabled flag |
 | GameplaySystem | Done | Ticks StatusEffects, CrowdControl, SkillManager cooldowns, HP/MP regen, PK decay, death visual (rotation + gray tint), respawn countdown, nameplates |
-| MobAISystem | Done | Ticks MobAI for all mobs, scans for players, applies movement, fires attacks |
+| MobAISystem | Done | Ticks MobAI for all mobs, threat-based targeting (top damager holds aggro, overrides nearest-player when in leash range), applies movement, fires attacks. Matches Unity ServerZoneMobAI threat swap behavior |
 | CombatActionSystem | Done | **Prediction-only** — TWOM Option B targeting, viewport-aware click/touch-to-target, auto-clear off-screen. Shows predicted damage text immediately, sends CmdAction to server. Does NOT modify mob/player HP, award XP/gold/honor, or determine kills. All state changes come from server messages (SvCombatEvent, SvPlayerState). |
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment, deferred entity creation (safe during archetype iteration) |
 | NPCInteractionSystem | Done | Click-to-interact with NPCs, viewport-aware screen-to-world, range check, dialogue open/close, click consumption (prevents combat targeting) |
@@ -373,6 +373,44 @@ classBonus    = classAdvantageMatrix[attacker][defender] // default 1.0
 ---
 
 ## Changelog
+
+### March 20, 2026 - Party Loot, Mob Aggro, WAL Integration
+
+**Party-aware loot ownership:**
+- `EnemyStats::getTopDamagerPartyAware(partyLookup)` aggregates threat table by party — party members' combined damage counts as one unit. Returns `LootOwnerResult` with `topDamagerId`, `winningGroupId`, `isParty` flag. Deterministic tie-breaking: lower entity/party ID wins on equal damage.
+- **FreeForAll mode:** Top damager in winning party owns loot, any party member can pick up.
+- **Random mode:** Each individual item/gold drop randomly assigned to a different online party member in the same scene. Per-item rolls, not per-kill. Only the assigned owner can pick up.
+- Pickup validation gated on `PartyLootMode` — same-party fallback only applies in FreeForAll, not Random.
+- 8 tests covering solo, party-beats-solo, solo-beats-party, ties, competing parties, isParty flag.
+
+**Threat-based mob aggro (matches Unity ServerZoneMobAI):**
+- MobAISystem now checks `EnemyStats::getTopThreatTarget()` after spatial grid nearest-player lookup. If the top threat is alive, same scene, and within leash range (`contactRadius`), it overrides the nearest player as the AI target.
+- Both single-threaded and parallel fiber AI paths updated. Reading `damageByAttacker` from worker fibers is safe (written only on game thread during `takeDamageFrom`).
+- Mobs now hold aggro on the highest damage dealer, not just the closest player.
+
+**WAL wired into ServerApp:**
+- 16MB safety cap on WAL file size (force-truncates with warning if exceeded).
+- Lifecycle: `open()` in init, `flush()` at end of each tick, `truncate()` after auto-save, `close()` in shutdown.
+- 9 mutation points instrumented (market buy/list/cancel, guild create, skill/auto-attack XP, loot pickup gold/item). WAL append called BEFORE each mutation.
+- Crash recovery on startup: reads/logs leftover entries, then truncates.
+
+**Test count:** 455 → 479 (24 new tests)
+
+### March 20, 2026 - Bugfixes & Auth Response Expansion
+
+**Critical bugfixes:**
+- **AOI target validation fix:** `TargetValidator::isInAOI()` was casting 64-bit PersistentId to 32-bit EntityHandle (truncation), causing every combat action to fail "not in AOI". Now resolves PersistentId → EntityHandle via ReplicationManager. Also switched to check `aoi.previous` (sorted visibility from last tick) instead of `aoi.current` (empty between ticks, cleared by `advance()`).
+- **CmdMove rate limit raised:** Token bucket for movement was burst=25/sustained=20 per second, but client sends at 60fps. Players were disconnected for "rate limit abuse" after ~5 seconds. Raised to burst=65/sustained=60.
+- **Gold doubling fix:** `addGold()` was called from auth response, pending SvPlayerState, and zone transitions — each adding on top of the previous. Replaced all with `setGold()` (server-authoritative, no accumulation). Added `Inventory::setGold()` method.
+- **Paper-doll EquipLayer alignment:** Replaced generic Cape/Legs/Body/Head/Helmet/WeaponFront layers with actual game equipment slots: Cloak/Shoes/Armor/Body/Gloves/Hat/Weapon (matches `EquipmentSlot` enum in game_types.h).
+
+**Auth response expansion:**
+- `AuthResponse` expanded from 6 to 18 fields — now sends full character snapshot: level, currentXP, gold, currentHP, maxHP, currentMP, maxMP, currentFury, honor, pvpKills, pvpDeaths, isDead, faction. Client applies all immediately at player entity creation, eliminating the Lv1 flash and blank stats on login.
+- Server `processLogin()` populates all new fields from CharacterRecord loaded from DB.
+- Client `onPlayerState` handler now applies gold via `setGold()` (was missing entirely).
+- Zone transition player recreation now applies gold from last SvPlayerState.
+
+**Known issue documented:** Server loads equipped items into inventory bag (not equipment slots) — `equipBonusHP/STR/etc.` are zero when `recalculateStats()` runs on login. MaxHP is calculated without equipment. Equipment stat application on server needs wiring.
 
 ### March 20, 2026 - Engine Polish & Production Hardening (14 issues, #21-34)
 
