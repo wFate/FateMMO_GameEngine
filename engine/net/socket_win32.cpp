@@ -125,4 +125,36 @@ int NetSocket::recvFrom(uint8_t* buffer, size_t bufferSize, NetAddress& from) {
     return result;
 }
 
+bool NetAddress::resolve(const char* host, uint16_t port, NetAddress& out) {
+    addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;     // Accept IPv4 or IPv6
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
+
+    char portStr[8];
+    snprintf(portStr, sizeof(portStr), "%u", port);
+
+    addrinfo* result = nullptr;
+    int ret = ::getaddrinfo(host, portStr, &hints, &result);
+    if (ret != 0 || !result) {
+        LOG_ERROR("Net", "getaddrinfo failed for '%s': %d", host, ret);
+        return false;
+    }
+
+    // Prefer IPv4 (server stays IPv4; iOS DNS64/NAT64 provides IPv4-mapped addresses)
+    for (auto* rp = result; rp; rp = rp->ai_next) {
+        if (rp->ai_family == AF_INET) {
+            auto* sin = reinterpret_cast<sockaddr_in*>(rp->ai_addr);
+            out.ip = ntohl(sin->sin_addr.s_addr);
+            out.port = port;
+            ::freeaddrinfo(result);
+            return true;
+        }
+    }
+
+    LOG_ERROR("Net", "No IPv4 address found for '%s'", host);
+    ::freeaddrinfo(result);
+    return false;
+}
+
 } // namespace fate
