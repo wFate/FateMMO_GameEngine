@@ -83,6 +83,7 @@ namespace PacketType {
     constexpr uint8_t CmdCraft        = 0x21;
     constexpr uint8_t CmdBattlefield  = 0x22;
     constexpr uint8_t CmdArena        = 0x23;
+    constexpr uint8_t CmdPet          = 0x24;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
@@ -91,6 +92,7 @@ namespace PacketType {
     constexpr uint8_t SvCraftResult      = 0xAB;
     constexpr uint8_t SvBattlefieldUpdate = 0xAC;
     constexpr uint8_t SvArenaUpdate       = 0xAD;
+    constexpr uint8_t SvPetUpdate         = 0xAE;
 } // namespace PacketType
 
 // ============================================================================

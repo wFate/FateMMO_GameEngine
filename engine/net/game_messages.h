@@ -695,4 +695,45 @@ struct SvArenaUpdateMsg {
     }
 };
 
+// ============================================================================
+// Client -> Server: CmdPet / Server -> Client: SvPetUpdate
+// ============================================================================
+struct CmdPetMsg {
+    uint8_t action = 0; // 0=Equip, 1=Unequip
+    int32_t petDbId = 0;
+
+    void write(ByteWriter& w) const { w.writeU8(action); w.writeI32(petDbId); }
+    static CmdPetMsg read(ByteReader& r) {
+        CmdPetMsg m; m.action = r.readU8(); m.petDbId = r.readI32(); return m;
+    }
+};
+
+struct SvPetUpdateMsg {
+    uint8_t equipped = 0;
+    std::string petDefId;
+    std::string petName;
+    uint8_t level = 0;
+    int32_t currentXP = 0;
+    int32_t xpToNextLevel = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(equipped);
+        w.writeString(petDefId);
+        w.writeString(petName);
+        w.writeU8(level);
+        w.writeI32(currentXP);
+        w.writeI32(xpToNextLevel);
+    }
+    static SvPetUpdateMsg read(ByteReader& r) {
+        SvPetUpdateMsg m;
+        m.equipped = r.readU8();
+        m.petDefId = r.readString();
+        m.petName = r.readString();
+        m.level = r.readU8();
+        m.currentXP = r.readI32();
+        m.xpToNextLevel = r.readI32();
+        return m;
+    }
+};
+
 } // namespace fate
