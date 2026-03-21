@@ -1,5 +1,6 @@
 #include "engine/net/net_server.h"
 #include "engine/net/protocol.h"
+#include "engine/net/packet_crypto.h"
 #include <cstring>
 
 namespace fate {
@@ -71,9 +72,24 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
         return;
     }
 
-    // Game packet — forward to callback
+    // Game packet — decrypt if crypto is active, then forward to callback
     if (onPacketReceived) {
-        ByteReader payload(data + r.position(), hdr.payloadSize);
+        const uint8_t* payloadData = data + r.position();
+        size_t payloadLen = hdr.payloadSize;
+
+        uint8_t decryptedBuf[MAX_PACKET_SIZE];
+        if (client->crypto.hasKeys() && !isSystemPacket(hdr.packetType) && payloadLen > 0) {
+            if (payloadLen <= PacketCrypto::TAG_SIZE) return; // too short
+            size_t decryptedSize = payloadLen - PacketCrypto::TAG_SIZE;
+            if (!client->crypto.decrypt(payloadData, payloadLen, hdr.sequence,
+                                        decryptedBuf, sizeof(decryptedBuf))) {
+                return; // tampered or wrong key — silently drop
+            }
+            payloadData = decryptedBuf;
+            payloadLen = decryptedSize;
+        }
+
+        ByteReader payload(payloadData, payloadLen);
         onPacketReceived(client->clientId, hdr.packetType, payload);
     }
 }
@@ -187,11 +203,26 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
     hdr.ackBits = ackBits;
     hdr.channel = channel;
     hdr.packetType = packetType;
-    hdr.payloadSize = static_cast<uint16_t>(payloadSize);
+
+    // Encrypt payload for non-system packets when keys are available
+    uint8_t encryptedBuf[MAX_PACKET_SIZE];
+    const uint8_t* sendPayload = payload;
+    size_t sendPayloadSize = payloadSize;
+
+    if (client.crypto.hasKeys() && !isSystemPacket(packetType) && payload && payloadSize > 0) {
+        size_t encSize = payloadSize + PacketCrypto::TAG_SIZE;
+        if (encSize <= sizeof(encryptedBuf) &&
+            client.crypto.encrypt(payload, payloadSize, hdr.sequence, encryptedBuf, sizeof(encryptedBuf))) {
+            sendPayload = encryptedBuf;
+            sendPayloadSize = encSize;
+        }
+    }
+
+    hdr.payloadSize = static_cast<uint16_t>(sendPayloadSize);
     hdr.write(w);
 
-    if (payload && payloadSize > 0) {
-        w.writeBytes(payload, payloadSize);
+    if (sendPayload && sendPayloadSize > 0) {
+        w.writeBytes(sendPayload, sendPayloadSize);
     }
 
     socket_.sendTo(buf, w.size(), client.address);

@@ -6,6 +6,7 @@
 #include "engine/net/protocol.h"
 #include "engine/net/auth_protocol.h"
 #include "engine/net/game_messages.h"
+#include "engine/net/packet_crypto.h"
 #include <functional>
 #include <string>
 
@@ -75,6 +76,7 @@ private:
     float lastHeartbeatSent_ = 0.0f;
     float lastPacketReceived_ = 0.0f;
     AuthToken authToken_ = {};
+    PacketCrypto crypto_;
 
     // Reconnect state machine
     enum class ReconnectPhase : uint8_t { None, Reconnecting, Failed };

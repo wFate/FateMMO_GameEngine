@@ -254,6 +254,16 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     target_link_libraries(fate_engine PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
+# libsodium (AEAD packet encryption) — optional, via vcpkg
+find_package(unofficial-sodium CONFIG QUIET)
+if(unofficial-sodium_FOUND)
+    target_link_libraries(fate_engine PUBLIC unofficial-sodium::sodium)
+    target_compile_definitions(fate_engine PUBLIC FATE_HAS_SODIUM=1)
+    message(STATUS "libsodium found — AEAD packet encryption enabled")
+else()
+    message(STATUS "libsodium NOT found — AEAD encryption disabled (plaintext fallback)")
+endif()
+
 if(WIN32)
     target_link_libraries(fate_engine PUBLIC ws2_32)
 endif()
