@@ -20,6 +20,7 @@ struct DroppedItemComponent {
     uint32_t ownerEntityId = 0;  // 0 = free for all
     float spawnTime = 0.0f;
     float despawnAfter = 120.0f; // 2 minutes
+    std::string sceneId;         // scene where this item was dropped
 
     uint32_t claimedBy = 0;  // 0 = unclaimed
 

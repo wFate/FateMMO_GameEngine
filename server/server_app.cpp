@@ -3345,6 +3345,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                         dropComp->rolledStatsJson = ItemStatRoller::rolledStatsToJson(drops[i].item.rolledStats);
                         dropComp->ownerEntityId = pickOwner();  // random per item
                         dropComp->spawnTime = gameTime_;
+                        dropComp->sceneId = es.sceneId;
 
                         const auto* def = itemDefCache_.getDefinition(drops[i].item.itemId);
                         if (def) dropComp->rarity = def->rarity;
@@ -3370,6 +3371,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                         goldComp->goldAmount = goldAmount;
                         goldComp->ownerEntityId = pickOwner();  // random per item
                         goldComp->spawnTime = gameTime_;
+                        goldComp->sceneId = es.sceneId;
                     }
 
                     PersistentId goldPid = PersistentId::generate(1);
@@ -3650,6 +3652,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                         dropComp->rolledStatsJson = ItemStatRoller::rolledStatsToJson(drops[i].item.rolledStats);
                         dropComp->ownerEntityId = pickOwner();  // random per item
                         dropComp->spawnTime = gameTime_;
+                        dropComp->sceneId = es.sceneId;
 
                         const auto* def = itemDefCache_.getDefinition(drops[i].item.itemId);
                         if (def) dropComp->rarity = def->rarity;
@@ -3675,6 +3678,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                         goldComp->goldAmount = goldAmount;
                         goldComp->ownerEntityId = pickOwner();  // random per item
                         goldComp->spawnTime = gameTime_;
+                        goldComp->sceneId = es.sceneId;
                     }
 
                     PersistentId goldPid = PersistentId::generate(1);
