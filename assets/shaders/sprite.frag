@@ -8,12 +8,25 @@ uniform sampler2D uTexture;
 uniform float u_pxRange;
 uniform vec2 u_atlasSize;
 uniform vec2 u_shadowOffset;
+uniform vec4 u_palette[16];
+uniform float u_paletteSize;
 
 float median(float r, float g, float b) {
     return max(min(r, g), min(max(r, g), b));
 }
 
 void main() {
+    // RenderType 5: Palette swap — grayscale index maps to palette color
+    if (v_renderType > 4.5 && v_renderType < 5.5) {
+        vec4 texel = texture(uTexture, v_uv);
+        if (texel.a < 0.01) discard;
+        int index = int(texel.r * 15.0 + 0.5); // 16-color palette (0-15)
+        index = clamp(index, 0, int(u_paletteSize) - 1);
+        fragColor = u_palette[index];
+        fragColor.a *= texel.a * v_color.a;
+        return;
+    }
+
     if (v_renderType < 0.5) {
         fragColor = texture(uTexture, v_uv) * v_color;
         if (fragColor.a < 0.01) discard;

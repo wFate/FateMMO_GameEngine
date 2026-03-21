@@ -41,12 +41,25 @@ uniform sampler2D uTexture;
 uniform float u_pxRange;
 uniform vec2 u_atlasSize;
 uniform vec2 u_shadowOffset;
+uniform vec4 u_palette[16];
+uniform float u_paletteSize;
 
 float median(float r, float g, float b) {
     return max(min(r, g), min(max(r, g), b));
 }
 
 void main() {
+    // RenderType 5: Palette swap -- grayscale index maps to palette color
+    if (v_renderType > 4.5 && v_renderType < 5.5) {
+        vec4 texel = texture(uTexture, v_uv);
+        if (texel.a < 0.01) discard;
+        int index = int(texel.r * 15.0 + 0.5); // 16-color palette (0-15)
+        index = clamp(index, 0, int(u_paletteSize) - 1);
+        fragColor = u_palette[index];
+        fragColor.a *= texel.a * v_color.a;
+        return;
+    }
+
     if (v_renderType < 0.5) {
         fragColor = texture(uTexture, v_uv) * v_color;
         if (fragColor.a < 0.01) discard;
@@ -516,6 +529,29 @@ void SpriteBatch::setBlendMode(BlendMode mode) {
             glBlendFunc(GL_DST_COLOR, GL_ZERO);
             break;
     }
+}
+
+void SpriteBatch::setPalette(const Color* colors, int count) {
+    count = std::min(count, 16);
+    shader_.bind();
+    shader_.setFloat("u_paletteSize", static_cast<float>(count));
+    for (int i = 0; i < count; ++i) {
+        std::string name = "u_palette[" + std::to_string(i) + "]";
+        shader_.setVec4(name, colors[i].r, colors[i].g, colors[i].b, colors[i].a);
+    }
+}
+
+void SpriteBatch::clearPalette() {
+    shader_.bind();
+    shader_.setFloat("u_paletteSize", 0.0f);
+}
+
+void SpriteBatch::drawPaletteSwapped(std::shared_ptr<Texture>& texture,
+                                      const SpriteDrawParams& params,
+                                      const Color* palette, int paletteSize) {
+    setPalette(palette, paletteSize);
+    drawTexturedQuad(texture->gfxHandle(), texture->id(), params, 5.0f);
+    clearPalette();
 }
 
 void SpriteBatch::createWhiteTexture() {
