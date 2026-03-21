@@ -52,6 +52,9 @@ public:
     // GameApp wires this to do a PID reverse-lookup and call netClient_.sendAction().
     std::function<void(Entity* target)> onSendAttack;
 
+    // Clear current combat target (called by GameApp when server confirms kill)
+    void serverClearTarget() { currentTargetId_ = INVALID_ENTITY; autoAttackEnabled_ = false; }
+
     void update(float dt) override {
         gameTime_ += dt;
 

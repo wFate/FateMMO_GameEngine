@@ -947,6 +947,15 @@ void GameApp::onInit() {
                 combatSystem_->showDamageText(targetPos, msg.damage, msg.isCrit != 0);
             }
         }
+
+        // Process kill: clear target, play death effects
+        if (msg.isKill && isLocalAttack) {
+            // Clear combat target so player can select a new mob
+            if (combatSystem_) {
+                combatSystem_->serverClearTarget();
+            }
+            LOG_INFO("Combat", "Target killed by server");
+        }
     };
 
     netClient_.onPlayerState = [this](const SvPlayerStateMsg& msg) {
