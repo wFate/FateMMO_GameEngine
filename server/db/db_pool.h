@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <pqxx/pqxx>
+#include "server/db/circuit_breaker.h"
 
 namespace fate {
 
@@ -80,6 +81,15 @@ public:
     /// Acquire with RAII auto-release.
     Guard acquire_guard() { return Guard(*this, acquire()); }
 
+    /// Advance the circuit breaker's notion of time (call from server tick).
+    void updateBreakerTime(double t) {
+        currentBreakerTime_ = t;
+        breaker_.updateTime(t);
+    }
+
+    /// Expose breaker state for monitoring/logging.
+    DbCircuitBreaker::State breakerState() const { return breaker_.state(); }
+
 private:
     std::unique_ptr<pqxx::connection> createConnection();
 
@@ -88,6 +98,8 @@ private:
     Config config_;
     int totalCreated_ = 0;
     bool initialized_ = false;
+    DbCircuitBreaker breaker_{5, 30.0}; // open after 5 consecutive failures, 30s cooldown
+    double currentBreakerTime_ = 0.0;  // mirrors breaker_.currentTime_ for use in acquire/release
 };
 
 } // namespace fate

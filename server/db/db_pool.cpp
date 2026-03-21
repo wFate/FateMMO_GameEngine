@@ -42,6 +42,12 @@ void DbPool::shutdown() {
 std::unique_ptr<pqxx::connection> DbPool::acquire() {
     std::lock_guard<std::mutex> lock(mutex_);
 
+    // Circuit breaker check — reject immediately if the DB is known to be down
+    if (!breaker_.allowRequest()) {
+        LOG_WARN("DbPool", "Circuit breaker OPEN — rejecting acquire request");
+        return nullptr;
+    }
+
     // Try to reuse an idle connection
     while (!idle_.empty()) {
         auto conn = std::move(idle_.back());
@@ -52,6 +58,10 @@ std::unique_ptr<pqxx::connection> DbPool::acquire() {
             if (conn && conn->is_open()) {
                 return conn;
             }
+        } catch (const pqxx::broken_connection& e) {
+            LOG_WARN("DbPool", "Idle connection broken during acquire: %s", e.what());
+            breaker_.recordFailure(currentBreakerTime_);
+            totalCreated_--;
         } catch (...) {
             totalCreated_--;  // dead connection
         }
@@ -61,6 +71,8 @@ std::unique_ptr<pqxx::connection> DbPool::acquire() {
     if (totalCreated_ < config_.maxConnections) {
         auto conn = createConnection();
         if (conn) return conn;
+        // createConnection failed — record the failure
+        breaker_.recordFailure(currentBreakerTime_);
     }
 
     // At max capacity and none idle — log error.
@@ -79,9 +91,13 @@ void DbPool::release(std::unique_ptr<pqxx::connection> conn) {
     // Check if connection is still usable
     try {
         if (conn->is_open()) {
+            breaker_.recordSuccess();
             idle_.push_back(std::move(conn));
             return;
         }
+    } catch (const pqxx::broken_connection& e) {
+        LOG_WARN("DbPool", "Broken connection on release: %s", e.what());
+        breaker_.recordFailure(currentBreakerTime_);
     } catch (...) {}
 
     // Dead connection — don't return to pool

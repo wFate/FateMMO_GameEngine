@@ -238,6 +238,9 @@ void ServerApp::tick(float dt) {
     for (auto& [id, count] : moveCountThisTick_) count = 0;
     for (auto& [id, count] : skillCommandsThisTick_) count = 0;
 
+    // Advance DB circuit breaker time so cooldowns are evaluated correctly
+    dbPool_.updateBreakerTime(static_cast<double>(gameTime_));
+
     // 1. Drain auth results first — pending sessions must be stored BEFORE
     //    poll() processes Connect packets, otherwise the token lookup fails.
     consumePendingSessions();
