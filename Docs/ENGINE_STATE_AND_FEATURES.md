@@ -4,11 +4,11 @@
 
 Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landscape gameplay with a built-in Unity-style editor for scene building, tile painting, and rapid iteration. All game systems from the Unity/C# prototype have been ported to C++ as server-authoritative logic.
 
-**Tech Stack:** C++20, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImGuizmo, ImPlot, Tracy Profiler, spdlog, nlohmann/json, stb_image, stb_truetype, Winsock2
+**Tech Stack:** C++23, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImGuizmo, ImPlot, Tracy Profiler, spdlog, nlohmann/json, stb_image, stb_truetype, Winsock2 + POSIX sockets
 
 **Build System:** CMake with FetchContent (auto-downloads all dependencies)
 
-**Target:** Windows (development), iOS (build pipeline ready, GLES 3.0), Android (future), Linux server (future)
+**Target:** Windows (development), iOS (build pipeline ready, GLES 3.0), Android (build pipeline ready, NDK r27), Linux server (future)
 
 **Codebase:** ~59,300 lines across 334 files (engine/ ~18,300 LOC, game/ ~23,600 LOC, server/ ~9,000 LOC, tests/ ~8,400 LOC)
 
@@ -35,13 +35,13 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 |---------|--------|-------|
 | SDL2 Window | Done | 1280x720 default, resizable |
 | OpenGL 3.3 Rendering | Done | Custom function loader, no GLAD dependency, shader preamble injection for GL/GLES portability |
-| Batched Sprite Renderer | Done | Sorts by depth + texture, 10k capacity, dirty-flag sort skip (hash-based) |
+| Batched Sprite Renderer | Done | Sorts by depth + texture, 10k capacity, dirty-flag sort skip (hash-based), palette swap shader (RenderType 5: indexed grayscale → 16-color palette lookup) |
 | 2D Orthographic Camera | Done | 480x270 virtual resolution (pixel art scale), 0.05x-8x zoom |
 | Archetype ECS | Done | Contiguous SoA component storage, O(matching) forEach queries, generational handles, command buffer for deferred structural changes |
 | Action Map Input | Done | 23 logical ActionIds, hardcoded WASD+arrow bindings, Gameplay/Chat context switching, 6-frame input buffer for combat skill queuing, programmatic injection API for touch/gamepad |
 | Structured Logging | Done | spdlog-backed, per-subsystem named loggers, rotating file sink (5MB/3 files), backtrace ring buffer (64 entries), callback sink for LogViewer, Android logcat ready |
 | SDF Text Rendering | Done | MTSDF uber-shader (normal/outlined/glow/shadow styles), runtime atlas generation from TTF, UTF-8 decode, resolution-independent at any zoom |
-| Tilemap System | Done | Tiled JSON loader, frustum-culled, collision layers |
+| Tilemap System | Done | Tiled JSON loader, frustum-culled, collision layers, Blob-47 autotiling (8-bit bitmask with diagonal gating, 256-entry O(1) lookup table) |
 | Coordinate System | Done | Tile-based coords (32px grid), pixel-to-tile conversion |
 | Spatial Grid (Primary) | Done | Fixed power-of-two grid, bitshift cell lookup (zero hash computation), std::span query results, std::expected error handling |
 | Spatial Hash (Fallback) | Done | Mueller-style 128px cells, counting-sort rebuild, for unbounded/sparse regions |
@@ -49,7 +49,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Memory: Frame Arena | Done | Double-buffered 64 MB, per-frame temporaries, swap at frame start |
 | Memory: Scratch Arenas | Done | Thread-local (2 per thread, 256 MB), Fleury conflict-avoidance, ScratchScope RAII |
 | Memory: Pool Allocator | Done | Free-list on arena backing, O(1) alloc/dealloc, debug occupancy bitmap |
-| Asset Hot-Reload | Done | Generational asset handles (20+12 bit), AssetRegistry with type-erased loaders, Windows file watcher (ReadDirectoryChangesW), 300ms debounced reload for textures/JSON/shaders |
+| Asset Hot-Reload | Done | Generational asset handles (20+12 bit), AssetRegistry with type-erased loaders, Windows file watcher (ReadDirectoryChangesW), 300ms debounced reload for textures/JSON/shaders, async texture loading (worker-thread decode → main-thread GPU upload via pending queue, 1x1 magenta placeholder) |
 | Allocator Visualization | Done | ImGui/ImPlot memory panel: arena watermark bars (color-coded), pool heat maps (per-block grid), frame arena timeline (300-sample ring buffer with high-water mark). Guarded by ENGINE_MEMORY_DEBUG |
 | Zone Snapshots | Done | Persistent entity IDs (64-bit), serialization skeleton for mob/boss state across zone visits |
 | Tracy Profiler | Done | On-demand profiling, named zones, frame marks, arena memory tracking |
@@ -65,15 +65,31 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Particle System | Done | CPU emitters, spawn rate/burst, gravity, per-particle lifetime/rotation/color lerp |
 | 2D Lighting | Done | Ambient + point lights, light map FBO, additive accumulation, multiplicative composite |
 | Post-Processing | Done | Bloom (extract + Gaussian blur + composite), vignette, color grading |
-| Fiber Job System | Done | Win32 fibers, 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas |
+| Fiber Job System | Done | Win32 fibers + minicoro (iOS/Android/Linux), 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas |
 | Graphics RHI | Done | gfx::Device + CommandList + Pipeline State Objects, GL backend, typed 32-bit handles, uniform cache |
-| Networking Transport | Done | Custom reliable UDP (Winsock2), ByteWriter/ByteReader (NaN/Inf rejection, string length cap, enum bounds, sticky error), 16-byte packet header, 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation, per-tick skill command cap |
-| Entity Replication | Done | AOI-driven enter/leave/update, delta compression with field bitmasks, per-entity sequence counters (stale update rejection), ghost entities, client-side position interpolation, spatial-indexed visibility |
+| Networking Transport | Done | Custom reliable UDP (Winsock2 + POSIX), ByteWriter/ByteReader (NaN/Inf rejection, string length cap, enum bounds, sticky error), 16-byte packet header, 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation, per-tick skill command cap, IPv6-ready via getaddrinfo (iOS DNS64/NAT64 compatible), protocol version handshake (rejects outdated clients with reason string) |
+| Rate Limiting | Done | Per-client, per-message-type token buckets (O(1) per packet). Configurable burst/sustained rates per command. Cumulative violation tracking with auto-disconnect threshold. Silent drop policy (never reveals limits to probers) |
+| Connection Cookies | Done | HMAC-based challenge cookie generator (FNV-1a keyed hash, 10s time-bucketed). Foundation for netcode.io-style stateless handshake to prevent spoofed-IP connection flooding |
+| Server Target Validation | Done | Every CmdAction/CmdUseSkill validates target exists in server-side AOI (binary search on sorted visibility set) and is within action range with latency tolerance |
+| Profanity Filter (Server) | Done | ProfanityFilter::filterChatMessage wired into CmdChat handler. Censor mode (asterisks) applied before broadcast. 50+ word list, leetspeak normalization, blocked phrases, max 200 char |
+| Mobile Reconnection | Done | ReconnectState machine: exponential backoff (1s→2s→4s...cap 30s), 60s timeout. Foundation for WiFi→cellular handoff recovery |
+| Entity Replication | Done | AOI-driven enter/leave/update, delta compression with 14-field bitmask (position, animFrame, flipX, currentHP, maxHP, moveState, animId, statusEffectMask, deathState, casting, targetEntityId, level, faction, equipVisuals), per-entity sequence counters (stale update rejection), distance-based tiered update frequency (Near 20Hz/Mid 7Hz/Far 4Hz/Edge 2Hz with HP-change priority override), ghost entities, client-side position interpolation, spatial-indexed visibility |
 | Client-Server Architecture | Done | Headless 20 tick/sec server (FateServer), NetClient/NetServer, session tokens, heartbeat/timeout |
 | Platform Detection | Done | Compile-time defines: FATEMMO_PLATFORM_WINDOWS/IOS/ANDROID/MACOS/LINUX, FATEMMO_MOBILE, FATEMMO_GLES |
 | Mobile Lifecycle | Done | SDL event filter for background/foreground/low-memory, virtual callbacks (onEnterBackground/Foreground/LowMemory), game loop pause on background, 4 unit tests |
 | Touch Controls | Done | TWOM-style D-pad (bottom-left), attack + 5 skill buttons (bottom-right arc), tap-to-target, multi-finger support, F4 desktop toggle, ImGui ForegroundDrawList rendering |
 | iOS Build Pipeline | Done | CMake Xcode generator, Info.plist, LaunchScreen.storyboard, GLES 3.0 context, static GL linking, asset bundling, free Apple ID signing, build-ios.sh script |
+| Android Build Pipeline | Done | Gradle wrapper project (AGP 8.5, NDK r27, arm64-v8a), SDLActivity JNI bridge, GLES 3.0 required, INTERNET permission, shared assets dir, `./gradlew installDebug` one-command deploy |
+| Write-Ahead Log | Done | Binary WAL with CRC32 per entry, batched fsync per tick. Journals gold/item/XP mutations. Replay on crash recovery. Truncate after successful DB checkpoint |
+| DB Circuit Breaker | Done | 3-state machine (Closed→Open→HalfOpen) on connection pool. 5 consecutive failures opens for 30s cooldown. Auto-probe on cooldown expiry. WAL queues writes during outage |
+| Per-Player Mutation Lock | Done | PlayerLockMap with unique_ptr<mutex> per character. Serializes concurrent inventory/gold mutations between game thread and async fiber DB operations. Consistent-order locking for two-player trades |
+| CI/CD | Done | GitHub Actions: 3-compiler matrix (MSVC windows-latest, GCC-13 ubuntu-24.04, Clang-17 ubuntu-24.04). Headless OpenGL via Xvfb + Mesa software renderer. vcpkg for Windows deps |
+| Structured Errors | Done | `EngineError` with 4 categories (Transient/Recoverable/Degraded/Fatal), `Result<T>` via `std::expected`, generic `CircuitBreaker` class (`engine/core/`) |
+| LRU Texture Cache | Done | VRAM-budgeted texture cache (512MB default), per-frame access tracking, automatic LRU eviction to 85%, skips in-use textures |
+| Paper-Doll Rendering | Done | `CharacterAppearance` with 6 equipment layers, direction-aware draw order, per-layer depth offsets, palette index per slot |
+| Precompiled Headers | Done | CMake `target_precompile_headers` for 11 STL headers on `fate_engine` target |
+| PvP Balance Config | Done | Hot-reloadable JSON (`assets/data/pvp_balance.json`) for combat tuning: PvP multipliers, 3×3 class advantage matrix, hit rate table, crit config |
+| DB Backup Script | Done | `scripts/backup_db.sh` — pg_dump custom format, 14-day retention, backup verification |
 
 ### Editor (Dear ImGui)
 | Feature | Status | Notes |
@@ -171,7 +187,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | CharacterStatsComponent | Done | Wraps CharacterStats (HP/MP/XP/level/stats/fury/death/respawn) |
 | CombatControllerComponent | Done | Target tracking, auto-attack state, attack cooldown |
 | DamageableComponent | Done | Marker for entities that can receive damage |
-| InventoryComponent | Done | Wraps Inventory (15 slots, equipment, gold) |
+| InventoryComponent | Done | Wraps Inventory (15 slots, equipment, gold). addItemToSlot rejects occupied slots. DB UNIQUE index on (character_id, slot_index) |
 | SkillManagerComponent | Done | Wraps SkillManager (learning, cooldowns, 4x5 bar) |
 | StatusEffectComponent | Done | Wraps StatusEffectManager (buffs, debuffs, DoTs, shields) |
 | CrowdControlComponent | Done | Wraps CrowdControlSystem (stun/freeze/root/taunt) |
@@ -348,13 +364,69 @@ multiplier = 1 + (enchantLevel * 0.125)
 +1: 25%, +2: 20%, +3: 17%, +4: 13%, +5: 10%
 +6: 7%, +7: 4%, +8: 2.5%, +9: 1%, +10: 0.5%
 
-// PvP damage multiplier
-pvpDamage = baseDamage * 0.05
+// PvP damage multiplier (now loaded from assets/data/pvp_balance.json)
+pvpAutoAttack = baseDamage * pvpDamageMultiplier     // default 0.05
+pvpSkill      = baseDamage * skillPvpDamageMultiplier // default 0.30
+classBonus    = classAdvantageMatrix[attacker][defender] // default 1.0
 ```
 
 ---
 
 ## Changelog
+
+### March 20, 2026 - Engine Polish & Production Hardening (14 issues, #21-34)
+
+**Rendering & art pipeline:**
+- **Palette swap shader (#21):** New RenderType 5 in `sprite.frag` — samples sprite as 4-bit grayscale index, looks up color from a 16-entry `u_palette[]` uniform array. `SpriteBatch::drawPaletteSwapped()` sets palette, draws, clears in one call. One equipment sprite × 5 rarity palettes = 5 visual variants from one asset.
+- **Paper-doll equipment compositing (#22):** `CharacterAppearance` struct with 6 `EquipLayer` slots (Cape/Legs/Body/Head/Helmet/WeaponFront). `drawPaperDoll()` renders layers in direction-aware order — north-facing swaps weapon behind body. Each layer references a spritesheet path + palette index. Per-layer 0.001 depth offsets prevent z-fighting.
+- **Blob-47 autotiling (#23):** `engine/tilemap/autotile.h` — 8-bit neighbor bitmask with diagonal gating (NE only counts if both N and E are same terrain). `applyDiagonalGating()` reduces 256 raw masks to 47 unique configurations. `autotileLookup()` uses a precomputed 256-entry O(1) table. `computeAutotileMask()` template queries neighbors via user-provided lambda. 4 tests, 262 assertions.
+
+**Networking & replication:**
+- **Expanded delta compression (#24):** `SvEntityUpdateMsg` expanded from 4 to 14 fields — added maxHP, moveState, animId, statusEffectMask, deathState, castingSkillId+castingProgress, targetEntityId, level, faction, equipVisuals (bits 4-13). Wire format is self-describing via 16-bit bitmask — only dirty fields are sent. Common position-only delta remains ~15 bytes. `buildCurrentState()` and `sendDiffs()` updated. 3 tests, 27 assertions.
+- **Tiered update frequency (#25):** Distance-based update throttling in `engine/net/update_frequency.h`. Near (≤10 tiles): every tick (20Hz). Mid (10-25 tiles): every 3rd tick (~7Hz). Far (25-40 tiles): every 5th (4Hz). Edge (40+ tiles): every 10th (2Hz). HP changes bypass throttling and always send immediately. Integrated into `ReplicationManager::sendDiffs()` with per-client distance computation. 3 tests.
+- **Protocol version handshake (#29):** Client now prepends `PROTOCOL_VERSION` byte to Connect payload (before auth token). Server validates version before allocating a client slot — rejects mismatched clients with `sendConnectReject()` and descriptive reason string. Prevents stale client builds from corrupting sessions. 2 tests.
+- **POSIX socket abstraction (#30):** `engine/net/socket_posix.cpp` implements the full `NetSocket` interface using POSIX APIs — `fcntl(O_NONBLOCK)`, `EAGAIN`/`EWOULDBLOCK` mapping, `socklen_t`. CMakeLists.txt filters `socket_posix.cpp` on Windows and `socket_win32.cpp` on POSIX. Enables iOS/Android/Linux server builds.
+
+**Asset & texture infrastructure:**
+- **LRU texture cache with VRAM budget (#27):** `TextureCache` expanded with `CacheEntry` (texture + lastAccessFrame + estimatedBytes), configurable VRAM budget (512MB default), `evictIfOverBudget()` walks entries to find oldest with refcount=1 and evicts to 85% of budget. `touch()` and `advanceFrame()` for access tracking. 4 tests.
+- **Async asset loading (#26):** `TextureCache::requestAsyncLoad()` spawns a worker thread to `stbi_load()` off the main thread, pushes decoded pixels into a mutex-guarded `PendingUpload` queue. `processUploads(maxPerFrame=2)` drains the queue on the main thread with `loadFromMemory()` GPU uploads. Inserts a 1×1 magenta placeholder immediately so the cache entry exists during decode.
+
+**Balance & configuration:**
+- **PvP balance hot-reloadable config (#28):** All combat tuning values externalized to `assets/data/pvp_balance.json` — pvpDamageMultiplier, skillPvpDamageMultiplier, 3×3 class advantage matrix (warrior/mage/archer), hit rate table, crit config. `CombatConfig::loadFromJsonString()` applies partial JSON gracefully (unset fields keep defaults). `loadFromFile()` convenience wrapper. New `skillPvpDamageMultiplier` field (0.30) separated from auto-attack multiplier (0.05). 5 tests.
+- **Structured error handling (#31):** `engine/core/engine_error.h` — `EngineError` struct with `ErrorCategory` enum (Transient/Recoverable/Degraded/Fatal), error code, message. `Result<T>` alias over `std::expected<T, EngineError>`. Factory helpers. `engine/core/circuit_breaker.h` — generic `CircuitBreaker` class (configurable failure threshold + cooldown, Closed→Open→HalfOpen state machine). 6 tests.
+
+**Build & ops:**
+- **Precompiled headers (#34):** `target_precompile_headers(fate_engine PRIVATE ...)` for 11 STL headers (vector, string, unordered_map, memory, functional, optional, variant, cstdint, algorithm, array, cmath). Excludes nlohmann/json.hpp, SDL.h, imgui.h to avoid macro conflicts.
+- **Database backup script (#33):** `scripts/backup_db.sh` — pg_dump in custom format (-Fc), supports DATABASE_URL or individual PGHOST/PGPORT/PGDATABASE vars, 14-day retention pruning via `find -mtime`, backup verification via `pg_restore --list`. Cron-ready.
+- **RmlUi migration plan (#32):** `docs/rmlui_migration_plan.md` — 4-phase plan: (1) integrate RmlUi alongside ImGui, (2) port core game UI (inventory/chat/HUD/dialogue), (3) advanced UI (trade/quest/map), (4) gate ImGui behind `#ifdef FATEMMO_EDITOR` in release builds.
+
+### March 20, 2026 - Server Hardening & Infrastructure (14 tasks, 455+ tests)
+
+**Network security hardening:**
+- **Token bucket rate limiting:** Per-client, per-message-type rate limiters (`server/rate_limiter.h`). Configurable burst capacity and sustained rate per packet type (e.g., CmdUseSkill: burst=3, sustained=1/sec; CmdMove: burst=25, sustained=20/sec). Cumulative violation tracking with auto-disconnect after threshold. Wired as first check in `onPacketReceived()` before any payload parsing. 7 tests.
+- **Server-side profanity filter:** `ProfanityFilter::filterChatMessage()` now called in CmdChat handler with Censor mode (asterisks). Empty/oversized messages dropped. 50+ word list with leetspeak normalization applied server-side before broadcast. 5 tests.
+- **Connection cookies:** `ConnectionCookieGenerator` (`engine/net/connection_cookie.h`) uses FNV-1a keyed HMAC with 10-second time buckets. Foundation for netcode.io-style stateless challenge-response handshake preventing spoofed-IP flooding. 5 tests.
+- **Server-side AOI target validation:** `TargetValidator` (`server/target_validator.h`) checks every CmdAction and CmdUseSkill target against the server-maintained AOI visibility set (binary search on sorted vector) and validates distance within action range + latency tolerance. Prevents ghost entity targeting and entity ID enumeration. 2 tests.
+
+**Inventory & economy safety:**
+- **addItemToSlot() overwrite fix:** `Inventory::addItemToSlot()` now rejects writes to occupied slots (`slots_[slotIndex].isValid()` check). Previously silently overwrote, enabling item destruction. Migration 006 adds `UNIQUE` index on `(character_id, slot_index)` as database-level safeguard. 1 test.
+- **Loot pickup atomicity:** `DroppedItemComponent` gains `tryClaim(entityId)` / `releaseClaim()`. Server pickup handler calls `tryClaim()` before inventory mutation — second caller in same tick gets rejected. Claim released if inventory full so item stays on ground. Prevents TOCTOU item duplication. 3 tests.
+- **Per-player mutation locks:** `PlayerLockMap` (`server/player_lock.h`) provides `unique_ptr<mutex>` per character ID. Serializes concurrent inventory/gold mutations between game thread and async fiber DB operations. Two-player trades acquire both locks in consistent address order to prevent deadlocks. Wired into `savePlayerToDBAsync()`, `onClientDisconnected()`, and trade execution. 4 tests.
+
+**Database resilience:**
+- **Write-ahead log:** `WriteAheadLog` (`server/wal/write_ahead_log.h/.cpp`) journals critical mutations (gold, items, XP) in a binary format with CRC32 per entry. Batched `fsync()` per tick. On crash recovery, replays entries beyond last DB checkpoint. `truncate()` after successful auto-save. 4 tests.
+- **DB circuit breaker:** `DbCircuitBreaker` (`server/db/circuit_breaker.h`) — 3-state machine (Closed→Open→HalfOpen). Opens after 5 consecutive `pqxx::broken_connection` failures, rejects all DB requests for 30s cooldown, then allows one probe. Integrated into `DbPool::acquire()` and `release()`. ServerApp ticks breaker time each frame. WAL captures mutations during outage. 6 tests.
+
+**Cross-platform & mobile:**
+- **IPv6 via getaddrinfo:** `NetAddress::resolve()` (`engine/net/socket.h`) uses `getaddrinfo()` with `AF_UNSPEC` for hostname resolution. Both `NetClient::connect()` and `connectWithToken()` now use it instead of manual dotted-quad parsing. iOS DNS64/NAT64 compatible (mandatory for App Store since 2016). 2 tests.
+- **Cross-platform fibers:** Vendored `minicoro.h` (v0.2.0, single-header stackful coroutines). `engine/job/fiber_minicoro.cpp` implements the `fiber::` API on non-Windows using minicoro's asymmetric resume/yield model. CMake conditionally selects Win32 or minicoro backend. Supports Windows x64, macOS/iOS ARM64, Android ARM64, Linux x64.
+- **Mobile reconnection state machine:** `ReconnectState` (`engine/net/reconnect_state.h`) — exponential backoff (1s, 2s, 4s... cap 30s), 60-second total timeout. Foundation for automatic WiFi→cellular handoff recovery. 5 tests.
+- **Android build pipeline:** Complete Gradle project in `android/` — AGP 8.5, NDK r27 (LLVM 18, C++20), arm64-v8a, minSdk 24, GLES 3.0 required. `FateActivity` extends `SDLActivity`, loads `libmain.so` via JNI. JNI `CMakeLists.txt` wraps the engine's root CMake. Shared assets directory. `./gradlew installDebug` one-command deploy.
+
+**CI/CD:**
+- **GitHub Actions:** `.github/workflows/ci.yml` — 3-job matrix: MSVC on windows-latest (vcpkg for OpenSSL/libpq), GCC-13 on ubuntu-24.04, Clang-17 on ubuntu-24.04. Linux jobs run headless via Xvfb + Mesa software renderer with `MESA_GL_VERSION_OVERRIDE=3.3`. Build caching via actions/cache.
+
+**Test count:** 400 → 455+ (55+ new tests, 3100+ assertions)
 
 ### March 20, 2026 - Server Authority Overhaul, Replication Fixes, Session Management
 
@@ -649,7 +721,7 @@ pvpDamage = baseDamage * 0.05
 - **Entity Type 3 Protocol**: Extended `SvEntityEnterMsg` with conditional item fields when `entityType == 3`. New `SvLootPickupMsg` (packet 0x98) notifies client on pickup. Backward compatible — existing entity types unchanged.
 - **Replication**: Dropped items replicated via AOI as entity type 3. `buildEnterMessage()` populates item fields from `DroppedItemComponent`.
 - **Server Loot Pipeline** (`server_app.cpp`): On mob kill — `takeDamageFrom()` tracks per-attacker damage, top damager gets loot ownership. `LootTableCache::rollLoot()` generates drops, spawned as ground entities with grid offset + jitter. Gold rolls separately. All registered with `ReplicationManager`.
-- **Pickup System**: `CmdAction(actionType=3)` targets a dropped item's PersistentId. Server validates proximity (48px), loot ownership, adds item/gold to inventory, sends `SvLootPickupMsg`, destroys entity.
+- **Pickup System**: `CmdAction(actionType=3)` targets a dropped item's PersistentId. Server validates proximity (48px), loot ownership, atomic claim via `tryClaim()` (prevents TOCTOU duplication), adds item/gold to inventory, sends `SvLootPickupMsg`, destroys entity. Claim released if inventory full.
 - **Despawn**: Server tick iterates all `DroppedItemComponent` entities, destroys any past `despawnAfter` (120s default).
 - **Boss Spawn Points** (`game/components/boss_spawn_point_component.h`): Fixed-position boss spawning from designer-specified coordinate lists. Respawns at different coordinate after death. 0.25s tick interval.
 - **Boss Death Persistence** (`server/db/zone_mob_state_repository.h/.cpp`): Saves boss death state to `zone_mob_deaths` table. Restores respawn timers on server restart. Auto-cleanup of expired records.
