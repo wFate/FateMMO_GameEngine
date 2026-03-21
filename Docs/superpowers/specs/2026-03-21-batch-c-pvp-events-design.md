@@ -42,8 +42,8 @@ Idle → Signup → Active → Idle (cycle repeats)
 - Events can query state: `getState(eventId)`, `getTimeRemaining(eventId)`
 
 **Interaction with other systems:**
-- Arena checks `scheduler_.isPlayerInEvent(playerId)` to prevent double-registration
-- Gauntlet checks the same
+- Arena and battlefield check a central `PlayerEventLock` map (`std::unordered_map<uint32_t, std::string>` mapping playerId → eventType) on ServerApp to prevent double-registration across all events
+- Gauntlet keeps its own internal timing for now (tech debt — could migrate to EventScheduler in a future session)
 
 ### Files
 - Create: `game/shared/event_scheduler.h` — state machine, event config, registration
@@ -70,39 +70,45 @@ No faction PvP event. Need a recurring event where Siras and Lanos fight with tr
 **Active phase (15 min):**
 - All registered players teleported to "battlefield" scene
 - No PK status changes during battlefield — all PvP is free, no penalties
-- Kill tracking: `siras_kills` vs `lanos_kills` counters
+- Kill tracking: per-faction kill counters (`std::unordered_map<Faction, int>`) — supports all 4 factions (Xyros, Fenor, Zethos, Solis)
 - Player stats tracked: personal kills, deaths
-- On death: respawn in battlefield after 5 seconds (no XP loss, no honor loss)
-- Players who disconnect during battlefield forfeit (removed from event)
+- On death: respawn in battlefield after 5 seconds (no XP loss, no honor loss). Respawn timer communicated via existing `SvDeathNotifyMsg.respawnTimer` with `DeathSource::Battlefield`.
+- Players who disconnect during battlefield are removed from the event. Their kills still count for their faction (already recorded).
+- `onClientDisconnected` in `server_app.cpp` must call `battlefieldManager_.removePlayer(clientId)`.
+- Minimum player count: battlefield requires at least 2 players from different factions to start. If not met at event start, event is cancelled and signup refunded.
 
 **End phase:**
-- Faction with more kills wins. If tied, both factions get loser rewards.
+- Faction with most kills wins. If multiple factions tied for most, all tied factions get winner rewards.
 - Winners: 3× Pendant of Honor + 20 honor
 - Losers: 1× Pendant of Honor + 5 honor
 - All players teleported back to original scene + position
-- System chat: "[Faction] wins the Battlefield! (Siras: X kills, Lanos: Y kills)"
+- System chat: "[Faction] wins the Battlefield! (Xyros: X, Fenor: Y, Zethos: Z, Solis: W)" — only shows factions that participated.
 
 **BattlefieldManager** — server component that handles all battlefield logic:
 - `registerPlayer(clientId, faction)` / `unregisterPlayer(clientId)`
-- `onPlayerKill(killerId, victimId)` — increment faction kills
+- `onPlayerKill(killerId, victimId)` — increment killer's faction kill count
+- `removePlayer(clientId)` — cleanup on disconnect
 - `getState()` — current phase info for UI
+- `hasMinimumPlayers()` — at least 2 players from 2+ different factions
 
 **Network messages:**
-- `CmdBattlefield` (client → server):
+- `CmdBattlefield` (client → server) — packet `0x22`:
   - `uint8_t action` — 0=Register, 1=Unregister
-- `SvBattlefieldUpdate` (server → client):
+- `SvBattlefieldUpdate` (server → client) — packet `0xAC`:
   - `uint8_t state` — 0=Idle, 1=Signup, 2=Active, 3=Ended
-  - `uint16_t timeRemaining` — seconds left in current phase
-  - `uint16_t sirasKills`
-  - `uint16_t lanosKills`
+  - `uint16_t timeRemaining` — seconds left in current phase (not sent during idle)
+  - `uint8_t factionCount` — number of participating factions (1-4)
+  - `uint8_t[] factionIds` — faction enum values (factionCount entries)
+  - `uint16_t[] factionKills` — kill counts per faction (factionCount entries)
   - `uint16_t personalKills`
   - `uint8_t result` — 0=ongoing, 1=win, 2=loss, 3=tie
 
 ### Files
 - Create: `game/shared/battlefield_manager.h` — player tracking, kill counting, reward distribution
+- Modify: `game/shared/game_types.h` — Add `DeathSource::Battlefield = 4` and `DeathSource::Arena = 5` to enum
 - Modify: `engine/net/protocol.h` or `game_messages.h` — CmdBattlefield, SvBattlefieldUpdate
-- Modify: `engine/net/packet.h` — packet types
-- Modify: `server/server_app.cpp` — register battlefield event, handle CmdBattlefield, hook kill tracking
+- Modify: `engine/net/packet.h` — packet types (`CmdBattlefield = 0x22`, `SvBattlefieldUpdate = 0xAC`)
+- Modify: `server/server_app.cpp` — register battlefield event, handle CmdBattlefield, hook kill tracking, cleanup in `onClientDisconnected`
 - Modify: `engine/net/net_client.h/cpp` — client callback
 
 ---
@@ -133,7 +139,7 @@ No competitive PvP. Need structured 1v1, 2v2, 3v3 matches with matchmaking, rewa
 - Unregister: removes group from queue, clears event lock on all members
 
 **Matchmaking:**
-- `ArenaManager` checks queue each server tick
+- `ArenaManager` checks queue every 20 ticks (1 second), not every tick, to avoid unnecessary iteration
 - Match criteria for each mode:
   - Two groups from **different factions** (prevents same-faction win-trading)
   - All participants within 5 levels of each other (compare highest vs lowest across both groups)
@@ -175,11 +181,17 @@ No competitive PvP. Need structured 1v1, 2v2, 3v3 matches with matchmaking, rewa
 - `tickMatches(float dt)` — check timer expiry, AFK checks on living players
 - `isPlayerInArena(playerId)` — for event lock checks
 
+**Arena disconnect:** If a player disconnects during a match, they are treated as dead (removed from living count). Their team plays on at a disadvantage. Disconnected player gets 0 rewards.
+
+**Simultaneous kill:** If both last players die on the same tick, it's a tie.
+
+**Party callback:** Use existing `PartyManager::onPartyChanged` callback. ArenaManager listens and checks if any registered group's members have changed — if so, auto-unregister the group.
+
 **Network messages:**
-- `CmdArena` (client → server):
+- `CmdArena` (client → server) — packet `0x23`:
   - `uint8_t action` — 0=Register, 1=Unregister
   - `uint8_t mode` — 1=Solo, 2=Duo, 3=Team
-- `SvArenaUpdate` (server → client):
+- `SvArenaUpdate` (server → client) — packet `0xAD`:
   - `uint8_t state` — 0=Queued, 1=Countdown, 2=Active, 3=Ended
   - `uint16_t timeRemaining` — seconds left
   - `uint8_t teamAlive` — count of living teammates
@@ -189,11 +201,12 @@ No competitive PvP. Need structured 1v1, 2v2, 3v3 matches with matchmaking, rewa
 
 ### Files
 - Create: `game/shared/arena_manager.h` — queue, matchmaking, match state, AFK tracking
+- Modify: `game/shared/game_types.h` — Add `DeathSource::Arena = 5`
 - Modify: `engine/net/protocol.h` or `game_messages.h` — CmdArena, SvArenaUpdate
-- Modify: `engine/net/packet.h` — packet types
-- Modify: `server/server_app.cpp` — ArenaManager integration, handle CmdArena, hook combat/movement for action tracking
+- Modify: `engine/net/packet.h` — packet types (`CmdArena = 0x23`, `SvArenaUpdate = 0xAD`)
+- Modify: `server/server_app.cpp` — ArenaManager integration, handle CmdArena, hook combat/movement for action tracking, arena disconnect cleanup in `onClientDisconnected`
 - Modify: `engine/net/net_client.h/cpp` — client callback
-- Modify: `game/shared/party_manager.h` — Add onMemberLeave callback for arena auto-unregister
+- Note: Uses existing `PartyManager::onPartyChanged` — no modification to party_manager.h needed
 
 ---
 
@@ -217,11 +230,14 @@ Honor field exists on `CharacterStats` but there's no ranking system or visual b
 | Elite Fighter | 6 | 25,000 |
 | Field Commander | 7 | 50,000 |
 | Commander | 8 | 75,000 |
-| General | 9 | 99,999 |
+| General | 9 | 99,999+ |
+
+General is the highest rank — all honor values 99,999 and above display as General.
 
 **Implementation:**
 - `HonorRank` enum (uint8_t, 0-9)
 - `HonorRank getHonorRank(int honor)` — pure lookup function, no state, in `game/shared/honor_system.h` (already exists)
+- `const char* getHonorRankName(HonorRank rank)` — returns display string for UI/nameplate
 - No separate stat — rank is computed from honor whenever needed
 
 **Replication to clients:**
@@ -282,5 +298,12 @@ Honor field exists on `CharacterStats` but there's no ranking system or visual b
 | Honor 0 = Recruit, 99999 = General | Boundary values |
 | honorRank in SvEntityEnterMsg for remote players | Replication |
 | honorRank bit 15 delta update | Delta sync |
+| Battlefield cancelled if < 2 factions at start | Minimum players |
+| Battlefield disconnect: kills still count, player removed | Disconnect handling |
+| Arena disconnect: player treated as dead, 0 rewards | Arena disconnect |
+| Arena simultaneous last kills = tie | Simultaneous death |
+| PlayerEventLock prevents joining arena while in battlefield | Cross-event lock |
+| DeathSource::Battlefield = no XP/honor loss | Death penalty bypass |
+| DeathSource::Arena = permanent death in match | Arena death |
 | CmdBattlefield/SvBattlefieldUpdate round-trip | Protocol |
 | CmdArena/SvArenaUpdate round-trip | Protocol |
