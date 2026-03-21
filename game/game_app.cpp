@@ -1533,6 +1533,29 @@ void GameApp::onInit() {
         LOG_INFO("Client", "Zone transition to '%s' at (%.1f, %.1f)",
                  msg.targetScene.c_str(), msg.spawnX, msg.spawnY);
 
+        // Snapshot current player stats before the deferred transition destroys the entity.
+        // This ensures level/HP/MP are preserved even if SvPlayerState hasn't arrived recently.
+        auto* sc = SceneManager::instance().currentScene();
+        if (sc) {
+            sc->world().forEach<CharacterStatsComponent, PlayerController>(
+                [this](Entity* e, CharacterStatsComponent* cs, PlayerController* ctrl) {
+                    if (!ctrl->isLocalPlayer) return;
+                    pendingPlayerState_.level = cs->stats.level;
+                    pendingPlayerState_.currentHP = cs->stats.currentHP;
+                    pendingPlayerState_.maxHP = cs->stats.maxHP;
+                    pendingPlayerState_.currentMP = cs->stats.currentMP;
+                    pendingPlayerState_.maxMP = cs->stats.maxMP;
+                    pendingPlayerState_.currentFury = cs->stats.currentFury;
+                    pendingPlayerState_.currentXP = cs->stats.currentXP;
+                    pendingPlayerState_.honor = cs->stats.honor;
+                    pendingPlayerState_.pvpKills = cs->stats.pvpKills;
+                    pendingPlayerState_.pvpDeaths = cs->stats.pvpDeaths;
+                    auto* inv = e->getComponent<InventoryComponent>();
+                    if (inv) pendingPlayerState_.gold = inv->inventory.getGold();
+                }
+            );
+        }
+
         // Defer the actual scene load to after poll() completes. Loading a scene
         // destroys all entities in the world, which would crash any code that runs
         // later in the same poll() pass (entity updates, combat events, etc.).
