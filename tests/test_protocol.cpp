@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "engine/net/protocol.h"
+#include "engine/net/game_messages.h"
 
 TEST_CASE("CmdMove round-trip") {
     uint8_t buf[256];
@@ -307,4 +308,118 @@ TEST_CASE("SvBossLootOwnerMsg empty winner name") {
     CHECK(decoded.bossId == "boss_99");
     CHECK(decoded.winnerName == "");
     CHECK(decoded.topDamage == 0);
+}
+
+TEST_CASE("CmdEnchantMsg serialization round-trip") {
+    fate::CmdEnchantMsg original;
+    original.inventorySlot = 5;
+    original.useProtectionStone = 1;
+    uint8_t buf[64];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::CmdEnchantMsg::read(r);
+    CHECK(decoded.inventorySlot == 5);
+    CHECK(decoded.useProtectionStone == 1);
+}
+
+TEST_CASE("SvEnchantResultMsg serialization round-trip") {
+    fate::SvEnchantResultMsg original;
+    original.success = 1;
+    original.newLevel = 9;
+    original.broke = 0;
+    original.message = "Enchant succeeded! +9";
+    uint8_t buf[256];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::SvEnchantResultMsg::read(r);
+    CHECK(decoded.success == 1);
+    CHECK(decoded.newLevel == 9);
+    CHECK(decoded.broke == 0);
+    CHECK(decoded.message == "Enchant succeeded! +9");
+}
+
+TEST_CASE("CmdRepairMsg serialization round-trip") {
+    fate::CmdRepairMsg original;
+    original.inventorySlot = 3;
+    uint8_t buf[64];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::CmdRepairMsg::read(r);
+    CHECK(decoded.inventorySlot == 3);
+}
+
+TEST_CASE("SvRepairResultMsg serialization round-trip") {
+    fate::SvRepairResultMsg original;
+    original.success = 1;
+    original.newLevel = 4;
+    original.message = "Item repaired to +4";
+    uint8_t buf[256];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::SvRepairResultMsg::read(r);
+    CHECK(decoded.success == 1);
+    CHECK(decoded.newLevel == 4);
+    CHECK(decoded.message == "Item repaired to +4");
+}
+
+TEST_CASE("CmdExtractCoreMsg serialization round-trip") {
+    fate::CmdExtractCoreMsg original;
+    original.itemSlot = 7;
+    original.scrollSlot = 2;
+    uint8_t buf[64];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::CmdExtractCoreMsg::read(r);
+    CHECK(decoded.itemSlot == 7);
+    CHECK(decoded.scrollSlot == 2);
+}
+
+TEST_CASE("SvExtractResultMsg serialization round-trip") {
+    fate::SvExtractResultMsg original;
+    original.success = 1;
+    original.coreItemId = "mat_core_3rd";
+    original.coreQuantity = 4;
+    original.message = "Extracted 4x 3rd Core";
+    uint8_t buf[256];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::SvExtractResultMsg::read(r);
+    CHECK(decoded.success == 1);
+    CHECK(decoded.coreItemId == "mat_core_3rd");
+    CHECK(decoded.coreQuantity == 4);
+    CHECK(decoded.message == "Extracted 4x 3rd Core");
+}
+
+TEST_CASE("CmdCraftMsg serialization round-trip") {
+    fate::CmdCraftMsg original;
+    original.recipeId = "recipe_iron_sword";
+    uint8_t buf[256];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::CmdCraftMsg::read(r);
+    CHECK(decoded.recipeId == "recipe_iron_sword");
+}
+
+TEST_CASE("SvCraftResultMsg serialization round-trip") {
+    fate::SvCraftResultMsg original;
+    original.success = 1;
+    original.resultItemId = "item_iron_sword";
+    original.resultQuantity = 1;
+    original.message = "Crafted Iron Sword";
+    uint8_t buf[256];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::SvCraftResultMsg::read(r);
+    CHECK(decoded.success == 1);
+    CHECK(decoded.resultItemId == "item_iron_sword");
+    CHECK(decoded.resultQuantity == 1);
+    CHECK(decoded.message == "Crafted Iron Sword");
 }

@@ -77,6 +77,16 @@ namespace PacketType {
 
     // Client -> Server: Equipment
     constexpr uint8_t CmdEquip        = 0x1D;
+    constexpr uint8_t CmdEnchant      = 0x1E;
+    constexpr uint8_t CmdRepair       = 0x1F;
+    constexpr uint8_t CmdExtractCore  = 0x20;
+    constexpr uint8_t CmdCraft        = 0x21;
+
+    // Server -> Client: Item system results
+    constexpr uint8_t SvEnchantResult  = 0xA8;
+    constexpr uint8_t SvRepairResult   = 0xA9;
+    constexpr uint8_t SvExtractResult  = 0xAA;
+    constexpr uint8_t SvCraftResult    = 0xAB;
 } // namespace PacketType
 
 // ============================================================================

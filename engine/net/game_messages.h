@@ -457,4 +457,155 @@ struct SvLevelUpMsg {
     }
 };
 
+// ============================================================================
+// Client -> Server: CmdEnchant / Server -> Client: SvEnchantResult
+// ============================================================================
+struct CmdEnchantMsg {
+    uint8_t inventorySlot = 0;
+    uint8_t useProtectionStone = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(inventorySlot);
+        w.writeU8(useProtectionStone);
+    }
+    static CmdEnchantMsg read(ByteReader& r) {
+        CmdEnchantMsg m;
+        m.inventorySlot = r.readU8();
+        m.useProtectionStone = r.readU8();
+        return m;
+    }
+};
+
+struct SvEnchantResultMsg {
+    uint8_t success = 0;
+    uint8_t newLevel = 0;
+    uint8_t broke = 0;
+    std::string message;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(success);
+        w.writeU8(newLevel);
+        w.writeU8(broke);
+        w.writeString(message);
+    }
+    static SvEnchantResultMsg read(ByteReader& r) {
+        SvEnchantResultMsg m;
+        m.success = r.readU8();
+        m.newLevel = r.readU8();
+        m.broke = r.readU8();
+        m.message = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdRepair / Server -> Client: SvRepairResult
+// ============================================================================
+struct CmdRepairMsg {
+    uint8_t inventorySlot = 0;
+
+    void write(ByteWriter& w) const { w.writeU8(inventorySlot); }
+    static CmdRepairMsg read(ByteReader& r) {
+        CmdRepairMsg m;
+        m.inventorySlot = r.readU8();
+        return m;
+    }
+};
+
+struct SvRepairResultMsg {
+    uint8_t success = 0;
+    uint8_t newLevel = 0;
+    std::string message;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(success);
+        w.writeU8(newLevel);
+        w.writeString(message);
+    }
+    static SvRepairResultMsg read(ByteReader& r) {
+        SvRepairResultMsg m;
+        m.success = r.readU8();
+        m.newLevel = r.readU8();
+        m.message = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdExtractCore / Server -> Client: SvExtractResult
+// ============================================================================
+struct CmdExtractCoreMsg {
+    uint8_t itemSlot = 0;
+    uint8_t scrollSlot = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(itemSlot);
+        w.writeU8(scrollSlot);
+    }
+    static CmdExtractCoreMsg read(ByteReader& r) {
+        CmdExtractCoreMsg m;
+        m.itemSlot = r.readU8();
+        m.scrollSlot = r.readU8();
+        return m;
+    }
+};
+
+struct SvExtractResultMsg {
+    uint8_t success = 0;
+    std::string coreItemId;
+    uint8_t coreQuantity = 0;
+    std::string message;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(success);
+        w.writeString(coreItemId);
+        w.writeU8(coreQuantity);
+        w.writeString(message);
+    }
+    static SvExtractResultMsg read(ByteReader& r) {
+        SvExtractResultMsg m;
+        m.success = r.readU8();
+        m.coreItemId = r.readString();
+        m.coreQuantity = r.readU8();
+        m.message = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdCraft / Server -> Client: SvCraftResult
+// ============================================================================
+struct CmdCraftMsg {
+    std::string recipeId;
+
+    void write(ByteWriter& w) const { w.writeString(recipeId); }
+    static CmdCraftMsg read(ByteReader& r) {
+        CmdCraftMsg m;
+        m.recipeId = r.readString();
+        return m;
+    }
+};
+
+struct SvCraftResultMsg {
+    uint8_t success = 0;
+    std::string resultItemId;
+    uint8_t resultQuantity = 0;
+    std::string message;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(success);
+        w.writeString(resultItemId);
+        w.writeU8(resultQuantity);
+        w.writeString(message);
+    }
+    static SvCraftResultMsg read(ByteReader& r) {
+        SvCraftResultMsg m;
+        m.success = r.readU8();
+        m.resultItemId = r.readString();
+        m.resultQuantity = r.readU8();
+        m.message = r.readString();
+        return m;
+    }
+};
+
 } // namespace fate
