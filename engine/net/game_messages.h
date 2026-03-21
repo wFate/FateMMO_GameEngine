@@ -736,4 +736,207 @@ struct SvPetUpdateMsg {
     }
 };
 
+// ============================================================================
+// Client -> Server: CmdBank / Server -> Client: SvBankResult
+// ============================================================================
+struct CmdBankMsg {
+    uint8_t action = 0;       // 0=deposit item, 1=withdraw item, 2=deposit gold, 3=withdraw gold
+    int64_t goldAmount = 0;
+    std::string itemId;
+    uint16_t itemCount = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(action);
+        detail::writeI64(w, goldAmount);
+        w.writeString(itemId);
+        w.writeU16(itemCount);
+    }
+    static CmdBankMsg read(ByteReader& r) {
+        CmdBankMsg m;
+        m.action    = r.readU8();
+        m.goldAmount = detail::readI64(r);
+        m.itemId    = r.readString();
+        m.itemCount = r.readU16();
+        return m;
+    }
+};
+
+struct SvBankResultMsg {
+    uint8_t action = 0;
+    uint8_t success = 0;
+    int64_t bankGold = 0;
+    std::string message;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(action);
+        w.writeU8(success);
+        detail::writeI64(w, bankGold);
+        w.writeString(message);
+    }
+    static SvBankResultMsg read(ByteReader& r) {
+        SvBankResultMsg m;
+        m.action   = r.readU8();
+        m.success  = r.readU8();
+        m.bankGold = detail::readI64(r);
+        m.message  = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdSocketItem / Server -> Client: SvSocketResult
+// ============================================================================
+struct CmdSocketItemMsg {
+    uint8_t equipSlot = 0;
+    std::string scrollItemId;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(equipSlot);
+        w.writeString(scrollItemId);
+    }
+    static CmdSocketItemMsg read(ByteReader& r) {
+        CmdSocketItemMsg m;
+        m.equipSlot    = r.readU8();
+        m.scrollItemId = r.readString();
+        return m;
+    }
+};
+
+struct SvSocketResultMsg {
+    uint8_t success = 0;
+    uint8_t rolledValue = 0;
+    uint8_t previousValue = 0;
+    uint8_t wasResocket = 0;
+    std::string message;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(success);
+        w.writeU8(rolledValue);
+        w.writeU8(previousValue);
+        w.writeU8(wasResocket);
+        w.writeString(message);
+    }
+    static SvSocketResultMsg read(ByteReader& r) {
+        SvSocketResultMsg m;
+        m.success       = r.readU8();
+        m.rolledValue   = r.readU8();
+        m.previousValue = r.readU8();
+        m.wasResocket   = r.readU8();
+        m.message       = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdStatEnchant / Server -> Client: SvStatEnchantResult
+// ============================================================================
+struct CmdStatEnchantMsg {
+    uint8_t equipSlot = 0;
+    uint8_t scrollStatType = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(equipSlot);
+        w.writeU8(scrollStatType);
+    }
+    static CmdStatEnchantMsg read(ByteReader& r) {
+        CmdStatEnchantMsg m;
+        m.equipSlot      = r.readU8();
+        m.scrollStatType = r.readU8();
+        return m;
+    }
+};
+
+struct SvStatEnchantResultMsg {
+    uint8_t success = 0;
+    uint8_t tier = 0;
+    int32_t value = 0;
+    std::string message;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(success);
+        w.writeU8(tier);
+        w.writeI32(value);
+        w.writeString(message);
+    }
+    static SvStatEnchantResultMsg read(ByteReader& r) {
+        SvStatEnchantResultMsg m;
+        m.success = r.readU8();
+        m.tier    = r.readU8();
+        m.value   = r.readI32();
+        m.message = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdUseConsumable / Server -> Client: SvConsumeResult
+// ============================================================================
+struct CmdUseConsumableMsg {
+    uint8_t inventorySlot = 0;
+
+    void write(ByteWriter& w) const { w.writeU8(inventorySlot); }
+    static CmdUseConsumableMsg read(ByteReader& r) {
+        CmdUseConsumableMsg m;
+        m.inventorySlot = r.readU8();
+        return m;
+    }
+};
+
+struct SvConsumeResultMsg {
+    uint8_t success = 0;
+    std::string message;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(success);
+        w.writeString(message);
+    }
+    static SvConsumeResultMsg read(ByteReader& r) {
+        SvConsumeResultMsg m;
+        m.success = r.readU8();
+        m.message = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdRankingQuery / Server -> Client: SvRankingResult
+// ============================================================================
+struct CmdRankingQueryMsg {
+    uint8_t category = 0;
+    uint8_t page = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(category);
+        w.writeU8(page);
+    }
+    static CmdRankingQueryMsg read(ByteReader& r) {
+        CmdRankingQueryMsg m;
+        m.category = r.readU8();
+        m.page     = r.readU8();
+        return m;
+    }
+};
+
+struct SvRankingResultMsg {
+    uint8_t category = 0;
+    uint8_t page = 0;
+    uint16_t totalEntries = 0;
+    std::string entriesJson;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(category);
+        w.writeU8(page);
+        w.writeU16(totalEntries);
+        w.writeString(entriesJson);
+    }
+    static SvRankingResultMsg read(ByteReader& r) {
+        SvRankingResultMsg m;
+        m.category     = r.readU8();
+        m.page         = r.readU8();
+        m.totalEntries = r.readU16();
+        m.entriesJson  = r.readString();
+        return m;
+    }
+};
+
 } // namespace fate
