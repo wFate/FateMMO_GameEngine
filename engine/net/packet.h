@@ -81,12 +81,16 @@ namespace PacketType {
     constexpr uint8_t CmdRepair       = 0x1F;
     constexpr uint8_t CmdExtractCore  = 0x20;
     constexpr uint8_t CmdCraft        = 0x21;
+    constexpr uint8_t CmdBattlefield  = 0x22;
+    constexpr uint8_t CmdArena        = 0x23;
 
     // Server -> Client: Item system results
-    constexpr uint8_t SvEnchantResult  = 0xA8;
-    constexpr uint8_t SvRepairResult   = 0xA9;
-    constexpr uint8_t SvExtractResult  = 0xAA;
-    constexpr uint8_t SvCraftResult    = 0xAB;
+    constexpr uint8_t SvEnchantResult    = 0xA8;
+    constexpr uint8_t SvRepairResult     = 0xA9;
+    constexpr uint8_t SvExtractResult    = 0xAA;
+    constexpr uint8_t SvCraftResult      = 0xAB;
+    constexpr uint8_t SvBattlefieldUpdate = 0xAC;
+    constexpr uint8_t SvArenaUpdate       = 0xAD;
 } // namespace PacketType
 
 // ============================================================================

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <vector>
 #include "engine/net/byte_stream.h"
 #include "engine/net/protocol.h"
 
@@ -604,6 +605,92 @@ struct SvCraftResultMsg {
         m.resultItemId = r.readString();
         m.resultQuantity = r.readU8();
         m.message = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdBattlefield / Server -> Client: SvBattlefieldUpdate
+// ============================================================================
+struct CmdBattlefieldMsg {
+    uint8_t action = 0; // 0=Register, 1=Unregister
+    void write(ByteWriter& w) const { w.writeU8(action); }
+    static CmdBattlefieldMsg read(ByteReader& r) {
+        CmdBattlefieldMsg m; m.action = r.readU8(); return m;
+    }
+};
+
+struct SvBattlefieldUpdateMsg {
+    uint8_t state = 0;
+    uint16_t timeRemaining = 0;
+    uint8_t factionCount = 0;
+    std::vector<uint8_t> factionIds;
+    std::vector<uint16_t> factionKills;
+    uint16_t personalKills = 0;
+    uint8_t result = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(state);
+        w.writeU16(timeRemaining);
+        w.writeU8(factionCount);
+        for (uint8_t i = 0; i < factionCount; ++i) {
+            w.writeU8(i < factionIds.size() ? factionIds[i] : 0);
+            w.writeU16(i < factionKills.size() ? factionKills[i] : 0);
+        }
+        w.writeU16(personalKills);
+        w.writeU8(result);
+    }
+    static SvBattlefieldUpdateMsg read(ByteReader& r) {
+        SvBattlefieldUpdateMsg m;
+        m.state = r.readU8();
+        m.timeRemaining = r.readU16();
+        m.factionCount = r.readU8();
+        for (uint8_t i = 0; i < m.factionCount; ++i) {
+            m.factionIds.push_back(r.readU8());
+            m.factionKills.push_back(r.readU16());
+        }
+        m.personalKills = r.readU16();
+        m.result = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdArena / Server -> Client: SvArenaUpdate
+// ============================================================================
+struct CmdArenaMsg {
+    uint8_t action = 0; // 0=Register, 1=Unregister
+    uint8_t mode = 1;   // 1=Solo, 2=Duo, 3=Team
+    void write(ByteWriter& w) const { w.writeU8(action); w.writeU8(mode); }
+    static CmdArenaMsg read(ByteReader& r) {
+        CmdArenaMsg m; m.action = r.readU8(); m.mode = r.readU8(); return m;
+    }
+};
+
+struct SvArenaUpdateMsg {
+    uint8_t state = 0;
+    uint16_t timeRemaining = 0;
+    uint8_t teamAlive = 0;
+    uint8_t enemyAlive = 0;
+    uint8_t result = 0;
+    int32_t honorReward = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(state);
+        w.writeU16(timeRemaining);
+        w.writeU8(teamAlive);
+        w.writeU8(enemyAlive);
+        w.writeU8(result);
+        w.writeI32(honorReward);
+    }
+    static SvArenaUpdateMsg read(ByteReader& r) {
+        SvArenaUpdateMsg m;
+        m.state = r.readU8();
+        m.timeRemaining = r.readU16();
+        m.teamAlive = r.readU8();
+        m.enemyAlive = r.readU8();
+        m.result = r.readU8();
+        m.honorReward = r.readI32();
         return m;
     }
 };
