@@ -189,21 +189,57 @@ struct SvEntityUpdateMsg {
     uint64_t persistentId = 0;
     uint16_t fieldMask    = 0;
 
-    // Conditional fields
-    Vec2    position;           // bit 0
-    uint8_t animFrame = 0;     // bit 1
-    uint8_t flipX     = 0;     // bit 2 (bool as u8)
-    int32_t currentHP = 0;     // bit 3
-    uint8_t updateSeq = 0;      // monotonic per-entity, for stale update rejection
+    // Bit 0: position (Vec2, 8B)
+    Vec2    position;
+    // Bit 1: animFrame (uint8, 1B)
+    uint8_t animFrame = 0;
+    // Bit 2: flipX (uint8, 1B)
+    uint8_t flipX     = 0;
+    // Bit 3: currentHP (int32, 4B)
+    int32_t currentHP = 0;
+    // Bit 4: maxHP (int32, 4B)
+    int32_t maxHP = 0;
+    // Bit 5: moveState (uint8, 1B) — idle/walk/dead/sitting
+    uint8_t moveState = 0;
+    // Bit 6: animId (uint16, 2B) — current skill/animation ID
+    uint16_t animId = 0;
+    // Bit 7: statusEffectMask (uint16, 2B) — bitfield of 16 status effects
+    uint16_t statusEffectMask = 0;
+    // Bit 8: deathState (uint8, 1B) — alive/dying/dead/ghost
+    uint8_t deathState = 0;
+    // Bit 9: castingSkillId (uint16, 2B) + castingProgress (uint8, 1B)
+    uint16_t castingSkillId = 0;
+    uint8_t  castingProgress = 0; // 0-255 maps to 0-100%
+    // Bit 10: targetEntityId (uint16, 2B)
+    uint16_t targetEntityId = 0;
+    // Bit 11: level (uint8, 1B)
+    uint8_t level = 0;
+    // Bit 12: faction (uint8, 1B)
+    uint8_t faction = 0;
+    // Bit 13: equipVisuals (uint32, 4B) — packed sprite/palette IDs
+    uint32_t equipVisuals = 0;
+    // Bits 14-15: reserved
+
+    uint8_t updateSeq = 0;
 
     void write(ByteWriter& w) const {
         w.writeU8(updateSeq);
         detail::writeU64(w, persistentId);
         w.writeU16(fieldMask);
-        if (fieldMask & (1 << 0)) w.writeVec2(position);
-        if (fieldMask & (1 << 1)) w.writeU8(animFrame);
-        if (fieldMask & (1 << 2)) w.writeU8(flipX);
-        if (fieldMask & (1 << 3)) w.writeI32(currentHP);
+        if (fieldMask & (1 << 0))  w.writeVec2(position);
+        if (fieldMask & (1 << 1))  w.writeU8(animFrame);
+        if (fieldMask & (1 << 2))  w.writeU8(flipX);
+        if (fieldMask & (1 << 3))  w.writeI32(currentHP);
+        if (fieldMask & (1 << 4))  w.writeI32(maxHP);
+        if (fieldMask & (1 << 5))  w.writeU8(moveState);
+        if (fieldMask & (1 << 6))  w.writeU16(animId);
+        if (fieldMask & (1 << 7))  w.writeU16(statusEffectMask);
+        if (fieldMask & (1 << 8))  w.writeU8(deathState);
+        if (fieldMask & (1 << 9))  { w.writeU16(castingSkillId); w.writeU8(castingProgress); }
+        if (fieldMask & (1 << 10)) w.writeU16(targetEntityId);
+        if (fieldMask & (1 << 11)) w.writeU8(level);
+        if (fieldMask & (1 << 12)) w.writeU8(faction);
+        if (fieldMask & (1 << 13)) w.writeU32(equipVisuals);
     }
 
     static SvEntityUpdateMsg read(ByteReader& r) {
@@ -211,10 +247,20 @@ struct SvEntityUpdateMsg {
         m.updateSeq    = r.readU8();
         m.persistentId = detail::readU64(r);
         m.fieldMask    = r.readU16();
-        if (m.fieldMask & (1 << 0)) m.position  = r.readVec2();
-        if (m.fieldMask & (1 << 1)) m.animFrame = r.readU8();
-        if (m.fieldMask & (1 << 2)) m.flipX     = r.readU8();
-        if (m.fieldMask & (1 << 3)) m.currentHP = r.readI32();
+        if (m.fieldMask & (1 << 0))  m.position  = r.readVec2();
+        if (m.fieldMask & (1 << 1))  m.animFrame = r.readU8();
+        if (m.fieldMask & (1 << 2))  m.flipX     = r.readU8();
+        if (m.fieldMask & (1 << 3))  m.currentHP = r.readI32();
+        if (m.fieldMask & (1 << 4))  m.maxHP     = r.readI32();
+        if (m.fieldMask & (1 << 5))  m.moveState = r.readU8();
+        if (m.fieldMask & (1 << 6))  m.animId    = r.readU16();
+        if (m.fieldMask & (1 << 7))  m.statusEffectMask = r.readU16();
+        if (m.fieldMask & (1 << 8))  m.deathState = r.readU8();
+        if (m.fieldMask & (1 << 9))  { m.castingSkillId = r.readU16(); m.castingProgress = r.readU8(); }
+        if (m.fieldMask & (1 << 10)) m.targetEntityId = r.readU16();
+        if (m.fieldMask & (1 << 11)) m.level = r.readU8();
+        if (m.fieldMask & (1 << 12)) m.faction = r.readU8();
+        if (m.fieldMask & (1 << 13)) m.equipVisuals = r.readU32();
         return m;
     }
 };
