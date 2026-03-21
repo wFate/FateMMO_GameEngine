@@ -446,6 +446,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onCraftResult) onCraftResult(msg);
             break;
         }
+        case PacketType::SvBattlefieldUpdate: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvBattlefieldUpdateMsg::read(payload);
+            if (onBattlefieldUpdate) onBattlefieldUpdate(msg);
+            break;
+        }
         default:
             break;
     }

@@ -28,6 +28,8 @@
 #include "server/player_lock.h"
 #include "server/nonce_manager.h"
 #include "game/shared/gauntlet.h"
+#include "game/shared/battlefield_manager.h"
+#include "game/shared/event_scheduler.h"
 #include "server/cache/item_definition_cache.h"
 #include "server/cache/loot_table_cache.h"
 #include "server/cache/recipe_cache.h"
@@ -110,6 +112,10 @@ private:
     // Gauntlet event system
     GauntletManager gauntletManager_;
 
+    // Battlefield event system
+    BattlefieldManager battlefieldManager_;
+    EventScheduler eventScheduler_;
+
     // Spawn system
     SpawnZoneCache spawnZoneCache_;
     ServerSpawnManager spawnManager_;
@@ -177,6 +183,7 @@ private:
     void tickMaintenance(float dt);
     void initGauntlet();
     void processGauntletCommand(uint16_t clientId, ByteReader& payload);
+    void processBattlefield(uint16_t clientId, const CmdBattlefieldMsg& msg);
     void broadcastBossKillNotification(const EnemyStats& es,
                                        const EnemyStats::LootOwnerResult& lootResult,
                                        const std::string& scene);

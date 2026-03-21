@@ -148,6 +148,168 @@ bool ServerApp::init(uint16_t port) {
     // Initialize Gauntlet system
     initGauntlet();
 
+    // Register and wire Battlefield event: 2hr cycle, 5min signup, 15min active
+    eventScheduler_.registerEvent({"battlefield", 7200.0f, 300.0f, 900.0f});
+
+    eventScheduler_.setCallback("battlefield", EventCallback::OnSignupStart, [this]{
+        SvChatMessageMsg msg;
+        msg.channel    = static_cast<uint8_t>(ChatChannel::System);
+        msg.senderName = "[Battlefield]";
+        msg.message    = "Battlefield signup is now open! Speak to the Battlefield Registrar to join.";
+        msg.faction    = 0;
+        uint8_t buf[512]; ByteWriter w(buf, sizeof(buf));
+        msg.write(w);
+        server_.broadcast(Channel::ReliableOrdered, PacketType::SvChatMessage, buf, w.size());
+        LOG_INFO("Server", "Battlefield signup is now open!");
+    });
+
+    eventScheduler_.setCallback("battlefield", EventCallback::OnEventStart, [this]{
+        if (!battlefieldManager_.hasMinimumPlayers()) {
+            LOG_INFO("Server", "Battlefield cancelled — not enough players from different factions");
+            for (const auto& [eid, player] : battlefieldManager_.players()) {
+                playerEventLocks_.erase(eid);
+            }
+            battlefieldManager_.reset();
+
+            SvChatMessageMsg msg;
+            msg.channel    = static_cast<uint8_t>(ChatChannel::System);
+            msg.senderName = "[Battlefield]";
+            msg.message    = "Battlefield has been cancelled — not enough players from different factions.";
+            msg.faction    = 0;
+            uint8_t buf[512]; ByteWriter w(buf, sizeof(buf));
+            msg.write(w);
+            server_.broadcast(Channel::ReliableOrdered, PacketType::SvChatMessage, buf, w.size());
+            return;
+        }
+        LOG_INFO("Server", "Battlefield started with %zu players", battlefieldManager_.playerCount());
+
+        // Teleport all registered players to battlefield scene
+        server_.connections().forEach([this](ClientConnection& conn) {
+            if (conn.playerEntityId == 0) return;
+            uint32_t eid = static_cast<uint32_t>(conn.playerEntityId);
+            if (!battlefieldManager_.isPlayerRegistered(eid)) return;
+
+            // Update scene on entity
+            PersistentId pid(conn.playerEntityId);
+            EntityHandle h = replication_.getEntityHandle(pid);
+            Entity* e = world_.getEntity(h);
+            if (e) {
+                auto* sc = e->getComponent<CharacterStatsComponent>();
+                if (sc) sc->stats.currentScene = "battlefield";
+            }
+
+            // Send zone transition to battlefield
+            float spawnX = 0.0f, spawnY = 0.0f;
+            auto* sceneDef = sceneCache_.get("battlefield");
+            if (sceneDef) { spawnX = sceneDef->defaultSpawnX; spawnY = sceneDef->defaultSpawnY; }
+
+            SvZoneTransitionMsg zt;
+            zt.targetScene = "battlefield";
+            zt.spawnX = spawnX;
+            zt.spawnY = spawnY;
+            uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+            zt.write(w);
+            server_.sendTo(conn.clientId, Channel::ReliableOrdered, PacketType::SvZoneTransition, buf, w.size());
+
+            // Clear AOI state
+            conn.aoi.previous.clear();
+            conn.aoi.current.clear();
+            conn.aoi.entered.clear();
+            conn.aoi.left.clear();
+            conn.aoi.stayed.clear();
+            conn.lastAckedState.clear();
+        });
+
+        SvChatMessageMsg msg;
+        msg.channel    = static_cast<uint8_t>(ChatChannel::System);
+        msg.senderName = "[Battlefield]";
+        msg.message    = "The Battlefield has begun! Fight for your faction's glory!";
+        msg.faction    = 0;
+        uint8_t buf[512]; ByteWriter w(buf, sizeof(buf));
+        msg.write(w);
+        server_.broadcast(Channel::ReliableOrdered, PacketType::SvChatMessage, buf, w.size());
+    });
+
+    eventScheduler_.setCallback("battlefield", EventCallback::OnEventEnd, [this]{
+        auto winner = battlefieldManager_.getWinningFaction();
+        LOG_INFO("Server", "Battlefield ended. Winner: faction %d", static_cast<int>(winner));
+
+        // Announce winner
+        std::string winnerMsg;
+        if (winner == Faction::None) {
+            winnerMsg = "The Battlefield has ended in a tie!";
+        } else {
+            winnerMsg = "The Battlefield has ended! Faction " +
+                        std::to_string(static_cast<int>(winner)) + " wins!";
+        }
+        SvChatMessageMsg chatMsg;
+        chatMsg.channel    = static_cast<uint8_t>(ChatChannel::System);
+        chatMsg.senderName = "[Battlefield]";
+        chatMsg.message    = winnerMsg;
+        chatMsg.faction    = 0;
+        uint8_t chatBuf[512]; ByteWriter cw(chatBuf, sizeof(chatBuf));
+        chatMsg.write(cw);
+        server_.broadcast(Channel::ReliableOrdered, PacketType::SvChatMessage, chatBuf, cw.size());
+
+        // Distribute rewards and teleport players back
+        server_.connections().forEach([this, winner](ClientConnection& conn) {
+            if (conn.playerEntityId == 0) return;
+            uint32_t eid = static_cast<uint32_t>(conn.playerEntityId);
+            if (!battlefieldManager_.isPlayerRegistered(eid)) return;
+
+            const auto& bfPlayers = battlefieldManager_.players();
+            auto pit = bfPlayers.find(eid);
+            if (pit == bfPlayers.end()) return;
+            const BattlefieldPlayer& bfPlayer = pit->second;
+
+            bool isWinner = (bfPlayer.faction == winner && winner != Faction::None);
+            int honorReward = isWinner ? 20 : 5;
+
+            // Apply honor to entity
+            PersistentId pid(conn.playerEntityId);
+            EntityHandle h = replication_.getEntityHandle(pid);
+            Entity* e = world_.getEntity(h);
+            if (e) {
+                auto* sc = e->getComponent<CharacterStatsComponent>();
+                if (sc) {
+                    sc->stats.honor += honorReward;
+                    // Teleport back to return scene
+                    sc->stats.currentScene = bfPlayer.returnScene;
+                }
+            }
+
+            // TODO: Add Pendants of Honor to inventory (3 for winners, 1 for losers)
+
+            // Send zone transition back to return scene
+            float retX = bfPlayer.returnPosition.x;
+            float retY = bfPlayer.returnPosition.y;
+            if (retX == 0.0f && retY == 0.0f) {
+                auto* sceneDef = sceneCache_.get(bfPlayer.returnScene);
+                if (sceneDef) { retX = sceneDef->defaultSpawnX; retY = sceneDef->defaultSpawnY; }
+            }
+
+            SvZoneTransitionMsg zt;
+            zt.targetScene = bfPlayer.returnScene;
+            zt.spawnX = retX;
+            zt.spawnY = retY;
+            uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+            zt.write(w);
+            server_.sendTo(conn.clientId, Channel::ReliableOrdered, PacketType::SvZoneTransition, buf, w.size());
+
+            // Clear AOI state
+            conn.aoi.previous.clear();
+            conn.aoi.current.clear();
+            conn.aoi.entered.clear();
+            conn.aoi.left.clear();
+            conn.aoi.stayed.clear();
+            conn.lastAckedState.clear();
+
+            playerEventLocks_.erase(eid);
+        });
+
+        battlefieldManager_.reset();
+    });
+
     // Auth server startup (warning only — game server can run without auth in dev)
     if (!authServer_.start(authPort_, tlsCertPath_, tlsKeyPath_, dbConnectionString_)) {
         LOG_WARN("Server", "Auth server failed to start on port %d; continuing without auth", authPort_);
@@ -450,7 +612,10 @@ void ServerApp::tick(float dt) {
     // 5c. Gauntlet event cycle
     gauntletManager_.tick(gameTime_);
 
-    // 5d. Auto-save and periodic maintenance
+    // 5d. Battlefield event scheduler
+    eventScheduler_.tick(gameTime_);
+
+    // 5e. Auto-save and periodic maintenance
     tickAutoSave(dt);
     tickMaintenance(dt);
     wal_.flush();
@@ -1306,6 +1471,10 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     }
 
     if (client && client->playerEntityId != 0) {
+        uint32_t eid = static_cast<uint32_t>(client->playerEntityId);
+        battlefieldManager_.removePlayer(eid);
+        playerEventLocks_.erase(eid);
+
         PersistentId pid(client->playerEntityId);
         EntityHandle h = replication_.getEntityHandle(pid);
         // Unregister from replication BEFORE destroying — prevents dangling
@@ -2437,6 +2606,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
         case PacketType::CmdCraft: {
             auto msg = CmdCraftMsg::read(payload);
             processCraft(clientId, msg);
+            break;
+        }
+        case PacketType::CmdBattlefield: {
+            auto msg = CmdBattlefieldMsg::read(payload);
+            processBattlefield(clientId, msg);
             break;
         }
         default:
@@ -4345,6 +4519,64 @@ void ServerApp::processCraft(uint16_t clientId, const CmdCraftMsg& msg) {
 
     LOG_INFO("Server", "Client %d crafted %dx %s from recipe %s",
              clientId, recipe->resultQuantity, recipe->resultItemId.c_str(), msg.recipeId.c_str());
+}
+
+// ============================================================================
+// processBattlefield — handle client battlefield registration/unregistration
+// ============================================================================
+
+void ServerApp::processBattlefield(uint16_t clientId, const CmdBattlefieldMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    uint32_t entityId = static_cast<uint32_t>(client->playerEntityId);
+
+    if (msg.action == 0) { // Register
+        // Validate signup phase
+        if (eventScheduler_.getState("battlefield") != EventState::Signup) {
+            LOG_INFO("Server", "Client %d tried to register for battlefield outside signup window", clientId);
+            return;
+        }
+
+        // Validate not already in another event
+        if (playerEventLocks_.count(entityId)) {
+            LOG_INFO("Server", "Client %d already registered for event '%s', cannot join battlefield",
+                     clientId, playerEventLocks_[entityId].c_str());
+            return;
+        }
+
+        // Get player entity, faction, position, scene
+        PersistentId pid(client->playerEntityId);
+        EntityHandle h = replication_.getEntityHandle(pid);
+        Entity* player = world_.getEntity(h);
+        if (!player) return;
+
+        auto* charStats = player->getComponent<CharacterStatsComponent>();
+        auto* factionComp = player->getComponent<FactionComponent>();
+        auto* transform = player->getComponent<Transform>();
+        if (!charStats || !factionComp) return;
+
+        Faction faction = factionComp->faction;
+        Vec2 pos = transform ? transform->position : Vec2{0.0f, 0.0f};
+        std::string scene = charStats->stats.currentScene;
+
+        if (battlefieldManager_.registerPlayer(entityId, client->character_id,
+                                                faction, pos, scene)) {
+            playerEventLocks_[entityId] = "battlefield";
+            LOG_INFO("Server", "Client %d registered for battlefield (faction %d)",
+                     clientId, static_cast<int>(faction));
+        }
+    } else { // Unregister
+        // Only allow unregistration during signup phase
+        if (eventScheduler_.getState("battlefield") != EventState::Signup) {
+            LOG_INFO("Server", "Client %d tried to unregister from battlefield outside signup window", clientId);
+            return;
+        }
+
+        battlefieldManager_.unregisterPlayer(entityId);
+        playerEventLocks_.erase(entityId);
+        LOG_INFO("Server", "Client %d unregistered from battlefield", clientId);
+    }
 }
 
 } // namespace fate
