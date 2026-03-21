@@ -8,9 +8,10 @@
 
 namespace fate {
 
-// Equipment visual layers in draw order (south-facing default)
+// Visual layers in draw order (south-facing default)
+// Matches EquipmentSlot enum in game_types.h for the visible slots
 enum class EquipLayer : uint8_t {
-    Cape = 0, Legs, Body, Head, Helmet, WeaponFront, COUNT
+    Cloak = 0, Shoes, Armor, Body, Gloves, Hat, Weapon, COUNT
 };
 
 struct EquipVisual {
@@ -27,14 +28,14 @@ struct CharacterAppearance {
 // Draw order varies by facing direction
 inline const EquipLayer* getDrawOrder(uint8_t direction, int& count) {
     static const EquipLayer southOrder[] = {
-        EquipLayer::Cape, EquipLayer::Legs, EquipLayer::Body,
-        EquipLayer::Head, EquipLayer::Helmet, EquipLayer::WeaponFront
+        EquipLayer::Cloak, EquipLayer::Shoes, EquipLayer::Armor,
+        EquipLayer::Body, EquipLayer::Gloves, EquipLayer::Hat, EquipLayer::Weapon
     };
     static const EquipLayer northOrder[] = {
-        EquipLayer::WeaponFront, EquipLayer::Body, EquipLayer::Legs,
-        EquipLayer::Cape, EquipLayer::Head, EquipLayer::Helmet
+        EquipLayer::Weapon, EquipLayer::Body, EquipLayer::Armor,
+        EquipLayer::Shoes, EquipLayer::Cloak, EquipLayer::Gloves, EquipLayer::Hat
     };
-    count = 6;
+    count = 7;
     return (direction == 2) ? northOrder : southOrder;
 }
 
