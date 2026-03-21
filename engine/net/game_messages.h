@@ -359,29 +359,100 @@ struct SvSkillResultMsg {
     uint64_t casterId = 0;   // PersistentId
     uint64_t targetId = 0;   // PersistentId
     std::string skillId;
-    int32_t damage = 0;
-    uint8_t isCrit = 0;
-    uint8_t isKill = 0;
-    uint8_t wasMiss = 0;
+    int32_t  damage       = 0;
+    int32_t  overkill     = 0;    // damage beyond lethal (0 if alive)
+    int32_t  targetNewHP  = 0;    // target's HP after this hit
+    uint8_t  hitFlags     = 0;    // HitFlags bitmask (HIT|CRIT|MISS|DODGE|BLOCKED|ABSORBED|KILLED)
+    uint16_t resourceCost = 0;    // mana/fury actually consumed
+    uint16_t cooldownMs   = 0;    // authoritative cooldown duration
+    uint16_t casterNewMP  = 0;    // caster's new mana value after cost
 
     void write(ByteWriter& w) const {
         detail::writeU64(w, casterId);
         detail::writeU64(w, targetId);
         w.writeString(skillId);
         w.writeI32(damage);
-        w.writeU8(isCrit);
-        w.writeU8(isKill);
-        w.writeU8(wasMiss);
+        w.writeI32(overkill);
+        w.writeI32(targetNewHP);
+        w.writeU8(hitFlags);
+        w.writeU16(resourceCost);
+        w.writeU16(cooldownMs);
+        w.writeU16(casterNewMP);
     }
     static SvSkillResultMsg read(ByteReader& r) {
         SvSkillResultMsg m;
-        m.casterId = detail::readU64(r);
-        m.targetId = detail::readU64(r);
-        m.skillId  = r.readString();
-        m.damage   = r.readI32();
-        m.isCrit   = r.readU8();
-        m.isKill   = r.readU8();
-        m.wasMiss  = r.readU8();
+        m.casterId     = detail::readU64(r);
+        m.targetId     = detail::readU64(r);
+        m.skillId      = r.readString();
+        m.damage       = r.readI32();
+        m.overkill     = r.readI32();
+        m.targetNewHP  = r.readI32();
+        m.hitFlags     = r.readU8();
+        m.resourceCost = r.readU16();
+        m.cooldownMs   = r.readU16();
+        m.casterNewMP  = r.readU16();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdEquip (equip or unequip an item)
+// ============================================================================
+struct CmdEquipMsg {
+    uint8_t action = 0;       // 0=equip, 1=unequip
+    int32_t inventorySlot = -1; // source inventory slot (equip only)
+    uint8_t equipSlot = 0;    // EquipmentSlot enum value
+
+    void write(ByteWriter& w) const {
+        w.writeU8(action);
+        w.writeI32(inventorySlot);
+        w.writeU8(equipSlot);
+    }
+    static CmdEquipMsg read(ByteReader& r) {
+        CmdEquipMsg m;
+        m.action        = r.readU8();
+        m.inventorySlot = r.readI32();
+        m.equipSlot     = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvLevelUp (explicit level-up event with full stat snapshot)
+// ============================================================================
+struct SvLevelUpMsg {
+    int32_t newLevel     = 0;
+    int32_t newMaxHP     = 0;
+    int32_t newMaxMP     = 0;
+    int32_t newCurrentHP = 0;
+    int32_t newCurrentMP = 0;
+    int32_t newArmor     = 0;
+    float   newCritRate  = 0.0f;
+    float   newSpeed     = 1.0f;
+    float   newDamageMult = 1.0f;
+
+    void write(ByteWriter& w) const {
+        w.writeI32(newLevel);
+        w.writeI32(newMaxHP);
+        w.writeI32(newMaxMP);
+        w.writeI32(newCurrentHP);
+        w.writeI32(newCurrentMP);
+        w.writeI32(newArmor);
+        w.writeFloat(newCritRate);
+        w.writeFloat(newSpeed);
+        w.writeFloat(newDamageMult);
+    }
+    static SvLevelUpMsg read(ByteReader& r) {
+        SvLevelUpMsg m;
+        m.newLevel     = r.readI32();
+        m.newMaxHP     = r.readI32();
+        m.newMaxMP     = r.readI32();
+        m.newCurrentHP = r.readI32();
+        m.newCurrentMP = r.readI32();
+        m.newArmor     = r.readI32();
+        m.newCritRate  = r.readFloat();
+        m.newSpeed     = r.readFloat();
+        m.newDamageMult = r.readFloat();
         return m;
     }
 };

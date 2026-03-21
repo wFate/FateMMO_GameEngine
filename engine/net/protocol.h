@@ -330,6 +330,16 @@ struct SvPlayerStateMsg {
     int32_t pvpKills    = 0;
     int32_t pvpDeaths   = 0;
 
+    // Derived stats (server-authoritative snapshot)
+    int32_t armor        = 0;
+    int32_t magicResist  = 0;
+    float   critRate     = 0.0f;
+    float   hitRate      = 0.0f;
+    float   evasion      = 0.0f;
+    float   speed        = 1.0f;
+    float   damageMult   = 1.0f;
+    uint8_t pkStatus     = 0; // PKStatus enum
+
     void write(ByteWriter& w) const {
         w.writeI32(currentHP);
         w.writeI32(maxHP);
@@ -342,6 +352,14 @@ struct SvPlayerStateMsg {
         w.writeI32(honor);
         w.writeI32(pvpKills);
         w.writeI32(pvpDeaths);
+        w.writeI32(armor);
+        w.writeI32(magicResist);
+        w.writeFloat(critRate);
+        w.writeFloat(hitRate);
+        w.writeFloat(evasion);
+        w.writeFloat(speed);
+        w.writeFloat(damageMult);
+        w.writeU8(pkStatus);
     }
 
     static SvPlayerStateMsg read(ByteReader& r) {
@@ -357,6 +375,14 @@ struct SvPlayerStateMsg {
         m.honor       = r.readI32();
         m.pvpKills    = r.readI32();
         m.pvpDeaths   = r.readI32();
+        m.armor       = r.readI32();
+        m.magicResist = r.readI32();
+        m.critRate    = r.readFloat();
+        m.hitRate     = r.readFloat();
+        m.evasion     = r.readFloat();
+        m.speed       = r.readFloat();
+        m.damageMult  = r.readFloat();
+        m.pkStatus    = r.readU8();
         return m;
     }
 };

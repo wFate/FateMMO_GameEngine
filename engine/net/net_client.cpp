@@ -297,6 +297,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onSkillResult) onSkillResult(msg);
             break;
         }
+        case PacketType::SvLevelUp: {
+            ByteReader payload(data + r.position(), hdr.payloadSize);
+            auto msg = SvLevelUpMsg::read(payload);
+            if (onLevelUp) onLevelUp(msg);
+            break;
+        }
         case PacketType::SvSkillSync: {
             ByteReader payload(data + r.position(), hdr.payloadSize);
             auto msg = SvSkillSyncMsg::read(payload);
