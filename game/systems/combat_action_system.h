@@ -455,7 +455,20 @@ private:
         bool clicked = input.isMousePressed(SDL_BUTTON_LEFT);
         bool touched = input.isTouchPressed(0);
         if (!clicked && !touched) return;
-        if (ImGui::GetIO().WantCaptureMouse) return;
+
+        // In editor mode, ImGui reports WantCaptureMouse=true for the game viewport
+        // (it IS an ImGui window). Only block clicks that are outside the viewport.
+        if (Editor::instance().isOpen()) {
+            Vec2 mpos = input.mousePosition();
+            Vec2 vp = Editor::instance().viewportPos();
+            Vec2 vs = Editor::instance().viewportSize();
+            bool inViewport = mpos.x >= vp.x && mpos.x <= vp.x + vs.x &&
+                              mpos.y >= vp.y && mpos.y <= vp.y + vs.y;
+            if (!inViewport) return;
+        } else {
+            if (ImGui::GetIO().WantCaptureMouse) return;
+        }
+
         if (!camera || !world_) return;
 
         // Check if NPCInteractionSystem already consumed this click
