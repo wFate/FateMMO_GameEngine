@@ -2,6 +2,7 @@
 #include "engine/net/aoi.h"
 #include "engine/net/protocol.h"
 #include "engine/net/net_server.h"
+#include "engine/net/update_frequency.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/persistent_id.h"
 #include "engine/ecs/entity_handle.h"
@@ -43,6 +44,9 @@ private:
 
     // Per-entity monotonic sequence counter for unreliable update ordering
     std::unordered_map<uint32_t, uint8_t> entitySeqCounters_; // key = EntityHandle packed value
+
+    // Monotonic tick counter incremented each update(); drives tiered update frequency
+    uint32_t tickCounter_ = 0;
 
     // Rebuild the spatial index with current positions of all registered entities
     void rebuildSpatialIndex(World& world);
