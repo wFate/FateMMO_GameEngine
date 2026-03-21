@@ -774,6 +774,17 @@ void GameApp::onInit() {
 
         combatSystem_ = world.addSystem<CombatActionSystem>();
         combatSystem_->camera = &camera();
+        combatSystem_->onSendAttack = [this](Entity* target) {
+            if (!netClient_.isConnected()) return;
+            // Reverse lookup: find PersistentId for this entity
+            for (const auto& [pid, handle] : ghostEntities_) {
+                auto* sc = SceneManager::instance().currentScene();
+                if (sc && sc->world().getEntity(handle) == target) {
+                    netClient_.sendAction(0, pid, 0);
+                    return;
+                }
+            }
+        };
 
         questSystem_ = world.addSystem<QuestSystem>();
 

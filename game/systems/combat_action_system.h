@@ -5,7 +5,7 @@
 #include "game/components/transform.h"
 #include "game/components/player_controller.h"
 #include "game/shared/combat_system.h"
-#include "game/shared/xp_calculator.h"
+// xp_calculator.h no longer needed — server awards XP via SvPlayerState
 #include "engine/core/logger.h"
 #include "engine/render/sprite_batch.h"
 #include "game/ui/game_viewport.h"
@@ -18,7 +18,7 @@
 #include "game/systems/quest_system.h"
 #include "game/components/faction_component.h"
 #include "game/components/zone_component.h"
-#include "game/shared/pk_system.h"
+// pk_system.h no longer needed — server handles PK status via SvPlayerState
 
 #include <vector>
 #include <limits>
@@ -26,6 +26,7 @@
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
+#include <functional>
 
 namespace fate {
 
@@ -46,6 +47,10 @@ public:
     const char* name() const override { return "CombatActionSystem"; }
 
     Camera* camera = nullptr;  // Set by GameApp for click-to-target
+
+    // Callback: send attack command to server (server is authoritative for damage/kills)
+    // GameApp wires this to do a PID reverse-lookup and call netClient_.sendAction().
+    std::function<void(Entity* target)> onSendAttack;
 
     void update(float dt) override {
         gameTime_ += dt;
@@ -650,20 +655,8 @@ private:
 
         Vec2 textPos = targetT->position;
 
-        // ---- Get status effect components for attacker and target ----
-        auto* playerSEComp = player->getComponent<StatusEffectComponent>();
-        auto* targetSEComp = target->getComponent<StatusEffectComponent>();
-        auto* targetCCComp = target->getComponent<CrowdControlComponent>();
-
-        // ---- PK status transition on PvP attack ----
-        if (targetIsPlayer) {
-            PKAttackResult pkResult = PKSystem::processPvPAttack(ps.pkStatus);
-            if (pkResult.statusChanged) {
-                ps.pkStatus = pkResult.newAttackerStatus;
-                LOG_INFO("Combat", "PK status changed to %s",
-                         ps.pkStatus == PKStatus::Purple ? "Purple" : "Red");
-            }
-        }
+        // Status effects, CC, PK status transitions are all handled server-side now.
+        // Client only does prediction (damage text) and sends CmdAction.
 
         if (targetIsMob) {
             // ================================================================
@@ -672,414 +665,144 @@ private:
             EnemyStats& es = enemyComp->stats;
 
             if (isMage) {
-                // ---- Spell attack (PvE) ----
+                // ---- Spell attack (PvE) — prediction only ----
+                // Predict resist for visual feedback
                 bool resisted = CombatSystem::rollSpellResist(
                     ps.level, ps.getIntelligence(), es.level, es.magicResist);
 
                 if (resisted) {
                     spawnResistText(textPos);
-                    LOG_DEBUG("Combat", "Spell resisted by %s", es.enemyName.c_str());
-                    return;
+                    LOG_DEBUG("Combat", "[predict] Spell resisted by %s", es.enemyName.c_str());
                 }
 
+                // Predict damage for floating text
                 bool isCrit = false;
-                bool forceCrit = false;
-                if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
-                    forceCrit = true;
-                    playerSEComp->effects.consumeGuaranteedCrit();
-                }
-
-                int damage = ps.calculateDamage(forceCrit, isCrit);
-
-                if (playerSEComp) {
-                    damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
-                }
+                int damage = ps.calculateDamage(false, isCrit);
 
                 float mrReduction = CombatSystem::getMobMagicDamageReduction(es.magicResist);
                 damage = static_cast<int>(damage * (1.0f - mrReduction));
-
-                if (targetSEComp) {
-                    float markBonus = targetSEComp->effects.getBonusDamageTaken();
-                    if (markBonus > 0.0f) {
-                        damage = static_cast<int>(damage * (1.0f + markBonus));
-                    }
-                }
-
-                if (targetSEComp) {
-                    float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
-                    if (bewitchMult > 0.0f) {
-                        damage = static_cast<int>(damage * bewitchMult);
-                    }
-                }
-
-                if (targetSEComp) {
-                    damage = targetSEComp->effects.absorbDamage(damage);
-                }
-
                 if (damage < 1) damage = 1;
 
-                es.takeDamageFrom(player->id(), damage);
-                spawnDamageText(textPos, damage, isCrit);
-
-                if (targetCCComp) {
-                    targetCCComp->cc.breakFreeze();
+                if (!resisted) {
+                    spawnDamageText(textPos, damage, isCrit);
                 }
 
-                if (ps.equipBonusLifesteal > 0.0f) {
-                    int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
-                    if (healAmount > 0) {
-                        ps.heal(healAmount);
-                        spawnHealText(playerT->position, healAmount);
-                    }
-                }
+                // Send attack to server (authoritative damage/kill)
+                if (onSendAttack) onSendAttack(target);
 
-                if (isCrit && targetSEComp) {
-                    targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
-                }
-
-                LOG_DEBUG("Combat", "Spell hit %s for %d%s",
+                LOG_DEBUG("Combat", "[predict] Spell on %s for %d%s (sent to server)",
                           es.enemyName.c_str(), damage, isCrit ? " (CRIT)" : "");
 
             } else {
-                // ---- Physical attack (PvE) ----
+                // ---- Physical attack (PvE) — prediction only ----
+                // Predict hit/miss for visual feedback
                 bool hit = CombatSystem::rollToHit(
                     ps.level, static_cast<int>(ps.getHitRate()), es.level, 0);
 
                 if (!hit) {
                     spawnMissText(textPos);
-                    LOG_DEBUG("Combat", "Attack missed %s", es.enemyName.c_str());
-                    return;
+                    LOG_DEBUG("Combat", "[predict] Attack missed %s", es.enemyName.c_str());
                 }
 
-                if (CombatSystem::rollBlock(ps.classDef.classType,
-                                            ps.getStrength(), ps.getDexterity(),
-                                            0.0f)) {
-                    spawnBlockText(textPos);
-                    LOG_DEBUG("Combat", "Attack blocked by %s", es.enemyName.c_str());
-                    return;
-                }
-
+                // Predict damage for floating text
                 bool isCrit = false;
-                bool forceCrit = false;
-                if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
-                    forceCrit = true;
-                    playerSEComp->effects.consumeGuaranteedCrit();
-                }
-
-                int damage = ps.calculateDamage(forceCrit, isCrit);
-
-                if (playerSEComp) {
-                    damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
-                }
-
+                int damage = ps.calculateDamage(false, isCrit);
                 damage = CombatSystem::applyArmorReduction(damage, es.armor);
-
-                if (targetSEComp) {
-                    float markBonus = targetSEComp->effects.getBonusDamageTaken();
-                    if (markBonus > 0.0f) {
-                        damage = static_cast<int>(damage * (1.0f + markBonus));
-                    }
-                }
-
-                if (targetSEComp) {
-                    float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
-                    if (bewitchMult > 0.0f) {
-                        damage = static_cast<int>(damage * bewitchMult);
-                    }
-                }
-
-                if (targetSEComp) {
-                    damage = targetSEComp->effects.absorbDamage(damage);
-                }
-
                 if (damage < 1) damage = 1;
 
-                es.takeDamageFrom(player->id(), damage);
-                spawnDamageText(textPos, damage, isCrit);
-
-                if (targetCCComp) {
-                    targetCCComp->cc.breakFreeze();
+                if (hit) {
+                    spawnDamageText(textPos, damage, isCrit);
                 }
 
-                if (ps.equipBonusLifesteal > 0.0f) {
-                    int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
-                    if (healAmount > 0) {
-                        ps.heal(healAmount);
-                        spawnHealText(playerT->position, healAmount);
-                    }
-                }
+                // Send attack to server (authoritative damage/kill)
+                if (onSendAttack) onSendAttack(target);
 
-                if (isCrit && targetSEComp) {
-                    targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
-                }
-
-                float furyGain = isCrit
-                    ? ps.classDef.furyPerCriticalHit
-                    : ps.classDef.furyPerBasicAttack;
-                ps.addFury(furyGain);
-
-                LOG_DEBUG("Combat", "Hit %s for %d%s (+%.1f fury)",
-                          es.enemyName.c_str(), damage,
-                          isCrit ? " (CRIT)" : "", furyGain);
+                LOG_DEBUG("Combat", "[predict] Physical on %s for %d%s (sent to server)",
+                          es.enemyName.c_str(), damage, isCrit ? " (CRIT)" : "");
             }
 
-            // ---- Check for mob death ----
-            if (!enemyComp->stats.isAlive) {
-                onMobDeath(player, target);
-            }
+            // Server determines mob death via SvCombatEvent.isKill — no local death check
 
         } else {
             // ================================================================
-            // PLAYER TARGET — PvP attack logic (0.05x damage multiplier)
+            // PLAYER TARGET — PvP attack prediction only (server authoritative)
             // ================================================================
             CharacterStats& ts = targetCharStats->stats;
 
             if (isMage) {
-                // ---- Spell attack (PvP) ----
+                // ---- Spell attack (PvP) — prediction only ----
                 bool resisted = CombatSystem::rollSpellResist(
                     ps.level, ps.getIntelligence(), ts.level, ts.getMagicResist());
 
                 if (resisted) {
                     spawnResistText(textPos);
-                    LOG_DEBUG("Combat", "Spell resisted by %s", ts.characterName.c_str());
-                    return;
+                    LOG_DEBUG("Combat", "[predict] PvP spell resisted by %s", ts.characterName.c_str());
                 }
 
+                // Predict damage for floating text
                 bool isCrit = false;
-                bool forceCrit = false;
-                if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
-                    forceCrit = true;
-                    playerSEComp->effects.consumeGuaranteedCrit();
-                }
-
-                int damage = ps.calculateDamage(forceCrit, isCrit);
-
-                if (playerSEComp) {
-                    damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
-                }
-
-                // PvP damage multiplier (0.05x)
+                int damage = ps.calculateDamage(false, isCrit);
                 damage = static_cast<int>(std::round(damage * CombatSystem::getPvPDamageMultiplier()));
-
-                // Player magic resist reduction
                 float mrReduction = CombatSystem::getPlayerMagicDamageReduction(ts.getMagicResist());
                 damage = static_cast<int>(damage * (1.0f - mrReduction));
-
-                if (targetSEComp) {
-                    float markBonus = targetSEComp->effects.getBonusDamageTaken();
-                    if (markBonus > 0.0f) {
-                        damage = static_cast<int>(damage * (1.0f + markBonus));
-                    }
-                }
-
-                if (targetSEComp) {
-                    float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
-                    if (bewitchMult > 0.0f) {
-                        damage = static_cast<int>(damage * bewitchMult);
-                    }
-                }
-
-                if (targetSEComp) {
-                    damage = targetSEComp->effects.absorbDamage(damage);
-                }
-
                 if (damage < 1) damage = 1;
 
-                ts.takeDamage(damage);
-                spawnDamageText(textPos, damage, isCrit);
-
-                if (targetCCComp) {
-                    targetCCComp->cc.breakFreeze();
+                if (!resisted) {
+                    spawnDamageText(textPos, damage, isCrit);
                 }
 
-                if (ps.equipBonusLifesteal > 0.0f) {
-                    int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
-                    if (healAmount > 0) {
-                        ps.heal(healAmount);
-                        spawnHealText(playerT->position, healAmount);
-                    }
-                }
+                // Send attack to server (authoritative damage/kill/PK status)
+                if (onSendAttack) onSendAttack(target);
 
-                if (isCrit && targetSEComp) {
-                    targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
-                }
-
-                LOG_DEBUG("Combat", "PvP spell hit %s for %d%s",
+                LOG_DEBUG("Combat", "[predict] PvP spell on %s for %d%s (sent to server)",
                           ts.characterName.c_str(), damage, isCrit ? " (CRIT)" : "");
 
             } else {
-                // ---- Physical attack (PvP) ----
+                // ---- Physical attack (PvP) — prediction only ----
                 bool hit = CombatSystem::rollToHit(
                     ps.level, static_cast<int>(ps.getHitRate()),
                     ts.level, static_cast<int>(ts.getEvasion()));
 
                 if (!hit) {
                     spawnMissText(textPos);
-                    LOG_DEBUG("Combat", "PvP attack missed %s", ts.characterName.c_str());
-                    return;
+                    LOG_DEBUG("Combat", "[predict] PvP attack missed %s", ts.characterName.c_str());
                 }
 
-                if (CombatSystem::rollBlock(ps.classDef.classType,
-                                            ps.getStrength(), ps.getDexterity(),
-                                            ts.getBlockChance())) {
-                    spawnBlockText(textPos);
-                    LOG_DEBUG("Combat", "PvP attack blocked by %s", ts.characterName.c_str());
-                    return;
-                }
-
+                // Predict damage for floating text
                 bool isCrit = false;
-                bool forceCrit = false;
-                if (playerSEComp && playerSEComp->effects.hasGuaranteedCrit()) {
-                    forceCrit = true;
-                    playerSEComp->effects.consumeGuaranteedCrit();
-                }
-
-                int damage = ps.calculateDamage(forceCrit, isCrit);
-
-                if (playerSEComp) {
-                    damage = static_cast<int>(damage * playerSEComp->effects.getDamageMultiplier());
-                }
-
-                // PvP damage multiplier (0.05x)
+                int damage = ps.calculateDamage(false, isCrit);
                 damage = static_cast<int>(std::round(damage * CombatSystem::getPvPDamageMultiplier()));
-
-                // Armor reduction using target player's armor
                 damage = CombatSystem::applyArmorReduction(damage, ts.getArmor());
-
-                if (targetSEComp) {
-                    float markBonus = targetSEComp->effects.getBonusDamageTaken();
-                    if (markBonus > 0.0f) {
-                        damage = static_cast<int>(damage * (1.0f + markBonus));
-                    }
-                }
-
-                if (targetSEComp) {
-                    float bewitchMult = targetSEComp->effects.consumeBewitch(player->id());
-                    if (bewitchMult > 0.0f) {
-                        damage = static_cast<int>(damage * bewitchMult);
-                    }
-                }
-
-                if (targetSEComp) {
-                    damage = targetSEComp->effects.absorbDamage(damage);
-                }
-
                 if (damage < 1) damage = 1;
 
-                ts.takeDamage(damage);
-                spawnDamageText(textPos, damage, isCrit);
-
-                if (targetCCComp) {
-                    targetCCComp->cc.breakFreeze();
+                if (hit) {
+                    spawnDamageText(textPos, damage, isCrit);
                 }
 
-                if (ps.equipBonusLifesteal > 0.0f) {
-                    int healAmount = static_cast<int>(damage * ps.equipBonusLifesteal);
-                    if (healAmount > 0) {
-                        ps.heal(healAmount);
-                        spawnHealText(playerT->position, healAmount);
-                    }
-                }
+                // Send attack to server (authoritative damage/kill/PK status)
+                if (onSendAttack) onSendAttack(target);
 
-                if (isCrit && targetSEComp) {
-                    targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f, 5.0f);
-                }
-
-                // Fury generation on PvP physical hit
-                float furyGain = isCrit
-                    ? ps.classDef.furyPerCriticalHit
-                    : ps.classDef.furyPerBasicAttack;
-                ps.addFury(furyGain);
-
-                LOG_DEBUG("Combat", "PvP hit %s for %d%s (+%.1f fury)",
-                          ts.characterName.c_str(), damage,
-                          isCrit ? " (CRIT)" : "", furyGain);
+                LOG_DEBUG("Combat", "[predict] PvP physical on %s for %d%s (sent to server)",
+                          ts.characterName.c_str(), damage, isCrit ? " (CRIT)" : "");
             }
 
-            // ---- Check for player death (no XP/gold reward) ----
-            if (ts.isDead) {
-                LOG_INFO("Combat", "Player %s killed in PvP", ts.characterName.c_str());
-                clearTarget();
-            }
+            // Server determines player death via SvCombatEvent — no local death check
         }
     }
 
     // ------------------------------------------------------------------
-    // onMobDeath — XP, honor, respawn scheduling
+    // onMobDeath — visual-only (all rewards come from server via SvPlayerState/SvCombatEvent)
     // ------------------------------------------------------------------
-    void onMobDeath(Entity* player, Entity* mob) {
-        auto* statsComp = player->getComponent<CharacterStatsComponent>();
+    void onMobDeath(Entity* /*player*/, Entity* mob) {
         auto* enemyComp = mob->getComponent<EnemyStatsComponent>();
         auto* mobT      = mob->getComponent<Transform>();
 
-        if (!statsComp || !enemyComp || !mobT) return;
+        if (!enemyComp || !mobT) return;
 
-        CharacterStats& ps = statsComp->stats;
-        EnemyStats&     es = enemyComp->stats;
+        EnemyStats& es = enemyComp->stats;
 
-        // Notify quest system of mob death
-        auto* questSys = world_->getSystem<QuestSystem>();
-        if (questSys) {
-            questSys->onMobDeath(es.enemyName);
-        }
-
-        // Calculate and award XP
-        int xp = XPCalculator::calculateXPReward(es.xpReward, es.level, ps.level);
-        int prevLevel = ps.level;
-        ps.addXP(xp);
-
-        LOG_INFO("Combat", "Player killed %s (Lv %d) for %d XP",
-                 es.enemyName.c_str(), es.level, xp);
-
-        // Spawn XP text
-        if (xp > 0) {
-            spawnXPText(mobT->position, xp);
-        }
-
-        // Check for level up
-        if (ps.level > prevLevel) {
-            auto* playerT = player->getComponent<Transform>();
-            if (playerT) {
-                spawnLevelUpText(playerT->position);
-            }
-            LOG_INFO("Combat", "LEVEL UP! Now level %d", ps.level);
-        }
-
-        // Award gold
-        if (es.goldDropChance > 0.0f && es.maxGoldDrop > 0) {
-            thread_local std::mt19937 goldRng{std::random_device{}()};
-            std::uniform_real_distribution<float> chanceDist(0.0f, 1.0f);
-            if (chanceDist(goldRng) <= es.goldDropChance) {
-                std::uniform_int_distribution<int> goldDist(es.minGoldDrop, es.maxGoldDrop);
-                int gold = goldDist(goldRng);
-                if (gold > 0) {
-                    auto* invComp = player->getComponent<InventoryComponent>();
-                    if (invComp) {
-                        invComp->inventory.addGold(gold);
-                    }
-                    // Gold text
-                    char goldBuf[32];
-                    std::snprintf(goldBuf, sizeof(goldBuf), "+%d Gold", gold);
-                    FloatingText ft;
-                    ft.position = {mobT->position.x, mobT->position.y + 12.0f};
-                    ft.text = goldBuf;
-                    ft.color = Color(1.0f, 0.84f, 0.0f); // gold
-                    ft.lifetime = kTextLifetime;
-                    ft.elapsed = 0.0f;
-                    ft.startY = ft.position.y;
-                    ft.isCrit = false;
-                    floatingTexts_.push_back(ft);
-                    LOG_INFO("Combat", "Gained %d gold from %s", gold, es.enemyName.c_str());
-                }
-            }
-        }
-
-        // Award honor if mob has honorReward
-        if (es.honorReward > 0) {
-            ps.honor += es.honorReward;
-            LOG_INFO("Combat", "Gained %d honor from %s",
-                     es.honorReward, es.enemyName.c_str());
-        }
+        LOG_INFO("Combat", "Mob %s (Lv %d) died — server awards XP/gold/honor",
+                 es.enemyName.c_str(), es.level);
 
         // Hide the mob sprite (SpawnSystem handles respawn)
         auto* sprite = mob->getComponent<SpriteComponent>();
