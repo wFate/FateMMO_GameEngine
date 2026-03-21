@@ -16,6 +16,7 @@
 #include "game/systems/mob_ai_system.h"
 #include "game/shared/xp_calculator.h"
 #include "game/shared/profanity_filter.h"
+#include "game/shared/enchant_system.h"
 #include "engine/net/game_messages.h"
 
 #ifdef _WIN32
@@ -2411,6 +2412,16 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             processEquip(clientId, msg);
             break;
         }
+        case PacketType::CmdEnchant: {
+            auto msg = CmdEnchantMsg::read(payload);
+            processEnchant(clientId, msg);
+            break;
+        }
+        case PacketType::CmdRepair: {
+            auto msg = CmdRepairMsg::read(payload);
+            processRepair(clientId, msg);
+            break;
+        }
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;
@@ -3903,6 +3914,214 @@ void ServerApp::broadcastBossKillNotification(const EnemyStats& es,
                           PacketType::SvBossLootOwner, buf, w.size());
         }
     });
+}
+
+// ============================================================================
+// processEnchant — attempt to enchant an inventory item
+// ============================================================================
+void ServerApp::processEnchant(uint16_t clientId, const CmdEnchantMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* player = world_.getEntity(h);
+    if (!player) return;
+
+    auto* charStats = player->getComponent<CharacterStatsComponent>();
+    auto* inv       = player->getComponent<InventoryComponent>();
+    if (!charStats || !inv) return;
+
+    // Helper: send enchant result back to client
+    auto sendResult = [&](bool success, uint8_t newLevel, bool broke, const std::string& msg_str) {
+        SvEnchantResultMsg res;
+        res.success  = success ? 1 : 0;
+        res.newLevel = newLevel;
+        res.broke    = broke ? 1 : 0;
+        res.message  = msg_str;
+        uint8_t buf[256];
+        ByteWriter w(buf, sizeof(buf));
+        res.write(w);
+        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvEnchantResult, buf, w.size());
+    };
+
+    // 1. Validate: item exists in inventory slot
+    ItemInstance item = inv->inventory.getSlot(msg.inventorySlot);
+    if (!item.isValid()) {
+        sendResult(false, 0, false, "Invalid item slot");
+        return;
+    }
+
+    // 2. Validate: item is not already broken
+    if (item.isBroken) {
+        sendResult(false, static_cast<uint8_t>(item.enchantLevel), false, "Item is broken — repair it first");
+        return;
+    }
+
+    // 3. Look up item definition
+    const CachedItemDefinition* itemDef = itemDefCache_.getDefinition(item.itemId);
+    if (!itemDef) {
+        sendResult(false, static_cast<uint8_t>(item.enchantLevel), false, "Unknown item");
+        return;
+    }
+
+    // 4. Validate: must be weapon or armor but NOT accessory
+    if (!(itemDef->isWeapon() || itemDef->isArmor()) || itemDef->isAccessory()) {
+        sendResult(false, static_cast<uint8_t>(item.enchantLevel), false, "Item cannot be enchanted");
+        return;
+    }
+
+    // 5. Check max enchant cap
+    int targetLevel = item.enchantLevel + 1;
+    int maxEnchant = static_cast<int>(EnchantConstants::MAX_ENCHANT_LEVEL);
+    int cap = (itemDef->maxEnchant < maxEnchant) ? itemDef->maxEnchant : maxEnchant;
+    if (targetLevel > cap) {
+        sendResult(false, static_cast<uint8_t>(item.enchantLevel), false, "Item is already at max enchant level");
+        return;
+    }
+
+    // 6. Find enhancement stone
+    std::string requiredStone = EnchantSystem::getRequiredStone(itemDef->levelReq);
+    int stoneSlot = inv->inventory.findItemById(requiredStone);
+    if (stoneSlot < 0) {
+        sendResult(false, static_cast<uint8_t>(item.enchantLevel), false, "Missing enhancement stone");
+        return;
+    }
+
+    // 7. Check gold
+    int goldCost = EnchantSystem::getGoldCost(targetLevel);
+    int64_t currentGold = inv->inventory.getGold();
+    if (currentGold < goldCost) {
+        sendResult(false, static_cast<uint8_t>(item.enchantLevel), false, "Insufficient gold");
+        return;
+    }
+
+    // 8. If protection stone requested, find it
+    int protectSlot = -1;
+    if (msg.useProtectionStone) {
+        protectSlot = inv->inventory.findItemById("mat_protect_stone");
+        if (protectSlot < 0) {
+            sendResult(false, static_cast<uint8_t>(item.enchantLevel), false, "Missing protection stone");
+            return;
+        }
+    }
+
+    // 9. WAL: log gold deduction before consuming
+    wal_.appendGoldChange(client->character_id, -static_cast<int64_t>(goldCost));
+
+    // 10. Consume resources
+    inv->inventory.setGold(currentGold - goldCost);
+    inv->inventory.removeItemQuantity(stoneSlot, 1);
+    if (protectSlot >= 0) {
+        inv->inventory.removeItemQuantity(protectSlot, 1);
+    }
+
+    // 11. Roll enchant
+    bool success = EnchantSystem::tryEnchant(targetLevel);
+    bool broke = false;
+
+    if (success) {
+        item.enchantLevel = targetLevel;
+    } else if (EnchantSystem::hasBreakRisk(targetLevel)) {
+        if (msg.useProtectionStone) {
+            // Stone was consumed; item stays at current level
+        } else {
+            // Break the item
+            item.isBroken    = true;
+            item.isSoulbound = true;
+            broke = true;
+        }
+    }
+    // Failure below safe threshold: item just stays at same level (no break)
+
+    // 12. Write item back to inventory (remove + re-add at same slot)
+    inv->inventory.removeItem(msg.inventorySlot);
+    inv->inventory.addItemToSlot(msg.inventorySlot, item);
+
+    // 13. Send result and sync
+    sendResult(success, static_cast<uint8_t>(item.enchantLevel), broke,
+               success ? "Enchant succeeded!" : (broke ? "Item was destroyed!" : "Enchant failed"));
+    sendPlayerState(clientId);
+    sendInventorySync(clientId);
+
+    LOG_INFO("Server", "Client %d enchant slot %d -> +%d success=%d broke=%d",
+             clientId, msg.inventorySlot, item.enchantLevel, success ? 1 : 0, broke ? 1 : 0);
+}
+
+// ============================================================================
+// processRepair — repair a broken inventory item using a repair scroll
+// ============================================================================
+void ServerApp::processRepair(uint16_t clientId, const CmdRepairMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* player = world_.getEntity(h);
+    if (!player) return;
+
+    auto* inv = player->getComponent<InventoryComponent>();
+    if (!inv) return;
+
+    // Helper: send repair result back to client
+    auto sendResult = [&](bool success, uint8_t newLevel, const std::string& msg_str) {
+        SvRepairResultMsg res;
+        res.success  = success ? 1 : 0;
+        res.newLevel = newLevel;
+        res.message  = msg_str;
+        uint8_t buf[256];
+        ByteWriter w(buf, sizeof(buf));
+        res.write(w);
+        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvRepairResult, buf, w.size());
+    };
+
+    // 1. Validate: item exists and is broken
+    ItemInstance item = inv->inventory.getSlot(msg.inventorySlot);
+    if (!item.isValid()) {
+        sendResult(false, 0, "Invalid item slot");
+        return;
+    }
+    if (!item.isBroken) {
+        sendResult(false, static_cast<uint8_t>(item.enchantLevel), "Item is not broken");
+        return;
+    }
+
+    // 2. Find repair scroll
+    int scrollSlot = inv->inventory.findItemById("item_repair_scroll");
+    if (scrollSlot < 0) {
+        sendResult(false, static_cast<uint8_t>(item.enchantLevel), "Missing repair scroll");
+        return;
+    }
+
+    // 3. Check gold (50,000)
+    constexpr int64_t REPAIR_GOLD_COST = 50000;
+    int64_t currentGold = inv->inventory.getGold();
+    if (currentGold < REPAIR_GOLD_COST) {
+        sendResult(false, static_cast<uint8_t>(item.enchantLevel), "Insufficient gold (need 50,000)");
+        return;
+    }
+
+    // 4. WAL: log gold deduction
+    wal_.appendGoldChange(client->character_id, -REPAIR_GOLD_COST);
+
+    // 5. Consume scroll and gold
+    inv->inventory.removeItemQuantity(scrollSlot, 1);
+    inv->inventory.setGold(currentGold - REPAIR_GOLD_COST);
+
+    // 6. Repair item (stays soulbound, enchant level reset to safe random level)
+    item.isBroken    = false;
+    item.enchantLevel = EnchantSystem::rollRepairLevel();
+
+    // 7. Write item back to inventory
+    inv->inventory.removeItem(msg.inventorySlot);
+    inv->inventory.addItemToSlot(msg.inventorySlot, item);
+
+    // 8. Send result and sync
+    sendResult(true, static_cast<uint8_t>(item.enchantLevel), "Item repaired successfully!");
+    sendInventorySync(clientId);
+
+    LOG_INFO("Server", "Client %d repaired slot %d -> enchant +%d",
+             clientId, msg.inventorySlot, item.enchantLevel);
 }
 
 } // namespace fate
