@@ -216,3 +216,42 @@ TEST_CASE("SvEntityUpdateMsg round-trip with updateSeq") {
     CHECK(dst.position.x == doctest::Approx(10.0f));
     CHECK(dst.currentHP == 500);
 }
+
+TEST_CASE("SvBossLootOwnerMsg serialization round-trip") {
+    fate::SvBossLootOwnerMsg original;
+    original.bossId = "goblin_king";
+    original.winnerName = "TestWarrior";
+    original.topDamage = 12500;
+    original.wasParty = 1;
+
+    uint8_t buf[256];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::SvBossLootOwnerMsg::read(r);
+
+    CHECK(decoded.bossId == "goblin_king");
+    CHECK(decoded.winnerName == "TestWarrior");
+    CHECK(decoded.topDamage == 12500);
+    CHECK(decoded.wasParty == 1);
+}
+
+TEST_CASE("SvBossLootOwnerMsg empty winner name") {
+    fate::SvBossLootOwnerMsg original;
+    original.bossId = "boss_99";
+    original.winnerName = "";
+    original.topDamage = 0;
+    original.wasParty = 0;
+
+    uint8_t buf[256];
+    fate::ByteWriter w(buf, sizeof(buf));
+    original.write(w);
+
+    fate::ByteReader r(buf, w.size());
+    auto decoded = fate::SvBossLootOwnerMsg::read(r);
+
+    CHECK(decoded.bossId == "boss_99");
+    CHECK(decoded.winnerName == "");
+    CHECK(decoded.topDamage == 0);
+}
