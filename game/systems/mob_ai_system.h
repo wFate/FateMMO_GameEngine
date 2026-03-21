@@ -290,7 +290,10 @@ public:
                 finalDamage = CombatSystem::applyArmorReduction(atk.rawDamage,
                     playerStatsComp->stats.getArmor());
             }
-            playerStatsComp->stats.takeDamage(finalDamage);
+            // Server-only: client skips damage application, waits for SvCombatEventMsg
+            if (onMobAttackResolved) {
+                playerStatsComp->stats.takeDamage(finalDamage);
+            }
         }
     }
 
