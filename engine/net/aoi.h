@@ -7,8 +7,8 @@
 namespace fate {
 
 struct AOIConfig {
-    float activationRadius = 320.0f;   // 10 tiles * 32px
-    float deactivationRadius = 384.0f; // 20% larger for hysteresis
+    float activationRadius = 640.0f;   // 20 tiles * 32px
+    float deactivationRadius = 768.0f; // 20% larger for hysteresis
 };
 
 struct VisibilitySet {

@@ -62,61 +62,22 @@ EntityHandle ReplicationManager::getEntityHandle(PersistentId pid) const {
 }
 
 void ReplicationManager::buildVisibility(World& world, ClientConnection& client) {
-    // Find the client's player entity to get its position
-    auto playerIt = pidToHandle_.find(client.playerEntityId);
-    if (playerIt == pidToHandle_.end()) return;
-
-    Entity* playerEntity = world.getEntity(playerIt->second);
-    if (!playerEntity) return;
-
-    auto* playerTransform = playerEntity->getComponent<Transform>();
-    if (!playerTransform) return;
-
-    Vec2 playerPos = playerTransform->position;
-
-    // Clear current visibility set
+    // Scene-based visibility: replicate ALL registered entities to the client
+    // (except the client's own player). At current scale (12 mobs + few players
+    // per zone), distance-based AOI adds complexity and causes invisible-mob bugs
+    // without meaningful bandwidth savings. Re-add AOI only when zone populations
+    // justify it (100+ entities).
     client.aoi.current.clear();
 
-    // Build set of previously visible handles for hysteresis check
-    std::unordered_map<uint32_t, bool> wasPreviouslyVisible;
-    for (const auto& h : client.aoi.previous) {
-        wasPreviouslyVisible[h.value] = true;
-    }
+    for (const auto& [handleValue, pid] : handleToPid_) {
+        // Exclude the client's own player entity
+        if (pid.value() == client.playerEntityId) continue;
 
-    // Query the spatial index using the deactivation radius (the larger one)
-    // to capture both newly-activating and previously-visible entities in one pass.
-    std::vector<EntityId> candidates;
-    spatialIndex_.queryRadius(playerPos, aoiConfig_.deactivationRadius, candidates,
-        [&](EntityId id) {
-            // Exclude the client's own player entity
-            auto pidIt = handleToPid_.find(id);
-            return pidIt != handleToPid_.end() &&
-                   pidIt->second.value() != client.playerEntityId;
-        });
+        // Verify entity still exists and is active
+        Entity* entity = world.getEntity(EntityHandle(handleValue));
+        if (!entity || !entity->isActive()) continue;
 
-    // Apply hysteresis: previously-visible entities use deactivation radius,
-    // new entities must be within the tighter activation radius.
-    float activationRadiusSq = aoiConfig_.activationRadius * aoiConfig_.activationRadius;
-
-    for (EntityId id : candidates) {
-        bool wasVisible = wasPreviouslyVisible.count(id) > 0;
-
-        if (wasVisible) {
-            // Already within deactivation radius (guaranteed by spatial query)
-            client.aoi.current.push_back(EntityHandle(id));
-        } else {
-            // New entity: must pass the stricter activation radius check
-            Entity* entity = world.getEntity(EntityHandle(id));
-            if (!entity) continue;
-            auto* transform = entity->getComponent<Transform>();
-            if (!transform) continue;
-
-            float dx = transform->position.x - playerPos.x;
-            float dy = transform->position.y - playerPos.y;
-            if (dx * dx + dy * dy <= activationRadiusSq) {
-                client.aoi.current.push_back(EntityHandle(id));
-            }
-        }
+        client.aoi.current.push_back(EntityHandle(handleValue));
     }
 
     client.aoi.computeDiff();
