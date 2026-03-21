@@ -8,8 +8,8 @@
 namespace fate {
 
 // Embedded shader sources (no external file needed for fallback)
+// Note: #version preamble injected by Shader::loadFromSource() at compile time
 static const char* SPRITE_VERT_SRC = R"(
-#version 330 core
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in vec2 aTexCoord;
 layout (location = 2) in vec4 aColor;
@@ -30,7 +30,6 @@ void main() {
 )";
 
 static const char* SPRITE_FRAG_SRC = R"(
-#version 330 core
 in vec2 v_uv;
 in vec4 v_color;
 in float v_renderType;

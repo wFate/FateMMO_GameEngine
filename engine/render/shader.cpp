@@ -11,7 +11,7 @@ namespace {
     const char* getShaderPreamble(bool isFragment) {
 #ifdef FATEMMO_GLES
         if (isFragment) {
-            return "#version 300 es\nprecision mediump float;\nprecision mediump sampler2D;\n";
+            return "#version 300 es\nprecision highp float;\nprecision highp sampler2D;\n";
         } else {
             return "#version 300 es\n";
         }
@@ -19,6 +19,18 @@ namespace {
         (void)isFragment;
         return "#version 330 core\n";
 #endif
+    }
+
+    bool hasVersionDirective(const std::string& src) {
+        // Skip leading whitespace/newlines
+        size_t pos = src.find_first_not_of(" \t\r\n");
+        if (pos == std::string::npos) return false;
+        return src.compare(pos, 8, "#version") == 0;
+    }
+
+    std::string prependPreamble(const std::string& src, bool isFragment) {
+        if (hasVersionDirective(src)) return src;
+        return std::string(getShaderPreamble(isFragment)) + src;
     }
 } // anonymous namespace
 
@@ -45,8 +57,8 @@ bool Shader::loadFromFile(const std::string& vertPath, const std::string& fragPa
     vertStream << vertFile.rdbuf();
     fragStream << fragFile.rdbuf();
 
-    std::string vertSrc = std::string(getShaderPreamble(false)) + vertStream.str();
-    std::string fragSrc = std::string(getShaderPreamble(true)) + fragStream.str();
+    std::string vertSrc = prependPreamble(vertStream.str(), false);
+    std::string fragSrc = prependPreamble(fragStream.str(), true);
 
     vertPath_ = vertPath;
     fragPath_ = fragPath;
@@ -65,8 +77,8 @@ bool Shader::reloadFromFile(const std::string& vertPath, const std::string& frag
     vertStream << vertFile.rdbuf();
     fragStream << fragFile.rdbuf();
 
-    std::string vertSrc = std::string(getShaderPreamble(false)) + vertStream.str();
-    std::string fragSrc = std::string(getShaderPreamble(true)) + fragStream.str();
+    std::string vertSrc = prependPreamble(vertStream.str(), false);
+    std::string fragSrc = prependPreamble(fragStream.str(), true);
 
     // Save old handle in case loadFromSource fails
     gfx::ShaderHandle oldHandle = gfxHandle_;
@@ -94,8 +106,12 @@ bool Shader::reloadFromFile(const std::string& vertPath, const std::string& frag
 }
 
 bool Shader::loadFromSource(const std::string& vertSrc, const std::string& fragSrc) {
+    // Ensure both sources have a version preamble (skip if already present)
+    std::string vert = prependPreamble(vertSrc, false);
+    std::string frag = prependPreamble(fragSrc, true);
+
     auto& device = gfx::Device::instance();
-    gfx::ShaderHandle handle = device.createShader(vertSrc, fragSrc);
+    gfx::ShaderHandle handle = device.createShader(vert, frag);
     if (!handle.valid()) {
         LOG_ERROR("Shader", "Device::createShader failed");
         return false;
