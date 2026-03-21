@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <vector>
+#include <utility>
 #include "engine/net/byte_stream.h"
 #include "engine/core/types.h"
 
@@ -355,6 +357,166 @@ struct SvLootPickupMsg {
         m.isGold      = r.readU8();
         m.goldAmount  = r.readI32();
         m.rarity      = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// State Sync Messages (server -> client on connect)
+// ============================================================================
+
+struct SkillSyncEntry {
+    std::string skillId;
+    uint8_t unlockedRank = 0;
+    uint8_t activatedRank = 0;
+};
+
+struct SvSkillSyncMsg {
+    std::vector<SkillSyncEntry> skills;
+    std::vector<std::string> skillBar; // 20 slots, empty string = unbound
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(skills.size()));
+        for (const auto& s : skills) {
+            w.writeString(s.skillId);
+            w.writeU8(s.unlockedRank);
+            w.writeU8(s.activatedRank);
+        }
+        w.writeU8(static_cast<uint8_t>(skillBar.size()));
+        for (const auto& slot : skillBar) {
+            w.writeString(slot);
+        }
+    }
+
+    static SvSkillSyncMsg read(ByteReader& r) {
+        SvSkillSyncMsg m;
+        uint16_t count = r.readU16();
+        m.skills.resize(count);
+        for (uint16_t i = 0; i < count; ++i) {
+            m.skills[i].skillId = r.readString();
+            m.skills[i].unlockedRank = r.readU8();
+            m.skills[i].activatedRank = r.readU8();
+        }
+        uint8_t barCount = r.readU8();
+        m.skillBar.resize(barCount);
+        for (uint8_t i = 0; i < barCount; ++i) {
+            m.skillBar[i] = r.readString();
+        }
+        return m;
+    }
+};
+
+struct QuestSyncEntry {
+    std::string questId;
+    uint8_t state = 0; // 0=active, 1=completed, 2=failed
+    std::vector<std::pair<int32_t, int32_t>> objectives; // current, target
+};
+
+struct SvQuestSyncMsg {
+    std::vector<QuestSyncEntry> quests;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(quests.size()));
+        for (const auto& q : quests) {
+            w.writeString(q.questId);
+            w.writeU8(q.state);
+            w.writeU8(static_cast<uint8_t>(q.objectives.size()));
+            for (const auto& [cur, tgt] : q.objectives) {
+                w.writeI32(cur);
+                w.writeI32(tgt);
+            }
+        }
+    }
+
+    static SvQuestSyncMsg read(ByteReader& r) {
+        SvQuestSyncMsg m;
+        uint16_t count = r.readU16();
+        m.quests.resize(count);
+        for (uint16_t i = 0; i < count; ++i) {
+            m.quests[i].questId = r.readString();
+            m.quests[i].state = r.readU8();
+            uint8_t objCount = r.readU8();
+            m.quests[i].objectives.resize(objCount);
+            for (uint8_t j = 0; j < objCount; ++j) {
+                m.quests[i].objectives[j].first = r.readI32();
+                m.quests[i].objectives[j].second = r.readI32();
+            }
+        }
+        return m;
+    }
+};
+
+struct InventorySyncSlot {
+    int32_t slotIndex = -1;
+    std::string itemId;
+    int32_t quantity = 0;
+    int32_t enchantLevel = 0;
+    std::string rolledStats; // JSON string
+    std::string socketStat;
+    int32_t socketValue = 0;
+};
+
+struct InventorySyncEquip {
+    uint8_t slot = 0; // EquipmentSlot enum
+    std::string itemId;
+    int32_t quantity = 0;
+    int32_t enchantLevel = 0;
+    std::string rolledStats;
+    std::string socketStat;
+    int32_t socketValue = 0;
+};
+
+struct SvInventorySyncMsg {
+    std::vector<InventorySyncSlot> slots;
+    std::vector<InventorySyncEquip> equipment;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(slots.size()));
+        for (const auto& s : slots) {
+            w.writeI32(s.slotIndex);
+            w.writeString(s.itemId);
+            w.writeI32(s.quantity);
+            w.writeI32(s.enchantLevel);
+            w.writeString(s.rolledStats);
+            w.writeString(s.socketStat);
+            w.writeI32(s.socketValue);
+        }
+        w.writeU16(static_cast<uint16_t>(equipment.size()));
+        for (const auto& e : equipment) {
+            w.writeU8(e.slot);
+            w.writeString(e.itemId);
+            w.writeI32(e.quantity);
+            w.writeI32(e.enchantLevel);
+            w.writeString(e.rolledStats);
+            w.writeString(e.socketStat);
+            w.writeI32(e.socketValue);
+        }
+    }
+
+    static SvInventorySyncMsg read(ByteReader& r) {
+        SvInventorySyncMsg m;
+        uint16_t slotCount = r.readU16();
+        m.slots.resize(slotCount);
+        for (uint16_t i = 0; i < slotCount; ++i) {
+            m.slots[i].slotIndex = r.readI32();
+            m.slots[i].itemId = r.readString();
+            m.slots[i].quantity = r.readI32();
+            m.slots[i].enchantLevel = r.readI32();
+            m.slots[i].rolledStats = r.readString();
+            m.slots[i].socketStat = r.readString();
+            m.slots[i].socketValue = r.readI32();
+        }
+        uint16_t equipCount = r.readU16();
+        m.equipment.resize(equipCount);
+        for (uint16_t i = 0; i < equipCount; ++i) {
+            m.equipment[i].slot = r.readU8();
+            m.equipment[i].itemId = r.readString();
+            m.equipment[i].quantity = r.readI32();
+            m.equipment[i].enchantLevel = r.readI32();
+            m.equipment[i].rolledStats = r.readString();
+            m.equipment[i].socketStat = r.readString();
+            m.equipment[i].socketValue = r.readI32();
+        }
         return m;
     }
 };

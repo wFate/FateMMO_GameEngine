@@ -50,6 +50,9 @@ public:
     std::function<void(const SvDeathNotifyMsg&)> onDeathNotify;
     std::function<void(const SvRespawnMsg&)> onRespawn;
     std::function<void(const SvSkillResultMsg&)> onSkillResult;
+    std::function<void(const SvSkillSyncMsg&)> onSkillSync;
+    std::function<void(const SvQuestSyncMsg&)> onQuestSync;
+    std::function<void(const SvInventorySyncMsg&)> onInventorySync;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:
@@ -59,7 +62,7 @@ private:
     uint16_t clientId_ = 0;
     uint32_t sessionToken_ = 0;
     bool connected_ = false;
-    float connectTimeout_ = 5.0f;
+    float connectTimeout_ = 15.0f;  // remote DB can take 10s+ to load character
     float connectStartTime_ = 0.0f;
     bool waitingForAccept_ = false;
     float lastHeartbeatSent_ = 0.0f;
