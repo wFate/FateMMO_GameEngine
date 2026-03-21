@@ -894,6 +894,10 @@ void GameApp::onInit() {
         auto* scene = SceneManager::instance().currentScene();
         if (!scene) return;
 
+        // Check if attacker is the local player (not in ghostEntities_ = us)
+        // Ghost entities are OTHER players/mobs; the local player is never a ghost.
+        bool isLocalAttack = (ghostEntities_.find(msg.attackerId) == ghostEntities_.end());
+
         // Find target entity position for floating text
         // Strategy: check if attackerId or targetId matches known entities
         Vec2 targetPos{0, 0};
@@ -934,11 +938,14 @@ void GameApp::onInit() {
 
         if (!foundTarget) return;
 
-        // Spawn floating text
-        if (msg.damage == 0) {
-            combatSystem_->showMissText(targetPos);
-        } else {
-            combatSystem_->showDamageText(targetPos, msg.damage, msg.isCrit != 0);
+        // Show floating text only for OTHER players' attacks.
+        // Local player already showed predicted damage text via CombatActionSystem.
+        if (!isLocalAttack) {
+            if (msg.damage == 0) {
+                combatSystem_->showMissText(targetPos);
+            } else {
+                combatSystem_->showDamageText(targetPos, msg.damage, msg.isCrit != 0);
+            }
         }
     };
 
