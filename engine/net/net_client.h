@@ -25,6 +25,7 @@ public:
     void sendZoneTransition(const std::string& targetScene);
     void sendRespawn(uint8_t respawnType);
     void sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId);
+    void sendUseConsumable(uint8_t inventorySlot);
 
     bool isConnected() const { return connected_; }
     uint16_t clientId() const { return clientId_; }
@@ -71,6 +72,8 @@ public:
     std::function<void(const SvBankResultMsg&)> onBankResult;
     std::function<void(const SvSocketResultMsg&)> onSocketResult;
     std::function<void(const SvStatEnchantResultMsg&)> onStatEnchantResult;
+    std::function<void(const SvConsumeResultMsg&)> onConsumeResult;
+    std::function<void(const SvRankingResultMsg&)> onRankingResult;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:
