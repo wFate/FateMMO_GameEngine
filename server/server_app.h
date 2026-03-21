@@ -119,6 +119,9 @@ private:
     // Per-client auto-save tracking (staggered)
     std::unordered_map<uint16_t, float> nextAutoSaveTime_;
 
+    // Per-client auto-attack cooldown tracking
+    std::unordered_map<uint16_t, float> lastAutoAttackTime_;
+
     // Periodic maintenance timers
     float bossTickTimer_ = 0.0f;
     float marketExpiryTimer_ = 0.0f;

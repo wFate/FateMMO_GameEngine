@@ -1091,6 +1091,7 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     skillCommandsThisTick_.erase(clientId);
     nextAutoSaveTime_.erase(clientId);
     needsFirstMoveSync_.erase(clientId);
+    lastAutoAttackTime_.erase(clientId);
 }
 
 void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload) {
@@ -2439,6 +2440,10 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         if (charStats) {
             attackRange = charStats->stats.classDef.attackRange;
         }
+
+        // Validate player is alive
+        if (charStats && charStats->stats.isDead) return;
+
         float maxRange = attackRange * 32.0f + 16.0f;
         float dist = attackerTransform->position.distance(targetTransform->position);
         if (dist > maxRange) {
@@ -2449,6 +2454,13 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         // Check target is a living enemy
         auto* enemyStats = target->getComponent<EnemyStatsComponent>();
         if (!enemyStats || !enemyStats->stats.isAlive) return;
+
+        // Validate auto-attack cooldown
+        float weaponSpeed = charStats ? charStats->stats.weaponAttackSpeed : 1.0f;
+        float cooldown = (weaponSpeed > 0.0f) ? (1.0f / weaponSpeed) : 1.5f;
+        auto lastIt = lastAutoAttackTime_.find(clientId);
+        if (lastIt != lastAutoAttackTime_.end() && gameTime_ - lastIt->second < cooldown * 0.8f) return;
+        lastAutoAttackTime_[clientId] = gameTime_;
 
         // Calculate damage
         int damage = 10; // default

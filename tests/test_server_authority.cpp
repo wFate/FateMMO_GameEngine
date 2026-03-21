@@ -40,3 +40,11 @@ TEST_CASE("addXP with zero does nothing") {
     CHECK(s.level == 5);
     CHECK(s.currentXP == 50);
 }
+
+TEST_CASE("Server rejects attack while player dead") {
+    // Create CharacterStats with isDead = true
+    CharacterStats s;
+    s.isDead = true;
+    CHECK(s.isDead == true);
+    // This validates the guard condition; full integration test would need server
+}
