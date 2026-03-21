@@ -539,6 +539,7 @@ struct InventorySyncSlot {
     std::string rolledStats; // JSON string
     std::string socketStat;
     int32_t socketValue = 0;
+    uint8_t isBroken = 0;
 };
 
 struct InventorySyncEquip {
@@ -549,6 +550,7 @@ struct InventorySyncEquip {
     std::string rolledStats;
     std::string socketStat;
     int32_t socketValue = 0;
+    uint8_t isBroken = 0;
 };
 
 struct SvInventorySyncMsg {
@@ -565,6 +567,7 @@ struct SvInventorySyncMsg {
             w.writeString(s.rolledStats);
             w.writeString(s.socketStat);
             w.writeI32(s.socketValue);
+            w.writeU8(s.isBroken);
         }
         w.writeU16(static_cast<uint16_t>(equipment.size()));
         for (const auto& e : equipment) {
@@ -575,6 +578,7 @@ struct SvInventorySyncMsg {
             w.writeString(e.rolledStats);
             w.writeString(e.socketStat);
             w.writeI32(e.socketValue);
+            w.writeU8(e.isBroken);
         }
     }
 
@@ -590,6 +594,7 @@ struct SvInventorySyncMsg {
             m.slots[i].rolledStats = r.readString();
             m.slots[i].socketStat = r.readString();
             m.slots[i].socketValue = r.readI32();
+            m.slots[i].isBroken = r.readU8();
         }
         uint16_t equipCount = r.readU16();
         m.equipment.resize(equipCount);
@@ -601,6 +606,7 @@ struct SvInventorySyncMsg {
             m.equipment[i].rolledStats = r.readString();
             m.equipment[i].socketStat = r.readString();
             m.equipment[i].socketValue = r.readI32();
+            m.equipment[i].isBroken = r.readU8();
         }
         return m;
     }
