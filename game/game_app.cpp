@@ -33,6 +33,7 @@
 #include "game/ui/hud_bars_ui.h"
 #include "game/ui/touch_controls.h"
 #include "game/shared/npc_types.h"
+#include "game/shared/item_stat_roller.h"
 #include "game/components/spawn_point_component.h"
 #include "imgui.h"
 #include <cstdio>
@@ -1095,6 +1096,116 @@ void GameApp::onInit() {
                         break;
                     default: break;
                 }
+            }
+        );
+    };
+
+    // --- State sync handlers (sent by server on connect) ---
+
+    netClient_.onSkillSync = [this](const SvSkillSyncMsg& msg) {
+        if (!localPlayerCreated_) return; // silently drop if player not yet created
+        auto* sc = SceneManager::instance().currentScene();
+        if (!sc) return;
+        sc->world().forEach<SkillManagerComponent, PlayerController>(
+            [&](Entity*, SkillManagerComponent* sm, PlayerController* ctrl) {
+                if (!ctrl->isLocalPlayer) return;
+                // Rebuild skill state from server data using setSerializedState
+                std::vector<LearnedSkill> skills;
+                for (const auto& s : msg.skills) {
+                    LearnedSkill ls;
+                    ls.skillId = s.skillId;
+                    ls.unlockedRank = s.unlockedRank;
+                    ls.activatedRank = s.activatedRank;
+                    skills.push_back(std::move(ls));
+                }
+                std::vector<std::string> bar;
+                for (int i = 0; i < (int)msg.skillBar.size() && i < 20; ++i) {
+                    bar.push_back(msg.skillBar[i]);
+                }
+                bar.resize(20); // pad to 20 slots
+                sm->skills.setSerializedState(std::move(skills), std::move(bar),
+                    sm->skills.availablePoints(), sm->skills.earnedPoints(), sm->skills.spentPoints());
+            }
+        );
+    };
+
+    netClient_.onQuestSync = [this](const SvQuestSyncMsg& msg) {
+        if (!localPlayerCreated_) return;
+        auto* sc = SceneManager::instance().currentScene();
+        if (!sc) return;
+        sc->world().forEach<QuestComponent, PlayerController>(
+            [&](Entity*, QuestComponent* qc, PlayerController* ctrl) {
+                if (!ctrl->isLocalPlayer) return;
+                std::vector<uint32_t> completed;
+                std::vector<ActiveQuest> active;
+                for (const auto& q : msg.quests) {
+                    uint32_t qid = 0;
+                    try { qid = static_cast<uint32_t>(std::stoul(q.questId)); }
+                    catch (...) { continue; }
+                    if (q.state == 1 || q.state == 2) { // completed or failed
+                        completed.push_back(qid);
+                    } else { // active
+                        ActiveQuest aq;
+                        aq.questId = qid;
+                        for (const auto& [cur, tgt] : q.objectives) {
+                            aq.objectiveProgress.push_back(static_cast<uint16_t>(cur));
+                        }
+                        active.push_back(std::move(aq));
+                    }
+                }
+                qc->quests.setSerializedState(std::move(completed), std::move(active));
+            }
+        );
+    };
+
+    netClient_.onInventorySync = [this](const SvInventorySyncMsg& msg) {
+        if (!localPlayerCreated_) return;
+        auto* sc = SceneManager::instance().currentScene();
+        if (!sc) return;
+        sc->world().forEach<InventoryComponent, PlayerController>(
+            [&](Entity*, InventoryComponent* invComp, PlayerController* ctrl) {
+                if (!ctrl->isLocalPlayer) return;
+                // Build slots vector
+                std::vector<ItemInstance> slots;
+                for (const auto& s : msg.slots) {
+                    if (s.slotIndex < 0) continue;
+                    // Ensure vector is large enough
+                    if (s.slotIndex >= (int)slots.size()) slots.resize(s.slotIndex + 1);
+                    ItemInstance item;
+                    item.instanceId = "sync_" + std::to_string(s.slotIndex);
+                    item.itemId = s.itemId;
+                    item.quantity = s.quantity;
+                    item.enchantLevel = s.enchantLevel;
+                    if (!s.rolledStats.empty()) {
+                        item.rolledStats = ItemStatRoller::parseRolledStats(s.rolledStats);
+                    }
+                    if (!s.socketStat.empty()) {
+                        item.socket.statType = ItemStatRoller::getStatType(s.socketStat);
+                        item.socket.value = s.socketValue;
+                        item.socket.isEmpty = false;
+                    }
+                    slots[s.slotIndex] = std::move(item);
+                }
+                // Build equipment map
+                std::unordered_map<EquipmentSlot, ItemInstance> equipment;
+                for (const auto& e : msg.equipment) {
+                    ItemInstance item;
+                    item.instanceId = "eq_" + std::to_string(e.slot);
+                    item.itemId = e.itemId;
+                    item.quantity = e.quantity;
+                    item.enchantLevel = e.enchantLevel;
+                    if (!e.rolledStats.empty()) {
+                        item.rolledStats = ItemStatRoller::parseRolledStats(e.rolledStats);
+                    }
+                    if (!e.socketStat.empty()) {
+                        item.socket.statType = ItemStatRoller::getStatType(e.socketStat);
+                        item.socket.value = e.socketValue;
+                        item.socket.isEmpty = false;
+                    }
+                    equipment[static_cast<EquipmentSlot>(e.slot)] = std::move(item);
+                }
+                invComp->inventory.setSerializedState(
+                    invComp->inventory.getGold(), std::move(slots), std::move(equipment));
             }
         );
     };
