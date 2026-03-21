@@ -491,3 +491,32 @@ TEST_CASE("SvPetUpdateMsg round-trip") {
     CHECK(d.petName == "Fang"); CHECK(d.level == 5);
     CHECK(d.currentXP == 1200); CHECK(d.xpToNextLevel == 1250);
 }
+
+TEST_CASE("CmdBankMsg round-trip") {
+    fate::CmdBankMsg orig;
+    orig.action = 2; orig.goldAmount = 50000; orig.itemId = ""; orig.itemCount = 0;
+    uint8_t buf[256]; fate::ByteWriter w(buf, sizeof(buf)); orig.write(w);
+    CHECK_FALSE(w.overflowed());
+    fate::ByteReader r(buf, w.size()); auto d = fate::CmdBankMsg::read(r);
+    CHECK_FALSE(r.overflowed());
+    CHECK(r.remaining() == 0);
+    CHECK(d.action == 2);
+    CHECK(d.goldAmount == 50000);
+    CHECK(d.itemId == "");
+    CHECK(d.itemCount == 0);
+}
+
+TEST_CASE("SvBankResultMsg round-trip") {
+    fate::SvBankResultMsg orig;
+    orig.action = 2; orig.success = 1; orig.bankGold = 999999;
+    orig.message = "Deposited 50000 gold";
+    uint8_t buf[256]; fate::ByteWriter w(buf, sizeof(buf)); orig.write(w);
+    CHECK_FALSE(w.overflowed());
+    fate::ByteReader r(buf, w.size()); auto d = fate::SvBankResultMsg::read(r);
+    CHECK_FALSE(r.overflowed());
+    CHECK(r.remaining() == 0);
+    CHECK(d.action == 2);
+    CHECK(d.success == 1);
+    CHECK(d.bankGold == 999999);
+    CHECK(d.message == "Deposited 50000 gold");
+}
