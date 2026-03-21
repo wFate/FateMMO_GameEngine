@@ -271,10 +271,14 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         }
         case PacketType::ConnectReject: {
             waitingForAccept_ = false;
+            connected_ = false;
             socket_.close();
+            // Stop reconnect — token is invalid, must re-authenticate
+            reconnectPhase_ = ReconnectPhase::Failed;
+            reconnectAttempts_ = 0;
             ByteReader payload(payloadData, payloadLen);
             std::string reason = payload.readString();
-            LOG_WARN("NetClient", "Connection rejected: %s", reason.c_str());
+            LOG_WARN("NetClient", "Connection rejected: %s (reconnect stopped)", reason.c_str());
             if (onConnectRejected) onConnectRejected(reason);
             break;
         }
@@ -482,9 +486,30 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onStatEnchantResult) onStatEnchantResult(msg);
             break;
         }
+        case PacketType::SvConsumeResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvConsumeResultMsg::read(payload);
+            if (onConsumeResult) onConsumeResult(msg);
+            break;
+        }
+        case PacketType::SvRankingResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvRankingResultMsg::read(payload);
+            if (onRankingResult) onRankingResult(msg);
+            break;
+        }
         default:
             break;
     }
+}
+
+void NetClient::sendUseConsumable(uint8_t inventorySlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdUseConsumableMsg msg;
+    msg.inventorySlot = inventorySlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdUseConsumable, w.data(), w.size());
 }
 
 void NetClient::sendMove(const Vec2& position, const Vec2& velocity, float timestamp) {
