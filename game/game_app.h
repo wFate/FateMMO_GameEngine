@@ -97,9 +97,12 @@ private:
 
     // Deferred zone transition — set by onZoneTransition callback, processed
     // after poll() completes to avoid destroying the world mid-frame.
+    // SvEntityEnter messages that arrive during the transition are buffered
+    // and replayed after the new scene loads (prevents ghost entity race condition).
     bool pendingZoneTransition_ = false;
     std::string pendingZoneScene_;
     Vec2 pendingZoneSpawn_ = {0.0f, 0.0f};
+    std::vector<SvEntityEnterMsg> pendingEntityEnters_;
 
     // Network config UI
     char serverHost_[64] = "127.0.0.1";

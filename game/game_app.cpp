@@ -824,6 +824,15 @@ void GameApp::onInit() {
 
     // Net client callbacks for ghost entity management
     netClient_.onEntityEnter = [this](const SvEntityEnterMsg& msg) {
+        // Buffer enters during pending zone transition — the old scene hasn't
+        // been destroyed yet, so creating ghosts now would either duplicate
+        // existing ghosts or create entities that get wiped when the scene loads.
+        // Buffered messages are replayed after the new scene finishes loading.
+        if (pendingZoneTransition_) {
+            pendingEntityEnters_.push_back(msg);
+            return;
+        }
+
         // Guard against duplicate entity enter (prevents ghost leak)
         if (ghostEntities_.count(msg.persistentId)) {
             LOG_WARN("Net", "Duplicate SvEntityEnter for PID %llu, ignoring", msg.persistentId);
@@ -1516,6 +1525,7 @@ void GameApp::onInit() {
         pendingZoneTransition_ = true;
         pendingZoneScene_ = msg.targetScene;
         pendingZoneSpawn_ = {msg.spawnX, msg.spawnY};
+        pendingEntityEnters_.clear(); // clear any stale buffered enters
 
         // Start zone music (crossfades from current track)
         audioManager_.playMusic("assets/audio/music/" + msg.targetScene + ".ogg");
@@ -2440,6 +2450,20 @@ void GameApp::onUpdate(float deltaTime) {
                         LOG_INFO("Client", "Player respawned at (%.0f, %.0f) in %s (Lv%d)",
                                  pendingZoneSpawn_.x, pendingZoneSpawn_.y,
                                  pendingZoneScene_.c_str(), pendingPlayerState_.level);
+                    }
+
+                    // Replay SvEntityEnter messages that were buffered during the
+                    // zone transition. These arrived while the old scene was still
+                    // loaded and would have created ghosts that got wiped.
+                    if (!pendingEntityEnters_.empty()) {
+                        LOG_INFO("Client", "Replaying %zu buffered entity enters",
+                                 pendingEntityEnters_.size());
+                        for (const auto& enterMsg : pendingEntityEnters_) {
+                            if (netClient_.onEntityEnter) {
+                                netClient_.onEntityEnter(enterMsg);
+                            }
+                        }
+                        pendingEntityEnters_.clear();
                     }
                 }
 
