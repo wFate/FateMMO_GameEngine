@@ -235,6 +235,21 @@ if(ENGINE_MEMORY_DEBUG)
     target_compile_definitions(fate_engine PUBLIC ENGINE_MEMORY_DEBUG)
 endif()
 
+# Precompiled headers — stable, frequently-included headers
+target_precompile_headers(fate_engine PRIVATE
+    <vector>
+    <string>
+    <unordered_map>
+    <memory>
+    <functional>
+    <optional>
+    <variant>
+    <cstdint>
+    <algorithm>
+    <array>
+    <cmath>
+)
+
 # =============================================================================
 # Game Executable
 # =============================================================================
