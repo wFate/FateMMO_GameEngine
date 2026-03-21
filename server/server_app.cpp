@@ -21,6 +21,9 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <Windows.h>
 #include <timeapi.h>
 #pragma comment(lib, "winmm.lib")
@@ -2711,7 +2714,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                 std::uniform_real_distribution<float> jitter(-3.0f, 3.0f);
 
                 int totalDrops = static_cast<int>(drops.size());
-                int cols = std::min(totalDrops, kMaxPerRow);
+                int cols = (std::min)(totalDrops, kMaxPerRow);
                 float gridWidth = (cols - 1) * kItemSpacing;
 
                 for (size_t i = 0; i < drops.size(); ++i) {
@@ -2998,7 +3001,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 std::uniform_real_distribution<float> jitter(-3.0f, 3.0f);
 
                 int totalDrops = static_cast<int>(drops.size());
-                int cols = std::min(totalDrops, kMaxPerRow);
+                int cols = (std::min)(totalDrops, kMaxPerRow);
                 float gridWidth = (cols - 1) * kItemSpacing;
 
                 for (size_t i = 0; i < drops.size(); ++i) {
