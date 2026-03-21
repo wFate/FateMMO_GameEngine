@@ -13,6 +13,7 @@
 #include "game/components/spawn_point_component.h"
 #include "game/shared/item_stat_roller.h"
 #include "game/components/pet_component.h"
+#include "game/shared/pet_system.h"
 #include "game/systems/mob_ai_system.h"
 #include "game/shared/xp_calculator.h"
 #include "game/shared/profanity_filter.h"
@@ -144,6 +145,29 @@ bool ServerApp::init(uint16_t port) {
              mobDefCache_.count(), skillDefCache_.skillCount(), skillDefCache_.rankCount(),
              sceneCache_.count());
     LOG_INFO("Server", "Spawn zones: %d rules", spawnZoneCache_.count());
+
+    // Initialize hardcoded pet definitions
+    {
+        PetDefinition wolf;
+        wolf.petId = "pet_wolf"; wolf.displayName = "Wolf";
+        wolf.baseHP = 10; wolf.baseCritRate = 0.01f; wolf.baseExpBonus = 0.0f;
+        wolf.hpPerLevel = 2.0f; wolf.critPerLevel = 0.002f; wolf.expBonusPerLevel = 0.0f;
+        petDefCache_.addDefinition(wolf);
+
+        PetDefinition hawk;
+        hawk.petId = "pet_hawk"; hawk.displayName = "Hawk";
+        hawk.baseHP = 5; hawk.baseCritRate = 0.02f; hawk.baseExpBonus = 0.05f;
+        hawk.hpPerLevel = 1.0f; hawk.critPerLevel = 0.003f; hawk.expBonusPerLevel = 0.005f;
+        petDefCache_.addDefinition(hawk);
+
+        PetDefinition turtle;
+        turtle.petId = "pet_turtle"; turtle.displayName = "Turtle";
+        turtle.baseHP = 20; turtle.baseCritRate = 0.0f; turtle.baseExpBonus = 0.0f;
+        turtle.hpPerLevel = 4.0f; turtle.critPerLevel = 0.0f; turtle.expBonusPerLevel = 0.0f;
+        petDefCache_.addDefinition(turtle);
+
+        LOG_INFO("Server", "Loaded %zu pet definitions", petDefCache_.size());
+    }
 
     // Initialize Gauntlet system
     initGauntlet();
@@ -2822,6 +2846,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             processArena(clientId, msg);
             break;
         }
+        case PacketType::CmdPet: {
+            auto msg = CmdPetMsg::read(payload);
+            processPetCommand(clientId, msg);
+            break;
+        }
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;
@@ -3080,6 +3109,24 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                     LOG_INFO("Server", "Client %d gained %d XP from '%s' (base=%d, mob Lv%d, player Lv%d)",
                              clientId, xp, es.enemyName.c_str(), es.xpReward,
                              es.level, casterStatsComp->stats.level);
+
+                    // Pet XP sharing (50%)
+                    auto* petCompXP = caster->getComponent<PetComponent>();
+                    if (petCompXP && petCompXP->hasPet()) {
+                        const auto* petDef = petDefCache_.getDefinition(petCompXP->equippedPet.petDefinitionId);
+                        if (petDef) {
+                            int64_t petXP = static_cast<int64_t>(xp * PetSystem::PET_XP_SHARE);
+                            if (petXP > 0) {
+                                int levelBefore = petCompXP->equippedPet.level;
+                                PetSystem::addXP(*petDef, petCompXP->equippedPet, petXP,
+                                                 casterStatsComp->stats.level);
+                                if (petCompXP->equippedPet.level != levelBefore) {
+                                    recalcEquipmentBonuses(caster);
+                                }
+                                sendPetUpdate(clientId, caster);
+                            }
+                        }
+                    }
                 } else {
                     LOG_INFO("Server", "Client %d: trivial mob '%s' Lv%d — no XP (player Lv%d)",
                              clientId, es.enemyName.c_str(), es.level, casterStatsComp->stats.level);
@@ -3367,6 +3414,24 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                     LOG_INFO("Server", "Client %d gained %d XP from '%s' (base=%d, mob Lv%d, player Lv%d)",
                              clientId, xp, es.enemyName.c_str(), es.xpReward,
                              es.level, charStats->stats.level);
+
+                    // Pet XP sharing (50%)
+                    auto* petCompXP = attacker->getComponent<PetComponent>();
+                    if (petCompXP && petCompXP->hasPet()) {
+                        const auto* petDef = petDefCache_.getDefinition(petCompXP->equippedPet.petDefinitionId);
+                        if (petDef) {
+                            int64_t petXP = static_cast<int64_t>(xp * PetSystem::PET_XP_SHARE);
+                            if (petXP > 0) {
+                                int levelBefore = petCompXP->equippedPet.level;
+                                PetSystem::addXP(*petDef, petCompXP->equippedPet, petXP,
+                                                 charStats->stats.level);
+                                if (petCompXP->equippedPet.level != levelBefore) {
+                                    recalcEquipmentBonuses(attacker);
+                                }
+                                sendPetUpdate(clientId, attacker);
+                            }
+                        }
+                    }
                 } else {
                     LOG_INFO("Server", "Client %d: trivial mob '%s' Lv%d — no XP (player Lv%d)",
                              clientId, es.enemyName.c_str(), es.level, charStats->stats.level);
@@ -3719,6 +3784,89 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
     }
 }
 
+void ServerApp::processPetCommand(uint16_t clientId, const CmdPetMsg& msg) {
+    auto* client = server_.connections().findById(clientId);
+    if (!client || client->playerEntityId == 0) return;
+
+    PersistentId pid(client->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* player = world_.getEntity(h);
+    if (!player) return;
+
+    auto* charStats = player->getComponent<CharacterStatsComponent>();
+    auto* petComp = player->getComponent<PetComponent>();
+    if (!charStats || !petComp) return;
+
+    const std::string& charId = client->character_id;
+
+    if (msg.action == 0) { // Equip
+        // Load all pets for this character to validate ownership
+        auto pets = petRepo_->loadPets(charId);
+
+        bool found = false;
+        PetRecord targetPet;
+        for (const auto& pet : pets) {
+            if (pet.id == msg.petDbId) {
+                found = true;
+                targetPet = pet;
+                break;
+            }
+        }
+        if (!found) {
+            LOG_WARN("Server", "Client %d tried to equip unknown pet %d", clientId, msg.petDbId);
+            return;
+        }
+
+        // Unequip current pet, then equip new one
+        petRepo_->unequipAllPets(charId);
+        petRepo_->equipPet(charId, msg.petDbId);
+
+        // Load into PetComponent
+        petComp->equippedPet.petDefinitionId = targetPet.petDefId;
+        petComp->equippedPet.petName         = targetPet.petName;
+        petComp->equippedPet.level           = targetPet.level;
+        petComp->equippedPet.currentXP       = targetPet.currentXP;
+        petComp->equippedPet.isSoulbound     = targetPet.isSoulbound;
+        petComp->equippedPet.autoLootEnabled  = targetPet.autoLootEnabled;
+        petComp->dbPetId                     = targetPet.id;
+        petComp->equippedPet.xpToNextLevel   = PetSystem::calculateXPToNextLevel(targetPet.level);
+
+        recalcEquipmentBonuses(player);
+        sendPlayerState(clientId);
+        sendPetUpdate(clientId, player);
+        LOG_INFO("Server", "Client %d equipped pet '%s' (Lv%d)",
+                 clientId, targetPet.petName.c_str(), targetPet.level);
+
+    } else { // Unequip
+        petRepo_->unequipAllPets(charId);
+
+        petComp->equippedPet = PetInstance{};
+        petComp->dbPetId     = 0;
+
+        recalcEquipmentBonuses(player);
+        sendPlayerState(clientId);
+        sendPetUpdate(clientId, player);
+        LOG_INFO("Server", "Client %d unequipped pet", clientId);
+    }
+}
+
+void ServerApp::sendPetUpdate(uint16_t clientId, Entity* player) {
+    auto* petComp = player->getComponent<PetComponent>();
+    SvPetUpdateMsg msg;
+    if (petComp && petComp->hasPet()) {
+        msg.equipped      = 1;
+        msg.petDefId      = petComp->equippedPet.petDefinitionId;
+        msg.petName       = petComp->equippedPet.petName;
+        msg.level         = static_cast<uint8_t>(petComp->equippedPet.level);
+        msg.currentXP     = static_cast<int32_t>(petComp->equippedPet.currentXP);
+        msg.xpToNextLevel = static_cast<int32_t>(petComp->equippedPet.xpToNextLevel);
+    }
+    uint8_t buf[256];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvPetUpdate, buf, w.size());
+}
+
 void ServerApp::recalcEquipmentBonuses(Entity* player) {
     auto* charStats = player->getComponent<CharacterStatsComponent>();
     auto* inv = player->getComponent<InventoryComponent>();
@@ -3742,6 +3890,17 @@ void ServerApp::recalcEquipmentBonuses(Entity* player) {
 
         charStats->stats.applyItemBonuses(item, baseWeaponMin, baseWeaponMax,
                                            baseArmor, baseAttackSpeed);
+    }
+
+    // Apply pet bonuses (after equipment, before recalculating stats)
+    auto* petComp = player->getComponent<PetComponent>();
+    if (petComp && petComp->hasPet()) {
+        const auto* petDef = petDefCache_.getDefinition(petComp->equippedPet.petDefinitionId);
+        if (petDef) {
+            PetSystem::applyToEquipBonuses(*petDef, petComp->equippedPet,
+                                           charStats->stats.equipBonusHP,
+                                           charStats->stats.equipBonusCritRate);
+        }
     }
 
     charStats->stats.recalculateStats();

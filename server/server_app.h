@@ -34,6 +34,7 @@
 #include "server/cache/item_definition_cache.h"
 #include "server/cache/loot_table_cache.h"
 #include "server/cache/recipe_cache.h"
+#include "server/cache/pet_definition_cache.h"
 #include "server/db/spawn_zone_cache.h"
 #include "server/server_spawn_manager.h"
 #include "engine/net/auth_protocol.h"
@@ -109,6 +110,7 @@ private:
     SkillDefCache skillDefCache_;
     SceneCache sceneCache_;
     RecipeCache recipeCache_;
+    PetDefinitionCache petDefCache_;
 
     // Gauntlet event system
     GauntletManager gauntletManager_;
@@ -194,6 +196,8 @@ private:
     void processGauntletCommand(uint16_t clientId, ByteReader& payload);
     void processBattlefield(uint16_t clientId, const CmdBattlefieldMsg& msg);
     void processArena(uint16_t clientId, const CmdArenaMsg& msg);
+    void processPetCommand(uint16_t clientId, const CmdPetMsg& msg);
+    void sendPetUpdate(uint16_t clientId, Entity* player);
     void broadcastBossKillNotification(const EnemyStats& es,
                                        const EnemyStats::LootOwnerResult& lootResult,
                                        const std::string& scene);

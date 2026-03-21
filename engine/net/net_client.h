@@ -67,6 +67,7 @@ public:
     std::function<void(const SvCraftResultMsg&)> onCraftResult;
     std::function<void(const SvBattlefieldUpdateMsg&)> onBattlefieldUpdate;
     std::function<void(const SvArenaUpdateMsg&)> onArenaUpdate;
+    std::function<void(const SvPetUpdateMsg&)> onPetUpdate;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:
