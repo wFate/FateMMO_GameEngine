@@ -1092,6 +1092,7 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     nextAutoSaveTime_.erase(clientId);
     needsFirstMoveSync_.erase(clientId);
     lastAutoAttackTime_.erase(clientId);
+    skillCooldowns_.erase(clientId);
 }
 
 void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload) {
@@ -2224,6 +2225,20 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
         wasMiss = true;
         if (prevOnFailed) prevOnFailed(id, reason);
     };
+
+    // Validate skill cooldown
+    auto& clientCooldowns = skillCooldowns_[clientId];
+    auto cooldownIt = clientCooldowns.find(msg.skillId);
+    if (cooldownIt != clientCooldowns.end()) {
+        const CachedSkillRank* rank = skillDefCache_.getRank(msg.skillId, msg.rank);
+        float cooldown = rank ? rank->cooldownSeconds : 1.0f;
+        if (gameTime_ - cooldownIt->second < cooldown * 0.8f) {
+            LOG_DEBUG("Server", "Client %d skill '%s' rejected: cooldown (%.1f < %.1f)",
+                      clientId, msg.skillId.c_str(), gameTime_ - cooldownIt->second, cooldown);
+            return; // reject — too fast
+        }
+    }
+    clientCooldowns[msg.skillId] = gameTime_;
 
     // Execute the skill
     int damage = skillComp->skills.executeSkill(msg.skillId, msg.rank, ctx);

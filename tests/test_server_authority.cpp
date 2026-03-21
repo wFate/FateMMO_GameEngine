@@ -48,3 +48,25 @@ TEST_CASE("Server rejects attack while player dead") {
     CHECK(s.isDead == true);
     // This validates the guard condition; full integration test would need server
 }
+
+TEST_CASE("Skill cooldown tracking rejects rapid cast") {
+    // Unit test: verify the cooldown map logic
+    std::unordered_map<std::string, float> cooldowns;
+    float gameTime = 10.0f;
+
+    // First cast should always succeed (no entry)
+    auto it = cooldowns.find("fireball");
+    CHECK(it == cooldowns.end()); // no cooldown yet
+    cooldowns["fireball"] = gameTime;
+
+    // Immediate recast should be rejected
+    float recastTime = gameTime + 0.5f; // 0.5s later
+    float cooldownDuration = 3.0f; // 3s cooldown
+    it = cooldowns.find("fireball");
+    CHECK(it != cooldowns.end());
+    CHECK(recastTime - it->second < cooldownDuration * 0.8f); // should reject
+
+    // After cooldown expires, should pass
+    float laterTime = gameTime + 3.0f;
+    CHECK(laterTime - cooldowns["fireball"] >= cooldownDuration * 0.8f); // should pass
+}

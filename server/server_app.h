@@ -122,6 +122,9 @@ private:
     // Per-client auto-attack cooldown tracking
     std::unordered_map<uint16_t, float> lastAutoAttackTime_;
 
+    // Per-client skill cooldown tracking: clientId -> skillId -> last cast gameTime
+    std::unordered_map<uint16_t, std::unordered_map<std::string, float>> skillCooldowns_;
+
     // Periodic maintenance timers
     float bossTickTimer_ = 0.0f;
     float marketExpiryTimer_ = 0.0f;
