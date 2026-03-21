@@ -962,9 +962,8 @@ void Editor::handleSceneDrag(Camera* camera, const Vec2& screenPos,
 
     // Only grid-snap ground tiles; other entities move freely
     if (gridSnap_ && selectedEntity_->tag() == "ground") {
-        float half = gridSize_ * 0.5f;
-        newPos.x = std::floor(newPos.x / gridSize_) * gridSize_ + half;
-        newPos.y = std::floor(newPos.y / gridSize_) * gridSize_ + half;
+        newPos.x = std::round(newPos.x / gridSize_) * gridSize_;
+        newPos.y = std::round(newPos.y / gridSize_) * gridSize_;
     }
 
     t->position = newPos;
