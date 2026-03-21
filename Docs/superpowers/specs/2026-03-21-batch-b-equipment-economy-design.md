@@ -28,13 +28,13 @@ No weapon/armor distinction — all enchantable slots (weapons and armor) are sa
 | +6 | 100% | 500 | No |
 | +7 | 100% | 2,000 | No |
 | +8 | 100% | 2,000 | No |
-| +9 | 40% | 10,000 | Yes |
-| +10 | 15% | 25,000 | Yes |
-| +11 | 8% | 50,000 | Yes |
-| +12 | 5% | 100,000 | Yes |
-| +13 | 2% | 500,000 | Yes |
-| +14 | 0.5% | 1,000,000 | Yes |
-| +15 | 0.1% | 2,000,000 | Yes |
+| +9 | 50% | 10,000 | Yes |
+| +10 | 40% | 25,000 | Yes |
+| +11 | 30% | 50,000 | Yes |
+| +12 | 20% | 100,000 | Yes |
+| +13 | 10% | 500,000 | Yes |
+| +14 | 5% | 1,000,000 | Yes |
+| +15 | 2% | 2,000,000 | Yes |
 
 `SAFE_ENCHANT_LEVEL = 8` — constant, same for all equipment types.
 
