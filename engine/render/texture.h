@@ -3,6 +3,7 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
+#include <cstdint>
 
 namespace fate {
 
@@ -44,8 +45,26 @@ public:
     std::shared_ptr<Texture> get(const std::string& path) const;
     void clear();
 
+    // LRU eviction
+    void setVRAMBudget(size_t bytes) { vramBudget_ = bytes; }
+    size_t vramBudget() const { return vramBudget_; }
+    size_t estimatedVRAM() const { return estimatedVRAM_; }
+    void touch(const std::string& path);
+    void evictIfOverBudget();
+    size_t entryCount() const { return cache_.size(); }
+    void advanceFrame() { ++frameCounter_; }
+
 private:
-    std::unordered_map<std::string, std::shared_ptr<Texture>> cache_;
+    struct CacheEntry {
+        std::shared_ptr<Texture> texture;
+        uint64_t lastAccessFrame = 0;
+        size_t estimatedBytes = 0;
+    };
+
+    std::unordered_map<std::string, CacheEntry> cache_;
+    size_t vramBudget_ = 512 * 1024 * 1024; // 512MB default
+    size_t estimatedVRAM_ = 0;
+    uint64_t frameCounter_ = 0;
 };
 
 } // namespace fate

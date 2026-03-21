@@ -89,7 +89,10 @@ void Texture::unbind() const {
 // TextureCache
 std::shared_ptr<Texture> TextureCache::load(const std::string& path) {
     auto it = cache_.find(path);
-    if (it != cache_.end()) return it->second;
+    if (it != cache_.end()) {
+        it->second.lastAccessFrame = frameCounter_;
+        return it->second.texture;
+    }
 
     // Delegate to AssetRegistry for actual loading
     AssetHandle h = AssetRegistry::instance().load(path);
@@ -98,17 +101,48 @@ std::shared_ptr<Texture> TextureCache::load(const std::string& path) {
 
     // Non-owning shared_ptr — AssetRegistry owns the lifetime
     auto tex = std::shared_ptr<Texture>(raw, [](Texture*){});
-    cache_[path] = tex;
+    size_t bytes = static_cast<size_t>(tex->width()) * tex->height() * 4;
+    cache_[path] = {tex, frameCounter_, bytes};
+    estimatedVRAM_ += bytes;
+    evictIfOverBudget();
     return tex;
 }
 
 std::shared_ptr<Texture> TextureCache::get(const std::string& path) const {
     auto it = cache_.find(path);
-    return (it != cache_.end()) ? it->second : nullptr;
+    return (it != cache_.end()) ? it->second.texture : nullptr;
 }
 
 void TextureCache::clear() {
     cache_.clear();
+    estimatedVRAM_ = 0;
+}
+
+void TextureCache::touch(const std::string& path) {
+    auto it = cache_.find(path);
+    if (it != cache_.end()) {
+        it->second.lastAccessFrame = frameCounter_;
+    }
+}
+
+void TextureCache::evictIfOverBudget() {
+    size_t target = static_cast<size_t>(vramBudget_ * 0.85); // evict to 85%
+    while (estimatedVRAM_ > vramBudget_ && !cache_.empty()) {
+        // Find oldest entry with refcount == 1 (only cache holds it)
+        auto oldest = cache_.end();
+        uint64_t oldestFrame = UINT64_MAX;
+        for (auto it = cache_.begin(); it != cache_.end(); ++it) {
+            if (it->second.texture.use_count() <= 1 &&
+                it->second.lastAccessFrame < oldestFrame) {
+                oldest = it;
+                oldestFrame = it->second.lastAccessFrame;
+            }
+        }
+        if (oldest == cache_.end()) break; // everything is in use
+        estimatedVRAM_ -= oldest->second.estimatedBytes;
+        cache_.erase(oldest);
+        if (estimatedVRAM_ <= target) break;
+    }
 }
 
 } // namespace fate
