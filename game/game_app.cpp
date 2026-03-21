@@ -45,6 +45,17 @@ namespace fs = std::filesystem;  // std::min, std::max (used with parenthesized 
 
 namespace fate {
 
+// File-local helper: maps PKStatus to nameplate Color (mirrors GameplaySystem::pkStatusColor)
+static Color pkStatusColor(PKStatus status) {
+    switch (status) {
+        case PKStatus::White:  return Color::white();
+        case PKStatus::Purple: return {0.659f, 0.333f, 0.969f};
+        case PKStatus::Red:    return Color::red();
+        case PKStatus::Black:  return {0.2f, 0.2f, 0.2f};
+        default:               return Color::white();
+    }
+}
+
 // ============================================================================
 // Procedural art generation — pixel-art sprites & tileset
 // ============================================================================
@@ -783,6 +794,7 @@ void GameApp::onInit() {
             EntityHandle targetHandle = target->handle();
             for (const auto& [pid, handle] : ghostEntities_) {
                 if (handle == targetHandle) {
+                    combatPredictions_.addPrediction(pid, netTime_);
                     netClient_.sendAction(0, pid, 0);
                     return;
                 }
@@ -833,6 +845,13 @@ void GameApp::onInit() {
         }
         if (ghost) {
             ghostEntities_[msg.persistentId] = ghost->handle();
+            // Apply PK status name color for remote players on enter
+            if (msg.entityType == 0) {
+                auto* nameplate = ghost->getComponent<NameplateComponent>();
+                if (nameplate) {
+                    nameplate->nameColor = pkStatusColor(static_cast<PKStatus>(msg.pkStatus));
+                }
+            }
             // Seed interpolation buffer with initial position so ghosts don't
             // snap to (0,0) before the first SvEntityUpdate arrives.
             ghostInterpolation_.onEntityUpdate(msg.persistentId, msg.position);
@@ -895,6 +914,12 @@ void GameApp::onInit() {
                 }
             }
         }
+        if (msg.fieldMask & (1 << 14)) { // bit 14 = pkStatus
+            auto* nameplate = ghost->getComponent<NameplateComponent>();
+            if (nameplate) {
+                nameplate->nameColor = pkStatusColor(static_cast<PKStatus>(msg.pkStatus));
+            }
+        }
     };
 
     netClient_.onCombatEvent = [this](const SvCombatEventMsg& msg) {
@@ -906,6 +931,11 @@ void GameApp::onInit() {
         // Check if attacker is the local player (not in ghostEntities_ = us)
         // Ghost entities are OTHER players/mobs; the local player is never a ghost.
         bool isLocalAttack = (ghostEntities_.find(msg.attackerId) == ghostEntities_.end());
+
+        // Resolve optimistic prediction — animation already playing, server confirmed
+        if (isLocalAttack) {
+            combatPredictions_.resolveOldest();
+        }
 
         LOG_INFO("CombatDbg", "SvCombatEvent: attacker=%llu target=%llu dmg=%d kill=%d isLocal=%d ghosts=%zu",
                  msg.attackerId, msg.targetId, msg.damage, (int)msg.isKill,
@@ -1280,6 +1310,9 @@ void GameApp::onInit() {
         auto* scene = SceneManager::instance().currentScene();
         if (!scene) return;
 
+        // Resolve optimistic prediction — animation already playing, server confirmed
+        combatPredictions_.resolveOldest();
+
         // Find target entity position for floating text
         Vec2 targetPos{0, 0};
         bool foundTarget = false;
@@ -1431,6 +1464,12 @@ void GameApp::onInit() {
                     break;
                 }
             }
+        }
+
+        // Optimistic skill feedback — flash player sprite immediately on activation
+        if (targetPid != 0 && combatSystem_) {
+            combatSystem_->triggerAttackFlash(/*isSpell=*/true);
+            combatPredictions_.addPrediction(targetPid, netTime_);
         }
 
         netClient_.sendUseSkill(skillId, static_cast<uint8_t>(rank), targetPid);
@@ -2315,6 +2354,7 @@ void GameApp::onUpdate(float deltaTime) {
                     // Clear ghost state before destroying the world
                     ghostEntities_.clear();
                     ghostInterpolation_.clear();
+                    combatPredictions_.clear();
 
                     std::string jsonPath = "assets/scenes/" + pendingZoneScene_ + ".json";
                     auto* sc = SceneManager::instance().currentScene();
@@ -2582,6 +2622,7 @@ void GameApp::drawNetworkPanel() {
             }
             ghostEntities_.clear();
             ghostInterpolation_.clear();
+            combatPredictions_.clear();
             localPlayerCreated_ = false;
             connState_ = ConnectionState::LoginScreen;
             loginScreen_.reset();
