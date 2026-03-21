@@ -101,10 +101,12 @@ TEST_CASE("respawn() restores HP and MP to full") {
     stats.currentHP = 0;
     stats.currentMP = 0;
     stats.isDead    = true;
+    stats.lifeState = LifeState::Dead;
 
     stats.respawn();
 
     CHECK(stats.isDead    == false);
+    CHECK(stats.lifeState == LifeState::Alive);
     CHECK(stats.currentHP == stats.maxHP);
     CHECK(stats.currentMP == stats.maxMP);
     CHECK(stats.maxHP     >  0);
@@ -126,10 +128,15 @@ TEST_CASE("die() XP loss and idempotency") {
 
         stats.die(DeathSource::PvE);
 
-        CHECK(stats.isDead == true);
+        CHECK(stats.lifeState == LifeState::Dying);
         CHECK(stats.currentHP == 0);
         // Level 1 loses 10% of currentXP; 80 * 0.10 = 8 → XP = 72
         CHECK(stats.currentXP == 72);
+
+        // Advance to Dead
+        stats.advanceDeathTick();
+        CHECK(stats.isDead == true);
+        CHECK(stats.lifeState == LifeState::Dead);
     }
 
     SUBCASE("die(PvP) does NOT apply XP loss") {
@@ -142,7 +149,7 @@ TEST_CASE("die() XP loss and idempotency") {
 
         stats.die(DeathSource::PvP);
 
-        CHECK(stats.isDead == true);
+        CHECK(stats.lifeState == LifeState::Dying);
         CHECK(stats.currentHP == 0);
         CHECK(stats.currentXP == 80);  // no XP loss for PvP
     }
@@ -158,7 +165,7 @@ TEST_CASE("die() XP loss and idempotency") {
         stats.die(DeathSource::PvE);
         int64_t xpAfterFirst = stats.currentXP;
 
-        // Second die() call should be a no-op because isDead is already true
+        // Second die() call should be a no-op because lifeState is Dying
         stats.die(DeathSource::PvE);
 
         CHECK(stats.currentXP == xpAfterFirst);

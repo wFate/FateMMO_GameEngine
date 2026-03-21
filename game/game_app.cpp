@@ -1264,6 +1264,7 @@ void GameApp::onInit() {
         scene->world().forEach<PlayerController, CharacterStatsComponent>(
             [&](Entity*, PlayerController* ctrl, CharacterStatsComponent* sc) {
                 if (!ctrl->isLocalPlayer) return;
+                sc->stats.lifeState = LifeState::Dead;
                 sc->stats.isDead = true;
                 sc->stats.currentHP = 0;
                 sc->stats.respawnTimeRemaining = msg.respawnTimer;
@@ -2227,6 +2228,7 @@ void GameApp::onUpdate(float deltaTime) {
                             cs->stats.pvpKills = ar.pvpKills;
                             cs->stats.pvpDeaths = ar.pvpDeaths;
                             cs->stats.isDead = ar.isDead != 0;
+                            cs->stats.lifeState = cs->stats.isDead ? LifeState::Dead : LifeState::Alive;
                         }
                         auto* inv = player->getComponent<InventoryComponent>();
                         if (inv) {
@@ -2277,6 +2279,7 @@ void GameApp::onUpdate(float deltaTime) {
                     if (hasPendingDeathNotify_) {
                         hasPendingDeathNotify_ = false;
                         if (finalStats) {
+                            finalStats->stats.lifeState = LifeState::Dead;
                             finalStats->stats.isDead = true;
                             finalStats->stats.currentHP = 0;
                         }

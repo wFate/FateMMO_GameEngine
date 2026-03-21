@@ -281,6 +281,11 @@ void ServerApp::tick(float dt) {
         cs->stats.tickTimers(dt);
     });
 
+    // 3d. Process Dying → Dead transitions (two-tick death lifecycle)
+    world_.forEach<CharacterStatsComponent>([](Entity*, CharacterStatsComponent* cs) {
+        cs->stats.advanceDeathTick();
+    });
+
     // Despawn expired ground items
     {
         std::vector<EntityHandle> toDestroy;
@@ -620,6 +625,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         s.pvpKills     = rec.pvp_kills;
         s.pvpDeaths    = rec.pvp_deaths;
         s.isDead       = rec.is_dead;
+        s.lifeState    = rec.is_dead ? LifeState::Dead : LifeState::Alive;
         // Fix legacy "Scene2" default — migrate to real scene name
         s.currentScene = (rec.current_scene == "Scene2" || rec.current_scene.empty())
             ? "WhisperingWoods" : rec.current_scene;
@@ -898,7 +904,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
             Entity* ent = world_.getEntity(eh);
             if (!ent) return;
             auto* cs = ent->getComponent<CharacterStatsComponent>();
-            if (!cs || cs->stats.isDead) return;
+            if (!cs || !cs->stats.isAlive()) return;
 
             cs->stats.currentHP = (std::max)(0, cs->stats.currentHP - damage);
 
@@ -2402,8 +2408,8 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     auto* casterStatsComp = caster->getComponent<CharacterStatsComponent>();
     if (!casterStatsComp) return;
 
-    // Check if caster is dead
-    if (casterStatsComp->stats.isDead) {
+    // Check if caster is dead or dying
+    if (!casterStatsComp->stats.isAlive()) {
         LOG_WARN("Server", "Client %d tried to use skill while dead", clientId);
         return;
     }
@@ -2484,7 +2490,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             ctx.targetMagicResist = targetCharStats->stats.getMagicResist();
             ctx.targetCurrentHP = targetCharStats->stats.currentHP;
             ctx.targetMaxHP = targetCharStats->stats.maxHP;
-            ctx.targetAlive = !targetCharStats->stats.isDead;
+            ctx.targetAlive = targetCharStats->stats.isAlive();
         }
     }
 
@@ -2529,7 +2535,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             if (isKill && damage > 0)
                 overkill = damage - (ctx.targetCurrentHP > 0 ? ctx.targetCurrentHP : 0);
         } else if (tgtCharStats) {
-            isKill = tgtCharStats->stats.isDead;
+            isKill = !tgtCharStats->stats.isAlive();
             targetNewHP = tgtCharStats->stats.currentHP;
             if (isKill && damage > 0)
                 overkill = damage - (ctx.targetCurrentHP > 0 ? ctx.targetCurrentHP : 0);
@@ -2741,7 +2747,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
 
         // Handle player death (PvP)
         auto* targetCharStats = target->getComponent<CharacterStatsComponent>();
-        if (targetCharStats && targetCharStats->stats.isDead) {
+        if (targetCharStats && !targetCharStats->stats.isAlive()) {
             // Find which client owns the killed player entity
             uint16_t targetClientId = 0;
             server_.connections().forEach([&](const ClientConnection& conn) {
@@ -2813,7 +2819,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         }
 
         // Validate player is alive
-        if (charStats && charStats->stats.isDead) return;
+        if (charStats && !charStats->stats.isAlive()) return;
 
         float maxRange = attackRange * 32.0f + 16.0f;
         float dist = attackerTransform->position.distance(targetTransform->position);
@@ -3019,7 +3025,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         } else {
         // PvP auto-attack: target is another player
         auto* targetCharStats = target->getComponent<CharacterStatsComponent>();
-        if (targetCharStats && !targetCharStats->stats.isDead) {
+        if (targetCharStats && targetCharStats->stats.isAlive()) {
             // Same-scene check
             if (charStats && !charStats->stats.currentScene.empty() &&
                 charStats->stats.currentScene != targetCharStats->stats.currentScene) return;
@@ -3040,7 +3046,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
 
             // Apply damage
             targetCharStats->stats.takeDamage(damage);
-            bool killed = targetCharStats->stats.isDead;
+            bool killed = !targetCharStats->stats.isAlive();
 
             // PK status transitions for auto-attacks (same as skill path)
             if (charStats) {
@@ -3257,8 +3263,8 @@ void ServerApp::processEquip(uint16_t clientId, const CmdEquipMsg& msg) {
         return;
     }
 
-    // Block equipment changes while dead
-    if (charStats->stats.isDead) return;
+    // Block equipment changes while dead or dying
+    if (!charStats->stats.isAlive()) return;
 
     auto targetSlot = static_cast<EquipmentSlot>(msg.equipSlot);
 

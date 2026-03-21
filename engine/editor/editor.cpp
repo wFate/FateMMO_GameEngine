@@ -2641,7 +2641,7 @@ void Editor::drawInspector() {
                 ImGui::Text("Atk Range: %.0f tiles  DmgMult: %.2f", s.classDef.attackRange, s.getDamageMultiplier());
                 if (ImGui::Button("Recalc Stats##cs")) { s.recalculateStats(); s.recalculateXPRequirement(); }
                 ImGui::SameLine();
-                if (ImGui::Button("Full Heal##cs")) { s.currentHP = s.maxHP; s.currentMP = s.maxMP; s.isDead = false; }
+                if (ImGui::Button("Full Heal##cs")) { s.currentHP = s.maxHP; s.currentMP = s.maxMP; s.isDead = false; s.lifeState = LifeState::Alive; }
             }
         }
 
