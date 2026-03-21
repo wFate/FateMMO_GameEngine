@@ -1117,15 +1117,107 @@ public:
     }
 
     // Creates a ghost dropped item (client-side, for rendering)
-    static Entity* createGhostDroppedItem(World& world, const std::string& name, Vec2 position) {
+    static Entity* createGhostDroppedItem(World& world, const std::string& name, Vec2 position,
+                                           bool isGold = false, const std::string& rarity = "Common") {
         Entity* entity = world.createEntity(name);
         entity->setTag("dropped_item");
 
         auto* transform = entity->addComponent<Transform>(position.x, position.y);
-        (void)transform;
+        transform->depth = 5.0f; // above ground, below mobs
 
         auto* sprite = entity->addComponent<SpriteComponent>();
         sprite->size = {16.0f, 16.0f};
+
+        // Procedural drop sprite
+        const int SZ = 16;
+        std::vector<unsigned char> pixels(SZ * SZ * 4, 0);
+        auto sp = [&](int x, int y, unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
+            if (x < 0 || x >= SZ || y < 0 || y >= SZ) return;
+            int i = (y * SZ + x) * 4;
+            pixels[i] = r; pixels[i+1] = g; pixels[i+2] = b; pixels[i+3] = a;
+        };
+        auto hash = [](int x, int y, int s) -> int {
+            int h = x * 374761393 + y * 668265263 + s * 1274126177;
+            h = (h ^ (h >> 13)) * 1274126177;
+            return h ^ (h >> 16);
+        };
+        auto cl = [](int v) -> unsigned char { return (unsigned char)((v<0)?0:(v>255)?255:v); };
+
+        if (isGold) {
+            // Gold coin — circular, shiny yellow
+            float cx = 7.5f, cy = 7.5f, r = 5.5f;
+            for (int y = 0; y < SZ; y++) for (int x = 0; x < SZ; x++) {
+                float dx = x - cx, dy = y - cy;
+                float d = dx*dx + dy*dy;
+                if (d < r*r) {
+                    int n = hash(x, y, 700) % 9 - 4;
+                    float nd = d / (r*r); // 0 at center, 1 at edge
+                    int shade = (int)(40.0f * (1.0f - nd));
+                    sp(x, y, cl(220+n+shade), cl(190+n+shade), cl(40+n));
+                    // Shine
+                    if (dx < -1 && dy < -1 && nd < 0.25f)
+                        sp(x, y, cl(255), cl(245+n), cl(150+n));
+                }
+            }
+            // G letter
+            sp(6, 6, 160, 130, 20); sp(7, 6, 160, 130, 20); sp(8, 6, 160, 130, 20);
+            sp(6, 7, 160, 130, 20); sp(6, 8, 160, 130, 20);
+            sp(7, 8, 160, 130, 20); sp(8, 8, 160, 130, 20);
+            sp(8, 9, 160, 130, 20); sp(7, 9, 160, 130, 20);
+            // Outline
+            for (int y = 0; y < SZ; y++) for (int x = 0; x < SZ; x++) {
+                if (pixels[(y*SZ+x)*4+3] == 0) continue;
+                for (int dy2=-1;dy2<=1;dy2++) for (int dx2=-1;dx2<=1;dx2++) {
+                    int nx=x+dx2, ny=y+dy2;
+                    if (nx>=0 && nx<SZ && ny>=0 && ny<SZ && pixels[(ny*SZ+nx)*4+3]==0)
+                        { sp(x,y,30,25,10); goto gold_next; }
+                }
+                gold_next:;
+            }
+        } else {
+            // Item drop — small colored bag/sack
+            // Bag color based on rarity
+            int br = 140, bg = 100, bb = 60; // brown default
+            if (rarity == "Uncommon")  { br = 60;  bg = 160; bb = 60; }  // green
+            else if (rarity == "Rare") { br = 60;  bg = 100; bb = 200; } // blue
+            else if (rarity == "Epic") { br = 150; bg = 60;  bb = 180; } // purple
+            else if (rarity == "Legendary") { br = 220; bg = 160; bb = 30; } // orange
+
+            // Bag body
+            for (int y = 4; y <= 13; y++) for (int x = 3; x <= 12; x++) {
+                float dx = x - 7.5f, dy = y - 9.0f;
+                if (dx*dx/(5*5) + dy*dy/(5*5) < 1.0f) {
+                    int n = hash(x, y, 710) % 9 - 4;
+                    sp(x, y, cl(br+n), cl(bg+n), cl(bb+n));
+                }
+            }
+            // Bag tie (top)
+            sp(7, 3, cl(br-20), cl(bg-20), cl(bb-20));
+            sp(8, 3, cl(br-20), cl(bg-20), cl(bb-20));
+            sp(6, 4, cl(br-10), cl(bg-10), cl(bb-10));
+            sp(9, 4, cl(br-10), cl(bg-10), cl(bb-10));
+            // Shine
+            sp(5, 7, cl(br+40), cl(bg+40), cl(bb+40));
+            sp(5, 8, cl(br+30), cl(bg+30), cl(bb+30));
+            // Outline
+            for (int y = 0; y < SZ; y++) for (int x = 0; x < SZ; x++) {
+                if (pixels[(y*SZ+x)*4+3] == 0) continue;
+                for (int dy2=-1;dy2<=1;dy2++) for (int dx2=-1;dx2<=1;dx2++) {
+                    int nx=x+dx2, ny=y+dy2;
+                    if (nx>=0 && nx<SZ && ny>=0 && ny<SZ && pixels[(ny*SZ+nx)*4+3]==0)
+                        { sp(x,y,20,18,15); goto bag_next; }
+                }
+                bag_next:;
+            }
+        }
+
+        // Save procedural sprite and load it
+        std::string dropSpritePath = "assets/sprites/drop_" + (isGold ? std::string("gold") : rarity) + ".png";
+        if (!std::filesystem::exists(dropSpritePath)) {
+            std::filesystem::create_directories("assets/sprites");
+            stbi_write_png(dropSpritePath.c_str(), SZ, SZ, 4, pixels.data(), SZ * 4);
+        }
+        sprite->texture = TextureCache::instance().load(dropSpritePath);
 
         return entity;
     }

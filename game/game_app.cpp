@@ -845,7 +845,8 @@ void GameApp::onInit() {
         if (msg.entityType == 0) { // player
             ghost = EntityFactory::createGhostPlayer(world, msg.name, msg.position);
         } else if (msg.entityType == 3) { // dropped item
-            ghost = EntityFactory::createGhostDroppedItem(world, msg.name, msg.position);
+            ghost = EntityFactory::createGhostDroppedItem(world, msg.name, msg.position,
+                msg.isGold != 0, msg.rarity);
         } else if (msg.entityType == 1) { // mob
             ghost = EntityFactory::createGhostMob(world, msg.name, msg.position,
                 msg.mobDefId, msg.level, msg.currentHP, msg.maxHP, msg.isBoss != 0);
