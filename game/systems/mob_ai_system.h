@@ -127,6 +127,30 @@ public:
                     nearestPlayer = world_->getEntity(result.value());
                 }
 
+                // --- THREAT-BASED TARGET OVERRIDE ---
+                // If the mob has been damaged, prefer the top threat target over nearest player.
+                // Matches Unity ServerZoneMobAI.Think() threat swap logic.
+                if (!stats.damageByAttacker.empty()) {
+                    uint32_t topThreatId = stats.getTopThreatTarget();
+                    if (topThreatId != 0) {
+                        Entity* topThreatEntity = world_->getEntity(EntityHandle(topThreatId));
+                        if (topThreatEntity) {
+                            auto* threatStats = topThreatEntity->getComponent<CharacterStatsComponent>();
+                            auto* threatTransform = topThreatEntity->getComponent<Transform>();
+                            bool valid = threatStats && threatTransform
+                                && threatStats->stats.isAlive()
+                                && (stats.sceneId.empty() || threatStats->stats.currentScene == stats.sceneId);
+                            if (valid) {
+                                float dist = currentPos.distance(threatTransform->position);
+                                if (dist <= ai.contactRadius) {
+                                    nearestPlayer = topThreatEntity;  // Override to top threat
+                                }
+                            }
+                        }
+                    }
+                }
+                // --- END THREAT OVERRIDE ---
+
                 // Scene check: only interact with players in the same scene as this mob
                 if (nearestPlayer && !stats.sceneId.empty()) {
                     auto* playerStats = nearestPlayer->getComponent<CharacterStatsComponent>();
@@ -342,6 +366,30 @@ private:
             if (result.has_value()) {
                 nearestPlayer = world_->getEntity(result.value());
             }
+
+            // --- THREAT-BASED TARGET OVERRIDE ---
+            // damageByAttacker is only written on the game thread (takeDamageFrom),
+            // which does not overlap with AI tick jobs — safe to read here.
+            if (!stats.damageByAttacker.empty()) {
+                uint32_t topThreatId = stats.getTopThreatTarget();
+                if (topThreatId != 0) {
+                    Entity* topThreatEntity = world_->getEntity(EntityHandle(topThreatId));
+                    if (topThreatEntity) {
+                        auto* threatStats = topThreatEntity->getComponent<CharacterStatsComponent>();
+                        auto* threatTransform = topThreatEntity->getComponent<Transform>();
+                        bool valid = threatStats && threatTransform
+                            && threatStats->stats.isAlive()
+                            && (stats.sceneId.empty() || threatStats->stats.currentScene == stats.sceneId);
+                        if (valid) {
+                            float dist = currentPos.distance(threatTransform->position);
+                            if (dist <= ai.contactRadius) {
+                                nearestPlayer = topThreatEntity;  // Override to top threat
+                            }
+                        }
+                    }
+                }
+            }
+            // --- END THREAT OVERRIDE ---
 
             Vec2 targetPos;
             Vec2* targetPosPtr = nullptr;

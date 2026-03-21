@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/net/aoi.h"
+#include "engine/net/replication.h"
 #include "engine/core/types.h"
 #include <algorithm>
 #include <cmath>
@@ -7,6 +8,16 @@
 namespace fate {
 
 struct TargetValidator {
+    // Check if a PersistentId (64-bit) corresponds to an EntityHandle in the AOI.
+    // Requires the replication manager to resolve PersistentId → EntityHandle.
+    static bool isInAOI(const VisibilitySet& aoi, uint64_t targetPersistentId,
+                        const ReplicationManager& replication) {
+        EntityHandle target = replication.getEntityHandle(PersistentId(targetPersistentId));
+        if (target.isNull()) return false;
+        return std::binary_search(aoi.current.begin(), aoi.current.end(), target);
+    }
+
+    // Legacy overload — kept for backward compat but should be replaced at call sites
     static bool isInAOI(const VisibilitySet& aoi, uint64_t targetId) {
         EntityHandle target(static_cast<uint32_t>(targetId));
         return std::binary_search(aoi.current.begin(), aoi.current.end(), target);

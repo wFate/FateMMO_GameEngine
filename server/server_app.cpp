@@ -2231,7 +2231,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     if (!client || client->playerEntityId == 0) return;
 
     if (msg.targetId != 0) {
-        if (!TargetValidator::isInAOI(client->aoi, msg.targetId)) {
+        if (!TargetValidator::isInAOI(client->aoi, msg.targetId, replication_)) {
             LOG_WARN("Net", "Client %u targeted entity %llu not in AOI", clientId, msg.targetId);
             return;
         }
@@ -2444,32 +2444,41 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                 return pc->party.partyId;
             };
             auto lootResult = es.getTopDamagerPartyAware(partyLookup);
-            uint32_t topDamagerId = lootResult.topDamagerId;
-            if (topDamagerId == 0) topDamagerId = casterHandle.value;
+            uint32_t baseOwner = lootResult.topDamagerId;
+            if (baseOwner == 0) baseOwner = casterHandle.value;
 
-            // Apply loot mode for party wins
+            // Prepare per-item random loot mode: collect all alive party members in scene
+            std::vector<uint32_t> partyEntityIds;
+            bool useRandomPerItem = false;
             if (lootResult.isParty) {
-                EntityHandle topHandle(topDamagerId);
+                EntityHandle topHandle(baseOwner);
                 auto* topEntity = world_.getEntity(topHandle);
                 if (topEntity) {
                     auto* pc = topEntity->getComponent<PartyComponent>();
                     if (pc && pc->party.lootMode == PartyLootMode::Random) {
+                        useRandomPerItem = true;
                         auto sceneMembers = pc->party.getMembersInScene(es.sceneId);
-                        if (!sceneMembers.empty()) {
-                            thread_local std::mt19937 lootRng{std::random_device{}()};
-                            std::uniform_int_distribution<size_t> pick(0, sceneMembers.size() - 1);
-                            const std::string& winnerCharId = sceneMembers[pick(lootRng)];
-                            uint32_t entityForCharacter = 0;
+                        for (const auto& charId : sceneMembers) {
                             server_.connections().forEach([&](const ClientConnection& c) {
-                                if (c.character_id == winnerCharId)
-                                    entityForCharacter = static_cast<uint32_t>(c.playerEntityId);
+                                if (c.character_id == charId && c.playerEntityId != 0)
+                                    partyEntityIds.push_back(static_cast<uint32_t>(c.playerEntityId));
                             });
-                            if (entityForCharacter != 0) topDamagerId = entityForCharacter;
                         }
                     }
-                    // FreeForAll: topDamagerId stays as-is; pickup validation allows any party member
+                    // FreeForAll: baseOwner stays as-is; pickup validation allows any party member
                 }
             }
+
+            // Per-item owner picker: random party member each time (Random mode),
+            // or always baseOwner (FreeForAll / solo).
+            thread_local std::mt19937 lootRng{std::random_device{}()};
+            auto pickOwner = [&]() -> uint32_t {
+                if (useRandomPerItem && !partyEntityIds.empty()) {
+                    std::uniform_int_distribution<size_t> pick(0, partyEntityIds.size() - 1);
+                    return partyEntityIds[pick(lootRng)];
+                }
+                return baseOwner;
+            };
 
             // Roll loot table
             if (!es.lootTableId.empty()) {
@@ -2500,7 +2509,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                         dropComp->quantity = drops[i].item.quantity;
                         dropComp->enchantLevel = drops[i].item.enchantLevel;
                         dropComp->rolledStatsJson = ItemStatRoller::rolledStatsToJson(drops[i].item.rolledStats);
-                        dropComp->ownerEntityId = topDamagerId;
+                        dropComp->ownerEntityId = pickOwner();  // random per item
                         dropComp->spawnTime = gameTime_;
 
                         const auto* def = itemDefCache_.getDefinition(drops[i].item.itemId);
@@ -2525,7 +2534,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                     if (goldComp) {
                         goldComp->isGold = true;
                         goldComp->goldAmount = goldAmount;
-                        goldComp->ownerEntityId = topDamagerId;
+                        goldComp->ownerEntityId = pickOwner();  // random per item
                         goldComp->spawnTime = gameTime_;
                     }
 
@@ -2592,7 +2601,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
     if (!client || client->playerEntityId == 0) return;
 
     if (action.targetId != 0) {
-        if (!TargetValidator::isInAOI(client->aoi, action.targetId)) {
+        if (!TargetValidator::isInAOI(client->aoi, action.targetId, replication_)) {
             LOG_WARN("Net", "Client %u targeted entity %llu not in AOI", clientId, action.targetId);
             return;
         }
@@ -2710,32 +2719,41 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 return pc->party.partyId;
             };
             auto lootResult = es.getTopDamagerPartyAware(partyLookup);
-            uint32_t topDamagerId = lootResult.topDamagerId;
-            if (topDamagerId == 0) topDamagerId = attackerHandle.value;
+            uint32_t baseOwner = lootResult.topDamagerId;
+            if (baseOwner == 0) baseOwner = attackerHandle.value;
 
-            // Apply loot mode for party wins
+            // Prepare per-item random loot mode: collect all alive party members in scene
+            std::vector<uint32_t> partyEntityIds;
+            bool useRandomPerItem = false;
             if (lootResult.isParty) {
-                EntityHandle topHandle(topDamagerId);
+                EntityHandle topHandle(baseOwner);
                 auto* topEntity = world_.getEntity(topHandle);
                 if (topEntity) {
                     auto* pc = topEntity->getComponent<PartyComponent>();
                     if (pc && pc->party.lootMode == PartyLootMode::Random) {
+                        useRandomPerItem = true;
                         auto sceneMembers = pc->party.getMembersInScene(es.sceneId);
-                        if (!sceneMembers.empty()) {
-                            thread_local std::mt19937 lootRng{std::random_device{}()};
-                            std::uniform_int_distribution<size_t> pick(0, sceneMembers.size() - 1);
-                            const std::string& winnerCharId = sceneMembers[pick(lootRng)];
-                            uint32_t entityForCharacter = 0;
+                        for (const auto& charId : sceneMembers) {
                             server_.connections().forEach([&](const ClientConnection& c) {
-                                if (c.character_id == winnerCharId)
-                                    entityForCharacter = static_cast<uint32_t>(c.playerEntityId);
+                                if (c.character_id == charId && c.playerEntityId != 0)
+                                    partyEntityIds.push_back(static_cast<uint32_t>(c.playerEntityId));
                             });
-                            if (entityForCharacter != 0) topDamagerId = entityForCharacter;
                         }
                     }
-                    // FreeForAll: topDamagerId stays as-is; pickup validation allows any party member
+                    // FreeForAll: baseOwner stays as-is; pickup validation allows any party member
                 }
             }
+
+            // Per-item owner picker: random party member each time (Random mode),
+            // or always baseOwner (FreeForAll / solo).
+            thread_local std::mt19937 lootRng{std::random_device{}()};
+            auto pickOwner = [&]() -> uint32_t {
+                if (useRandomPerItem && !partyEntityIds.empty()) {
+                    std::uniform_int_distribution<size_t> pick(0, partyEntityIds.size() - 1);
+                    return partyEntityIds[pick(lootRng)];
+                }
+                return baseOwner;
+            };
 
             // Roll loot table
             if (!es.lootTableId.empty()) {
@@ -2766,7 +2784,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                         dropComp->quantity = drops[i].item.quantity;
                         dropComp->enchantLevel = drops[i].item.enchantLevel;
                         dropComp->rolledStatsJson = ItemStatRoller::rolledStatsToJson(drops[i].item.rolledStats);
-                        dropComp->ownerEntityId = topDamagerId;
+                        dropComp->ownerEntityId = pickOwner();  // random per item
                         dropComp->spawnTime = gameTime_;
 
                         const auto* def = itemDefCache_.getDefinition(drops[i].item.itemId);
@@ -2791,7 +2809,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                     if (goldComp) {
                         goldComp->isGold = true;
                         goldComp->goldAmount = goldAmount;
-                        goldComp->ownerEntityId = topDamagerId;
+                        goldComp->ownerEntityId = pickOwner();  // random per item
                         goldComp->spawnTime = gameTime_;
                     }
 
