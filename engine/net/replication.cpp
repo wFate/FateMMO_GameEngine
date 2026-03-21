@@ -152,6 +152,26 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
             dirtyMask |= (1 << 2);
         if (current.currentHP != last.currentHP)
             dirtyMask |= (1 << 3);
+        if (current.maxHP != last.maxHP)
+            dirtyMask |= (1 << 4);
+        if (current.moveState != last.moveState)
+            dirtyMask |= (1 << 5);
+        if (current.animId != last.animId)
+            dirtyMask |= (1 << 6);
+        if (current.statusEffectMask != last.statusEffectMask)
+            dirtyMask |= (1 << 7);
+        if (current.deathState != last.deathState)
+            dirtyMask |= (1 << 8);
+        if (current.castingSkillId != last.castingSkillId || current.castingProgress != last.castingProgress)
+            dirtyMask |= (1 << 9);
+        if (current.targetEntityId != last.targetEntityId)
+            dirtyMask |= (1 << 10);
+        if (current.level != last.level)
+            dirtyMask |= (1 << 11);
+        if (current.faction != last.faction)
+            dirtyMask |= (1 << 12);
+        if (current.equipVisuals != last.equipVisuals)
+            dirtyMask |= (1 << 13);
 
         if (dirtyMask == 0) continue; // Nothing changed
 
@@ -159,13 +179,24 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         seq++; // wraps naturally at 255->0
 
         SvEntityUpdateMsg deltaMsg;
-        deltaMsg.persistentId = pid.value();
-        deltaMsg.fieldMask = dirtyMask;
-        deltaMsg.position = current.position;
-        deltaMsg.animFrame = current.animFrame;
-        deltaMsg.flipX = current.flipX;
-        deltaMsg.currentHP = current.currentHP;
-        deltaMsg.updateSeq = seq;
+        deltaMsg.persistentId    = pid.value();
+        deltaMsg.fieldMask       = dirtyMask;
+        deltaMsg.position        = current.position;
+        deltaMsg.animFrame       = current.animFrame;
+        deltaMsg.flipX           = current.flipX;
+        deltaMsg.currentHP       = current.currentHP;
+        deltaMsg.maxHP           = current.maxHP;
+        deltaMsg.moveState       = current.moveState;
+        deltaMsg.animId          = current.animId;
+        deltaMsg.statusEffectMask = current.statusEffectMask;
+        deltaMsg.deathState      = current.deathState;
+        deltaMsg.castingSkillId  = current.castingSkillId;
+        deltaMsg.castingProgress = current.castingProgress;
+        deltaMsg.targetEntityId  = current.targetEntityId;
+        deltaMsg.level           = current.level;
+        deltaMsg.faction         = current.faction;
+        deltaMsg.equipVisuals    = current.equipVisuals;
+        deltaMsg.updateSeq       = seq;
 
         uint8_t buf[MAX_PAYLOAD_SIZE];
         ByteWriter writer(buf, sizeof(buf));
@@ -244,7 +275,7 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
 SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* entity, PersistentId pid) {
     SvEntityUpdateMsg msg;
     msg.persistentId = pid.value();
-    msg.fieldMask = 0x000F; // all 4 bits set
+    msg.fieldMask = 0x3FFF; // all 14 bits set
 
     // Position
     auto* transform = entity->getComponent<Transform>();
@@ -259,16 +290,36 @@ SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* en
         msg.flipX = sprite->flipX ? 1 : 0;
     }
 
-    // HP
+    // HP, maxHP, level
     auto* charStats = entity->getComponent<CharacterStatsComponent>();
     if (charStats) {
         msg.currentHP = charStats->stats.currentHP;
+        msg.maxHP     = charStats->stats.maxHP;
+        msg.level     = static_cast<uint8_t>(charStats->stats.level);
     } else {
         auto* enemyStats = entity->getComponent<EnemyStatsComponent>();
         if (enemyStats) {
             msg.currentHP = enemyStats->stats.currentHP;
+            msg.maxHP     = enemyStats->stats.maxHP;
+            msg.level     = static_cast<uint8_t>(enemyStats->stats.level);
         }
     }
+
+    // Faction
+    auto* factionComp = entity->getComponent<FactionComponent>();
+    if (factionComp) {
+        msg.faction = static_cast<uint8_t>(factionComp->faction);
+    }
+
+    // Placeholders for fields not yet driven by components
+    msg.moveState        = 0;
+    msg.animId           = 0;
+    msg.statusEffectMask = 0;
+    msg.deathState       = 0;
+    msg.castingSkillId   = 0;
+    msg.castingProgress  = 0;
+    msg.targetEntityId   = 0;
+    msg.equipVisuals     = 0;
 
     return msg;
 }
