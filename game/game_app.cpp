@@ -988,7 +988,7 @@ void GameApp::onInit() {
         auto* scene = SceneManager::instance().currentScene();
         if (!scene) return;
         scene->world().forEach<CharacterStatsComponent, PlayerController>(
-            [&](Entity*, CharacterStatsComponent* stats, PlayerController* ctrl) {
+            [&](Entity* entity, CharacterStatsComponent* stats, PlayerController* ctrl) {
                 if (!ctrl->isLocalPlayer) return;
                 // Set level and recalculate FIRST, then override with server values.
                 // recalculateStats() overwrites maxHP/maxMP, so server values must come after.
@@ -1006,6 +1006,10 @@ void GameApp::onInit() {
                 stats->stats.honor = msg.honor;
                 stats->stats.pvpKills = msg.pvpKills;
                 stats->stats.pvpDeaths = msg.pvpDeaths;
+
+                // Gold — server-authoritative, set directly (not additive)
+                auto* inv = entity->getComponent<InventoryComponent>();
+                if (inv) inv->inventory.setGold(msg.gold);
             }
         );
     };
@@ -2225,8 +2229,8 @@ void GameApp::onUpdate(float deltaTime) {
                             cs->stats.isDead = ar.isDead != 0;
                         }
                         auto* inv = player->getComponent<InventoryComponent>();
-                        if (inv && ar.gold > 0) {
-                            inv->inventory.addGold(ar.gold);
+                        if (inv) {
+                            inv->inventory.setGold(ar.gold); // set, not add — avoid doubling
                         }
                     }
 
@@ -2257,8 +2261,8 @@ void GameApp::onUpdate(float deltaTime) {
                             cs->stats.pvpDeaths = ps.pvpDeaths;
                         }
                         auto* inv = player->getComponent<InventoryComponent>();
-                        if (inv && pendingPlayerState_.gold > 0) {
-                            inv->inventory.addGold(pendingPlayerState_.gold);
+                        if (inv) {
+                            inv->inventory.setGold(pendingPlayerState_.gold);
                         }
                     }
 
@@ -2345,6 +2349,8 @@ void GameApp::onUpdate(float deltaTime) {
                             cs->stats.pvpKills = ps.pvpKills;
                             cs->stats.pvpDeaths = ps.pvpDeaths;
                         }
+                        auto* inv = player->getComponent<InventoryComponent>();
+                        if (inv) inv->inventory.setGold(pendingPlayerState_.gold);
 
                         LOG_INFO("Client", "Player respawned at (%.0f, %.0f) in %s (Lv%d)",
                                  pendingZoneSpawn_.x, pendingZoneSpawn_.y,
