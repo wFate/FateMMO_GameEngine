@@ -876,6 +876,7 @@ void GameApp::onInit() {
             }
             ghostEntities_.erase(it);
             ghostUpdateSeqs_.erase(msg.persistentId);
+            ghostDeathTimers_.erase(msg.persistentId);
         }
         ghostInterpolation_.removeEntity(msg.persistentId);
     };
@@ -971,6 +972,8 @@ void GameApp::onInit() {
                         es->stats.currentHP = 0;
                         es->stats.isAlive = false;
                     }
+                    // Start 3-second corpse timer — sprite hidden after delay
+                    ghostDeathTimers_[msg.targetId] = netTime_;
                 }
             }
         }
@@ -2416,6 +2419,7 @@ void GameApp::onUpdate(float deltaTime) {
 
                     // Clear ghost state before destroying the world
                     ghostEntities_.clear();
+                    ghostDeathTimers_.clear();
                     ghostInterpolation_.clear();
                     combatPredictions_.clear();
 
@@ -2491,6 +2495,31 @@ void GameApp::onUpdate(float deltaTime) {
                             if (ghost) {
                                 auto* t = ghost->getComponent<Transform>();
                                 if (t) t->position = pos;
+                            }
+                        }
+                    }
+                }
+
+                // Hide dead mob sprites after 3-second corpse delay
+                if (!editorPaused && !ghostDeathTimers_.empty()) {
+                    auto* sc2 = SceneManager::instance().currentScene();
+                    if (sc2) {
+                        constexpr float CORPSE_VISIBLE_DURATION = 3.0f;
+                        for (auto it = ghostDeathTimers_.begin(); it != ghostDeathTimers_.end(); ) {
+                            if (netTime_ - it->second >= CORPSE_VISIBLE_DURATION) {
+                                auto git = ghostEntities_.find(it->first);
+                                if (git != ghostEntities_.end()) {
+                                    Entity* ghost = sc2->world().getEntity(git->second);
+                                    if (ghost) {
+                                        auto* spr = ghost->getComponent<SpriteComponent>();
+                                        if (spr) spr->enabled = false;
+                                        auto* np = ghost->getComponent<NameplateComponent>();
+                                        if (np) np->visible = false;
+                                    }
+                                }
+                                it = ghostDeathTimers_.erase(it);
+                            } else {
+                                ++it;
                             }
                         }
                     }
@@ -2701,6 +2730,7 @@ void GameApp::drawNetworkPanel() {
                 scene->world().processDestroyQueue();
             }
             ghostEntities_.clear();
+            ghostDeathTimers_.clear();
             ghostInterpolation_.clear();
             combatPredictions_.clear();
             localPlayerCreated_ = false;

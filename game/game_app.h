@@ -69,6 +69,7 @@ private:
     InterpolationManager ghostInterpolation_;
     std::unordered_map<uint64_t, EntityHandle> ghostEntities_; // PersistentId -> local ghost
     std::unordered_map<uint64_t, uint8_t> ghostUpdateSeqs_; // PersistentId -> last applied seq
+    std::unordered_map<uint64_t, float> ghostDeathTimers_; // PersistentId -> time of death (for corpse fade)
     float lastMoveSendTime_ = 0.0f;
     float netTime_ = 0.0f; // accumulated time for network polling
 
