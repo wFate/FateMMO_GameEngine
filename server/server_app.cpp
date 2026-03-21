@@ -2443,8 +2443,33 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                 if (!pc || !pc->party.isInParty()) return -1;
                 return pc->party.partyId;
             };
-            uint32_t topDamagerId = es.getTopDamagerPartyAware(partyLookup);
+            auto lootResult = es.getTopDamagerPartyAware(partyLookup);
+            uint32_t topDamagerId = lootResult.topDamagerId;
             if (topDamagerId == 0) topDamagerId = casterHandle.value;
+
+            // Apply loot mode for party wins
+            if (lootResult.isParty) {
+                EntityHandle topHandle(topDamagerId);
+                auto* topEntity = world_.getEntity(topHandle);
+                if (topEntity) {
+                    auto* pc = topEntity->getComponent<PartyComponent>();
+                    if (pc && pc->party.lootMode == PartyLootMode::Random) {
+                        auto sceneMembers = pc->party.getMembersInScene(es.sceneId);
+                        if (!sceneMembers.empty()) {
+                            thread_local std::mt19937 lootRng{std::random_device{}()};
+                            std::uniform_int_distribution<size_t> pick(0, sceneMembers.size() - 1);
+                            const std::string& winnerCharId = sceneMembers[pick(lootRng)];
+                            uint32_t entityForCharacter = 0;
+                            server_.connections().forEach([&](const ClientConnection& c) {
+                                if (c.character_id == winnerCharId)
+                                    entityForCharacter = static_cast<uint32_t>(c.playerEntityId);
+                            });
+                            if (entityForCharacter != 0) topDamagerId = entityForCharacter;
+                        }
+                    }
+                    // FreeForAll: topDamagerId stays as-is; pickup validation allows any party member
+                }
+            }
 
             // Roll loot table
             if (!es.lootTableId.empty()) {
@@ -2684,8 +2709,33 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 if (!pc || !pc->party.isInParty()) return -1;
                 return pc->party.partyId;
             };
-            uint32_t topDamagerId = es.getTopDamagerPartyAware(partyLookup);
+            auto lootResult = es.getTopDamagerPartyAware(partyLookup);
+            uint32_t topDamagerId = lootResult.topDamagerId;
             if (topDamagerId == 0) topDamagerId = attackerHandle.value;
+
+            // Apply loot mode for party wins
+            if (lootResult.isParty) {
+                EntityHandle topHandle(topDamagerId);
+                auto* topEntity = world_.getEntity(topHandle);
+                if (topEntity) {
+                    auto* pc = topEntity->getComponent<PartyComponent>();
+                    if (pc && pc->party.lootMode == PartyLootMode::Random) {
+                        auto sceneMembers = pc->party.getMembersInScene(es.sceneId);
+                        if (!sceneMembers.empty()) {
+                            thread_local std::mt19937 lootRng{std::random_device{}()};
+                            std::uniform_int_distribution<size_t> pick(0, sceneMembers.size() - 1);
+                            const std::string& winnerCharId = sceneMembers[pick(lootRng)];
+                            uint32_t entityForCharacter = 0;
+                            server_.connections().forEach([&](const ClientConnection& c) {
+                                if (c.character_id == winnerCharId)
+                                    entityForCharacter = static_cast<uint32_t>(c.playerEntityId);
+                            });
+                            if (entityForCharacter != 0) topDamagerId = entityForCharacter;
+                        }
+                    }
+                    // FreeForAll: topDamagerId stays as-is; pickup validation allows any party member
+                }
+            }
 
             // Roll loot table
             if (!es.lootTableId.empty()) {
@@ -2858,7 +2908,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         float dist = playerT->position.distance(itemT->position);
         if (dist > 48.0f) return;
 
-        // Validate loot rights — allow owner or any member of the owner's party
+        // Validate loot rights — allow owner always; allow party members only in FreeForAll mode
         if (dropComp->ownerEntityId != 0 && dropComp->ownerEntityId != attackerHandle.value) {
             bool sameParty = false;
             auto* attackerParty = attacker->getComponent<PartyComponent>();
@@ -2868,7 +2918,8 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 if (ownerEntity) {
                     auto* ownerParty = ownerEntity->getComponent<PartyComponent>();
                     if (ownerParty && ownerParty->party.isInParty()
-                        && ownerParty->party.partyId == attackerParty->party.partyId) {
+                        && ownerParty->party.partyId == attackerParty->party.partyId
+                        && attackerParty->party.lootMode == PartyLootMode::FreeForAll) {
                         sameParty = true;
                     }
                 }

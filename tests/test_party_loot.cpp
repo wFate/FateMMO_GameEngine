@@ -14,7 +14,7 @@ TEST_CASE("EnemyStats: getTopDamagerPartyAware solo players") {
 
     // No parties — same as getTopThreatTarget
     auto noParty = [](uint32_t) { return -1; };
-    CHECK(es.getTopDamagerPartyAware(noParty) == 20);
+    CHECK(es.getTopDamagerPartyAware(noParty).topDamagerId == 20);
 }
 
 TEST_CASE("EnemyStats: party aggregation wins over solo") {
@@ -32,7 +32,7 @@ TEST_CASE("EnemyStats: party aggregation wins over solo") {
     };
 
     // Party wins (450 > 400), top individual in party is 30 (250)
-    CHECK(es.getTopDamagerPartyAware(partyLookup) == 30);
+    CHECK(es.getTopDamagerPartyAware(partyLookup).topDamagerId == 30);
 }
 
 TEST_CASE("EnemyStats: solo beats smaller party") {
@@ -48,14 +48,14 @@ TEST_CASE("EnemyStats: solo beats smaller party") {
     };
 
     // Solo wins (600 > 200)
-    CHECK(es.getTopDamagerPartyAware(partyLookup) == 10);
+    CHECK(es.getTopDamagerPartyAware(partyLookup).topDamagerId == 10);
 }
 
 TEST_CASE("EnemyStats: empty threat table returns 0") {
     EnemyStats es;
     es.maxHP = 100; es.currentHP = 100; es.isAlive = true;
     auto noParty = [](uint32_t) { return -1; };
-    CHECK(es.getTopDamagerPartyAware(noParty) == 0);
+    CHECK(es.getTopDamagerPartyAware(noParty).topDamagerId == 0);
 }
 
 TEST_CASE("EnemyStats: two parties, winning party top individual returned") {
@@ -75,7 +75,46 @@ TEST_CASE("EnemyStats: two parties, winning party top individual returned") {
     };
 
     // Party 1 wins (700 > 400), top in party 1 = entity 40 (400 dmg)
-    CHECK(es.getTopDamagerPartyAware(partyLookup) == 40);
+    CHECK(es.getTopDamagerPartyAware(partyLookup).topDamagerId == 40);
+}
+
+TEST_CASE("EnemyStats: tie-breaking favors lower entity ID") {
+    EnemyStats es;
+    es.maxHP = 1000; es.currentHP = 1000; es.isAlive = true;
+    es.damageByAttacker[50] = 300;
+    es.damageByAttacker[10] = 300; // same damage, lower ID
+
+    auto noParty = [](uint32_t) { return -1; };
+    auto result = es.getTopDamagerPartyAware(noParty);
+    CHECK(result.topDamagerId == 10); // lower ID wins tie
+}
+
+TEST_CASE("EnemyStats: party tie-breaking favors lower group ID") {
+    EnemyStats es;
+    es.maxHP = 1000; es.currentHP = 1000; es.isAlive = true;
+    es.damageByAttacker[10] = 200; // party 5
+    es.damageByAttacker[20] = 200; // party 1 (lower)
+
+    auto partyLookup = [](uint32_t id) -> int {
+        if (id == 10) return 5;
+        if (id == 20) return 1;
+        return -1;
+    };
+
+    auto result = es.getTopDamagerPartyAware(partyLookup);
+    CHECK(result.topDamagerId == 20); // party 1 < party 5
+    CHECK(result.isParty == true);
+}
+
+TEST_CASE("EnemyStats: result marks solo vs party correctly") {
+    EnemyStats es;
+    es.maxHP = 1000; es.currentHP = 1000; es.isAlive = true;
+    es.damageByAttacker[10] = 500;
+
+    auto noParty = [](uint32_t) { return -1; };
+    auto result = es.getTopDamagerPartyAware(noParty);
+    CHECK(result.isParty == false);
+    CHECK(result.topDamagerId == 10);
 }
 
 } // TEST_SUITE
