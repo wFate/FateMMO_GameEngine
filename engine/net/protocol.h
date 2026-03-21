@@ -123,7 +123,8 @@ struct SvEntityEnterMsg {
     uint8_t     isBoss = 0;
 
     // Player fields (only serialized when entityType == 0)
-    uint8_t pkStatus = 0; // PKStatus enum (only for entityType == 0, player)
+    uint8_t pkStatus  = 0; // PKStatus enum (only for entityType == 0, player)
+    uint8_t honorRank = 0; // HonorRank enum (only for entityType == 0, player)
 
     void write(ByteWriter& w) const {
         detail::writeU64(w, persistentId);
@@ -136,6 +137,7 @@ struct SvEntityEnterMsg {
         w.writeU8(faction);
         if (entityType == 0) { // player-specific fields
             w.writeU8(pkStatus);
+            w.writeU8(honorRank);
         }
         if (entityType == 3) {
             w.writeString(itemId);
@@ -162,7 +164,8 @@ struct SvEntityEnterMsg {
         m.maxHP        = r.readI32();
         m.faction      = r.readU8();
         if (m.entityType == 0) {
-            m.pkStatus = r.readU8();
+            m.pkStatus  = r.readU8();
+            m.honorRank = r.readU8();
         }
         if (m.entityType == 3) {
             m.itemId       = r.readString();
@@ -229,7 +232,8 @@ struct SvEntityUpdateMsg {
     uint32_t equipVisuals = 0;
     // Bit 14: pkStatus (uint8, 1B) — PK name color (0=White, 1=Purple, 2=Red, 3=Black)
     uint8_t pkStatus = 0;
-    // Bit 15: reserved
+    // Bit 15: honorRank (uint8, 1B) — HonorRank enum
+    uint8_t honorRank = 0;
 
     uint8_t updateSeq = 0;
 
@@ -252,6 +256,7 @@ struct SvEntityUpdateMsg {
         if (fieldMask & (1 << 12)) w.writeU8(faction);
         if (fieldMask & (1 << 13)) w.writeU32(equipVisuals);
         if (fieldMask & (1 << 14)) w.writeU8(pkStatus);
+        if (fieldMask & (1 << 15)) w.writeU8(honorRank);
     }
 
     static SvEntityUpdateMsg read(ByteReader& r) {
@@ -273,7 +278,8 @@ struct SvEntityUpdateMsg {
         if (m.fieldMask & (1 << 11)) m.level = r.readU8();
         if (m.fieldMask & (1 << 12)) m.faction = r.readU8();
         if (m.fieldMask & (1 << 13)) m.equipVisuals = r.readU32();
-        if (m.fieldMask & (1 << 14)) m.pkStatus = r.readU8();
+        if (m.fieldMask & (1 << 14)) m.pkStatus  = r.readU8();
+        if (m.fieldMask & (1 << 15)) m.honorRank = r.readU8();
         return m;
     }
 };
@@ -352,6 +358,7 @@ struct SvPlayerStateMsg {
     float   speed        = 1.0f;
     float   damageMult   = 1.0f;
     uint8_t pkStatus     = 0; // PKStatus enum
+    uint8_t honorRank    = 0; // HonorRank enum
 
     void write(ByteWriter& w) const {
         w.writeI32(currentHP);
@@ -373,6 +380,7 @@ struct SvPlayerStateMsg {
         w.writeFloat(speed);
         w.writeFloat(damageMult);
         w.writeU8(pkStatus);
+        w.writeU8(honorRank);
     }
 
     static SvPlayerStateMsg read(ByteReader& r) {
@@ -396,6 +404,7 @@ struct SvPlayerStateMsg {
         m.speed       = r.readFloat();
         m.damageMult  = r.readFloat();
         m.pkStatus    = r.readU8();
+        m.honorRank   = r.readU8();
         return m;
     }
 };
