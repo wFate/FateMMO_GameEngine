@@ -2135,6 +2135,8 @@ void GameApp::onUpdate(float deltaTime) {
                     pendingLevel_ = resp.level;
                     pendingSpawnPos_ = {resp.spawnX, resp.spawnY};
                     pendingSceneName_ = resp.sceneName;
+                    // Store full character state from auth for immediate player init
+                    pendingAuthResponse_ = resp;
                     // Connect to game server via UDP with auth token
                     std::string host = loginScreen_.serverHost;
                     netClient_.connectWithToken(host, static_cast<uint16_t>(serverPort_), pendingAuthToken_);
@@ -2202,13 +2204,29 @@ void GameApp::onUpdate(float deltaTime) {
                     auto* t = player->getComponent<Transform>();
                     if (t) t->position = pendingSpawnPos_;
 
-                    // Set level from auth response (avoids Lv1 flash before SvPlayerState arrives)
-                    if (pendingLevel_ > 1) {
+                    // Apply full character state from auth response immediately
+                    // (avoids blank/default stats until SvPlayerState arrives)
+                    {
+                        const auto& ar = pendingAuthResponse_;
                         auto* cs = player->getComponent<CharacterStatsComponent>();
                         if (cs) {
-                            cs->stats.level = pendingLevel_;
+                            cs->stats.level = ar.level;
                             cs->stats.recalculateStats();
                             cs->stats.recalculateXPRequirement();
+                            cs->stats.currentHP = ar.currentHP;
+                            cs->stats.maxHP = ar.maxHP;
+                            cs->stats.currentMP = ar.currentMP;
+                            cs->stats.maxMP = ar.maxMP;
+                            cs->stats.currentFury = ar.currentFury;
+                            cs->stats.currentXP = ar.currentXP;
+                            cs->stats.honor = ar.honor;
+                            cs->stats.pvpKills = ar.pvpKills;
+                            cs->stats.pvpDeaths = ar.pvpDeaths;
+                            cs->stats.isDead = ar.isDead != 0;
+                        }
+                        auto* inv = player->getComponent<InventoryComponent>();
+                        if (inv && ar.gold > 0) {
+                            inv->inventory.addGold(ar.gold);
                         }
                     }
 

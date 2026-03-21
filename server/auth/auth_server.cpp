@@ -576,13 +576,26 @@ void AuthServer::processLogin(const LoginRequest& req, AuthResponse& resp) {
     resp.authToken = token;
     resp.characterName = character->character_name;
     resp.className = character->class_name;
-    resp.level = character->level;
-    // Send saved position in pixel coords so client spawns at the right place
-    resp.spawnX = character->position_x * Coords::TILE_SIZE;
-    resp.spawnY = character->position_y * Coords::TILE_SIZE;
     // Fix legacy "Scene2" default, then send the scene name
     resp.sceneName = (character->current_scene == "Scene2" || character->current_scene.empty())
         ? "WhisperingWoods" : character->current_scene;
+    // Send saved position in pixel coords so client spawns at the right place
+    resp.spawnX = character->position_x * Coords::TILE_SIZE;
+    resp.spawnY = character->position_y * Coords::TILE_SIZE;
+    // Full character state
+    resp.level = character->level;
+    resp.currentXP = character->current_xp;
+    resp.gold = character->gold;
+    resp.currentHP = character->current_hp;
+    resp.maxHP = character->max_hp;
+    resp.currentMP = character->current_mp;
+    resp.maxMP = character->max_mp;
+    resp.currentFury = character->current_fury;
+    resp.honor = character->honor;
+    resp.pvpKills = character->pvp_kills;
+    resp.pvpDeaths = character->pvp_deaths;
+    resp.isDead = character->is_dead ? 1 : 0;
+    resp.faction = 0; // TODO: load faction from DB when faction column exists
 
     LOG_INFO("AuthServer", "Login successful: '%s' (id=%d), character '%s' level %d",
              req.username.c_str(), account->account_id,
