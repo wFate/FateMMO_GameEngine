@@ -2114,6 +2114,13 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                 Entity* e = getWorldForClient(clientId).getEntity(h);
                 if (!e) break;
 
+                // Moving while casting interrupts the cast
+                auto* charStats = e->getComponent<CharacterStatsComponent>();
+                if (charStats && charStats->stats.isCasting()) {
+                    charStats->stats.interruptCast();
+                    LOG_INFO("Server", "Client %d cast interrupted by movement", clientId);
+                }
+
                 // First move after connect: accept unconditionally (position desync)
                 if (needsFirstMoveSync_.count(clientId)) {
                     needsFirstMoveSync_.erase(clientId);
@@ -4629,6 +4636,12 @@ void ServerApp::processEquip(uint16_t clientId, const CmdEquipMsg& msg) {
 
     // Block equipment changes while dead or dying
     if (!charStats->stats.isAlive()) return;
+
+    // Block equipment changes while casting
+    if (charStats->stats.isCasting()) {
+        LOG_WARN("Server", "Client %d tried to change equipment while casting", clientId);
+        return;
+    }
 
     // H4-FIX: Block equipment changes during an active trade session
     if (tradeRepo_->getActiveSession(client->character_id)) {

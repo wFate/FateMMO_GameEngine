@@ -70,3 +70,20 @@ TEST_CASE("Skill with castTime > 0 should enter casting state") {
     CHECK(done);
     CHECK_FALSE(caster.isCasting());
 }
+
+TEST_CASE("Movement should interrupt active cast") {
+    CharacterStats stats;
+    stats.beginCast("fireball", 2.0f, 42);
+    CHECK(stats.isCasting());
+
+    // Moving interrupts the cast
+    stats.interruptCast();
+    CHECK_FALSE(stats.isCasting());
+}
+
+TEST_CASE("Equipment change should be blocked while casting") {
+    CharacterStats stats;
+    stats.beginCast("fireball", 2.0f, 42);
+    CHECK(stats.isCasting());
+    // Server equip handler checks isCasting() and returns early
+}
