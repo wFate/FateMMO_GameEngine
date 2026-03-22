@@ -13,6 +13,7 @@
 #include "engine/asset/file_watcher.h"
 #include "engine/asset/asset_registry.h"
 #include "engine/asset/loaders.h"
+#include "engine/ui/ui_manager.h"
 #include "engine/memory/arena.h"
 #include <SDL.h>
 #include <string>
@@ -78,6 +79,7 @@ public:
     RenderGraph& renderGraph() { return renderGraph_; }
     LightingConfig& lightingConfig() { return lightingConfig_; }
     PostProcessConfig& postProcessConfig() { return postProcessConfig_; }
+    UIManager& uiManager() { return uiManager_; }
 
 protected:
     AppConfig config_;
@@ -104,6 +106,7 @@ private:
     float fps_ = 0.0f;
     float fixedTimeAccumulator_ = 0.0f;
     FrameArena frameArena_;
+    UIManager uiManager_;
     FileWatcher fileWatcher_;
     float elapsedTime_ = 0.0f;  // for reload debounce timestamps
     std::string assetsDir_;     // cached from config

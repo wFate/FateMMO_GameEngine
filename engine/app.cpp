@@ -24,6 +24,7 @@
 #else
 #include "imgui_impl_metal.h"
 #endif
+#include "engine/render/sdf_text.h"
 #include "engine/profiling/tracy_zones.h"
 #include "engine/job/job_system.h"
 #if defined(ENGINE_MEMORY_DEBUG)
@@ -206,6 +207,9 @@ bool App::init(const AppConfig& config) {
 
     // Game registers its scene passes (tiles, entities, etc.) in onInit()
     onInit();
+
+    // Load default UI theme (non-fatal — screens work without a theme)
+    uiManager_.loadTheme("assets/ui/themes/default.json");
 
     // Register engine render passes AFTER game passes, so the graph order is:
     // [game scene passes] -> Lighting -> BloomExtract -> BloomBlur -> PostProcess
@@ -532,6 +536,15 @@ void App::render() {
 
             onRender(spriteBatch_, camera_);
             editor.renderScene(&spriteBatch_, &camera_);
+
+            // UI system: render loaded screens in screen-space on top of game world
+            {
+                Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
+                spriteBatch_.begin(screenProj);
+                uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
+                uiManager_.render(spriteBatch_, SDFText::instance());
+                spriteBatch_.end();
+            }
         }
 
         editor.renderUI(world, &camera_, &spriteBatch_, &frameArena_);
@@ -550,6 +563,15 @@ void App::render() {
 
         // Blit PostProcess result to drawable via Metal pipeline, then render ImGui on top
         onRender(spriteBatch_, camera_);
+
+        // UI system: render loaded screens in screen-space on top of game world
+        {
+            Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
+            spriteBatch_.begin(screenProj);
+            uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
+            uiManager_.render(spriteBatch_, SDFText::instance());
+            spriteBatch_.end();
+        }
 
         ImGui::Render();
         MTLRenderPassDescriptor* passDesc = [MTLRenderPassDescriptor renderPassDescriptor];
@@ -624,6 +646,15 @@ void App::render() {
         // Editor overlays (grid, selection, etc.) drawn on top
         editor.renderScene(&spriteBatch_, &camera_);
 
+        // UI system: render loaded screens in screen-space on top of game world
+        {
+            Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
+            spriteBatch_.begin(screenProj);
+            uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
+            uiManager_.render(spriteBatch_, SDFText::instance());
+            spriteBatch_.end();
+        }
+
         editorFbo.unbind();
     }
 
@@ -677,6 +708,15 @@ void App::render() {
     }
 
     onRender(spriteBatch_, camera_);
+
+    // UI system: render loaded screens in screen-space on top of game world
+    {
+        Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
+        spriteBatch_.begin(screenProj);
+        uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
+        uiManager_.render(spriteBatch_, SDFText::instance());
+        spriteBatch_.end();
+    }
 
     // Render ImGui draw data
     ImGui::Render();
