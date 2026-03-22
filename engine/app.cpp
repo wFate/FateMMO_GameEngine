@@ -5,8 +5,10 @@
 #include "engine/render/gfx/device.h"
 #include "engine/render/shader.h"
 #include "engine/core/logger.h"
+#ifndef FATE_SHIPPING
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
+#endif
 #include "engine/profiling/tracy_zones.h"
 #include "engine/job/job_system.h"
 #if defined(ENGINE_MEMORY_DEBUG)
@@ -108,6 +110,7 @@ bool App::init(const AppConfig& config) {
     // Initialize fullscreen quad (used by lighting + post-process passes)
     FullscreenQuad::instance().init();
 
+#ifndef FATE_SHIPPING
     // Initialize editor (Dear ImGui)
     Editor::instance().init(window_, glContext_);
     Editor::instance().setPostProcessConfig(&postProcessConfig_);
@@ -116,6 +119,7 @@ bool App::init(const AppConfig& config) {
     Logger::instance().setLogCallback([](const std::string& msg, int level) {
         LogViewer::instance().addMessage(msg, level);
     });
+#endif
 
     assetsDir_ = config.assetsDir;
 
@@ -188,10 +192,13 @@ void App::quit() {
 
 void App::processEvents() {
     Input::instance().beginFrame();
+#ifndef FATE_SHIPPING
     Editor::instance().beginFrame();
+#endif
 
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+#ifndef FATE_SHIPPING
         // Editor gets events first
         Editor::instance().processEvent(event);
 
@@ -215,6 +222,9 @@ void App::processEvents() {
                 Input::instance().processEvent(event);
             }
         }
+#else
+        Input::instance().processEvent(event);
+#endif
 
         switch (event.type) {
             case SDL_QUIT:
@@ -237,6 +247,7 @@ void App::processEvents() {
                 handleLifecycleEvent(event);
                 break;
 
+#ifndef FATE_SHIPPING
             case SDL_KEYDOWN:
                 if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
                     Editor::instance().cancelPlacement();
@@ -342,6 +353,7 @@ void App::processEvents() {
                     Editor::instance().handleMouseUp();
                 }
                 break;
+#endif
         }
     }
 }
@@ -359,8 +371,10 @@ void App::update() {
         activeScene->world().processDestroyQueue();
     }
 
+#ifndef FATE_SHIPPING
     // Skip game logic if editor is paused
     if (Editor::instance().isPaused()) return;
+#endif
 
     fixedTimeAccumulator_ += deltaTime_;
     while (fixedTimeAccumulator_ >= config_.fixedTimestep) {
@@ -384,6 +398,8 @@ void App::update() {
 void App::render() {
     auto* scene = SceneManager::instance().currentScene();
     World* world = scene ? &scene->world() : nullptr;
+
+#ifndef FATE_SHIPPING
     auto& editor = Editor::instance();
 
     auto& editorFbo = editor.viewportFbo();
@@ -447,6 +463,49 @@ void App::render() {
     glClear(GL_COLOR_BUFFER_BIT);
     editor.renderUI(world, &camera_, &spriteBatch_, &frameArena_);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+#else
+    // Shipping: render directly to the default framebuffer
+    int vpW = config_.windowWidth;
+    int vpH = config_.windowHeight;
+    camera_.setViewportSize(vpW, vpH);
+
+    RenderPassContext ctx;
+    ctx.spriteBatch = &spriteBatch_;
+    ctx.camera = &camera_;
+    ctx.world = world;
+    ctx.viewportWidth = vpW;
+    ctx.viewportHeight = vpH;
+    renderGraph_.execute(ctx);
+
+    glViewport(0, 0, vpW, vpH);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    auto& postFbo = renderGraph_.getFBO("PostProcess", vpW, vpH);
+
+    static Shader s_blitShader;
+    static bool s_blitLoaded = false;
+    if (!s_blitLoaded) {
+        s_blitLoaded = s_blitShader.loadFromFile(
+            "assets/shaders/fullscreen_quad.vert",
+            "assets/shaders/blit.frag"
+        );
+    }
+
+    if (s_blitLoaded) {
+        glDisable(GL_BLEND);
+        s_blitShader.bind();
+        s_blitShader.setInt("u_texture", 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, postFbo.textureId());
+        FullscreenQuad::instance().draw();
+        s_blitShader.unbind();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+
+    onRender(spriteBatch_, camera_);
+#endif
 
     SDL_GL_SwapWindow(window_);
 }
@@ -476,7 +535,9 @@ void App::shutdown() {
     renderGraph_.clearFBOs();
     FullscreenQuad::instance().shutdown();
 
+#ifndef FATE_SHIPPING
     Editor::instance().shutdown();
+#endif
     spriteBatch_.shutdown();
     fileWatcher_.stop();
     TextureCache::instance().clear();

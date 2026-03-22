@@ -6,7 +6,9 @@
 #include "engine/render/post_process.h"
 #include "engine/render/fullscreen_quad.h"
 #include "engine/scene/scene_manager.h"
+#ifndef FATE_SHIPPING
 #include "engine/editor/editor.h"
+#endif
 #include "engine/input/input.h"
 #include "engine/asset/file_watcher.h"
 #include "engine/asset/asset_registry.h"

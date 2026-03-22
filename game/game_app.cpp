@@ -2,7 +2,9 @@
 #include "engine/core/logger.h"
 #include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/scene/scene_manager.h"
+#ifndef FATE_SHIPPING
 #include "engine/editor/editor.h"
+#endif
 #include "game/register_components.h"
 #include "game/components/transform.h"
 #include "game/components/sprite_component.h"
@@ -748,11 +750,17 @@ void GameApp::onInit() {
     // Generate village tileset (only creates files that don't exist yet)
     generateVillageTiles();
 
+#ifndef FATE_SHIPPING
     // Set up editor and prefab library
     Editor::instance().setAssetRoot("assets");
 #ifdef FATE_SOURCE_DIR
     Editor::instance().setSourceDir(FATE_SOURCE_DIR "/assets/scenes");
     PrefabLibrary::instance().setSourceDirectory(FATE_SOURCE_DIR "/assets/prefabs");
+#endif
+#else
+#ifdef FATE_SOURCE_DIR
+    PrefabLibrary::instance().setSourceDirectory(FATE_SOURCE_DIR "/assets/prefabs");
+#endif
 #endif
     PrefabLibrary::instance().setDirectory("assets/prefabs");
     PrefabLibrary::instance().loadAll();
@@ -801,6 +809,9 @@ void GameApp::onInit() {
             }
             LOG_WARN("Combat", "onSendAttack: target '%s' (id=%u) not found in %zu ghosts",
                      target->name().c_str(), target->id(), ghostEntities_.size());
+        };
+        combatSystem_->onPlaySFX = [this](const std::string& id) {
+            audioManager_.playSFX(id);
         };
 
         questSystem_ = world.addSystem<QuestSystem>();
@@ -934,7 +945,9 @@ void GameApp::onInit() {
     };
 
     netClient_.onCombatEvent = [this](const SvCombatEventMsg& msg) {
+#ifndef FATE_SHIPPING
         if (Editor::instance().isPaused()) return; // Don't process combat while paused
+#endif
         if (!combatSystem_) return;
         auto* scene = SceneManager::instance().currentScene();
         if (!scene) return;
@@ -1028,11 +1041,9 @@ void GameApp::onInit() {
             LOG_INFO("Combat", "Target killed by server");
         }
 
-        // Audio feedback
+        // Audio feedback — local attack audio now plays on the animation hit frame
+        // (CombatActionSystem), so only play kill SFX here for local attacks.
         if (isLocalAttack) {
-            if (msg.isCrit) audioManager_.playSFX("hit_crit");
-            else if (msg.damage > 0) audioManager_.playSFX("hit_melee");
-            else audioManager_.playSFX("miss");
             if (msg.isKill) audioManager_.playSFX("kill");
         } else if (foundTarget) {
             auto& cam = camera();
@@ -1322,7 +1333,9 @@ void GameApp::onInit() {
     };
 
     netClient_.onDeathNotify = [this](const SvDeathNotifyMsg& msg) {
+#ifndef FATE_SHIPPING
         if (Editor::instance().isPaused()) return;
+#endif
         // If player entity doesn't exist yet (first frame after connect),
         // store pending death and apply after player creation.
         if (!localPlayerCreated_) {
@@ -1521,9 +1534,9 @@ void GameApp::onInit() {
             }
         }
 
-        // Optimistic skill feedback — flash player sprite immediately on activation
+        // Optimistic skill feedback — windup animation toward target
         if (targetPid != 0 && combatSystem_) {
-            combatSystem_->triggerAttackFlash(/*isSpell=*/true);
+            combatSystem_->triggerAttackWindup();
             combatPredictions_.addPrediction(targetPid, netTime_);
         }
 
