@@ -93,8 +93,24 @@ assets/audio/music/
 # All assets (superset — covers sprites, tiles, audio, etc.)
 assets/
 
-# Internal docs & tooling
-Docs/superpowers/
-Docs/migrations/
-Docs/ENGINE_STATE_AND_FEATURES.md
+# Server — all proprietary (auth, DB repos, caches, WAL, handlers)
+server/
+
+# Game-specific HUD widgets (engine/ui/widgets/ base types are public, these are game-specific)
+engine/ui/widgets/dpad.*
+engine/ui/widgets/skill_arc.*
+engine/ui/widgets/player_info_block.*
+engine/ui/widgets/target_frame.*
+engine/ui/widgets/exp_bar.*
+engine/ui/widgets/menu_button_row.*
+engine/ui/widgets/chat_ticker.*
+
+# Internal docs — all proprietary
+Docs/
+docs/superpowers/
+
+# Scripts with credentials (backup scripts, deploy, etc.)
+scripts/
+
+# Claude memory & tooling
 .claude/
