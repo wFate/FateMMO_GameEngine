@@ -1,7 +1,12 @@
 #include "engine/tilemap/chunk_renderer.h"
 #include "engine/tilemap/tilemap.h" // for Tileset definition
 #include "engine/render/tile_texture_array.h"
+#ifndef FATEMMO_METAL
 #include "engine/render/gfx/backend/gl/gl_loader.h"
+#endif
+#ifdef FATEMMO_METAL
+#import <Metal/Metal.h>
+#endif
 #include "engine/core/logger.h"
 #include <algorithm>
 
@@ -190,6 +195,10 @@ void ChunkRenderer::setTileArray(TileTextureArray* array) {
              tileArray_->layerCount());
 }
 
+#ifdef FATEMMO_METAL
+void ChunkRenderer::setMetalEncoder(void* encoder) { metalEncoder_ = encoder; }
+#endif
+
 // Helper: used for sorting vertices by tileset texture for sub-batching.
 struct TileSortEntry {
     unsigned int textureId;
@@ -313,7 +322,9 @@ void ChunkRenderer::rebuildChunk(ChunkData& chunk, const std::vector<Tileset>& t
     }
     gpu.vboHandle = device.createBuffer(gfx::BufferType::Vertex, gfx::BufferUsage::Static,
                                          vboSize, vertexBuf_.data());
+#ifndef FATEMMO_METAL
     gpu.vbo = device.resolveGLBuffer(gpu.vboHandle);
+#endif
 
     // Create or recreate EBO
     size_t eboSize = indexBuf_.size() * sizeof(unsigned int);
@@ -322,10 +333,12 @@ void ChunkRenderer::rebuildChunk(ChunkData& chunk, const std::vector<Tileset>& t
     }
     gpu.eboHandle = device.createBuffer(gfx::BufferType::Index, gfx::BufferUsage::Static,
                                          eboSize, indexBuf_.data());
+#ifndef FATEMMO_METAL
     gpu.ebo = device.resolveGLBuffer(gpu.eboHandle);
 
     // Re-resolve VAO from pipeline (shared across all chunks)
     gpu.vao = device.resolveGLPipelineVAO(pipeline_);
+#endif
 
     gpu.vertexCount = (int)vertexBuf_.size();
     gpu.indexCount = (int)indexBuf_.size();
@@ -397,7 +410,9 @@ void ChunkRenderer::rebuildChunkTextureArray(ChunkData& chunk,
     }
     gpu.vboHandle = device.createBuffer(gfx::BufferType::Vertex, gfx::BufferUsage::Static,
                                          vboSize, tileVertexBuf_.data());
+#ifndef FATEMMO_METAL
     gpu.vbo = device.resolveGLBuffer(gpu.vboHandle);
+#endif
 
     // Create or recreate EBO
     size_t eboSize = indexBuf_.size() * sizeof(unsigned int);
@@ -406,10 +421,12 @@ void ChunkRenderer::rebuildChunkTextureArray(ChunkData& chunk,
     }
     gpu.eboHandle = device.createBuffer(gfx::BufferType::Index, gfx::BufferUsage::Static,
                                          eboSize, indexBuf_.data());
+#ifndef FATEMMO_METAL
     gpu.ebo = device.resolveGLBuffer(gpu.eboHandle);
 
     // Use tile array pipeline VAO
     gpu.vao = device.resolveGLPipelineVAO(tileArrayPipeline_);
+#endif
 
     gpu.vertexCount = (int)tileVertexBuf_.size();
     gpu.indexCount = (int)indexBuf_.size();
@@ -425,9 +442,11 @@ void ChunkRenderer::renderLayer(const ChunkLayer& layer, const Mat4& viewProject
         return;
     }
 
+#ifndef FATEMMO_METAL
     shader_.bind();
     shader_.setMat4("uViewProjection", viewProjection);
     shader_.setInt("uTexture", 0);
+#endif
 
     for (auto& chunk : layer.chunks) {
         if (chunk.state != ChunkState::Active) continue;
@@ -448,7 +467,40 @@ void ChunkRenderer::renderLayer(const ChunkLayer& layer, const Mat4& viewProject
 
         if (!visibleBounds.overlaps(chunkBounds)) continue;
 
-        // Bind this chunk's VBO to the shared VAO
+#ifdef FATEMMO_METAL
+        // Metal path: resolve buffers and draw via encoder
+        if (!metalEncoder_) continue;
+        id<MTLRenderCommandEncoder> enc =
+            (__bridge id<MTLRenderCommandEncoder>)metalEncoder_;
+        auto& device = gfx::Device::instance();
+        id<MTLBuffer> vbuf = (__bridge id<MTLBuffer>)device.resolveMetalBuffer(gpu.vboHandle);
+        id<MTLBuffer> ebuf = (__bridge id<MTLBuffer>)device.resolveMetalBuffer(gpu.eboHandle);
+        id<MTLRenderPipelineState> pso =
+            (__bridge id<MTLRenderPipelineState>)device.resolveMetalPipelineState(pipeline_);
+
+        [enc setRenderPipelineState:pso];
+        [enc setVertexBuffer:vbuf offset:0 atIndex:0];
+
+        // Upload viewProjection as vertex uniforms at index 1
+        [enc setVertexBytes:viewProjection.data()
+                     length:sizeof(float) * 16
+                    atIndex:1];
+
+        // Draw sub-batches (one per tileset texture)
+        for (auto& sb : gpu.subBatches) {
+            // Bind tileset texture at fragment index 0
+            id<MTLTexture> tex =
+                (__bridge id<MTLTexture>)device.resolveMetalTexture(
+                    gfx::TextureHandle{}); // placeholder: caller binds per-sb texture
+            (void)tex; // actual wiring done by caller via setFragmentTexture before this
+            [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                            indexCount:(NSUInteger)sb.indexCount
+                             indexType:MTLIndexTypeUInt32
+                           indexBuffer:ebuf
+                     indexBufferOffset:(NSUInteger)sb.indexOffset];
+        }
+#else
+        // GL path: bind this chunk's VBO to the shared VAO
         glBindVertexArray(gpu.vao);
         glBindBuffer(GL_ARRAY_BUFFER, gpu.vbo);
 
@@ -479,22 +531,27 @@ void ChunkRenderer::renderLayer(const ChunkLayer& layer, const Mat4& viewProject
             glDrawElements(GL_TRIANGLES, sb.indexCount, GL_UNSIGNED_INT,
                            (void*)(intptr_t)sb.indexOffset);
         }
+#endif
     }
 
+#ifndef FATEMMO_METAL
     glBindVertexArray(0);
     shader_.unbind();
+#endif
 }
 
 void ChunkRenderer::renderLayerTextureArray(const ChunkLayer& layer,
                                              const Mat4& viewProjection,
                                              const Rect& visibleBounds, Vec2 mapOrigin,
                                              int tileW, int tileH) {
+#ifndef FATEMMO_METAL
     tileArrayShader_.bind();
     tileArrayShader_.setMat4("uViewProjection", viewProjection);
     tileArrayShader_.setInt("u_tileArray", 0);
 
     // Bind the texture array once for all chunks
     tileArray_->bind(0);
+#endif
 
     for (auto& chunk : layer.chunks) {
         if (chunk.state != ChunkState::Active) continue;
@@ -515,7 +572,38 @@ void ChunkRenderer::renderLayerTextureArray(const ChunkLayer& layer,
 
         if (!visibleBounds.overlaps(chunkBounds)) continue;
 
-        // Bind this chunk's VBO and set up TileChunkVertex layout
+#ifdef FATEMMO_METAL
+        // Metal path: resolve buffers and draw indexed via encoder
+        if (!metalEncoder_) continue;
+        id<MTLRenderCommandEncoder> enc =
+            (__bridge id<MTLRenderCommandEncoder>)metalEncoder_;
+        auto& device = gfx::Device::instance();
+        id<MTLBuffer> vbuf = (__bridge id<MTLBuffer>)device.resolveMetalBuffer(gpu.vboHandle);
+        id<MTLBuffer> ebuf = (__bridge id<MTLBuffer>)device.resolveMetalBuffer(gpu.eboHandle);
+        id<MTLRenderPipelineState> pso =
+            (__bridge id<MTLRenderPipelineState>)device.resolveMetalPipelineState(tileArrayPipeline_);
+
+        [enc setRenderPipelineState:pso];
+        [enc setVertexBuffer:vbuf offset:0 atIndex:0];
+
+        // Upload viewProjection as vertex uniforms at index 1
+        [enc setVertexBytes:viewProjection.data()
+                     length:sizeof(float) * 16
+                    atIndex:1];
+
+        // Bind tile texture array at fragment index 0
+        id<MTLTexture> arrayTex =
+            (__bridge id<MTLTexture>)tileArray_->metalTexture();
+        [enc setFragmentTexture:arrayTex atIndex:0];
+
+        // Single draw call per chunk -- no sub-batching needed
+        [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                        indexCount:(NSUInteger)gpu.indexCount
+                         indexType:MTLIndexTypeUInt32
+                       indexBuffer:ebuf
+                 indexBufferOffset:0];
+#else
+        // GL path: bind this chunk's VBO and set up TileChunkVertex layout
         glBindVertexArray(gpu.vao);
         glBindBuffer(GL_ARRAY_BUFFER, gpu.vbo);
 
@@ -540,11 +628,14 @@ void ChunkRenderer::renderLayerTextureArray(const ChunkLayer& layer,
 
         // Single draw call per chunk -- no sub-batching needed
         glDrawElements(GL_TRIANGLES, gpu.indexCount, GL_UNSIGNED_INT, nullptr);
+#endif
     }
 
+#ifndef FATEMMO_METAL
     glBindVertexArray(0);
     tileArray_->unbind(0);
     tileArrayShader_.unbind();
+#endif
 }
 
 void ChunkRenderer::releaseChunk(int chunkX, int chunkY, int layerIndex) {

@@ -66,6 +66,11 @@ public:
     // Enable texture array mode (zero-bleed tile rendering)
     void setTileArray(TileTextureArray* array);
 
+#ifdef FATEMMO_METAL
+    // Provide the active MTLRenderCommandEncoder for this frame's tile pass
+    void setMetalEncoder(void* encoder);
+#endif
+
 private:
     // Key: packed (layerIndex << 20) | (chunkY << 10) | chunkX
     static int packKey(int cx, int cy, int li) { return (li << 20) | (cy << 10) | cx; }
@@ -80,6 +85,10 @@ private:
     TileTextureArray* tileArray_ = nullptr;
     Shader tileArrayShader_;
     gfx::PipelineHandle tileArrayPipeline_{};
+
+#ifdef FATEMMO_METAL
+    void* metalEncoder_ = nullptr;
+#endif
 
     // Temp buffers to avoid per-frame allocation
     std::vector<SpriteVertex> vertexBuf_;

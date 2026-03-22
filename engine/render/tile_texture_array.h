@@ -18,7 +18,13 @@ public:
     void bind(int unit = 0) const;
     void unbind(int unit = 0) const;
 
+#ifndef FATEMMO_METAL
     unsigned int glId() const { return texId_; }
+#else
+    unsigned int glId() const { return 0; }
+    void* metalTexture() const { return metalTex_; }
+#endif
+
     int layerCount() const { return nextLayer_; }
     int tileWidth() const { return tileW_; }
     int tileHeight() const { return tileH_; }
@@ -29,7 +35,11 @@ public:
     void setGidMapping(int gid, int layer);
 
 private:
+#ifndef FATEMMO_METAL
     unsigned int texId_ = 0;
+#else
+    void* metalTex_ = nullptr;
+#endif
     int tileW_ = 0, tileH_ = 0;
     int maxLayers_ = 0;
     int nextLayer_ = 0;
