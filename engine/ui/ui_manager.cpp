@@ -4,6 +4,7 @@
 #include "engine/ui/widgets/button.h"
 #include "engine/ui/widgets/text_input.h"
 #include "engine/ui/widgets/scroll_view.h"
+#include "engine/ui/widgets/progress_bar.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
 #include <nlohmann/json.hpp>
@@ -218,6 +219,22 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         auto sv = std::make_unique<ScrollView>(id);
         sv->scrollSpeed = j.value("scrollSpeed", 30.0f);
         node = std::move(sv);
+    }
+    else if (type == "progress_bar") {
+        auto bar = std::make_unique<ProgressBar>(id);
+        bar->value = j.value("value", 0.0f);
+        bar->maxValue = j.value("maxValue", 100.0f);
+        if (j.contains("fillColor") && j["fillColor"].is_array()) {
+            auto& c = j["fillColor"];
+            bar->fillColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(),
+                             c.size() >= 4 ? c[3].get<float>() : 1.0f};
+        }
+        bar->showText = j.value("showText", false);
+        std::string dir = j.value("direction", "left_to_right");
+        if (dir == "right_to_left") bar->direction = BarDirection::RightToLeft;
+        else if (dir == "bottom_to_top") bar->direction = BarDirection::BottomToTop;
+        else if (dir == "top_to_bottom") bar->direction = BarDirection::TopToBottom;
+        node = std::move(bar);
     }
     else {
         node = std::make_unique<UINode>(id, type);
