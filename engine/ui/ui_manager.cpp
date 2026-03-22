@@ -23,6 +23,8 @@
 #include "engine/ui/widgets/skill_panel.h"
 #include "engine/ui/widgets/character_select_screen.h"
 #include "engine/ui/widgets/character_creation_screen.h"
+#include "engine/ui/widgets/chat_panel.h"
+#include "engine/ui/widgets/trade_window.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -452,6 +454,14 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     else if (type == "character_creation_screen") {
         auto ccs = std::make_unique<CharacterCreationScreen>(id);
         node = std::move(ccs);
+    }
+    else if (type == "chat_panel") {
+        auto cp = std::make_unique<ChatPanel>(id);
+        node = std::move(cp);
+    }
+    else if (type == "trade_window") {
+        auto tw = std::make_unique<TradeWindow>(id);
+        node = std::move(tw);
     }
     else {
         node = std::make_unique<UINode>(id, type);
