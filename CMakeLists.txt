@@ -133,6 +133,7 @@ FetchContent_Declare(
 option(TRACY_ENABLE "Enable Tracy profiler" ON)
 option(TRACY_ON_DEMAND "Enable Tracy on-demand mode" ON)
 option(ENGINE_MEMORY_DEBUG "Enable allocator debug visualization panels" ON)
+option(FATE_SHIPPING "Strip editor UI for production/shipping builds" OFF)
 FetchContent_MakeAvailable(tracy)
 
 # PhysicsFS (virtual filesystem with ZIP/archive mount support)
@@ -268,6 +269,10 @@ file(GLOB_RECURSE ENGINE_SOURCES
     engine/*.h
 )
 
+if(FATE_SHIPPING)
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "engine/editor/.*")
+endif()
+
 # Exclude platform-specific fiber backends that don't apply to the current target
 if(WIN32 AND NOT FATEMMO_BUILD_MOBILE)
     list(FILTER ENGINE_SOURCES EXCLUDE REGEX "fiber_minicoro\.cpp$")
@@ -317,6 +322,10 @@ endif()
 
 if(ENGINE_MEMORY_DEBUG)
     target_compile_definitions(fate_engine PUBLIC ENGINE_MEMORY_DEBUG)
+endif()
+
+if(FATE_SHIPPING)
+    target_compile_definitions(fate_engine PUBLIC FATE_SHIPPING=1)
 endif()
 
 # Precompiled headers — stable, frequently-included headers
