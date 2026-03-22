@@ -14,6 +14,7 @@
 #endif
 #include "engine/editor/tile_tools.h"
 #include "engine/editor/node_editor.h"
+#include "engine/editor/asset_browser.h"
 #include <ImGuizmo.h>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
@@ -277,6 +278,10 @@ private:
 
     // Dialogue node editor panel
     DialogueNodeEditor dialogueEditor_;
+
+    // Enhanced asset browser
+    AssetBrowser assetBrowser_;
+    bool useEnhancedBrowser_ = true;
 
     // ImGuizmo operation mode (synced to currentTool_)
     ImGuizmo::OPERATION gizmoOperation_ = ImGuizmo::TRANSLATE;
