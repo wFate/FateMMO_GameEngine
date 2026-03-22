@@ -10,6 +10,18 @@
 // File-static state is used (matching the GL backend's minimal-member pattern)
 // because CommandList objects are cheap value types and only one is ever active
 // per frame.
+//
+// Uniform buffer contract:
+//   The scratch buffer (s_uniformData) is reset to offset 0 after every draw
+//   call.  Callers must re-set all uniforms needed for the next draw.  The
+//   order in which setUniform() is called MUST match the field order of the
+//   corresponding MSL uniform struct (e.g. LightUniforms, PostProcessUniforms)
+//   because Metal uses positional buffer layout, not named bindings.
+//
+//   Integer setUniform() calls are intentional no-ops on Metal: in GLSL they
+//   bind texture samplers by name (e.g. setUniform("u_scene", 0)), but Metal
+//   uses explicit [[texture(N)]] bindings — no integer slots in the uniform
+//   buffer.
 
 #import "engine/render/gfx/command_list.h"
 #import "engine/render/gfx/device.h"
@@ -43,7 +55,8 @@ static bool                         s_needsClear     = false;
 static PipelineHandle               s_boundPipeline{};
 static BufferHandle                 s_boundIndexBuffer{};
 
-// Uniform scratch buffer (written with setUniform, flushed before each draw)
+// Uniform scratch buffer (written with setUniform, flushed before each draw).
+// Reset to offset 0 after every draw so each draw starts with a clean block.
 static uint8_t                      s_uniformData[4096];
 static size_t                       s_uniformOffset  = 0;
 static bool                         s_uniformsDirty  = false;
@@ -124,6 +137,20 @@ static void ensureEncoder() {
         s_encoder = [s_commandBuffer renderCommandEncoderWithDescriptor:passDesc];
         if (!s_encoder) {
             LOG_ERROR("metal", "CommandList::ensureEncoder: failed to create render encoder");
+            s_hasPendingFB = false;
+            s_needsClear   = false;
+            return;
+        }
+
+        // Bind the default sampler (Nearest/ClampToEdge) at [[sampler(0)]].
+        // All Metal shaders declare `sampler samp [[sampler(0)]]` — without
+        // this binding the GPU would use undefined sampler state.
+        id<MTLSamplerState> samp =
+            (__bridge id<MTLSamplerState>)Device::instance().resolveMetalDefaultSampler();
+        if (samp) {
+            [s_encoder setFragmentSamplerState:samp atIndex:0];
+        } else {
+            LOG_WARN("metal", "CommandList::ensureEncoder: default sampler not available");
         }
 
         s_hasPendingFB = false;
@@ -131,11 +158,14 @@ static void ensureEncoder() {
     }
 }
 
-// Push all accumulated uniform data to both vertex and fragment stages.
+// Push all accumulated uniform data to both vertex and fragment stages, then
+// reset the scratch buffer offset so the next draw starts fresh.
 static void flushUniforms() {
     if (!s_uniformsDirty || s_uniformOffset == 0) return;
     [s_encoder setVertexBytes:s_uniformData   length:s_uniformOffset atIndex:1];
     [s_encoder setFragmentBytes:s_uniformData length:s_uniformOffset atIndex:0];
+    // Reset offset after each draw so callers re-supply uniforms per draw.
+    s_uniformOffset = 0;
     s_uniformsDirty = false;
 }
 
@@ -297,6 +327,15 @@ void CommandList::bindIndexBuffer(BufferHandle buffer) {
 
 // ---------------------------------------------------------------------------
 // setUniform overloads — write typed values into the scratch buffer.
+//
+// IMPORTANT: The order of setUniform() calls before each draw must match the
+// field order of the MSL uniform struct for the bound shader.  Metal uses
+// positional buffer layout (no named bindings).
+//
+// Integer overload is a deliberate no-op: in GLSL, integer uniforms are used
+// to bind texture samplers by unit index (e.g. setUniform("u_scene", 0)).
+// Metal uses explicit [[texture(N)]] attribute bindings instead, so writing
+// an integer into the uniform buffer would corrupt the struct layout.
 // ---------------------------------------------------------------------------
 
 void CommandList::setUniform(const char* name, float value) {
@@ -305,8 +344,10 @@ void CommandList::setUniform(const char* name, float value) {
 }
 
 void CommandList::setUniform(const char* name, int value) {
+    // No-op on Metal: integer uniforms are GLSL sampler-slot hints and have no
+    // corresponding field in any MSL uniform struct.
     (void)name;
-    writeUniform(&value, sizeof(int));
+    (void)value;
 }
 
 void CommandList::setUniform(const char* name, const fate::Vec2& value) {

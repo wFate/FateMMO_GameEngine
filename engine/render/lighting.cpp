@@ -89,11 +89,11 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
 
         // Bind additive pipeline for point lights
         cmd->bindPipeline(s_lightAdditivePipeline);
-        cmd->setUniform("u_resolution", Vec2{(float)w, (float)h});
 
         // Iterate all entities with PointLightComponent + Transform
         Mat4 vp = ctx.camera->getViewProjection();
         float cameraZoom = ctx.camera->zoom();
+        Vec2 resolution{(float)w, (float)h};
 
         ctx.world->forEach<PointLightComponent, Transform>(
             [&](Entity*, PointLightComponent* plc, Transform* t) {
@@ -116,11 +116,17 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
                 // Convert world-space radius to screen-space using camera zoom
                 float screenRadius = light.radius * cameraZoom;
 
+                // Uniform order must match LightUniforms MSL struct field order:
+                // {u_lightPos, u_lightColor, u_lightRadius, u_lightIntensity,
+                //  u_lightFalloff, u_resolution}
+                // The scratch buffer resets after each draw, so all uniforms
+                // for this draw must be set here.
                 cmd->setUniform("u_lightPos", screenPos);
                 cmd->setUniform("u_lightColor", Vec3{light.color.r, light.color.g, light.color.b});
                 cmd->setUniform("u_lightRadius", screenRadius);
                 cmd->setUniform("u_lightIntensity", light.intensity);
                 cmd->setUniform("u_lightFalloff", light.falloff);
+                cmd->setUniform("u_resolution", resolution);
 
                 cmd->draw(gfx::PrimitiveType::Triangles, 3);
             });
