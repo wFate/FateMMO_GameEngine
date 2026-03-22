@@ -19,6 +19,7 @@
 #include "engine/ui/widgets/chat_ticker.h"
 #include "engine/ui/widgets/left_sidebar.h"
 #include "engine/ui/widgets/inventory_panel.h"
+#include "engine/ui/widgets/status_panel.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -431,6 +432,10 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         ip->gridRows = j.value("gridRows", 5);
         ip->slotSize = j.value("slotSize", 40.0f);
         node = std::move(ip);
+    }
+    else if (type == "status_panel") {
+        auto sp = std::make_unique<StatusPanel>(id);
+        node = std::move(sp);
     }
     else {
         node = std::make_unique<UINode>(id, type);
