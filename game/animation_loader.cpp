@@ -49,6 +49,7 @@ bool AnimationLoader::loadPackedMeta(const std::string& path, PackedSheetMeta& o
 void AnimationLoader::applyToAnimator(const PackedSheetMeta& meta, Animator& animator) {
     for (auto& [name, s] : meta.states) {
         animator.addAnimation(name, s.startFrame, s.frameCount, s.frameRate, s.loop, s.hitFrame);
+        if (s.flipX) animator.flipXPerAnim[name] = true;
     }
 }
 

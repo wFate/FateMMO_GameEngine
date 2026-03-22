@@ -28,6 +28,7 @@ struct Animator {
     FATE_COMPONENT(Animator)
 
     std::unordered_map<std::string, AnimationDef> animations;
+    std::unordered_map<std::string, bool> flipXPerAnim; // per-animation flipX (from packed metadata)
     std::string currentAnimation;
     float timer = 0.0f;
     bool playing = true;

@@ -158,10 +158,49 @@ public:
     void update(float dt) override {
         world_->forEach<SpriteComponent, Animator>(
             [&](Entity*, SpriteComponent* sprite, Animator* anim) {
-                if (anim->playing) {
-                    anim->timer += dt;
-                    sprite->currentFrame = anim->getCurrentFrame();
-                    sprite->updateSourceRect();
+                if (!anim->playing) return;
+
+                auto it = anim->animations.find(anim->currentAnimation);
+                if (it == anim->animations.end()) return;
+                const auto& def = it->second;
+
+                int prevFrame = anim->getLocalFrameIndex();
+                anim->timer += dt;
+                int currFrame = anim->getLocalFrameIndex();
+
+                sprite->currentFrame = anim->getCurrentFrame();
+                sprite->updateSourceRect();
+
+                // Apply per-animation flipX from packed metadata
+                if (!anim->flipXPerAnim.empty()) {
+                    auto fx = anim->flipXPerAnim.find(anim->currentAnimation);
+                    if (fx != anim->flipXPerAnim.end()) {
+                        sprite->flipX = fx->second;
+                    }
+                }
+
+                // Fire hitFrame callback on frame crossing
+                if (def.hitFrame >= 0 && !anim->hitFrameFired_ &&
+                    prevFrame < def.hitFrame && currFrame >= def.hitFrame) {
+                    anim->hitFrameFired_ = true;
+                    if (anim->onHitFrame) anim->onHitFrame();
+                }
+
+                // Handle non-looping animation completion
+                if (!def.loop && anim->isFinished()) {
+                    if (anim->onComplete) {
+                        auto cb = std::move(anim->onComplete);
+                        anim->onComplete = nullptr;
+                        cb();
+                    }
+                    // Auto-transition to returnAnimation
+                    if (!anim->returnAnimation.empty()) {
+                        std::string ret = anim->returnAnimation;
+                        anim->returnAnimation.clear();
+                        anim->play(ret);
+                    } else {
+                        anim->playing = false;
+                    }
                 }
             }
         );

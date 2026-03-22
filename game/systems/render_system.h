@@ -39,7 +39,7 @@ public:
                 if (!bounds.overlaps(visible)) return;
 
                 SpriteDrawParams params;
-                params.position = transform->position;
+                params.position = transform->position + sprite->renderOffset;
                 params.size = sprite->size * transform->scale;
                 params.sourceRect = sprite->sourceRect;
                 params.color = sprite->tint;
