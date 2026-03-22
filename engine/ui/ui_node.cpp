@@ -64,8 +64,9 @@ void UINode::computeLayout(const Rect& parentRect) {
     px += ml;  py += mt;
     pw -= (ml + mr);  ph -= (mt + mb);
 
-    float w = anchor_.size.x;
-    float h = anchor_.size.y;
+    // size == 0 means "inherit full parent dimension"
+    float w = (anchor_.size.x > 0.0f) ? anchor_.size.x : pw;
+    float h = (anchor_.size.y > 0.0f) ? anchor_.size.y : ph;
     float ox = anchor_.offset.x;
     float oy = anchor_.offset.y;
     float cx = 0.0f, cy = 0.0f;
