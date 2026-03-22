@@ -641,14 +641,14 @@ with:
         }
 ```
 
-- [ ] **Step 5: Touch and build**
+- [ ] **Step 6: Touch and build**
 
 ```bash
 touch engine/editor/editor.cpp
 "$CMAKE" --build out/build/x64-Debug --config Debug --target FateEngine
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add engine/editor/editor.cpp
