@@ -99,17 +99,21 @@ bool Device::initMetal(void* metalLayerPtr) {
         // Store the CAMetalLayer
         impl_->metalLayer = (__bridge CAMetalLayer*)metalLayerPtr;
 
-        // Create the MTLDevice (the system default GPU)
-        impl_->device = MTLCreateSystemDefaultDevice();
+        // Use the device already set on the layer (set by the caller in app.cpp).
+        // This avoids creating a second MTLDevice, which wastes GPU resources and
+        // breaks any objects that were already created against the first device.
+        impl_->device = impl_->metalLayer.device;
         if (!impl_->device) {
-            LOG_ERROR("gfx", "Metal: MTLCreateSystemDefaultDevice() returned nil");
-            delete impl_;
-            impl_ = nullptr;
-            return false;
+            // Layer had no device yet — fall back to creating one and wiring it up
+            impl_->device = MTLCreateSystemDefaultDevice();
+            if (!impl_->device) {
+                LOG_ERROR("gfx", "Metal: MTLCreateSystemDefaultDevice() returned nil");
+                delete impl_;
+                impl_ = nullptr;
+                return false;
+            }
+            impl_->metalLayer.device = impl_->device;
         }
-
-        // Wire the layer to this device
-        impl_->metalLayer.device = impl_->device;
 
         // Create the command queue
         impl_->commandQueue = [impl_->device newCommandQueue];
@@ -719,6 +723,11 @@ void* Device::resolveMetalFramebufferPassDesc(FramebufferHandle h) const {
     return (__bridge void*)it->second.renderPassDesc;
 }
 
+void* Device::resolveMetalDefaultSampler() const {
+    if (!impl_) return nullptr;
+    return (__bridge void*)impl_->defaultSampler;
+}
+
 // ============================================================================
 // Shared helpers
 // ============================================================================
@@ -732,6 +741,19 @@ BufferType Device::getBufferType(BufferHandle h) const {
     if (!h.valid() || !impl_) return BufferType::Vertex;
     auto it = impl_->buffers.find(h.id);
     return (it != impl_->buffers.end()) ? it->second.type : BufferType::Vertex;
+}
+
+// ============================================================================
+// Shader library population (called from app.cpp after initMetal)
+// ============================================================================
+bool Device::compileMetalShaderSource(const std::string& source, const std::string& label) {
+    if (!impl_) return false;
+    return impl_->shaderLib.compileSource(source, label);
+}
+
+bool Device::loadMetalShaderLibrary(const std::string& path) {
+    if (!impl_) return false;
+    return impl_->shaderLib.loadMetallib(path);
 }
 
 } // namespace gfx

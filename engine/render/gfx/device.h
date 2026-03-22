@@ -11,6 +11,8 @@ public:
     bool init();
 #ifdef FATEMMO_METAL
     bool initMetal(void* metalLayer);
+    bool compileMetalShaderSource(const std::string& source, const std::string& label = "");
+    bool loadMetalShaderLibrary(const std::string& path);
 #endif
     void shutdown();
 
@@ -61,6 +63,7 @@ public:
     void* resolveMetalDepthStencilState(PipelineHandle h) const;
     void* resolveMetalCommandQueue() const;                  // returns id<MTLCommandQueue>
     void* resolveMetalFramebufferPassDesc(FramebufferHandle h) const; // returns MTLRenderPassDescriptor*
+    void* resolveMetalDefaultSampler() const;                // returns id<MTLSamplerState>
 #endif
 
     // Shared across backends

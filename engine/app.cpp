@@ -7,6 +7,8 @@
 #ifdef FATEMMO_METAL
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
+#include <fstream>
+#include <sstream>
 #endif
 #include "engine/render/gfx/device.h"
 #include "engine/render/shader.h"
@@ -96,6 +98,36 @@ bool App::init(const AppConfig& config) {
     layer.maximumDrawableCount = 3;  // Triple buffering for ProMotion 120fps
 #endif
     gfx::Device::instance().initMetal(metalLayer_);
+
+    // Populate the Metal shader library — every shader creation depends on this.
+#ifdef FATE_SHIPPING
+    if (!gfx::Device::instance().loadMetalShaderLibrary("assets/shaders/metal/default.metallib")) {
+        LOG_FATAL("App", "Metal: failed to load default.metallib");
+        return false;
+    }
+#else
+    {
+        auto compileShader = [](const std::string& path) {
+            std::ifstream f(path);
+            if (!f.is_open()) {
+                LOG_WARN("App", "Metal: shader source not found: %s", path.c_str());
+                return;
+            }
+            std::ostringstream ss;
+            ss << f.rdbuf();
+            gfx::Device::instance().compileMetalShaderSource(ss.str(), path);
+        };
+        compileShader("assets/shaders/metal/sprite.metal");
+        compileShader("assets/shaders/metal/tile_chunk.metal");
+        compileShader("assets/shaders/metal/fullscreen_quad.metal");
+        compileShader("assets/shaders/metal/blit.metal");
+        compileShader("assets/shaders/metal/light.metal");
+        compileShader("assets/shaders/metal/postprocess.metal");
+        compileShader("assets/shaders/metal/bloom_extract.metal");
+        compileShader("assets/shaders/metal/blur.metal");
+        compileShader("assets/shaders/metal/grid.metal");
+    }
+#endif // FATE_SHIPPING
 #else
     glContext_ = SDL_GL_CreateContext(window_);
     if (!glContext_) {
@@ -487,7 +519,16 @@ void App::render() {
             renderGraph_.execute(ctx);
 
             // Blit PostProcess result to editor viewport FBO via Metal pipeline
-            FullscreenQuad::instance().draw(commandBuffer);
+            {
+                MTLRenderPassDescriptor* blitPassDesc = [MTLRenderPassDescriptor renderPassDescriptor];
+                blitPassDesc.colorAttachments[0].texture = drawable.texture;
+                blitPassDesc.colorAttachments[0].loadAction = MTLLoadActionLoad;
+                blitPassDesc.colorAttachments[0].storeAction = MTLStoreActionStore;
+                id<MTLRenderCommandEncoder> blitEncoder =
+                    [commandBuffer renderCommandEncoderWithDescriptor:blitPassDesc];
+                FullscreenQuad::instance().draw((__bridge void*)blitEncoder);
+                [blitEncoder endEncoding];
+            }
 
             onRender(spriteBatch_, camera_);
             editor.renderScene(&spriteBatch_, &camera_);
@@ -507,12 +548,9 @@ void App::render() {
         ctx.viewportHeight = vpH;
         renderGraph_.execute(ctx);
 
-        // Blit PostProcess result to drawable via Metal pipeline
-        FullscreenQuad::instance().draw(commandBuffer);
-
+        // Blit PostProcess result to drawable via Metal pipeline, then render ImGui on top
         onRender(spriteBatch_, camera_);
 
-        // Render ImGui draw data via Metal
         ImGui::Render();
         MTLRenderPassDescriptor* passDesc = [MTLRenderPassDescriptor renderPassDescriptor];
         passDesc.colorAttachments[0].texture = drawable.texture;
@@ -521,6 +559,8 @@ void App::render() {
         passDesc.colorAttachments[0].storeAction = MTLStoreActionStore;
         id<MTLRenderCommandEncoder> encoder =
             [commandBuffer renderCommandEncoderWithDescriptor:passDesc];
+        // FullscreenQuad blit pass — draw the PostProcess result into the drawable
+        FullscreenQuad::instance().draw((__bridge void*)encoder);
         ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), commandBuffer, encoder);
         [encoder endEncoding];
 #endif
