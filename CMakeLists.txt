@@ -29,6 +29,17 @@ endif()
 
 option(FATEMMO_BUILD_MOBILE "Build for mobile (iOS/Android)" OFF)
 
+# Metal backend on all Apple platforms
+if(APPLE)
+    add_compile_definitions(FATEMMO_METAL)
+    find_library(METAL_FRAMEWORK Metal)
+    find_library(QUARTZCORE_FRAMEWORK QuartzCore)
+    set(METAL_LIBS ${METAL_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
+
+    # SDL must be built with Metal support
+    set(SDL_VIDEO_METAL ON CACHE BOOL "" FORCE)
+endif()
+
 # =============================================================================
 # Dependencies via FetchContent (zero external installs required)
 # =============================================================================
@@ -233,15 +244,16 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
 endif()
 
 # Find OpenGL / OpenGL ES (cross-platform)
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+# Apple platforms use Metal; OpenGL detection is skipped there.
+if(APPLE)
+    set(OPENGL_LIB "")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     # iOS uses OpenGL ES 3.0 framework
     find_library(OPENGLES_LIB OpenGLES)
     set(OPENGL_LIB ${OPENGLES_LIB})
     add_compile_definitions(FATEMMO_GLES)
 elseif(WIN32)
     set(OPENGL_LIB opengl32)
-elseif(APPLE)
-    find_library(OPENGL_LIB OpenGL)
 else()
     find_library(OPENGL_LIB GL PATHS /usr/lib/x86_64-linux-gnu /usr/lib)
     if(NOT OPENGL_LIB)
@@ -256,8 +268,6 @@ add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
     ${implot_SOURCE_DIR}/implot.cpp
     ${implot_SOURCE_DIR}/implot_items.cpp
     ${imguizmo_SOURCE_DIR}/ImGuizmo.cpp
@@ -272,7 +282,21 @@ target_include_directories(imgui_lib PUBLIC
     ${imguizmo_SOURCE_DIR}
     ${imnodes_SOURCE_DIR}
 )
-target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static ${OPENGL_LIB} Freetype::Freetype)
+if(APPLE)
+    # Metal backend: swap OpenGL backend for Metal + SDL2
+    target_sources(imgui_lib PRIVATE
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_metal.mm
+    )
+    target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static Freetype::Freetype ${METAL_LIBS})
+else()
+    # OpenGL backend (Windows / Linux)
+    target_sources(imgui_lib PRIVATE
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+    )
+    target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static ${OPENGL_LIB} Freetype::Freetype)
+endif()
 # No loader define = ImGui uses its own minimal GL loader
 
 # =============================================================================
@@ -301,7 +325,42 @@ else()
     list(FILTER ENGINE_SOURCES EXCLUDE REGEX "socket_win32\\.cpp$")
 endif()
 
-add_library(fate_engine STATIC ${ENGINE_SOURCES})
+# GFX backend: Metal (.mm) on Apple, GL (.cpp) elsewhere.
+# GLOB_RECURSE above only captures *.cpp so .mm files must be added explicitly.
+# On Apple we also exclude the GL backend sources from ENGINE_SOURCES to avoid
+# linking two competing implementations.
+if(APPLE)
+    set(GFX_BACKEND_SOURCES
+        engine/render/gfx/backend/metal/metal_device.mm
+        engine/render/gfx/backend/metal/metal_command_list.mm
+        engine/render/gfx/backend/metal/metal_shader_lib.mm
+    )
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "engine/render/gfx/backend/gl/.*")
+else()
+    set(GFX_BACKEND_SOURCES
+        engine/render/gfx/backend/gl/gl_device.cpp
+        engine/render/gfx/backend/gl/gl_loader.cpp
+        engine/render/gfx/backend/gl/gl_command_list.cpp
+    )
+    # Remove any GL files already captured by GLOB so we don't double-add them
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "engine/render/gfx/backend/gl/.*")
+endif()
+
+# Files with #ifdef FATEMMO_METAL ObjC syntax blocks must compile as ObjC++
+if(APPLE)
+    set_source_files_properties(
+        engine/render/sprite_batch.cpp
+        engine/tilemap/chunk_renderer.cpp
+        engine/render/fullscreen_quad.cpp
+        engine/render/sdf_text.cpp
+        engine/render/tile_texture_array.cpp
+        engine/app.cpp
+        engine/editor/editor.cpp
+        PROPERTIES LANGUAGE OBJCXX
+    )
+endif()
+
+add_library(fate_engine STATIC ${ENGINE_SOURCES} ${GFX_BACKEND_SOURCES})
 target_include_directories(fate_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
@@ -316,6 +375,9 @@ target_link_libraries(fate_engine PUBLIC
     physfs-static
     soloud_lib
 )
+if(APPLE)
+    target_link_libraries(fate_engine PUBLIC ${METAL_LIBS})
+endif()
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     target_link_libraries(fate_engine PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 endif()
@@ -370,6 +432,9 @@ target_link_libraries(FateEngine PRIVATE
     fate_engine
     SDL2::SDL2main
 )
+if(APPLE)
+    target_link_libraries(FateEngine PRIVATE ${METAL_LIBS})
+endif()
 
 # Pass source directory to code so saves go to the right place
 target_compile_definitions(FateEngine PRIVATE
@@ -404,6 +469,36 @@ else()
         ${CMAKE_CURRENT_SOURCE_DIR}/assets
         $<TARGET_FILE_DIR:FateEngine>/assets
     )
+endif()
+
+# =============================================================================
+# Shipping Metallib Build
+# =============================================================================
+if(APPLE AND FATE_SHIPPING)
+    file(GLOB METAL_SHADERS ${CMAKE_SOURCE_DIR}/assets/shaders/metal/*.metal)
+    if(METAL_SHADERS)
+        set(METAL_AIR_FILES "")
+        foreach(SHADER ${METAL_SHADERS})
+            get_filename_component(SHADER_NAME ${SHADER} NAME_WE)
+            set(AIR_FILE ${CMAKE_BINARY_DIR}/metal_air/${SHADER_NAME}.air)
+            add_custom_command(
+                OUTPUT ${AIR_FILE}
+                COMMAND xcrun metal -c ${SHADER} -o ${AIR_FILE}
+                DEPENDS ${SHADER}
+                COMMENT "Compiling Metal shader: ${SHADER_NAME}"
+            )
+            list(APPEND METAL_AIR_FILES ${AIR_FILE})
+        endforeach()
+        set(METALLIB_OUTPUT ${CMAKE_BINARY_DIR}/default.metallib)
+        add_custom_command(
+            OUTPUT ${METALLIB_OUTPUT}
+            COMMAND xcrun metallib ${METAL_AIR_FILES} -o ${METALLIB_OUTPUT}
+            DEPENDS ${METAL_AIR_FILES}
+            COMMENT "Linking Metal shaders into default.metallib"
+        )
+        add_custom_target(metal_shaders ALL DEPENDS ${METALLIB_OUTPUT})
+        add_dependencies(FateEngine metal_shaders)
+    endif()
 endif()
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
