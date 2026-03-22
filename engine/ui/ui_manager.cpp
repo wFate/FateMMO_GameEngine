@@ -20,6 +20,7 @@
 #include "engine/ui/widgets/left_sidebar.h"
 #include "engine/ui/widgets/inventory_panel.h"
 #include "engine/ui/widgets/status_panel.h"
+#include "engine/ui/widgets/skill_panel.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -436,6 +437,10 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     else if (type == "status_panel") {
         auto sp = std::make_unique<StatusPanel>(id);
         node = std::move(sp);
+    }
+    else if (type == "skill_panel") {
+        auto skp = std::make_unique<SkillPanel>(id);
+        node = std::move(skp);
     }
     else {
         node = std::make_unique<UINode>(id, type);
