@@ -632,6 +632,73 @@ void SpriteBatch::createWhiteTexture() {
     whiteTexture_ = device.resolveGLTexture(whiteTexHandle_);
 }
 
+void SpriteBatch::drawCircle(const Vec2& center, float radius, const Color& color,
+                              float depth, int segments) {
+    if (!drawing_ || radius <= 0) return;
+    float angleStep = 2.0f * 3.14159265f / static_cast<float>(segments);
+    float halfChord = radius * std::sin(angleStep * 0.5f);
+
+    for (int i = 0; i < segments; i++) {
+        float midAngle = (i + 0.5f) * angleStep;
+        float cx = center.x + std::cos(midAngle) * radius * 0.5f;
+        float cy = center.y + std::sin(midAngle) * radius * 0.5f;
+
+        SpriteDrawParams params;
+        params.position  = {cx, cy};
+        params.size      = {halfChord * 2.2f, radius * 1.05f};
+        params.color     = color;
+        params.depth     = depth;
+        params.rotation  = midAngle - 1.5707963f; // midAngle - PI/2
+        params.sourceRect = {0, 0, 1, 1};
+        entries_.push_back({nullptr, 0, params});
+    }
+}
+
+void SpriteBatch::drawRing(const Vec2& center, float radius, float thickness,
+                            const Color& color, float depth, int segments) {
+    if (!drawing_ || radius <= 0) return;
+    float innerR = radius - thickness;
+    if (innerR < 0.0f) innerR = 0.0f;
+    float midR = (radius + innerR) * 0.5f;
+    float angleStep = 2.0f * 3.14159265f / static_cast<float>(segments);
+
+    for (int i = 0; i < segments; i++) {
+        float midAngle = (i + 0.5f) * angleStep;
+
+        SpriteDrawParams params;
+        params.position  = {center.x + std::cos(midAngle) * midR,
+                            center.y + std::sin(midAngle) * midR};
+        params.size      = {2.0f * midR * std::sin(angleStep * 0.5f) * 1.15f, thickness * 1.02f};
+        params.color     = color;
+        params.depth     = depth;
+        params.rotation  = midAngle - 1.5707963f;
+        params.sourceRect = {0, 0, 1, 1};
+        entries_.push_back({nullptr, 0, params});
+    }
+}
+
+void SpriteBatch::drawArc(const Vec2& center, float radius, float startAngle,
+                           float endAngle, const Color& color, float depth, int segments) {
+    if (!drawing_ || radius <= 0) return;
+    float totalAngle = endAngle - startAngle;
+    float angleStep = totalAngle / static_cast<float>(segments);
+    float halfChord = radius * std::sin(std::abs(angleStep) * 0.5f);
+
+    for (int i = 0; i < segments; i++) {
+        float midAngle = startAngle + (i + 0.5f) * angleStep;
+
+        SpriteDrawParams params;
+        params.position  = {center.x + std::cos(midAngle) * radius * 0.5f,
+                            center.y + std::sin(midAngle) * radius * 0.5f};
+        params.size      = {halfChord * 2.2f, radius * 1.05f};
+        params.color     = color;
+        params.depth     = depth;
+        params.rotation  = midAngle - 1.5707963f;
+        params.sourceRect = {0, 0, 1, 1};
+        entries_.push_back({nullptr, 0, params});
+    }
+}
+
 void SpriteBatch::drawNineSlice(const std::shared_ptr<Texture>& texture,
                                 const Rect& dest,
                                 const NineSlice& s,

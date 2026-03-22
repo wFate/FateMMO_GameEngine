@@ -59,6 +59,18 @@ public:
                        const Color& tint = Color::white(),
                        float depth = 0.0f);
 
+    // Draw a filled circle using N quad segments (uses white texture)
+    void drawCircle(const Vec2& center, float radius, const Color& color,
+                    float depth = 0.0f, int segments = 24);
+
+    // Draw a circle outline (ring) with given thickness
+    void drawRing(const Vec2& center, float radius, float thickness, const Color& color,
+                  float depth = 0.0f, int segments = 24);
+
+    // Draw a filled arc (pie slice) from startAngle to endAngle (radians, 0=right, CCW)
+    void drawArc(const Vec2& center, float radius, float startAngle, float endAngle,
+                 const Color& color, float depth = 0.0f, int segments = 24);
+
 #ifndef FATEMMO_METAL
     // Draw a quad with a raw GL texture ID (for font atlas, custom textures)
     void drawTexturedQuad(unsigned int glTexId, const SpriteDrawParams& params, float renderType = 0.0f);
