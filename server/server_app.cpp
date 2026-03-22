@@ -831,6 +831,7 @@ void ServerApp::tick(float dt) {
     // 5g. Auto-save and periodic maintenance
     tickAutoSave(dt);
     tickMaintenance(dt);
+    tickDungeonInstances(dt);
     wal_.flush();
 
     // 6. Check timeouts
@@ -6210,6 +6211,16 @@ void ServerApp::tickPetAutoLoot(float dt) {
     for (auto handle : toDestroy) {
         replication_.unregisterEntity(handle);
         world_.destroyEntity(handle);
+    }
+}
+
+void ServerApp::tickDungeonInstances(float dt) {
+    dungeonManager_.tick(dt);
+
+    auto expired = dungeonManager_.getExpiredInstances();
+    for (uint32_t id : expired) {
+        LOG_INFO("Server", "Dungeon instance %u expired, destroying", id);
+        dungeonManager_.destroyInstance(id);
     }
 }
 

@@ -38,6 +38,7 @@
 #include "server/cache/pet_definition_cache.h"
 #include "server/db/spawn_zone_cache.h"
 #include "server/server_spawn_manager.h"
+#include "server/dungeon_manager.h"
 #include "engine/net/auth_protocol.h"
 #include "server/gm_commands.h"
 #include <cstdint>
@@ -136,6 +137,9 @@ private:
     GMCommandRegistry gmCommands_;
     std::unordered_map<uint16_t, int> clientAdminRoles_; // clientId -> admin_role
 
+    // Instanced dungeons
+    DungeonManager dungeonManager_;
+
     // Session tracking
     std::unordered_map<AuthToken, PendingSession, AuthTokenHash> pendingSessions_;
     std::unordered_map<int, uint16_t> activeAccountSessions_; // account_id -> clientId
@@ -217,6 +221,7 @@ private:
     void broadcastBossKillNotification(const EnemyStats& es,
                                        const EnemyStats::LootOwnerResult& lootResult,
                                        const std::string& scene);
+    void tickDungeonInstances(float dt);
     void initGMCommands();
     uint16_t findClientByCharacterName(const std::string& name);
 };
