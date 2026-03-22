@@ -140,7 +140,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Remove Components | Done | Right-click any component header to remove it (all 38+ component types) |
 | Resize Handles | Done | 8 drag handles (4 corners + 4 edges), E key for resize tool mode |
 | Source Rect Editor | Done | UV region editing in Sprite inspector for tileset splicing |
-| Undo/Redo | Done | Ctrl+Z/Ctrl+Y, 200 action history, tracks move/resize/delete/duplicate/tile paint. **CompoundCommand** groups multi-tile operations (fill/rect/line) into single undo step. **Handle remap** — entity handles remapped after delete+undo recreate, so subsequent undo operations resolve to the new handle |
+| Undo/Redo | Done | Ctrl+Z/Ctrl+Y, 200 action history, tracks move/resize/delete/duplicate/tile paint. **CompoundCommand** groups multi-tile operations (fill/rect/line) into single undo step. **Handle remap** — entity handles remapped after delete+undo recreate. Selection cleared after undo/redo to prevent dangling entity pointers |
 | Tool Modes | Done | W=Move, E=Resize, B=Paint, X=Erase, **G=Fill, U=RectFill, L=LineTool**. Active tool gets accent-blue background, inactive tools transparent with muted text. Fill uses BFS flood fill, Rect/Line use drag start→end with visual preview |
 | Keyboard Shortcuts | Done | Ctrl+Z undo, Ctrl+Y redo, Ctrl+S save, Ctrl+D duplicate, Ctrl+A select all, Delete |
 | Eraser Tool | Done | X key, click/drag to delete ground tiles with undo support |
@@ -155,7 +155,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Network Panel | Done | Connect/disconnect to server, host/port config, shows client ID and ghost count, docked in bottom panel |
 | ImGuizmo | Done | Visual translate/scale/rotate handles on selected entities |
 | Dialogue Node Editor | Done | Visual node-based dialogue tree editor using **imnodes** library. Nodes with speaker/text, choice output pins, link creation/deletion, right-click add node, JSON load/save. Window > Dialogue Editor toggle. **Colors harmonized** with editor palette (node backgrounds, title bars, links, grid, pins) |
-| Animation Editor | Done | TWOM-style visual animation panel. Import individual frame PNGs, arrange into sequences per state (idle/walk/attack/cast/death) and direction (down/up/side), set hitFrame visually, preview with play/pause/step, pack into runtime sprite sheets on save. Template presets for Player/Mob/NPC. Layer support (Body/Weapon/Gloves). `.anim` template + `.frameset` file formats. `AnimationLoader` runtime utility reads packed metadata into Animator + SpriteComponent. 3-direction authoring → 4-direction runtime (side → left+right with flipX). Asset browser classifies `.anim`/`.frameset`, double-click to open. Animator inspector "Open in Animation Editor" button. Window > Animation Editor toggle. **Visual polish**: checkerboard transparency behind frame thumbnails and preview, accent-blue selection borders, outlined drop target, small-font frame counter, accent highlight on selected state |
+| Animation Editor | Done | TWOM-style visual animation panel. Import individual frame PNGs, arrange into sequences per state (idle/walk/attack/cast/death) and direction (down/up/side), set hitFrame visually, preview with play/pause/step, pack into runtime sprite sheets on save. Template presets for Player/Mob/NPC. Layer support (Body/Weapon/Gloves). `.anim` template + `.frameset` file formats. `AnimationLoader` runtime utility reads packed metadata into Animator + SpriteComponent (including per-animation flipX wiring). 3-direction authoring → 4-direction runtime (side → left+right with flipX). Asset browser classifies `.anim`/`.frameset`, double-click to open. Animator inspector "Open in Animation Editor" button. Window > Animation Editor toggle. **Visual polish**: checkerboard transparency behind frame thumbnails and preview, accent-blue selection borders, outlined drop target, small-font frame counter, accent highlight on selected state |
 | EDITOR_BUILD | Done | Compile definition on FateEngine and fate_tests targets only (not FateServer). `editor_build.h` documents `#ifdef EDITOR_BUILD` guard pattern. Groundwork for editor/runtime separation. `IMGUI_ENABLE_FREETYPE` defined on imgui_lib target for font rendering |
 
 ### Game UI (ImGui-based, in-game panels)
@@ -200,8 +200,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Transform | Done | Position (px), scale, rotation, depth; tile coord display |
-| SpriteComponent | Done | Texture (via AssetHandle), sourceRect (tileset support), spritesheet frames, tint, flip, renderOffset (procedural visual offset, applied at draw time) |
-| Animator | Done | Frame-based animation with hit-frame events (`onHitFrame` callback), completion callbacks (`onComplete`), auto-transition (`returnAnimation`), non-looping support, **frameCount==0 guard** (returns frame 0 instead of div-by-zero). Editor: "Open in Animation Editor" inspector button |
+| SpriteComponent | Done | Texture (via AssetHandle), sourceRect (tileset support), spritesheet frames, tint, flip, renderOffset (procedural visual offset, **applied at draw time by SpriteRenderSystem**) |
+| Animator | Done | Frame-based animation with hit-frame events (`onHitFrame` callback fired by AnimationSystem on frame crossing), completion callbacks (`onComplete`), auto-transition (`returnAnimation` — system auto-plays after non-looping end), non-looping support, **per-animation flipX map** (populated by AnimationLoader from packed metadata), **frameCount==0 guard** (returns frame 0 instead of div-by-zero). Editor: "Open in Animation Editor" inspector button |
 | PlayerController | Done | Cardinal movement, speed, facing, isLocalPlayer flag |
 | BoxCollider | Done | AABB with offset, trigger/static flags, "Fit to Sprite" button |
 | PolygonCollider | Done | SAT collision, vertex editing, make box/circle presets (auto-sized to sprite) |
@@ -253,14 +253,14 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | System | Status | Notes |
 |--------|--------|-------|
 | MovementSystem | Done | WASD input (local player only), Box+Polygon collision (all combos) |
-| AnimationSystem | Done | Timer-based frame updates, fires `onHitFrame` event on frame crossing, handles non-looping completion + auto-transition to `returnAnimation` |
+| AnimationSystem | Done | Timer-based frame updates, fires `onHitFrame` callback on frame crossing, fires `onComplete` on non-looping end, auto-transitions via `returnAnimation`, applies per-animation `flipX` from packed metadata |
 | CameraFollowSystem | Done | Locked to local player, smooth (no pixel-snap jitter) |
-| SpriteRenderSystem | Done | Frustum culled, depth sorted, respects sprite enabled flag |
+| SpriteRenderSystem | Done | Frustum culled, depth sorted, respects sprite enabled flag, applies `renderOffset` to draw position |
 | GameplaySystem | Done | Ticks StatusEffects, CrowdControl, SkillManager cooldowns, HP/MP regen, PK decay, death visual (rotation + gray tint), respawn countdown, nameplates |
 | MobAISystem | Done | Ticks MobAI for all mobs, threat-based targeting (top damager holds aggro, overrides nearest-player when in **acquire range**), applies movement, fires attacks. Matches Unity ServerZoneMobAI threat swap behavior |
-| CombatActionSystem | Done | **Prediction-only with animation windup** — viewport-aware click/touch-to-target, auto-clear off-screen. On attack: sends CmdAction to server immediately, starts 3-frame windup animation (10 fps). Hit frame (~100 ms) defers predicted damage text + optimistic audio. Procedural lunge offset (pullback → strike → recover) until real sprites exist. Does NOT modify mob/player HP, award XP/gold/honor, or determine kills. All state changes come from server messages (SvCombatEvent, SvPlayerState). CombatPredictionBuffer (32 slots) tracks pending attacks for reconciliation |
-| SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment, deferred entity creation (safe during archetype iteration) |
-| NPCInteractionSystem | Done | Click-to-interact with NPCs, viewport-aware screen-to-world, range check, dialogue open/close, click consumption (prevents combat targeting) |
+| CombatActionSystem | Done | **Prediction-only with animation windup** — viewport-aware click/touch-to-target, auto-clear off-screen. On attack: sends CmdAction to server immediately, starts 3-frame windup animation (10 fps). Hit frame (~100 ms) defers predicted damage text + optimistic audio. Procedural lunge offset via renderOffset (pullback → strike → recover, **now visible** — SpriteRenderSystem applies renderOffset) until real sprites exist. Does NOT modify mob/player HP, award XP/gold/honor, or determine kills. All state changes come from server messages (SvCombatEvent, SvPlayerState). CombatPredictionBuffer (32 slots) tracks pending attacks for reconciliation |
+| SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment (Y-axis clamping fixed), deferred entity creation (safe during archetype iteration) |
+| NPCInteractionSystem | Done | Click-to-interact with NPCs, viewport-aware screen-to-world, range check, dialogue open/close, click consumption (prevents combat targeting), EntityHandle validation prevents use-after-free on zone transition |
 | QuestSystem | Done | Routes mob kills/item pickups/NPC talks to quest progress, event-driven quest marker updates on all NPCs |
 | ZoneSystem | Done | Zone transitions, portal detection, fade effects |
 | ParticleSystem | Done | CPU particle emitters, registered as ECS system |
@@ -300,12 +300,12 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 ## Game Systems (Ported from Unity Prototype)
 
-All 37 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`, plus 4 new systems (Arena, Battlefield, Event Scheduler, Core Extraction). Total: **65 files, ~12,200 lines**, all compile with zero errors (844 test cases). Database repositories exist for all systems in `server/db/` (13 repos). All major systems are DB wired with message handlers, load-on-connect, save-on-disconnect, periodic maintenance, and async auto-save. Combat formula matches Unity prototype exactly (off-by-one fixed). Inventory saves after market/trade mutations prevent item duplication. Gauntlet has 3 divisions with real mob data.
+All 37 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`, plus 4 new systems (Arena, Battlefield, Event Scheduler, Core Extraction). Total: **65 files, ~12,200 lines**, all compile with zero errors (849 test cases). Database repositories exist for all systems in `server/db/` (13 repos). All major systems are DB wired with message handlers, load-on-connect, save-on-disconnect, periodic maintenance, and async auto-save. Combat formula matches Unity prototype exactly (off-by-one fixed). Trade system uses in-memory inventory sync + slot locking to prevent item duplication. Item instance IDs use UUID v4. Zone transitions validated against scene cache. GM admin_role loaded from DB. Gauntlet has 3 divisions with real mob data.
 
 ### Core Gameplay (Fully Ported — Logic Identical to C#)
 | System | Files | Lines | C# Source | Notes |
 |--------|-------|-------|-----------|-------|
-| Game Types & Enums | `game_types.h` | 372 | ItemEnums, ClassDefinition, constants | All enums, ClassDefinition struct, rarity/mob colors, all constants |
+| Game Types & Enums | `game_types.h` | 400 | ItemEnums, ClassDefinition, constants | All enums, ClassDefinition struct, rarity/mob colors, all constants, UUID v4 item instance ID generator |
 | Character Stats | `character_stats.h/.cpp` | 463 | NetworkCharacterStats (3,284L) | HP/MP/XP/level, stat calc with VIT multiplier, damage formulas, death/respawn, fury/mana |
 | Enemy Stats | `enemy_stats.h/.cpp` | 268 | NetworkEnemyStats (1,036L) | Mob HP, threat table (damage attribution), scaling, death events |
 | Combat System | `combat_system.h/.cpp` | 373 | CombatHitRateConfig + System (961L) | Hit rate with coverage, spell resist, block, armor reduction, PvP, class advantage |
@@ -336,12 +336,12 @@ See `Docs/Guides/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and N
 | System | Files | Lines | C# Source | Notes |
 |--------|-------|-------|-----------|-------|
 | Inventory | `inventory.h/.cpp` | 410 | NetworkInventory | 15 slots, equipment map, gold, trade slot locking, stack/swap **(DB wired)** |
-| Skill Manager | `skill_manager.h/.cpp` | 340 | PlayerSkillManager (2,079L) | Skill learning (skillbook + points), cooldowns, 4x5 skill bar **(DB wired — load/save on connect/disconnect)** |
+| Skill Manager | `skill_manager.h/.cpp` | 340 | PlayerSkillManager (2,079L) | Skill learning (skillbook + points), cooldowns, 4x5 skill bar, caster death check (blocks skill use while dead) **(DB wired — load/save on connect/disconnect)** |
 | Party Manager | `party_manager.h/.cpp` | 410 | NetworkPartyManager | 3-player parties, +10%/member XP bonus, loot mode, invites **(runtime only — no persistence needed)** |
 | Guild Manager | `guild_manager.h/.cpp` | 280 | NetworkGuildManager | TWOM guilds, ranks, 16x16 pixel symbols, XP contribution **(DB wired — load on connect)** |
 | Friends Manager | `friends_manager.h/.cpp` | 377 | NetworkFriendsManager | 50 friends, 100 blocks, profile inspection, online status **(DB wired — init + last_online on connect/disconnect)** |
 | Chat Manager | `chat_manager.h/.cpp` | 120 | NetworkChatManager | 7 channels (Map/Global/Trade/Party/Guild/Private/System), cross-faction garbling on public channels **(runtime only — no persistence needed)** |
-| Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(DB wired — full session flow: initiate/addItem/lock/confirm/execute/cancel, atomic item+gold transfer)** |
+| Trade Manager | `trade_manager.h/.cpp` | 354 | NetworkTradeManager | Two-step security (Lock->Confirm->Execute), 8 item slots + gold **(DB wired — full session flow, atomic item+gold transfer, in-memory inventory sync on completion, trade slot locking prevents market/enchant during trade)** |
 | Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(DB wired — list/buy/cancel, 2% tax to jackpot, offline seller credit, expiry maintenance)** |
 | Gauntlet | `gauntlet.h/.cpp` | ~850 | GauntletManager + GauntletInstance + GauntletTeam + GauntletRegistry + GauntletConfig (10 files) | Full event scheduler (2hr cycle, 10min signup), division-based matchmaking, GauntletTeam per-team scoring/MVP, GauntletRegistry signup queues, BasicWaveConfig/BossSpawnConfig/LevelMobMapping for wave spawning, reward configs (winner/loser/performance), consolation for overflow, announcement callbacks, debug commands **(DB wired — config loaded at startup, ticked every frame, CmdGauntlet register/unregister/status, mob kill notifications routed)** |
 | Faction System | `faction.h` | ~130 | FactionRegistry + FactionChatGarbler | 4 factions (Xyros/Fenor/Zethos/Solis), registry, deterministic chat garbling, same-faction checks, faction picker on registration screen |
@@ -413,6 +413,37 @@ classBonus    = classAdvantageMatrix[attacker][defender] // default 1.0
 ---
 
 ## Changelog
+
+### March 22, 2026 - Full System Audit: 12 Critical Fixes
+
+Full system-wide audit across all subsystems (server, combat, inventory, network, DB, editor, game systems). 117 total findings catalogued (12 critical, 22 high, 28 medium, 40 low). All 12 critical-severity issues verified and fixed. High/medium/low fixes handled in parallel session.
+
+**Trade System (C1/C2) — Item Duplication & Slot Locking:**
+- **FIXED** item duplication exploit: trade execution now syncs in-memory `Inventory` objects (moves items between players, transfers gold) before `saveInventoryForClient()` writes to DB. Previously, the DB transfer was correct but the in-memory save overwrote it with stale state
+- **WIRED** `lockSlotForTrade()` / `unlockAllTradeSlots()` — slots locked on AddItem, unlocked on Cancel/Complete. Market listing already checked `isSlotLocked` but trade never set it
+
+**Server Authority (C4/C5):**
+- **C4 FIXED** zone transition bypass: server now rejects transitions to unknown scenes (`!targetScene` → break with LOG_WARN). Previously, invalid scene names skipped the level gate and proceeded
+- **C5 FIXED** GM admin_role: `admin_role` loaded from `accounts` table via `AccountRecord` → `PendingSession` → `clientAdminRoles_`. Previously hardcoded to 0 for all players
+
+**Combat (C6) — Dead Caster Skill Exploit:**
+- **FIXED** `SkillManager::executeSkill()` and `executeSkillAOE()` now check `casterStats->isAlive()` before execution. Dead players could cast skills via crafted packets
+
+**Item Instance IDs (C7/C8/C9):**
+- **ADDED** `generateItemInstanceId()` UUID v4 generator in `game_types.h` (thread-safe, `mt19937_64`)
+- **FIXED** all item pickup paths (loot drop, dungeon auto-loot, boss treasure box) — replaced `steady_clock` nanosecond strings with proper UUID v4
+- **FIXED** bank withdrawal and core extraction — both assigned UUIDs (previously empty `instanceId` corrupted UUID PK column)
+
+**Editor (C10) — Undo/Redo Dangling Pointer:**
+- **FIXED** `clearSelection()` called after every undo/redo operation (menu + Ctrl+Z/Y). Previously, undoing entity creation left `selectedEntity_` pointing to freed memory
+
+**NPCInteractionSystem (C11) — Stale Pointer Crash:**
+- **ADDED** `resetCachedPointers()` method and per-frame `world_->isAlive(handle)` validation on `localPlayer` and `interactingNPC`. Auto-recovers on entity destruction during zone transitions
+
+**Spawn System (C12) — Copy-Paste Bug:**
+- **FIXED** Y-axis zone containment clamping: `bounds.x` → `bounds.y`. Mobs escaped vertical bounds on non-square zones
+
+**Files changed:** `server_app.cpp`, `skill_manager.cpp`, `game_types.h`, `spawn_system.h`, `npc_interaction_system.h`, `editor.cpp`, `account_repository.h/.cpp`, `auth_protocol.h`, `auth_server.cpp`
 
 ### March 22, 2026 - High-Severity Bug Sweep (20 fixes)
 
@@ -2392,7 +2423,7 @@ game/
 - [x] Compile-time component type system (CompId, Hot/Warm/Cold tiers, no RTTI)
 - [ ] SIMD intrinsics for spatial queries (future optimization)
 - [ ] C++20 coroutines for async chunk I/O (structured for future drop-in)
-- [x] Unit test suite (doctest, 844 test cases + 10 scenario tests)
+- [x] Unit test suite (doctest, 849 test cases + 10 scenario tests)
 - [x] Action map input system (23 actions, input buffering, chat mode switching)
 - [x] SDF text rendering (uber-shader, outlined/glow/shadow effects, UTF-8, replaces bitmap font)
 - [x] Reflection system (FATE_REFLECT macro, auto-generated JSON serializers)
