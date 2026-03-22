@@ -3100,6 +3100,9 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             ctx.targetLevel = targetCharStats->stats.level;
             ctx.targetArmor = targetCharStats->stats.getArmor();
             ctx.targetMagicResist = targetCharStats->stats.getMagicResist();
+            for (int i = 0; i < 8; i++) {
+                ctx.targetElementalResists[i] = targetCharStats->stats.getElementalResist(static_cast<DamageType>(i));
+            }
             ctx.targetCurrentHP = targetCharStats->stats.currentHP;
             ctx.targetMaxHP = targetCharStats->stats.maxHP;
             ctx.targetAlive = targetCharStats->stats.isAlive();

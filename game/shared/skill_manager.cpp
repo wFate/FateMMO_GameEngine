@@ -652,6 +652,11 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                     ? CombatSystem::getPlayerMagicDamageReduction(ctx.targetMagicResist)
                     : CombatSystem::getMobMagicDamageReduction(ctx.targetMagicResist);
                 damage = static_cast<int>(std::round(damage * (1.0f - mrReduction)));
+                // Elemental resist (from equipment, stacks multiplicatively with MR)
+                float elemResist = ctx.targetElementalResists[static_cast<int>(def->damageType)];
+                if (elemResist > 0.0f && damage > 0) {
+                    damage = static_cast<int>(std::round(damage * (1.0f - elemResist)));
+                }
             } else {
                 // Physical armor
                 damage = CombatSystem::applyArmorReduction(damage, ctx.targetArmor);
@@ -966,6 +971,11 @@ int SkillManager::executeSkillAOE(const std::string& skillId, int rank,
                     ? CombatSystem::getPlayerMagicDamageReduction(tctx.targetMagicResist)
                     : CombatSystem::getMobMagicDamageReduction(tctx.targetMagicResist);
                 damage = static_cast<int>(std::round(damage * (1.0f - mr)));
+                // Elemental resist (from equipment, stacks multiplicatively with MR)
+                float elemResist = tctx.targetElementalResists[static_cast<int>(def->damageType)];
+                if (elemResist > 0.0f && damage > 0) {
+                    damage = static_cast<int>(std::round(damage * (1.0f - elemResist)));
+                }
             } else {
                 damage = CombatSystem::applyArmorReduction(damage, tctx.targetArmor);
             }
