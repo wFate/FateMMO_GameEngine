@@ -237,6 +237,15 @@ private:
     // for a client (dungeon instance world if in dungeon, otherwise main world_).
     World& getWorldForClient(uint16_t clientId);
     ReplicationManager& getReplicationForClient(uint16_t clientId);
+
+    // Transfer a player entity from one World to another (dungeon entry/exit).
+    // Snapshots all component data, destroys the source entity, creates a new
+    // entity in the destination World at spawnPos, and re-registers replication.
+    // Returns the new entity's handle (null on failure).
+    EntityHandle transferPlayerToWorld(uint16_t clientId,
+                                       World& srcWorld, ReplicationManager& srcRepl,
+                                       World& dstWorld, ReplicationManager& dstRepl,
+                                       Vec2 spawnPos, const std::string& newScene);
 };
 
 } // namespace fate

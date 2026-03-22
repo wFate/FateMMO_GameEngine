@@ -6341,4 +6341,256 @@ ReplicationManager& ServerApp::getReplicationForClient(uint16_t clientId) {
     return replication_;
 }
 
+// ---------------------------------------------------------------------------
+// transferPlayerToWorld — move a player entity between Worlds
+// ---------------------------------------------------------------------------
+EntityHandle ServerApp::transferPlayerToWorld(uint16_t clientId,
+                                              World& srcWorld, ReplicationManager& srcRepl,
+                                              World& dstWorld, ReplicationManager& dstRepl,
+                                              Vec2 spawnPos, const std::string& newScene) {
+    auto* conn = server_.connections().findById(clientId);
+    if (!conn) return EntityHandle();
+
+    // Resolve source entity via PersistentId -> EntityHandle
+    PersistentId oldPid(conn->playerEntityId);
+    EntityHandle srcHandle = srcRepl.getEntityHandle(oldPid);
+    Entity* srcEntity = srcWorld.getEntity(srcHandle);
+    if (!srcEntity) {
+        LOG_ERROR("Server", "transferPlayerToWorld: source entity not found for client %u", clientId);
+        return EntityHandle();
+    }
+
+    // ---- 1. Snapshot component data from source entity ----
+    auto* srcStats    = srcEntity->getComponent<CharacterStatsComponent>();
+    auto* srcInv      = srcEntity->getComponent<InventoryComponent>();
+    auto* srcSkills   = srcEntity->getComponent<SkillManagerComponent>();
+    auto* srcPet      = srcEntity->getComponent<PetComponent>();
+    auto* srcFaction  = srcEntity->getComponent<FactionComponent>();
+    auto* srcParty    = srcEntity->getComponent<PartyComponent>();
+    auto* srcSprite   = srcEntity->getComponent<SpriteComponent>();
+    auto* srcCtrl     = srcEntity->getComponent<PlayerController>();
+    auto* srcNameplate = srcEntity->getComponent<NameplateComponent>();
+    auto* srcCombat   = srcEntity->getComponent<CombatControllerComponent>();
+    auto* srcQuest    = srcEntity->getComponent<QuestComponent>();
+    auto* srcBank     = srcEntity->getComponent<BankStorageComponent>();
+    auto* srcChat     = srcEntity->getComponent<ChatComponent>();
+    auto* srcGuild    = srcEntity->getComponent<GuildComponent>();
+    auto* srcFriends  = srcEntity->getComponent<FriendsComponent>();
+    auto* srcMarket   = srcEntity->getComponent<MarketComponent>();
+    auto* srcTrade    = srcEntity->getComponent<TradeComponent>();
+
+    // Deep-copy mutable data before we destroy the source entity
+    CharacterStats  savedStats;
+    if (srcStats) savedStats = srcStats->stats;
+
+    Inventory savedInv;
+    if (srcInv) savedInv = srcInv->inventory;
+
+    SkillManager savedSkills;
+    if (srcSkills) savedSkills = srcSkills->skills;
+
+    PetComponent savedPet;
+    if (srcPet) savedPet = *srcPet;
+
+    Faction savedFaction = Faction::None;
+    if (srcFaction) savedFaction = srcFaction->faction;
+
+    PartyManager savedParty;
+    if (srcParty) savedParty = srcParty->party;
+
+    // Sprite visual data
+    std::string savedTexPath;
+    Vec2 savedSpriteSize{20.0f, 33.0f};
+    Color savedTint = Color::white();
+    bool savedFlipX = false;
+    if (srcSprite) {
+        savedTexPath = srcSprite->texturePath;
+        savedSpriteSize = srcSprite->size;
+        savedTint = srcSprite->tint;
+        savedFlipX = srcSprite->flipX;
+    }
+
+    // PlayerController
+    float savedMoveSpeed = 96.0f;
+    Direction savedFacing = Direction::Down;
+    bool savedIsLocal = false;
+    if (srcCtrl) {
+        savedMoveSpeed = srcCtrl->moveSpeed;
+        savedFacing = srcCtrl->facing;
+        savedIsLocal = srcCtrl->isLocalPlayer;
+    }
+
+    // Nameplate
+    NameplateComponent savedNameplate;
+    if (srcNameplate) savedNameplate = *srcNameplate;
+
+    // Combat controller
+    CombatControllerComponent savedCombat;
+    if (srcCombat) savedCombat = *srcCombat;
+
+    // Quest, Bank, Chat, Guild, Friends, Market, Trade
+    QuestManager savedQuest;
+    if (srcQuest) savedQuest = srcQuest->quests;
+
+    BankStorage savedBank;
+    if (srcBank) savedBank = srcBank->storage;
+
+    ChatManager savedChat;
+    if (srcChat) savedChat = srcChat->chat;
+
+    GuildManager savedGuild;
+    if (srcGuild) savedGuild = srcGuild->guild;
+
+    FriendsManager savedFriends;
+    if (srcFriends) savedFriends = srcFriends->friends;
+
+    MarketManager savedMarket;
+    if (srcMarket) savedMarket = srcMarket->market;
+
+    TradeManager savedTrade;
+    if (srcTrade) savedTrade = srcTrade->trade;
+
+    // ---- 2. Unregister from source replication ----
+    srcRepl.unregisterEntity(srcHandle);
+
+    // ---- 3. Destroy source entity ----
+    srcWorld.destroyEntity(srcHandle);
+    srcWorld.processDestroyQueue();
+
+    // ---- 4. Create new entity in destination World ----
+    auto newHandle = dstWorld.createEntityH("player");
+    auto* newEntity = dstWorld.getEntity(newHandle);
+    if (!newEntity) {
+        LOG_ERROR("Server", "transferPlayerToWorld: failed to create entity in dst world");
+        return EntityHandle();
+    }
+    newEntity->setTag("player");
+
+    // ---- 5. Add components and copy saved data ----
+
+    // Transform — use spawnPos, not source position
+    auto* newTransform = dstWorld.addComponentToEntity<Transform>(newEntity);
+    newTransform->position = spawnPos;
+    newTransform->depth = 10.0f;
+
+    // SpriteComponent — copy visual data
+    auto* newSprite = dstWorld.addComponentToEntity<SpriteComponent>(newEntity);
+    newSprite->texturePath = savedTexPath;
+    newSprite->texture = TextureCache::instance().load(savedTexPath);
+    newSprite->size = savedSpriteSize;
+    newSprite->tint = savedTint;
+    newSprite->flipX = savedFlipX;
+
+    // BoxCollider — recreate with standard player dimensions
+    auto* newCollider = dstWorld.addComponentToEntity<BoxCollider>(newEntity);
+    newCollider->size = {newSprite->size.x - 4.0f, newSprite->size.y * 0.5f};
+    newCollider->offset = {0.0f, -newSprite->size.y * 0.25f};
+    newCollider->isStatic = false;
+
+    // PlayerController — copy movement config
+    auto* newCtrl = dstWorld.addComponentToEntity<PlayerController>(newEntity);
+    newCtrl->moveSpeed = savedMoveSpeed;
+    newCtrl->facing = savedFacing;
+    newCtrl->isLocalPlayer = savedIsLocal;
+    newCtrl->isMoving = false;
+
+    // CharacterStats — deep copy, update scene
+    auto* newStats = dstWorld.addComponentToEntity<CharacterStatsComponent>(newEntity);
+    newStats->stats = savedStats;
+    newStats->stats.currentScene = newScene;
+
+    // CombatController — copy config, reset cooldown
+    auto* newCombat = dstWorld.addComponentToEntity<CombatControllerComponent>(newEntity);
+    newCombat->baseAttackCooldown = savedCombat.baseAttackCooldown;
+    newCombat->attackCooldownRemaining = 0.0f;
+
+    // Damageable marker
+    dstWorld.addComponentToEntity<DamageableComponent>(newEntity);
+
+    // Inventory — deep copy
+    auto* newInv = dstWorld.addComponentToEntity<InventoryComponent>(newEntity);
+    newInv->inventory = savedInv;
+
+    // SkillManager — deep copy, relink stats pointer
+    auto* newSkillComp = dstWorld.addComponentToEntity<SkillManagerComponent>(newEntity);
+    newSkillComp->skills = savedSkills;
+    newSkillComp->skills.initialize(&newStats->stats);
+
+    // StatusEffects — fresh (clear buffs/debuffs on transfer)
+    dstWorld.addComponentToEntity<StatusEffectComponent>(newEntity);
+
+    // CrowdControl — fresh (clear CC on transfer)
+    dstWorld.addComponentToEntity<CrowdControlComponent>(newEntity);
+
+    // Targeting — fresh (clear target on transfer)
+    dstWorld.addComponentToEntity<TargetingComponent>(newEntity);
+
+    // Chat — copy
+    auto* newChat = dstWorld.addComponentToEntity<ChatComponent>(newEntity);
+    newChat->chat = savedChat;
+
+    // Guild — copy
+    auto* newGuild = dstWorld.addComponentToEntity<GuildComponent>(newEntity);
+    newGuild->guild = savedGuild;
+
+    // Party — copy
+    auto* newPartyComp = dstWorld.addComponentToEntity<PartyComponent>(newEntity);
+    newPartyComp->party = savedParty;
+
+    // Friends — copy
+    auto* newFriends = dstWorld.addComponentToEntity<FriendsComponent>(newEntity);
+    newFriends->friends = savedFriends;
+
+    // Market — copy
+    auto* newMarket = dstWorld.addComponentToEntity<MarketComponent>(newEntity);
+    newMarket->market = savedMarket;
+
+    // Trade — copy
+    auto* newTrade = dstWorld.addComponentToEntity<TradeComponent>(newEntity);
+    newTrade->trade = savedTrade;
+
+    // Quest — copy
+    auto* newQuestComp = dstWorld.addComponentToEntity<QuestComponent>(newEntity);
+    newQuestComp->quests = savedQuest;
+
+    // Bank — copy
+    auto* newBankComp = dstWorld.addComponentToEntity<BankStorageComponent>(newEntity);
+    newBankComp->storage = savedBank;
+
+    // Faction — copy
+    auto* newFaction = dstWorld.addComponentToEntity<FactionComponent>(newEntity);
+    newFaction->faction = savedFaction;
+
+    // Pet — copy
+    auto* newPetComp = dstWorld.addComponentToEntity<PetComponent>(newEntity);
+    *newPetComp = savedPet;
+
+    // Nameplate — copy
+    auto* newNameplate = dstWorld.addComponentToEntity<NameplateComponent>(newEntity);
+    *newNameplate = savedNameplate;
+
+    // ---- 6. Register in destination replication ----
+    auto newPid = PersistentId::generate(1);
+    dstRepl.registerEntity(newHandle, newPid);
+
+    // ---- 7. Update connection to point to new entity ----
+    conn->playerEntityId = newPid.value();
+
+    // Clear stale AOI state so replication rebuilds from scratch
+    conn->aoi.current.clear();
+    conn->aoi.previous.clear();
+    conn->aoi.entered.clear();
+    conn->aoi.left.clear();
+    conn->aoi.stayed.clear();
+    conn->lastAckedState.clear();
+
+    // Mark first-move sync so server accepts position unconditionally
+    needsFirstMoveSync_.insert(clientId);
+
+    LOG_INFO("Server", "transferPlayerToWorld: client %u transferred to scene '%s' at (%.0f, %.0f)",
+             clientId, newScene.c_str(), spawnPos.x, spawnPos.y);
+
+    return newHandle;
+}
+
 } // namespace fate
