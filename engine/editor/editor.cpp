@@ -506,10 +506,10 @@ void Editor::drawSceneViewport() {
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
             ImGui::SameLine();
 
-            // Play/Pause
+            // Play/Stop (with ECS snapshot/restore)
             {
                 float playBtnW = 50.0f;
-                if (paused_) {
+                if (!inPlayMode_) {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
                     if (ImGui::Button("|>", ImVec2(playBtnW, btnH))) {
                         // Save editor camera state, reset to default zoom for play
@@ -518,8 +518,7 @@ void Editor::drawSceneViewport() {
                             savedCamZoom_ = dockCamera_->zoom();
                             dockCamera_->setZoom(1.0f);
                         }
-                        paused_ = false;
-                        clearSelection();
+                        enterPlayMode(dockWorld_);
                     }
                     ImGui::PopStyleColor();
                 } else {
@@ -530,7 +529,7 @@ void Editor::drawSceneViewport() {
                             dockCamera_->setPosition(savedCamPos_);
                             dockCamera_->setZoom(savedCamZoom_);
                         }
-                        paused_ = true;
+                        exitPlayMode(dockWorld_);
                     }
                     ImGui::PopStyleColor();
                 }
@@ -1935,6 +1934,45 @@ void Editor::drawImGuizmo(Camera* camera) {
             UndoSystem::instance().push(std::move(cmd));
         }
     }
+}
+
+// ============================================================================
+// Play-in-Editor: Snapshot / Restore
+// ============================================================================
+
+void Editor::enterPlayMode(World* world) {
+    if (inPlayMode_ || !world) return;
+    // Snapshot all entities
+    playModeSnapshot_ = nlohmann::json::array();
+    world->forEachEntity([&](Entity* e) {
+        playModeSnapshot_.push_back(PrefabLibrary::entityToJson(e));
+    });
+    paused_ = false;
+    inPlayMode_ = true;
+}
+
+void Editor::exitPlayMode(World* world) {
+    if (!inPlayMode_ || !world) return;
+    // Destroy all current entities
+    std::vector<EntityHandle> toDestroy;
+    world->forEachEntity([&](Entity* e) {
+        toDestroy.push_back(e->handle());
+    });
+    for (auto h : toDestroy) {
+        world->destroyEntity(h);
+    }
+    world->processDestroyQueue();
+
+    // Restore from snapshot
+    for (auto& entityJson : playModeSnapshot_) {
+        PrefabLibrary::jsonToEntity(entityJson, *world);
+    }
+    playModeSnapshot_ = nlohmann::json();
+    paused_ = true;
+    inPlayMode_ = false;
+
+    // Clear selection (entities were recreated with new handles)
+    clearSelection();
 }
 
 // ============================================================================

@@ -15,6 +15,7 @@
 #include "engine/editor/tile_tools.h"
 #include <ImGuizmo.h>
 #include <SDL.h>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 #include <set>
@@ -132,6 +133,11 @@ public:
     void saveScene(World* world, const std::string& path);
     void loadScene(World* world, const std::string& path);
 
+    // Play-in-editor: snapshot/restore ECS state
+    void enterPlayMode(World* world);
+    void exitPlayMode(World* world);
+    bool inPlayMode() const { return inPlayMode_; }
+
     void setPostProcessConfig(PostProcessConfig* cfg) { postProcessConfig_ = cfg; }
 
     void setAssetRoot(const std::string& root) { assetRoot_ = root; }
@@ -164,6 +170,8 @@ private:
 
     bool open_ = true;   // Editor is always visible — the editor IS the application
     bool paused_ = true;  // Start paused (editing mode)
+    nlohmann::json playModeSnapshot_;  // ECS state before entering play mode
+    bool inPlayMode_ = false;
     bool frameStarted_ = false;
     bool wantsKeyboard_ = false;
     bool wantsMouse_ = false;
