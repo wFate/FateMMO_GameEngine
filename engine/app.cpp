@@ -460,6 +460,9 @@ void App::update() {
 
     onUpdate(deltaTime_);
 
+    // Route mouse/keyboard input to the UI system (hover, focus, press, drag-drop)
+    uiManager_.handleInput();
+
     // Always process destroy queue (so editor delete works while paused)
     auto* activeScene = SceneManager::instance().currentScene();
     if (activeScene) {

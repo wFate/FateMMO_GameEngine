@@ -2,7 +2,9 @@
 #include "engine/ui/widgets/panel.h"
 #include "engine/ui/widgets/label.h"
 #include "engine/core/logger.h"
+#include "engine/input/input.h"
 #include <nlohmann/json.hpp>
+#include <SDL.h>
 #include <fstream>
 #include <algorithm>
 
@@ -290,6 +292,82 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     }
 
     return node;
+}
+
+// ---------------------------------------------------------------------------
+// Input routing
+// ---------------------------------------------------------------------------
+
+void UIManager::handleInput() {
+    auto& input = Input::instance();
+    Vec2 mousePos = input.mousePosition();
+
+    updateHover(mousePos);
+
+    if (input.isMousePressed(SDL_BUTTON_LEFT)) {
+        handlePress(mousePos);
+    }
+    if (input.isMouseReleased(SDL_BUTTON_LEFT)) {
+        handleRelease(mousePos);
+    }
+}
+
+void UIManager::updateHover(const Vec2& mousePos) {
+    UINode* newHover = hitTest(mousePos);
+    if (newHover != hoveredNode_) {
+        if (hoveredNode_) hoveredNode_->onHoverExit();
+        hoveredNode_ = newHover;
+        if (hoveredNode_) hoveredNode_->onHoverEnter();
+    }
+}
+
+void UIManager::handlePress(const Vec2& mousePos) {
+    UINode* target = hitTest(mousePos);
+
+    if (target != focusedNode_) {
+        if (focusedNode_) focusedNode_->onFocusLost();
+        focusedNode_ = target;
+        if (focusedNode_) focusedNode_->onFocusGained();
+    }
+
+    pressedNode_ = target;
+    pressStartPos_ = mousePos;
+
+    if (target) {
+        Vec2 localPos = {mousePos.x - target->computedRect().x,
+                        mousePos.y - target->computedRect().y};
+        target->onPress(localPos);
+    }
+}
+
+void UIManager::handleRelease(const Vec2& mousePos) {
+    if (pressedNode_) {
+        Vec2 localPos = {mousePos.x - pressedNode_->computedRect().x,
+                        mousePos.y - pressedNode_->computedRect().y};
+        pressedNode_->onRelease(localPos);
+    }
+
+    if (dragPayload_.active) {
+        UINode* dropTarget = hitTest(mousePos);
+        if (dropTarget && dropTarget->acceptsDrop(dragPayload_)) {
+            dropTarget->onDrop(dragPayload_);
+        }
+        dragPayload_.clear();
+    }
+
+    pressedNode_ = nullptr;
+}
+
+void UIManager::handleKeyInput(int scancode, bool pressed) {
+    if (focusedNode_) {
+        focusedNode_->onKeyInput(scancode, pressed);
+    }
+}
+
+void UIManager::handleTextInput(const std::string& text) {
+    if (focusedNode_) {
+        focusedNode_->onTextInput(text);
+    }
 }
 
 // ---------------------------------------------------------------------------
