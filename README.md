@@ -246,16 +246,29 @@ build/Debug/fate_tests.exe -tc="PersistenceQueue*"
 
 <div align="center">
 
-## Forged by
+---
 
-<img src="https://img.shields.io/badge/Caleb_Kious-Solo_Dev-8B5CF6?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyTDEgMjFoMjJMMTIgMnptMCAxNy41M0w0LjI0IDE5LjVIMTkuNzZMMTIgMTkuNTN6Ii8+PC9zdmc+&logoColor=white" alt="Caleb Kious" />
+<br>
 
-**Engine Architecture** · **Networking** · **Server Systems** · **Cross-Platform Tooling**
+<img src="https://img.shields.io/badge/%E2%9A%94%EF%B8%8F_Forged_by-Caleb_Kious-8B5CF6?style=for-the-badge&logoColor=white" alt="Forged by Caleb Kious" />
 
-```
- 80,000+ lines of C++     ·     450+ files     ·     844 tests
-```
+<br>
 
-[![GitHub](https://img.shields.io/badge/GitHub-wFate-181717?style=flat-square&logo=github)](https://github.com/wFate)
+<sub>**Engine Architecture** · **Networking** · **Server Systems** · **Editor Tooling** · **Cross-Platform**</sub>
+
+<br><br>
+
+<img src="https://img.shields.io/badge/C%2B%2B-80%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
+<img src="https://img.shields.io/badge/files-450%2B-2ea44f?style=flat-square" alt="Files" />
+<img src="https://img.shields.io/badge/tests-844_passing-2ea44f?style=flat-square" alt="Tests" />
+<img src="https://img.shields.io/badge/platforms-5-orange?style=flat-square" alt="Platforms" />
+
+<br><br>
+
+[![GitHub](https://img.shields.io/badge/GitHub-wFate-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/wFate)
+
+<br>
+
+<sub>*Built from scratch — every line, every system, every packet.*</sub>
 
 </div>
