@@ -444,8 +444,8 @@ void Editor::drawDockSpace() {
         if (ImGui::BeginMenu("Edit")) {
             bool canUndo = UndoSystem::instance().canUndo();
             bool canRedo = UndoSystem::instance().canRedo();
-            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo)) UndoSystem::instance().undo(dockWorld_);
-            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo)) UndoSystem::instance().redo(dockWorld_);
+            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo)) { UndoSystem::instance().undo(dockWorld_); clearSelection(); }
+            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo)) { UndoSystem::instance().redo(dockWorld_); clearSelection(); }
             ImGui::EndMenu();
         }
 
@@ -3733,11 +3733,13 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     // Ctrl+Z = Undo
     if (ctrl && scancode == SDL_SCANCODE_Z && !shift) {
         UndoSystem::instance().undo(world);
+        clearSelection();
     }
     // Ctrl+Y or Ctrl+Shift+Z = Redo
     if ((ctrl && scancode == SDL_SCANCODE_Y) ||
         (ctrl && shift && scancode == SDL_SCANCODE_Z)) {
         UndoSystem::instance().redo(world);
+        clearSelection();
     }
     // Ctrl+S = Save current scene
     if (ctrl && scancode == SDL_SCANCODE_S && !currentScenePath_.empty()) {

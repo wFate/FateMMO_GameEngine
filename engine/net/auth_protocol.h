@@ -229,6 +229,7 @@ struct PendingSession {
     std::string character_id;  // VARCHAR(64) matching Unity DB
     double created_at = 0.0;
     double expires_at = 0.0;
+    int admin_role = 0;        // 0=player, 1=GM, 2=admin
 };
 
 } // namespace fate
