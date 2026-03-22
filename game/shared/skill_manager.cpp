@@ -696,6 +696,19 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
         damage = (std::max)(1, damage);
     }
 
+    // H3: Re-validate target is still alive before applying damage
+    bool targetStillAlive = true;
+    if (ctx.targetMobStats) targetStillAlive = ctx.targetMobStats->isAlive;
+    else if (ctx.targetPlayerStats) targetStillAlive = ctx.targetPlayerStats->isAlive();
+    if (!targetStillAlive) {
+        return 0; // Target died between validation and execution
+    }
+
+    // H4: Re-validate caster is still alive before applying damage
+    if (ctx.casterStats && !ctx.casterStats->isAlive()) {
+        return 0; // Caster died before hit landed
+    }
+
     // 11. Apply damage to target
     int actualDamage = damage;
     if (ctx.targetMobStats && damage > 0) {
@@ -922,6 +935,11 @@ int SkillManager::executeSkillAOE(const std::string& skillId, int rank,
 
     // Execute against each target (skip resource/cooldown validation per-target)
     for (int i = 0; i < targetCount; ++i) {
+        // H5: Re-check caster CC status before each AOE target hit
+        if (primaryCtx.casterCC && !primaryCtx.casterCC->canAct()) {
+            break; // Stop hitting remaining targets if caster got CC'd
+        }
+
         auto& tctx = targets[i];
 
         if (!tctx.targetAlive) continue;

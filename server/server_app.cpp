@@ -7585,6 +7585,20 @@ void ServerApp::processStartDungeon(uint16_t clientId, const CmdStartDungeonMsg&
         return;
     }
 
+    // H9: Validate all party members are online before starting dungeon
+    for (const auto& member : partyComp->party.members) {
+        if (member.characterId == conn->character_id) continue; // skip leader
+        uint16_t memberCid = 0;
+        server_.connections().forEach([&](const ClientConnection& c) {
+            if (c.character_id == member.characterId) memberCid = c.clientId;
+        });
+        if (memberCid == 0) {
+            LOG_WARN("Server", "Dungeon start rejected: party member '%s' is offline",
+                     member.characterName.c_str());
+            return;
+        }
+    }
+
     // 3. Validate no event locks for any member
     for (auto& member : partyComp->party.members) {
         // Look up entityId via characterId
