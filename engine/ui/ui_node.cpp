@@ -1,4 +1,5 @@
 #include "engine/ui/ui_node.h"
+#include "engine/ui/ui_input.h"
 #include <algorithm>
 
 namespace fate {
@@ -155,5 +156,20 @@ void UINode::renderChildren(SpriteBatch& batch, SDFText& text) {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Interaction hooks — default no-op implementations
+// ---------------------------------------------------------------------------
+
+bool UINode::onPress(const Vec2&) { return false; }
+void UINode::onRelease(const Vec2&) {}
+void UINode::onHoverEnter() { hovered_ = true; }
+void UINode::onHoverExit() { hovered_ = false; }
+void UINode::onFocusGained() { focused_ = true; }
+void UINode::onFocusLost() { focused_ = false; }
+bool UINode::onKeyInput(int, bool) { return false; }
+bool UINode::onTextInput(const std::string&) { return false; }
+bool UINode::acceptsDrop(const DragPayload&) const { return false; }
+void UINode::onDrop(const DragPayload&) {}
 
 } // namespace fate

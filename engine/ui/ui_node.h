@@ -8,6 +8,8 @@
 
 namespace fate {
 
+struct DragPayload;
+
 class SpriteBatch;
 class SDFText;
 
@@ -57,6 +59,18 @@ public:
 
     // Hit-testing
     bool hitTest(const Vec2& point) const;
+
+    // Interaction hooks (widgets override these)
+    virtual bool onPress(const Vec2& localPos);
+    virtual void onRelease(const Vec2& localPos);
+    virtual void onHoverEnter();
+    virtual void onHoverExit();
+    virtual void onFocusGained();
+    virtual void onFocusLost();
+    virtual bool onKeyInput(int scancode, bool pressed);
+    virtual bool onTextInput(const std::string& text);
+    virtual bool acceptsDrop(const DragPayload& payload) const;
+    virtual void onDrop(const DragPayload& payload);
 
     // Rendering (virtual — widgets override)
     virtual void render(SpriteBatch& batch, SDFText& text);
