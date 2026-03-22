@@ -25,6 +25,7 @@
 #include "engine/ui/widgets/character_creation_screen.h"
 #include "engine/ui/widgets/chat_panel.h"
 #include "engine/ui/widgets/trade_window.h"
+#include "engine/ui/widgets/party_frame.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -462,6 +463,12 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     else if (type == "trade_window") {
         auto tw = std::make_unique<TradeWindow>(id);
         node = std::move(tw);
+    }
+    else if (type == "party_frame") {
+        auto pf = std::make_unique<PartyFrame>(id);
+        pf->cardWidth  = j.value("cardWidth",   170.0f);
+        pf->cardHeight = j.value("cardHeight",   48.0f);
+        node = std::move(pf);
     }
     else {
         node = std::make_unique<UINode>(id, type);
