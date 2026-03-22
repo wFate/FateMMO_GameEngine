@@ -52,6 +52,9 @@ public:
     DragPayload& dragPayload() { return dragPayload_; }
     bool isDragging() const { return dragPayload_.active; }
 
+    // Editor: list loaded screen IDs
+    std::vector<std::string> screenIds() const { return screenOrder_; }
+
 private:
     UITheme theme_;
     std::vector<std::string> screenOrder_;

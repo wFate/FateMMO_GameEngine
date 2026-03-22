@@ -366,6 +366,11 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     dialogueEditor_.draw();
     animationEditor_.draw();
 
+    // UI editor panels (hierarchy tree + inspector)
+    if (uiManager_) {
+        uiEditorPanel_.draw(*uiManager_);
+    }
+
     // Post-process config panel
     if (showPostProcessPanel_ && postProcessConfig_) {
         ImGui::SetNextWindowSize(ImVec2(280, 320), ImGuiCond_FirstUseEver);
@@ -487,6 +492,9 @@ void Editor::drawDockSpace() {
             ImGui::MenuItem("Show Colliders", nullptr, &showCollisionDebug_);
             ImGui::Separator();
             ImGui::MenuItem("Post Process", nullptr, &showPostProcessPanel_);
+            ImGui::Separator();
+            ImGui::MenuItem("UI Hierarchy", nullptr, &uiEditorPanel_.showHierarchy);
+            ImGui::MenuItem("UI Inspector", nullptr, &uiEditorPanel_.showInspector);
             ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout")) { resetLayout_ = true; }
             ImGui::Separator();

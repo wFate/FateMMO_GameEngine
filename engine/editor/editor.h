@@ -16,6 +16,7 @@
 #include "engine/editor/node_editor.h"
 #include "engine/editor/animation_editor.h"
 #include "engine/editor/asset_browser.h"
+#include "engine/editor/ui_editor_panel.h"
 #include <ImGuizmo.h>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
@@ -146,6 +147,8 @@ public:
     bool inPlayMode() const { return inPlayMode_; }
 
     void setPostProcessConfig(PostProcessConfig* cfg) { postProcessConfig_ = cfg; }
+    void setUIManager(UIManager* mgr) { uiManager_ = mgr; }
+    UIEditorPanel& uiEditorPanel() { return uiEditorPanel_; }
 
     void setAssetRoot(const std::string& root) { assetRoot_ = root; }
     void setSourceDir(const std::string& dir) { sourceDir_ = dir; }
@@ -290,6 +293,10 @@ private:
     // Post-process panel
     bool showPostProcessPanel_ = false;
     PostProcessConfig* postProcessConfig_ = nullptr;
+
+    // UI editor panel
+    UIEditorPanel uiEditorPanel_;
+    UIManager* uiManager_ = nullptr;
 
     // Dialogue node editor panel
     DialogueNodeEditor dialogueEditor_;

@@ -15,6 +15,14 @@ public:
 
     void setStyle(const std::string& name, const UIStyle& style);
 
+    // Editor: list all style names
+    std::vector<std::string> styleNames() const {
+        std::vector<std::string> names;
+        names.reserve(styles_.size());
+        for (auto& [k, v] : styles_) names.push_back(k);
+        return names;
+    }
+
 private:
     std::unordered_map<std::string, UIStyle> styles_;
     static const UIStyle defaultStyle_;
