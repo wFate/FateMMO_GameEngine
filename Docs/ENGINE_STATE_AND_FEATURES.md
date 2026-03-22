@@ -70,13 +70,13 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Graphics RHI | Done | gfx::Device + CommandList + Pipeline State Objects, GL backend, typed 32-bit handles, uniform cache |
 | Networking Transport | Done | Custom reliable UDP (Winsock2 + POSIX), ByteWriter/ByteReader (NaN/Inf rejection, string length cap, enum bounds, sticky error), 16-byte packet header, 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation, per-tick skill command cap, **IPv6 dual-stack sockets** (sockaddr_storage, AF_INET6 with IPV6_V6ONLY=0, IPv4 fallback, DNS64/NAT64 compatible — iOS App Store mandatory), protocol version handshake (rejects outdated clients with reason string) |
 | AEAD Packet Encryption | Done | XChaCha20-Poly1305 via libsodium. Per-session key pair generated on connect, sent via KeyExchange (0x82) packet. All non-system payloads encrypted/authenticated. Sequence number as 24-byte nonce. Tampered packets silently dropped. Separate tx/rx keys prevent reflection attacks. Compiles in plaintext fallback mode without libsodium (`FATE_HAS_SODIUM` guard) |
-| Auto-Reconnect | Done | `ReconnectPhase` state machine in NetClient. Heartbeat timeout (5s) triggers auto-reconnect with stored auth token. Exponential backoff (1s→2s→4s...30s cap), 60s total timeout. ConnectAccept clears reconnect state. Anonymous connections skip auto-reconnect |
+| Auto-Reconnect | Done | `ReconnectPhase` state machine in NetClient. Heartbeat timeout (8s) triggers auto-reconnect with stored auth token. Exponential backoff (1s→2s→4s...30s cap), 60s total timeout. ConnectAccept clears reconnect state. Anonymous connections skip auto-reconnect. Every 3rd heartbeat sent via reliable channel as fallback |
 | Economic Nonces | Done | `NonceManager` on server issues random uint64_t per-client nonces for trade/market actions. Single-use (replay rejected), wrong-client rejected, 60s expiry. Cleaned on disconnect and in maintenance tick. Infrastructure ready — protocol message nonce fields are next step |
 | Rate Limiting | Done | Per-client, per-message-type token buckets (O(1) per packet). Configurable burst/sustained rates per command (CmdMove: 65/60 for 60fps clients). Cumulative violation tracking with auto-disconnect threshold. Silent drop policy (never reveals limits to probers) |
 | Connection Cookies | Done | HMAC-based challenge cookie generator (FNV-1a keyed hash, 10s time-bucketed). Foundation for netcode.io-style stateless handshake to prevent spoofed-IP connection flooding |
 | Server Target Validation | Done | Every CmdAction/CmdUseSkill validates target exists in server-side AOI (binary search on sorted visibility set) and is within action range with latency tolerance. **Full PvP validation:** `canAttackPlayer()` checks safe zone → party member → dead/dying target → same-faction innocents → different factions. Same-faction players can only attack Red/Black (PK-flagged) targets |
 | Profanity Filter (Server) | Done | ProfanityFilter::filterChatMessage wired into CmdChat handler. Censor mode (asterisks) applied before broadcast. 50+ word list, leetspeak normalization, blocked phrases, max 200 char |
-| Mobile Reconnection | Done | ReconnectState machine: exponential backoff (1s→2s→4s...cap 30s), 60s timeout. **Wired into NetClient:** heartbeat timeout detection triggers auto-reconnect with stored auth token. ConnectAccept clears state |
+| Mobile Reconnection | Done | ReconnectState machine: exponential backoff (1s→2s→4s...cap 30s), 60s timeout. **Wired into NetClient:** heartbeat timeout detection (8s) triggers auto-reconnect with stored auth token. ConnectAccept clears state. Reliable heartbeat fallback every 3rd beat prevents false timeouts on lossy WiFi/mobile |
 | Entity Replication | Done | AOI-driven enter/leave/update, delta compression with 16-field bitmask (position, animFrame, flipX, currentHP, maxHP, moveState, animId, statusEffectMask, deathState, casting, targetEntityId, level, faction, equipVisuals, pkStatus, **honorRank**), per-entity sequence counters (stale update rejection), distance-based tiered update frequency (Near 20Hz/Mid 7Hz/Far 4Hz/Edge 2Hz with HP-change priority override), ghost entities, client-side position interpolation, spatial-indexed visibility |
 | Client-Server Architecture | Done | Headless 20 tick/sec server (FateServer), NetClient/NetServer, session tokens, heartbeat/timeout |
 | Platform Detection | Done | Compile-time defines: FATEMMO_PLATFORM_WINDOWS/IOS/ANDROID/MACOS/LINUX, FATEMMO_MOBILE, FATEMMO_GLES |
@@ -95,7 +95,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Palette Registry | Done | `PaletteRegistry` loads named 16-color palettes from JSON. `Color::fromHex(string)` overload parses hex color strings. 5 starter palettes (2 faction, 3 rarity). Connects to existing shader renderType 5 and SpriteBatch palette swap API |
 | Device Info | Done | `DeviceInfo` detects physical RAM (Windows/macOS/Linux/Android), classifies into Low (≤3GB, 200MB VRAM) / Medium (4-6GB, 350MB) / High (8GB+, 512MB) tiers. Thermal state polling (stubs for iOS/Android, TODO native bridges). Recommended FPS drops to 30 on serious/critical thermal |
 | Two-Tick Death | Done | `LifeState` enum (Alive→Dying→Dead). `takeDamage()` transitions to Dying (on-death procs fire). `advanceDeathTick()` transitions Dying→Dead on next server tick. Dying/Dead entities reject further damage. Replicated as 3-state deathState field |
-| Optimistic Combat | Done | Client plays attack animation immediately on input (no waiting for server RTT). `CombatPredictionBuffer` ring buffer (32 slots) tracks pending attacks. Attack flash: brief sprite tint (warm yellow melee, cool blue spell). Server response reconciles with final damage numbers |
+| Optimistic Combat | Done | TWOM-style animation windup hides network latency. On attack press: sends to server immediately + starts 3-frame attack animation (10 fps, 300 ms). Hit frame fires at ~100 ms — spawns predicted damage text + plays optimistic audio. Procedural lunge offset (2 px pullback → 3 px strike → ease recover) provides combat feel until real sprite frames exist. `CombatPredictionBuffer` ring buffer (32 slots) tracks pending attacks. Server response reconciles with final damage. See `Docs/ANIMATION_WINDUP_SYSTEM.md` |
 | Paper-Doll Rendering | Done | `CharacterAppearance` with 6 equipment layers, direction-aware draw order, per-layer depth offsets, palette index per slot |
 | Precompiled Headers | Done | CMake `target_precompile_headers` for 11 STL headers on `fate_engine` target |
 | PvP Balance Config | Done | Hot-reloadable JSON (`assets/data/pvp_balance.json`) for combat tuning: PvP multipliers, 3×3 class advantage matrix, hit rate table, crit config |
@@ -105,6 +105,9 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Core Extraction | Done | Equipment disassembly into 7-tier crafting cores, rarity/level-based tier, enchant-level bonus quantity |
 | Crafting (Server) | Done | Recipe cache with tier-based lookup (Novice/Book I/II/III), ingredient validation, level/class/gold requirements, DB-loaded at startup |
 | DB Backup Script | Done | `scripts/backup_db.sh` — pg_dump custom format, 14-day retention, backup verification |
+| FATE_SHIPPING Flag | Done | `cmake -DFATE_SHIPPING=ON` strips `engine/editor/*` from build, `#ifndef FATE_SHIPPING` guards on all Editor references in app.h/cpp, game_app.cpp, combat_action_system.h, npc_interaction_system.h |
+| Elemental Resists | Done | 6 element types (Fire/Water/Poison/Lightning/Void/Magic) with 75% cap, `getElementalResist(DamageType)` on CharacterStats, wired into both single-target and AOE skill damage paths (multiplicative with base MR) |
+| Instanced Dungeons | Done | `DungeonManager` + `DungeonInstance` per-party ECS worlds. Each instance has its own World + SpawnManager. Party-to-instance and client-to-instance tracking. 30-min timeout auto-cleanup when empty. Foundation ready — needs dungeon scene DB entries and enter/exit transition wiring |
 
 ### Editor (Dear ImGui)
 | Feature | Status | Notes |
@@ -190,8 +193,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Transform | Done | Position (px), scale, rotation, depth; tile coord display |
-| SpriteComponent | Done | Texture (via AssetHandle), sourceRect (tileset support), spritesheet frames, tint, flip |
-| Animator | Done | State machine, frame-based animation |
+| SpriteComponent | Done | Texture (via AssetHandle), sourceRect (tileset support), spritesheet frames, tint, flip, renderOffset (procedural visual offset, applied at draw time) |
+| Animator | Done | Frame-based animation with hit-frame events (`onHitFrame` callback), completion callbacks (`onComplete`), auto-transition (`returnAnimation`), non-looping support |
 | PlayerController | Done | Cardinal movement, speed, facing, isLocalPlayer flag |
 | BoxCollider | Done | AABB with offset, trigger/static flags, "Fit to Sprite" button |
 | PolygonCollider | Done | SAT collision, vertex editing, make box/circle presets (auto-sized to sprite) |
@@ -243,12 +246,12 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | System | Status | Notes |
 |--------|--------|-------|
 | MovementSystem | Done | WASD input (local player only), Box+Polygon collision (all combos) |
-| AnimationSystem | Done | Timer-based frame updates |
+| AnimationSystem | Done | Timer-based frame updates, fires `onHitFrame` event on frame crossing, handles non-looping completion + auto-transition to `returnAnimation` |
 | CameraFollowSystem | Done | Locked to local player, smooth (no pixel-snap jitter) |
 | SpriteRenderSystem | Done | Frustum culled, depth sorted, respects sprite enabled flag |
 | GameplaySystem | Done | Ticks StatusEffects, CrowdControl, SkillManager cooldowns, HP/MP regen, PK decay, death visual (rotation + gray tint), respawn countdown, nameplates |
 | MobAISystem | Done | Ticks MobAI for all mobs, threat-based targeting (top damager holds aggro, overrides nearest-player when in leash range), applies movement, fires attacks. Matches Unity ServerZoneMobAI threat swap behavior |
-| CombatActionSystem | Done | **Prediction-only with optimistic feedback** — viewport-aware click/touch-to-target, auto-clear off-screen. Plays attack animation + sprite flash immediately on input (no server wait). Shows predicted damage text, sends CmdAction to server. Does NOT modify mob/player HP, award XP/gold/honor, or determine kills. All state changes come from server messages (SvCombatEvent, SvPlayerState). CombatPredictionBuffer (32 slots) tracks pending attacks for reconciliation |
+| CombatActionSystem | Done | **Prediction-only with animation windup** — viewport-aware click/touch-to-target, auto-clear off-screen. On attack: sends CmdAction to server immediately, starts 3-frame windup animation (10 fps). Hit frame (~100 ms) defers predicted damage text + optimistic audio. Procedural lunge offset (pullback → strike → recover) until real sprites exist. Does NOT modify mob/player HP, award XP/gold/honor, or determine kills. All state changes come from server messages (SvCombatEvent, SvPlayerState). CombatPredictionBuffer (32 slots) tracks pending attacks for reconciliation |
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment, deferred entity creation (safe during archetype iteration) |
 | NPCInteractionSystem | Done | Click-to-interact with NPCs, viewport-aware screen-to-world, range check, dialogue open/close, click consumption (prevents combat targeting) |
 | QuestSystem | Done | Routes mob kills/item pickups/NPC talks to quest progress, event-driven quest marker updates on all NPCs |
@@ -335,7 +338,7 @@ See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 | Market Manager | `market_manager.h/.cpp` | 233 | NetworkMarketManager + MarketStructs | Marketplace with jackpot, merchant pass, tax system **(DB wired — list/buy/cancel, 2% tax to jackpot, offline seller credit, expiry maintenance)** |
 | Gauntlet | `gauntlet.h/.cpp` | ~850 | GauntletManager + GauntletInstance + GauntletTeam + GauntletRegistry + GauntletConfig (10 files) | Full event scheduler (2hr cycle, 10min signup), division-based matchmaking, GauntletTeam per-team scoring/MVP, GauntletRegistry signup queues, BasicWaveConfig/BossSpawnConfig/LevelMobMapping for wave spawning, reward configs (winner/loser/performance), consolation for overflow, announcement callbacks, debug commands **(DB wired — config loaded at startup, ticked every frame, CmdGauntlet register/unregister/status, mob kill notifications routed)** |
 | Faction System | `faction.h` | ~130 | FactionRegistry + FactionChatGarbler | 4 factions (Xyros/Fenor/Zethos/Solis), registry, deterministic chat garbling, same-faction checks, faction picker on registration screen |
-| Pet System | `pet_system.h/.cpp` | ~120 | PetDefinition + PetInstance + PetSystem | Leveling, rarity-tiered stats (HP/Crit/XP bonus), XP sharing (50%), player-level cap, equip/unequip wired with stat bonuses applied to CharacterStats **(DB wired — load/save on connect/disconnect, PetDefinitionCache on server)** |
+| Pet System | `pet_system.h/.cpp` | ~120 | PetDefinition + PetInstance + PetSystem | Leveling, rarity-tiered stats (HP/Crit/XP bonus), XP sharing (50%), player-level cap, equip/unequip wired with stat bonuses applied to CharacterStats, **auto-loot** (0.5s tick, 64px radius, ownership+party aware) **(DB wired — load/save on connect/disconnect, PetDefinitionCache loaded from DB at startup)** |
 | Stat Enchant System | `stat_enchant_system.h` | ~70 | StatEnchantSystem | Accessory enchanting (Belt/Ring/Necklace/Cloak), 6-tier roll table, HP/MP x10 scaling |
 | Bounty System | `bounty_system.h` | ~200 | NetworkBountyManager + BountyService + BountyRepository | PvE bounty board (max 10 active, 50K-500M gold, 48hr expiry), 2% tax, guild-mate protection, 12hr guild-leave cooldown, party split on claim, cancel/refund, expiration processing **(DB wired — place/cancel handlers + expiry maintenance)** |
 | Ranking System | `ranking_system.h` | ~170 | NetworkRankingManager + RankingRepository | Global/class/guild/honor leaderboards, paginated (50/page), 60s cache, PlayerRankInfo (global+class+guild rank), K/D ratio, honor rankings **(repo built, needs integration)** |
@@ -404,6 +407,58 @@ classBonus    = classAdvantageMatrix[attacker][defender] // default 1.0
 
 ## Changelog
 
+### March 21, 2026 - Phase 14: Deferred Items
+
+Implemented 7 deferred items from Phase 13 backlog. Test count: 758 → 801 (+43 tests).
+
+**Pet definitions from DB:**
+- `PetDefinitionCache::initialize(pqxx::connection&)` loads from `pet_definitions` table at startup
+- Replaced 22-line hardcoded wolf/hawk/turtle block with 2-line DB load
+- Implementation split: header declares, `.cpp` file has DB code (prevents pqxx leaking into test target)
+
+**Pet auto-loot:**
+- `tickPetAutoLoot()` runs every 0.5s in server tick loop
+- Scans unclaimed dropped items within `autoLootRadius` (64px/2 tiles) of players with `autoLootEnabled` pets
+- Validates loot ownership (owner or FreeForAll party member), scene match, inventory capacity
+- Gold uses `setGold()` (server-authoritative), items use WAL-logged `addItem()`
+- Sends `SvLootPickupMsg` + `sendInventorySync()` on pickup
+- Safe entity destruction (deferred after iteration, unregister from replication first)
+
+**FATE_SHIPPING build flag:**
+- `cmake -DFATE_SHIPPING=ON` excludes `engine/editor/*` from sources and defines `FATE_SHIPPING=1`
+- Guards in: `app.h`, `app.cpp`, `game_app.cpp`, `combat_action_system.h`, `npc_interaction_system.h`
+- Shipping mode: no editor UI, input goes directly to game, renders to default framebuffer
+
+**Heartbeat timeout hardening:**
+- `lastHeartbeat` initialized to `currentTime` in `addClient()` (was 0.0f → premature timeout)
+- Client timeout increased 5s → 8s
+- Every 3rd heartbeat sent via reliable channel as UDP packet loss fallback
+- `heartbeatCounter_` reset on disconnect
+
+**Elemental resist in skills:**
+- `getElementalResist(DamageType)` on CharacterStats returns per-element resist capped at 75%
+- `targetElementalResists[8]` array added to `SkillExecutionContext`
+- Populated from player target stats (mobs default to 0 — no per-element resist)
+- Applied in both single-target and AOE damage paths, multiplicative with base MR
+- Fire skill vs 20% MR + 25% Fire resist = `damage * 0.80 * 0.75 = 60%`
+
+**Instanced dungeons (foundation):**
+- `DungeonManager` manages `DungeonInstance` objects (per-party isolated `World` + `ServerSpawnManager`)
+- Party-to-instance and client-to-instance bidirectional tracking
+- `tick(dt)` updates all instance worlds, `getExpiredInstances()` finds empty timed-out instances
+- 30-minute timeout, auto-cleanup when empty
+- Wired into ServerApp tick loop
+- **Follow-up needed:** dungeon scene DB entries, enter/exit transition flow, dungeon-specific replication
+
+**Migration 010 (scene mob sync):**
+- SQL ready at `Docs/migrations/010_scene_mob_sync.sql`
+- 5 WhisperingWoods mob definitions + 5 spawn zones
+- Must be run manually against dev DB
+
+**Audit fixes:**
+- Auto-loot gold pickup corrected from `addGold()` to `setGold()` (server-authoritative gold rule)
+- Two unguarded Editor references in `combat_action_system.h` and `npc_interaction_system.h` fixed for FATE_SHIPPING
+
 ### March 21, 2026 - Batch D: Server Handler Wiring (6 systems)
 
 Wired 6 remaining game systems into the server with protocol messages, command handlers, validation, and DB persistence. Test count: 698 → 758 (+60 tests). Total server command handlers: 26. Total client callbacks: 37.
@@ -455,7 +510,7 @@ Pet system end-to-end wiring: equip/unequip, stat bonuses, XP sharing. Test coun
 
 **Pet equip/unequip:**
 - `CmdPetMsg` / `SvPetUpdateMsg` protocol messages for equip/unequip actions
-- `PetDefinitionCache` on server with hardcoded pet lookup (3 starter pets)
+- `PetDefinitionCache` on server loaded from `pet_definitions` DB table at startup (3 starter pets: wolf, hawk, turtle)
 - Server handler validates pet ownership, applies stat bonuses via `PetSystem::applyToEquipBonuses()`
 - Client receives `SvPetUpdate` with pet instance data, updates PetComponent
 
@@ -577,7 +632,7 @@ Integrated SoLoud audio library providing SFX, music streaming, spatial audio, a
 - All clamped 0-1, real-time adjustable
 
 **Game integration (10 hooks in game_app.cpp):**
-- `onCombatEvent`: hit_melee, hit_crit, miss, kill (local); spatial audio (remote)
+- `onCombatEvent`: kill SFX (local, on server confirm); spatial hit_melee/miss (remote). Local hit/crit/miss audio moved to animation hit frame via `CombatActionSystem::onPlaySFX`
 - `onSkillResult`: hit_skill, hit_crit, miss, kill (via HitFlags bitmask)
 - `onDeathNotify`: death SFX
 - `onLootPickup`: loot_gold, loot_item
@@ -603,7 +658,7 @@ Cross-referenced 9 research documents against the full engine codebase. Implemen
 - **AEAD packet encryption:** XChaCha20-Poly1305 via libsodium (vcpkg). Per-session key pair, KeyExchange (0x82) packet, sequence-as-nonce. All non-system payloads encrypted. Tampered packets silently dropped. Plaintext fallback without libsodium. 11 tests.
 - **IPv6 dual-stack sockets:** Refactored `NetAddress` from `uint32_t ip` to `sockaddr_storage`. Socket tries AF_INET6 with IPV6_V6ONLY=0 (dual-stack), falls back to AF_INET. Auto-converts IPv4-mapped IPv6 addresses. `toString()` for logging. iOS App Store mandatory since 2016. 7 tests.
 - **One-time economic nonces:** `NonceManager` issues random uint64 per-client, validates single-use, 60s expiry. Wired into server disconnect + maintenance. Infrastructure for trade/market replay prevention. 8 tests.
-- **Auto-reconnect wired:** NetClient detects heartbeat timeout (5s), auto-reconnects with stored auth token. Exponential backoff 1s→30s, 60s total timeout. ConnectAccept clears state. 4 tests.
+- **Auto-reconnect wired:** NetClient detects heartbeat timeout (8s), auto-reconnects with stored auth token. Exponential backoff 1s→30s, 60s total timeout. ConnectAccept clears state. Reliable heartbeat fallback every 3rd beat. 4 tests.
 
 **Combat & PvP:**
 - **Two-tick death lifecycle:** `LifeState` enum (Alive→Dying→Dead). `takeDamage()` transitions to Dying (on-death procs fire). `advanceDeathTick()` called per server tick transitions Dying→Dead. Dying/Dead entities reject damage. Replication sends 3-state value. 11 tests.
@@ -1454,6 +1509,7 @@ Spawn zones are spatial entities you place and resize in the scene editor. Mobs 
 - PetComponent on all players (empty by default, equip pet to activate)
 - Pets gain 50% of player XP, cannot outlevel owner
 - `PetSystem::applyToEquipBonuses()` writes pet HP/CritRate to CharacterStats equipBonus fields for recalculateStats()
+- **Auto-loot wired:** `tickPetAutoLoot()` every 0.5s picks up nearby drops (64px radius), ownership+party aware, WAL-logged
 
 **Stat enchant system (accessory-only enchanting):**
 - StatEnchantSystem: 7 scroll types (STR/INT/DEX/VIT/WIS/HP/MP), Belt/Ring/Necklace/Cloak only
@@ -1938,13 +1994,14 @@ engine/
 server/                          # Headless Server (Phase 6+7)
 ├── server_app.h/.cpp           # ServerApp: 20 tick/sec, loot pipeline, boss tick, pickup, despawn
 ├── server_main.cpp             # Server entry point
+├── dungeon_manager.h/.cpp      # Per-party instanced dungeon worlds (DungeonInstance + DungeonManager)
 ├── auth/
 │   └── auth_server.h/.cpp      # TLS auth (bcrypt, register+login, starter equipment)
 ├── cache/
 │   ├── item_definition_cache.h/.cpp  # 748 items from item_definitions (possible_stats, attributes)
 │   ├── loot_table_cache.h/.cpp       # 72 loot tables from loot_drops (rollLoot, enchant rolling)
 │   ├── recipe_cache.h/.cpp           # Crafting recipes with tier-based lookup
-│   └── pet_definition_cache.h        # Pet definitions (3 starter pets)
+│   └── pet_definition_cache.h/.cpp   # Pet definitions loaded from DB (3 starter pets)
 └── db/
     ├── db_connection.h/.cpp    # pqxx wrapper with reconnect
     ├── db_pool.h/.cpp          # Thread-safe connection pool (5-50)
