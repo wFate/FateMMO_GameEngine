@@ -625,6 +625,34 @@ void Editor::drawSceneViewport() {
                     }
                     ImGui::PopStyleColor();
                 } else {
+                    // Pause/Resume toggle
+                    if (paused_) {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
+                        if (ImGui::Button("Resume", ImVec2(playBtnW, btnH))) {
+                            // Restore gameplay camera (discard editor zoom/pan from pause)
+                            if (dockCamera_) {
+                                dockCamera_->setPosition(pausedCamPos_);
+                                dockCamera_->setZoom(pausedCamZoom_);
+                            }
+                            paused_ = false;
+                        }
+                        ImGui::PopStyleColor();
+                    } else {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.50f, 0.20f, 1.00f));
+                        if (ImGui::Button("Pause", ImVec2(playBtnW, btnH))) {
+                            // Save gameplay camera before editor takes over
+                            if (dockCamera_) {
+                                pausedCamPos_ = dockCamera_->position();
+                                pausedCamZoom_ = dockCamera_->zoom();
+                            }
+                            paused_ = true;
+                        }
+                        ImGui::PopStyleColor();
+                    }
+
+                    ImGui::SameLine();
+
+                    // Stop — destroy runtime state, restore scene from snapshot
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.20f, 0.20f, 1.00f));
                     if (ImGui::Button("Stop", ImVec2(playBtnW, btnH))) {
                         // Restore editor camera state

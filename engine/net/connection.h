@@ -43,6 +43,8 @@ struct ClientConnection {
     std::string character_id;
     AuthToken authToken = {};  // populated from Connect packet payload
     PacketCrypto crypto;       // AEAD encrypt/decrypt for this session
+    PacketCrypto::PublicKey clientPublicKey = {};  // DH public key from Connect payload
+    bool hasClientPublicKey = false;
 };
 
 class ConnectionManager {

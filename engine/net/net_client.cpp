@@ -58,11 +58,26 @@ bool NetClient::connectWithToken(const std::string& host, uint16_t port, const A
     lastHost_ = host;
     lastPort_ = port;
 
-    // Prepend protocol version byte before auth token
-    uint8_t connectPayload[17]; // 1 byte version + 16 byte token
-    connectPayload[0] = PROTOCOL_VERSION;
-    std::memcpy(connectPayload + 1, token.data(), 16);
-    sendPacket(Channel::ReliableOrdered, PacketType::Connect, connectPayload, 17);
+    // Generate DH keypair for secure key exchange
+    if (PacketCrypto::isAvailable()) {
+        clientKeypair_ = PacketCrypto::generateKeypair();
+        keypairGenerated_ = true;
+    }
+
+    if (keypairGenerated_) {
+        // New format: version + auth token + DH public key
+        uint8_t connectPayload[49]; // 1 byte version + 16 byte token + 32 byte pk
+        connectPayload[0] = PROTOCOL_VERSION;
+        std::memcpy(connectPayload + 1, token.data(), 16);
+        std::memcpy(connectPayload + 17, clientKeypair_.pk.data(), 32);
+        sendPacket(Channel::ReliableOrdered, PacketType::Connect, connectPayload, 49);
+    } else {
+        // Legacy format: version + auth token (no DH)
+        uint8_t connectPayload[17]; // 1 byte version + 16 byte token
+        connectPayload[0] = PROTOCOL_VERSION;
+        std::memcpy(connectPayload + 1, token.data(), 16);
+        sendPacket(Channel::ReliableOrdered, PacketType::Connect, connectPayload, 17);
+    }
     waitingForAccept_ = true;
     connectStartTime_ = 0.0f;
 
@@ -267,12 +282,28 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         }
         case PacketType::KeyExchange: {
             ByteReader payload(payloadData, payloadLen);
-            PacketCrypto::Key txKey{}, rxKey{};
-            payload.readBytes(txKey.data(), 32);
-            payload.readBytes(rxKey.data(), 32);
-            if (payload.ok()) {
-                crypto_.setKeys(txKey, rxKey);
-                LOG_INFO("NetClient", "AEAD session keys received — encryption active");
+            if (payloadLen == PacketCrypto::PUBLIC_KEY_SIZE && keypairGenerated_) {
+                // DH exchange: server sent its public key, derive shared session keys
+                PacketCrypto::PublicKey serverPk{};
+                payload.readBytes(serverPk.data(), PacketCrypto::PUBLIC_KEY_SIZE);
+                if (payload.ok()) {
+                    auto keys = PacketCrypto::deriveClientSessionKeys(
+                        clientKeypair_.pk, clientKeypair_.sk, serverPk);
+                    crypto_.setKeys(keys.txKey, keys.rxKey);
+                    // Wipe secret key — no longer needed
+                    PacketCrypto::secureWipe(clientKeypair_.sk.data(), clientKeypair_.sk.size());
+                    keypairGenerated_ = false;
+                    LOG_INFO("NetClient", "AEAD session keys derived via DH — encryption active");
+                }
+            } else if (payloadLen == 64) {
+                // Legacy fallback: server sent raw session keys (no DH support)
+                PacketCrypto::Key txKey{}, rxKey{};
+                payload.readBytes(txKey.data(), 32);
+                payload.readBytes(rxKey.data(), 32);
+                if (payload.ok()) {
+                    crypto_.setKeys(txKey, rxKey);
+                    LOG_WARN("NetClient", "AEAD session keys received in plaintext (legacy — upgrade server)");
+                }
             }
             break;
         }

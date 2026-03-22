@@ -2368,6 +2368,11 @@ void GameApp::onUpdate(float deltaTime) {
 
                 LOG_INFO("GameApp", "Connected to game server, entering game as '%s' (%s)",
                          pendingCharName_.c_str(), pendingClassName_.c_str());
+            } else if (!netClient_.isWaitingForConnection()) {
+                // Connect timed out or failed — return to login screen
+                connState_ = ConnectionState::LoginScreen;
+                loginScreen_.statusMessage = "Connection timed out";
+                loginScreen_.isError = true;
             }
             // ConnectReject is handled by the onConnectRejected callback set up in onInit
             break;

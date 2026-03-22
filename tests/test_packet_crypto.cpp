@@ -145,6 +145,97 @@ TEST_CASE("wrong key pair fails decryption") {
     CHECK_FALSE(receiver.decrypt(ciphertext.data(), ciphertext.size(), 1, decrypted.data(), decrypted.size()));
 }
 
+TEST_CASE("DH keypair generation produces non-zero public key") {
+    PacketCrypto::initLibrary();
+    if (!PacketCrypto::isAvailable()) return;
+
+    auto kp = PacketCrypto::generateKeypair();
+
+    bool pkNonZero = false;
+    for (size_t i = 0; i < PacketCrypto::PUBLIC_KEY_SIZE; ++i) {
+        if (kp.pk[i] != 0) pkNonZero = true;
+    }
+    CHECK(pkNonZero);
+}
+
+TEST_CASE("DH key derivation produces matching session keys") {
+    PacketCrypto::initLibrary();
+    if (!PacketCrypto::isAvailable()) return;
+
+    auto clientKp = PacketCrypto::generateKeypair();
+    auto serverKp = PacketCrypto::generateKeypair();
+
+    auto clientKeys = PacketCrypto::deriveClientSessionKeys(clientKp.pk, clientKp.sk, serverKp.pk);
+    auto serverKeys = PacketCrypto::deriveServerSessionKeys(serverKp.pk, serverKp.sk, clientKp.pk);
+
+    // Client's tx key must equal server's rx key (client sends → server receives)
+    CHECK(clientKeys.txKey == serverKeys.rxKey);
+    // Client's rx key must equal server's tx key (server sends → client receives)
+    CHECK(clientKeys.rxKey == serverKeys.txKey);
+}
+
+TEST_CASE("DH-derived keys encrypt/decrypt correctly") {
+    PacketCrypto::initLibrary();
+    if (!PacketCrypto::isAvailable()) return;
+
+    auto clientKp = PacketCrypto::generateKeypair();
+    auto serverKp = PacketCrypto::generateKeypair();
+
+    auto clientKeys = PacketCrypto::deriveClientSessionKeys(clientKp.pk, clientKp.sk, serverKp.pk);
+    auto serverKeys = PacketCrypto::deriveServerSessionKeys(serverKp.pk, serverKp.sk, clientKp.pk);
+
+    // Client sends to server
+    PacketCrypto clientCrypto, serverCrypto;
+    clientCrypto.setKeys(clientKeys.txKey, clientKeys.rxKey);
+    serverCrypto.setKeys(serverKeys.txKey, serverKeys.rxKey);
+
+    const uint8_t plaintext[] = "DH key exchange test payload";
+    size_t plaintextSize = sizeof(plaintext);
+    uint64_t nonce = 1;
+
+    // Client encrypts, server decrypts
+    std::vector<uint8_t> ciphertext(plaintextSize + PacketCrypto::TAG_SIZE);
+    CHECK(clientCrypto.encrypt(plaintext, plaintextSize, nonce, ciphertext.data(), ciphertext.size()));
+
+    std::vector<uint8_t> decrypted(plaintextSize);
+    CHECK(serverCrypto.decrypt(ciphertext.data(), ciphertext.size(), nonce, decrypted.data(), decrypted.size()));
+    CHECK(std::memcmp(plaintext, decrypted.data(), plaintextSize) == 0);
+
+    // Server encrypts, client decrypts
+    const uint8_t reply[] = "Server reply via DH channel";
+    size_t replySize = sizeof(reply);
+    uint64_t nonce2 = 2;
+
+    std::vector<uint8_t> ciphertext2(replySize + PacketCrypto::TAG_SIZE);
+    CHECK(serverCrypto.encrypt(reply, replySize, nonce2, ciphertext2.data(), ciphertext2.size()));
+
+    std::vector<uint8_t> decrypted2(replySize);
+    CHECK(clientCrypto.decrypt(ciphertext2.data(), ciphertext2.size(), nonce2, decrypted2.data(), decrypted2.size()));
+    CHECK(std::memcmp(reply, decrypted2.data(), replySize) == 0);
+}
+
+TEST_CASE("DH keys differ per keypair") {
+    PacketCrypto::initLibrary();
+    if (!PacketCrypto::isAvailable()) return;
+
+    auto kp1 = PacketCrypto::generateKeypair();
+    auto kp2 = PacketCrypto::generateKeypair();
+
+    CHECK(kp1.pk != kp2.pk);
+    CHECK(kp1.sk != kp2.sk);
+}
+
+TEST_CASE("secureWipe zeros memory") {
+    uint8_t buf[64];
+    std::memset(buf, 0xAA, sizeof(buf));
+
+    PacketCrypto::secureWipe(buf, sizeof(buf));
+
+    for (size_t i = 0; i < sizeof(buf); ++i) {
+        CHECK(buf[i] == 0);
+    }
+}
+
 TEST_CASE("isSystemPacket identifies system packets correctly") {
     // System packets
     CHECK(isSystemPacket(PacketType::Connect));

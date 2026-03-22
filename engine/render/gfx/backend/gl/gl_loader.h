@@ -70,6 +70,7 @@ extern PFNGLRENDERBUFFERSTORAGEPROC        glRenderbufferStorage_fp;
 extern PFNGLFRAMEBUFFERRENDERBUFFERPROC    glFramebufferRenderbuffer_fp;
 extern PFNGLTEXIMAGE3DPROC                 glTexImage3D_fp;
 extern PFNGLTEXSUBIMAGE3DPROC              glTexSubImage3D_fp;
+extern PFNGLCOMPRESSEDTEXIMAGE2DPROC       glCompressedTexImage2D_fp;
 
 // ============================================================================
 // Convenience macros so code reads like normal GL calls
@@ -118,6 +119,7 @@ extern PFNGLTEXSUBIMAGE3DPROC              glTexSubImage3D_fp;
 #undef glFramebufferRenderbuffer
 #undef glTexImage3D
 #undef glTexSubImage3D
+#undef glCompressedTexImage2D
 
 #define glCreateShader          glCreateShader_fp
 #define glDeleteShader          glDeleteShader_fp
@@ -163,6 +165,7 @@ extern PFNGLTEXSUBIMAGE3DPROC              glTexSubImage3D_fp;
 #define glFramebufferRenderbuffer  glFramebufferRenderbuffer_fp
 #define glTexImage3D               glTexImage3D_fp
 #define glTexSubImage3D            glTexSubImage3D_fp
+#define glCompressedTexImage2D     glCompressedTexImage2D_fp
 
 #endif // !FATEMMO_GLES
 

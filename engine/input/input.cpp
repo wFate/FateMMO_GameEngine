@@ -28,9 +28,7 @@ void Input::processEvent(const SDL_Event& event) {
         case SDL_KEYDOWN:
             if (!event.key.repeat) {
                 keys_[event.key.keysym.scancode] = KeyState::Pressed;
-                // Skip action map when ImGui has keyboard focus (e.g., chat input)
-                if (!ImGui::GetIO().WantCaptureKeyboard)
-                    actionMap_.onKeyDown(event.key.keysym.scancode);
+                actionMap_.onKeyDown(event.key.keysym.scancode);
                 // Buffer combat actions
                 SDL_Scancode sc = event.key.keysym.scancode;
                 auto checkBuffer = [&](ActionId id) {

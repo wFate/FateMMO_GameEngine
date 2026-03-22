@@ -34,7 +34,35 @@ inline bool operator==(FramebufferHandle a, FramebufferHandle b) { return a.id =
 
 enum class BufferType    : uint8_t { Vertex, Index, Uniform };
 enum class BufferUsage   : uint8_t { Static, Dynamic, Stream };
-enum class TextureFormat : uint8_t { RGBA8, RGB8, R8, Depth24Stencil8 };
+enum class TextureFormat : uint8_t {
+    RGBA8, RGB8, R8, Depth24Stencil8,
+    // Compressed formats (GPU-native, loaded from KTX files)
+    ETC2_RGBA8,      // GL_COMPRESSED_RGBA8_ETC2_EAC — mandatory in GLES 3.0, 8 bpp
+    ASTC_4x4_RGBA,   // GL_COMPRESSED_RGBA_ASTC_4x4_KHR — best quality, 8 bpp
+    ASTC_8x8_RGBA    // GL_COMPRESSED_RGBA_ASTC_8x8_KHR — best compression, 2 bpp
+};
+
+// Returns true if the format uses GPU-compressed blocks (uploaded via glCompressedTexImage2D).
+inline bool isCompressedFormat(TextureFormat fmt) {
+    return fmt == TextureFormat::ETC2_RGBA8 ||
+           fmt == TextureFormat::ASTC_4x4_RGBA ||
+           fmt == TextureFormat::ASTC_8x8_RGBA;
+}
+
+// Estimate VRAM bytes for a texture in the given format.
+inline size_t estimateTextureBytes(int width, int height, TextureFormat fmt) {
+    switch (fmt) {
+        case TextureFormat::RGBA8:           return static_cast<size_t>(width) * height * 4;
+        case TextureFormat::RGB8:            return static_cast<size_t>(width) * height * 3;
+        case TextureFormat::R8:              return static_cast<size_t>(width) * height;
+        case TextureFormat::Depth24Stencil8: return static_cast<size_t>(width) * height * 4;
+        // Compressed: 16 bytes per block
+        case TextureFormat::ETC2_RGBA8:      // 4x4 blocks
+        case TextureFormat::ASTC_4x4_RGBA:   return static_cast<size_t>(((width+3)/4)) * ((height+3)/4) * 16;
+        case TextureFormat::ASTC_8x8_RGBA:   return static_cast<size_t>(((width+7)/8)) * ((height+7)/8) * 16;
+    }
+    return static_cast<size_t>(width) * height * 4;
+}
 enum class BlendMode     : uint8_t { None, Alpha, Additive, Multiplicative };
 enum class PrimitiveType : uint8_t { Triangles, Lines, Points };
 

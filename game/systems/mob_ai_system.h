@@ -8,7 +8,6 @@
 #include "game/components/player_controller.h"
 #include "game/components/sprite_component.h"
 #include "game/components/box_collider.h"
-#include "game/components/polygon_collider.h"
 #include "engine/core/logger.h"
 
 #include <algorithm>
@@ -354,8 +353,8 @@ private:
     Vec2 localPlayerPos_{0, 0};
     bool hasLocalPlayer_ = false;
 
-    // Check if a position is blocked by static colliders (trees, buildings, walls).
-    // Only checks isStatic colliders — mobs pass through players and other mobs.
+    // Check if a position is blocked by static AABB colliders (trees, buildings, walls).
+    // Only checks isStatic BoxColliders — mobs pass through players and other mobs.
     // Thread-safe: static collider transforms/shapes are read-only.
     bool isBlockedByStatic(Entity* self, const Vec2& newPos) const {
         auto* myBox = self->getComponent<BoxCollider>();
@@ -378,19 +377,6 @@ private:
                 }
             }
         );
-
-        if (!blocked) {
-            world_->forEach<Transform, PolygonCollider>(
-                [&](Entity* other, Transform* otherT, PolygonCollider* otherP) {
-                    if (blocked) return;
-                    if (other == self || otherP->isTrigger || !otherP->isStatic) return;
-                    if (CollisionUtil::polygonOverlapsRect(
-                            otherP->getWorldPoints(otherT->position), mobBounds)) {
-                        blocked = true;
-                    }
-                }
-            );
-        }
 
         return blocked;
     }

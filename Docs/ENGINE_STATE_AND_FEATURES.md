@@ -10,7 +10,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 **Target:** Windows (development), iOS (build pipeline ready, GLES 3.0), Android (build pipeline ready, NDK r27), Linux server (future)
 
-**Codebase:** ~75,200 lines across 425 files (engine/ ~23,200 LOC, game/ ~27,800 LOC, server/ ~11,800 LOC, tests/ ~12,400 LOC)
+**Codebase:** ~87,300 lines across 471 files (engine/ ~27,900 LOC, game/ ~29,100 LOC, server/ ~15,600 LOC, tests/ ~14,700 LOC)
 
 ### Build & Run
 
@@ -69,12 +69,12 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Fiber Job System | Done | Win32 fibers + minicoro (iOS/Android/Linux), 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas, **Release build hardening** (`#pragma optimize off` for job_system.cpp, `noinline` switchTo, leaked singleton prevents static destruction crash) |
 | Graphics RHI | Done | gfx::Device + CommandList + Pipeline State Objects, GL backend, typed 32-bit handles, uniform cache |
 | Networking Transport | Done | Custom reliable UDP (Winsock2 + POSIX), ByteWriter/ByteReader (NaN/Inf rejection, string length cap, enum bounds, sticky error), **18-byte packet header** (32-bit ack bitfield), 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation, per-tick skill command cap, **IPv6 dual-stack sockets** (sockaddr_storage, AF_INET6 with IPV6_V6ONLY=0, IPv4 fallback, DNS64/NAT64 compatible — iOS App Store mandatory), protocol version handshake (rejects outdated clients with reason string), **payload size validation** (cross-checks header vs actual packet), **pending packet cap** (256 max), **auth DNS resolution** (getaddrinfo replaces sscanf) |
-| AEAD Packet Encryption | Done | XChaCha20-Poly1305 via libsodium. Per-session key pair generated on connect, sent via KeyExchange (0x82) packet. All non-system payloads encrypted/authenticated. Sequence number as 24-byte nonce. Tampered packets silently dropped. Separate tx/rx keys prevent reflection attacks. Compiles in plaintext fallback mode without libsodium (`FATE_HAS_SODIUM` guard) |
+| AEAD Packet Encryption | Done | XChaCha20-Poly1305 via libsodium. **X25519 Diffie-Hellman key exchange** — client and server exchange only public keys (safe in plaintext), derive shared session keys locally via `crypto_kx_*`. Keys never cross the wire. Sequence number as 24-byte nonce. All non-system payloads encrypted/authenticated. Tampered packets silently dropped. Ephemeral server keypairs wiped after derivation via `sodium_memzero`. Legacy plaintext key fallback for old clients. Compiles in plaintext fallback mode without libsodium (`FATE_HAS_SODIUM` guard). 16 tests |
 | Auto-Reconnect | Done | `ReconnectPhase` state machine in NetClient. Heartbeat timeout (8s) triggers auto-reconnect with stored auth token. Exponential backoff (1s→2s→4s...30s cap), 60s total timeout. ConnectAccept clears reconnect state. Anonymous connections skip auto-reconnect. Every 3rd heartbeat sent via reliable channel as fallback |
 | Economic Nonces | Done | `NonceManager` on server issues random uint64_t per-client nonces for trade/market actions. Single-use (replay rejected), wrong-client rejected, 60s expiry. Cleaned on disconnect and in maintenance tick. Infrastructure ready — protocol message nonce fields are next step |
 | Rate Limiting | Done | Per-client, per-message-type token buckets (O(1) per packet). Configurable burst/sustained rates per command (CmdMove: 65/60 for 60fps clients). Cumulative violation tracking with auto-disconnect threshold. Silent drop policy (never reveals limits to probers). **Per-account state preservation** — rate limiter survives reconnect (moved to `accountRateLimiters_` on disconnect, restored on auth) |
 | Connection Cookies | Done | HMAC-based challenge cookie generator (FNV-1a keyed hash, 10s time-bucketed). Foundation for netcode.io-style stateless handshake to prevent spoofed-IP connection flooding |
-| Server Target Validation | Done | Every CmdAction/CmdUseSkill validates target exists in server-side AOI (binary search on sorted visibility set) and is within action range with latency tolerance. **Full PvP validation:** `canAttackPlayer()` checks safe zone → party member → dead/dying target → same-faction innocents → different factions. Same-faction players can only attack Red/Black (PK-flagged) targets |
+| Server Target Validation | Done | Every CmdAction/CmdUseSkill validates target exists in server-side AOI (binary search on sorted visibility set) and is within action range with latency tolerance. **Full PvP validation:** `canAttackPlayer()` checks safe zone → party member → dead/dying target → same-faction innocents → different factions. Same-faction players can only attack Red/Black (PK-flagged) targets. **Combat state re-checks:** target alive + caster alive re-validated at damage application time (H3/H4), AOE CC re-check per target (H5) |
 | Profanity Filter (Server) | Done | ProfanityFilter::filterChatMessage wired into CmdChat handler. Censor mode (asterisks) applied before broadcast. 50+ word list, leetspeak normalization, blocked phrases, max 200 char |
 | Mobile Reconnection | Done | ReconnectState machine: exponential backoff (1s→2s→4s...cap 30s), 60s timeout. **Wired into NetClient:** heartbeat timeout detection (8s) triggers auto-reconnect with stored auth token. ConnectAccept clears state. Reliable heartbeat fallback every 3rd beat prevents false timeouts on lossy WiFi/mobile |
 | Entity Replication | Done | AOI-driven enter/leave/update, delta compression with 16-field bitmask (position, animFrame, flipX, currentHP, maxHP, moveState, animId, statusEffectMask, deathState, casting, targetEntityId, level, faction, equipVisuals, pkStatus, **honorRank**), per-entity sequence counters (stale update rejection), distance-based tiered update frequency (Near 20Hz/Mid 7Hz/Far 4Hz/Edge 2Hz with HP-change priority override), ghost entities, client-side position interpolation, spatial-indexed visibility |
@@ -92,7 +92,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Per-Player Mutation Lock | Done | PlayerLockMap with unique_ptr<mutex> per character. Serializes concurrent inventory/gold mutations between game thread and async fiber DB operations. Consistent-order locking for two-player trades |
 | CI/CD | Done | GitHub Actions: 3-compiler matrix (MSVC windows-latest, GCC-13 ubuntu-24.04, Clang-17 ubuntu-24.04). Headless OpenGL via Xvfb + Mesa software renderer. vcpkg for Windows deps |
 | Structured Errors | Done | `EngineError` with 4 categories (Transient/Recoverable/Degraded/Fatal), `Result<T>` via `std::expected`, generic `CircuitBreaker` class (`engine/core/`) |
-| LRU Texture Cache | Done | VRAM-budgeted texture cache (512MB default, adjustable via DeviceInfo tier), per-frame access tracking, automatic LRU eviction to 85%, skips in-use textures |
+| LRU Texture Cache | Done | VRAM-budgeted texture cache (512MB default, adjustable via DeviceInfo tier), per-frame access tracking, automatic LRU eviction to 85%, skips in-use textures. **Format-aware VRAM estimation** via `estimateTextureBytes()` (accounts for compressed block sizes) |
+| Compressed Texture Pipeline | Done | GPU-native compressed texture support: **ETC2** (GLES 3.0 mandatory, 4:1), **ASTC 4x4** (8 bpp, 4:1), **ASTC 8x8** (2 bpp, 16:1). KTX1 file loader (header validation, format mapping, GPU capability check). `Device::createCompressedTexture()` via `glCompressedTexImage2D`. `GPUCompressedFormats::detect()` queries GL extensions at startup. On `FATEMMO_MOBILE`, `loadFromFile()` auto-checks for `.ktx` sibling before PNG fallback. Note: pixel-art sprites stay uncompressed RGBA (lossy block compression degrades GL_NEAREST rendering). 7 tests |
 | PhysicsFS VFS | Done | Virtual filesystem via PhysicsFS. Mount directories or ZIP archives with overlay priority (later mounts win). API: init/mount/readFile/readText/exists/listDir. Enables asset packaging (.pak) and future mod support |
 | Telemetry Collector | Done | `TelemetryCollector` records named float metrics with epoch timestamps. `flushToJson()` serializes to JSON with session ID. `trySend()` placeholder for HTTPS POST. Ready for Cloudflare Worker or similar endpoint |
 | Palette Registry | Done | `PaletteRegistry` loads named 16-color palettes from JSON. `Color::fromHex(string)` overload parses hex color strings. 5 starter palettes (2 faction, 3 rarity). Connects to existing shader renderType 5 and SpriteBatch palette swap API |
@@ -110,7 +111,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | DB Backup Script | Done | `scripts/backup_db.sh` — pg_dump custom format, 14-day retention, backup verification |
 | FATE_SHIPPING Flag | Done | `cmake -DFATE_SHIPPING=ON` strips `engine/editor/*` from build, `#ifndef FATE_SHIPPING` guards on all Editor references. **x64-Shipping CMake preset**, `editor_shim.h` no-op stubs, standalone ImGui init in app.cpp for game UI, network panel always visible in shipping |
 | Elemental Resists | Done | 6 element types (Fire/Water/Poison/Lightning/Void/Magic) with 75% cap, `getElementalResist(DamageType)` on CharacterStats, wired into both single-target and AOE skill damage paths (multiplicative with base MR) |
-| Instanced Dungeons | Done | TWOM-style per-party dungeon instances. `DungeonManager` + `DungeonInstance` with isolated `World` + `ReplicationManager` per instance. Full entry flow (leader start → member invite/accept → teleport in), 10-min timer, daily ticket (midnight CT reset), no mob respawn, boss kill detection, 15s celebration window. Rewards: honor (+1/mob, +50/boss to all members), gold (10K × tier), boss treasure box. All 30+ handlers routed via `getWorldForClient()`. `transferPlayerToWorld()` snapshots/restores player entities between worlds. GM `/dungeon start\|leave\|list` for testing. 3 dungeon scenes in DB (GoblinCave/UndeadCrypt/DragonLair). No XP loss on death. Event lock integration prevents multi-event enrollment |
+| Instanced Dungeons | Done | TWOM-style per-party dungeon instances. `DungeonManager` + `DungeonInstance` with isolated `World` + `ReplicationManager` per instance. Full entry flow (leader start → member invite/accept → teleport in), **all members validated online before start**, 10-min timer, daily ticket (midnight CT reset), no mob respawn, boss kill detection, 15s celebration window. Rewards: honor (+1/mob, +50/boss to all members), gold (10K × tier), boss treasure box. All 30+ handlers routed via `getWorldForClient()`. `transferPlayerToWorld()` snapshots/restores player entities between worlds. GM `/dungeon start\|leave\|list` for testing. 3 dungeon scenes in DB (GoblinCave/UndeadCrypt/DragonLair). No XP loss on death. Event lock integration prevents multi-event enrollment |
 
 ### Editor (Dear ImGui)
 | Feature | Status | Notes |
@@ -201,7 +202,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 |-----------|--------|-------|
 | Transform | Done | Position (px), scale, rotation, depth; tile coord display |
 | SpriteComponent | Done | Texture (via AssetHandle), sourceRect (tileset support), spritesheet frames, tint, flip, renderOffset (procedural visual offset, **applied at draw time by SpriteRenderSystem**) |
-| Animator | Done | Frame-based animation with hit-frame events (`onHitFrame` callback fired by AnimationSystem on frame crossing), completion callbacks (`onComplete`), auto-transition (`returnAnimation` — system auto-plays after non-looping end), non-looping support, **per-animation flipX map** (populated by AnimationLoader from packed metadata), **frameCount==0 guard** (returns frame 0 instead of div-by-zero). Editor: "Open in Animation Editor" inspector button |
+| Animator | Done | Frame-based animation with hit-frame events (`onHitFrame` callback fired by AnimationSystem on frame crossing), completion callbacks (`onComplete`), auto-transition (`returnAnimation` — system auto-plays after non-looping end), non-looping support, **per-animation flipX map** (populated by AnimationLoader from packed metadata), **frameCount==0 guard** (returns frame 0 instead of div-by-zero), **hitFrame serialized** in toJson/fromJson (survives scene save/load and play-in-editor). Editor: "Open in Animation Editor" inspector button |
 | PlayerController | Done | Cardinal movement, speed, facing, isLocalPlayer flag |
 | BoxCollider | Done | AABB with offset, trigger/static flags, "Fit to Sprite" button |
 | PolygonCollider | Done | SAT collision, vertex editing, make box/circle presets (auto-sized to sprite) |
@@ -215,7 +216,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | CombatControllerComponent | Done | Target tracking, auto-attack state, attack cooldown |
 | DamageableComponent | Done | Marker for entities that can receive damage |
 | InventoryComponent | Done | Wraps Inventory (15 fixed slots, equipment, gold, nested bag contents). addItemToSlot rejects occupied slots. DB UNIQUE index on (character_id, slot_index) |
-| SkillManagerComponent | Done | Wraps SkillManager (learning, cooldowns, 4x5 bar) |
+| SkillManagerComponent | Done | Wraps SkillManager (learning, cooldowns, 4x5 bar). **Networked** (skill bar changes replicated) |
 | StatusEffectComponent | Done | Wraps StatusEffectManager (buffs, debuffs, DoTs, shields) |
 | CrowdControlComponent | Done | Wraps CrowdControlSystem (stun/freeze/root/taunt) |
 | TargetingComponent | Done | Selected target ID, target type, max range, click consumed flag |
@@ -229,7 +230,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | EnemyStatsComponent | Done | Wraps EnemyStats (mob HP, threat table, scaling) |
 | MobAIComponent | Done | Wraps MobAI (TWOM cardinal AI, L-shaped chase) |
 | MobNameplateComponent | Done | Mob display name, level, boss/elite flags |
-| NPCComponent | Done | NPC identity, greeting, interaction radius, face direction |
+| NPCComponent | Done | NPC identity, greeting, interaction radius, face direction, sceneId (replication scene filter) |
 | QuestGiverComponent | Done | List of quest IDs this NPC offers |
 | QuestMarkerComponent | Done | `?`/`!` marker state and tier for quest givers |
 | ShopComponent | Done | Shop name and item inventory with buy/sell prices |
@@ -268,7 +269,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 ### Entity Factory
 | Feature | Status | Notes |
 |---------|--------|-------|
-| createPlayer() | Done | Assembles player with all 23 components (includes FactionComponent, PetComponent), faction selected at character creation (Xyros/Fenor/Zethos/Solis) |
+| createPlayer() | Done | Assembles player with all 24 components (includes FactionComponent, PetComponent, EquipVisualsComponent), faction selected at character creation (Xyros/Fenor/Zethos/Solis) |
 | createMob() | Done | Assembles mob with EnemyStats, MobAI, StatusEffects, nameplate, procedural pixel art sprites (Slime/Goblin/Wolf/Mushroom/Forest Golem), trigger colliders |
 | createNPC() | Done | Assembles NPC from NPCTemplate with composable role components (quest/shop/trainer/bank/guild/teleporter/story) |
 | Class Configuration | Done | Warrior/Mage/Archer stats from CLAUDE.md class table (HP, STR, per-level gains) |
@@ -300,13 +301,13 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 ## Game Systems (Ported from Unity Prototype)
 
-All 37 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`, plus 4 new systems (Arena, Battlefield, Event Scheduler, Core Extraction). Total: **65 files, ~12,200 lines**, all compile with zero errors (849 test cases). Database repositories exist for all systems in `server/db/` (13 repos). All major systems are DB wired with message handlers, load-on-connect, save-on-disconnect, periodic maintenance, and async auto-save. Combat formula matches Unity prototype exactly (off-by-one fixed). Trade system uses in-memory inventory sync + slot locking to prevent item duplication. Item instance IDs use UUID v4. Zone transitions validated against scene cache. GM admin_role loaded from DB. Gauntlet has 3 divisions with real mob data.
+All 37 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`, plus 4 new systems (Arena, Battlefield, Event Scheduler, Core Extraction). Total: **65 files, ~12,200 lines**, all compile with zero errors (877 test cases). Database repositories exist for all systems in `server/db/` (13 repos). All major systems are DB wired with message handlers, load-on-connect, save-on-disconnect, periodic maintenance, and async auto-save. Combat formula matches Unity prototype exactly (off-by-one fixed). Trade system uses in-memory inventory sync + slot locking to prevent item duplication. Item instance IDs use UUID v4. Zone transitions validated against scene cache. GM admin_role loaded from DB. Gauntlet has 3 divisions with real mob data.
 
 ### Core Gameplay (Fully Ported — Logic Identical to C#)
 | System | Files | Lines | C# Source | Notes |
 |--------|-------|-------|-----------|-------|
 | Game Types & Enums | `game_types.h` | 400 | ItemEnums, ClassDefinition, constants | All enums, ClassDefinition struct, rarity/mob colors, all constants, UUID v4 item instance ID generator |
-| Character Stats | `character_stats.h/.cpp` | 463 | NetworkCharacterStats (3,284L) | HP/MP/XP/level, stat calc with VIT multiplier, damage formulas, death/respawn, fury/mana |
+| Character Stats | `character_stats.h/.cpp` | 463 | NetworkCharacterStats (3,284L) | HP/MP/XP/level, stat calc with VIT multiplier, damage formulas, death/respawn, fury/mana, **CastingState** (beginCast/tickCast/interruptCast for cast-time skills) |
 | Enemy Stats | `enemy_stats.h/.cpp` | 268 | NetworkEnemyStats (1,036L) | Mob HP, threat table (damage attribution), scaling, death events |
 | Combat System | `combat_system.h/.cpp` | 373 | CombatHitRateConfig + System (961L) | Hit rate with coverage, spell resist, block, armor reduction, PvP, class advantage |
 | Mob AI | `mob_ai.h/.cpp` | 572 | ServerZoneMobAI (1,349L) | TWOM cardinal-only movement, L-shaped chase, axis locking, wiggle unstuck, roam/idle phases |
@@ -335,8 +336,8 @@ See `Docs/Guides/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and N
 ### Game Systems (Ported — Most DB Wired)
 | System | Files | Lines | C# Source | Notes |
 |--------|-------|-------|-----------|-------|
-| Inventory | `inventory.h/.cpp` | 410 | NetworkInventory | 15 slots, equipment map, gold, trade slot locking, stack/swap **(DB wired)** |
-| Skill Manager | `skill_manager.h/.cpp` | 340 | PlayerSkillManager (2,079L) | Skill learning (skillbook + points), cooldowns, 4x5 skill bar, caster death check (blocks skill use while dead) **(DB wired — load/save on connect/disconnect)** |
+| Inventory | `inventory.h/.cpp` | 410 | NetworkInventory | 15 slots, equipment map, gold (setGold clamps to MAX_GOLD), trade slot locking, stack/swap, **equip validates class/level requirements** **(DB wired)** |
+| Skill Manager | `skill_manager.h/.cpp` | 340 | PlayerSkillManager (2,079L) | Skill learning (skillbook + points), cooldowns, 4x5 skill bar, caster death check (blocks skill use while dead), **cast-time system** (server ticks CastingState, CC interrupts, movement interrupts, fizzle on dead target) **(DB wired — load/save on connect/disconnect)** |
 | Party Manager | `party_manager.h/.cpp` | 410 | NetworkPartyManager | 3-player parties, +10%/member XP bonus, loot mode, invites **(runtime only — no persistence needed)** |
 | Guild Manager | `guild_manager.h/.cpp` | 280 | NetworkGuildManager | TWOM guilds, ranks, 16x16 pixel symbols, XP contribution **(DB wired — load on connect)** |
 | Friends Manager | `friends_manager.h/.cpp` | 377 | NetworkFriendsManager | 50 friends, 100 blocks, profile inspection, online status **(DB wired — init + last_online on connect/disconnect)** |
@@ -413,6 +414,73 @@ classBonus    = classAdvantageMatrix[attacker][defender] // default 1.0
 ---
 
 ## Changelog
+
+### March 22, 2026 - Phase 18: DH Key Exchange + Compressed Texture Pipeline
+
+Security hardening and mobile rendering infrastructure. Test count: 870 → 877 (+7 tests, 4795 assertions).
+
+**DH Key Exchange (Security Fix):**
+- Replaced plaintext AEAD key exchange with X25519 Diffie-Hellman via libsodium `crypto_kx_*`
+- Client generates keypair, appends 32-byte public key to Connect payload
+- Server generates ephemeral keypair, derives shared keys, sends only its 32-byte public key back
+- Both sides derive identical session keys locally — keys never cross the wire
+- Ephemeral secret keys wiped immediately via `sodium_memzero`
+- Backward compatible: server detects client DH capability, falls back to legacy for old clients
+- 5 new tests (keypair generation, key derivation matching, bidirectional encrypt/decrypt, uniqueness, secureWipe)
+
+**Compressed Texture Pipeline (Mobile VRAM):**
+- Added `ETC2_RGBA8`, `ASTC_4x4_RGBA`, `ASTC_8x8_RGBA` to `gfx::TextureFormat`
+- Added `glCompressedTexImage2D` to GL loader (desktop runtime + iOS static)
+- `Device::createCompressedTexture()` uploads pre-compressed blocks with GL error validation
+- KTX1 file loader: header parsing, endianness check, format mapping, GPU cap check, 64MB size guard
+- `GPUCompressedFormats::detect()` queries GL extensions for ASTC/ETC2 at startup
+- On `FATEMMO_MOBILE`, `loadFromFile()` auto-checks for `.ktx` sibling before PNG fallback
+- `.ktx` registered in asset loader with magic-byte validation
+- TextureCache VRAM estimation now format-aware via `estimateTextureBytes()`
+- **Decision:** pixel-art sprites stay uncompressed RGBA (lossy block compression degrades GL_NEAREST)
+- 7 new tests (format identification, VRAM estimation, compression ratios, KTX header validation)
+
+**Files changed:** `packet_crypto.h/cpp`, `net_client.h/cpp`, `net_server.cpp`, `connection.h`, `server_app.cpp`, `gfx/types.h`, `gfx/device.h`, `gl_device.cpp`, `gl_loader.h/cpp`, `texture.h/cpp`, `loaders.cpp`, + 2 test files
+
+### March 22, 2026 - Phase 17 Audit: 11 Critical Fixes + Cast Time System
+
+Full system-wide audit (6 parallel agents: security, combat, networking, inventory, party/dungeon/events, engine/editor). 52 findings catalogued (12 critical, 10 high, 22 medium, 8 low). 11 critical + 7 high fixes applied, cast-time system implemented, 3 quick-fix bugs resolved. Test count: 857 → 877 (+20 tests).
+
+**Critical Fixes (C2-C12):**
+- **C2 FIXED** trade gold duplication: `addGold(-amount)` silently failed (rejects negative). Changed to `setGold()` with explicit arithmetic for in-memory trade sync
+- **C3 FIXED** equipment class/level requirements: `processEquip()` now validates `classReq` and `levelReq` from `ItemDefinitionCache` before allowing equip
+- **C4 FIXED** crafted/extracted items missing UUID: added `generateItemInstanceId()` for crafted items and extracted cores
+- **C5 FIXED** crafting resource loss on full inventory: pre-checks for empty slot BEFORE consuming gold/ingredients
+- **C9 FIXED** NPC scene filtering: added `sceneId` field to `NPCComponent`, wired into replication scene filter and serializer
+- **C10 FIXED** SkillManagerComponent not networked: added `Serializable | Networked | Persistent` trait specialization
+- **C11 FIXED** hitFrame not serialized in Animator: added to both toJson and fromJson in register_components.h
+- **C12 FIXED** createPlayer() missing EquipVisualsComponent: added to entity factory (24 components total)
+
+**Quick Fixes (3 bugs from plan):**
+- Cooldown tolerance tightened 0.8x → 0.9x (latency forgiveness was too generous at 20%, now 10%)
+- Party cleanup on disconnect: `leaveParty()` called in `onClientDisconnected()` before entity destruction
+- Trade gold overflow: `setGold()` now clamps to `[0, MAX_GOLD]`, trade rejects if either player would exceed cap
+
+**Cast Time System (5 tasks):**
+- `CastingState` struct added to `CharacterStats` (beginCast/tickCast/interruptCast/isCasting)
+- Server `processUseSkill()` checks `CachedSkillDef::castTime` — skills with castTime > 0 enter casting state instead of instant execution
+- Server tick loop advances active casts, executes skill on completion (re-entry guard via `castCompleting_` flag)
+- Movement interrupts active cast (standard MMO behavior), equipment changes blocked during cast
+- Stun/freeze CC interrupts active cast via `interruptCast()` in skill_manager.cpp
+- Cast fizzles if target dies during cast window (target alive re-validated at completion)
+
+**Remaining HIGH fixes (7 fixes):**
+- H1: First-move position bounds-checked to [0, 32768] range
+- H2: Movement destination bounds-checked (rejects out-of-world positions)
+- H3: Target alive re-validated at damage application time (not just context build)
+- H4: Caster alive re-validated before dealing damage (dead casters can't hit)
+- H5: AOE skills stop hitting remaining targets if caster gets CC'd mid-loop
+- H9: Dungeon start rejects if any non-leader party member is offline
+- H10: Animator `flipXPerAnim` now serialized (survives play-in-editor and scene save/load)
+
+**Files changed:** `server_app.cpp`, `server_app.h`, `game_components.h`, `entity_factory.h`, `register_components.h`, `replication.cpp`, `inventory.h`, `character_stats.h`, `skill_manager.cpp`, + 4 test files
+
+---
 
 ### March 22, 2026 - Full System Audit: 12 Critical Fixes
 
@@ -556,8 +624,8 @@ Security, persistence, network, and ECS hardening pass. 28 findings from product
 - ~101 transaction sites across 24 files (12 headers + 12 sources) migrated
 - `AccountRepository` unchanged (belongs to AuthServer, separate connection)
 
-**Deferred (3 remaining):**
-- M1: Key exchange sends AEAD keys in plaintext UDP — needs DH/HKDF redesign
+**Deferred (2 remaining):**
+- ~~M1: Key exchange sends AEAD keys in plaintext UDP~~ — **FIXED** (X25519 DH key exchange, session 18)
 - M14: DbConnection::reconnect blocks up to 6s — needs async pattern
 - M19: Connection cookie FNV-1a hash — acceptable short-term with secret key
 
@@ -857,7 +925,7 @@ hit_melee.wav, hit_crit.wav, hit_skill.wav, miss.wav, kill.wav, death.wav, loot_
 Cross-referenced 9 research documents against the full engine codebase. Implemented 16 systems across 4 domains. Test count: 478 → 573 (+95 new tests, 3732 assertions).
 
 **Network Security:**
-- **AEAD packet encryption:** XChaCha20-Poly1305 via libsodium (vcpkg). Per-session key pair, KeyExchange (0x82) packet, sequence-as-nonce. All non-system payloads encrypted. Tampered packets silently dropped. Plaintext fallback without libsodium. 11 tests.
+- **AEAD packet encryption:** XChaCha20-Poly1305 via libsodium (vcpkg). **Upgraded to X25519 DH key exchange in session 18** — client/server exchange only public keys, derive shared session keys via `crypto_kx_*`. Keys never cross the wire. Sequence-as-nonce. All non-system payloads encrypted. Tampered packets silently dropped. Plaintext fallback without libsodium. 16 tests.
 - **IPv6 dual-stack sockets:** Refactored `NetAddress` from `uint32_t ip` to `sockaddr_storage`. Socket tries AF_INET6 with IPV6_V6ONLY=0 (dual-stack), falls back to AF_INET. Auto-converts IPv4-mapped IPv6 addresses. `toString()` for logging. iOS App Store mandatory since 2016. 7 tests.
 - **One-time economic nonces:** `NonceManager` issues random uint64 per-client, validates single-use, 60s expiry. Wired into server disconnect + maintenance. Infrastructure for trade/market replay prevention. 8 tests.
 - **Auto-reconnect wired:** NetClient detects heartbeat timeout (8s), auto-reconnects with stored auth token. Exponential backoff 1s→30s, 60s total timeout. ConnectAccept clears state. Reliable heartbeat fallback every 3rd beat. 4 tests.
