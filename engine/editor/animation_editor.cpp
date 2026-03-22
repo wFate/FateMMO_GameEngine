@@ -1,43 +1,840 @@
 #include "engine/editor/animation_editor.h"
+#include "engine/core/logger.h"
+#include "engine/render/texture.h"
 #include <imgui.h>
+#include <fstream>
+#include <filesystem>
+#include <algorithm>
+#include <cstring>
+#include <stb_image.h>
+#include <stb_image_write.h>
 
 namespace fate {
 
+namespace fs = std::filesystem;
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
 void AnimationEditor::init() {}
 
-void AnimationEditor::shutdown() {}
+void AnimationEditor::shutdown() {
+    frameTexCache_.clear();
+}
 
 void AnimationEditor::draw() {
     if (!open_) return;
 
     if (ImGui::Begin("Animation Editor", &open_, ImGuiWindowFlags_MenuBar)) {
-        ImGui::TextUnformatted("Animation Editor \xe2\x80\x94 under construction");
+        drawMenuBar();
+        drawTopBar();
+        ImGui::Separator();
+        drawFrameWorkspace();
+        drawPreview();
     }
     ImGui::End();
 }
 
-void AnimationEditor::openFile(const std::string& /*path*/) {
+void AnimationEditor::openFile(const std::string& path) {
     open_ = true;
+    if (!path.empty()) {
+        // Detect file type by extension
+        if (path.find(".frameset") != std::string::npos) {
+            loadFrameSet(path);
+        } else {
+            loadTemplate(path);
+        }
+    }
 }
 
-// Draw sub-panels (stubs)
-void AnimationEditor::drawTopBar() {}
-void AnimationEditor::drawFrameWorkspace() {}
-void AnimationEditor::drawStateList() {}
-void AnimationEditor::drawFrameStrip() {}
-void AnimationEditor::drawStateProperties() {}
-void AnimationEditor::drawPreview() {}
-void AnimationEditor::drawMenuBar() {}
+// ---------------------------------------------------------------------------
+// Task 3: Template File I/O
+// ---------------------------------------------------------------------------
+void AnimationEditor::newTemplate(const std::string& entityType) {
+    template_ = AnimTemplate{};
+    template_.entityType = entityType;
+    template_.name = "Untitled";
+    templatePath_.clear();
+    frameSets_.clear();
+    selectedStateIdx_ = 0;
+    selectedFrameIdx_ = -1;
 
-// File I/O (stubs)
-void AnimationEditor::newTemplate(const std::string& /*entityType*/) {}
-void AnimationEditor::loadTemplate(const std::string& /*path*/) {}
-void AnimationEditor::saveTemplate() {}
-void AnimationEditor::loadFrameSet(const std::string& /*path*/) {}
-void AnimationEditor::saveFrameSet(const std::string& /*layerVariantKey*/) {}
-void AnimationEditor::packFrameSet(const std::string& /*layerVariantKey*/) {}
+    auto makeState = [](const std::string& n, float rate, bool loop, int hit) {
+        AnimState s;
+        s.name = n;
+        s.frameRate = rate;
+        s.loop = loop;
+        s.hitFrame = hit;
+        s.frameCount = {{"down", 1}, {"up", 1}, {"side", 1}};
+        return s;
+    };
 
+    if (entityType == "player") {
+        template_.states.push_back(makeState("idle",   8.0f,  true, -1));
+        template_.states.push_back(makeState("walk",   8.0f,  true, -1));
+        template_.states.push_back(makeState("attack", 10.0f, false, 1));
+        template_.states.push_back(makeState("cast",   8.0f,  true, -1));
+        template_.states.push_back(makeState("death",  8.0f,  true, -1));
+    } else if (entityType == "mob") {
+        template_.states.push_back(makeState("idle",   8.0f,  true, -1));
+        template_.states.push_back(makeState("walk",   8.0f,  true, -1));
+        template_.states.push_back(makeState("attack", 10.0f, false, 1));
+        template_.states.push_back(makeState("death",  8.0f,  true, -1));
+    } else if (entityType == "npc") {
+        template_.states.push_back(makeState("idle",   8.0f,  true, -1));
+    }
+
+    LOG_INFO("AnimEditor", "Created new %s template", entityType.c_str());
+}
+
+void AnimationEditor::loadTemplate(const std::string& path) {
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        LOG_ERROR("AnimEditor", "Failed to open template: %s", path.c_str());
+        return;
+    }
+
+    try {
+        nlohmann::json j;
+        in >> j;
+
+        template_ = AnimTemplate{};
+        template_.version = j.value("version", 1);
+        template_.name = j.value("name", "Untitled");
+        template_.entityType = j.value("entityType", "player");
+
+        for (auto& sj : j["states"]) {
+            AnimState s;
+            s.name = sj.value("name", "unknown");
+            s.frameRate = sj.value("frameRate", 8.0f);
+            s.loop = sj.value("loop", true);
+            s.hitFrame = sj.value("hitFrame", -1);
+            if (sj.contains("frameCount")) {
+                for (auto& [dir, cnt] : sj["frameCount"].items()) {
+                    s.frameCount[dir] = cnt.get<int>();
+                }
+            }
+            template_.states.push_back(std::move(s));
+        }
+
+        templatePath_ = path;
+        selectedStateIdx_ = 0;
+        selectedFrameIdx_ = -1;
+        LOG_INFO("AnimEditor", "Loaded template: %s (%d states)",
+                 template_.name.c_str(), (int)template_.states.size());
+    } catch (const std::exception& e) {
+        LOG_ERROR("AnimEditor", "Error parsing template %s: %s", path.c_str(), e.what());
+    }
+}
+
+void AnimationEditor::saveTemplate() {
+    if (templatePath_.empty()) {
+        LOG_WARN("AnimEditor", "No template path set — cannot save");
+        return;
+    }
+
+    nlohmann::json j;
+    j["version"] = template_.version;
+    j["name"] = template_.name;
+    j["entityType"] = template_.entityType;
+
+    nlohmann::json statesArr = nlohmann::json::array();
+    for (auto& s : template_.states) {
+        nlohmann::json sj;
+        sj["name"] = s.name;
+        sj["frameRate"] = s.frameRate;
+        sj["loop"] = s.loop;
+        sj["hitFrame"] = s.hitFrame;
+        nlohmann::json fc;
+        for (auto& [dir, cnt] : s.frameCount) {
+            fc[dir] = cnt;
+        }
+        sj["frameCount"] = fc;
+        statesArr.push_back(sj);
+    }
+    j["states"] = statesArr;
+
+    // Ensure parent directory exists
+    fs::path p(templatePath_);
+    if (p.has_parent_path()) {
+        fs::create_directories(p.parent_path());
+    }
+
+    std::ofstream out(templatePath_);
+    if (!out.is_open()) {
+        LOG_ERROR("AnimEditor", "Failed to write template: %s", templatePath_.c_str());
+        return;
+    }
+    out << j.dump(2);
+    LOG_INFO("AnimEditor", "Saved template: %s", templatePath_.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// Task 3: Menu Bar
+// ---------------------------------------------------------------------------
+void AnimationEditor::drawMenuBar() {
+    if (ImGui::BeginMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            // New submenu
+            if (ImGui::BeginMenu("New")) {
+                if (ImGui::MenuItem("Player")) newTemplate("player");
+                if (ImGui::MenuItem("Mob"))    newTemplate("mob");
+                if (ImGui::MenuItem("NPC"))    newTemplate("npc");
+                ImGui::EndMenu();
+            }
+
+            // Open with input popup
+            if (ImGui::BeginMenu("Open")) {
+                ImGui::InputText("Path", openPathBuf_, sizeof(openPathBuf_));
+                if (ImGui::Button("Load")) {
+                    loadTemplate(openPathBuf_);
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::MenuItem("Save", nullptr, false, !templatePath_.empty())) {
+                saveTemplate();
+            }
+
+            ImGui::Separator();
+
+            // Frame set I/O
+            if (ImGui::BeginMenu("Load Frame Set")) {
+                ImGui::InputText("Path##fs", loadFrameSetBuf_, sizeof(loadFrameSetBuf_));
+                if (ImGui::Button("Load##fs")) {
+                    loadFrameSet(loadFrameSetBuf_);
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::MenuItem("Save Frame Set", nullptr, false,
+                                !template_.name.empty())) {
+                saveFrameSet(currentLayerVariantKey());
+            }
+
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenuBar();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Task 3: Top Bar
+// ---------------------------------------------------------------------------
+void AnimationEditor::drawTopBar() {
+    ImGui::Text("Template: %s", template_.name.c_str());
+    ImGui::SameLine();
+    ImGui::Text("(%s)", template_.entityType.c_str());
+
+    ImGui::SameLine(0.0f, 20.0f);
+    // Layer radio buttons
+    if (ImGui::RadioButton("Body",   selectedLayer_ == "body"))   selectedLayer_ = "body";
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Weapon", selectedLayer_ == "weapon")) selectedLayer_ = "weapon";
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Gloves", selectedLayer_ == "gloves")) selectedLayer_ = "gloves";
+
+    ImGui::SameLine(0.0f, 20.0f);
+    ImGui::SetNextItemWidth(120.0f);
+    ImGui::InputText("Variant", variantBuf_, sizeof(variantBuf_));
+    selectedVariant_ = variantBuf_;
+}
+
+// ---------------------------------------------------------------------------
+// Task 4: State List
+// ---------------------------------------------------------------------------
+void AnimationEditor::drawStateList() {
+    ImGui::BeginChild("StateList", ImVec2(130, 0), true);
+
+    for (int i = 0; i < (int)template_.states.size(); ++i) {
+        bool selected = (i == selectedStateIdx_);
+        if (ImGui::Selectable(template_.states[i].name.c_str(), selected)) {
+            selectedStateIdx_ = i;
+            selectedFrameIdx_ = -1;
+        }
+    }
+
+    ImGui::Separator();
+
+    // Add state button
+    if (ImGui::Button("+", ImVec2(30, 0))) {
+        ImGui::OpenPopup("AddStatePopup");
+        newStateBuf_[0] = '\0';
+    }
+
+    if (ImGui::BeginPopup("AddStatePopup")) {
+        ImGui::InputText("State Name", newStateBuf_, sizeof(newStateBuf_));
+        if (ImGui::Button("Add") && newStateBuf_[0] != '\0') {
+            AnimState ns;
+            ns.name = newStateBuf_;
+            ns.frameRate = 8.0f;
+            ns.loop = true;
+            ns.hitFrame = -1;
+            ns.frameCount = {{"down", 1}, {"up", 1}, {"side", 1}};
+            template_.states.push_back(std::move(ns));
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    ImGui::SameLine();
+
+    // Remove state button
+    if (ImGui::Button("-", ImVec2(30, 0))) {
+        if (selectedStateIdx_ >= 0 && selectedStateIdx_ < (int)template_.states.size()) {
+            template_.states.erase(template_.states.begin() + selectedStateIdx_);
+            if (selectedStateIdx_ >= (int)template_.states.size()) {
+                selectedStateIdx_ = (int)template_.states.size() - 1;
+            }
+            selectedFrameIdx_ = -1;
+        }
+    }
+
+    ImGui::EndChild();
+}
+
+// ---------------------------------------------------------------------------
+// Task 4: Frame Strip
+// ---------------------------------------------------------------------------
+void AnimationEditor::drawFrameStrip() {
+    auto& frames = currentFrameList();
+    int removeIdx = -1;
+    int dragSrc = -1;
+    int dragDst = -1;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 4));
+
+    for (int i = 0; i < (int)frames.size(); ++i) {
+        ImGui::PushID(i);
+
+        bool isSelected = (i == selectedFrameIdx_);
+        if (isSelected) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.5f, 0.8f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.6f, 0.9f, 1.0f));
+        }
+
+        // Try to load texture
+        unsigned int texId = loadFrameTexture(frames[i]);
+        if (texId != 0) {
+            if (ImGui::ImageButton("frame", (ImTextureID)(intptr_t)texId, ImVec2(48, 48))) {
+                selectedFrameIdx_ = i;
+            }
+        } else {
+            // Placeholder button with frame index
+            char label[16];
+            snprintf(label, sizeof(label), "%d", i);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+            if (ImGui::Button(label, ImVec2(48, 48))) {
+                selectedFrameIdx_ = i;
+            }
+            ImGui::PopStyleColor();
+        }
+
+        if (isSelected) {
+            ImGui::PopStyleColor(2);
+        }
+
+        // Right-click context menu
+        if (ImGui::BeginPopupContextItem("FrameCtx")) {
+            if (ImGui::MenuItem("Remove")) {
+                removeIdx = i;
+            }
+            ImGui::EndPopup();
+        }
+
+        // Drag-to-reorder source
+        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+            ImGui::SetDragDropPayload("ANIM_FRAME_REORDER", &i, sizeof(int));
+            ImGui::Text("Frame %d", i);
+            ImGui::EndDragDropSource();
+        }
+
+        // Drag-to-reorder target
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ANIM_FRAME_REORDER")) {
+                dragSrc = *(const int*)payload->Data;
+                dragDst = i;
+            }
+            // Also accept ASSET drops on individual frame slots
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET")) {
+                std::string assetPath((const char*)payload->Data, payload->DataSize - 1);
+                auto ext = fs::path(assetPath).extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (ext == ".png" || ext == ".jpg" || ext == ".bmp") {
+                    frames.push_back(assetPath);
+                    // Update frameCount in template
+                    if (selectedStateIdx_ >= 0 && selectedStateIdx_ < (int)template_.states.size()) {
+                        auto& st = template_.states[selectedStateIdx_];
+                        st.frameCount[directionName(selectedDirection_)] = (int)frames.size();
+                    }
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+
+        ImGui::SameLine();
+        ImGui::PopID();
+    }
+
+    // "Drop here" zone at end of strip for ASSET drops
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
+    if (ImGui::Button("+##drop", ImVec2(48, 48))) {
+        // Clicking does nothing — this is just a drop target
+    }
+    ImGui::PopStyleColor();
+
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET")) {
+            std::string assetPath((const char*)payload->Data, payload->DataSize - 1);
+            auto ext = fs::path(assetPath).extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+            if (ext == ".png" || ext == ".jpg" || ext == ".bmp") {
+                frames.push_back(assetPath);
+                if (selectedStateIdx_ >= 0 && selectedStateIdx_ < (int)template_.states.size()) {
+                    auto& st = template_.states[selectedStateIdx_];
+                    st.frameCount[directionName(selectedDirection_)] = (int)frames.size();
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+
+    ImGui::PopStyleVar(); // ItemSpacing
+
+    // Apply reorder
+    if (dragSrc >= 0 && dragDst >= 0 && dragSrc != dragDst) {
+        std::string tmp = std::move(frames[dragSrc]);
+        frames.erase(frames.begin() + dragSrc);
+        int insertAt = (dragDst > dragSrc) ? dragDst - 1 : dragDst;
+        if (insertAt < 0) insertAt = 0;
+        if (insertAt > (int)frames.size()) insertAt = (int)frames.size();
+        frames.insert(frames.begin() + insertAt, std::move(tmp));
+    }
+
+    // Apply removal
+    if (removeIdx >= 0 && removeIdx < (int)frames.size()) {
+        frames.erase(frames.begin() + removeIdx);
+        if (selectedStateIdx_ >= 0 && selectedStateIdx_ < (int)template_.states.size()) {
+            auto& st = template_.states[selectedStateIdx_];
+            st.frameCount[directionName(selectedDirection_)] = (int)frames.size();
+        }
+        if (selectedFrameIdx_ >= (int)frames.size()) {
+            selectedFrameIdx_ = (int)frames.size() - 1;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Task 4: State Properties
+// ---------------------------------------------------------------------------
+void AnimationEditor::drawStateProperties() {
+    if (selectedStateIdx_ < 0 || selectedStateIdx_ >= (int)template_.states.size()) return;
+
+    auto& state = template_.states[selectedStateIdx_];
+
+    ImGui::DragFloat("Frame Rate", &state.frameRate, 0.5f, 1.0f, 60.0f);
+    ImGui::Checkbox("Loop", &state.loop);
+
+    // hitFrame combo
+    auto& frames = currentFrameList();
+    int frameCount = (int)frames.size();
+
+    // Build combo items: "None" + frame indices
+    int comboValue = state.hitFrame + 1; // 0 = None, 1..N = frames 0..N-1
+    const char* preview = "None";
+    char prevBuf[16];
+    if (state.hitFrame >= 0) {
+        snprintf(prevBuf, sizeof(prevBuf), "%d", state.hitFrame);
+        preview = prevBuf;
+    }
+
+    if (ImGui::BeginCombo("Hit Frame", preview)) {
+        if (ImGui::Selectable("None", state.hitFrame == -1)) {
+            state.hitFrame = -1;
+        }
+        for (int i = 0; i < frameCount; ++i) {
+            char label[16];
+            snprintf(label, sizeof(label), "%d", i);
+            if (ImGui::Selectable(label, state.hitFrame == i)) {
+                state.hitFrame = i;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    (void)comboValue; // suppress unused warning
+}
+
+// ---------------------------------------------------------------------------
+// Task 4: Frame Workspace (combines state list + direction tabs + strip + properties)
+// ---------------------------------------------------------------------------
+void AnimationEditor::drawFrameWorkspace() {
+    drawStateList();
+    ImGui::SameLine();
+    ImGui::BeginGroup();
+
+    // Direction tabs
+    ImGui::RadioButton("Down", &selectedDirection_, 0);
+    ImGui::SameLine();
+    ImGui::RadioButton("Up", &selectedDirection_, 1);
+    ImGui::SameLine();
+    ImGui::RadioButton("Side", &selectedDirection_, 2);
+
+    drawFrameStrip();
+    ImGui::Separator();
+    drawStateProperties();
+
+    ImGui::EndGroup();
+}
+
+// ---------------------------------------------------------------------------
+// Task 5: Frame Set File I/O
+// ---------------------------------------------------------------------------
+void AnimationEditor::loadFrameSet(const std::string& path) {
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        LOG_ERROR("AnimEditor", "Failed to open frame set: %s", path.c_str());
+        return;
+    }
+
+    try {
+        nlohmann::json j;
+        in >> j;
+
+        FrameSet fs;
+        fs.version = j.value("version", 1);
+        fs.templateName = j.value("template", "");
+        fs.layer = j.value("layer", "body");
+        fs.variant = j.value("variant", "");
+        fs.packedSheet = j.value("packedSheet", "");
+        fs.packedMeta = j.value("packedMeta", "");
+
+        if (j.contains("frames")) {
+            for (auto& [stateName, dirObj] : j["frames"].items()) {
+                for (auto& [dir, pathsArr] : dirObj.items()) {
+                    for (auto& p : pathsArr) {
+                        fs.frames[stateName][dir].push_back(p.get<std::string>());
+                    }
+                }
+            }
+        }
+
+        std::string key = fs.layer + ":" + fs.variant;
+        frameSets_[key] = std::move(fs);
+        LOG_INFO("AnimEditor", "Loaded frame set: %s (key=%s)", path.c_str(), key.c_str());
+    } catch (const std::exception& e) {
+        LOG_ERROR("AnimEditor", "Error parsing frame set %s: %s", path.c_str(), e.what());
+    }
+}
+
+void AnimationEditor::saveFrameSet(const std::string& layerVariantKey) {
+    auto it = frameSets_.find(layerVariantKey);
+    if (it == frameSets_.end()) {
+        LOG_WARN("AnimEditor", "No frame set for key: %s", layerVariantKey.c_str());
+        return;
+    }
+
+    auto& fset = it->second;
+    fset.templateName = template_.name;
+
+    nlohmann::json j;
+    j["version"] = fset.version;
+    j["template"] = fset.templateName;
+    j["layer"] = fset.layer;
+    j["variant"] = fset.variant;
+
+    nlohmann::json framesObj;
+    for (auto& [stateName, dirMap] : fset.frames) {
+        nlohmann::json dirObj;
+        for (auto& [dir, paths] : dirMap) {
+            dirObj[dir] = paths;
+        }
+        framesObj[stateName] = dirObj;
+    }
+    j["frames"] = framesObj;
+    j["packedSheet"] = fset.packedSheet;
+    j["packedMeta"] = fset.packedMeta;
+
+    // Output path based on template name
+    std::string dir = "assets/animations";
+    fs::create_directories(dir);
+    std::string outPath = dir + "/" + template_.name + "_" + fset.layer + "_" + fset.variant + ".frameset";
+
+    std::ofstream out(outPath);
+    if (!out.is_open()) {
+        LOG_ERROR("AnimEditor", "Failed to write frame set: %s", outPath.c_str());
+        return;
+    }
+    out << j.dump(2);
+    LOG_INFO("AnimEditor", "Saved frame set: %s", outPath.c_str());
+
+    // Also pack the sprite sheet
+    packFrameSet(layerVariantKey);
+}
+
+// ---------------------------------------------------------------------------
+// Task 6: Preview Playback
+// ---------------------------------------------------------------------------
+void AnimationEditor::drawPreview() {
+    ImGui::Separator();
+    ImGui::Text("Preview");
+
+    if (selectedStateIdx_ < 0 || selectedStateIdx_ >= (int)template_.states.size()) {
+        ImGui::TextDisabled("No state selected");
+        return;
+    }
+
+    auto& state = template_.states[selectedStateIdx_];
+    auto& frames = currentFrameList();
+    int frameCount = (int)frames.size();
+
+    if (frameCount == 0) {
+        ImGui::TextDisabled("No frames");
+        return;
+    }
+
+    // Advance timer if playing
+    if (previewPlaying_ && state.frameRate > 0.0f) {
+        previewTimer_ += ImGui::GetIO().DeltaTime;
+        float frameDuration = 1.0f / state.frameRate;
+        float totalDuration = frameCount * frameDuration;
+
+        if (state.loop) {
+            if (totalDuration > 0.0f) {
+                while (previewTimer_ >= totalDuration) previewTimer_ -= totalDuration;
+            }
+            previewFrame_ = (int)(previewTimer_ * state.frameRate) % frameCount;
+        } else {
+            previewFrame_ = (int)(previewTimer_ * state.frameRate);
+            if (previewFrame_ >= frameCount) {
+                previewFrame_ = frameCount - 1;
+                previewPlaying_ = false;
+            }
+        }
+    }
+
+    // Clamp preview frame
+    if (previewFrame_ < 0) previewFrame_ = 0;
+    if (previewFrame_ >= frameCount) previewFrame_ = frameCount - 1;
+
+    // Show current frame at 4x zoom
+    if (previewFrame_ >= 0 && previewFrame_ < (int)frames.size()) {
+        unsigned int texId = loadFrameTexture(frames[previewFrame_]);
+        if (texId != 0) {
+            ImGui::Image((ImTextureID)(intptr_t)texId, ImVec2(128, 128));
+        } else {
+            ImGui::Dummy(ImVec2(128, 128));
+        }
+    }
+
+    ImGui::Text("Frame %d / %d", previewFrame_ + 1, frameCount);
+
+    // Transport controls
+    if (ImGui::Button(previewPlaying_ ? "Pause" : "Play")) {
+        previewPlaying_ = !previewPlaying_;
+        if (previewPlaying_ && previewFrame_ >= frameCount - 1 && !state.loop) {
+            // Restart from beginning if at end of non-looping animation
+            previewTimer_ = 0.0f;
+            previewFrame_ = 0;
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Step")) {
+        previewPlaying_ = false;
+        previewFrame_ = (previewFrame_ + 1) % frameCount;
+        previewTimer_ = previewFrame_ / state.frameRate;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset")) {
+        previewPlaying_ = false;
+        previewTimer_ = 0.0f;
+        previewFrame_ = 0;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Task 7: Sprite Sheet Packing
+// ---------------------------------------------------------------------------
+void AnimationEditor::packFrameSet(const std::string& layerVariantKey) {
+    auto it = frameSets_.find(layerVariantKey);
+    if (it == frameSets_.end()) {
+        LOG_WARN("AnimEditor", "No frame set to pack for key: %s", layerVariantKey.c_str());
+        return;
+    }
+
+    auto& fset = it->second;
+
+    // 1. Collect all frame paths in order: states -> directions (down, up, side)
+    std::vector<std::string> allPaths;
+    for (auto& state : template_.states) {
+        const char* dirs[] = {"down", "up", "side"};
+        for (auto dir : dirs) {
+            auto stIt = fset.frames.find(state.name);
+            if (stIt != fset.frames.end()) {
+                auto dIt = stIt->second.find(dir);
+                if (dIt != stIt->second.end()) {
+                    for (auto& p : dIt->second) {
+                        allPaths.push_back(p);
+                    }
+                }
+            }
+        }
+    }
+
+    if (allPaths.empty()) {
+        LOG_WARN("AnimEditor", "No frames to pack");
+        return;
+    }
+
+    // 2. Load all frames
+    struct FrameData {
+        unsigned char* pixels = nullptr;
+        int w = 0, h = 0;
+    };
+    std::vector<FrameData> loaded;
+    loaded.reserve(allPaths.size());
+
+    for (auto& p : allPaths) {
+        FrameData fd;
+        int ch = 0;
+        fd.pixels = stbi_load(p.c_str(), &fd.w, &fd.h, &ch, 4);
+        if (!fd.pixels) {
+            LOG_ERROR("AnimEditor", "Failed to load frame: %s", p.c_str());
+            // Free already loaded
+            for (auto& prev : loaded) {
+                if (prev.pixels) stbi_image_free(prev.pixels);
+            }
+            return;
+        }
+        loaded.push_back(fd);
+    }
+
+    // 3. Validate dimensions
+    int frameW = loaded[0].w;
+    int frameH = loaded[0].h;
+    for (size_t i = 1; i < loaded.size(); ++i) {
+        if (loaded[i].w != frameW || loaded[i].h != frameH) {
+            LOG_ERROR("AnimEditor", "Frame size mismatch: frame %d is %dx%d, expected %dx%d",
+                      (int)i, loaded[i].w, loaded[i].h, frameW, frameH);
+            for (auto& fd : loaded) stbi_image_free(fd.pixels);
+            return;
+        }
+    }
+
+    // 4. Layout
+    int totalFrames = (int)loaded.size();
+    int columns = totalFrames;
+    if (columns * frameW > 2048) {
+        columns = 2048 / frameW;
+        if (columns < 1) columns = 1;
+    }
+    int rows = (totalFrames + columns - 1) / columns;
+    int sheetW = columns * frameW;
+    int sheetH = rows * frameH;
+
+    // 5. Allocate and copy
+    std::vector<unsigned char> sheetPixels(sheetW * sheetH * 4, 0);
+    for (int i = 0; i < totalFrames; ++i) {
+        int col = i % columns;
+        int row = i / columns;
+        int dstX = col * frameW;
+        int dstY = row * frameH;
+
+        for (int y = 0; y < frameH; ++y) {
+            unsigned char* dstRow = sheetPixels.data() + ((dstY + y) * sheetW + dstX) * 4;
+            unsigned char* srcRow = loaded[i].pixels + y * frameW * 4;
+            memcpy(dstRow, srcRow, frameW * 4);
+        }
+    }
+
+    // 6. Write PNG
+    std::string packedDir = "assets/animations/packed";
+    fs::create_directories(packedDir);
+    std::string sheetPath = packedDir + "/" + template_.name + "_"
+                          + fset.layer + "_" + fset.variant + "_sheet.png";
+    std::string metaPath = packedDir + "/" + template_.name + "_"
+                         + fset.layer + "_" + fset.variant + "_sheet.json";
+
+    if (!stbi_write_png(sheetPath.c_str(), sheetW, sheetH, 4,
+                        sheetPixels.data(), sheetW * 4)) {
+        LOG_ERROR("AnimEditor", "Failed to write sprite sheet: %s", sheetPath.c_str());
+        for (auto& fd : loaded) stbi_image_free(fd.pixels);
+        return;
+    }
+
+    // 7. Build metadata JSON with 4-direction entries
+    nlohmann::json meta;
+    meta["sheet"] = sheetPath;
+    meta["frameWidth"] = frameW;
+    meta["frameHeight"] = frameH;
+    meta["columns"] = columns;
+    meta["totalFrames"] = totalFrames;
+
+    nlohmann::json entries = nlohmann::json::array();
+    int frameIdx = 0;
+    for (auto& state : template_.states) {
+        const char* dirs[] = {"down", "up", "side"};
+        for (auto dir : dirs) {
+            auto stIt = fset.frames.find(state.name);
+            if (stIt == fset.frames.end()) continue;
+            auto dIt = stIt->second.find(dir);
+            if (dIt == stIt->second.end()) continue;
+
+            int count = (int)dIt->second.size();
+            if (count == 0) continue;
+
+            if (std::string(dir) == "down" || std::string(dir) == "up") {
+                nlohmann::json e;
+                e["name"] = state.name + "_" + dir;
+                e["startFrame"] = frameIdx;
+                e["frameCount"] = count;
+                e["flipX"] = false;
+                entries.push_back(e);
+            } else {
+                // "side" -> left (no flip) and right (flipX)
+                nlohmann::json eLeft;
+                eLeft["name"] = state.name + "_left";
+                eLeft["startFrame"] = frameIdx;
+                eLeft["frameCount"] = count;
+                eLeft["flipX"] = false;
+                entries.push_back(eLeft);
+
+                nlohmann::json eRight;
+                eRight["name"] = state.name + "_right";
+                eRight["startFrame"] = frameIdx;
+                eRight["frameCount"] = count;
+                eRight["flipX"] = true;
+                entries.push_back(eRight);
+            }
+            frameIdx += count;
+        }
+    }
+    meta["entries"] = entries;
+
+    std::ofstream metaOut(metaPath);
+    if (!metaOut.is_open()) {
+        LOG_ERROR("AnimEditor", "Failed to write metadata: %s", metaPath.c_str());
+    } else {
+        metaOut << meta.dump(2);
+    }
+
+    // Update frame set references
+    fset.packedSheet = sheetPath;
+    fset.packedMeta = metaPath;
+
+    // 8. Free loaded frame data
+    for (auto& fd : loaded) {
+        stbi_image_free(fd.pixels);
+    }
+
+    LOG_INFO("AnimEditor", "Packed %d frames -> %s (%dx%d)", totalFrames,
+             sheetPath.c_str(), sheetW, sheetH);
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
+// ---------------------------------------------------------------------------
 std::string AnimationEditor::currentLayerVariantKey() const {
     return selectedLayer_ + ":" + selectedVariant_;
 }
@@ -68,7 +865,18 @@ const char* AnimationEditor::directionName(int idx) const {
     }
 }
 
-unsigned int AnimationEditor::loadFrameTexture(const std::string& /*path*/) {
+unsigned int AnimationEditor::loadFrameTexture(const std::string& path) {
+    if (path.empty()) return 0;
+
+    // Check local cache first
+    auto it = frameTexCache_.find(path);
+    if (it != frameTexCache_.end()) return it->second;
+
+    auto tex = TextureCache::instance().load(path);
+    if (tex && tex->id() != 0) {
+        frameTexCache_[path] = tex->id();
+        return tex->id();
+    }
     return 0;
 }
 
