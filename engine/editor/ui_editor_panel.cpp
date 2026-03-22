@@ -1,4 +1,6 @@
 #include "engine/editor/ui_editor_panel.h"
+#include "engine/ui/ui_serializer.h"
+#include "engine/core/logger.h"
 #include "engine/ui/widgets/panel.h"
 #include "engine/ui/widgets/label.h"
 #include "engine/ui/widgets/button.h"
@@ -260,6 +262,14 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else {
         ImGui::TextDisabled("(no widget-specific properties)");
+    }
+
+    // --- Save ---
+    ImGui::Separator();
+    if (ImGui::Button("Save Screen") && !selectedScreenId_.empty()) {
+        std::string path = "assets/ui/screens/" + selectedScreenId_ + ".json";
+        UISerializer::saveToFile(path, selectedScreenId_, uiMgr.getScreen(selectedScreenId_));
+        LOG_INFO("UI", "Saved screen: %s", path.c_str());
     }
 
     ImGui::End();
