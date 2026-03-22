@@ -86,8 +86,9 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Android Build Pipeline | Done | Gradle wrapper project (AGP 8.7, NDK r27, C++23, arm64-v8a), `FateMMOActivity` extends SDLActivity via JNI, GLES 3.0 required, INTERNET permission, 16KB page size support, shared assets dir, `./gradlew installDebug` one-command deploy, `android/build.sh` convenience script |
 | Write-Ahead Log | Done | Binary WAL with CRC32 per entry, batched fsync per tick. Journals gold/item/XP mutations. Replay on crash recovery. Truncate after successful DB checkpoint |
 | DB Circuit Breaker | Done | 3-state machine (Closed→Open→HalfOpen) on connection pool. 5 consecutive failures opens for 30s cooldown. Auto-probe on cooldown expiry. WAL queues writes during outage |
-| Priority DB Flushing | Done | `PersistenceQueue` with 4 tiers: IMMEDIATE (0s, gold/inventory/trades), HIGH (5s, level-ups), NORMAL (60s, position/stats), LOW (300s, cosmetics). Priority queue with age-based tiebreaking. Wired into ServerApp — needs handler-site enqueue calls for full activation |
-| Tracked<T> Dirty Wrappers | Done | Template `Tracked<T>` with `mutate()` (auto-sets dirty flag + increments version counter), `clearDirty()`. `PlayerDirtyFlags` struct (10 booleans: position/vitals/stats/inventory/skills/quests/bank/pet/social/guild) with `any()` and `clearAll()`. Wired into ServerApp — needs mutation-site flag setting for full activation |
+| Priority DB Flushing | Done | `PersistenceQueue` with 4 tiers: IMMEDIATE (0s, gold/inventory/trades), HIGH (5s, level-ups/PK status), NORMAL (60s, position), LOW (300s, pet/bank). **Fully wired:** `enqueuePersist()` with 1s dedup window at 30 handler sites, `tickPersistQueue()` dequeues up to 10/tick, 5-minute auto-save kept as safety-net catch-all |
+| Dirty Flag Persistence | Done | `PlayerDirtyFlags` (position/vitals/stats/inventory/skills/quests/bank/pet) gates `savePlayerToDB` and `savePlayerToDBAsync` via `forceSaveAll` param. **95 dirty-flag sets** at mutation sites (13 position, 33 vitals, 18 stats, 26 inventory, 5 quests, 4 bank, 4 pet, 1 guild). Regen skipped intentionally (runs on all players). Disconnect and auto-save bypass flags with forceSaveAll=true |
+| Tracked<T> Template | Done | Template `Tracked<T>` with `mutate()` (auto-sets dirty flag + increments version counter), `clearDirty()`. Available for future per-field tracking |
 | Per-Player Mutation Lock | Done | PlayerLockMap with unique_ptr<mutex> per character. Serializes concurrent inventory/gold mutations between game thread and async fiber DB operations. Consistent-order locking for two-player trades |
 | CI/CD | Done | GitHub Actions: 3-compiler matrix (MSVC windows-latest, GCC-13 ubuntu-24.04, Clang-17 ubuntu-24.04). Headless OpenGL via Xvfb + Mesa software renderer. vcpkg for Windows deps |
 | Structured Errors | Done | `EngineError` with 4 categories (Transient/Recoverable/Degraded/Fatal), `Result<T>` via `std::expected`, generic `CircuitBreaker` class (`engine/core/`) |
@@ -153,6 +154,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Network Panel | Done | Connect/disconnect to server, host/port config, shows client ID and ghost count, docked in bottom panel |
 | ImGuizmo | Done | Visual translate/scale/rotate handles on selected entities |
 | Dialogue Node Editor | Done | Visual node-based dialogue tree editor using **imnodes** library. Nodes with speaker/text, choice output pins, link creation/deletion, right-click add node, JSON load/save. Window > Dialogue Editor toggle |
+| Animation Editor | Done | TWOM-style visual animation panel. Import individual frame PNGs, arrange into sequences per state (idle/walk/attack/cast/death) and direction (down/up/side), set hitFrame visually, preview with play/pause/step, pack into runtime sprite sheets on save. Template presets for Player/Mob/NPC. Layer support (Body/Weapon/Gloves). `.anim` template + `.frameset` file formats. `AnimationLoader` runtime utility reads packed metadata into Animator + SpriteComponent. 3-direction authoring → 4-direction runtime (side → left+right with flipX). Asset browser classifies `.anim`/`.frameset`, double-click to open. Animator inspector "Open in Animation Editor" button. Window > Animation Editor toggle |
 | EDITOR_BUILD | Done | Compile definition on FateEngine and fate_tests targets only (not FateServer). `editor_build.h` documents `#ifdef EDITOR_BUILD` guard pattern. Groundwork for editor/runtime separation |
 
 ### Game UI (ImGui-based, in-game panels)
@@ -198,7 +200,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 |-----------|--------|-------|
 | Transform | Done | Position (px), scale, rotation, depth; tile coord display |
 | SpriteComponent | Done | Texture (via AssetHandle), sourceRect (tileset support), spritesheet frames, tint, flip, renderOffset (procedural visual offset, applied at draw time) |
-| Animator | Done | Frame-based animation with hit-frame events (`onHitFrame` callback), completion callbacks (`onComplete`), auto-transition (`returnAnimation`), non-looping support |
+| Animator | Done | Frame-based animation with hit-frame events (`onHitFrame` callback), completion callbacks (`onComplete`), auto-transition (`returnAnimation`), non-looping support. Editor: "Open in Animation Editor" inspector button |
 | PlayerController | Done | Cardinal movement, speed, facing, isLocalPlayer flag |
 | BoxCollider | Done | AABB with offset, trigger/static flags, "Fit to Sprite" button |
 | PolygonCollider | Done | SAT collision, vertex editing, make box/circle presets (auto-sized to sprite) |
@@ -297,7 +299,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 ## Game Systems (Ported from Unity Prototype)
 
-All 37 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`, plus 4 new systems (Arena, Battlefield, Event Scheduler, Core Extraction). Total: **65 files, ~12,200 lines**, all compile with zero errors (824 test cases). Database repositories exist for all systems in `server/db/` (13 repos). All major systems are DB wired with message handlers, load-on-connect, save-on-disconnect, periodic maintenance, and async auto-save. Combat formula matches Unity prototype exactly (off-by-one fixed). Inventory saves after market/trade mutations prevent item duplication. Gauntlet has 3 divisions with real mob data.
+All 37 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`, plus 4 new systems (Arena, Battlefield, Event Scheduler, Core Extraction). Total: **65 files, ~12,200 lines**, all compile with zero errors (844 test cases). Database repositories exist for all systems in `server/db/` (13 repos). All major systems are DB wired with message handlers, load-on-connect, save-on-disconnect, periodic maintenance, and async auto-save. Combat formula matches Unity prototype exactly (off-by-one fixed). Inventory saves after market/trade mutations prevent item duplication. Gauntlet has 3 divisions with real mob data.
 
 ### Core Gameplay (Fully Ported — Logic Identical to C#)
 | System | Files | Lines | C# Source | Notes |
@@ -2299,7 +2301,7 @@ game/
 - [x] Compile-time component type system (CompId, Hot/Warm/Cold tiers, no RTTI)
 - [ ] SIMD intrinsics for spatial queries (future optimization)
 - [ ] C++20 coroutines for async chunk I/O (structured for future drop-in)
-- [x] Unit test suite (doctest, 824 test cases + 10 scenario tests)
+- [x] Unit test suite (doctest, 844 test cases + 10 scenario tests)
 - [x] Action map input system (23 actions, input buffering, chat mode switching)
 - [x] SDF text rendering (uber-shader, outlined/glow/shadow effects, UTF-8, replaces bitmap font)
 - [x] Reflection system (FATE_REFLECT macro, auto-generated JSON serializers)
