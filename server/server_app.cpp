@@ -290,6 +290,7 @@ bool ServerApp::init(uint16_t port) {
             }
             playerDirty_[conn.clientId].stats = true;
             playerDirty_[conn.clientId].position = true;
+            enqueuePersist(conn.clientId, PersistPriority::HIGH, PersistType::Character);
 
             // TODO: Add Pendants of Honor to inventory (3 for winners, 1 for losers)
 
@@ -365,6 +366,7 @@ bool ServerApp::init(uint16_t port) {
                     }
                     playerDirty_[targetClientId].stats = true;
                     playerDirty_[targetClientId].position = true;
+                    enqueuePersist(targetClientId, PersistPriority::HIGH, PersistType::Character);
 
                     // Send zone transition back to return scene
                     float retX = stats.returnPosition.x;
@@ -3467,6 +3469,8 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                             auto* memberCS = memberPlayer->getComponent<CharacterStatsComponent>();
                             if (memberCS) {
                                 memberCS->stats.honor += honorAmount;
+                                playerDirty_[memberCid].stats = true;
+                                enqueuePersist(memberCid, PersistPriority::HIGH, PersistType::Character);
                                 sendPlayerState(memberCid);
                             }
                         }
@@ -3810,6 +3814,8 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                             auto* memberCS = memberPlayer->getComponent<CharacterStatsComponent>();
                             if (memberCS) {
                                 memberCS->stats.honor += honorAmount;
+                                playerDirty_[memberCid].stats = true;
+                                enqueuePersist(memberCid, PersistPriority::HIGH, PersistType::Character);
                                 sendPlayerState(memberCid);
                             }
                         }
@@ -6766,6 +6772,8 @@ void ServerApp::distributeDungeonRewards(DungeonInstance* inst) {
 
         // Boss honor (+50)
         cs->stats.honor += 50;
+        playerDirty_[cid].stats = true;
+        enqueuePersist(cid, PersistPriority::HIGH, PersistType::Character);
 
         // Treasure box to inventory (silently skip if full)
         auto* boxDef = itemDefCache_.getDefinition(treasureBoxId);
