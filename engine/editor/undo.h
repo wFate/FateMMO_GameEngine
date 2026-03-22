@@ -119,6 +119,23 @@ struct PropertyCommand : UndoCommand {
     std::string description() const override { return desc; }
 };
 
+// Group multiple commands into a single undo step (e.g., brush stroke)
+struct CompoundCommand : UndoCommand {
+    std::vector<std::unique_ptr<UndoCommand>> commands;
+    std::string desc;
+
+    void undo(World* w) override {
+        for (auto it = commands.rbegin(); it != commands.rend(); ++it)
+            (*it)->undo(w);
+    }
+    void redo(World* w) override {
+        for (auto& cmd : commands)
+            cmd->redo(w);
+    }
+    std::string description() const override { return desc; }
+    bool empty() const { return commands.empty(); }
+};
+
 // Undo/Redo stack
 class UndoSystem {
 public:
