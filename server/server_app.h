@@ -162,6 +162,7 @@ private:
     // Server-side HP/MP regen timers
     float regenTimer_ = 0.0f;
     float mpRegenTimer_ = 0.0f;
+    float petAutoLootTimer_ = 0.0f;
 
     // One-time nonces for economic actions (trade/market replay prevention)
     NonceManager nonceManager_;
@@ -207,6 +208,7 @@ private:
     void processArena(uint16_t clientId, const CmdArenaMsg& msg);
     void processPetCommand(uint16_t clientId, const CmdPetMsg& msg);
     void sendPetUpdate(uint16_t clientId, Entity* player);
+    void tickPetAutoLoot(float dt);
     void processBank(uint16_t clientId, const CmdBankMsg& msg);
     void processSocketItem(uint16_t clientId, const CmdSocketItemMsg& msg);
     void processStatEnchant(uint16_t clientId, const CmdStatEnchantMsg& msg);

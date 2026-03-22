@@ -611,6 +611,9 @@ void ServerApp::tick(float dt) {
         if (doMP) mpRegenTimer_ -= 5.0f;
     }
 
+    // Pet auto-loot tick
+    tickPetAutoLoot(dt);
+
     // 3e. Process Dying → Dead transitions (two-tick death lifecycle)
     world_.forEach<CharacterStatsComponent>([](Entity*, CharacterStatsComponent* cs) {
         cs->stats.advanceDeathTick();
@@ -6058,6 +6061,153 @@ void ServerApp::processRankingQuery(uint16_t clientId, const CmdRankingQueryMsg&
 
     LOG_INFO("Server", "Client %d queried rankings cat=%d page=%d (%d entries)",
              clientId, msg.category, msg.page, totalEntries);
+}
+
+void ServerApp::tickPetAutoLoot(float dt) {
+    static constexpr float AUTO_LOOT_INTERVAL = 0.5f;
+    petAutoLootTimer_ += dt;
+    if (petAutoLootTimer_ < AUTO_LOOT_INTERVAL) return;
+    petAutoLootTimer_ = 0.0f;
+
+    // Collect all unclaimed dropped items with positions
+    struct DroppedItemInfo {
+        Entity* entity;
+        Vec2 pos;
+        DroppedItemComponent* drop;
+    };
+    std::vector<DroppedItemInfo> droppedItems;
+    world_.forEach<DroppedItemComponent>([&](Entity* e, DroppedItemComponent* d) {
+        if (d->claimedBy != 0) return;
+        auto* t = e->getComponent<Transform>();
+        if (!t) return;
+        droppedItems.push_back({e, t->position, d});
+    });
+
+    if (droppedItems.empty()) return;
+
+    // Track entities to destroy after iteration (can't destroy during forEach)
+    std::vector<EntityHandle> toDestroy;
+
+    // For each player with auto-loot pet, check nearby items
+    world_.forEach<CharacterStatsComponent>([&](Entity* player, CharacterStatsComponent* cs) {
+        auto* petComp = player->getComponent<PetComponent>();
+        if (!petComp || !petComp->hasPet() || !petComp->equippedPet.autoLootEnabled) return;
+
+        auto* playerTransform = player->getComponent<Transform>();
+        if (!playerTransform) return;
+
+        // Find clientId for this player
+        uint16_t clientId = 0;
+        auto playerHandle = player->handle();
+        server_.connections().forEach([&](const ClientConnection& conn) {
+            PersistentId pid(conn.playerEntityId);
+            EntityHandle h = replication_.getEntityHandle(pid);
+            if (h == playerHandle) {
+                clientId = conn.clientId;
+            }
+        });
+        if (clientId == 0) return;
+
+        auto* inv = player->getComponent<InventoryComponent>();
+        if (!inv) return;
+
+        float radiusSq = petComp->autoLootRadius * petComp->autoLootRadius;
+        Vec2 pPos = playerTransform->position;
+
+        for (auto& info : droppedItems) {
+            if (info.drop->claimedBy != 0) continue;
+
+            // Scene check
+            if (info.drop->sceneId != cs->stats.currentScene) continue;
+
+            // Ownership check
+            bool canLoot = (info.drop->ownerEntityId == 0 ||
+                           info.drop->ownerEntityId == playerHandle.value);
+            if (!canLoot) {
+                auto* partyComp = player->getComponent<PartyComponent>();
+                if (partyComp && partyComp->party.isInParty() &&
+                    partyComp->party.lootMode == PartyLootMode::FreeForAll) {
+                    EntityHandle ownerH(info.drop->ownerEntityId);
+                    auto* ownerEntity = world_.getEntity(ownerH);
+                    if (ownerEntity) {
+                        auto* ownerParty = ownerEntity->getComponent<PartyComponent>();
+                        if (ownerParty && ownerParty->party.isInParty() &&
+                            ownerParty->party.partyId == partyComp->party.partyId) {
+                            canLoot = true;
+                        }
+                    }
+                }
+            }
+            if (!canLoot) continue;
+
+            // Distance check
+            float dx = pPos.x - info.pos.x;
+            float dy = pPos.y - info.pos.y;
+            if (dx * dx + dy * dy > radiusSq) continue;
+
+            // Claim it
+            if (!info.drop->tryClaim(playerHandle.value)) continue;
+
+            if (info.drop->isGold) {
+                auto* client = server_.connections().findById(clientId);
+                if (client) wal_.appendGoldChange(client->character_id, static_cast<int64_t>(info.drop->goldAmount));
+                inv->inventory.addGold(info.drop->goldAmount);
+
+                SvLootPickupMsg pickup;
+                pickup.isGold = 1;
+                pickup.goldAmount = info.drop->goldAmount;
+                pickup.displayName = "Gold";
+                uint8_t buf[256];
+                ByteWriter w(buf, sizeof(buf));
+                pickup.write(w);
+                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvLootPickup, buf, w.size());
+            } else {
+                const auto* itemDef = itemDefCache_.getDefinition(info.drop->itemId);
+
+                ItemInstance item;
+                item.instanceId   = std::to_string(
+                    std::chrono::steady_clock::now().time_since_epoch().count());
+                item.itemId       = info.drop->itemId;
+                item.quantity     = info.drop->quantity;
+                item.enchantLevel = info.drop->enchantLevel;
+                item.rolledStats  = ItemStatRoller::parseRolledStats(info.drop->rolledStatsJson);
+                item.rarity       = parseItemRarity(info.drop->rarity);
+                item.displayName  = itemDef ? itemDef->displayName : info.drop->itemId;
+
+                auto* client = server_.connections().findById(clientId);
+                if (client) wal_.appendItemAdd(client->character_id, -1, item.instanceId);
+
+                if (!inv->inventory.addItem(item)) {
+                    info.drop->releaseClaim();
+                    continue;
+                }
+
+                SvLootPickupMsg pickup;
+                pickup.itemId = info.drop->itemId;
+                pickup.quantity = info.drop->quantity;
+                pickup.rarity = info.drop->rarity;
+                pickup.displayName = itemDef ? itemDef->displayName : info.drop->itemId;
+                if (info.drop->enchantLevel > 0) {
+                    pickup.displayName += " +" + std::to_string(info.drop->enchantLevel);
+                }
+                uint8_t buf[256];
+                ByteWriter w(buf, sizeof(buf));
+                pickup.write(w);
+                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvLootPickup, buf, w.size());
+
+                sendInventorySync(clientId);
+            }
+
+            sendPlayerState(clientId);
+            toDestroy.push_back(info.entity->handle());
+        }
+    });
+
+    // Destroy picked-up items after iteration
+    for (auto handle : toDestroy) {
+        replication_.unregisterEntity(handle);
+        world_.destroyEntity(handle);
+    }
 }
 
 } // namespace fate
