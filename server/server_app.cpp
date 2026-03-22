@@ -668,6 +668,41 @@ void ServerApp::tick(float dt) {
         if (doMP) mpRegenTimer_ -= 5.0f;
     }
 
+    // Tick active casts for all players
+    world_.forEach<CharacterStatsComponent>([&](Entity* e, CharacterStatsComponent* cs) {
+        if (!cs->stats.isCasting()) return;
+        bool completed = cs->stats.tickCast(dt);
+        if (completed) {
+            // Fields (skillId, skillRank, targetEntityId) are still valid after tickCast clears active
+            std::string castSkillId = cs->stats.castingState.skillId;
+            uint8_t castRank = static_cast<uint8_t>(cs->stats.castingState.skillRank);
+            uint32_t castTargetId = cs->stats.castingState.targetEntityId;
+
+            // Find owning client
+            uint16_t ownerClientId = 0;
+            server_.connections().forEach([&](const ClientConnection& c) {
+                if (c.playerEntityId != 0) {
+                    PersistentId p(c.playerEntityId);
+                    EntityHandle eh = replication_.getEntityHandle(p);
+                    if (world_.getEntity(eh) == e) ownerClientId = c.clientId;
+                }
+            });
+            if (ownerClientId == 0) return;
+
+            // Erase cooldown so processUseSkill doesn't reject (cooldown was set at cast start)
+            skillCooldowns_[ownerClientId].erase(castSkillId);
+
+            // Re-execute the skill now that cast completed
+            CmdUseSkillMsg fakeMsg;
+            fakeMsg.skillId = castSkillId;
+            fakeMsg.rank = castRank;
+            fakeMsg.targetId = static_cast<uint64_t>(castTargetId);
+            castCompleting_ = true;
+            processUseSkill(ownerClientId, fakeMsg);
+            castCompleting_ = false;
+        }
+    });
+
     // Pet auto-loot tick
     tickPetAutoLoot(dt);
 
@@ -3509,6 +3544,17 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
         }
     }
     clientCooldowns[msg.skillId] = gameTime_;
+
+    // Check cast time — if skill has a cast time, enter casting state instead of instant execution
+    if (!castCompleting_) {
+        const CachedSkillDef* skillDef = skillDefCache_.getSkill(msg.skillId);
+        if (skillDef && skillDef->castTime > 0.0f && !casterStatsComp->stats.isCasting()) {
+            uint32_t castTargetId = static_cast<uint32_t>(msg.targetId);
+            casterStatsComp->stats.beginCast(msg.skillId, skillDef->castTime, castTargetId, msg.rank);
+            LOG_INFO("Server", "Client %d began casting '%s' (%.1fs)", clientId, msg.skillId.c_str(), skillDef->castTime);
+            return; // don't execute yet — wait for cast to complete
+        }
+    }
 
     // Execute the skill
     int damage = skillComp->skills.executeSkill(msg.skillId, msg.rank, ctx);

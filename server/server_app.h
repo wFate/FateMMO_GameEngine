@@ -198,6 +198,9 @@ private:
     float tradeCleanupTimer_ = 0.0f;
     float pvpKillLogPruneTimer_ = 0.0f;
 
+    // Cast-completion re-entry guard (skip castTime check when executing after cast completes)
+    bool castCompleting_ = false;
+
     void tick(float dt);
     void onClientConnected(uint16_t clientId);
     void onClientDisconnected(uint16_t clientId);
