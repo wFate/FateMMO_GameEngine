@@ -11,7 +11,7 @@ namespace {
     const char* getShaderPreamble(bool isFragment) {
 #ifdef FATEMMO_GLES
         if (isFragment) {
-            return "#version 300 es\nprecision highp float;\nprecision highp sampler2D;\n";
+            return "#version 300 es\nprecision highp float;\nprecision highp sampler2D;\nprecision highp sampler2DArray;\n";
         } else {
             return "#version 300 es\n";
         }

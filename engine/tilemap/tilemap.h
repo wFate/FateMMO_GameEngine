@@ -3,6 +3,7 @@
 #include "engine/render/texture.h"
 #include "engine/render/sprite_batch.h"
 #include "engine/render/camera.h"
+#include "engine/render/tile_texture_array.h"
 #include "engine/tilemap/chunk.h"
 #include "engine/tilemap/chunk_renderer.h"
 #include <string>
@@ -100,10 +101,12 @@ private:
     std::string basePath_; // directory containing the .json file
     ChunkManager chunkManager_;
     ChunkRenderer chunkRenderer_;
+    TileTextureArray tileArray_;
     bool useChunkVBOs_ = true;
 
     const Tileset* findTileset(int gid) const;
     Vec2 tileToWorld(int col, int row) const;
+    void buildTileArray();
 };
 
 } // namespace fate
