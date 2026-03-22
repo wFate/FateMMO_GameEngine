@@ -13,6 +13,22 @@ namespace fate {
 
 namespace fs = std::filesystem;
 
+namespace {
+static void drawCheckerboard(ImDrawList* dl, ImVec2 pos, float w, float h, int checkSize = 8) {
+    ImU32 c1 = IM_COL32(40, 40, 40, 255);
+    ImU32 c2 = IM_COL32(50, 50, 50, 255);
+    for (int y = 0; y < (int)h; y += checkSize) {
+        for (int x = 0; x < (int)w; x += checkSize) {
+            ImU32 c = ((x / checkSize + y / checkSize) % 2 == 0) ? c1 : c2;
+            float x1 = pos.x + (float)x, y1 = pos.y + (float)y;
+            float x2 = x1 + fminf((float)checkSize, w - (float)x);
+            float y2 = y1 + fminf((float)checkSize, h - (float)y);
+            dl->AddRectFilled(ImVec2(x1, y1), ImVec2(x2, y2), c);
+        }
+    }
+}
+} // anonymous namespace
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
@@ -250,9 +266,15 @@ void AnimationEditor::drawStateList() {
 
     for (int i = 0; i < (int)template_.states.size(); ++i) {
         bool selected = (i == selectedStateIdx_);
+        if (selected) {
+            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.290f, 0.541f, 0.859f, 0.30f));
+        }
         if (ImGui::Selectable(template_.states[i].name.c_str(), selected)) {
             selectedStateIdx_ = i;
             selectedFrameIdx_ = -1;
+        }
+        if (selected) {
+            ImGui::PopStyleColor();
         }
     }
 
@@ -310,10 +332,9 @@ void AnimationEditor::drawFrameStrip() {
         ImGui::PushID(i);
 
         bool isSelected = (i == selectedFrameIdx_);
-        if (isSelected) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.5f, 0.8f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.6f, 0.9f, 1.0f));
-        }
+
+        ImVec2 framePos = ImGui::GetCursorScreenPos();
+        drawCheckerboard(ImGui::GetWindowDrawList(), framePos, 48.0f, 48.0f);
 
         // Try to load texture
         unsigned int texId = loadFrameTexture(frames[i]);
@@ -333,7 +354,9 @@ void AnimationEditor::drawFrameStrip() {
         }
 
         if (isSelected) {
-            ImGui::PopStyleColor(2);
+            ImVec2 min = ImGui::GetItemRectMin();
+            ImVec2 max = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddRect(min, max, IM_COL32(74, 138, 219, 255), 2.0f, 0, 2.0f);
         }
 
         // Right-click context menu
@@ -379,11 +402,16 @@ void AnimationEditor::drawFrameStrip() {
     }
 
     // "Drop here" zone at end of strip for ASSET drops
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
-    if (ImGui::Button("+##drop", ImVec2(48, 48))) {
-        // Clicking does nothing — this is just a drop target
+    {
+        ImVec2 dropPos = ImGui::GetCursorScreenPos();
+        ImGui::GetWindowDrawList()->AddRect(
+            dropPos, ImVec2(dropPos.x + 48, dropPos.y + 48),
+            IM_COL32(128, 128, 128, 60), 3.0f);
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.06f));
+        if (ImGui::Button("+##drop", ImVec2(48, 48))) {}
+        ImGui::PopStyleColor(2);
     }
-    ImGui::PopStyleColor();
 
     if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET")) {
@@ -522,6 +550,8 @@ void AnimationEditor::loadFrameSet(const std::string& path) {
 
         std::string key = fs.layer + ":" + fs.variant;
         frameSets_[key] = std::move(fs);
+        selectedStateIdx_ = 0;
+        selectedFrameIdx_ = -1;
         LOG_INFO("AnimEditor", "Loaded frame set: %s (key=%s)", path.c_str(), key.c_str());
     } catch (const std::exception& e) {
         LOG_ERROR("AnimEditor", "Error parsing frame set %s: %s", path.c_str(), e.what());
@@ -622,13 +652,17 @@ void AnimationEditor::drawPreview() {
     if (previewFrame_ >= 0 && previewFrame_ < (int)frames.size()) {
         unsigned int texId = loadFrameTexture(frames[previewFrame_]);
         if (texId != 0) {
+            ImVec2 previewPos = ImGui::GetCursorScreenPos();
+            drawCheckerboard(ImGui::GetWindowDrawList(), previewPos, 128.0f, 128.0f);
             ImGui::Image((ImTextureID)(intptr_t)texId, ImVec2(128, 128));
         } else {
             ImGui::Dummy(ImVec2(128, 128));
         }
     }
 
+    if (fontSmall_) ImGui::PushFont(fontSmall_);
     ImGui::Text("Frame %d / %d", previewFrame_ + 1, frameCount);
+    if (fontSmall_) ImGui::PopFont();
 
     // Transport controls
     if (ImGui::Button(previewPlaying_ ? "Pause" : "Play")) {
