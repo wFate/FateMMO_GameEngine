@@ -17,6 +17,8 @@
 #include "engine/ui/widgets/exp_bar.h"
 #include "engine/ui/widgets/menu_button_row.h"
 #include "engine/ui/widgets/chat_ticker.h"
+#include "engine/ui/widgets/left_sidebar.h"
+#include "engine/ui/widgets/inventory_panel.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -413,6 +415,22 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         auto ct = std::make_unique<ChatTicker>(id);
         ct->scrollSpeed = j.value("scrollSpeed", 40.0f);
         node = std::move(ct);
+    }
+    else if (type == "left_sidebar") {
+        auto sb = std::make_unique<LeftSidebar>(id);
+        sb->buttonSize = j.value("buttonSize", 40.0f);
+        sb->spacing = j.value("spacing", 8.0f);
+        if (j.contains("labels") && j["labels"].is_array())
+            for (auto& l : j["labels"]) sb->panelLabels.push_back(l.get<std::string>());
+        sb->activePanel = j.value("activePanel", "");
+        node = std::move(sb);
+    }
+    else if (type == "inventory_panel") {
+        auto ip = std::make_unique<InventoryPanel>(id);
+        ip->gridColumns = j.value("gridColumns", 4);
+        ip->gridRows = j.value("gridRows", 5);
+        ip->slotSize = j.value("slotSize", 40.0f);
+        node = std::move(ip);
     }
     else {
         node = std::make_unique<UINode>(id, type);
