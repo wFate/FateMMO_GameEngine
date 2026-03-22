@@ -209,8 +209,8 @@ private:
     void sendQuestSync(uint16_t clientId);
     void sendInventorySync(uint16_t clientId);
     void consumePendingSessions();
-    void savePlayerToDB(uint16_t clientId);
-    void savePlayerToDBAsync(uint16_t clientId);
+    void savePlayerToDB(uint16_t clientId, bool forceSaveAll = true);
+    void savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll = true);
     void saveInventoryForClient(uint16_t clientId);
     void tickAutoSave(float dt);
     void tickMaintenance(float dt);
@@ -246,6 +246,14 @@ private:
                                        World& srcWorld, ReplicationManager& srcRepl,
                                        World& dstWorld, ReplicationManager& dstRepl,
                                        Vec2 spawnPos, const std::string& newScene);
+
+    // Dungeon entry flow
+    void processStartDungeon(uint16_t clientId, const CmdStartDungeonMsg& msg);
+    void processDungeonResponse(uint16_t clientId, const CmdDungeonResponseMsg& msg);
+    void startDungeonInstance(DungeonInstance* inst);
+    bool checkDungeonTicket(const std::string& characterId);
+    void consumeDungeonTicket(const std::string& characterId);
+    void spawnDungeonMobs(DungeonInstance* inst);
 };
 
 } // namespace fate

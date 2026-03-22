@@ -1488,7 +1488,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
              guildComp ? guildComp->guild.guildId : 0);
 }
 
-void ServerApp::savePlayerToDB(uint16_t clientId) {
+void ServerApp::savePlayerToDB(uint16_t clientId, bool forceSaveAll) {
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
 
@@ -1496,6 +1496,8 @@ void ServerApp::savePlayerToDB(uint16_t clientId) {
     EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
     Entity* e = getWorldForClient(clientId).getEntity(h);
     if (!e) return;
+
+    auto& dirty = playerDirty_[clientId];
 
     CharacterRecord rec;
     rec.character_id = client->character_id;
@@ -1506,40 +1508,48 @@ void ServerApp::savePlayerToDB(uint16_t clientId) {
         const CharacterStats& s = charStatsComp->stats;
         rec.character_name   = s.characterName;
         rec.class_name       = s.className;
-        rec.level            = s.level;
-        rec.current_xp       = s.currentXP;
-        rec.xp_to_next_level = static_cast<int>(s.xpToNextLevel);
-        rec.current_hp       = s.currentHP;
-        rec.max_hp           = s.maxHP;
-        rec.current_mp       = s.currentMP;
-        rec.max_mp           = s.maxMP;
-        rec.current_fury     = s.currentFury;
-        rec.honor            = s.honor;
-        rec.pvp_kills        = s.pvpKills;
-        rec.pvp_deaths       = s.pvpDeaths;
-        rec.is_dead          = s.isDead;
-        rec.pk_status        = static_cast<int>(s.pkStatus);
-        rec.faction          = static_cast<int>(s.faction);
+        if (forceSaveAll || dirty.stats) {
+            rec.level            = s.level;
+            rec.current_xp       = s.currentXP;
+            rec.xp_to_next_level = static_cast<int>(s.xpToNextLevel);
+            rec.honor            = s.honor;
+            rec.pvp_kills        = s.pvpKills;
+            rec.pvp_deaths       = s.pvpDeaths;
+            rec.pk_status        = static_cast<int>(s.pkStatus);
+            rec.faction          = static_cast<int>(s.faction);
+        }
+        if (forceSaveAll || dirty.vitals) {
+            rec.current_hp       = s.currentHP;
+            rec.max_hp           = s.maxHP;
+            rec.current_mp       = s.currentMP;
+            rec.max_mp           = s.maxMP;
+            rec.current_fury     = s.currentFury;
+            rec.is_dead          = s.isDead;
+        }
     }
 
-    auto* t = e->getComponent<Transform>();
-    if (t) {
-        // Convert pixel coords to tile coords for DB (matches Unity format)
-        Vec2 tilePos = Coords::toTile(t->position);
-        rec.position_x = tilePos.x;
-        rec.position_y = tilePos.y;
+    if (forceSaveAll || dirty.position) {
+        auto* t = e->getComponent<Transform>();
+        if (t) {
+            // Convert pixel coords to tile coords for DB (matches Unity format)
+            Vec2 tilePos = Coords::toTile(t->position);
+            rec.position_x = tilePos.x;
+            rec.position_y = tilePos.y;
+        }
+
+        // Save current scene from the player's own stats (not SceneManager, which
+        // is a client-side concept — the server has no loaded scene).
+        auto* statsForScene = e->getComponent<CharacterStatsComponent>();
+        rec.current_scene = (statsForScene && !statsForScene->stats.currentScene.empty())
+            ? statsForScene->stats.currentScene
+            : "WhisperingWoods";
     }
 
-    // Save current scene from the player's own stats (not SceneManager, which
-    // is a client-side concept — the server has no loaded scene).
-    auto* statsForScene = e->getComponent<CharacterStatsComponent>();
-    rec.current_scene = (statsForScene && !statsForScene->stats.currentScene.empty())
-        ? statsForScene->stats.currentScene
-        : "WhisperingWoods";
-
-    auto* inv = e->getComponent<InventoryComponent>();
-    if (inv) {
-        rec.gold = inv->inventory.getGold();
+    if (forceSaveAll || dirty.inventory) {
+        auto* inv = e->getComponent<InventoryComponent>();
+        if (inv) {
+            rec.gold = inv->inventory.getGold();
+        }
     }
 
     if (!characterRepo_->saveCharacter(rec)) {
@@ -1551,79 +1561,91 @@ void ServerApp::savePlayerToDB(uint16_t clientId) {
     }
 
     // Save skills
-    auto* skillComp = e->getComponent<SkillManagerComponent>();
-    if (skillComp) {
-        // Collect learned skills from vector
-        std::vector<CharacterSkillRecord> skillRecords;
-        for (const auto& learned : skillComp->skills.getLearnedSkills()) {
-            CharacterSkillRecord sr;
-            sr.skillId = learned.skillId;
-            sr.unlockedRank = learned.unlockedRank;
-            sr.activatedRank = learned.activatedRank;
-            skillRecords.push_back(std::move(sr));
-        }
-        skillRepo_->saveAllCharacterSkills(rec.character_id, skillRecords);
+    if (forceSaveAll || dirty.skills) {
+        auto* skillComp = e->getComponent<SkillManagerComponent>();
+        if (skillComp) {
+            // Collect learned skills from vector
+            std::vector<CharacterSkillRecord> skillRecords;
+            for (const auto& learned : skillComp->skills.getLearnedSkills()) {
+                CharacterSkillRecord sr;
+                sr.skillId = learned.skillId;
+                sr.unlockedRank = learned.unlockedRank;
+                sr.activatedRank = learned.activatedRank;
+                skillRecords.push_back(std::move(sr));
+            }
+            skillRepo_->saveAllCharacterSkills(rec.character_id, skillRecords);
 
-        // Save skill bar
-        std::vector<std::string> bar;
-        bar.reserve(20);
-        for (int i = 0; i < 20; ++i) {
-            bar.push_back(skillComp->skills.getSkillInSlot(i));
-        }
-        skillRepo_->saveSkillBar(rec.character_id, bar);
+            // Save skill bar
+            std::vector<std::string> bar;
+            bar.reserve(20);
+            for (int i = 0; i < 20; ++i) {
+                bar.push_back(skillComp->skills.getSkillInSlot(i));
+            }
+            skillRepo_->saveSkillBar(rec.character_id, bar);
 
-        // Save skill points
-        int earned = skillComp->skills.earnedPoints();
-        int spent = earned - skillComp->skills.availablePoints();
-        skillRepo_->saveSkillPoints(rec.character_id, earned, spent);
+            // Save skill points
+            int earned = skillComp->skills.earnedPoints();
+            int spent = earned - skillComp->skills.availablePoints();
+            skillRepo_->saveSkillPoints(rec.character_id, earned, spent);
+        }
     }
 
     // Save quest progress
-    auto* questComp = e->getComponent<QuestComponent>();
-    if (questComp) {
-        std::vector<QuestProgressRecord> questRecords;
-        for (const auto& aq : questComp->quests.getActiveQuests()) {
-            QuestProgressRecord qr;
-            qr.questId = std::to_string(aq.questId);
-            qr.status = "active";
-            qr.currentCount = aq.objectiveProgress.empty() ? 0 : aq.objectiveProgress[0];
-            qr.targetCount = 1; // Will be updated by quest definition lookup if needed
-            questRecords.push_back(std::move(qr));
+    if (forceSaveAll || dirty.quests) {
+        auto* questComp = e->getComponent<QuestComponent>();
+        if (questComp) {
+            std::vector<QuestProgressRecord> questRecords;
+            for (const auto& aq : questComp->quests.getActiveQuests()) {
+                QuestProgressRecord qr;
+                qr.questId = std::to_string(aq.questId);
+                qr.status = "active";
+                qr.currentCount = aq.objectiveProgress.empty() ? 0 : aq.objectiveProgress[0];
+                qr.targetCount = 1; // Will be updated by quest definition lookup if needed
+                questRecords.push_back(std::move(qr));
+            }
+            questRepo_->saveAllQuestProgress(rec.character_id, questRecords);
         }
-        questRepo_->saveAllQuestProgress(rec.character_id, questRecords);
     }
 
     // Save bank gold (items saved on-demand when deposited/withdrawn)
-    auto* bankComp = e->getComponent<BankStorageComponent>();
-    if (bankComp) {
-        int64_t bankGold = bankComp->storage.getStoredGold();
-        if (bankGold > 0) {
-            bankRepo_->depositGold(rec.character_id, 0); // ensure row exists
-            // Direct set via raw query would be cleaner, but depositGold upserts
+    if (forceSaveAll || dirty.bank) {
+        auto* bankComp = e->getComponent<BankStorageComponent>();
+        if (bankComp) {
+            int64_t bankGold = bankComp->storage.getStoredGold();
+            if (bankGold > 0) {
+                bankRepo_->depositGold(rec.character_id, 0); // ensure row exists
+                // Direct set via raw query would be cleaner, but depositGold upserts
+            }
         }
     }
 
     // Save pet state
-    auto* petComp = e->getComponent<PetComponent>();
-    if (petComp && petComp->hasPet()) {
-        PetRecord petRec;
-        petRec.id = petComp->dbPetId;
-        petRec.characterId = rec.character_id;
-        petRec.petDefId = petComp->equippedPet.petDefinitionId;
-        petRec.petName = petComp->equippedPet.petName;
-        petRec.level = petComp->equippedPet.level;
-        petRec.currentXP = petComp->equippedPet.currentXP;
-        petRec.isEquipped = true;
-        petRec.isSoulbound = petComp->equippedPet.isSoulbound;
-        petRec.autoLootEnabled = petComp->equippedPet.autoLootEnabled;
-        petRepo_->savePet(petRec);
+    if (forceSaveAll || dirty.pet) {
+        auto* petComp = e->getComponent<PetComponent>();
+        if (petComp && petComp->hasPet()) {
+            PetRecord petRec;
+            petRec.id = petComp->dbPetId;
+            petRec.characterId = rec.character_id;
+            petRec.petDefId = petComp->equippedPet.petDefinitionId;
+            petRec.petName = petComp->equippedPet.petName;
+            petRec.level = petComp->equippedPet.level;
+            petRec.currentXP = petComp->equippedPet.currentXP;
+            petRec.isEquipped = true;
+            petRec.isSoulbound = petComp->equippedPet.isSoulbound;
+            petRec.autoLootEnabled = petComp->equippedPet.autoLootEnabled;
+            petRepo_->savePet(petRec);
+        }
     }
 
     // Update last_online
     socialRepo_->updateLastOnline(rec.character_id);
+
+    if (!forceSaveAll) {
+        dirty.clearAll();
+    }
 }
 
-void ServerApp::savePlayerToDBAsync(uint16_t clientId) {
+void ServerApp::savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll) {
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
 
@@ -1631,6 +1653,8 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId) {
     EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
     Entity* e = getWorldForClient(clientId).getEntity(h);
     if (!e) return;
+
+    auto& dirty = playerDirty_[clientId];
 
     // ---- Snapshot all data on game thread ----
     CharacterRecord rec;
@@ -1642,54 +1666,69 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId) {
         const CharacterStats& s = charStatsComp->stats;
         rec.character_name   = s.characterName;
         rec.class_name       = s.className;
-        rec.level            = s.level;
-        rec.current_xp       = s.currentXP;
-        rec.xp_to_next_level = static_cast<int>(s.xpToNextLevel);
-        rec.current_hp       = s.currentHP;
-        rec.max_hp           = s.maxHP;
-        rec.current_mp       = s.currentMP;
-        rec.max_mp           = s.maxMP;
-        rec.current_fury     = s.currentFury;
-        rec.honor            = s.honor;
-        rec.pvp_kills        = s.pvpKills;
-        rec.pvp_deaths       = s.pvpDeaths;
-        rec.is_dead          = s.isDead;
-        rec.pk_status        = static_cast<int>(s.pkStatus);
-        rec.faction          = static_cast<int>(s.faction);
+        if (forceSaveAll || dirty.stats) {
+            rec.level            = s.level;
+            rec.current_xp       = s.currentXP;
+            rec.xp_to_next_level = static_cast<int>(s.xpToNextLevel);
+            rec.honor            = s.honor;
+            rec.pvp_kills        = s.pvpKills;
+            rec.pvp_deaths       = s.pvpDeaths;
+            rec.pk_status        = static_cast<int>(s.pkStatus);
+            rec.faction          = static_cast<int>(s.faction);
+        }
+        if (forceSaveAll || dirty.vitals) {
+            rec.current_hp       = s.currentHP;
+            rec.max_hp           = s.maxHP;
+            rec.current_mp       = s.currentMP;
+            rec.max_mp           = s.maxMP;
+            rec.current_fury     = s.currentFury;
+            rec.is_dead          = s.isDead;
+        }
     }
 
-    auto* t = e->getComponent<Transform>();
-    if (t) {
-        Vec2 tilePos = Coords::toTile(t->position);
-        rec.position_x = tilePos.x;
-        rec.position_y = tilePos.y;
+    if (forceSaveAll || dirty.position) {
+        auto* t = e->getComponent<Transform>();
+        if (t) {
+            Vec2 tilePos = Coords::toTile(t->position);
+            rec.position_x = tilePos.x;
+            rec.position_y = tilePos.y;
+        }
+
+        auto* statsForScene2 = e->getComponent<CharacterStatsComponent>();
+        rec.current_scene = (statsForScene2 && !statsForScene2->stats.currentScene.empty())
+            ? statsForScene2->stats.currentScene
+            : "WhisperingWoods";
     }
 
-    auto* statsForScene2 = e->getComponent<CharacterStatsComponent>();
-    rec.current_scene = (statsForScene2 && !statsForScene2->stats.currentScene.empty())
-        ? statsForScene2->stats.currentScene
-        : "WhisperingWoods";
-
-    auto* inv = e->getComponent<InventoryComponent>();
-    if (inv) rec.gold = inv->inventory.getGold();
+    if (forceSaveAll || dirty.inventory) {
+        auto* inv = e->getComponent<InventoryComponent>();
+        if (inv) rec.gold = inv->inventory.getGold();
+    }
 
     // Snapshot skills
+    bool saveSkills = forceSaveAll || dirty.skills;
     std::vector<CharacterSkillRecord> skillRecords;
     int skillEarned = 0, skillSpent = 0;
     std::vector<std::string> skillBar(20, "");
-    auto* skillComp = e->getComponent<SkillManagerComponent>();
-    if (skillComp) {
-        for (const auto& learned : skillComp->skills.getLearnedSkills()) {
-            CharacterSkillRecord sr;
-            sr.skillId = learned.skillId;
-            sr.unlockedRank = learned.unlockedRank;
-            sr.activatedRank = learned.activatedRank;
-            skillRecords.push_back(std::move(sr));
+    if (saveSkills) {
+        auto* skillComp = e->getComponent<SkillManagerComponent>();
+        if (skillComp) {
+            for (const auto& learned : skillComp->skills.getLearnedSkills()) {
+                CharacterSkillRecord sr;
+                sr.skillId = learned.skillId;
+                sr.unlockedRank = learned.unlockedRank;
+                sr.activatedRank = learned.activatedRank;
+                skillRecords.push_back(std::move(sr));
+            }
+            skillEarned = skillComp->skills.earnedPoints();
+            skillSpent = skillEarned - skillComp->skills.availablePoints();
+            for (int i = 0; i < 20; ++i)
+                skillBar[i] = skillComp->skills.getSkillInSlot(i);
         }
-        skillEarned = skillComp->skills.earnedPoints();
-        skillSpent = skillEarned - skillComp->skills.availablePoints();
-        for (int i = 0; i < 20; ++i)
-            skillBar[i] = skillComp->skills.getSkillInSlot(i);
+    }
+
+    if (!forceSaveAll) {
+        dirty.clearAll();
     }
 
     std::string charId = client->character_id;
@@ -1698,16 +1737,18 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId) {
     // Acquire per-player lock inside the fiber to serialize against concurrent
     // game-thread mutations (trade execution, loot, market) that may modify
     // inventory/gold while the async save is writing state.
-    dbDispatcher_.dispatchVoid([this, rec, charId, skillRecords, skillEarned, skillSpent, skillBar]
+    dbDispatcher_.dispatchVoid([this, rec, charId, skillRecords, skillEarned, skillSpent, skillBar, saveSkills]
                                (pqxx::connection& conn) {
         std::lock_guard<std::mutex> lock(playerLocks_.get(charId));
         CharacterRepository charRepo(conn);
         charRepo.saveCharacter(rec);
 
-        SkillRepository skillRepo(conn);
-        skillRepo.saveAllCharacterSkills(charId, skillRecords);
-        skillRepo.saveSkillBar(charId, skillBar);
-        skillRepo.saveSkillPoints(charId, skillEarned, skillSpent);
+        if (saveSkills) {
+            SkillRepository skillRepo(conn);
+            skillRepo.saveAllCharacterSkills(charId, skillRecords);
+            skillRepo.saveSkillBar(charId, skillBar);
+            skillRepo.saveSkillPoints(charId, skillEarned, skillSpent);
+        }
 
         SocialRepository socialRepo(conn);
         socialRepo.updateLastOnline(charId);
