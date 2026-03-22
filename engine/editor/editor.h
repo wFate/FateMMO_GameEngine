@@ -13,6 +13,7 @@
 #include <implot.h>
 #endif
 #include "engine/editor/tile_tools.h"
+#include "engine/editor/node_editor.h"
 #include <ImGuizmo.h>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
@@ -273,6 +274,9 @@ private:
     // Post-process panel
     bool showPostProcessPanel_ = false;
     PostProcessConfig* postProcessConfig_ = nullptr;
+
+    // Dialogue node editor panel
+    DialogueNodeEditor dialogueEditor_;
 
     // ImGuizmo operation mode (synced to currentTool_)
     ImGuizmo::OPERATION gizmoOperation_ = ImGuizmo::TRANSLATE;

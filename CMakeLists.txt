@@ -114,6 +114,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imguizmo)
 
+FetchContent_Declare(
+    imnodes
+    GIT_REPOSITORY https://github.com/Nelarius/imnodes.git
+    GIT_TAG        v0.5
+)
+FetchContent_MakeAvailable(imnodes)
+
 # doctest (header-only test framework)
 FetchContent_Declare(
     doctest
@@ -251,12 +258,14 @@ add_library(imgui_lib STATIC
     ${implot_SOURCE_DIR}/implot.cpp
     ${implot_SOURCE_DIR}/implot_items.cpp
     ${imguizmo_SOURCE_DIR}/ImGuizmo.cpp
+    ${imnodes_SOURCE_DIR}/imnodes.cpp
 )
 target_include_directories(imgui_lib PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
     ${implot_SOURCE_DIR}
     ${imguizmo_SOURCE_DIR}
+    ${imnodes_SOURCE_DIR}
 )
 target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static ${OPENGL_LIB})
 # No loader define = ImGui uses its own minimal GL loader
@@ -462,7 +471,7 @@ endif()
 if(MSVC)
     target_compile_definitions(fate_engine PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_definitions(FateEngine PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_definitions(imgui_lib PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_definitions(imgui_lib PRIVATE _CRT_SECURE_NO_WARNINGS IMGUI_DEFINE_MATH_OPERATORS)
     target_compile_options(fate_engine PRIVATE /W4 /wd4100 /wd4201 /wd4458)
     target_compile_options(FateEngine PRIVATE /W4 /wd4100 /wd4201 /wd4458 /bigobj)
     target_compile_options(imgui_lib PRIVATE /W4 /wd4100 /wd4201 /wd4458 /wd4996)
