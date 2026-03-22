@@ -2161,6 +2161,12 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                 // First move after connect: accept unconditionally (position desync)
                 if (needsFirstMoveSync_.count(clientId)) {
                     needsFirstMoveSync_.erase(clientId);
+                    if (move.position.x < 0.0f || move.position.x > 32768.0f ||
+                        move.position.y < 0.0f || move.position.y > 32768.0f) {
+                        LOG_WARN("Server", "Client %d first move out of bounds (%.0f, %.0f)",
+                                 clientId, move.position.x, move.position.y);
+                        break;
+                    }
                     auto* t = e->getComponent<Transform>();
                     if (t) t->position = move.position;
                     lastValidPositions_[clientId] = move.position;
@@ -2193,6 +2199,13 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     server_.sendTo(clientId, Channel::Unreliable,
                                    PacketType::SvMovementCorrection, buf, w.size());
                 } else {
+                    // Reject moves to out-of-bounds positions
+                    if (move.position.x < 0.0f || move.position.x > 32768.0f ||
+                        move.position.y < 0.0f || move.position.y > 32768.0f) {
+                        LOG_WARN("Server", "Client %d move destination out of bounds (%.0f, %.0f)",
+                                 clientId, move.position.x, move.position.y);
+                        break;
+                    }
                     // Accept position
                     auto* t = e->getComponent<Transform>();
                     if (t) t->position = move.position;
