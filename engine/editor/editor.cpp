@@ -1,7 +1,9 @@
 #include "engine/editor/editor.h"
 #include "engine/core/logger.h"
+#ifndef FATEMMO_METAL
 // Editor uses direct GL for ImGui integration — intentionally outside RHI
 #include "engine/render/gfx/backend/gl/gl_loader.h"
+#endif
 #include "engine/render/fullscreen_quad.h"
 #include "engine/input/input.h"
 
@@ -14,7 +16,13 @@
 #include "imgui_internal.h"
 #include "imgui_freetype.h"
 #include "imgui_impl_sdl2.h"
+#ifdef FATEMMO_METAL
+#include <imgui_impl_metal.h>
+#import <Metal/Metal.h>
+#import <QuartzCore/CAMetalLayer.h>
+#else
 #include "imgui_impl_opengl3.h"
+#endif
 
 #include "game/components/transform.h"
 #include "game/components/sprite_component.h"
@@ -63,7 +71,11 @@ namespace fate {
 // Init / Shutdown
 // ============================================================================
 
+#ifdef FATEMMO_METAL
+bool Editor::init(SDL_Window* window, void* metalLayer) {
+#else
 bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
+#endif
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 #if defined(ENGINE_MEMORY_DEBUG)
@@ -203,8 +215,14 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     c[ImGuiCol_DockingPreview]       = ImVec4(0.290f, 0.541f, 0.859f, 0.40f);
     c[ImGuiCol_NavHighlight]         = ImVec4(0.290f, 0.541f, 0.859f, 1.00f);
 
+#ifdef FATEMMO_METAL
+    ImGui_ImplSDL2_InitForMetal(window);
+    CAMetalLayer* layer = (__bridge CAMetalLayer*)metalLayer;
+    ImGui_ImplMetal_Init(layer.device);
+#else
     ImGui_ImplSDL2_InitForOpenGL(window, glContext);
     ImGui_ImplOpenGL3_Init("#version 330");
+#endif
 
     SDL_SetWindowTitle(window, "FateMMO Engine | Editor");
 
@@ -227,7 +245,11 @@ void Editor::shutdown() {
 #if defined(ENGINE_MEMORY_DEBUG)
     ImPlot::DestroyContext();
 #endif
+#ifdef FATEMMO_METAL
+    ImGui_ImplMetal_Shutdown();
+#else
     ImGui_ImplOpenGL3_Shutdown();
+#endif
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
 }
@@ -239,7 +261,11 @@ void Editor::processEvent(const SDL_Event& event) {
 void Editor::beginFrame() {
     frameStarted_ = false;
 
+#ifdef FATEMMO_METAL
+    ImGui_ImplMetal_NewFrame(nil);
+#else
     ImGui_ImplOpenGL3_NewFrame();
+#endif
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
     frameStarted_ = true;
@@ -296,9 +322,11 @@ void Editor::drawSceneGridShader(Camera* camera) {
     gridShader_.setVec2("u_cameraPos", camera->position());
 
     // Additive/transparent blend for grid overlay
+#ifndef FATEMMO_METAL
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_DEPTH_TEST);
+#endif
 
     FullscreenQuad::instance().draw();
 
@@ -368,7 +396,9 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     }
 
     ImGui::Render();
+#ifndef FATEMMO_METAL
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#endif
 }
 
 void Editor::drawDockSpace() {

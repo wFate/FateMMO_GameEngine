@@ -77,7 +77,11 @@ public:
         return s_instance;
     }
 
+#ifdef FATEMMO_METAL
+    bool init(SDL_Window* window, void* metalLayer);
+#else
     bool init(SDL_Window* window, SDL_GLContext glContext);
+#endif
     void shutdown();
 
     void processEvent(const SDL_Event& event);
