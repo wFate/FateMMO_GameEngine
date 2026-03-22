@@ -6017,6 +6017,102 @@ void ServerApp::initGMCommands() {
                  static_cast<long long>(amount));
     }});
 
+    // /dungeon start <sceneId> | leave | list — Admin (role 2)
+    gmCommands_.registerCommand({"dungeon", 2, [this, sendSystemMsg](uint16_t callerId, const std::vector<std::string>& args) {
+        if (args.empty()) {
+            sendSystemMsg(callerId, "Usage: /dungeon start <sceneId> | leave | list");
+            return;
+        }
+
+        if (args[0] == "start") {
+            if (args.size() < 2) {
+                sendSystemMsg(callerId, "Usage: /dungeon start <sceneId>");
+                return;
+            }
+            const std::string& sceneId = args[1];
+            auto* sceneInfo = sceneCache_.get(sceneId);
+            if (!sceneInfo || !sceneInfo->isDungeon) {
+                sendSystemMsg(callerId, "Unknown dungeon: " + sceneId);
+                return;
+            }
+            if (dungeonManager_.getInstanceForClient(callerId) != 0) {
+                sendSystemMsg(callerId, "Already in a dungeon instance");
+                return;
+            }
+
+            auto* conn = server_.connections().findById(callerId);
+            if (!conn) return;
+            PersistentId pid(conn->playerEntityId);
+            EntityHandle ph = replication_.getEntityHandle(pid);
+            Entity* player = world_.getEntity(ph);
+            if (!player) return;
+
+            // Create instance (partyId = -1 for GM solo)
+            uint32_t instId = dungeonManager_.createInstance(sceneId, -1, sceneInfo->difficultyTier);
+            auto* inst = dungeonManager_.getInstance(instId);
+            if (!inst) return;
+            inst->leaderClientId = callerId;
+
+            // Save return point
+            auto* cs = player->getComponent<CharacterStatsComponent>();
+            auto* transform = player->getComponent<Transform>();
+            if (cs && transform) {
+                inst->returnPoints[callerId] = {cs->stats.currentScene, transform->position.x, transform->position.y};
+            }
+
+            // Event lock
+            playerEventLocks_[static_cast<uint32_t>(conn->playerEntityId)] = "Dungeon";
+
+            // Transfer to instance world
+            Vec2 spawnPos = {sceneInfo->defaultSpawnX, sceneInfo->defaultSpawnY};
+            transferPlayerToWorld(callerId, world_, replication_, inst->world, inst->replication, spawnPos, sceneId);
+
+            // Track
+            dungeonManager_.addPlayer(instId, callerId);
+
+            // Spawn mobs
+            spawnDungeonMobs(inst);
+
+            // Send start message
+            SvDungeonStartMsg start;
+            start.sceneId = sceneId;
+            start.timeLimitSeconds = static_cast<uint16_t>(inst->timeLimitSeconds);
+            uint8_t buf[128];
+            ByteWriter w(buf, sizeof(buf));
+            start.write(w);
+            server_.sendTo(callerId, Channel::ReliableOrdered, PacketType::SvDungeonStart, buf, w.size());
+
+            sendSystemMsg(callerId, "Dungeon instance " + std::to_string(instId) + " created: " + sceneInfo->sceneName);
+            LOG_INFO("GM", "Client %d started dungeon '%s' (instance %u)", callerId, sceneId.c_str(), instId);
+        }
+        else if (args[0] == "leave") {
+            uint32_t instId = dungeonManager_.getInstanceForClient(callerId);
+            if (instId == 0) {
+                sendSystemMsg(callerId, "Not in a dungeon");
+                return;
+            }
+            endDungeonInstance(instId, 2); // reason=abandoned
+            sendSystemMsg(callerId, "Left dungeon instance " + std::to_string(instId));
+            LOG_INFO("GM", "Client %d left dungeon instance %u", callerId, instId);
+        }
+        else if (args[0] == "list") {
+            size_t count = dungeonManager_.instanceCount();
+            std::string msg = "Active dungeons: " + std::to_string(count);
+            for (auto& [id, inst] : dungeonManager_.allInstances()) {
+                msg += "\n  #" + std::to_string(id)
+                     + " " + inst->sceneId
+                     + " | " + std::to_string(inst->playerClientIds.size()) + " players"
+                     + " | " + std::to_string(static_cast<int>(inst->elapsedTime)) + "s elapsed"
+                     + (inst->completed ? " [COMPLETED]" : "")
+                     + (inst->expired ? " [EXPIRED]" : "");
+            }
+            sendSystemMsg(callerId, msg);
+        }
+        else {
+            sendSystemMsg(callerId, "Usage: /dungeon start <sceneId> | leave | list");
+        }
+    }});
+
     LOG_INFO("Server", "Registered %zu GM commands", gmCommands_.size());
 }
 
