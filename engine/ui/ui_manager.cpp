@@ -12,6 +12,7 @@
 #include "engine/ui/widgets/tooltip.h"
 #include "engine/ui/widgets/dpad.h"
 #include "engine/ui/widgets/skill_arc.h"
+#include "engine/ui/widgets/player_info_block.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -379,6 +380,13 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         arc->startAngleDeg    = j.value("startAngleDeg", 210.0f);
         arc->endAngleDeg      = j.value("endAngleDeg", 330.0f);
         node = std::move(arc);
+    }
+    else if (type == "player_info_block") {
+        auto pib = std::make_unique<PlayerInfoBlock>(id);
+        pib->portraitSize = j.value("portraitSize", 48.0f);
+        pib->barWidth     = j.value("barWidth", 120.0f);
+        pib->barHeight    = j.value("barHeight", 16.0f);
+        node = std::move(pib);
     }
     else {
         node = std::make_unique<UINode>(id, type);
