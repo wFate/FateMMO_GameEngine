@@ -26,6 +26,7 @@
 #include "server/rate_limiter.h"
 #include "server/wal/write_ahead_log.h"
 #include "server/db/persistence_priority.h"
+#include "server/db/player_dirty_flags.h"
 #include "server/player_lock.h"
 #include "server/nonce_manager.h"
 #include "game/shared/gauntlet.h"
@@ -154,6 +155,9 @@ private:
     std::unordered_map<uint16_t, int>   moveCountThisTick_;
     std::unordered_map<uint16_t, int>   skillCommandsThisTick_;
     std::unordered_set<uint16_t> needsFirstMoveSync_;  // accept first CmdMove unconditionally
+
+    // Per-client dirty tracking (skip DB writes when nothing changed)
+    std::unordered_map<uint16_t, PlayerDirtyFlags> playerDirty_;
 
     // Per-client auto-save tracking (staggered)
     std::unordered_map<uint16_t, float> nextAutoSaveTime_;
