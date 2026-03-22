@@ -12,6 +12,15 @@
 namespace fate {
 
 struct Tileset; // forward decl (defined in tilemap.h)
+class TileTextureArray; // forward decl
+
+// Vertex for texture-array tile rendering (layer index instead of renderType)
+struct TileChunkVertex {
+    float x, y;           // position
+    float u, v;           // texcoord (0-1 within tile)
+    float layerIndex;     // texture array layer
+    float r, g, b, a;     // color tint
+};
 
 // Per-chunk GPU resources
 struct ChunkGPU {
@@ -54,6 +63,9 @@ public:
     // Release GPU resources for evicted chunks
     void releaseChunk(int chunkX, int chunkY, int layerIndex);
 
+    // Enable texture array mode (zero-bleed tile rendering)
+    void setTileArray(TileTextureArray* array);
+
 private:
     // Key: packed (layerIndex << 20) | (chunkY << 10) | chunkX
     static int packKey(int cx, int cy, int li) { return (li << 20) | (cy << 10) | cx; }
@@ -63,14 +75,28 @@ private:
     Shader shader_;
     gfx::PipelineHandle pipeline_{}; // shared pipeline for all chunk draws
 
+    // Texture array mode
+    bool useTextureArray_ = false;
+    TileTextureArray* tileArray_ = nullptr;
+    Shader tileArrayShader_;
+    gfx::PipelineHandle tileArrayPipeline_{};
+
     // Temp buffers to avoid per-frame allocation
     std::vector<SpriteVertex> vertexBuf_;
+    std::vector<TileChunkVertex> tileVertexBuf_;
     std::vector<unsigned int> indexBuf_;
 
     ChunkGPU& getOrCreate(int key);
 
     // The Tileset* finder helper -- matches Tilemap::findTileset logic
     static const Tileset* findTileset(int gid, const std::vector<Tileset>& tilesets);
+
+    // Texture array rebuild/render helpers
+    void rebuildChunkTextureArray(ChunkData& chunk, const std::vector<Tileset>& tilesets,
+                                   Vec2 mapOrigin, int tileW, int tileH, float layerOpacity);
+    void renderLayerTextureArray(const ChunkLayer& layer, const Mat4& viewProjection,
+                                  const Rect& visibleBounds, Vec2 mapOrigin,
+                                  int tileW, int tileH);
 };
 
 } // namespace fate

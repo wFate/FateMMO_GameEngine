@@ -3,6 +3,8 @@
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <algorithm>
+#include <cstring>
+#include "stb_image.h"
 
 namespace fate {
 
@@ -118,6 +120,18 @@ bool Tilemap::loadFromFile(const std::string& path) {
                 }
             }
             useChunkVBOs_ = true;
+
+            // Build texture array and enable zero-bleed rendering
+            buildTileArray();
+            if (tileArray_.glId()) {
+                chunkRenderer_.setTileArray(&tileArray_);
+                // Re-dirty all chunks so they rebuild with texture array vertex format
+                for (auto& cl : chunkManager_.layers()) {
+                    for (auto& cd : cl.chunks) {
+                        cd.dirty = true;
+                    }
+                }
+            }
         } else {
             LOG_WARN("Tilemap", "ChunkRenderer init failed, falling back to SpriteBatch rendering");
             useChunkVBOs_ = false;
@@ -278,6 +292,68 @@ void ChunkManager::buildFromLayers(const std::vector<TilemapLayer>& layers,
 
         chunkLayers_.push_back(std::move(cl));
     }
+}
+
+void Tilemap::buildTileArray() {
+    // Count total tiles across all tilesets
+    int totalTiles = 0;
+    for (auto& ts : tilesets_) {
+        totalTiles += ts.tileCount;
+    }
+
+    if (totalTiles <= 0) {
+        LOG_WARN("Tilemap", "No tiles to build texture array from");
+        return;
+    }
+
+    if (!tileArray_.create(tileWidth_, tileHeight_, totalTiles)) {
+        LOG_ERROR("Tilemap", "Failed to create tile texture array");
+        return;
+    }
+
+    // For each tileset, load its image and extract individual tiles
+    for (auto& ts : tilesets_) {
+        if (ts.imagePath.empty() || ts.tileCount <= 0) continue;
+
+        // Load tileset image via stb_image (force RGBA)
+        int imgWidth = 0, imgHeight = 0, imgChannels = 0;
+        unsigned char* fullImageData = stbi_load(ts.imagePath.c_str(),
+                                                  &imgWidth, &imgHeight, &imgChannels, 4);
+        if (!fullImageData) {
+            LOG_WARN("Tilemap", "Failed to load tileset image for array: %s", ts.imagePath.c_str());
+            continue;
+        }
+
+        int cols = ts.columns;
+        if (cols <= 0) cols = 1;
+
+        for (int i = 0; i < ts.tileCount; ++i) {
+            int col = i % cols;
+            int row = i / cols;
+            int srcX = col * ts.tileWidth;
+            int srcY = row * ts.tileHeight;
+
+            // Extract tile pixels from full image
+            std::vector<uint8_t> tilePixels(ts.tileWidth * ts.tileHeight * 4);
+            for (int y = 0; y < ts.tileHeight; ++y) {
+                memcpy(&tilePixels[y * ts.tileWidth * 4],
+                       &fullImageData[(srcY + y) * imgWidth * 4 + srcX * 4],
+                       ts.tileWidth * 4);
+            }
+
+            int layer = tileArray_.addTile(tilePixels.data());
+            if (layer >= 0) {
+                tileArray_.setGidMapping(ts.firstGid + i, layer);
+            }
+        }
+
+        stbi_image_free(fullImageData);
+        LOG_INFO("Tilemap", "Extracted %d tiles from '%s' into texture array",
+                 ts.tileCount, ts.name.c_str());
+    }
+
+    LOG_INFO("Tilemap", "Built tile texture array: %d layers (%dx%d per tile)",
+             tileArray_.layerCount(), tileArray_.tileWidth(), tileArray_.tileHeight());
 }
 
 const Tileset* Tilemap::findTileset(int gid) const {

@@ -68,6 +68,8 @@ extern PFNGLDELETERENDERBUFFERSPROC        glDeleteRenderbuffers_fp;
 extern PFNGLBINDRENDERBUFFERPROC           glBindRenderbuffer_fp;
 extern PFNGLRENDERBUFFERSTORAGEPROC        glRenderbufferStorage_fp;
 extern PFNGLFRAMEBUFFERRENDERBUFFERPROC    glFramebufferRenderbuffer_fp;
+extern PFNGLTEXIMAGE3DPROC                 glTexImage3D_fp;
+extern PFNGLTEXSUBIMAGE3DPROC              glTexSubImage3D_fp;
 
 // ============================================================================
 // Convenience macros so code reads like normal GL calls
@@ -114,6 +116,8 @@ extern PFNGLFRAMEBUFFERRENDERBUFFERPROC    glFramebufferRenderbuffer_fp;
 #undef glBindRenderbuffer
 #undef glRenderbufferStorage
 #undef glFramebufferRenderbuffer
+#undef glTexImage3D
+#undef glTexSubImage3D
 
 #define glCreateShader          glCreateShader_fp
 #define glDeleteShader          glDeleteShader_fp
@@ -157,6 +161,8 @@ extern PFNGLFRAMEBUFFERRENDERBUFFERPROC    glFramebufferRenderbuffer_fp;
 #define glBindRenderbuffer         glBindRenderbuffer_fp
 #define glRenderbufferStorage      glRenderbufferStorage_fp
 #define glFramebufferRenderbuffer  glFramebufferRenderbuffer_fp
+#define glTexImage3D               glTexImage3D_fp
+#define glTexSubImage3D            glTexSubImage3D_fp
 
 #endif // !FATEMMO_GLES
 
