@@ -735,6 +735,10 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
         }
         if (def->appliesFreeze && effectDuration > 0.0f && ctx.targetCC) {
             ctx.targetCC->applyFreeze(effectDuration, ctx.targetSEM, ctx.casterEntityId);
+            // Interrupt any active cast when CC is applied
+            if (ctx.targetPlayerStats && ctx.targetPlayerStats->isCasting()) {
+                ctx.targetPlayerStats->interruptCast();
+            }
         }
     }
 
@@ -744,6 +748,10 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                              ? def->stunDurationPerRank[ri] : 0.0f;
         if (stunDuration > 0.0f && !def->appliesFreeze) {
             ctx.targetCC->applyStun(stunDuration, ctx.targetSEM, ctx.casterEntityId);
+            // Interrupt any active cast when CC is applied
+            if (ctx.targetPlayerStats && ctx.targetPlayerStats->isCasting()) {
+                ctx.targetPlayerStats->interruptCast();
+            }
         }
     }
 

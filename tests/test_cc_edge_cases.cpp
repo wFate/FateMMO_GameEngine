@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "game/shared/crowd_control.h"
 #include "game/shared/status_effects.h"
+#include "game/shared/character_stats.h"
 
 using namespace fate;
 
@@ -211,4 +212,18 @@ TEST_CASE("CC: removeAllCC clears everything") {
     CHECK(cc.canMove());
     CHECK(cc.getCurrentCC() == CCType::None);
     CHECK(cc.getRemainingTime() == doctest::Approx(0.0f));
+}
+
+// ============================================================================
+// Cast Interruption on CC
+// ============================================================================
+
+TEST_CASE("Stun interrupts active cast") {
+    CharacterStats stats;
+    stats.beginCast("fireball", 3.0f, 42);
+    CHECK(stats.isCasting());
+
+    // Apply stun — should interrupt the cast
+    stats.interruptCast();
+    CHECK_FALSE(stats.isCasting());
 }
