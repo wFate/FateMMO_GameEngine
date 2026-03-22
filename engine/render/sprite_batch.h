@@ -2,6 +2,7 @@
 #include "engine/core/types.h"
 #include "engine/render/shader.h"
 #include "engine/render/texture.h"
+#include "engine/render/nine_slice.h"
 #include "engine/render/gfx/types.h"
 #include "engine/render/gfx/device.h"
 #include "engine/render/gfx/command_list.h"
@@ -49,6 +50,14 @@ public:
 
     // Draw a solid colored rectangle (no texture)
     void drawRect(const Vec2& position, const Vec2& size, const Color& color, float depth = 0.0f);
+
+    // Draw a 9-slice panel: corners fixed, edges stretch, center fills
+    // NOTE: Phase 1 assumes texture occupies full UV space (0-1).
+    void drawNineSlice(const std::shared_ptr<Texture>& texture,
+                       const Rect& dest,
+                       const NineSlice& sliceInsets,
+                       const Color& tint = Color::white(),
+                       float depth = 0.0f);
 
 #ifndef FATEMMO_METAL
     // Draw a quad with a raw GL texture ID (for font atlas, custom textures)

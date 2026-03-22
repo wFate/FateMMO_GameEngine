@@ -632,4 +632,70 @@ void SpriteBatch::createWhiteTexture() {
     whiteTexture_ = device.resolveGLTexture(whiteTexHandle_);
 }
 
+void SpriteBatch::drawNineSlice(const std::shared_ptr<Texture>& texture,
+                                const Rect& dest,
+                                const NineSlice& s,
+                                const Color& tint,
+                                float depth) {
+    if (!texture || !drawing_) return;
+
+    float texW = static_cast<float>(texture->width());
+    float texH = static_cast<float>(texture->height());
+    if (texW <= 0 || texH <= 0) return;
+
+    // UV insets (normalized 0-1)
+    float uLeft   = s.left / texW;
+    float uRight  = s.right / texW;
+    float vTop    = s.top / texH;
+    float vBottom = s.bottom / texH;
+
+    // Destination regions
+    float dl = dest.x;
+    float dt = dest.y;
+    float dr = dest.x + dest.w;
+    float db = dest.y + dest.h;
+    float dml = dl + s.left;
+    float dmr = dr - s.right;
+    float dmt = dt + s.top;
+    float dmb = db - s.bottom;
+
+    // Clamp: if dest is smaller than slice insets, degenerate gracefully
+    if (dml > dmr) { dml = dmr = (dl + dr) * 0.5f; }
+    if (dmt > dmb) { dmt = dmb = (dt + db) * 0.5f; }
+
+    struct SliceRegion {
+        Rect destRect;
+        Rect uvRect;
+    };
+
+    SliceRegion regions[9] = {
+        // Top row
+        {{dl,  dt,  s.left,        s.top},         {0,           0,           uLeft,          vTop}},
+        {{dml, dt,  dmr - dml,     s.top},         {uLeft,       0,           1-uLeft-uRight, vTop}},
+        {{dmr, dt,  s.right,       s.top},         {1 - uRight,  0,           uRight,         vTop}},
+        // Middle row
+        {{dl,  dmt, s.left,        dmb - dmt},     {0,           vTop,        uLeft,          1-vTop-vBottom}},
+        {{dml, dmt, dmr - dml,     dmb - dmt},     {uLeft,       vTop,        1-uLeft-uRight, 1-vTop-vBottom}},
+        {{dmr, dmt, s.right,       dmb - dmt},     {1 - uRight,  vTop,        uRight,         1-vTop-vBottom}},
+        // Bottom row
+        {{dl,  dmb, s.left,        s.bottom},      {0,           1 - vBottom, uLeft,          vBottom}},
+        {{dml, dmb, dmr - dml,     s.bottom},      {uLeft,       1 - vBottom, 1-uLeft-uRight, vBottom}},
+        {{dmr, dmb, s.right,       s.bottom},      {1 - uRight,  1 - vBottom, uRight,         vBottom}},
+    };
+
+    for (auto& r : regions) {
+        if (r.destRect.w <= 0 || r.destRect.h <= 0) continue;
+
+        SpriteDrawParams params;
+        params.position = {r.destRect.x + r.destRect.w * 0.5f,
+                          r.destRect.y + r.destRect.h * 0.5f};
+        params.size = {r.destRect.w, r.destRect.h};
+        params.sourceRect = r.uvRect;
+        params.color = tint;
+        params.depth = depth;
+
+        draw(texture, params);
+    }
+}
+
 } // namespace fate
