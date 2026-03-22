@@ -96,6 +96,7 @@ struct SceneInfoRecord {
     int minLevel = 1;
     bool isDungeon = false;
     bool pvpEnabled = false;
+    int difficultyTier = 1;
     float defaultSpawnX = 0.0f;
     float defaultSpawnY = 0.0f;
 };
