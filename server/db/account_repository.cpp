@@ -25,7 +25,8 @@ std::optional<AccountRecord> AccountRepository::findByUsername(const std::string
     try {
         pqxx::work txn(conn_);
         auto result = txn.exec_params(
-            "SELECT account_id, username, password_hash, email, is_active, is_banned, ban_reason "
+            "SELECT account_id, username, password_hash, email, is_active, is_banned, ban_reason, "
+            "COALESCE(admin_role, 0) AS admin_role "
             "FROM accounts WHERE username = $1",
             username);
         txn.commit();
@@ -38,6 +39,7 @@ std::optional<AccountRecord> AccountRepository::findByUsername(const std::string
         rec.is_active     = result[0]["is_active"].is_null() ? true : result[0]["is_active"].as<bool>();
         rec.is_banned     = result[0]["is_banned"].is_null() ? false : result[0]["is_banned"].as<bool>();
         rec.ban_reason    = result[0]["ban_reason"].is_null() ? "" : result[0]["ban_reason"].as<std::string>();
+        rec.admin_role    = result[0]["admin_role"].as<int>();
         return rec;
     } catch (const std::exception& e) {
         LOG_ERROR("AccountRepo", "findByUsername failed: %s", e.what());

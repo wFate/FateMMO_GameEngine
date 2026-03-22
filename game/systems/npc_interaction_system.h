@@ -35,8 +35,22 @@ public:
     Entity* interactingNPC = nullptr;
     Entity* localPlayer = nullptr;
 
+    void resetCachedPointers() {
+        localPlayer = nullptr;
+        interactingNPC = nullptr;
+        dialogueOpen = false;
+    }
+
     void update(float dt) override {
         if (!world_ || !camera) return;
+
+        if (localPlayer && !world_->isAlive(localPlayer->handle())) {
+            localPlayer = nullptr;
+        }
+        if (interactingNPC && !world_->isAlive(interactingNPC->handle())) {
+            interactingNPC = nullptr;
+            dialogueOpen = false;
+        }
 
         // Find local player if not cached
         if (!localPlayer) {

@@ -1262,8 +1262,8 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     // Track active account session
     activeAccountSessions_[session.account_id] = clientId;
 
-    // Default admin_role to 0 (no GM); real role requires DB account lookup
-    clientAdminRoles_[clientId] = 0;
+    // Load admin_role from DB (carried through PendingSession from auth flow)
+    clientAdminRoles_[clientId] = session.admin_role;
 
     // Load skills from DB
     auto* skillComp = player->getComponent<SkillManagerComponent>();
@@ -2731,11 +2731,13 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     if (!inv) break;
                     int invSlot = inv->inventory.findByInstanceId(instanceId);
                     if (invSlot < 0) { sendTradeResult(6, 4, "Item not found"); break; }
+                    if (inv->inventory.isSlotLocked(invSlot)) { sendTradeResult(6, 4, "Item already in trade"); break; }
                     ItemInstance item = inv->inventory.getSlot(invSlot);
                     if (item.isBound()) { sendTradeResult(6, 5, "Item is soulbound"); break; }
 
                     tradeRepo_->addItemToTrade(session->sessionId, client->character_id,
                                                 slotIdx, sourceSlot, instanceId, quantity);
+                    inv->inventory.lockSlotForTrade(invSlot);
                     // Unlock both sides when items change
                     tradeRepo_->unlockBothPlayers(session->sessionId);
                     sendTradeResult(2, 0, "Item added");
@@ -2836,6 +2838,50 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                                 session->playerACharacterId, session->playerBCharacterId,
                                 session->playerAGold, session->playerBGold, "[]", "[]");
 
+                            // Sync in-memory inventories to match DB state
+                            auto findInvForCharId = [&](const std::string& charId) -> InventoryComponent* {
+                                InventoryComponent* result = nullptr;
+                                server_.connections().forEach([&](ClientConnection& c) {
+                                    if (c.character_id == charId && c.playerEntityId != 0) {
+                                        PersistentId p(c.playerEntityId);
+                                        EntityHandle eh = getReplicationForClient(c.clientId).getEntityHandle(p);
+                                        Entity* ent = getWorldForClient(c.clientId).getEntity(eh);
+                                        if (ent) result = ent->getComponent<InventoryComponent>();
+                                    }
+                                });
+                                return result;
+                            };
+                            auto* invA = findInvForCharId(session->playerACharacterId);
+                            auto* invB = findInvForCharId(session->playerBCharacterId);
+                            if (invA && invB) {
+                                for (const auto& offer : offersA) {
+                                    int slot = invA->inventory.findByInstanceId(offer.itemInstanceId);
+                                    if (slot >= 0) {
+                                        ItemInstance item = invA->inventory.getSlot(slot);
+                                        invA->inventory.removeItem(slot);
+                                        invB->inventory.addItem(item);
+                                    }
+                                }
+                                for (const auto& offer : offersB) {
+                                    int slot = invB->inventory.findByInstanceId(offer.itemInstanceId);
+                                    if (slot >= 0) {
+                                        ItemInstance item = invB->inventory.getSlot(slot);
+                                        invB->inventory.removeItem(slot);
+                                        invA->inventory.addItem(item);
+                                    }
+                                }
+                                if (session->playerAGold > 0) {
+                                    invA->inventory.addGold(-session->playerAGold);
+                                    invB->inventory.addGold(session->playerAGold);
+                                }
+                                if (session->playerBGold > 0) {
+                                    invB->inventory.addGold(-session->playerBGold);
+                                    invA->inventory.addGold(session->playerBGold);
+                                }
+                            }
+                            if (invA) invA->inventory.unlockAllTradeSlots();
+                            if (invB) invB->inventory.unlockAllTradeSlots();
+
                             sendTradeResult(5, 0, "Trade completed!");
                             playerDirty_[clientId].inventory = true;
                             enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
@@ -2868,6 +2914,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     if (session) {
                         tradeRepo_->cancelSession(session->sessionId);
                     }
+                    auto* inv = e->getComponent<InventoryComponent>();
+                    if (inv) inv->inventory.unlockAllTradeSlots();
                     sendTradeResult(6, 0, "Trade cancelled");
                     break;
                 }
@@ -2964,9 +3012,16 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             Entity* e = getWorldForClient(clientId).getEntity(h);
             if (!e) break;
 
-            // Level gate: check SceneCache for minimum level requirement
+            // Validate target scene exists
             const SceneInfoRecord* targetScene = sceneCache_.getByName(cmd.targetScene);
-            if (targetScene) {
+            if (!targetScene) {
+                LOG_WARN("Server", "Client %d zone transition to unknown scene '%s'",
+                         clientId, cmd.targetScene.c_str());
+                break; // reject — scene does not exist
+            }
+
+            // Level gate: check minimum level requirement
+            {
                 auto* charStats = e->getComponent<CharacterStatsComponent>();
                 if (charStats && charStats->stats.level < targetScene->minLevel) {
                     SvChatMessageMsg chatMsg;
@@ -4283,8 +4338,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             const auto* def = itemDefCache_.getDefinition(dropComp->itemId);
 
             ItemInstance item;
-            item.instanceId = std::to_string(
-                std::chrono::steady_clock::now().time_since_epoch().count());
+            item.instanceId = generateItemInstanceId();
             item.itemId = dropComp->itemId;
             item.quantity = dropComp->quantity;
             item.enchantLevel = dropComp->enchantLevel;
@@ -6816,8 +6870,7 @@ void ServerApp::tickPetAutoLoot(float dt) {
                     const auto* itemDef = itemDefCache_.getDefinition(info.drop->itemId);
 
                     ItemInstance item;
-                    item.instanceId   = std::to_string(
-                        std::chrono::steady_clock::now().time_since_epoch().count());
+                    item.instanceId   = generateItemInstanceId();
                     item.itemId       = info.drop->itemId;
                     item.quantity     = info.drop->quantity;
                     item.enchantLevel = info.drop->enchantLevel;
@@ -6975,8 +7028,7 @@ void ServerApp::distributeDungeonRewards(DungeonInstance* inst) {
             ItemInstance box;
             box.itemId = treasureBoxId;
             box.quantity = 1;
-            box.instanceId = std::to_string(
-                std::chrono::steady_clock::now().time_since_epoch().count());
+            box.instanceId = generateItemInstanceId();
             box.rarity = parseItemRarity(boxDef->rarity);
             int slot = inv->inventory.addItem(box);
             if (slot >= 0) {

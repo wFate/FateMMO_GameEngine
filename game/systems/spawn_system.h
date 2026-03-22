@@ -335,7 +335,7 @@ private:
                     clamped.x = home.x < bounds.x ? bounds.x + 16.0f :
                                (home.x > bounds.x + bounds.w ? bounds.x + bounds.w - 16.0f : home.x);
                     clamped.y = home.y < bounds.y ? bounds.y + 16.0f :
-                               (home.y > bounds.x + bounds.h ? bounds.y + bounds.h - 16.0f : home.y);
+                               (home.y > bounds.y + bounds.h ? bounds.y + bounds.h - 16.0f : home.y);
                     tm.homePosition = clamped;
                     aiComp->ai.onRespawned(clamped); // Reset AI home
                 }

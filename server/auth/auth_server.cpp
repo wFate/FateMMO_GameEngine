@@ -569,6 +569,7 @@ void AuthServer::processLogin(const LoginRequest& req, AuthResponse& resp) {
     session.character_id = character->character_id;
     session.created_at = now;
     session.expires_at = now + 30.0; // 30 second window to connect via UDP
+    session.admin_role = account->admin_role;
 
     pushResult(AuthResult{token, session});
 

@@ -13,6 +13,7 @@ struct AccountRecord {
     bool is_active = true;
     bool is_banned = false;
     std::string ban_reason;
+    int admin_role = 0;  // 0=player, 1=GM, 2=admin
 };
 
 class AccountRepository {
