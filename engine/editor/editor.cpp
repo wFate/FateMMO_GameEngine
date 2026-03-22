@@ -41,6 +41,7 @@
 #include <algorithm>
 #include <cstring>
 #include <unordered_set>
+#include <unordered_map>
 
 namespace fs = std::filesystem;
 
@@ -483,6 +484,9 @@ void Editor::drawSceneViewport() {
             toolBtn("Rotate", EditorTool::Rotate);
             toolBtn("Paint", EditorTool::Paint);
             toolBtn("Erase", EditorTool::Erase);
+            toolBtn("Fill", EditorTool::Fill);
+            toolBtn("Rect", EditorTool::RectFill);
+            toolBtn("Line", EditorTool::LineTool);
 
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
             ImGui::SameLine();
@@ -732,7 +736,11 @@ void Editor::drawDebugInfoPanel(World* world) {
         ImGui::Text("Tool: %s", currentTool_ == EditorTool::Move ? "Move" :
                                  currentTool_ == EditorTool::Scale ? "Scale" :
                                  currentTool_ == EditorTool::Rotate ? "Rotate" :
-                                 currentTool_ == EditorTool::Paint ? "Paint" : "Erase");
+                                 currentTool_ == EditorTool::Paint ? "Paint" :
+                                 currentTool_ == EditorTool::Erase ? "Erase" :
+                                 currentTool_ == EditorTool::Fill ? "Fill" :
+                                 currentTool_ == EditorTool::RectFill ? "RectFill" :
+                                 currentTool_ == EditorTool::LineTool ? "Line" : "?");
     }
     ImGui::End();
 }
@@ -975,6 +983,14 @@ void Editor::handleSceneDrag(Camera* camera, const Vec2& screenPos,
     t->position = newPos;
 }
 
+// Forward declarations for tile tool helpers (defined below paintTileAt)
+static std::unique_ptr<UndoCommand> paintOneTile(World* world,
+    const Vec2& worldPos, int tileIndex, int paletteCols,
+    int paletteTileSize, float gridSize,
+    const std::shared_ptr<Texture>& paletteTexture,
+    const std::string& paletteTexturePath);
+static Vec2 tileToWorldCenter(int col, int row, float gridSize);
+
 void Editor::handleMouseUp() {
     // Record undo for completed drag/resize
     if (selectedEntity_) {
@@ -1007,6 +1023,39 @@ void Editor::handleMouseUp() {
     isDraggingEntity_ = false;
     isResizingEntity_ = false;
     resizeHandle_ = -1;
+
+    // Finalize RectFill / LineTool drag
+    if (isToolDragging_ && dockWorld_ &&
+        (currentTool_ == EditorTool::RectFill || currentTool_ == EditorTool::LineTool) &&
+        selectedTileIndex_ >= 0 && paletteTexture_) {
+
+        TileCoordList coords;
+        std::string toolName;
+        if (currentTool_ == EditorTool::RectFill) {
+            coords = rectangleFill(toolDragStart_.x, toolDragStart_.y,
+                                   toolDragEnd_.x, toolDragEnd_.y);
+            toolName = "Rect Fill";
+        } else {
+            coords = lineTool(toolDragStart_.x, toolDragStart_.y,
+                              toolDragEnd_.x, toolDragEnd_.y);
+            toolName = "Line";
+        }
+
+        if (!coords.empty()) {
+            auto compound = std::make_unique<CompoundCommand>();
+            compound->desc = toolName + " (" + std::to_string(coords.size()) + " tiles)";
+            for (auto& coord : coords) {
+                Vec2 wp = tileToWorldCenter(coord.x, coord.y, gridSize_);
+                auto cmd = paintOneTile(dockWorld_, wp, selectedTileIndex_, paletteColumns_,
+                                        paletteTileSize_, gridSize_, paletteTexture_, paletteTexturePath_);
+                if (cmd) compound->commands.push_back(std::move(cmd));
+            }
+            if (!compound->empty()) UndoSystem::instance().push(std::move(compound));
+        }
+    }
+    isToolDragging_ = false;
+    toolDragStart_ = {-1, -1};
+    toolDragEnd_ = {-1, -1};
 }
 
 // ============================================================================
@@ -1364,6 +1413,85 @@ void Editor::loadTileset(const std::string& path, int tileSize) {
              paletteTexture_->width(), paletteTexture_->height());
 }
 
+// Paint a single tile at world position, returning the undo command (caller manages undo stack)
+static std::unique_ptr<UndoCommand> paintOneTile(World* world,
+    const Vec2& worldPos, int tileIndex, int paletteCols,
+    int paletteTileSize, float gridSize,
+    const std::shared_ptr<Texture>& paletteTexture,
+    const std::string& paletteTexturePath) {
+
+    int col = tileIndex % paletteCols;
+    int row = tileIndex / paletteCols;
+    float texW = (float)paletteTexture->width();
+    float texH = (float)paletteTexture->height();
+
+    Rect srcRect = {
+        (col * paletteTileSize) / texW,
+        1.0f - ((row + 1) * paletteTileSize) / texH,
+        paletteTileSize / texW,
+        paletteTileSize / texH
+    };
+
+    // Check if there's already a tile from the SAME tileset at this position
+    std::unique_ptr<UndoCommand> result;
+    bool replaced = false;
+    world->forEach<Transform, SpriteComponent>(
+        [&](Entity* entity, Transform* t, SpriteComponent* s) {
+            if (replaced) return;
+            if (entity->tag() != "ground") return;
+            if (std::abs(t->position.x - worldPos.x) > 1.0f ||
+                std::abs(t->position.y - worldPos.y) > 1.0f) return;
+            if (s->texturePath != paletteTexturePath) return;
+
+            auto cmd = std::make_unique<PropertyCommand>();
+            cmd->entityHandle = entity->handle();
+            cmd->oldState = PrefabLibrary::entityToJson(entity);
+            cmd->desc = "Paint Tile";
+            s->sourceRect = srcRect;
+            cmd->newState = PrefabLibrary::entityToJson(entity);
+            result = std::move(cmd);
+            replaced = true;
+        }
+    );
+
+    if (!replaced) {
+        float tileDepth = 0.0f;
+        world->forEach<Transform, SpriteComponent>(
+            [&](Entity* entity, Transform* t, SpriteComponent*) {
+                if (entity->tag() == "ground" &&
+                    std::abs(t->position.x - worldPos.x) < 1.0f &&
+                    std::abs(t->position.y - worldPos.y) < 1.0f) {
+                    if (t->depth >= tileDepth) tileDepth = t->depth + 1.0f;
+                }
+            }
+        );
+
+        Entity* tile = world->createEntity("Tile");
+        tile->setTag("ground");
+
+        auto* transform = tile->addComponent<Transform>(worldPos);
+        transform->depth = tileDepth;
+
+        auto* sprite = tile->addComponent<SpriteComponent>();
+        sprite->texture = paletteTexture;
+        sprite->texturePath = paletteTexturePath;
+        sprite->sourceRect = srcRect;
+        sprite->size = {(float)paletteTileSize, (float)paletteTileSize};
+
+        auto cmd = std::make_unique<CreateCommand>();
+        cmd->createdHandle = tile->handle();
+        cmd->entityData = PrefabLibrary::entityToJson(tile);
+        result = std::move(cmd);
+    }
+    return result;
+}
+
+// Convert tile col/row to snapped world position
+static Vec2 tileToWorldCenter(int col, int row, float gridSize) {
+    float half = gridSize * 0.5f;
+    return { col * gridSize + half, row * gridSize + half };
+}
+
 void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
                          int windowWidth, int windowHeight) {
     if (!world || !camera || selectedTileIndex_ < 0 || !paletteTexture_) return;
@@ -1377,76 +1505,94 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
     worldPos.x = std::floor(worldPos.x / gridSize_) * gridSize_ + half;
     worldPos.y = std::floor(worldPos.y / gridSize_) * gridSize_ + half;
 
-    int col = selectedTileIndex_ % paletteColumns_;
-    int row = selectedTileIndex_ / paletteColumns_;
-    float texW = (float)paletteTexture_->width();
-    float texH = (float)paletteTexture_->height();
+    int tileCol = (int)std::floor(worldPos.x / gridSize_);
+    int tileRow = (int)std::floor(worldPos.y / gridSize_);
 
-    Rect srcRect = {
-        (col * paletteTileSize_) / texW,
-        1.0f - ((row + 1) * paletteTileSize_) / texH,
-        paletteTileSize_ / texW,
-        paletteTileSize_ / texH
-    };
+    // --- Fill tool: flood fill on click ---
+    if (currentTool_ == EditorTool::Fill) {
+        // Build a lookup of occupied tile positions (same tileset, same GID)
+        int srcCol = selectedTileIndex_ % paletteColumns_;
+        int srcRow = selectedTileIndex_ / paletteColumns_;
+        float texW = (float)paletteTexture_->width();
+        float texH = (float)paletteTexture_->height();
+        Rect selectedSrcRect = {
+            (srcCol * paletteTileSize_) / texW,
+            1.0f - ((srcRow + 1) * paletteTileSize_) / texH,
+            paletteTileSize_ / texW,
+            paletteTileSize_ / texH
+        };
 
-    // Check if there's already a tile from the SAME tileset at this position
-    // (only replace tiles from the same texture to avoid destroying ground under overlays)
-    bool replaced = false;
-    world->forEach<Transform, SpriteComponent>(
-        [&](Entity* entity, Transform* t, SpriteComponent* s) {
-            if (replaced) return;
-            if (entity->tag() != "ground") return;
-            if (std::abs(t->position.x - worldPos.x) > 1.0f ||
-                std::abs(t->position.y - worldPos.y) > 1.0f) return;
-            if (s->texturePath != paletteTexturePath_) return;
+        // Collect existing ground tile positions and their source rects
+        std::unordered_map<int, Rect> tileMap; // pack(col,row) -> srcRect
+        int mapW = 256, mapH = 256; // generous bounds
+        auto pack = [mapW](int c, int r) { return r * mapW + c; };
 
-            // Same tileset at same position — update the tile region
-            auto cmd = std::make_unique<PropertyCommand>();
-            cmd->entityHandle = entity->handle();
-            cmd->oldState = PrefabLibrary::entityToJson(entity);
-            cmd->desc = "Paint Tile";
-
-            s->sourceRect = srcRect;
-
-            cmd->newState = PrefabLibrary::entityToJson(entity);
-            UndoSystem::instance().push(std::move(cmd));
-            replaced = true;
-        }
-    );
-
-    if (!replaced) {
-        // Create new tile entity as an overlay (depth 1 if ground tiles exist, 0 otherwise)
-        // Check if any ground tile exists at this position
-        float tileDepth = 0.0f;
         world->forEach<Transform, SpriteComponent>(
-            [&](Entity* entity, Transform* t, SpriteComponent*) {
-                if (entity->tag() == "ground" &&
-                    std::abs(t->position.x - worldPos.x) < 1.0f &&
-                    std::abs(t->position.y - worldPos.y) < 1.0f) {
-                    // Place above the highest existing tile at this position
-                    if (t->depth >= tileDepth) tileDepth = t->depth + 1.0f;
+            [&](Entity* entity, Transform* t, SpriteComponent* s) {
+                if (entity->tag() != "ground") return;
+                if (s->texturePath != paletteTexturePath_) return;
+                int tc = (int)std::floor(t->position.x / gridSize_);
+                int tr = (int)std::floor(t->position.y / gridSize_);
+                if (tc >= 0 && tc < mapW && tr >= 0 && tr < mapH) {
+                    tileMap[pack(tc, tr)] = s->sourceRect;
                 }
             }
         );
 
-        Entity* tile = world->createEntity("Tile");
-        tile->setTag("ground");
+        // Fill target: tiles that have the same source rect as the clicked tile,
+        // or empty tiles if the clicked tile was empty
+        auto it = tileMap.find(pack(tileCol, tileRow));
+        bool clickedEmpty = (it == tileMap.end());
+        Rect clickedRect = clickedEmpty ? Rect{} : it->second;
 
-        auto* transform = tile->addComponent<Transform>(worldPos);
-        transform->depth = tileDepth;
+        auto matchesFillTarget = [&](int c, int r) -> bool {
+            auto found = tileMap.find(pack(c, r));
+            if (clickedEmpty) return found == tileMap.end();
+            if (found == tileMap.end()) return false;
+            // Match if same source rect
+            auto& sr = found->second;
+            return std::abs(sr.x - clickedRect.x) < 0.001f &&
+                   std::abs(sr.y - clickedRect.y) < 0.001f &&
+                   std::abs(sr.w - clickedRect.w) < 0.001f &&
+                   std::abs(sr.h - clickedRect.h) < 0.001f;
+        };
 
-        auto* sprite = tile->addComponent<SpriteComponent>();
-        sprite->texture = paletteTexture_;
-        sprite->texturePath = paletteTexturePath_;
-        sprite->sourceRect = srcRect;
-        sprite->size = {(float)paletteTileSize_, (float)paletteTileSize_};
+        auto coords = floodFill(tileCol, tileRow, mapW, mapH, matchesFillTarget);
+        if (coords.empty()) return;
 
-        // Record undo for new tile creation
-        auto cmd = std::make_unique<CreateCommand>();
-        cmd->createdHandle = tile->handle();
-        cmd->entityData = PrefabLibrary::entityToJson(tile);
-        UndoSystem::instance().push(std::move(cmd));
+        // Don't fill if same tile already
+        if (!clickedEmpty) {
+            if (std::abs(clickedRect.x - selectedSrcRect.x) < 0.001f &&
+                std::abs(clickedRect.y - selectedSrcRect.y) < 0.001f) return;
+        }
+
+        auto compound = std::make_unique<CompoundCommand>();
+        compound->desc = "Fill (" + std::to_string(coords.size()) + " tiles)";
+        for (auto& coord : coords) {
+            Vec2 wp = tileToWorldCenter(coord.x, coord.y, gridSize_);
+            auto cmd = paintOneTile(world, wp, selectedTileIndex_, paletteColumns_,
+                                    paletteTileSize_, gridSize_, paletteTexture_, paletteTexturePath_);
+            if (cmd) compound->commands.push_back(std::move(cmd));
+        }
+        if (!compound->empty()) UndoSystem::instance().push(std::move(compound));
+        return;
     }
+
+    // --- RectFill / LineTool: record drag start on mousedown, track end ---
+    if (currentTool_ == EditorTool::RectFill || currentTool_ == EditorTool::LineTool) {
+        if (!isToolDragging_) {
+            toolDragStart_ = {tileCol, tileRow};
+            isToolDragging_ = true;
+        }
+        toolDragEnd_ = {tileCol, tileRow};
+        // Actual painting happens in handleMouseUp
+        return;
+    }
+
+    // --- Paint tool: single tile (existing behavior) ---
+    auto cmd = paintOneTile(world, worldPos, selectedTileIndex_, paletteColumns_,
+                            paletteTileSize_, gridSize_, paletteTexture_, paletteTexturePath_);
+    if (cmd) UndoSystem::instance().push(std::move(cmd));
 }
 
 void Editor::drawTilePalette(World* world, Camera* camera) {
@@ -1500,10 +1646,17 @@ void Editor::drawTilePalette(World* world, Camera* camera) {
         return;
     }
 
-    // Paint mode toggle
-    if (currentTool_ == EditorTool::Paint) {
+    // Paint mode toggle — shows active tool name
+    bool isTileToolActive = (currentTool_ == EditorTool::Paint ||
+                             currentTool_ == EditorTool::Fill ||
+                             currentTool_ == EditorTool::RectFill ||
+                             currentTool_ == EditorTool::LineTool);
+    if (isTileToolActive) {
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
-        if (ImGui::Button("PAINTING")) currentTool_ = EditorTool::Move;
+        const char* activeLabel = currentTool_ == EditorTool::Paint ? "PAINTING" :
+                                  currentTool_ == EditorTool::Fill ? "FILLING" :
+                                  currentTool_ == EditorTool::RectFill ? "RECT FILL" : "LINE";
+        if (ImGui::Button(activeLabel)) currentTool_ = EditorTool::Move;
         ImGui::PopStyleColor();
     } else {
         if (ImGui::Button("Paint") && selectedTileIndex_ >= 0) currentTool_ = EditorTool::Paint;
@@ -1552,7 +1705,12 @@ void Editor::drawTilePalette(World* world, Camera* camera) {
             if (ImGui::ImageButton(btnId, texId, ImVec2(tileDisplaySize, tileDisplaySize),
                                    ImVec2(u0, v1), ImVec2(u1, v0))) {
                 selectedTileIndex_ = index;
-                currentTool_ = EditorTool::Paint;
+                // Preserve current tile tool if active; otherwise default to Paint
+                if (currentTool_ != EditorTool::Fill &&
+                    currentTool_ != EditorTool::RectFill &&
+                    currentTool_ != EditorTool::LineTool) {
+                    currentTool_ = EditorTool::Paint;
+                }
             }
 
             if (selected) ImGui::PopStyleColor();
@@ -3390,6 +3548,18 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     // X = Erase tool
     if (scancode == SDL_SCANCODE_X && !ctrl) {
         currentTool_ = EditorTool::Erase;
+    }
+    // G = Flood fill tool
+    if (scancode == SDL_SCANCODE_G && !ctrl) {
+        currentTool_ = EditorTool::Fill;
+    }
+    // U = Rectangle fill tool
+    if (scancode == SDL_SCANCODE_U && !ctrl) {
+        currentTool_ = EditorTool::RectFill;
+    }
+    // L = Line tool
+    if (scancode == SDL_SCANCODE_L && !ctrl) {
+        currentTool_ = EditorTool::LineTool;
     }
 }
 

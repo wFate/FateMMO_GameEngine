@@ -12,6 +12,7 @@
 #include "engine/editor/memory_panel.h"
 #include <implot.h>
 #endif
+#include "engine/editor/tile_tools.h"
 #include <ImGuizmo.h>
 #include <SDL.h>
 #include <string>
@@ -55,11 +56,14 @@ static constexpr int kDisplayPresetCount = sizeof(kDisplayPresets) / sizeof(kDis
 
 // Editor tool modes (like Unity W/E/R)
 enum class EditorTool {
-    Move,    // W - drag to move entities
-    Scale,   // E - drag handles to scale/resize
-    Rotate,  // R - rotate entity
-    Paint,   // B - tile painting mode
-    Erase    // X - click to delete ground tiles
+    Move,      // W - drag to move entities
+    Scale,     // E - drag handles to scale/resize
+    Rotate,    // R - rotate entity
+    Paint,     // B - tile painting mode
+    Erase,     // X - click to delete ground tiles
+    Fill,      // G - flood fill
+    RectFill,  // U - rectangle fill
+    LineTool   // L - line tool
 };
 
 class Editor {
@@ -111,7 +115,12 @@ public:
     Entity* selectedEntity() const { return selectedEntity_; }
     void clearSelection() { selectedEntity_ = nullptr; isDraggingEntity_ = false; selectedEntities_.clear(); }
     void cancelPlacement() { isDraggingAsset_ = false; draggedAssetPath_.clear(); }
-    bool isTilePaintMode() const { return currentTool_ == EditorTool::Paint && selectedTileIndex_ >= 0; }
+    bool isTilePaintMode() const {
+        return (currentTool_ == EditorTool::Paint ||
+                currentTool_ == EditorTool::Fill ||
+                currentTool_ == EditorTool::RectFill ||
+                currentTool_ == EditorTool::LineTool) && selectedTileIndex_ >= 0;
+    }
     bool isEraseMode() const { return currentTool_ == EditorTool::Erase; }
     bool isScaleMode() const { return currentTool_ == EditorTool::Scale; }
 
@@ -226,6 +235,18 @@ private:
     int paletteColumns_ = 0;
     int paletteRows_ = 0;
     int selectedTileIndex_ = -1;
+
+    // Multi-tile stamp selection
+    Vec2i stampStart_ = {-1, -1};
+    Vec2i stampEnd_ = {-1, -1};
+    std::vector<int> stampTiles_;
+    int stampWidth_ = 1;
+    int stampHeight_ = 1;
+
+    // Rect/line tool drag state
+    Vec2i toolDragStart_ = {-1, -1};
+    Vec2i toolDragEnd_ = {-1, -1};
+    bool isToolDragging_ = false;
 
     // Console command
     char consoleCmdBuf_[256] = "";
