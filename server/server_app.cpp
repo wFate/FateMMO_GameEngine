@@ -1957,6 +1957,21 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
         arenaManager_.onPlayerDisconnect(eid);
         playerEventLocks_.erase(eid);
 
+        // Clean up party membership on disconnect
+        {
+            World& w = getWorldForClient(clientId);
+            ReplicationManager& r = getReplicationForClient(clientId);
+            PersistentId p(client->playerEntityId);
+            EntityHandle eh = r.getEntityHandle(p);
+            Entity* pe = w.getEntity(eh);
+            if (pe) {
+                auto* partyComp = pe->getComponent<PartyComponent>();
+                if (partyComp && partyComp->party.isInParty()) {
+                    partyComp->party.leaveParty();
+                }
+            }
+        }
+
         World& world = getWorldForClient(clientId);
         ReplicationManager& repl = getReplicationForClient(clientId);
 

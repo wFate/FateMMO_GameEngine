@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "game/shared/enemy_stats.h"
+#include "game/shared/party_manager.h"
 
 using namespace fate;
 
@@ -115,6 +116,26 @@ TEST_CASE("EnemyStats: result marks solo vs party correctly") {
     auto result = es.getTopDamagerPartyAware(noParty);
     CHECK(result.isParty == false);
     CHECK(result.topDamagerId == 10);
+}
+
+TEST_CASE("Party cleanup: leader leaving disbands party") {
+    PartyManager pm;
+    pm.createParty("leader1", "Leader", "Warrior", 10);
+    PartyMemberInfo mi;
+    mi.characterId = "member1";
+    mi.characterName = "Member";
+    mi.className = "Mage";
+    mi.level = 10;
+    mi.currentHP = 100; mi.maxHP = 100;
+    mi.currentMP = 50; mi.maxMP = 50;
+    pm.addMember(mi);
+    CHECK(pm.isInParty());
+    CHECK(pm.isLeader);
+
+    // When leader leaves, party should dissolve
+    pm.leaveParty();
+    CHECK_FALSE(pm.isInParty());
+    CHECK(pm.memberCount() == 0);
 }
 
 } // TEST_SUITE
