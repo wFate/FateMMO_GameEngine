@@ -10,6 +10,9 @@ void MetalShaderLib::init(void* mtlDevice) {
 }
 
 void MetalShaderLib::shutdown() {
+    for (auto& [name, ptr] : cache_) {
+        if (ptr) CFRelease(ptr);
+    }
     cache_.clear();
     library_ = nil;
     device_ = nil;

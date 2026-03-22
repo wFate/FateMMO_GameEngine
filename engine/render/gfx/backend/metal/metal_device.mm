@@ -201,19 +201,20 @@ ShaderHandle Device::createShaderFromFiles(const std::string& vertPath, const st
     if (!impl_) return {};
 
     @autoreleasepool {
-        std::string baseName = deriveShaderBaseName(vertPath);
+        std::string vertBase = deriveShaderBaseName(vertPath);
+        std::string fragBase = deriveShaderBaseName(fragPath);
 
-        void* vFunc = impl_->shaderLib.getFunction(baseName + "_vertex");
-        void* fFunc = impl_->shaderLib.getFunction(baseName + "_fragment");
+        void* vFunc = impl_->shaderLib.getFunction(vertBase + "_vertex");
+        void* fFunc = impl_->shaderLib.getFunction(fragBase + "_fragment");
 
         if (!vFunc) {
             LOG_ERROR("gfx", "Metal: vertex function '%s_vertex' not found (from path '%s')",
-                      baseName.c_str(), vertPath.c_str());
+                      vertBase.c_str(), vertPath.c_str());
             return {};
         }
         if (!fFunc) {
             LOG_ERROR("gfx", "Metal: fragment function '%s_fragment' not found (from path '%s')",
-                      baseName.c_str(), fragPath.c_str());
+                      fragBase.c_str(), fragPath.c_str());
             return {};
         }
 
@@ -510,8 +511,10 @@ FramebufferHandle Device::createFramebuffer(int width, int height,
 
     @autoreleasepool {
         // Color texture (renderable)
+        // Always use BGRA8Unorm for FBO color textures so the format matches
+        // all pipeline states (which also target BGRA8Unorm, the CAMetalLayer format).
         MTLTextureDescriptor* colorDesc =
-            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:toMTLPixelFormat(colorFormat)
+            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
                                                               width:(NSUInteger)width
                                                              height:(NSUInteger)height
                                                           mipmapped:NO];
@@ -702,6 +705,18 @@ void* Device::resolveMetalDepthStencilState(PipelineHandle h) const {
     auto it = impl_->pipelines.find(h.id);
     if (it == impl_->pipelines.end()) return nullptr;
     return (__bridge void*)it->second.depthStencilState;
+}
+
+void* Device::resolveMetalCommandQueue() const {
+    if (!impl_) return nullptr;
+    return (__bridge void*)impl_->commandQueue;
+}
+
+void* Device::resolveMetalFramebufferPassDesc(FramebufferHandle h) const {
+    if (!impl_) return nullptr;
+    auto it = impl_->framebuffers.find(h.id);
+    if (it == impl_->framebuffers.end()) return nullptr;
+    return (__bridge void*)it->second.renderPassDesc;
 }
 
 // ============================================================================
