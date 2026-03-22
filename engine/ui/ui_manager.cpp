@@ -26,6 +26,7 @@
 #include "engine/ui/widgets/chat_panel.h"
 #include "engine/ui/widgets/trade_window.h"
 #include "engine/ui/widgets/party_frame.h"
+#include "engine/ui/widgets/guild_panel.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -469,6 +470,10 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         pf->cardWidth  = j.value("cardWidth",   170.0f);
         pf->cardHeight = j.value("cardHeight",   48.0f);
         node = std::move(pf);
+    }
+    else if (type == "guild_panel") {
+        auto gp = std::make_unique<GuildPanel>(id);
+        node = std::move(gp);
     }
     else {
         node = std::make_unique<UINode>(id, type);
