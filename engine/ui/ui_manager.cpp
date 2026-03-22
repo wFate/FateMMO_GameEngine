@@ -8,6 +8,7 @@
 #include "engine/ui/widgets/slot.h"
 #include "engine/ui/widgets/slot_grid.h"
 #include "engine/ui/widgets/window.h"
+#include "engine/ui/widgets/tab_container.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
 #include <nlohmann/json.hpp>
@@ -266,6 +267,17 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         win->minimizable = j.value("minimizable", false);
         win->titleBarHeight = j.value("titleBarHeight", 28.0f);
         node = std::move(win);
+    }
+    else if (type == "tab_container") {
+        auto tc = std::make_unique<TabContainer>(id);
+        tc->tabHeight = j.value("tabHeight", 30.0f);
+        tc->activeTab = j.value("activeTab", 0);
+        if (j.contains("tabs") && j["tabs"].is_array()) {
+            for (auto& tab : j["tabs"]) {
+                tc->tabLabels_.push_back(tab.get<std::string>());
+            }
+        }
+        node = std::move(tc);
     }
     else {
         node = std::make_unique<UINode>(id, type);
