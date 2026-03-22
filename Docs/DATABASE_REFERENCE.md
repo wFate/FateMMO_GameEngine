@@ -27,8 +27,9 @@ The C++ engine reads `DATABASE_URL` from the environment in `ServerApp::init()`.
 - `008_pet_definitions.sql` — pet_definitions table + 3 starter pets (wolf, hawk, turtle)
 - `009_admin_role.sql` — admin_role column on accounts
 - `010_scene_mob_sync.sql` — 5 WhisperingWoods mob definitions + spawn zones
+- `011_dungeon_support.sql` — last_dungeon_entry on characters, difficulty_tier on scenes, 3 boss treasure box items
 
-All 68+ tables are live on `fate_engine_dev`. Migrations 007-009 applied; migration 010 pending.
+All 68+ tables are live on `fate_engine_dev`. Migrations 007-009 applied; 010-011 pending.
 
 ---
 

@@ -2,203 +2,260 @@
 
 ## Overview
 
-Instanced dungeons give each party their own isolated copy of a dungeon scene. Players inside an instance only see and interact with entities in that instance — mobs, drops, and other players in the overworld are invisible, and vice versa. When the party leaves or the instance times out, it's destroyed.
+TWOM-style instanced dungeons where each party gets an isolated ECS world. Players inside an instance only interact with entities in their instance. Mobs don't respawn, there's a 10-minute timer, and killing the boss rewards the entire party.
+
+## How Dungeons Work (Player Perspective)
+
+1. Party leader opens dungeon menu, selects a dungeon, clicks "Start"
+2. All party members get an invite popup — 30 seconds to accept
+3. If anyone declines, the dungeon is cancelled
+4. Once all accept: everyone teleports to the dungeon spawn point
+5. Kill mobs (they don't respawn) and work toward the boss
+6. If you die, you respawn at the dungeon entrance and run back
+7. Kill the boss → 15-second celebration window → everyone gets rewards → teleport home
+8. If the 10-minute timer expires, everyone teleports home with no rewards
+
+## Rules
+
+- **Party required:** minimum 2 players
+- **Daily ticket:** 1 dungeon entry per character per day, resets at midnight Central Time
+- **No XP loss:** dying in a dungeon has no XP penalty
+- **Honor:** +1 per mob kill, +50 per boss kill (to ALL party members)
+- **No respawn:** dead mobs stay dead
+- **Event lock:** can't enter a dungeon while in Arena, Battlefield, or Gauntlet (and vice versa)
+
+## Rewards (Boss Kill)
+
+All party members receive:
+- **Gold:** 10,000 × difficulty tier (tier 1 = 10K, tier 2 = 20K, tier 3 = 30K)
+- **Boss treasure box:** inventory item (Goblin Hoard / Crypt Reliquary / Dragon Hoard)
+- **+50 honor**
+- **Boss ground loot:** rolled from the boss's loot table (normal pickup rules)
+
+## Current Dungeons
+
+| Scene ID | Name | Level | Tier | Gold | Treasure Box |
+|----------|------|-------|------|------|--------------|
+| GoblinCave | Goblin Cave | 3+ | 1 | 10,000 | Goblin Hoard (Rare) |
+| UndeadCrypt | Undead Crypt | 8+ | 2 | 20,000 | Crypt Reliquary (Epic) |
+| DragonLair | Dragon's Lair | 15+ | 3 | 30,000 | Dragon Hoard (Legendary) |
+
+---
 
 ## Architecture
 
 ### Key Classes
 
-**`DungeonInstance`** (`server/dungeon_manager.h`) — A single dungeon run:
-- `instanceId` — unique ID assigned on creation
-- `sceneId` — which dungeon scene (e.g. `"GoblinCave"`)
-- `partyId` — the party that owns this instance
-- `world` — isolated `World` (ECS) with its own entities
-- `spawnManager` — spawns mobs within this instance's world
-- `playerClientIds` — which clients are currently inside
-- `elapsedTime` / `timeoutSeconds` — 30-minute default timeout
+**`DungeonInstance`** (`server/dungeon_manager.h`):
+```
+instanceId          — unique runtime ID
+sceneId             — DB scene (e.g. "GoblinCave")
+partyId             — party that owns this instance
+difficultyTier      — reward scaling (1/2/3)
+world               — isolated ECS World
+replication         — per-instance ReplicationManager
+timeLimitSeconds    — 600 (10 minutes)
+celebrationTimer    — set to 15.0 on boss kill
+completed / expired — lifecycle flags
+playerClientIds     — clients currently inside
+returnPoints        — saved position+scene per client (for teleport home)
+pendingAccepts      — invite flow tracking
+```
 
-**`DungeonManager`** (`server/dungeon_manager.h`) — Manages all active instances:
+**`DungeonManager`** (`server/dungeon_manager.h`):
 - Creates/destroys instances
-- Tracks party-to-instance and client-to-instance mappings
-- Ticks all instance worlds each server frame
-- Auto-destroys expired empty instances
+- Tracks mappings: instance↔party, instance↔client
+- Ticks all instance worlds + replication each server frame
+- Detects timeouts, boss kills, empty instances
 
-### How It Fits Into the Server
+### Handler Routing
+
+Every server handler that touches entities goes through:
+```cpp
+World& world = getWorldForClient(clientId);
+ReplicationManager& repl = getReplicationForClient(clientId);
+```
+
+If the client is in a dungeon, these return the instance's World/Replication. Otherwise, they return the overworld's. This means combat, skills, loot, equipment, and every other handler works inside dungeons automatically.
+
+### Player Transfer
+
+`transferPlayerToWorld()` moves a player between worlds:
+1. Snapshots all components (stats, inventory, skills, pet, party, faction, etc.)
+2. Unregisters from source ReplicationManager
+3. Destroys entity in source World
+4. Creates new entity in destination World
+5. Copies all component data
+6. Registers in destination ReplicationManager
+7. Updates `conn->playerEntityId`
+
+### Server Tick Integration
 
 ```
 ServerApp::tick(dt)
-    ├── world_.update(dt)           ← overworld entities
-    ├── spawnManager_.tick()        ← overworld mob spawning
-    ├── tickPetAutoLoot(dt)
-    ├── tickAutoSave(dt)
-    ├── tickMaintenance(dt)
-    └── tickDungeonInstances(dt)    ← all dungeon instance worlds
-          ├── dungeonManager_.tick(dt)
-          │     └── for each instance:
-          │           ├── world.update(dt)
-          │           └── world.processDestroyQueue()
-          └── destroy expired empty instances
+    ├── world_.update(dt)              ← overworld
+    ├── spawnManager_.tick()           ← overworld mob respawn
+    ├── forEachAllWorlds: status effects, regen, death, etc.
+    └── tickDungeonInstances(dt)
+          ├── dungeonManager_.tick()   ← all instance worlds
+          ├── instance replication     ← entity sync per instance
+          ├── invite timeouts          ← 30s
+          ├── boss kill detection      ← dead MiniBoss
+          ├── timer expiry             ← 10 min
+          ├── celebration finish       ← 15s after boss
+          └── empty instance cleanup   ← all disconnected
 ```
 
-Each `DungeonInstance` has its own `World`, completely separate from the server's main `world_`. Entities created in an instance don't exist in the overworld or in other instances.
+---
 
-### Database Schema
+## How to Add a New Dungeon
 
-**`scenes` table** — dungeon scenes have `is_dungeon = true`:
-```sql
-SELECT scene_id, scene_name, min_level, is_dungeon FROM scenes WHERE is_dungeon = true;
--- GoblinCave    | Goblin Cave    | 3  | true
--- UndeadCrypt   | Undead Crypt   | 8  | true
--- DragonLair    | Dragon's Lair  | 15 | true
-```
-
-**`spawn_zones` table** — mobs to spawn per dungeon:
-```sql
-SELECT scene_id, zone_name, mob_def_id, target_count FROM spawn_zones
-WHERE scene_id IN ('GoblinCave', 'UndeadCrypt', 'DragonLair')
-ORDER BY scene_id, center_x;
-```
-
-Each dungeon has 3 zones (entrance → mid → boss) with mobs placed at increasing `center_x` positions (0, 300, 500) to simulate progression through the dungeon.
-
-## Current State
-
-### What's Done
-- `DungeonManager` and `DungeonInstance` classes (fully implemented)
-- Party-to-instance and client-to-instance bidirectional tracking
-- Per-instance `World` (isolated ECS)
-- Server tick integration (all instances updated each frame)
-- Auto-cleanup of expired empty instances (30-min timeout)
-- 3 dungeon scenes in DB (GoblinCave, UndeadCrypt, DragonLair)
-- Spawn zones configured with overworld mobs as placeholders
-- 8 unit tests covering creation, isolation, tracking, expiry
-
-### What's NOT Done Yet
-- **Enter/exit transition flow** — no way for players to actually enter a dungeon yet
-- **Dungeon-specific replication** — instance entities aren't replicated to clients
-- **Dungeon-specific mob definitions** — using overworld mobs as placeholders (e.g. Timber Alpha as GoblinCave boss instead of a custom Cave Troll)
-- **Dungeon SpawnManager wiring** — `spawnManager` field exists but isn't initialized with zones yet
-- **Loot/XP inside instances** — needs routing to the instance world instead of the overworld
-- **Completion conditions** — no boss-kill detection or victory state
-
-## How to Build on This
-
-### Step 1: Dungeon Enter/Exit Flow
-
-The core missing piece. Suggested approach:
-
-1. **Add a `CmdEnterDungeon` message** (client → server):
-   ```
-   CmdEnterDungeon { sceneId: string }
-   ```
-
-2. **Server handler `processEnterDungeon()`:**
-   - Validate player is in a party
-   - Validate scene exists and `is_dungeon == true`
-   - Validate player meets `min_level`
-   - Check if party already has an instance (`getInstanceForParty`)
-   - If not, create one (`createInstance`) and initialize its `SpawnManager`
-   - Remove player entity from overworld `world_`
-   - Create player entity in instance `world`
-   - Track via `addPlayer(instanceId, clientId)`
-   - Send scene transition to client
-
-3. **Exit flow** (on disconnect, timeout, or explicit leave):
-   - Remove player entity from instance world
-   - `removePlayer(instanceId, clientId)`
-   - Re-create player entity in overworld `world_` at their saved position
-   - If instance is now empty, it will auto-expire after timeout
-
-### Step 2: Instance-Specific Replication
-
-Currently `ReplicationManager::buildVisibility()` only scans the overworld `world_`. For dungeon instances:
-
-**Option A (simpler):** Give each `DungeonInstance` its own `ReplicationManager`. Build visibility against the instance's `world` for clients inside that instance.
-
-**Option B (single manager):** Extend the existing `ReplicationManager` to accept a `World*` parameter and scope visibility to it based on `getInstanceForClient()`.
-
-Option A is cleaner — each instance is fully self-contained.
-
-### Step 3: SpawnManager Initialization
-
-When creating a dungeon instance, initialize its spawn manager:
-
-```cpp
-uint32_t id = dungeonManager_.createInstance(sceneId, partyId);
-auto* inst = dungeonManager_.getInstance(id);
-
-// Load spawn zones for this dungeon scene
-auto zones = spawnZoneCache_.getZonesForScene(sceneId);
-inst->spawnManager = std::make_shared<ServerSpawnManager>();
-inst->spawnManager->initialize(sceneId, inst->world, /* replication */, spawnZoneCache_, mobDefCache_);
-```
-
-### Step 4: Custom Dungeon Mobs
-
-The current spawn zones use overworld mobs as placeholders. To add dungeon-specific mobs:
+### 1. Add the scene to the DB
 
 ```sql
--- Add custom dungeon boss
-INSERT INTO mob_definitions (mob_def_id, mob_name, display_name, base_hp, base_damage, ...)
-VALUES ('crypt_lord', 'Crypt Lord', 'Crypt Lord', 5000, 120, ...);
+INSERT INTO scenes (scene_id, scene_name, scene_type, min_level, is_dungeon, pvp_enabled, difficulty_tier, default_spawn_x, default_spawn_y)
+VALUES ('VolcanicPit', 'Volcanic Pit', 'Dungeon', 25, true, false, 4, 0, 0);
+```
 
--- Update spawn zone to use it
+Key fields:
+- `is_dungeon = true` — marks it as an instanced dungeon
+- `difficulty_tier` — gold reward multiplier (tier 4 = 40,000 gold)
+- `min_level` — party members below this can't enter
+- `default_spawn_x/y` — where players spawn inside the dungeon
+
+### 2. Add spawn zones
+
+```sql
+INSERT INTO spawn_zones (scene_id, zone_name, center_x, center_y, radius, mob_def_id, target_count) VALUES
+('VolcanicPit', 'Entrance',    0,   0,   150, 'sandstorm_elemental', 4),
+('VolcanicPit', 'Inner Cave',  300, 0,   120, 'sunscale_raptor',     3),
+('VolcanicPit', 'Boss Arena',  500, 0,   80,  'sand_shark',          1);
+```
+
+- Place zones at increasing `center_x` to create progression
+- The boss zone should have exactly **1 mob with `monster_type = 'MiniBoss'`** — that's what triggers the boss kill detection
+- Regular mobs can be any type/count
+
+### 3. Add a treasure box item
+
+```sql
+INSERT INTO item_definitions (item_id, name, type, subtype, description, rarity, max_stack, gold_value)
+VALUES ('boss_treasure_box_t4', 'Volcanic Treasure', 'Consumable', 'TreasureBox',
+        'Molten treasure from the Volcanic Pit.', 'Legendary', 1, 8000)
+ON CONFLICT (item_id) DO NOTHING;
+```
+
+The treasure box ID must be `boss_treasure_box_t<tier>` — the server constructs this string from the difficulty tier.
+
+### 4. Build a scene file in the editor
+
+Open the editor, create a new scene, paint floor tiles and walls, save as `VolcanicPit.json`. This is what the client renders — without it, players see a void.
+
+### 5. Restart FateServer.exe
+
+The server loads scenes and spawn zones at startup.
+
+### 6. Test with GM command
+
+```
+/dungeon start VolcanicPit
+```
+
+This bypasses party and ticket requirements so you can test solo.
+
+---
+
+## How to Add Custom Dungeon Mobs
+
+Currently dungeons reuse overworld mobs. To add dungeon-specific mobs:
+
+```sql
+-- Add the mob definition
+INSERT INTO mob_definitions (mob_def_id, mob_name, display_name, base_hp, base_damage, base_armor,
+    base_xp_reward, xp_per_level, hp_per_level, damage_per_level,
+    min_spawn_level, max_spawn_level, aggro_range, attack_range, leash_radius,
+    respawn_seconds, is_aggressive, monster_type, min_gold_drop, max_gold_drop, gold_drop_chance)
+VALUES
+    ('crypt_lord', 'Crypt Lord', 'Crypt Lord', 5000, 120, 30,
+     200, 10, 50, 5,
+     8, 8, 6.0, 2.0, 12.0,
+     0, true, 'MiniBoss', 50, 200, 1.0);
+
+-- Update the spawn zone to use it
 UPDATE spawn_zones SET mob_def_id = 'crypt_lord'
 WHERE scene_id = 'UndeadCrypt' AND zone_name = 'Crypt Lord';
 ```
 
-Planned custom bosses:
-- **GoblinCave:** Cave Troll (replaces Timber Alpha)
-- **UndeadCrypt:** Crypt Lord (replaces Spine Shell)
-- **DragonLair:** Drake (replaces Spine Shell)
+Set `monster_type = 'MiniBoss'` for the dungeon boss — this is what triggers boss kill detection and the 50-honor reward.
 
-### Step 5: Completion & Rewards
+---
 
-Detect when the boss is killed and reward the party:
+## GM Commands
 
-1. Hook into mob death in the instance world
-2. Check if the dead mob is the boss (by `monster_type == "MiniBoss"` or a `is_dungeon_boss` flag)
-3. Grant bonus XP/loot to all party members in the instance
-4. Start a 60-second timer, then teleport everyone out and destroy the instance
+| Command | Description |
+|---------|-------------|
+| `/dungeon start <sceneId>` | Create and enter a dungeon solo (bypasses party/ticket checks) |
+| `/dungeon leave` | Force-exit current dungeon |
+| `/dungeon list` | Show all active instances with player counts and elapsed time |
 
-## API Reference
+Requires admin role (level 2).
 
-```cpp
-// Create a new instance for a party
-uint32_t id = dungeonManager_.createInstance("GoblinCave", partyId);
+---
 
-// Look up instance by party or client
-uint32_t id = dungeonManager_.getInstanceForParty(partyId);   // 0 if none
-uint32_t id = dungeonManager_.getInstanceForClient(clientId); // 0 if none
+## Troubleshooting
 
-// Get the instance object
-DungeonInstance* inst = dungeonManager_.getInstance(id);
-inst->world;            // isolated ECS world
-inst->spawnManager;     // mob spawner for this instance
-inst->playerClientIds;  // who's inside
+**"Not in a dungeon" when using /dungeon leave:**
+- You're in the overworld, not in a dungeon instance
 
-// Player tracking
-dungeonManager_.addPlayer(id, clientId);
-dungeonManager_.removePlayer(id, clientId);
+**Mobs don't appear in dungeon:**
+- Check `spawn_zones` table has entries for the dungeon's `scene_id`
+- Check `mob_definitions` table has entries for the `mob_def_id` values referenced
+- Restart FateServer.exe (caches load at startup)
 
-// Cleanup
-dungeonManager_.destroyInstance(id);                // immediate
-auto expired = dungeonManager_.getExpiredInstances(); // empty + timed out
-```
+**Boss kill doesn't end the dungeon:**
+- The boss mob must have `monster_type = 'MiniBoss'` in `mob_definitions`
+- Check with: `SELECT mob_def_id, monster_type FROM mob_definitions WHERE mob_def_id = 'your_boss_id'`
 
-## Testing
+**Rewards not distributed:**
+- Treasure box requires `boss_treasure_box_t<tier>` in `item_definitions`
+- Gold uses `setGold()` (server-authoritative) — check WAL log for the gold change entry
+- Players with full inventory don't get the treasure box (silently skipped)
 
-Tests are in `tests/test_dungeon_manager.cpp` (8 test cases):
-- Instance creation and ID uniqueness
-- World isolation between instances
-- Destroy cleanup (party and client mappings)
-- Party-to-instance lookup
-- Tick without crash
-- Player add/remove tracking
-- Expiry only when empty
-- Party mapping cleanup on destroy
+**Event lock stuck (can't enter new dungeon after disconnect):**
+- Event locks are cleared on dungeon exit. If a player disconnects during a dungeon and the instance expires, the lock should be cleared on reconnect via the disconnect handler
+- Manual fix: restart the server (locks are runtime-only, not persisted)
 
-Run with:
+**Daily ticket not resetting:**
+- Resets at midnight Central Time (America/Chicago timezone)
+- Check with: `SELECT character_id, last_dungeon_entry FROM characters WHERE character_id = 'your_char'`
+- Manual reset: `UPDATE characters SET last_dungeon_entry = NULL WHERE character_id = 'your_char'`
+
+---
+
+## Client-Side Requirements (Not Yet Implemented)
+
+These need to be built on the client for the full player experience:
+
+1. **Dungeon invite popup** — triggered by `SvDungeonInviteMsg`, shows dungeon name/level/timer, Accept/Decline buttons, sends `CmdDungeonResponseMsg`
+2. **Dungeon timer HUD** — triggered by `SvDungeonStartMsg`, countdown display from `timeLimitSeconds`
+3. **Scene loading** — on `SvDungeonStartMsg`, load the dungeon scene file (e.g. `GoblinCave.json`)
+4. **Return teleport** — on `SvDungeonEndMsg`, load the return scene and reposition camera
+5. **Dungeon menu** — UI for the party leader to select and start dungeons (sends `CmdStartDungeonMsg`)
+
+---
+
+## Testing Checklist
+
 ```bash
+# Run unit tests
 ./fate_tests.exe -tc="DungeonManager*"
+./fate_tests.exe -tc="DungeonTransfer*"
+./fate_tests.exe -tc="DungeonEntry*"
+./fate_tests.exe -tc="DungeonLifecycle*"
+
+# In-game GM test
+/dungeon start GoblinCave    # Enter dungeon solo
+/dungeon list                 # Verify instance exists
+# Kill mobs, kill boss        # Verify rewards
+/dungeon leave                # Force-exit (or wait for timer)
 ```

@@ -4,7 +4,7 @@
 
 Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landscape gameplay with a built-in Unity-style editor for scene building, tile painting, and rapid iteration. All game systems from the Unity/C# prototype have been ported to C++ as server-authoritative logic.
 
-**Tech Stack:** C++23, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImGuizmo, ImPlot, SoLoud (audio), Tracy Profiler, spdlog, nlohmann/json, stb_image, stb_truetype, Winsock2 + POSIX sockets
+**Tech Stack:** C++23, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImGuizmo, ImPlot, imnodes, SoLoud (audio), Tracy Profiler, spdlog, nlohmann/json, stb_image, stb_truetype, Winsock2 + POSIX sockets
 
 **Build System:** CMake with FetchContent (auto-downloads all dependencies)
 
@@ -41,7 +41,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Action Map Input | Done | 23 logical ActionIds, hardcoded WASD+arrow bindings, Gameplay/Chat context switching, 6-frame input buffer for combat skill queuing, programmatic injection API for touch/gamepad |
 | Structured Logging | Done | spdlog-backed, per-subsystem named loggers, rotating file sink (5MB/3 files), backtrace ring buffer (64 entries), callback sink for LogViewer, Android logcat ready |
 | SDF Text Rendering | Done | MTSDF uber-shader (normal/outlined/glow/shadow styles), runtime atlas generation from TTF, UTF-8 decode, resolution-independent at any zoom |
-| Tilemap System | Done | Tiled JSON loader, frustum-culled, collision layers, Blob-47 autotiling (8-bit bitmask with diagonal gating, 256-entry O(1) lookup table) |
+| Tilemap System | Done | Tiled JSON loader, frustum-culled, collision layers, Blob-47 autotiling (8-bit bitmask with diagonal gating, 256-entry O(1) lookup table), **chunk-based pre-built VBOs** (per-chunk VAO/VBO, multi-tileset sub-batching, static buffers rebuilt only on dirty flag), **GL_TEXTURE_2D_ARRAY** (zero-bleed tile rendering, one array layer per tile, custom tile_chunk.vert/frag shaders with sampler2DArray) |
 | Coordinate System | Done | Tile-based coords (32px grid), pixel-to-tile conversion |
 | Spatial Grid (Primary) | Done | Fixed power-of-two grid, bitshift cell lookup (zero hash computation), std::span query results, std::expected error handling |
 | Spatial Hash (Fallback) | Done | Mueller-style 128px cells, counting-sort rebuild, for unbounded/sparse regions |
@@ -58,7 +58,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Serialization Registry | Done | ComponentMetaRegistry maps string names → type-erased serialize/deserialize, aliases for backward compat. Enum/EntityHandle/Direction fields fully serialized (size-aware memcpy for enums) |
 | Component Traits | Done | ComponentFlags (Serializable/Networked/Persistent/EditorOnly), per-component policy via component_traits<T> |
 | Generic Inspector | Done | Reflection-driven ImGui widget fallback for any reflected component, manual inspectors take priority |
-| Chunk Lifecycle | Done | 7-state machine (Queued→Loading→Setup→Active→Sleeping→Unloading→Evicted), ticket system, rate-limited transitions, double-buffered staging |
+| Chunk Lifecycle | Done | 7-state machine (Queued→Loading→Setup→Active→Sleeping→Unloading→Evicted), ticket system, rate-limited transitions, double-buffered staging, **ChunkRenderer** for per-chunk GPU resources (VAO/VBO/EBO) |
 | AOI Groundwork | Done | Visibility sets with enter/leave/stay diffs, hysteresis (20% larger deactivation radius) |
 | Ghost Entity Scaffold | Done | GhostFlag component, dedicated GhostArena for cross-zone proxy entities |
 | Render Graph | Done | 10-pass pipeline: GroundTiles→Entities→Particles→SDFText→DebugOverlays→Lighting→BloomExtract→BloomBlur→PostProcess→Blit |
@@ -86,6 +86,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Android Build Pipeline | Done | Gradle wrapper project (AGP 8.7, NDK r27, C++23, arm64-v8a), `FateMMOActivity` extends SDLActivity via JNI, GLES 3.0 required, INTERNET permission, 16KB page size support, shared assets dir, `./gradlew installDebug` one-command deploy, `android/build.sh` convenience script |
 | Write-Ahead Log | Done | Binary WAL with CRC32 per entry, batched fsync per tick. Journals gold/item/XP mutations. Replay on crash recovery. Truncate after successful DB checkpoint |
 | DB Circuit Breaker | Done | 3-state machine (Closed→Open→HalfOpen) on connection pool. 5 consecutive failures opens for 30s cooldown. Auto-probe on cooldown expiry. WAL queues writes during outage |
+| Priority DB Flushing | Done | `PersistenceQueue` with 4 tiers: IMMEDIATE (0s, gold/inventory/trades), HIGH (5s, level-ups), NORMAL (60s, position/stats), LOW (300s, cosmetics). Priority queue with age-based tiebreaking. Wired into ServerApp — needs handler-site enqueue calls for full activation |
+| Tracked<T> Dirty Wrappers | Done | Template `Tracked<T>` with `mutate()` (auto-sets dirty flag + increments version counter), `clearDirty()`. `PlayerDirtyFlags` struct (10 booleans: position/vitals/stats/inventory/skills/quests/bank/pet/social/guild) with `any()` and `clearAll()`. Wired into ServerApp — needs mutation-site flag setting for full activation |
 | Per-Player Mutation Lock | Done | PlayerLockMap with unique_ptr<mutex> per character. Serializes concurrent inventory/gold mutations between game thread and async fiber DB operations. Consistent-order locking for two-player trades |
 | CI/CD | Done | GitHub Actions: 3-compiler matrix (MSVC windows-latest, GCC-13 ubuntu-24.04, Clang-17 ubuntu-24.04). Headless OpenGL via Xvfb + Mesa software renderer. vcpkg for Windows deps |
 | Structured Errors | Done | `EngineError` with 4 categories (Transient/Recoverable/Degraded/Fatal), `Result<T>` via `std::expected`, generic `CircuitBreaker` class (`engine/core/`) |
@@ -107,7 +109,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | DB Backup Script | Done | `scripts/backup_db.sh` — pg_dump custom format, 14-day retention, backup verification |
 | FATE_SHIPPING Flag | Done | `cmake -DFATE_SHIPPING=ON` strips `engine/editor/*` from build, `#ifndef FATE_SHIPPING` guards on all Editor references in app.h/cpp, game_app.cpp, combat_action_system.h, npc_interaction_system.h |
 | Elemental Resists | Done | 6 element types (Fire/Water/Poison/Lightning/Void/Magic) with 75% cap, `getElementalResist(DamageType)` on CharacterStats, wired into both single-target and AOE skill damage paths (multiplicative with base MR) |
-| Instanced Dungeons | Done | `DungeonManager` + `DungeonInstance` per-party ECS worlds. Each instance has its own World + SpawnManager. Party-to-instance and client-to-instance tracking. 30-min timeout auto-cleanup when empty. Foundation ready — needs dungeon scene DB entries and enter/exit transition wiring |
+| Instanced Dungeons | Done | TWOM-style per-party dungeon instances. `DungeonManager` + `DungeonInstance` with isolated `World` + `ReplicationManager` per instance. Full entry flow (leader start → member invite/accept → teleport in), 10-min timer, daily ticket (midnight CT reset), no mob respawn, boss kill detection, 15s celebration window. Rewards: honor (+1/mob, +50/boss to all members), gold (10K × tier), boss treasure box. All 30+ handlers routed via `getWorldForClient()`. `transferPlayerToWorld()` snapshots/restores player entities between worlds. GM `/dungeon start\|leave\|list` for testing. 3 dungeon scenes in DB (GoblinCave/UndeadCrypt/DragonLair). No XP loss on death. Event lock integration prevents multi-event enrollment |
 
 ### Editor (Dear ImGui)
 | Feature | Status | Notes |
@@ -115,16 +117,16 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Toggle with F3 | Done | Auto-pauses game when opened |
 | Entity Hierarchy | Done | Grouped by name+tag (collapsible), color-coded (player/ground/obstacle/mob/boss), error badges |
 | Inspector Panel | Done | Edit all engine + game component properties live, sprite preview thumbnail, reflection-driven generic fallback |
-| Project Browser | Done | Tabs: Sprites, Scripts, Scenes, Shaders, Prefabs. Delete confirmation dialogs, path traversal validation on save |
+| Project Browser | Done | Tabs: Sprites, Scripts, Scenes, Shaders, Prefabs. Delete confirmation dialogs, path traversal validation on save. **Enhanced Asset Browser** (toggleable): directory navigation with breadcrumb, thumbnail grid (32-128px resizable), search filtering, lazy texture cache, drag-and-drop, type-colored placeholders |
 | Right-Click Context Menus | Done | Open in VS Code, Show in Explorer, Copy Path, Delete |
 | Asset Placement | Done | Click sprite thumbnail, click scene to stamp entities |
-| Tile Palette | Done | Collapsible panel, load tilesets (recursive subdirectory scan), scrollable tile grid, paint/drag to place |
+| Tile Palette | Done | Collapsible panel, load tilesets (recursive subdirectory scan), scrollable tile grid, paint/drag to place, **multi-tile stamp selection** (click-drag in palette to select rectangular region) |
 | Scene Interaction | Done | Click to select (depth-priority, closest-center), drag to move, sticky selection |
 | Grid Overlay | Done | Tile-edge aligned (tiles sit inside grid cells), toggleable |
 | Grid Snapping | Done | Ground tiles snap to grid, other entities move freely |
 | Camera Pan | Done | Right-click drag to pan scene |
 | Camera Zoom | Done | Mouse scroll wheel, 0.05x to 8x range |
-| Play/Pause | Done | Toolbar button, auto-pause on editor open |
+| Play/Pause | Done | Toolbar button, auto-pause on editor open. **Play-in-Editor**: enterPlayMode snapshots all entities to JSON, exitPlayMode destroys and restores from snapshot (full ECS state round-trip). Camera position saved/restored |
 | Create/Delete Entities | Done | Menu + Delete key, works while paused |
 | Duplicate Entity | Done | Full deep copy via JSON serialization, offset by 32px |
 | Add Components | Done | Popup with engine, game systems, social, NPC, and player quest/bank sections |
@@ -136,8 +138,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Remove Components | Done | Right-click any component header to remove it (all 38+ component types) |
 | Resize Handles | Done | 8 drag handles (4 corners + 4 edges), E key for resize tool mode |
 | Source Rect Editor | Done | UV region editing in Sprite inspector for tileset splicing |
-| Undo/Redo | Done | Ctrl+Z/Ctrl+Y, 200 action history, tracks move/resize/delete/duplicate/tile paint |
-| Tool Modes | Done | W=Move, E=Resize, B=Paint, X=Erase. Active tool highlighted in toolbar |
+| Undo/Redo | Done | Ctrl+Z/Ctrl+Y, 200 action history, tracks move/resize/delete/duplicate/tile paint. **CompoundCommand** groups multi-tile operations (fill/rect/line) into single undo step |
+| Tool Modes | Done | W=Move, E=Resize, B=Paint, X=Erase, **G=Fill, U=RectFill, L=LineTool**. Active tool highlighted in toolbar. Fill uses BFS flood fill, Rect/Line use drag start→end with visual preview |
 | Keyboard Shortcuts | Done | Ctrl+Z undo, Ctrl+Y redo, Ctrl+S save, Ctrl+D duplicate, Ctrl+A select all, Delete |
 | Eraser Tool | Done | X key, click/drag to delete ground tiles with undo support |
 | Layer Visibility | Done | Gnd/Obj toggles in toolbar to show/hide entity layers |
@@ -150,6 +152,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Post-Process Panel | Done | Live tweaking bloom/vignette/color grading |
 | Network Panel | Done | Connect/disconnect to server, host/port config, shows client ID and ghost count, docked in bottom panel |
 | ImGuizmo | Done | Visual translate/scale/rotate handles on selected entities |
+| Dialogue Node Editor | Done | Visual node-based dialogue tree editor using **imnodes** library. Nodes with speaker/text, choice output pins, link creation/deletion, right-click add node, JSON load/save. Window > Dialogue Editor toggle |
+| EDITOR_BUILD | Done | Compile definition on FateEngine and fate_tests targets only (not FateServer). `editor_build.h` documents `#ifdef EDITOR_BUILD` guard pattern. Groundwork for editor/runtime separation |
 
 ### Game UI (ImGui-based, in-game panels)
 | Feature | Status | Notes |
@@ -272,7 +276,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 |---------|--------|-------|
 | Save Entity as Prefab | Done | JSON to assets/prefabs/, saves to both source + build dirs |
 | Spawn from Prefab | Done | Click in Prefabs tab, click scene to place. Registry-based deserialization (no hardcoded types) |
-| Prefab Library | Done | Auto-loads all .json from prefab directory on startup. Unknown components preserved as raw JSON |
+| Prefab Library | Done | Auto-loads all .json from prefab directory on startup. Unknown components preserved as raw JSON. **Prefab Variants**: JSON Patch (RFC 6902) based inheritance (base → variant → instance). Variants store only diffs via `computePrefabDiff()`, composed at spawn via `applyPrefabPatches()`. Variant files detected by `parent_prefab` key. `saveVariant()` computes minimal diff |
 | Editor Integration | Done | Prefabs tab, right-click to place/delete, tooltip shows components |
 | Scene Versioning | Done | `"version": 1` header in scene files, forward-compat validation |
 | Registry-Based Save/Load | Done | Scene and prefab serialization driven by ComponentMetaRegistry — adding new components requires zero file edits |
@@ -293,7 +297,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 
 ## Game Systems (Ported from Unity Prototype)
 
-All 37 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`, plus 4 new systems (Arena, Battlefield, Event Scheduler, Core Extraction). Total: **65 files, ~12,200 lines**, all compile with zero errors (698 test cases). Database repositories exist for all systems in `server/db/` (13 repos). All major systems are DB wired with message handlers, load-on-connect, save-on-disconnect, periodic maintenance, and async auto-save. Combat formula matches Unity prototype exactly (off-by-one fixed). Inventory saves after market/trade mutations prevent item duplication. Gauntlet has 3 divisions with real mob data.
+All 37 game systems from the C#/Unity prototype have been converted to C++ and live in `game/shared/`, plus 4 new systems (Arena, Battlefield, Event Scheduler, Core Extraction). Total: **65 files, ~12,200 lines**, all compile with zero errors (824 test cases). Database repositories exist for all systems in `server/db/` (13 repos). All major systems are DB wired with message handlers, load-on-connect, save-on-disconnect, periodic maintenance, and async auto-save. Combat formula matches Unity prototype exactly (off-by-one fixed). Inventory saves after market/trade mutations prevent item duplication. Gauntlet has 3 divisions with real mob data.
 
 ### Core Gameplay (Fully Ported — Logic Identical to C#)
 | System | Files | Lines | C# Source | Notes |
@@ -406,6 +410,48 @@ classBonus    = classAdvantageMatrix[attacker][defender] // default 1.0
 ---
 
 ## Changelog
+
+### March 21, 2026 - Instanced Dungeons (Production)
+
+TWOM-style instanced dungeon system with per-party isolated ECS worlds. 8 implementation tasks, 3 critical bug fixes. Test count: 839 → 844 (+5 tests).
+
+**Architecture:**
+- `DungeonInstance` owns a `World` + `ReplicationManager` — fully isolated from overworld
+- `getWorldForClient()` / `getReplicationForClient()` routes all 30+ server handlers to the correct world
+- `transferPlayerToWorld()` snapshots all player components, destroys in source world, recreates in destination world
+
+**Entry flow:**
+- Party leader sends `CmdStartDungeon`, server validates (party 2+, level req, event lock, daily ticket)
+- Non-leader members receive `SvDungeonInvite`, respond with `CmdDungeonResponse`
+- All accept → save return points, consume tickets, set event locks, transfer players, spawn mobs
+- 30s invite timeout, decline cancels for everyone
+
+**Dungeon rules:**
+- 10-minute timer, no mob respawn, no XP loss on death
+- Death respawns at dungeon spawn point (must run back)
+- Honor: +1 per mob kill, +50 per boss kill (to all party members)
+- Boss kill triggers 15s celebration window, then exit
+
+**Boss rewards (to all members):**
+- Gold: 10,000 × difficulty tier (WAL-logged, server-authoritative)
+- Boss treasure box item added to inventory (tier-specific: Goblin Hoard / Crypt Reliquary / Dragon Hoard)
+- +50 honor
+
+**Exit/cleanup:**
+- Timer expiry: teleport back with no rewards
+- Boss kill + 15s celebration: teleport back with rewards
+- All disconnect: instance destroyed immediately, no rewards
+- Event locks cleared, return positions restored
+
+**GM commands:** `/dungeon start <sceneId>` (solo, bypasses party/ticket), `/dungeon leave`, `/dungeon list`
+
+**Protocol:** 5 new messages (CmdStartDungeon 0x2A, CmdDungeonResponse 0x2B, SvDungeonInvite 0xB4, SvDungeonStart 0xB5, SvDungeonEnd 0xB6)
+
+**DB:** Migration 011 (last_dungeon_entry timestamp, difficulty_tier on scenes, 3 treasure box items). Daily ticket reset at midnight Central Time.
+
+**3 dungeon scenes:** GoblinCave (tier 1, level 3), UndeadCrypt (tier 2, level 8), DragonLair (tier 3, level 15)
+
+**Bug fixes:** PersistentId→EntityHandle truncation in reward/honor distribution, event lock clearing before/after transfer
 
 ### March 21, 2026 - Phase 14: Deferred Items
 
@@ -2174,9 +2220,10 @@ game/
 - [x] EventScheduler (FSM for timed events, drives Arena and Battlefield)
 - [x] CoreExtraction (equipment disassembly into 7-tier crafting cores)
 - [x] CraftingSystem (recipe cache, tier-based lookup, ingredient validation)
-- [x] Instanced Dungeons (DungeonManager foundation — per-party ECS worlds, auto-cleanup)
+- [x] Instanced Dungeons (full TWOM-style: per-party ECS worlds, entry flow, timer, boss rewards, daily tickets, handler routing, GM commands)
 - [ ] Dungeon-specific mob definitions (custom bosses per dungeon — e.g. "Crypt Lord" for UndeadCrypt, "Cave Troll" for GoblinCave, "Drake" for DragonLair — currently using overworld mobs as placeholders)
-- [ ] Dungeon enter/exit scene transition flow (portal interaction → create/join instance → teleport back on complete/timeout)
+- [ ] Dungeon scene files (editor-built .json scenes for client rendering — currently no visual environment)
+- [ ] Client dungeon UI (invite popup, timer HUD, SvDungeonStart scene loading, SvDungeonEnd return handling)
 
 ### ECS Integration
 - [x] Component wrappers for all game systems (38+ components registered)
@@ -2252,7 +2299,7 @@ game/
 - [x] Compile-time component type system (CompId, Hot/Warm/Cold tiers, no RTTI)
 - [ ] SIMD intrinsics for spatial queries (future optimization)
 - [ ] C++20 coroutines for async chunk I/O (structured for future drop-in)
-- [x] Unit test suite (doctest, 698 test cases + 10 scenario tests)
+- [x] Unit test suite (doctest, 824 test cases + 10 scenario tests)
 - [x] Action map input system (23 actions, input buffering, chat mode switching)
 - [x] SDF text rendering (uber-shader, outlined/glow/shadow effects, UTF-8, replaces bitmap font)
 - [x] Reflection system (FATE_REFLECT macro, auto-generated JSON serializers)
