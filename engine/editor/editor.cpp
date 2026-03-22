@@ -147,6 +147,9 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
 
     scanAssets();
     assetBrowser_.init(assetRoot_, sourceDir_);
+    assetBrowser_.onOpenAnimation = [this](const std::string& path) {
+        animationEditor_.openFile(path);
+    };
 
     dialogueEditor_.init();
     animationEditor_.init();
@@ -2672,6 +2675,9 @@ void Editor::drawInspector() {
                     ImGui::Text("%s | %.2f", a->playing ? "Playing" : "Stopped", a->timer);
 
                     ImGui::EndTable();
+                }
+                if (ImGui::Button("Open in Animation Editor")) {
+                    animationEditor_.setOpen(true);
                 }
             }
         }

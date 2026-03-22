@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <functional>
 #include <unordered_map>
 
 namespace fate {
@@ -21,9 +22,12 @@ public:
     const std::string& draggedAssetPath() const { return draggedAssetPath_; }
     void clearDrag() { isDraggingAsset_ = false; draggedAssetPath_.clear(); }
 
+    // Callback for opening animation files
+    std::function<void(const std::string&)> onOpenAnimation;
+
 private:
     // Asset entry with type classification
-    enum class AssetType { Sprite, Script, Scene, Shader, Audio, Font, Tile, Prefab, Other };
+    enum class AssetType { Sprite, Script, Scene, Shader, Audio, Font, Tile, Prefab, Animation, Other };
 
     struct Entry {
         std::string name;

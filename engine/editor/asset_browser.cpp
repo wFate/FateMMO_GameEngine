@@ -16,7 +16,7 @@ namespace fs = std::filesystem;
 namespace {
 
 // Indices match AssetBrowser::AssetType enum:
-// Sprite=0, Script=1, Scene=2, Shader=3, Audio=4, Font=5, Tile=6, Prefab=7, Other=8
+// Sprite=0, Script=1, Scene=2, Shader=3, Audio=4, Font=5, Tile=6, Prefab=7, Animation=8, Other=9
 static ImVec4 colorForType(int type) {
     switch (type) {
         case 0:  return {0.4f, 0.8f, 0.4f, 1.0f};   // Sprite - green
@@ -27,6 +27,7 @@ static ImVec4 colorForType(int type) {
         case 5:  return {0.9f, 0.9f, 0.5f, 1.0f};   // Font - yellow
         case 6:  return {0.6f, 0.6f, 0.9f, 1.0f};   // Tile - blue
         case 7:  return {1.0f, 0.6f, 0.6f, 1.0f};   // Prefab - red
+        case 8:  return {0.5f, 1.0f, 0.9f, 1.0f};   // Animation - teal
         default: return {0.6f, 0.6f, 0.6f, 1.0f};   // Other - gray
     }
 }
@@ -41,6 +42,7 @@ static const char* iconForType(int type) {
         case 5:  return "FNT";
         case 6:  return "TIL";
         case 7:  return "PRE";
+        case 8:  return "ANM";
         default: return "???";
     }
 }
@@ -134,6 +136,8 @@ AssetBrowser::AssetType AssetBrowser::classifyExtension(const std::string& ext) 
         return AssetType::Audio;
     if (ext == ".ttf" || ext == ".otf")
         return AssetType::Font;
+    if (ext == ".anim" || ext == ".frameset")
+        return AssetType::Animation;
     return AssetType::Other;
 }
 
@@ -347,6 +351,14 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
             if (ImGui::Button(btnLabel, ImVec2(itemW, itemH))) {
                 LOG_INFO("AssetBrowser", "Selected: %s", entry.fullPath.c_str());
             }
+
+            // Double-click opens animation files in the animation editor
+            if (entry.type == AssetType::Animation && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                if (onOpenAnimation) {
+                    onOpenAnimation(entry.fullPath);
+                }
+            }
+
             ImGui::PopStyleColor(2);
         }
 
