@@ -370,6 +370,7 @@ target_link_libraries(FateEngine PRIVATE
 target_compile_definitions(FateEngine PRIVATE
     FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     FATE_DEV_TLS
+    EDITOR_BUILD
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
@@ -437,6 +438,7 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
         target_include_directories(fate_tests PRIVATE ${CMAKE_SOURCE_DIR})
         target_compile_definitions(fate_tests PRIVATE
             FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+            EDITOR_BUILD
         )
         if(MSVC)
             target_compile_options(fate_tests PRIVATE /EHsc /W4 /wd4100 /wd4201 /wd4458 /MP)
