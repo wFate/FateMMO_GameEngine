@@ -3392,11 +3392,13 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             if (tgtCS->stats.pkStatus == PKStatus::White) {
                 casterStatsComp->stats.flagAsAggressor();
                 playerDirty_[clientId].stats = true;
+                enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
             }
             // If attacker kills a non-flagged player → Murderer
             if (isKill && tgtCS->stats.pkStatus == PKStatus::White) {
                 casterStatsComp->stats.flagAsMurderer();
                 playerDirty_[clientId].stats = true;
+                enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
             }
         }
     }
@@ -4009,10 +4011,12 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 if (targetCharStats->stats.pkStatus == PKStatus::White) {
                     charStats->stats.flagAsAggressor();
                     playerDirty_[clientId].stats = true;
+                    enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
                 }
                 if (killed && targetCharStats->stats.pkStatus == PKStatus::White) {
                     charStats->stats.flagAsMurderer();
                     playerDirty_[clientId].stats = true;
+                    enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
                 }
             }
 
@@ -5825,6 +5829,7 @@ void ServerApp::processStatEnchant(uint16_t clientId, const CmdStatEnchantMsg& m
     playerDirty_[clientId].inventory = true;
     playerDirty_[clientId].vitals = true;
     playerDirty_[clientId].stats = true;
+    enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
 
     // 12. Send results to client
     if (tier > 0) {
@@ -6317,6 +6322,7 @@ void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMs
     // 10. Dirty flags: vitals changed (HP/MP), inventory changed (item consumed)
     playerDirty_[clientId].vitals = true;
     playerDirty_[clientId].inventory = true;
+    enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
 
     // 11. Send results
     sendResult(true, effectMsg);
