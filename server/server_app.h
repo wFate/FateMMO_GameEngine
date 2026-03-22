@@ -232,6 +232,11 @@ private:
     void tickDungeonInstances(float dt);
     void initGMCommands();
     uint16_t findClientByCharacterName(const std::string& name);
+
+    // Dungeon instance routing: returns the correct World/ReplicationManager
+    // for a client (dungeon instance world if in dungeon, otherwise main world_).
+    World& getWorldForClient(uint16_t clientId);
+    ReplicationManager& getReplicationForClient(uint16_t clientId);
 };
 
 } // namespace fate

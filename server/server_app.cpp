@@ -576,14 +576,35 @@ void ServerApp::tick(float dt) {
     world_.forEach<StatusEffectComponent>([&](Entity* entity, StatusEffectComponent* seComp) {
         seComp->effects.tick(dt);
     });
+    for (auto& [id, inst] : dungeonManager_.allInstances()) {
+        if (!inst->expired) {
+            inst->world.forEach<StatusEffectComponent>([&](Entity*, StatusEffectComponent* seComp) {
+                seComp->effects.tick(dt);
+            });
+        }
+    }
     world_.forEach<CrowdControlComponent>([&](Entity*, CrowdControlComponent* ccComp) {
         ccComp->cc.tick(dt);
     });
+    for (auto& [id, inst] : dungeonManager_.allInstances()) {
+        if (!inst->expired) {
+            inst->world.forEach<CrowdControlComponent>([&](Entity*, CrowdControlComponent* ccComp) {
+                ccComp->cc.tick(dt);
+            });
+        }
+    }
 
     // 3c. Tick player timers (PK decay, combat timer, respawn invuln)
     world_.forEach<CharacterStatsComponent>([&](Entity*, CharacterStatsComponent* cs) {
         cs->stats.tickTimers(dt);
     });
+    for (auto& [id, inst] : dungeonManager_.allInstances()) {
+        if (!inst->expired) {
+            inst->world.forEach<CharacterStatsComponent>([&](Entity*, CharacterStatsComponent* cs) {
+                cs->stats.tickTimers(dt);
+            });
+        }
+    }
 
     // 3d. HP/MP regen tick (server-authoritative)
     regenTimer_ += dt;
@@ -591,7 +612,7 @@ void ServerApp::tick(float dt) {
     if (regenTimer_ >= 10.0f || mpRegenTimer_ >= 5.0f) {
         bool doHP = regenTimer_ >= 10.0f;
         bool doMP = mpRegenTimer_ >= 5.0f;
-        world_.forEach<CharacterStatsComponent>([&](Entity*, CharacterStatsComponent* cs) {
+        auto regenLambda = [&](Entity*, CharacterStatsComponent* cs) {
             if (!cs->stats.isAlive()) return;
             // HP regen: 1% maxHP + equipment bonus, every 10 seconds
             if (doHP && cs->stats.currentHP < cs->stats.maxHP) {
@@ -606,7 +627,13 @@ void ServerApp::tick(float dt) {
                     cs->stats.getWisdom() * 0.5f + cs->stats.equipBonusMPRegen));
                 cs->stats.currentMP = std::min(cs->stats.maxMP, cs->stats.currentMP + amount);
             }
-        });
+        };
+        world_.forEach<CharacterStatsComponent>(regenLambda);
+        for (auto& [id, inst] : dungeonManager_.allInstances()) {
+            if (!inst->expired) {
+                inst->world.forEach<CharacterStatsComponent>(regenLambda);
+            }
+        }
         if (doHP) regenTimer_ -= 10.0f;
         if (doMP) mpRegenTimer_ -= 5.0f;
     }
@@ -618,6 +645,13 @@ void ServerApp::tick(float dt) {
     world_.forEach<CharacterStatsComponent>([](Entity*, CharacterStatsComponent* cs) {
         cs->stats.advanceDeathTick();
     });
+    for (auto& [id, inst] : dungeonManager_.allInstances()) {
+        if (!inst->expired) {
+            inst->world.forEach<CharacterStatsComponent>([](Entity*, CharacterStatsComponent* cs) {
+                cs->stats.advanceDeathTick();
+            });
+        }
+    }
 
     // Despawn expired ground items
     {
@@ -630,6 +664,22 @@ void ServerApp::tick(float dt) {
         for (auto handle : toDestroy) {
             replication_.unregisterEntity(handle);
             world_.destroyEntity(handle);
+        }
+
+        // Despawn in dungeon instances too
+        for (auto& [id, inst] : dungeonManager_.allInstances()) {
+            if (!inst->expired) {
+                std::vector<EntityHandle> instDestroy;
+                inst->world.forEach<DroppedItemComponent>([&](Entity* e, DroppedItemComponent* drop) {
+                    if (gameTime_ - drop->spawnTime > drop->despawnAfter) {
+                        instDestroy.push_back(e->handle());
+                    }
+                });
+                for (auto handle : instDestroy) {
+                    inst->replication.unregisterEntity(handle);
+                    inst->world.destroyEntity(handle);
+                }
+            }
         }
     }
 
@@ -1307,8 +1357,8 @@ void ServerApp::onClientConnected(uint16_t clientId) {
             auto* cl = server_.connections().findById(clientId);
             if (!cl || cl->playerEntityId == 0) return;
             PersistentId p(cl->playerEntityId);
-            EntityHandle eh = replication_.getEntityHandle(p);
-            Entity* ent = world_.getEntity(eh);
+            EntityHandle eh = getReplicationForClient(clientId).getEntityHandle(p);
+            Entity* ent = getWorldForClient(clientId).getEntity(eh);
             if (!ent) return;
             recalcEquipmentBonuses(ent);
             sendPlayerState(clientId);
@@ -1332,8 +1382,8 @@ void ServerApp::onClientConnected(uint16_t clientId) {
             auto* cl = server_.connections().findById(clientId);
             if (!cl || cl->playerEntityId == 0) return;
             PersistentId p(cl->playerEntityId);
-            EntityHandle eh = replication_.getEntityHandle(p);
-            Entity* ent = world_.getEntity(eh);
+            EntityHandle eh = getReplicationForClient(clientId).getEntityHandle(p);
+            Entity* ent = getWorldForClient(clientId).getEntity(eh);
             if (!ent) return;
             auto* cs = ent->getComponent<CharacterStatsComponent>();
             if (!cs || !cs->stats.isAlive()) return;
@@ -1372,8 +1422,8 @@ void ServerApp::onClientConnected(uint16_t clientId) {
             auto* cl = server_.connections().findById(clientId);
             if (!cl || cl->playerEntityId == 0) return;
             PersistentId p(cl->playerEntityId);
-            EntityHandle eh = replication_.getEntityHandle(p);
-            Entity* ent = world_.getEntity(eh);
+            EntityHandle eh = getReplicationForClient(clientId).getEntityHandle(p);
+            Entity* ent = getWorldForClient(clientId).getEntity(eh);
             if (!ent) return;
             auto* cs = ent->getComponent<CharacterStatsComponent>();
             if (!cs) return;
@@ -1443,8 +1493,8 @@ void ServerApp::savePlayerToDB(uint16_t clientId) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* e = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* e = getWorldForClient(clientId).getEntity(h);
     if (!e) return;
 
     CharacterRecord rec;
@@ -1578,8 +1628,8 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* e = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* e = getWorldForClient(clientId).getEntity(h);
     if (!e) return;
 
     // ---- Snapshot all data on game thread ----
@@ -1669,8 +1719,8 @@ void ServerApp::saveInventoryForClient(uint16_t clientId) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* e = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* e = getWorldForClient(clientId).getEntity(h);
     if (!e) return;
 
     auto* inv = e->getComponent<InventoryComponent>();
@@ -1762,14 +1812,23 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
         arenaManager_.onPlayerDisconnect(eid);
         playerEventLocks_.erase(eid);
 
+        World& world = getWorldForClient(clientId);
+        ReplicationManager& repl = getReplicationForClient(clientId);
+
         PersistentId pid(client->playerEntityId);
-        EntityHandle h = replication_.getEntityHandle(pid);
+        EntityHandle h = repl.getEntityHandle(pid);
         // Unregister from replication BEFORE destroying — prevents dangling
         // handle in spatial index on next tick's rebuildSpatialIndex()
-        replication_.unregisterEntity(h);
+        repl.unregisterEntity(h);
         if (h) {
-            world_.destroyEntity(h);
-            world_.processDestroyQueue();
+            world.destroyEntity(h);
+            world.processDestroyQueue();
+        }
+
+        // If in a dungeon instance, remove from instance tracking
+        uint32_t instId = dungeonManager_.getInstanceForClient(clientId);
+        if (instId) {
+            dungeonManager_.removePlayer(instId, clientId);
         }
     }
 
@@ -1850,8 +1909,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             auto* client = server_.connections().findById(clientId);
             if (client && client->playerEntityId != 0) {
                 PersistentId pid(client->playerEntityId);
-                EntityHandle h = replication_.getEntityHandle(pid);
-                Entity* e = world_.getEntity(h);
+                EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+                Entity* e = getWorldForClient(clientId).getEntity(h);
                 if (!e) break;
 
                 // First move after connect: accept unconditionally (position desync)
@@ -1950,8 +2009,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             auto* client = server_.connections().findById(clientId);
             if (client && client->playerEntityId != 0) {
                 PersistentId pid(client->playerEntityId);
-                EntityHandle h = replication_.getEntityHandle(pid);
-                Entity* e = world_.getEntity(h);
+                EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+                Entity* e = getWorldForClient(clientId).getEntity(h);
                 if (e) {
                     auto* nameplate = e->getComponent<NameplateComponent>();
                     if (nameplate) senderName = nameplate->displayName;
@@ -1984,8 +2043,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     int64_t priceGold = detail::readI64(payload);
 
                     PersistentId pid(client->playerEntityId);
-                    EntityHandle h = replication_.getEntityHandle(pid);
-                    Entity* e = world_.getEntity(h);
+                    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+                    Entity* e = getWorldForClient(clientId).getEntity(h);
                     if (!e) break;
 
                     auto* inv = e->getComponent<InventoryComponent>();
@@ -2075,8 +2134,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     int32_t listingId = payload.readI32();
 
                     PersistentId pid(client->playerEntityId);
-                    EntityHandle h = replication_.getEntityHandle(pid);
-                    Entity* e = world_.getEntity(h);
+                    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+                    Entity* e = getWorldForClient(clientId).getEntity(h);
                     if (!e) break;
 
                     auto* inv = e->getComponent<InventoryComponent>();
@@ -2256,8 +2315,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     // Refund gold if successful
                     if (dbResult == BountyResult::Success && refund > 0) {
                         PersistentId pid(client->playerEntityId);
-                        EntityHandle h = replication_.getEntityHandle(pid);
-                        Entity* e = world_.getEntity(h);
+                        EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+                        Entity* e = getWorldForClient(clientId).getEntity(h);
                         if (e) {
                             auto* inv = e->getComponent<InventoryComponent>();
                             if (inv) {
@@ -2282,8 +2341,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             if (!client || client->playerEntityId == 0) break;
 
             PersistentId pid(client->playerEntityId);
-            EntityHandle h = replication_.getEntityHandle(pid);
-            Entity* e = world_.getEntity(h);
+            EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+            Entity* e = getWorldForClient(clientId).getEntity(h);
             if (!e) break;
 
             switch (subAction) {
@@ -2409,8 +2468,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             if (!client || client->playerEntityId == 0) break;
 
             PersistentId pid(client->playerEntityId);
-            EntityHandle h = replication_.getEntityHandle(pid);
-            Entity* e = world_.getEntity(h);
+            EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+            Entity* e = getWorldForClient(clientId).getEntity(h);
             if (!e) break;
             auto* charStats = e->getComponent<CharacterStatsComponent>();
 
@@ -2641,8 +2700,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             if (!client || client->playerEntityId == 0) break;
 
             PersistentId pid(client->playerEntityId);
-            EntityHandle h = replication_.getEntityHandle(pid);
-            Entity* e = world_.getEntity(h);
+            EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+            Entity* e = getWorldForClient(clientId).getEntity(h);
             if (!e) break;
 
             auto* questComp = e->getComponent<QuestComponent>();
@@ -2707,8 +2766,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             if (!client || client->playerEntityId == 0) break;
 
             PersistentId pid(client->playerEntityId);
-            EntityHandle h = replication_.getEntityHandle(pid);
-            Entity* e = world_.getEntity(h);
+            EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+            Entity* e = getWorldForClient(clientId).getEntity(h);
             if (!e) break;
 
             // Level gate: check SceneCache for minimum level requirement
@@ -2752,12 +2811,12 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             {
                 auto* client = server_.connections().findById(clientId);
                 if (client && client->playerEntityId != 0) {
-                    PersistentId pid(client->playerEntityId);
-                    EntityHandle h = replication_.getEntityHandle(pid);
-                    Entity* e = world_.getEntity(h);
-                    if (e) {
-                        auto* sc = e->getComponent<CharacterStatsComponent>();
-                        if (sc) sc->stats.currentScene = cmd.targetScene;
+                    PersistentId pid2(client->playerEntityId);
+                    EntityHandle h2 = getReplicationForClient(clientId).getEntityHandle(pid2);
+                    Entity* e2 = getWorldForClient(clientId).getEntity(h2);
+                    if (e2) {
+                        auto* sc2 = e2->getComponent<CharacterStatsComponent>();
+                        if (sc2) sc2->stats.currentScene = cmd.targetScene;
                     }
 
                     // Clear AOI state so the replication system sends fresh
@@ -2789,8 +2848,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             if (!client || client->playerEntityId == 0) break;
 
             PersistentId pid(client->playerEntityId);
-            EntityHandle h = replication_.getEntityHandle(pid);
-            Entity* e = world_.getEntity(h);
+            EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+            Entity* e = getWorldForClient(clientId).getEntity(h);
             if (!e) break;
 
             auto* sc = e->getComponent<CharacterStatsComponent>();
@@ -2978,8 +3037,11 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
 
+    World& world = getWorldForClient(clientId);
+    ReplicationManager& repl = getReplicationForClient(clientId);
+
     if (msg.targetId != 0) {
-        if (!TargetValidator::isInAOI(client->aoi, msg.targetId, replication_)) {
+        if (!TargetValidator::isInAOI(client->aoi, msg.targetId, repl)) {
             LOG_WARN("Net", "Client %u targeted entity %llu not in AOI", clientId, msg.targetId);
             return;
         }
@@ -2992,8 +3054,8 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     }
 
     PersistentId casterPid(client->playerEntityId);
-    EntityHandle casterHandle = replication_.getEntityHandle(casterPid);
-    Entity* caster = world_.getEntity(casterHandle);
+    EntityHandle casterHandle = repl.getEntityHandle(casterPid);
+    Entity* caster = world.getEntity(casterHandle);
     if (!caster) return;
 
     auto* skillComp = caster->getComponent<SkillManagerComponent>();
@@ -3032,8 +3094,8 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     bool targetIsBoss = false;
 
     if (msg.targetId != 0) {
-        EntityHandle targetHandle = replication_.getEntityHandle(targetPid);
-        target = world_.getEntity(targetHandle);
+        EntityHandle targetHandle = repl.getEntityHandle(targetPid);
+        target = world.getEntity(targetHandle);
     }
 
     // Reject skill if target was specified but no longer exists (died/disconnected)
@@ -3253,9 +3315,9 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             }
 
             // Determine top damager for loot ownership (party-aware)
-            auto partyLookup = [this](uint32_t entityId) -> int {
+            auto partyLookup = [&world](uint32_t entityId) -> int {
                 EntityHandle h(entityId);
-                auto* entity = world_.getEntity(h);
+                auto* entity = world.getEntity(h);
                 if (!entity) return -1;
                 auto* pc = entity->getComponent<PartyComponent>();
                 if (!pc || !pc->party.isInParty()) return -1;
@@ -3274,7 +3336,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             bool useRandomPerItem = false;
             if (lootResult.isParty) {
                 EntityHandle topHandle(baseOwner);
-                auto* topEntity = world_.getEntity(topHandle);
+                auto* topEntity = world.getEntity(topHandle);
                 if (topEntity) {
                     auto* pc = topEntity->getComponent<PartyComponent>();
                     if (pc && pc->party.lootMode == PartyLootMode::Random) {
@@ -3324,7 +3386,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                     };
                     Vec2 dropPos = {deathPos.x + offset.x, deathPos.y + offset.y};
 
-                    Entity* dropEntity = EntityFactory::createDroppedItem(world_, dropPos, false);
+                    Entity* dropEntity = EntityFactory::createDroppedItem(world, dropPos, false);
                     auto* dropComp = dropEntity->getComponent<DroppedItemComponent>();
                     if (dropComp) {
                         dropComp->itemId = drops[i].item.itemId;
@@ -3340,7 +3402,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                     }
 
                     PersistentId dropPid = PersistentId::generate(1);
-                    replication_.registerEntity(dropEntity->handle(), dropPid);
+                    repl.registerEntity(dropEntity->handle(), dropPid);
                 }
             }
 
@@ -3352,7 +3414,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                     std::uniform_int_distribution<int> goldDist(es.minGoldDrop, es.maxGoldDrop);
                     int goldAmount = goldDist(goldRng);
 
-                    Entity* goldEntity = EntityFactory::createDroppedItem(world_, deathPos, true);
+                    Entity* goldEntity = EntityFactory::createDroppedItem(world, deathPos, true);
                     auto* goldComp = goldEntity->getComponent<DroppedItemComponent>();
                     if (goldComp) {
                         goldComp->isGold = true;
@@ -3363,7 +3425,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                     }
 
                     PersistentId goldPid = PersistentId::generate(1);
-                    replication_.registerEntity(goldEntity->handle(), goldPid);
+                    repl.registerEntity(goldEntity->handle(), goldPid);
                 }
             }
 
@@ -3424,22 +3486,25 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
 
+    World& world = getWorldForClient(clientId);
+    ReplicationManager& repl = getReplicationForClient(clientId);
+
     if (action.targetId != 0) {
-        if (!TargetValidator::isInAOI(client->aoi, action.targetId, replication_)) {
+        if (!TargetValidator::isInAOI(client->aoi, action.targetId, repl)) {
             LOG_WARN("Net", "Client %u targeted entity %llu not in AOI", clientId, action.targetId);
             return;
         }
     }
 
     PersistentId attackerPid(client->playerEntityId);
-    EntityHandle attackerHandle = replication_.getEntityHandle(attackerPid);
-    Entity* attacker = world_.getEntity(attackerHandle);
+    EntityHandle attackerHandle = repl.getEntityHandle(attackerPid);
+    Entity* attacker = world.getEntity(attackerHandle);
     if (!attacker) return;
 
     // Find target entity
     PersistentId targetPid(action.targetId);
-    EntityHandle targetHandle = replication_.getEntityHandle(targetPid);
-    Entity* target = world_.getEntity(targetHandle);
+    EntityHandle targetHandle = repl.getEntityHandle(targetPid);
+    Entity* target = world.getEntity(targetHandle);
     if (!target) {
         LOG_WARN("Server", "Client %d action on invalid target %llu", clientId, action.targetId);
         return;
@@ -3560,9 +3625,9 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             }
 
             // Determine top damager for loot ownership (party-aware)
-            auto partyLookup = [this](uint32_t entityId) -> int {
+            auto partyLookup = [&world](uint32_t entityId) -> int {
                 EntityHandle h(entityId);
-                auto* entity = world_.getEntity(h);
+                auto* entity = world.getEntity(h);
                 if (!entity) return -1;
                 auto* pc = entity->getComponent<PartyComponent>();
                 if (!pc || !pc->party.isInParty()) return -1;
@@ -3581,7 +3646,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             bool useRandomPerItem = false;
             if (lootResult.isParty) {
                 EntityHandle topHandle(baseOwner);
-                auto* topEntity = world_.getEntity(topHandle);
+                auto* topEntity = world.getEntity(topHandle);
                 if (topEntity) {
                     auto* pc = topEntity->getComponent<PartyComponent>();
                     if (pc && pc->party.lootMode == PartyLootMode::Random) {
@@ -3631,7 +3696,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                     };
                     Vec2 dropPos = {deathPos.x + offset.x, deathPos.y + offset.y};
 
-                    Entity* dropEntity = EntityFactory::createDroppedItem(world_, dropPos, false);
+                    Entity* dropEntity = EntityFactory::createDroppedItem(world, dropPos, false);
                     auto* dropComp = dropEntity->getComponent<DroppedItemComponent>();
                     if (dropComp) {
                         dropComp->itemId = drops[i].item.itemId;
@@ -3647,7 +3712,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                     }
 
                     PersistentId dropPid = PersistentId::generate(1);
-                    replication_.registerEntity(dropEntity->handle(), dropPid);
+                    repl.registerEntity(dropEntity->handle(), dropPid);
                 }
             }
 
@@ -3659,7 +3724,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                     std::uniform_int_distribution<int> goldDist(es.minGoldDrop, es.maxGoldDrop);
                     int goldAmount = goldDist(goldRng);
 
-                    Entity* goldEntity = EntityFactory::createDroppedItem(world_, deathPos, true);
+                    Entity* goldEntity = EntityFactory::createDroppedItem(world, deathPos, true);
                     auto* goldComp = goldEntity->getComponent<DroppedItemComponent>();
                     if (goldComp) {
                         goldComp->isGold = true;
@@ -3670,7 +3735,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                     }
 
                     PersistentId goldPid = PersistentId::generate(1);
-                    replication_.registerEntity(goldEntity->handle(), goldPid);
+                    repl.registerEntity(goldEntity->handle(), goldPid);
                 }
             }
 
@@ -3805,8 +3870,8 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
     } else if (action.actionType == 3) {
         // Pickup
         PersistentId itemPid(action.targetId);
-        EntityHandle itemHandle = replication_.getEntityHandle(itemPid);
-        Entity* itemEntity = world_.getEntity(itemHandle);
+        EntityHandle itemHandle = repl.getEntityHandle(itemPid);
+        Entity* itemEntity = world.getEntity(itemHandle);
         if (!itemEntity) return;
 
         auto* dropComp = itemEntity->getComponent<DroppedItemComponent>();
@@ -3825,7 +3890,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             auto* attackerParty = attacker->getComponent<PartyComponent>();
             if (attackerParty && attackerParty->party.isInParty()) {
                 EntityHandle ownerHandle(dropComp->ownerEntityId);
-                auto* ownerEntity = world_.getEntity(ownerHandle);
+                auto* ownerEntity = world.getEntity(ownerHandle);
                 if (ownerEntity) {
                     auto* ownerParty = ownerEntity->getComponent<PartyComponent>();
                     if (ownerParty && ownerParty->party.isInParty()
@@ -3900,8 +3965,8 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         sendPlayerState(clientId);
 
         // Destroy the dropped item
-        replication_.unregisterEntity(itemHandle);
-        world_.destroyEntity(itemHandle);
+        repl.unregisterEntity(itemHandle);
+        world.destroyEntity(itemHandle);
     } else {
         LOG_INFO("Server", "Unhandled action type %d from client %d", action.actionType, clientId);
     }
@@ -3912,8 +3977,8 @@ void ServerApp::processPetCommand(uint16_t clientId, const CmdPetMsg& msg) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* player = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* player = getWorldForClient(clientId).getEntity(h);
     if (!player) return;
 
     auto* charStats = player->getComponent<CharacterStatsComponent>();
@@ -4040,8 +4105,8 @@ void ServerApp::processEquip(uint16_t clientId, const CmdEquipMsg& msg) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* player = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* player = getWorldForClient(clientId).getEntity(h);
     if (!player) return;
 
     auto* charStats = player->getComponent<CharacterStatsComponent>();
@@ -4081,8 +4146,8 @@ void ServerApp::sendPlayerState(uint16_t clientId) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* e = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* e = getWorldForClient(clientId).getEntity(h);
     if (!e) return;
 
     auto* charStats = e->getComponent<CharacterStatsComponent>();
@@ -4130,8 +4195,8 @@ void ServerApp::sendSkillSync(uint16_t clientId) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* e = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* e = getWorldForClient(clientId).getEntity(h);
     if (!e) return;
 
     auto* skillComp = e->getComponent<SkillManagerComponent>();
@@ -4161,8 +4226,8 @@ void ServerApp::sendQuestSync(uint16_t clientId) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* e = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* e = getWorldForClient(clientId).getEntity(h);
     if (!e) return;
 
     auto* questComp = e->getComponent<QuestComponent>();
@@ -4190,8 +4255,8 @@ void ServerApp::sendInventorySync(uint16_t clientId) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* e = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* e = getWorldForClient(clientId).getEntity(h);
     if (!e) return;
 
     auto* invComp = e->getComponent<InventoryComponent>();
@@ -4466,8 +4531,8 @@ void ServerApp::processGauntletCommand(uint16_t clientId, ByteReader& payload) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* e = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* e = getWorldForClient(clientId).getEntity(h);
     if (!e) return;
 
     auto* charStats = e->getComponent<CharacterStatsComponent>();
@@ -4568,9 +4633,20 @@ void ServerApp::broadcastBossKillNotification(const EnemyStats& es,
     auto it = es.damageByAttacker.find(lootResult.topDamagerId);
     bossMsg.topDamage = (it != es.damageByAttacker.end()) ? it->second : 0;
 
-    // Look up winner name
-    EntityHandle winnerH(lootResult.topDamagerId);
-    auto* winnerEntity = world_.getEntity(winnerH);
+    // Look up winner name — check main world first, then dungeon instances
+    Entity* winnerEntity = nullptr;
+    {
+        EntityHandle winnerH(lootResult.topDamagerId);
+        winnerEntity = world_.getEntity(winnerH);
+        if (!winnerEntity) {
+            for (auto& [id, inst] : dungeonManager_.allInstances()) {
+                if (!inst->expired) {
+                    winnerEntity = inst->world.getEntity(winnerH);
+                    if (winnerEntity) break;
+                }
+            }
+        }
+    }
     if (winnerEntity) {
         auto* winnerNameplate = winnerEntity->getComponent<NameplateComponent>();
         if (winnerNameplate) {
@@ -4587,8 +4663,9 @@ void ServerApp::broadcastBossKillNotification(const EnemyStats& es,
     // Scene-scoped broadcast: only send to clients in the same scene
     server_.connections().forEach([&](ClientConnection& client) {
         if (client.playerEntityId == 0) return;
-        EntityHandle ch(static_cast<uint32_t>(client.playerEntityId));
-        auto* ce = world_.getEntity(ch);
+        PersistentId cpid(client.playerEntityId);
+        EntityHandle ch = getReplicationForClient(client.clientId).getEntityHandle(cpid);
+        auto* ce = getWorldForClient(client.clientId).getEntity(ch);
         if (!ce) return;
         auto* cs = ce->getComponent<CharacterStatsComponent>();
         if (cs && cs->stats.currentScene == scene) {
@@ -4606,8 +4683,8 @@ void ServerApp::processEnchant(uint16_t clientId, const CmdEnchantMsg& msg) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* player = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* player = getWorldForClient(clientId).getEntity(h);
     if (!player) return;
 
     auto* charStats = player->getComponent<CharacterStatsComponent>();
@@ -4738,8 +4815,8 @@ void ServerApp::processRepair(uint16_t clientId, const CmdRepairMsg& msg) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* player = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* player = getWorldForClient(clientId).getEntity(h);
     if (!player) return;
 
     auto* inv = player->getComponent<InventoryComponent>();
@@ -4814,8 +4891,8 @@ void ServerApp::processExtractCore(uint16_t clientId, const CmdExtractCoreMsg& m
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* player = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* player = getWorldForClient(clientId).getEntity(h);
     if (!player) return;
 
     auto* charStats = player->getComponent<CharacterStatsComponent>();
@@ -4900,8 +4977,8 @@ void ServerApp::processCraft(uint16_t clientId, const CmdCraftMsg& msg) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* player = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* player = getWorldForClient(clientId).getEntity(h);
     if (!player) return;
 
     auto* charStats = player->getComponent<CharacterStatsComponent>();
@@ -5032,8 +5109,8 @@ void ServerApp::processArena(uint16_t clientId, const CmdArenaMsg& msg) {
         auto mode = static_cast<ArenaMode>(msg.mode);
 
         PersistentId pid(client->playerEntityId);
-        EntityHandle h = replication_.getEntityHandle(pid);
-        Entity* player = world_.getEntity(h);
+        EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+        Entity* player = getWorldForClient(clientId).getEntity(h);
         if (!player) return;
 
         auto* charStats = player->getComponent<CharacterStatsComponent>();
@@ -5100,8 +5177,8 @@ void ServerApp::processBattlefield(uint16_t clientId, const CmdBattlefieldMsg& m
 
         // Get player entity, faction, position, scene
         PersistentId pid(client->playerEntityId);
-        EntityHandle h = replication_.getEntityHandle(pid);
-        Entity* player = world_.getEntity(h);
+        EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+        Entity* player = getWorldForClient(clientId).getEntity(h);
         if (!player) return;
 
         auto* charStats = player->getComponent<CharacterStatsComponent>();
@@ -5140,8 +5217,8 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* player = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* player = getWorldForClient(clientId).getEntity(h);
     if (!player) return;
 
     auto* charStats = player->getComponent<CharacterStatsComponent>();
@@ -5323,8 +5400,8 @@ void ServerApp::processSocketItem(uint16_t clientId, const CmdSocketItemMsg& msg
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* player = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* player = getWorldForClient(clientId).getEntity(h);
     if (!player) return;
 
     auto* charStats = player->getComponent<CharacterStatsComponent>();
@@ -5421,8 +5498,8 @@ void ServerApp::processStatEnchant(uint16_t clientId, const CmdStatEnchantMsg& m
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* player = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* player = getWorldForClient(clientId).getEntity(h);
     if (!player) return;
 
     auto* charStats = player->getComponent<CharacterStatsComponent>();
@@ -5506,8 +5583,8 @@ uint16_t ServerApp::findClientByCharacterName(const std::string& name) {
         if (result != 0) return;
         if (client.playerEntityId == 0) return;
         PersistentId pid(client.playerEntityId);
-        EntityHandle h = replication_.getEntityHandle(pid);
-        Entity* entity = world_.getEntity(h);
+        EntityHandle h = getReplicationForClient(client.clientId).getEntityHandle(pid);
+        Entity* entity = getWorldForClient(client.clientId).getEntity(h);
         if (!entity) return;
         auto* nameplate = entity->getComponent<NameplateComponent>();
         if (nameplate && nameplate->displayName == name) {
@@ -5573,8 +5650,8 @@ void ServerApp::initGMCommands() {
         auto* callerClient = server_.connections().findById(callerId);
         if (!targetClient || !callerClient) return;
 
-        Entity* targetEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(targetClient->playerEntityId)));
-        Entity* callerEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(callerClient->playerEntityId)));
+        Entity* targetEntity = getWorldForClient(targetId).getEntity(getReplicationForClient(targetId).getEntityHandle(PersistentId(targetClient->playerEntityId)));
+        Entity* callerEntity = getWorldForClient(callerId).getEntity(getReplicationForClient(callerId).getEntityHandle(PersistentId(callerClient->playerEntityId)));
         if (!targetEntity || !callerEntity) return;
 
         auto* targetTransform = targetEntity->getComponent<Transform>();
@@ -5613,8 +5690,8 @@ void ServerApp::initGMCommands() {
         auto* targetClient = server_.connections().findById(targetId);
         if (!callerClient || !targetClient) return;
 
-        Entity* callerEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(callerClient->playerEntityId)));
-        Entity* targetEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(targetClient->playerEntityId)));
+        Entity* callerEntity = getWorldForClient(callerId).getEntity(getReplicationForClient(callerId).getEntityHandle(PersistentId(callerClient->playerEntityId)));
+        Entity* targetEntity = getWorldForClient(targetId).getEntity(getReplicationForClient(targetId).getEntityHandle(PersistentId(targetClient->playerEntityId)));
         if (!callerEntity || !targetEntity) return;
 
         auto* callerTransform = callerEntity->getComponent<Transform>();
@@ -5669,7 +5746,7 @@ void ServerApp::initGMCommands() {
 
         auto* targetClient = server_.connections().findById(targetId);
         if (!targetClient) return;
-        Entity* targetEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(targetClient->playerEntityId)));
+        Entity* targetEntity = getWorldForClient(targetId).getEntity(getReplicationForClient(targetId).getEntityHandle(PersistentId(targetClient->playerEntityId)));
         if (!targetEntity) return;
         auto* charStats = targetEntity->getComponent<CharacterStatsComponent>();
         if (!charStats) return;
@@ -5696,7 +5773,7 @@ void ServerApp::initGMCommands() {
 
         auto* targetClient = server_.connections().findById(targetId);
         if (!targetClient) return;
-        Entity* targetEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(targetClient->playerEntityId)));
+        Entity* targetEntity = getWorldForClient(targetId).getEntity(getReplicationForClient(targetId).getEntityHandle(PersistentId(targetClient->playerEntityId)));
         if (!targetEntity) return;
         auto* inv = targetEntity->getComponent<InventoryComponent>();
         if (!inv) return;
@@ -5722,7 +5799,7 @@ void ServerApp::initGMCommands() {
 
         auto* targetClient = server_.connections().findById(targetId);
         if (!targetClient) return;
-        Entity* targetEntity = world_.getEntity(replication_.getEntityHandle(PersistentId(targetClient->playerEntityId)));
+        Entity* targetEntity = getWorldForClient(targetId).getEntity(getReplicationForClient(targetId).getEntityHandle(PersistentId(targetClient->playerEntityId)));
         if (!targetEntity) return;
         auto* inv = targetEntity->getComponent<InventoryComponent>();
         if (!inv) return;
@@ -5745,8 +5822,8 @@ void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMs
     if (!client || client->playerEntityId == 0) return;
 
     PersistentId pid(client->playerEntityId);
-    EntityHandle h = replication_.getEntityHandle(pid);
-    Entity* player = world_.getEntity(h);
+    EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+    Entity* player = getWorldForClient(clientId).getEntity(h);
     if (!player) return;
 
     auto* charStats = player->getComponent<CharacterStatsComponent>();
@@ -6073,149 +6150,160 @@ void ServerApp::tickPetAutoLoot(float dt) {
     if (petAutoLootTimer_ < AUTO_LOOT_INTERVAL) return;
     petAutoLootTimer_ = 0.0f;
 
-    // Collect all unclaimed dropped items with positions
+    // Per-world auto-loot processing
     struct DroppedItemInfo {
         Entity* entity;
         Vec2 pos;
         DroppedItemComponent* drop;
     };
-    std::vector<DroppedItemInfo> droppedItems;
-    world_.forEach<DroppedItemComponent>([&](Entity* e, DroppedItemComponent* d) {
-        if (d->claimedBy != 0) return;
-        auto* t = e->getComponent<Transform>();
-        if (!t) return;
-        droppedItems.push_back({e, t->position, d});
-    });
 
-    if (droppedItems.empty()) return;
-
-    // Track entities to destroy after iteration (can't destroy during forEach)
-    std::vector<EntityHandle> toDestroy;
-
-    // For each player with auto-loot pet, check nearby items
-    world_.forEach<CharacterStatsComponent>([&](Entity* player, CharacterStatsComponent* cs) {
-        auto* petComp = player->getComponent<PetComponent>();
-        if (!petComp || !petComp->hasPet() || !petComp->equippedPet.autoLootEnabled) return;
-
-        auto* playerTransform = player->getComponent<Transform>();
-        if (!playerTransform) return;
-
-        // Find clientId for this player
-        uint16_t clientId = 0;
-        auto playerHandle = player->handle();
-        server_.connections().forEach([&](const ClientConnection& conn) {
-            PersistentId pid(conn.playerEntityId);
-            EntityHandle h = replication_.getEntityHandle(pid);
-            if (h == playerHandle) {
-                clientId = conn.clientId;
-            }
+    auto processAutoLootForWorld = [this](World& w, ReplicationManager& r) {
+        std::vector<DroppedItemInfo> droppedItems;
+        w.forEach<DroppedItemComponent>([&](Entity* e, DroppedItemComponent* d) {
+            if (d->claimedBy != 0) return;
+            auto* t = e->getComponent<Transform>();
+            if (!t) return;
+            droppedItems.push_back({e, t->position, d});
         });
-        if (clientId == 0) return;
 
-        auto* inv = player->getComponent<InventoryComponent>();
-        if (!inv) return;
+        if (droppedItems.empty()) return;
 
-        float radiusSq = petComp->autoLootRadius * petComp->autoLootRadius;
-        Vec2 pPos = playerTransform->position;
+        std::vector<EntityHandle> toDestroy;
 
-        for (auto& info : droppedItems) {
-            if (info.drop->claimedBy != 0) continue;
+        w.forEach<CharacterStatsComponent>([&](Entity* player, CharacterStatsComponent* cs) {
+            auto* petComp = player->getComponent<PetComponent>();
+            if (!petComp || !petComp->hasPet() || !petComp->equippedPet.autoLootEnabled) return;
 
-            // Scene check
-            if (info.drop->sceneId != cs->stats.currentScene) continue;
+            auto* playerTransform = player->getComponent<Transform>();
+            if (!playerTransform) return;
 
-            // Ownership check
-            bool canLoot = (info.drop->ownerEntityId == 0 ||
-                           info.drop->ownerEntityId == playerHandle.value);
-            if (!canLoot) {
-                auto* partyComp = player->getComponent<PartyComponent>();
-                if (partyComp && partyComp->party.isInParty() &&
-                    partyComp->party.lootMode == PartyLootMode::FreeForAll) {
-                    EntityHandle ownerH(info.drop->ownerEntityId);
-                    auto* ownerEntity = world_.getEntity(ownerH);
-                    if (ownerEntity) {
-                        auto* ownerParty = ownerEntity->getComponent<PartyComponent>();
-                        if (ownerParty && ownerParty->party.isInParty() &&
-                            ownerParty->party.partyId == partyComp->party.partyId) {
-                            canLoot = true;
+            uint16_t clientId = 0;
+            auto playerHandle = player->handle();
+            server_.connections().forEach([&](const ClientConnection& conn) {
+                PersistentId pid(conn.playerEntityId);
+                EntityHandle h = r.getEntityHandle(pid);
+                if (h == playerHandle) {
+                    clientId = conn.clientId;
+                }
+            });
+            if (clientId == 0) return;
+
+            auto* inv = player->getComponent<InventoryComponent>();
+            if (!inv) return;
+
+            float radiusSq = petComp->autoLootRadius * petComp->autoLootRadius;
+            Vec2 pPos = playerTransform->position;
+
+            for (auto& info : droppedItems) {
+                if (info.drop->claimedBy != 0) continue;
+                if (info.drop->sceneId != cs->stats.currentScene) continue;
+
+                bool canLoot = (info.drop->ownerEntityId == 0 ||
+                               info.drop->ownerEntityId == playerHandle.value);
+                if (!canLoot) {
+                    auto* partyComp = player->getComponent<PartyComponent>();
+                    if (partyComp && partyComp->party.isInParty() &&
+                        partyComp->party.lootMode == PartyLootMode::FreeForAll) {
+                        EntityHandle ownerH(info.drop->ownerEntityId);
+                        auto* ownerEntity = w.getEntity(ownerH);
+                        if (ownerEntity) {
+                            auto* ownerParty = ownerEntity->getComponent<PartyComponent>();
+                            if (ownerParty && ownerParty->party.isInParty() &&
+                                ownerParty->party.partyId == partyComp->party.partyId) {
+                                canLoot = true;
+                            }
                         }
                     }
                 }
-            }
-            if (!canLoot) continue;
+                if (!canLoot) continue;
 
-            // Distance check
-            float dx = pPos.x - info.pos.x;
-            float dy = pPos.y - info.pos.y;
-            if (dx * dx + dy * dy > radiusSq) continue;
+                float dx = pPos.x - info.pos.x;
+                float dy = pPos.y - info.pos.y;
+                if (dx * dx + dy * dy > radiusSq) continue;
 
-            // Claim it
-            if (!info.drop->tryClaim(playerHandle.value)) continue;
+                if (!info.drop->tryClaim(playerHandle.value)) continue;
 
-            if (info.drop->isGold) {
-                auto* client = server_.connections().findById(clientId);
-                if (client) wal_.appendGoldChange(client->character_id, static_cast<int64_t>(info.drop->goldAmount));
-                inv->inventory.setGold(inv->inventory.getGold() + info.drop->goldAmount);
+                if (info.drop->isGold) {
+                    auto* client = server_.connections().findById(clientId);
+                    if (client) wal_.appendGoldChange(client->character_id, static_cast<int64_t>(info.drop->goldAmount));
+                    inv->inventory.setGold(inv->inventory.getGold() + info.drop->goldAmount);
 
-                SvLootPickupMsg pickup;
-                pickup.isGold = 1;
-                pickup.goldAmount = info.drop->goldAmount;
-                pickup.displayName = "Gold";
-                uint8_t buf[256];
-                ByteWriter w(buf, sizeof(buf));
-                pickup.write(w);
-                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvLootPickup, buf, w.size());
-            } else {
-                const auto* itemDef = itemDefCache_.getDefinition(info.drop->itemId);
+                    SvLootPickupMsg pickup;
+                    pickup.isGold = 1;
+                    pickup.goldAmount = info.drop->goldAmount;
+                    pickup.displayName = "Gold";
+                    uint8_t buf[256];
+                    ByteWriter bw(buf, sizeof(buf));
+                    pickup.write(bw);
+                    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvLootPickup, buf, bw.size());
+                } else {
+                    const auto* itemDef = itemDefCache_.getDefinition(info.drop->itemId);
 
-                ItemInstance item;
-                item.instanceId   = std::to_string(
-                    std::chrono::steady_clock::now().time_since_epoch().count());
-                item.itemId       = info.drop->itemId;
-                item.quantity     = info.drop->quantity;
-                item.enchantLevel = info.drop->enchantLevel;
-                item.rolledStats  = ItemStatRoller::parseRolledStats(info.drop->rolledStatsJson);
-                item.rarity       = parseItemRarity(info.drop->rarity);
-                item.displayName  = itemDef ? itemDef->displayName : info.drop->itemId;
+                    ItemInstance item;
+                    item.instanceId   = std::to_string(
+                        std::chrono::steady_clock::now().time_since_epoch().count());
+                    item.itemId       = info.drop->itemId;
+                    item.quantity     = info.drop->quantity;
+                    item.enchantLevel = info.drop->enchantLevel;
+                    item.rolledStats  = ItemStatRoller::parseRolledStats(info.drop->rolledStatsJson);
+                    item.rarity       = parseItemRarity(info.drop->rarity);
+                    item.displayName  = itemDef ? itemDef->displayName : info.drop->itemId;
 
-                auto* client = server_.connections().findById(clientId);
-                if (client) wal_.appendItemAdd(client->character_id, -1, item.instanceId);
+                    auto* client = server_.connections().findById(clientId);
+                    if (client) wal_.appendItemAdd(client->character_id, -1, item.instanceId);
 
-                if (!inv->inventory.addItem(item)) {
-                    info.drop->releaseClaim();
-                    continue;
+                    if (!inv->inventory.addItem(item)) {
+                        info.drop->releaseClaim();
+                        continue;
+                    }
+
+                    SvLootPickupMsg pickup;
+                    pickup.itemId = info.drop->itemId;
+                    pickup.quantity = info.drop->quantity;
+                    pickup.rarity = info.drop->rarity;
+                    pickup.displayName = itemDef ? itemDef->displayName : info.drop->itemId;
+                    if (info.drop->enchantLevel > 0) {
+                        pickup.displayName += " +" + std::to_string(info.drop->enchantLevel);
+                    }
+                    uint8_t buf[256];
+                    ByteWriter bw(buf, sizeof(buf));
+                    pickup.write(bw);
+                    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvLootPickup, buf, bw.size());
+
+                    sendInventorySync(clientId);
                 }
 
-                SvLootPickupMsg pickup;
-                pickup.itemId = info.drop->itemId;
-                pickup.quantity = info.drop->quantity;
-                pickup.rarity = info.drop->rarity;
-                pickup.displayName = itemDef ? itemDef->displayName : info.drop->itemId;
-                if (info.drop->enchantLevel > 0) {
-                    pickup.displayName += " +" + std::to_string(info.drop->enchantLevel);
-                }
-                uint8_t buf[256];
-                ByteWriter w(buf, sizeof(buf));
-                pickup.write(w);
-                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvLootPickup, buf, w.size());
-
-                sendInventorySync(clientId);
+                sendPlayerState(clientId);
+                toDestroy.push_back(info.entity->handle());
             }
+        });
 
-            sendPlayerState(clientId);
-            toDestroy.push_back(info.entity->handle());
+        for (auto handle : toDestroy) {
+            r.unregisterEntity(handle);
+            w.destroyEntity(handle);
         }
-    });
+    };
 
-    // Destroy picked-up items after iteration
-    for (auto handle : toDestroy) {
-        replication_.unregisterEntity(handle);
-        world_.destroyEntity(handle);
+    // Process main world
+    processAutoLootForWorld(world_, replication_);
+
+    // Process dungeon instances
+    for (auto& [id, inst] : dungeonManager_.allInstances()) {
+        if (!inst->expired) {
+            processAutoLootForWorld(inst->world, inst->replication);
+        }
     }
 }
 
 void ServerApp::tickDungeonInstances(float dt) {
     dungeonManager_.tick(dt);
+
+    // Tick replication for each active instance
+    for (auto& [id, inst] : dungeonManager_.allInstances()) {
+        if (!inst->expired) {
+            inst->replication.update(inst->world, server_);
+        }
+    }
 
     for (uint32_t id : dungeonManager_.getTimedOutInstances()) {
         LOG_INFO("Server", "Dungeon instance %u timed out, destroying", id);
@@ -6229,6 +6317,28 @@ void ServerApp::tickDungeonInstances(float dt) {
         LOG_INFO("Server", "Dungeon instance %u empty, destroying", id);
         dungeonManager_.destroyInstance(id);
     }
+}
+
+// ============================================================================
+// Dungeon instance routing helpers
+// ============================================================================
+
+World& ServerApp::getWorldForClient(uint16_t clientId) {
+    uint32_t instId = dungeonManager_.getInstanceForClient(clientId);
+    if (instId) {
+        auto* inst = dungeonManager_.getInstance(instId);
+        if (inst) return inst->world;
+    }
+    return world_;
+}
+
+ReplicationManager& ServerApp::getReplicationForClient(uint16_t clientId) {
+    uint32_t instId = dungeonManager_.getInstanceForClient(clientId);
+    if (instId) {
+        auto* inst = dungeonManager_.getInstance(instId);
+        if (inst) return inst->replication;
+    }
+    return replication_;
 }
 
 } // namespace fate
