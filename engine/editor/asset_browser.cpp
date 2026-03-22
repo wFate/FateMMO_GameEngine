@@ -19,16 +19,16 @@ namespace {
 // Sprite=0, Script=1, Scene=2, Shader=3, Audio=4, Font=5, Tile=6, Prefab=7, Animation=8, Other=9
 static ImVec4 colorForType(int type) {
     switch (type) {
-        case 0:  return {0.4f, 0.8f, 0.4f, 1.0f};   // Sprite - green
-        case 1:  return {0.4f, 0.8f, 1.0f, 1.0f};   // Script - cyan
-        case 2:  return {0.4f, 1.0f, 0.6f, 1.0f};   // Scene - mint
-        case 3:  return {1.0f, 0.7f, 0.4f, 1.0f};   // Shader - orange
-        case 4:  return {0.9f, 0.4f, 0.9f, 1.0f};   // Audio - purple
-        case 5:  return {0.9f, 0.9f, 0.5f, 1.0f};   // Font - yellow
-        case 6:  return {0.6f, 0.6f, 0.9f, 1.0f};   // Tile - blue
-        case 7:  return {1.0f, 0.6f, 0.6f, 1.0f};   // Prefab - red
-        case 8:  return {0.5f, 1.0f, 0.9f, 1.0f};   // Animation - teal
-        default: return {0.6f, 0.6f, 0.6f, 1.0f};   // Other - gray
+        case 0:  return {0.35f, 0.65f, 0.35f, 1.0f};   // Sprite - green
+        case 1:  return {0.35f, 0.65f, 0.80f, 1.0f};   // Script - cyan
+        case 2:  return {0.35f, 0.80f, 0.50f, 1.0f};   // Scene - mint
+        case 3:  return {0.80f, 0.58f, 0.35f, 1.0f};   // Shader - orange
+        case 4:  return {0.72f, 0.35f, 0.72f, 1.0f};   // Audio - purple
+        case 5:  return {0.72f, 0.72f, 0.42f, 1.0f};   // Font - yellow
+        case 6:  return {0.50f, 0.50f, 0.72f, 1.0f};   // Tile - blue
+        case 7:  return {0.80f, 0.50f, 0.50f, 1.0f};   // Prefab - red
+        case 8:  return {0.42f, 0.80f, 0.72f, 1.0f};   // Animation - teal
+        default: return {0.50f, 0.50f, 0.50f, 1.0f};   // Other - gray
     }
 }
 
@@ -44,6 +44,20 @@ static const char* iconForType(int type) {
         case 7:  return "PRE";
         case 8:  return "ANM";
         default: return "???";
+    }
+}
+
+static void drawCheckerboard(ImDrawList* dl, ImVec2 pos, float w, float h, int checkSize = 8) {
+    ImU32 c1 = IM_COL32(40, 40, 40, 255);
+    ImU32 c2 = IM_COL32(50, 50, 50, 255);
+    for (int y = 0; y < (int)h; y += checkSize) {
+        for (int x = 0; x < (int)w; x += checkSize) {
+            ImU32 c = ((x / checkSize + y / checkSize) % 2 == 0) ? c1 : c2;
+            float x1 = pos.x + (float)x, y1 = pos.y + (float)y;
+            float x2 = x1 + fminf((float)checkSize, w - (float)x);
+            float y2 = y1 + fminf((float)checkSize, h - (float)y);
+            dl->AddRectFilled(ImVec2(x1, y1), ImVec2(x2, y2), c);
+        }
     }
 }
 
@@ -197,6 +211,8 @@ void AssetBrowser::draw(World* world, Camera* camera) {
 // ============================================================================
 
 void AssetBrowser::drawBreadcrumb() {
+    if (fontSmall_) ImGui::PushFont(fontSmall_);
+
     // Root button
     if (ImGui::SmallButton("assets")) {
         navigateTo("");
@@ -225,7 +241,7 @@ void AssetBrowser::drawBreadcrumb() {
             accumulated += segment;
 
             ImGui::SameLine();
-            ImGui::TextDisabled("/");
+            ImGui::TextColored(ImVec4(0.502f, 0.502f, 0.533f, 1.0f), ">");
             ImGui::SameLine();
 
             // Make each segment clickable
@@ -233,11 +249,14 @@ void AssetBrowser::drawBreadcrumb() {
             if (ImGui::SmallButton(segment.c_str())) {
                 navigateTo(accumulated);
                 ImGui::PopID();
+                if (fontSmall_) ImGui::PopFont();
                 return;  // early out since entries changed
             }
             ImGui::PopID();
         }
     }
+
+    if (fontSmall_) ImGui::PopFont();
 }
 
 // ============================================================================
@@ -312,6 +331,9 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
                 bool selected = (draggedAssetPath_ == entry.relativePath);
                 if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.6f, 1.0f, 0.7f));
 
+                ImVec2 thumbPos = ImGui::GetCursorScreenPos();
+                drawCheckerboard(ImGui::GetWindowDrawList(), thumbPos, itemW - 8, itemH - 8);
+
                 char btnId[128];
                 snprintf(btnId, sizeof(btnId), "##thumb_%s", entry.name.c_str());
                 if (ImGui::ImageButton(btnId, texId, ImVec2(itemW - 8, itemH - 8),
@@ -320,6 +342,12 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
                     draggedAssetPath_ = entry.relativePath;
                 }
                 if (selected) ImGui::PopStyleColor();
+
+                if (draggedAssetPath_ == entry.relativePath && !entry.isDirectory) {
+                    ImVec2 min = ImGui::GetItemRectMin();
+                    ImVec2 max = ImGui::GetItemRectMax();
+                    ImGui::GetWindowDrawList()->AddRect(min, max, IM_COL32(74, 138, 219, 255), 2.0f, 0, 2.0f);
+                }
             } else {
                 // Fallback if texture failed to load
                 ImVec4 tc = colorForType(typeInt);
@@ -360,6 +388,12 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
             }
 
             ImGui::PopStyleColor(2);
+        }
+
+        if (ImGui::IsItemHovered() && !entry.isDirectory) {
+            ImVec2 min = ImGui::GetItemRectMin();
+            ImVec2 max = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddRectFilled(min, max, IM_COL32(255, 255, 255, 15));
         }
 
         // Right-click context menu
