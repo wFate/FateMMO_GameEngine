@@ -208,6 +208,9 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     # PostgreSQL client (libpq — required by libpqxx) — installed via vcpkg
     find_package(PostgreSQL REQUIRED)
 
+    # FreeType (font rendering for ImGui) — installed via vcpkg
+    find_package(Freetype REQUIRED)
+
     # libpqxx (C++ PostgreSQL client, wraps libpq)
     FetchContent_Declare(
         libpqxx
@@ -259,15 +262,17 @@ add_library(imgui_lib STATIC
     ${implot_SOURCE_DIR}/implot_items.cpp
     ${imguizmo_SOURCE_DIR}/ImGuizmo.cpp
     ${imnodes_SOURCE_DIR}/imnodes.cpp
+    ${imgui_SOURCE_DIR}/misc/freetype/imgui_freetype.cpp
 )
 target_include_directories(imgui_lib PUBLIC
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
+    ${imgui_SOURCE_DIR}/misc/freetype
     ${implot_SOURCE_DIR}
     ${imguizmo_SOURCE_DIR}
     ${imnodes_SOURCE_DIR}
 )
-target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static ${OPENGL_LIB})
+target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static ${OPENGL_LIB} Freetype::Freetype)
 # No loader define = ImGui uses its own minimal GL loader
 
 # =============================================================================
@@ -475,7 +480,7 @@ endif()
 if(MSVC)
     target_compile_definitions(fate_engine PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_definitions(FateEngine PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_definitions(imgui_lib PRIVATE _CRT_SECURE_NO_WARNINGS IMGUI_DEFINE_MATH_OPERATORS)
+    target_compile_definitions(imgui_lib PRIVATE _CRT_SECURE_NO_WARNINGS IMGUI_DEFINE_MATH_OPERATORS IMGUI_ENABLE_FREETYPE)
     target_compile_options(fate_engine PRIVATE /W4 /wd4100 /wd4201 /wd4458)
     target_compile_options(FateEngine PRIVATE /W4 /wd4100 /wd4201 /wd4458 /bigobj)
     target_compile_options(imgui_lib PRIVATE /W4 /wd4100 /wd4201 /wd4458 /wd4996)
