@@ -323,7 +323,7 @@ All 37 game systems from the C#/Unity prototype have been converted to C++ and l
 | Bank Storage | `bank_storage.h` | Persistent bank storage with item slots, gold deposit/withdraw, configurable fee |
 | Serialization | `register_components.h` | Custom toJson/fromJson for all complex NPC/Quest components (shops, skills, dialogue trees, quest progress, bank storage). NPC entities fully persist across scene save/load and prefab round-trips |
 
-See `Docs/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
+See `Docs/Guides/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
 
 ### Game Systems (Ported — Most DB Wired)
 | System | Files | Lines | C# Source | Notes |
