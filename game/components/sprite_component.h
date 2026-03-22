@@ -28,6 +28,10 @@ struct SpriteComponent {
     int totalFrames = 1;
     int columns = 1;      // frames per row in spritesheet
 
+    // Procedural animation offset (temporary — replaced by real sprite frames later).
+    // Applied additively to the draw position without affecting Transform.
+    Vec2 renderOffset = {0.0f, 0.0f};
+
     // Sets source rect based on current frame in a spritesheet
     void updateSourceRect() {
         if (frameWidth <= 0 || frameHeight <= 0 || !texture) return;

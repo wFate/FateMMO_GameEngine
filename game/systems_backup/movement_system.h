@@ -158,10 +158,33 @@ public:
     void update(float dt) override {
         world_->forEach<SpriteComponent, Animator>(
             [&](Entity*, SpriteComponent* sprite, Animator* anim) {
-                if (anim->playing) {
-                    anim->timer += dt;
-                    sprite->currentFrame = anim->getCurrentFrame();
-                    sprite->updateSourceRect();
+                if (!anim->playing) return;
+
+                anim->timer += dt;
+                sprite->currentFrame = anim->getCurrentFrame();
+                sprite->updateSourceRect();
+
+                auto it = anim->animations.find(anim->currentAnimation);
+                if (it == anim->animations.end()) return;
+                const auto& def = it->second;
+
+                // Fire hit-frame event once per playback
+                int localIdx = anim->getFrameIndex(def);
+                if (def.hitFrame >= 0 && !anim->hitFrameFired_ && localIdx >= def.hitFrame) {
+                    anim->hitFrameFired_ = true;
+                    if (anim->onHitFrame) anim->onHitFrame();
+                }
+
+                // Handle non-looping animation completion
+                if (!def.loop && anim->isFinished()) {
+                    anim->playing = false;
+                    if (anim->onComplete) anim->onComplete();
+
+                    // Auto-transition to return animation (e.g., idle)
+                    if (!anim->returnAnimation.empty() &&
+                        anim->animations.count(anim->returnAnimation)) {
+                        anim->play(anim->returnAnimation);
+                    }
                 }
             }
         );
