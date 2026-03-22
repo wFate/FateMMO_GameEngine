@@ -9,8 +9,10 @@
 #include "engine/ui/widgets/slot_grid.h"
 #include "engine/ui/widgets/window.h"
 #include "engine/ui/widgets/tab_container.h"
+#include "engine/ui/widgets/tooltip.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
+#include "engine/render/sdf_text.h"
 #include <nlohmann/json.hpp>
 #include <SDL.h>
 #include <fstream>
@@ -103,11 +105,45 @@ bool UIManager::loadTheme(const std::string& filepath) {
 // Per-frame
 // ---------------------------------------------------------------------------
 
-void UIManager::update(float /*dt*/) {
-    // Placeholder for future animation / data-binding updates
+void UIManager::update(float dt) {
+    // Tooltip hover tracking
+    if (hoveredNode_ && hoveredNode_->properties.count("tooltip")) {
+        if (tooltipTarget_ != hoveredNode_) {
+            tooltipTarget_ = hoveredNode_;
+            tooltipHoverTime_ = 0.0f;
+            tooltip_.setVisible(false);
+        }
+        tooltipHoverTime_ += dt;
+        if (tooltipHoverTime_ >= TOOLTIP_DELAY && !tooltip_.visible()) {
+            tooltip_.tooltipText = hoveredNode_->properties.at("tooltip");
+            Vec2 mousePos = Input::instance().mousePosition();
+            auto& sdf = SDFText::instance();
+            Vec2 ts = sdf.measure(tooltip_.tooltipText, 12.0f);
+            float tw = ts.x + 12.0f;
+            float th = ts.y + 8.0f;
+            float tx = mousePos.x + 12.0f;
+            float ty = mousePos.y + 16.0f;
+            // Clamp to screen
+            if (tx + tw > screenWidth_) tx = screenWidth_ - tw;
+            if (ty + th > screenHeight_) ty = mousePos.y - th - 4.0f;
+            UIAnchor a;
+            a.preset = AnchorPreset::TopLeft;
+            a.offset = {tx, ty};
+            a.size    = {tw, th};
+            tooltip_.setAnchor(a);
+            tooltip_.computeLayout({0.0f, 0.0f, screenWidth_, screenHeight_});
+            tooltip_.setVisible(true);
+        }
+    } else {
+        tooltip_.setVisible(false);
+        tooltipTarget_ = nullptr;
+        tooltipHoverTime_ = 0.0f;
+    }
 }
 
 void UIManager::computeLayout(float screenWidth, float screenHeight) {
+    screenWidth_ = screenWidth;
+    screenHeight_ = screenHeight;
     Rect screenRect{0.0f, 0.0f, screenWidth, screenHeight};
     for (const auto& id : screenOrder_) {
         auto it = screens_.find(id);
@@ -124,6 +160,7 @@ void UIManager::render(SpriteBatch& batch, SDFText& text) {
             it->second->render(batch, text);
         }
     }
+    if (tooltip_.visible()) tooltip_.render(batch, text);
 }
 
 // ---------------------------------------------------------------------------

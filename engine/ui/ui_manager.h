@@ -2,6 +2,7 @@
 #include "engine/ui/ui_node.h"
 #include "engine/ui/ui_theme.h"
 #include "engine/ui/ui_input.h"
+#include "engine/ui/widgets/tooltip.h"
 #include <nlohmann/json_fwd.hpp>
 #include <string>
 #include <unordered_map>
@@ -58,6 +59,13 @@ private:
     Vec2 pressStartPos_;
     DragPayload dragPayload_;
     static constexpr float DRAG_THRESHOLD = 5.0f;
+
+    Tooltip tooltip_{"__tooltip__"};
+    float tooltipHoverTime_ = 0.0f;
+    UINode* tooltipTarget_ = nullptr;
+    float screenWidth_ = 0.0f;
+    float screenHeight_ = 0.0f;
+    static constexpr float TOOLTIP_DELAY = 0.5f;
 
     std::unique_ptr<UINode> parseNode(const nlohmann::json& j);
     AnchorPreset parsePreset(const std::string& name);
