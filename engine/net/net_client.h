@@ -88,6 +88,7 @@ private:
     bool waitingForAccept_ = false;
     float lastHeartbeatSent_ = 0.0f;
     float lastPacketReceived_ = 0.0f;
+    float lastPollTime_ = 0.0f;  // cached from poll() for RTT tracking
     AuthToken authToken_ = {};
     PacketCrypto crypto_;
 

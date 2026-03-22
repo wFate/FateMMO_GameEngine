@@ -4,6 +4,7 @@
 #include <cmath>
 #include <string>
 #include "engine/core/types.h"
+#include "engine/core/logger.h"
 
 namespace fate {
 
@@ -43,6 +44,10 @@ public:
 private:
     void writeRaw(const void* data, size_t len) {
         if (overflow_ || pos_ + len > capacity_) {
+            if (!overflow_) {
+                LOG_WARN("ByteWriter", "Buffer overflow: pos=%zu + len=%zu > capacity=%zu",
+                         pos_, len, capacity_);
+            }
             overflow_ = true;
             return;
         }

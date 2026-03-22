@@ -9,7 +9,7 @@ namespace fate {
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
 constexpr uint8_t  PROTOCOL_VERSION  = 1;
-constexpr size_t   PACKET_HEADER_SIZE = 16;
+constexpr size_t   PACKET_HEADER_SIZE = 18;
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
 
@@ -111,14 +111,14 @@ namespace PacketType {
 } // namespace PacketType
 
 // ============================================================================
-// PacketHeader (16 bytes)
+// PacketHeader (18 bytes)
 // ============================================================================
 struct PacketHeader {
     uint16_t protocolId   = PROTOCOL_ID;
     uint32_t sessionToken = 0;
     uint16_t sequence     = 0;
     uint16_t ack          = 0;
-    uint16_t ackBits      = 0;
+    uint32_t ackBits      = 0;
     Channel  channel      = Channel::Unreliable;
     uint8_t  packetType   = 0;
     uint16_t payloadSize  = 0;
@@ -128,7 +128,7 @@ struct PacketHeader {
         w.writeU32(sessionToken);
         w.writeU16(sequence);
         w.writeU16(ack);
-        w.writeU16(ackBits);
+        w.writeU32(ackBits);
         w.writeU8(static_cast<uint8_t>(channel));
         w.writeU8(packetType);
         w.writeU16(payloadSize);
@@ -140,8 +140,14 @@ struct PacketHeader {
         h.sessionToken = r.readU32();
         h.sequence     = r.readU16();
         h.ack          = r.readU16();
-        h.ackBits      = r.readU16();
-        h.channel      = static_cast<Channel>(r.readU8());
+        h.ackBits      = r.readU32();
+        uint8_t rawChannel = r.readU8();
+        if (rawChannel > static_cast<uint8_t>(Channel::ReliableUnordered)) {
+            h.channel = Channel::Unreliable; // invalid channel, default to Unreliable
+            h.protocolId = 0; // mark header as invalid so callers reject it
+        } else {
+            h.channel = static_cast<Channel>(rawChannel);
+        }
         h.packetType   = r.readU8();
         h.payloadSize  = r.readU16();
         return h;

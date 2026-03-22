@@ -46,6 +46,7 @@ public:
 private:
     NetSocket socket_;
     ConnectionManager connections_;
+    float lastPollTime_ = 0.0f;  // cached from poll() for RTT tracking
 
     void handleRawPacket(const NetAddress& from, const uint8_t* data, int size, float currentTime);
     void handleConnect(const NetAddress& from, const uint8_t* payload, size_t payloadSize, float currentTime);

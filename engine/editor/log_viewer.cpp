@@ -35,6 +35,8 @@ void LogViewer::draw() {
     std::string filter(filterBuf_);
     std::transform(filter.begin(), filter.end(), filter.begin(), ::tolower);
 
+    // Lock mutex before iterating entries_ to prevent data races with
+    // concurrent writes from other threads (e.g. logging from network thread).
     std::lock_guard<std::mutex> lock(mutex_);
     for (auto& entry : entries_) {
         // Level filter
