@@ -87,6 +87,7 @@ void NetClient::disconnect() {
     crypto_.clearKeys();
     lastHeartbeatSent_ = 0.0f;
     lastPacketReceived_ = 0.0f;
+    heartbeatCounter_ = 0;
     reconnectPhase_ = ReconnectPhase::None;
     reconnectAttempts_ = 0;
 
@@ -172,6 +173,10 @@ void NetClient::poll(float currentTime) {
         currentTime - lastHeartbeatSent_ > 1.0f) {
         sendPacket(Channel::Unreliable, PacketType::Heartbeat);
         lastHeartbeatSent_ = currentTime;
+        heartbeatCounter_++;
+        if (heartbeatCounter_ % 3 == 0) {
+            sendPacket(Channel::ReliableOrdered, PacketType::Heartbeat);
+        }
     }
 
     // Process retransmits

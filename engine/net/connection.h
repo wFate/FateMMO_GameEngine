@@ -32,7 +32,7 @@ struct ClientConnection {
 
 class ConnectionManager {
 public:
-    uint16_t addClient(const NetAddress& address);
+    uint16_t addClient(const NetAddress& address, float currentTime = 0.0f);
     void removeClient(uint16_t clientId);
     ClientConnection* findById(uint16_t clientId);
     ClientConnection* findByAddress(const NetAddress& address);

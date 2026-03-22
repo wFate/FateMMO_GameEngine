@@ -2,7 +2,7 @@
 
 namespace fate {
 
-uint16_t ConnectionManager::addClient(const NetAddress& address) {
+uint16_t ConnectionManager::addClient(const NetAddress& address, float currentTime) {
     // Find unused ID (skip 0, skip in-use IDs)
     while (nextClientId_ == 0 || clients_.count(nextClientId_)) {
         ++nextClientId_;
@@ -16,7 +16,7 @@ uint16_t ConnectionManager::addClient(const NetAddress& address) {
     conn.clientId = id;
     conn.address = address;
     conn.sessionToken = generateToken();
-    conn.lastHeartbeat = 0.0f;
+    conn.lastHeartbeat = currentTime;
 
     clients_.emplace(id, std::move(conn));
     return id;
