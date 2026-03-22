@@ -71,6 +71,12 @@ private:
     // Texture cache
     std::unordered_map<std::string, unsigned int> frameTexCache_;
 
+    // UI popup / dialog state
+    char openPathBuf_[256] = {};
+    char newStateBuf_[64] = {};
+    char variantBuf_[64] = {};
+    char loadFrameSetBuf_[256] = {};
+
     // Draw sub-panels
     void drawTopBar();
     void drawFrameWorkspace();
