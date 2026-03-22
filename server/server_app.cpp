@@ -3462,7 +3462,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     if (cooldownIt != clientCooldowns.end()) {
         const CachedSkillRank* rank = skillDefCache_.getRank(msg.skillId, msg.rank);
         float cooldown = rank ? rank->cooldownSeconds : 1.0f;
-        if (gameTime_ - cooldownIt->second < cooldown * 0.8f) {
+        if (gameTime_ - cooldownIt->second < cooldown * 0.9f) {
             LOG_DEBUG("Server", "Client %d skill '%s' rejected: cooldown (%.1f < %.1f)",
                       clientId, msg.skillId.c_str(), gameTime_ - cooldownIt->second, cooldown);
             return; // reject — too fast
@@ -3867,7 +3867,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         float weaponSpeed = charStats ? charStats->stats.weaponAttackSpeed : 1.0f;
         float cooldown = (weaponSpeed > 0.0f) ? (1.0f / weaponSpeed) : 1.5f;
         auto lastIt = lastAutoAttackTime_.find(clientId);
-        if (lastIt != lastAutoAttackTime_.end() && gameTime_ - lastIt->second < cooldown * 0.8f) return;
+        if (lastIt != lastAutoAttackTime_.end() && gameTime_ - lastIt->second < cooldown * 0.9f) return;
         lastAutoAttackTime_[clientId] = gameTime_;
 
         if (enemyStats) {

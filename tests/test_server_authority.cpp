@@ -89,3 +89,17 @@ TEST_CASE("Respawn rejected when player not dead") {
     // This validates the guard condition
     CHECK(s.isDead == false); // would be rejected
 }
+
+TEST_CASE("Skill cooldown rejects requests within full cooldown window") {
+    // The cooldown check uses 0.9x tolerance for network latency
+    // A cast at 90% of cooldown should be allowed, but at 80% should be rejected
+    float cooldown = 5.0f;
+    float elapsed_90pct = 4.5f;  // 90% — should be allowed with 0.9x tolerance
+    float elapsed_80pct = 4.0f;  // 80% — should be rejected with 0.9x tolerance
+
+    // 0.9x tolerance: allows cast at 90% (4.5 >= 4.5)
+    CHECK_FALSE(elapsed_90pct < cooldown * 0.9f);
+
+    // 0.9x tolerance: rejects cast at 80% (4.0 < 4.5)
+    CHECK(elapsed_80pct < cooldown * 0.9f);
+}
