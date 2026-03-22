@@ -4,6 +4,8 @@
 #include <unordered_map>
 #include <nlohmann/json.hpp>
 
+struct ImFont;
+
 namespace fate {
 
 // Template data (.anim)
@@ -45,6 +47,7 @@ public:
 
     bool isOpen() const { return open_; }
     void setOpen(bool o) { open_ = o; }
+    void setFonts(ImFont* heading, ImFont* small) { fontHeading_ = heading; fontSmall_ = small; }
 
     void openFile(const std::string& path);
 
@@ -99,6 +102,9 @@ private:
     std::vector<std::string>& currentFrameList();
     const char* directionName(int idx) const;
     unsigned int loadFrameTexture(const std::string& path);
+
+    ImFont* fontHeading_ = nullptr;
+    ImFont* fontSmall_ = nullptr;
 };
 
 } // namespace fate

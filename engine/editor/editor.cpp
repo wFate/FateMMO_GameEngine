@@ -12,6 +12,7 @@
 
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "imgui_freetype.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 
@@ -74,71 +75,133 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.FontGlobalScale = 1.0f;
 
+    // Load Inter font family with FreeType hinting
+    ImFontConfig fontCfg;
+    fontCfg.FontBuilderFlags = ImGuiFreeTypeBuilderFlags_LightHinting;
+    fontCfg.OversampleH = 1;
+    fontCfg.OversampleV = 1;
+
+    // Body font (14px) — default for all UI
+    fontBody_ = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter-Regular.ttf", 14.0f, &fontCfg);
+
+    // Heading font (16px) — CollapsingHeaders, entity names
+    fontHeading_ = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter-SemiBold.ttf", 16.0f, &fontCfg);
+
+    // Small font (12px) — metadata, FPS, breadcrumbs
+    fontSmall_ = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter-Regular.ttf", 12.0f, &fontCfg);
+
+    // Fallback: if fonts fail to load, ImGui uses its built-in font
+    if (!fontBody_) {
+        LOG_WARN("Editor", "Failed to load Inter fonts — using ImGui default");
+        fontBody_ = io.Fonts->AddFontDefault();
+        fontHeading_ = fontBody_;
+        fontSmall_ = fontBody_;
+    }
+
+    io.Fonts->Build();
+
+    // Wire font pointers to sub-editors
+    animationEditor_.setFonts(fontHeading_, fontSmall_);
+    assetBrowser_.setFonts(fontHeading_, fontSmall_);
+
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
 
-    // Sharp, tight, professional
-    style.WindowRounding = 0.0f;
-    style.FrameRounding = 2.0f;
-    style.GrabRounding = 2.0f;
-    style.TabRounding = 0.0f;
-    style.ScrollbarRounding = 2.0f;
-    style.WindowBorderSize = 1.0f;
-    style.FrameBorderSize = 0.0f;
-    style.PopupBorderSize = 1.0f;
-    style.WindowPadding = ImVec2(6.0f, 6.0f);
-    style.FramePadding = ImVec2(4.0f, 3.0f);
-    style.CellPadding = ImVec2(4.0f, 2.0f);
-    style.ItemSpacing = ImVec2(6.0f, 3.0f);
-    style.ItemInnerSpacing = ImVec2(4.0f, 3.0f);
-    style.IndentSpacing = 14.0f;
-    style.ScrollbarSize = 10.0f;
-    style.GrabMinSize = 6.0f;
-    style.TabBorderSize = 1.0f;
+    // Spacing — 8px grid, tight vertical, comfortable horizontal
+    style.WindowPadding     = ImVec2(8, 8);
+    style.FramePadding      = ImVec2(6, 4);
+    style.CellPadding       = ImVec2(4, 3);
+    style.ItemSpacing       = ImVec2(8, 4);
+    style.ItemInnerSpacing  = ImVec2(4, 4);
+    style.IndentSpacing     = 16.0f;
+    style.ScrollbarSize     = 11.0f;
+    style.GrabMinSize       = 8.0f;
+
+    // Rounding — subtle modern softness
+    style.WindowRounding    = 3.0f;
+    style.ChildRounding     = 3.0f;
+    style.FrameRounding     = 3.0f;
+    style.PopupRounding     = 4.0f;
+    style.ScrollbarRounding = 6.0f;
+    style.GrabRounding      = 3.0f;
+    style.TabRounding       = 3.0f;
+
+    // Borders — minimal, modern
+    style.WindowBorderSize     = 1.0f;
+    style.ChildBorderSize      = 0.0f;
+    style.PopupBorderSize      = 1.0f;
+    style.FrameBorderSize      = 0.0f;
+    style.TabBorderSize        = 0.0f;
     style.DockingSeparatorSize = 2.0f;
 
-    // Color scheme — dark charcoal with subtle blue accents
+    // Color scheme — layered dark backgrounds with blue accent
     ImVec4* c = style.Colors;
-    c[ImGuiCol_WindowBg]             = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
-    c[ImGuiCol_ChildBg]              = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
-    c[ImGuiCol_PopupBg]              = ImVec4(0.10f, 0.10f, 0.12f, 0.96f);
-    c[ImGuiCol_Border]               = ImVec4(0.22f, 0.22f, 0.25f, 1.00f);
+
+    // Background hierarchy (darkest -> lightest)
+    c[ImGuiCol_DockingEmptyBg]       = ImVec4(0.078f, 0.078f, 0.086f, 1.00f);
+    c[ImGuiCol_WindowBg]             = ImVec4(0.118f, 0.118f, 0.133f, 1.00f);
+    c[ImGuiCol_ChildBg]              = ImVec4(0.118f, 0.118f, 0.133f, 1.00f);
+    c[ImGuiCol_PopupBg]              = ImVec4(0.188f, 0.188f, 0.212f, 0.96f);
+    c[ImGuiCol_FrameBg]              = ImVec4(0.165f, 0.165f, 0.180f, 1.00f);
+    c[ImGuiCol_FrameBgHovered]       = ImVec4(0.200f, 0.200f, 0.220f, 1.00f);
+    c[ImGuiCol_FrameBgActive]        = ImVec4(0.235f, 0.235f, 0.259f, 1.00f);
+
+    // Title bar & menu
+    c[ImGuiCol_TitleBg]              = ImVec4(0.078f, 0.078f, 0.094f, 1.00f);
+    c[ImGuiCol_TitleBgActive]        = ImVec4(0.118f, 0.118f, 0.133f, 1.00f);
+    c[ImGuiCol_TitleBgCollapsed]     = ImVec4(0.078f, 0.078f, 0.094f, 0.50f);
+    c[ImGuiCol_MenuBarBg]            = ImVec4(0.102f, 0.102f, 0.118f, 1.00f);
+
+    // Tabs
+    c[ImGuiCol_Tab]                  = ImVec4(0.094f, 0.094f, 0.110f, 1.00f);
+    c[ImGuiCol_TabHovered]           = ImVec4(0.200f, 0.220f, 0.259f, 1.00f);
+    c[ImGuiCol_TabSelected]          = ImVec4(0.118f, 0.118f, 0.133f, 1.00f);
+    c[ImGuiCol_TabSelectedOverline]  = ImVec4(0.290f, 0.541f, 0.859f, 1.00f);
+    c[ImGuiCol_TabDimmed]            = ImVec4(0.078f, 0.078f, 0.102f, 1.00f);
+    c[ImGuiCol_TabDimmedSelected]    = ImVec4(0.102f, 0.102f, 0.125f, 1.00f);
+    c[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.290f, 0.541f, 0.859f, 0.50f);
+
+    // Headers (CollapsingHeader, Selectable)
+    c[ImGuiCol_Header]               = ImVec4(0.165f, 0.176f, 0.196f, 1.00f);
+    c[ImGuiCol_HeaderHovered]        = ImVec4(0.200f, 0.220f, 0.259f, 1.00f);
+    c[ImGuiCol_HeaderActive]         = ImVec4(0.227f, 0.251f, 0.314f, 1.00f);
+
+    // Buttons
+    c[ImGuiCol_Button]               = ImVec4(0.145f, 0.145f, 0.188f, 1.00f);
+    c[ImGuiCol_ButtonHovered]        = ImVec4(0.200f, 0.200f, 0.251f, 1.00f);
+    c[ImGuiCol_ButtonActive]         = ImVec4(0.243f, 0.243f, 0.298f, 1.00f);
+
+    // Text
+    c[ImGuiCol_Text]                 = ImVec4(0.831f, 0.831f, 0.847f, 1.00f);
+    c[ImGuiCol_TextDisabled]         = ImVec4(0.502f, 0.502f, 0.533f, 1.00f);
+    c[ImGuiCol_TextSelectedBg]       = ImVec4(0.290f, 0.541f, 0.859f, 0.40f);
+
+    // Borders & separators
+    c[ImGuiCol_Border]               = ImVec4(0.165f, 0.165f, 0.188f, 1.00f);
     c[ImGuiCol_BorderShadow]         = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-    c[ImGuiCol_FrameBg]              = ImVec4(0.16f, 0.16f, 0.19f, 1.00f);
-    c[ImGuiCol_FrameBgHovered]       = ImVec4(0.22f, 0.22f, 0.26f, 1.00f);
-    c[ImGuiCol_FrameBgActive]        = ImVec4(0.28f, 0.28f, 0.33f, 1.00f);
-    c[ImGuiCol_TitleBg]              = ImVec4(0.09f, 0.09f, 0.11f, 1.00f);
-    c[ImGuiCol_TitleBgActive]        = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
-    c[ImGuiCol_TitleBgCollapsed]     = ImVec4(0.09f, 0.09f, 0.11f, 0.80f);
-    c[ImGuiCol_MenuBarBg]            = ImVec4(0.14f, 0.14f, 0.16f, 1.00f);
-    c[ImGuiCol_ScrollbarBg]          = ImVec4(0.10f, 0.10f, 0.12f, 1.00f);
-    c[ImGuiCol_ScrollbarGrab]        = ImVec4(0.28f, 0.28f, 0.32f, 1.00f);
-    c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.35f, 0.35f, 0.40f, 1.00f);
-    c[ImGuiCol_ScrollbarGrabActive]  = ImVec4(0.42f, 0.42f, 0.48f, 1.00f);
-    c[ImGuiCol_CheckMark]            = ImVec4(0.40f, 0.65f, 1.00f, 1.00f);
-    c[ImGuiCol_SliderGrab]           = ImVec4(0.40f, 0.65f, 1.00f, 0.80f);
-    c[ImGuiCol_SliderGrabActive]     = ImVec4(0.50f, 0.72f, 1.00f, 1.00f);
-    c[ImGuiCol_Button]               = ImVec4(0.20f, 0.20f, 0.24f, 1.00f);
-    c[ImGuiCol_ButtonHovered]        = ImVec4(0.28f, 0.28f, 0.34f, 1.00f);
-    c[ImGuiCol_ButtonActive]         = ImVec4(0.35f, 0.35f, 0.42f, 1.00f);
-    c[ImGuiCol_Header]               = ImVec4(0.20f, 0.20f, 0.24f, 1.00f);
-    c[ImGuiCol_HeaderHovered]        = ImVec4(0.28f, 0.32f, 0.42f, 1.00f);
-    c[ImGuiCol_HeaderActive]         = ImVec4(0.30f, 0.38f, 0.52f, 1.00f);
-    c[ImGuiCol_Separator]            = ImVec4(0.22f, 0.22f, 0.25f, 1.00f);
-    c[ImGuiCol_SeparatorHovered]     = ImVec4(0.40f, 0.55f, 0.80f, 0.80f);
-    c[ImGuiCol_SeparatorActive]      = ImVec4(0.40f, 0.55f, 0.80f, 1.00f);
-    c[ImGuiCol_ResizeGrip]           = ImVec4(0.30f, 0.30f, 0.35f, 0.40f);
-    c[ImGuiCol_ResizeGripHovered]    = ImVec4(0.40f, 0.55f, 0.80f, 0.60f);
-    c[ImGuiCol_ResizeGripActive]     = ImVec4(0.40f, 0.55f, 0.80f, 0.90f);
-    c[ImGuiCol_Tab]                  = ImVec4(0.14f, 0.14f, 0.17f, 1.00f);
-    c[ImGuiCol_TabHovered]           = ImVec4(0.28f, 0.32f, 0.42f, 1.00f);
-    c[ImGuiCol_TabSelected]          = ImVec4(0.20f, 0.24f, 0.33f, 1.00f);
-    c[ImGuiCol_TabDimmed]            = ImVec4(0.10f, 0.10f, 0.12f, 1.00f);
-    c[ImGuiCol_TabDimmedSelected]    = ImVec4(0.16f, 0.18f, 0.24f, 1.00f);
-    c[ImGuiCol_DockingPreview]       = ImVec4(0.40f, 0.55f, 0.80f, 0.40f);
-    c[ImGuiCol_DockingEmptyBg]       = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
-    c[ImGuiCol_TextSelectedBg]       = ImVec4(0.30f, 0.45f, 0.70f, 0.40f);
-    c[ImGuiCol_NavHighlight]         = ImVec4(0.40f, 0.55f, 0.80f, 1.00f);
+    c[ImGuiCol_Separator]            = ImVec4(0.165f, 0.165f, 0.188f, 1.00f);
+    c[ImGuiCol_SeparatorHovered]     = ImVec4(0.290f, 0.541f, 0.859f, 0.60f);
+    c[ImGuiCol_SeparatorActive]      = ImVec4(0.290f, 0.541f, 0.859f, 1.00f);
+
+    // Scrollbar
+    c[ImGuiCol_ScrollbarBg]          = ImVec4(0.078f, 0.078f, 0.094f, 1.00f);
+    c[ImGuiCol_ScrollbarGrab]        = ImVec4(0.200f, 0.200f, 0.220f, 1.00f);
+    c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.251f, 0.251f, 0.282f, 1.00f);
+    c[ImGuiCol_ScrollbarGrabActive]  = ImVec4(0.314f, 0.314f, 0.345f, 1.00f);
+
+    // Accent-colored interactive elements
+    c[ImGuiCol_CheckMark]            = ImVec4(0.290f, 0.541f, 0.859f, 1.00f);
+    c[ImGuiCol_SliderGrab]           = ImVec4(0.290f, 0.541f, 0.859f, 0.80f);
+    c[ImGuiCol_SliderGrabActive]     = ImVec4(0.369f, 0.604f, 0.910f, 1.00f);
+
+    // Resize grip
+    c[ImGuiCol_ResizeGrip]           = ImVec4(0.200f, 0.200f, 0.220f, 0.40f);
+    c[ImGuiCol_ResizeGripHovered]    = ImVec4(0.290f, 0.541f, 0.859f, 0.60f);
+    c[ImGuiCol_ResizeGripActive]     = ImVec4(0.290f, 0.541f, 0.859f, 0.90f);
+
+    // Docking & nav
+    c[ImGuiCol_DockingPreview]       = ImVec4(0.290f, 0.541f, 0.859f, 0.40f);
+    c[ImGuiCol_NavHighlight]         = ImVec4(0.290f, 0.541f, 0.859f, 1.00f);
 
     ImGui_ImplSDL2_InitForOpenGL(window, glContext);
     ImGui_ImplOpenGL3_Init("#version 330");

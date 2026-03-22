@@ -6,6 +6,8 @@
 #include <functional>
 #include <unordered_map>
 
+struct ImFont;
+
 namespace fate {
 
 class World;
@@ -24,6 +26,8 @@ public:
 
     // Callback for opening animation files
     std::function<void(const std::string&)> onOpenAnimation;
+
+    void setFonts(ImFont* heading, ImFont* small) { fontHeading_ = heading; fontSmall_ = small; }
 
 private:
     // Asset entry with type classification
@@ -68,6 +72,8 @@ private:
     std::shared_ptr<Texture> getThumbnail(const Entry& entry);
     void navigateTo(const std::string& relDir);
 
+    ImFont* fontHeading_ = nullptr;
+    ImFont* fontSmall_ = nullptr;
 };
 
 } // namespace fate
