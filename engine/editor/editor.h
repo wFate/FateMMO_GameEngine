@@ -178,6 +178,12 @@ private:
     bool frameStarted_ = false;
     bool wantsKeyboard_ = false;
     bool wantsMouse_ = false;
+
+    // Font stack (loaded in init, used via PushFont/PopFont)
+    ImFont* fontBody_ = nullptr;
+    ImFont* fontHeading_ = nullptr;
+    ImFont* fontSmall_ = nullptr;
+
     bool showDemoWindow_ = false;
 #if defined(ENGINE_MEMORY_DEBUG)
     bool showMemoryPanel_ = false;
