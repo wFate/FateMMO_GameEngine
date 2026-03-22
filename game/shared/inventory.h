@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -59,7 +60,9 @@ public:
     // ---- Gold --------------------------------------------------------------
     bool addGold(int64_t amount);
     bool removeGold(int64_t amount);
-    void setGold(int64_t amount) { gold_ = (amount >= 0) ? amount : 0; }
+    void setGold(int64_t amount) {
+        gold_ = std::clamp(amount, int64_t{0}, InventoryConstants::MAX_GOLD);
+    }
 
     // ---- Trade Locking -----------------------------------------------------
     void lockSlotForTrade(int slot);

@@ -2818,6 +2818,31 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                             (&lockA < &lockB) ? lockA : lockB,
                             (&lockA < &lockB) ? lockB : lockA
                         );
+                        // Validate gold overflow before committing
+                        auto getGoldForChar = [&](const std::string& charId) -> int64_t {
+                            int64_t g = 0;
+                            server_.connections().forEach([&](ClientConnection& c) {
+                                if (c.character_id == charId && c.playerEntityId != 0) {
+                                    PersistentId p(c.playerEntityId);
+                                    EntityHandle eh = getReplicationForClient(c.clientId).getEntityHandle(p);
+                                    Entity* ent = getWorldForClient(c.clientId).getEntity(eh);
+                                    if (ent) {
+                                        auto* inv = ent->getComponent<InventoryComponent>();
+                                        if (inv) g = inv->inventory.getGold();
+                                    }
+                                }
+                            });
+                            return g;
+                        };
+                        int64_t goldA = getGoldForChar(session->playerACharacterId);
+                        int64_t goldB = getGoldForChar(session->playerBCharacterId);
+                        int64_t netA = goldA - session->playerAGold + session->playerBGold;
+                        int64_t netB = goldB - session->playerBGold + session->playerAGold;
+                        if (netA > InventoryConstants::MAX_GOLD || netB > InventoryConstants::MAX_GOLD) {
+                            sendTradeResult(6, 8, "Trade would exceed gold cap");
+                            break;
+                        }
+
                         // Execute trade atomically
                         try {
                             auto guard = dbPool_.acquire_guard();

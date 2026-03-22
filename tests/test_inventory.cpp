@@ -361,4 +361,18 @@ TEST_CASE("Inventory: addItemToSlot rejects occupied slot") {
     CHECK(inv.getSlot(0).itemId == "sword_01");   // original preserved
 }
 
+TEST_CASE("setGold clamps to MAX_GOLD") {
+    Inventory inv;
+    inv.initialize("test", 0);
+    inv.setGold(InventoryConstants::MAX_GOLD + 100);
+    CHECK(inv.getGold() == InventoryConstants::MAX_GOLD);
+}
+
+TEST_CASE("setGold clamps negative to zero") {
+    Inventory inv;
+    inv.initialize("test", 1000);
+    inv.setGold(-500);
+    CHECK(inv.getGold() == 0);
+}
+
 } // TEST_SUITE
