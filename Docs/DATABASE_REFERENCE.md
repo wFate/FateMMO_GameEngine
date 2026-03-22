@@ -23,8 +23,12 @@ The C++ engine reads `DATABASE_URL` from the environment in `ServerApp::init()`.
 - `001_full_schema.sql` — complete 65-table schema
 - `002_bank_and_pets.sql` — character_bank, character_bank_gold, character_pets (3 new tables + 2 indexes)
 - `003_gauntlet_seed_data.sql` — 3 divisions, 15 waves (real mob IDs), 15 rewards, 6 performance rewards
+- `007_is_broken_book_tier.sql` — is_broken + book_tier columns on character_inventory
+- `008_pet_definitions.sql` — pet_definitions table + 3 starter pets (wolf, hawk, turtle)
+- `009_admin_role.sql` — admin_role column on accounts
+- `010_scene_mob_sync.sql` — 5 WhisperingWoods mob definitions + spawn zones
 
-All 68 tables are live on `fate_engine_dev`. The full schema was applied, then game data was migrated from `fate_mmo`, then bank/pet tables added, then gauntlet config populated.
+All 68+ tables are live on `fate_engine_dev`. Migrations 007-009 applied; migration 010 pending.
 
 ---
 
@@ -206,6 +210,10 @@ fate_mmo -> /tmp/scenes.csv           -> fate_engine_dev.scenes          (3 rows
 
 **character_bags** — `id SERIAL PK`, character_id, slot_index, bag_id
 
+**pet_definitions** — `pet_id VARCHAR(64) PK`, display_name, rarity, base_hp, base_crit_rate, base_exp_bonus, hp_per_level, crit_per_level, exp_bonus_per_level, description, icon_path
+
+**spawn_zones** — `zone_id SERIAL PK`, scene_id, zone_name, center_x, center_y, radius, mob_def_id FK, target_count
+
 ---
 
 ## C++ Database Layer
@@ -243,10 +251,11 @@ fate_mmo -> /tmp/scenes.csv           -> fate_engine_dev.scenes          (3 rows
 | `server/cache/item_definition_cache.h/.cpp` | item_definitions | 748 |
 | `server/cache/loot_table_cache.h/.cpp` | loot_drops, loot_tables | 835 + 72 |
 | `server/db/definition_caches.h/.cpp` | mob_definitions, skill_definitions, skill_ranks, scenes | 73 + 60 + 174 + 3 |
+| `server/cache/pet_definition_cache.h/.cpp` | pet_definitions | 3 |
 
 ### ServerApp Integration
 
-**On startup:** Pool initialized (5-50 connections), 9 repos created, 5 caches loaded, dispatcher initialized.
+**On startup:** Pool initialized (5-50 connections), 9 repos created, 6 caches loaded (items, loot, mobs, skills, scenes, pets), dispatcher initialized.
 
 **On connect:** Load character + inventory + skills (learned, bar, points) + guild (membership, rank) + friends (init + last_online).
 
