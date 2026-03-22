@@ -47,7 +47,9 @@ public:
 
 private:
     SDFText() = default;
+#ifndef FATEMMO_METAL
     unsigned int atlasTexId_ = 0;
+#endif
     gfx::TextureHandle atlasGfxHandle_{};
     float atlasWidth_ = 512.0f, atlasHeight_ = 512.0f;
     float pxRange_ = 4.0f;

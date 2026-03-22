@@ -226,7 +226,11 @@ Vec2 SDFText::measure(const std::string& text, float fontSize) const {
 }
 
 unsigned int SDFText::atlasTextureId() const {
+#ifdef FATEMMO_METAL
+    return 0;
+#else
     return atlasTexId_;
+#endif
 }
 
 Mat4 SDFText::screenProjection(int windowWidth, int windowHeight) {
