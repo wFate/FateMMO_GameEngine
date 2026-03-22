@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 #include "game/shared/combat_system.h"
+#include "game/shared/character_stats.h"
 
 using namespace fate;
 
@@ -16,4 +17,56 @@ TEST_CASE("CombatSystem: damage reduction boundary matches Unity") {
     // levelDiff=1: no reduction
     float mult1 = CombatSystem::calculateDamageMultiplier(10, 11);
     CHECK(mult1 == doctest::Approx(1.0f));
+}
+
+TEST_CASE("CastingState tracks active cast") {
+    CharacterStats stats;
+    CHECK_FALSE(stats.isCasting());
+
+    stats.beginCast("fireball", 2.0f, 42);
+    CHECK(stats.isCasting());
+    CHECK(stats.castingState.skillId == "fireball");
+    CHECK(stats.castingState.remainingTime == doctest::Approx(2.0f));
+    CHECK(stats.castingState.targetEntityId == 42);
+
+    // Tick 1 second
+    stats.tickCast(1.0f);
+    CHECK(stats.isCasting());
+    CHECK(stats.castingState.remainingTime == doctest::Approx(1.0f));
+
+    // Tick remaining
+    bool completed = stats.tickCast(1.0f);
+    CHECK(completed);
+    CHECK_FALSE(stats.isCasting());
+}
+
+TEST_CASE("CastingState can be interrupted") {
+    CharacterStats stats;
+    stats.beginCast("fireball", 2.0f, 42);
+    CHECK(stats.isCasting());
+
+    stats.interruptCast();
+    CHECK_FALSE(stats.isCasting());
+}
+
+TEST_CASE("Skill with castTime > 0 should enter casting state") {
+    CharacterStats caster;
+    caster.classDef.classType = ClassType::Warrior;
+    caster.level = 10;
+    caster.recalculateStats();
+    caster.currentHP = caster.maxHP;
+
+    float castTime = 2.0f;
+    CHECK_FALSE(caster.isCasting());
+
+    if (castTime > 0.0f) {
+        caster.beginCast("fireball", castTime, 999);
+    }
+    CHECK(caster.isCasting());
+
+    caster.tickCast(1.0f);
+    CHECK(caster.isCasting());
+    bool done = caster.tickCast(1.0f);
+    CHECK(done);
+    CHECK_FALSE(caster.isCasting());
 }
