@@ -84,7 +84,13 @@ protected:
 
 private:
     SDL_Window* window_ = nullptr;
+#ifndef FATEMMO_METAL
     SDL_GLContext glContext_ = nullptr;
+#endif
+#ifdef FATEMMO_METAL
+    void* metalView_ = nullptr;    // SDL_MetalView
+    void* metalLayer_ = nullptr;   // CAMetalLayer*
+#endif
     SpriteBatch spriteBatch_;
     Camera camera_;
     RenderGraph renderGraph_;

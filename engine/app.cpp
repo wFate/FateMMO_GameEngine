@@ -1,7 +1,13 @@
 #include "engine/app.h"
+#ifndef FATEMMO_METAL
 // Direct GL used for initialization (glGetString, initial state, window resize)
 // and FBO blit pass (interleaved with ImGui) — intentionally outside RHI.
 #include "engine/render/gfx/backend/gl/gl_loader.h"
+#endif
+#ifdef FATEMMO_METAL
+#import <Metal/Metal.h>
+#import <QuartzCore/CAMetalLayer.h>
+#endif
 #include "engine/render/gfx/device.h"
 #include "engine/render/shader.h"
 #include "engine/core/logger.h"
@@ -11,7 +17,11 @@
 #endif
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
+#ifndef FATEMMO_METAL
 #include "imgui_impl_opengl3.h"
+#else
+#include "imgui_impl_metal.h"
+#endif
 #include "engine/profiling/tracy_zones.h"
 #include "engine/job/job_system.h"
 #if defined(ENGINE_MEMORY_DEBUG)
@@ -44,6 +54,7 @@ bool App::init(const AppConfig& config) {
     // events before the main event loop (critical for iOS 5-second deadline)
     SDL_SetEventFilter(lifecycleEventFilter, this);
 
+#ifndef FATEMMO_METAL
 #ifdef FATEMMO_GLES
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -55,8 +66,13 @@ bool App::init(const AppConfig& config) {
 #endif
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
+#endif // !FATEMMO_METAL
 
+#ifdef FATEMMO_METAL
+    Uint32 flags = SDL_WINDOW_METAL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_ALLOW_HIGHDPI;
+#else
     Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_ALLOW_HIGHDPI;
+#endif
     if (config.fullscreen) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
     window_ = SDL_CreateWindow(
@@ -70,6 +86,17 @@ bool App::init(const AppConfig& config) {
         return false;
     }
 
+#ifdef FATEMMO_METAL
+    metalView_ = SDL_Metal_CreateView(window_);
+    metalLayer_ = (__bridge void*)(__bridge CAMetalLayer*)SDL_Metal_GetLayer((SDL_MetalView)metalView_);
+    CAMetalLayer* layer = (__bridge CAMetalLayer*)metalLayer_;
+    layer.device = MTLCreateSystemDefaultDevice();
+    layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+#ifdef FATEMMO_PLATFORM_IOS
+    layer.maximumDrawableCount = 3;  // Triple buffering for ProMotion 120fps
+#endif
+    gfx::Device::instance().initMetal(metalLayer_);
+#else
     glContext_ = SDL_GL_CreateContext(window_);
     if (!glContext_) {
         LOG_FATAL("App", "SDL_GL_CreateContext failed: %s", SDL_GetError());
@@ -102,6 +129,7 @@ bool App::init(const AppConfig& config) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_DEPTH_TEST);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+#endif // FATEMMO_METAL
 
     if (!spriteBatch_.init()) {
         LOG_FATAL("App", "Failed to initialize SpriteBatch");
@@ -127,8 +155,14 @@ bool App::init(const AppConfig& config) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
+#ifdef FATEMMO_METAL
+    ImGui_ImplSDL2_InitForMetal(window_);
+    id<MTLDevice> mtlDevice = ((__bridge CAMetalLayer*)metalLayer_).device;
+    ImGui_ImplMetal_Init(mtlDevice);
+#else
     ImGui_ImplSDL2_InitForOpenGL(window_, glContext_);
     ImGui_ImplOpenGL3_Init("#version 330");
+#endif
 #endif
 
     assetsDir_ = config.assetsDir;
@@ -205,7 +239,11 @@ void App::processEvents() {
 #ifndef FATE_SHIPPING
     Editor::instance().beginFrame();
 #else
+#ifdef FATEMMO_METAL
+    ImGui_ImplMetal_NewFrame(nullptr);
+#else
     ImGui_ImplOpenGL3_NewFrame();
+#endif
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 #endif
@@ -232,7 +270,9 @@ void App::processEvents() {
                        event.window.event == SDL_WINDOWEVENT_RESIZED) {
                 config_.windowWidth = event.window.data1;
                 config_.windowHeight = event.window.data2;
+#ifndef FATEMMO_METAL
                 glViewport(0, 0, config_.windowWidth, config_.windowHeight);
+#endif
             }
             // Always forward key events so keys don't get stuck
             if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
@@ -252,7 +292,9 @@ void App::processEvents() {
                 if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
                     config_.windowWidth = event.window.data1;
                     config_.windowHeight = event.window.data2;
+#ifndef FATEMMO_METAL
                     glViewport(0, 0, config_.windowWidth, config_.windowHeight);
+#endif
                 }
                 break;
 
@@ -416,6 +458,77 @@ void App::render() {
     auto* scene = SceneManager::instance().currentScene();
     World* world = scene ? &scene->world() : nullptr;
 
+#ifdef FATEMMO_METAL
+    @autoreleasepool {
+        CAMetalLayer* layer = (__bridge CAMetalLayer*)metalLayer_;
+        id<CAMetalDrawable> drawable = [layer nextDrawable];
+        if (!drawable) return;
+
+        id<MTLCommandQueue> commandQueue = (__bridge id<MTLCommandQueue>)
+            gfx::Device::instance().resolveMetalCommandQueue();
+        id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
+
+#ifndef FATE_SHIPPING
+        auto& editor = Editor::instance();
+
+        auto& editorFbo = editor.viewportFbo();
+        int vpW = editorFbo.width();
+        int vpH = editorFbo.height();
+
+        if (vpW > 0 && vpH > 0 && editorFbo.isValid()) {
+            camera_.setViewportSize(vpW, vpH);
+
+            RenderPassContext ctx;
+            ctx.spriteBatch = &spriteBatch_;
+            ctx.camera = &camera_;
+            ctx.world = world;
+            ctx.viewportWidth = vpW;
+            ctx.viewportHeight = vpH;
+            renderGraph_.execute(ctx);
+
+            // Blit PostProcess result to editor viewport FBO via Metal pipeline
+            FullscreenQuad::instance().draw(commandBuffer);
+
+            onRender(spriteBatch_, camera_);
+            editor.renderScene(&spriteBatch_, &camera_);
+        }
+
+        editor.renderUI(world, &camera_, &spriteBatch_, &frameArena_);
+#else
+        int vpW = config_.windowWidth;
+        int vpH = config_.windowHeight;
+        camera_.setViewportSize(vpW, vpH);
+
+        RenderPassContext ctx;
+        ctx.spriteBatch = &spriteBatch_;
+        ctx.camera = &camera_;
+        ctx.world = world;
+        ctx.viewportWidth = vpW;
+        ctx.viewportHeight = vpH;
+        renderGraph_.execute(ctx);
+
+        // Blit PostProcess result to drawable via Metal pipeline
+        FullscreenQuad::instance().draw(commandBuffer);
+
+        onRender(spriteBatch_, camera_);
+
+        // Render ImGui draw data via Metal
+        ImGui::Render();
+        MTLRenderPassDescriptor* passDesc = [MTLRenderPassDescriptor renderPassDescriptor];
+        passDesc.colorAttachments[0].texture = drawable.texture;
+        passDesc.colorAttachments[0].loadAction = MTLLoadActionClear;
+        passDesc.colorAttachments[0].clearColor = MTLClearColorMake(0.1, 0.1, 0.1, 1.0);
+        passDesc.colorAttachments[0].storeAction = MTLStoreActionStore;
+        id<MTLRenderCommandEncoder> encoder =
+            [commandBuffer renderCommandEncoderWithDescriptor:passDesc];
+        ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), commandBuffer, encoder);
+        [encoder endEncoding];
+#endif
+
+        [commandBuffer presentDrawable:drawable];
+        [commandBuffer commit];
+    } // @autoreleasepool
+#else
 #ifndef FATE_SHIPPING
     auto& editor = Editor::instance();
 
@@ -531,6 +644,7 @@ void App::render() {
 #endif
 
     SDL_GL_SwapWindow(window_);
+#endif // FATEMMO_METAL
 }
 
 void App::shutdown() {
@@ -561,7 +675,11 @@ void App::shutdown() {
 #ifndef FATE_SHIPPING
     Editor::instance().shutdown();
 #else
+#ifdef FATEMMO_METAL
+    ImGui_ImplMetal_Shutdown();
+#else
     ImGui_ImplOpenGL3_Shutdown();
+#endif
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
 #endif
@@ -574,10 +692,17 @@ void App::shutdown() {
 
     gfx::Device::instance().shutdown();
 
+#ifdef FATEMMO_METAL
+    if (metalView_) {
+        SDL_Metal_DestroyView((SDL_MetalView)metalView_);
+        metalView_ = nullptr;
+    }
+#else
     if (glContext_) {
         SDL_GL_DeleteContext(glContext_);
         glContext_ = nullptr;
     }
+#endif
     if (window_) {
         SDL_DestroyWindow(window_);
         window_ = nullptr;
