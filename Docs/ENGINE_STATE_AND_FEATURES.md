@@ -2174,6 +2174,9 @@ game/
 - [x] EventScheduler (FSM for timed events, drives Arena and Battlefield)
 - [x] CoreExtraction (equipment disassembly into 7-tier crafting cores)
 - [x] CraftingSystem (recipe cache, tier-based lookup, ingredient validation)
+- [x] Instanced Dungeons (DungeonManager foundation — per-party ECS worlds, auto-cleanup)
+- [ ] Dungeon-specific mob definitions (custom bosses per dungeon — e.g. "Crypt Lord" for UndeadCrypt, "Cave Troll" for GoblinCave, "Drake" for DragonLair — currently using overworld mobs as placeholders)
+- [ ] Dungeon enter/exit scene transition flow (portal interaction → create/join instance → teleport back on complete/timeout)
 
 ### ECS Integration
 - [x] Component wrappers for all game systems (38+ components registered)
