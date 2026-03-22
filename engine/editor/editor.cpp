@@ -147,11 +147,14 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
 
     scanAssets();
 
+    dialogueEditor_.init();
+
     LOG_INFO("Editor", "Editor initialized");
     return true;
 }
 
 void Editor::shutdown() {
+    dialogueEditor_.shutdown();
     viewportFbo_.destroy();
 #if defined(ENGINE_MEMORY_DEBUG)
     ImPlot::DestroyContext();
@@ -263,6 +266,8 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     if (showDemoWindow_) {
         ImGui::ShowDemoWindow(&showDemoWindow_);
     }
+
+    dialogueEditor_.draw();
 
     // Post-process config panel
     if (showPostProcessPanel_ && postProcessConfig_) {
@@ -418,6 +423,14 @@ void Editor::drawDockSpace() {
                     dockWorld_->destroyEntity(selectedEntity_->handle());
                     selectedEntity_ = nullptr;
                 }
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Window")) {
+            bool dlgOpen = dialogueEditor_.isOpen();
+            if (ImGui::MenuItem("Dialogue Editor", nullptr, &dlgOpen)) {
+                dialogueEditor_.setOpen(dlgOpen);
             }
             ImGui::EndMenu();
         }
