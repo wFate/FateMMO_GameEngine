@@ -140,7 +140,7 @@ void GuildPanel::render(SpriteBatch& batch, SDFText& sdf) {
         int memberIdx = startRow + i;
         if (memberIdx >= static_cast<int>(members.size())) break;
 
-        const GuildMemberInfo& gm = members[static_cast<size_t>(memberIdx)];
+        const GuildPanelMemberInfo& gm = members[static_cast<size_t>(memberIdx)];
         float rowY   = rowAreaY + static_cast<float>(i) * rowH;
         float rowCY  = rowY + rowH * 0.5f;
 

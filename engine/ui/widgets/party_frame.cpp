@@ -22,7 +22,7 @@ void PartyFrame::render(SpriteBatch& batch, SDFText& sdf) {
     int count = (std::min)(static_cast<int>(members.size()), 2);
 
     for (int i = 0; i < count; ++i) {
-        const PartyMemberInfo& m = members[static_cast<size_t>(i)];
+        const PartyFrameMemberInfo& m = members[static_cast<size_t>(i)];
 
         float cardX = rect.x;
         float cardY = rect.y + static_cast<float>(i) * (cardHeight + cardSpacing);

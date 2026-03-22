@@ -5,7 +5,7 @@
 
 namespace fate {
 
-struct GuildMemberInfo {
+struct GuildPanelMemberInfo {
     std::string name;
     int level = 1;
     std::string rank;  // "Leader", "Officer", "Member"
@@ -21,7 +21,7 @@ public:
     std::string guildName;
     int guildLevel = 1;
     int memberCount = 0;
-    std::vector<GuildMemberInfo> members;
+    std::vector<GuildPanelMemberInfo> members;
     float scrollOffset = 0.0f;
 
     UIClickCallback onClose;
