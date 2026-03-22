@@ -62,3 +62,18 @@ TEST_CASE("PersistenceQueue sets correct maxDelay per priority") {
     CHECK(batch[2].maxDelay == doctest::Approx(60.0f));
     CHECK(batch[3].maxDelay == doctest::Approx(300.0f));
 }
+
+TEST_CASE("Persistence dedup key packing produces unique keys") {
+    uint16_t clientA = 100;
+    uint16_t clientB = 200;
+    uint8_t typeInv = static_cast<uint8_t>(fate::PersistType::Inventory);
+    uint8_t typePos = static_cast<uint8_t>(fate::PersistType::Position);
+
+    uint64_t keyA_inv = (static_cast<uint64_t>(clientA) << 8) | typeInv;
+    uint64_t keyA_pos = (static_cast<uint64_t>(clientA) << 8) | typePos;
+    uint64_t keyB_inv = (static_cast<uint64_t>(clientB) << 8) | typeInv;
+
+    CHECK(keyA_inv != keyA_pos);
+    CHECK(keyA_inv != keyB_inv);
+    CHECK(keyA_pos != keyB_inv);
+}

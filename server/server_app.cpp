@@ -887,6 +887,7 @@ void ServerApp::tick(float dt) {
 
     // 5g. Auto-save and periodic maintenance
     tickAutoSave(dt);
+    tickPersistQueue();
     tickMaintenance(dt);
     tickDungeonInstances(dt);
     wal_.flush();
@@ -1656,6 +1657,25 @@ void ServerApp::savePlayerToDB(uint16_t clientId, bool forceSaveAll) {
     }
 }
 
+void ServerApp::enqueuePersist(uint16_t clientId, PersistPriority priority, PersistType type) {
+    uint64_t key = (static_cast<uint64_t>(clientId) << 8) | static_cast<uint64_t>(type);
+    auto it = pendingPersist_.find(key);
+    if (it != pendingPersist_.end()) {
+        float elapsed = gameTime_ - it->second;
+        if (elapsed < 1.0f) return; // dedup window
+    }
+    pendingPersist_[key] = gameTime_;
+    persistQueue_.enqueue(clientId, priority, type, gameTime_);
+}
+
+void ServerApp::tickPersistQueue() {
+    if (persistQueue_.empty()) return;
+    auto batch = persistQueue_.dequeue(10, gameTime_);
+    for (auto& req : batch) {
+        savePlayerToDBAsync(req.clientId, false); // false = check dirty flags
+    }
+}
+
 void ServerApp::savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll) {
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
@@ -1851,6 +1871,13 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
 
     // Save player data first
     savePlayerToDB(clientId);
+
+    // Clean persistence dedup entries for this client
+    for (uint8_t t = 0; t < 9; ++t) {
+        uint64_t key = (static_cast<uint64_t>(clientId) << 8) | t;
+        pendingPersist_.erase(key);
+    }
+    playerDirty_.erase(clientId);
 
     // Remove from active account sessions
     auto* client = server_.connections().findById(clientId);
@@ -4540,6 +4567,14 @@ void ServerApp::tickMaintenance(float dt) {
 
     // Expire stale economic nonces (>60s old)
     nonceManager_.expireAll(gameTime_);
+
+    // Clean stale persistence dedup entries (>60s old)
+    for (auto it = pendingPersist_.begin(); it != pendingPersist_.end(); ) {
+        if (gameTime_ - it->second > 60.0f)
+            it = pendingPersist_.erase(it);
+        else
+            ++it;
+    }
 }
 
 // ============================================================================

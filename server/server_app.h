@@ -159,6 +159,9 @@ private:
     // Per-client dirty tracking (skip DB writes when nothing changed)
     std::unordered_map<uint16_t, PlayerDirtyFlags> playerDirty_;
 
+    // Deduplication for persistence queue
+    std::unordered_map<uint64_t, float> pendingPersist_;
+
     // Per-client auto-save tracking (staggered)
     std::unordered_map<uint16_t, float> nextAutoSaveTime_;
 
@@ -213,6 +216,8 @@ private:
     void savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll = true);
     void saveInventoryForClient(uint16_t clientId);
     void tickAutoSave(float dt);
+    void tickPersistQueue();
+    void enqueuePersist(uint16_t clientId, PersistPriority priority, PersistType type);
     void tickMaintenance(float dt);
     void initGauntlet();
     void processGauntletCommand(uint16_t clientId, ByteReader& payload);
