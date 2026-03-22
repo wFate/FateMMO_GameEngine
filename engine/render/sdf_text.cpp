@@ -1,7 +1,11 @@
 #include "engine/render/sdf_text.h"
 #include "engine/render/sdf_font_atlas.h"
 #include "engine/render/gfx/device.h"
+#ifndef FATEMMO_METAL
 #include "engine/render/gfx/backend/gl/gl_loader.h"
+#else
+#import <Metal/Metal.h>
+#endif
 #include "engine/core/logger.h"
 #include "stb_image.h"
 #include <nlohmann/json.hpp>
@@ -22,6 +26,11 @@ bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath)
 
     // Load atlas PNG via stb_image (4 channels: RGBA)
     int w = 0, h = 0, channels = 0;
+#ifdef FATEMMO_METAL
+    stbi_set_flip_vertically_on_load(false);
+#else
+    stbi_set_flip_vertically_on_load(true);
+#endif
     unsigned char* data = stbi_load(atlasPath.c_str(), &w, &h, &channels, 4);
     if (!data) {
         LOG_ERROR("SDFText", "Failed to load atlas image: %s", atlasPath.c_str());
@@ -41,6 +50,7 @@ bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath)
         return false;
     }
 
+#ifndef FATEMMO_METAL
     atlasTexId_ = device.resolveGLTexture(atlasGfxHandle_);
 
     // SDF atlas needs linear filtering (Device defaults to nearest)
@@ -48,6 +58,7 @@ bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
+#endif
 
     // Load glyph metrics from JSON
     loadMetrics(metricsPath);
@@ -61,7 +72,9 @@ void SDFText::shutdown() {
     if (atlasGfxHandle_.valid()) {
         gfx::Device::instance().destroy(atlasGfxHandle_);
         atlasGfxHandle_ = {};
+#ifndef FATEMMO_METAL
         atlasTexId_ = 0;
+#endif
     }
     glyphs_.clear();
 }
@@ -147,7 +160,11 @@ void SDFText::drawScreen(SpriteBatch& batch, const std::string& text, Vec2 posit
 void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 position,
                            float fontSize, Color color, float depth, TextStyle style,
                            bool yDown) {
+#ifdef FATEMMO_METAL
+    if (glyphs_.empty() || !atlasGfxHandle_.valid()) return;
+#else
     if (glyphs_.empty() || !atlasTexId_) return;
+#endif
 
     const float scale = fontSize;
     float penX = position.x;
@@ -191,7 +208,11 @@ void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 pos
             params.color     = color;
             params.depth     = depth;
             // Raster atlas: use regular sprite rendering (not SDF shader)
+#ifdef FATEMMO_METAL
+            batch.drawTexturedQuad(atlasGfxHandle_, 0, params, 0.0f);
+#else
             batch.drawTexturedQuad(atlasGfxHandle_, atlasTexId_, params, 0.0f);
+#endif
         }
 
         penX += gm.advance * scale;
