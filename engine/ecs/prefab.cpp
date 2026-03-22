@@ -14,6 +14,7 @@ namespace fate {
 
 void PrefabLibrary::loadAll() {
     prefabs_.clear();
+    variants_.clear();
 
     if (!fs::exists(directory_)) {
         fs::create_directories(directory_);
@@ -31,13 +32,24 @@ void PrefabLibrary::loadAll() {
 
         try {
             nlohmann::json data = nlohmann::json::parse(file);
-            prefabs_[name] = std::move(data);
+
+            // Check if this is a variant (has parent_prefab + patches)
+            if (data.contains("parent_prefab") && data.contains("patches")) {
+                PrefabVariant variant;
+                variant.name = name;
+                variant.parentName = data["parent_prefab"].get<std::string>();
+                variant.patches = data["patches"];
+                variants_[name] = std::move(variant);
+            } else {
+                prefabs_[name] = std::move(data);
+            }
         } catch (const nlohmann::json::exception& e) {
             LOG_ERROR("Prefab", "Failed to parse %s: %s", name.c_str(), e.what());
         }
     }
 
-    LOG_INFO("Prefab", "Loaded %zu prefabs from %s", prefabs_.size(), directory_.c_str());
+    LOG_INFO("Prefab", "Loaded %zu prefabs, %zu variants from %s",
+             prefabs_.size(), variants_.size(), directory_.c_str());
 }
 
 bool PrefabLibrary::save(const std::string& name, Entity* entity) {
@@ -78,13 +90,31 @@ bool PrefabLibrary::save(const std::string& name, Entity* entity) {
 }
 
 Entity* PrefabLibrary::spawn(const std::string& name, World& world, const Vec2& position) {
+    nlohmann::json composedJson;
+
     auto it = prefabs_.find(name);
-    if (it == prefabs_.end()) {
-        LOG_ERROR("Prefab", "Prefab '%s' not found", name.c_str());
-        return nullptr;
+    if (it != prefabs_.end()) {
+        composedJson = it->second;
+    } else {
+        // Check variants
+        auto vit = variants_.find(name);
+        if (vit == variants_.end()) {
+            LOG_ERROR("Prefab", "Prefab '%s' not found", name.c_str());
+            return nullptr;
+        }
+
+        const auto& variant = vit->second;
+        auto pit = prefabs_.find(variant.parentName);
+        if (pit == prefabs_.end()) {
+            LOG_ERROR("Prefab", "Parent prefab '%s' not found for variant '%s'",
+                      variant.parentName.c_str(), name.c_str());
+            return nullptr;
+        }
+
+        composedJson = applyPrefabPatches(pit->second, variant.patches);
     }
 
-    Entity* entity = jsonToEntity(it->second, world);
+    Entity* entity = jsonToEntity(composedJson, world);
     if (!entity) return nullptr;
 
     // Override position
@@ -98,13 +128,17 @@ Entity* PrefabLibrary::spawn(const std::string& name, World& world, const Vec2& 
 }
 
 bool PrefabLibrary::has(const std::string& name) const {
-    return prefabs_.find(name) != prefabs_.end();
+    return prefabs_.find(name) != prefabs_.end() ||
+           variants_.find(name) != variants_.end();
 }
 
 std::vector<std::string> PrefabLibrary::names() const {
     std::vector<std::string> result;
-    result.reserve(prefabs_.size());
+    result.reserve(prefabs_.size() + variants_.size());
     for (auto& [name, _] : prefabs_) {
+        result.push_back(name);
+    }
+    for (auto& [name, _] : variants_) {
         result.push_back(name);
     }
     return result;
@@ -113,6 +147,65 @@ std::vector<std::string> PrefabLibrary::names() const {
 const nlohmann::json* PrefabLibrary::getJson(const std::string& name) const {
     auto it = prefabs_.find(name);
     return (it != prefabs_.end()) ? &it->second : nullptr;
+}
+
+bool PrefabLibrary::saveVariant(const std::string& variantName,
+                                 const std::string& parentName,
+                                 Entity* entity) {
+    if (!entity) return false;
+
+    auto pit = prefabs_.find(parentName);
+    if (pit == prefabs_.end()) {
+        LOG_ERROR("Prefab", "Parent prefab '%s' not found for variant '%s'",
+                  parentName.c_str(), variantName.c_str());
+        return false;
+    }
+
+    nlohmann::json entityJson = entityToJson(entity);
+    nlohmann::json patches = computePrefabDiff(pit->second, entityJson);
+
+    nlohmann::json variantFile;
+    variantFile["parent_prefab"] = parentName;
+    variantFile["patches"] = patches;
+
+    std::string jsonStr = variantFile.dump(2);
+
+    // Write to runtime directory
+    if (!fs::exists(directory_)) fs::create_directories(directory_);
+    std::string path = directory_ + "/" + variantName + ".json";
+    {
+        std::ofstream file(path);
+        if (!file.is_open()) {
+            LOG_ERROR("Prefab", "Cannot write variant to %s", path.c_str());
+            return false;
+        }
+        file << jsonStr;
+    }
+
+    // Also write to source directory (persists across rebuilds)
+    if (!sourceDirectory_.empty() && sourceDirectory_ != directory_) {
+        if (!fs::exists(sourceDirectory_)) fs::create_directories(sourceDirectory_);
+        std::string srcPath = sourceDirectory_ + "/" + variantName + ".json";
+        std::ofstream srcFile(srcPath);
+        if (srcFile.is_open()) {
+            srcFile << jsonStr;
+        }
+    }
+
+    // Cache it
+    PrefabVariant variant;
+    variant.name = variantName;
+    variant.parentName = parentName;
+    variant.patches = std::move(patches);
+    variants_[variantName] = std::move(variant);
+
+    LOG_INFO("Prefab", "Saved variant '%s' (parent: '%s') to %s",
+             variantName.c_str(), parentName.c_str(), path.c_str());
+    return true;
+}
+
+bool PrefabLibrary::isVariant(const std::string& name) const {
+    return variants_.find(name) != variants_.end();
 }
 
 // ============================================================================

@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/ecs/entity.h"
 #include "engine/ecs/world.h"
+#include "engine/ecs/prefab_variant.h"
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
@@ -47,6 +48,13 @@ public:
     // Get the raw JSON for a prefab (for editor preview)
     const nlohmann::json* getJson(const std::string& name) const;
 
+    // Save an entity as a variant of an existing prefab (stores only the diff)
+    bool saveVariant(const std::string& variantName, const std::string& parentName,
+                     Entity* entity);
+
+    // Check if a name refers to a variant
+    bool isVariant(const std::string& name) const;
+
     // Serialize/deserialize (used by editor for duplicate, scene save/load)
     static nlohmann::json entityToJson(Entity* entity);
     static Entity* jsonToEntity(const nlohmann::json& data, World& world);
@@ -57,6 +65,7 @@ private:
     std::string directory_ = "assets/prefabs";
     std::string sourceDirectory_; // project source path for persistent saves
     std::unordered_map<std::string, nlohmann::json> prefabs_;
+    std::unordered_map<std::string, PrefabVariant> variants_;
 };
 
 } // namespace fate
