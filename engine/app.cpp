@@ -461,6 +461,9 @@ void App::update() {
 
     onUpdate(deltaTime_);
 
+    // Update retained-mode UI system (data binding resolution, hot-reload checks)
+    uiManager_.update(deltaTime_);
+
     // Route mouse/keyboard input to the UI system (hover, focus, press, drag-drop)
     uiManager_.handleInput();
 
