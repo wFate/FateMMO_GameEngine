@@ -57,6 +57,7 @@ public:
 
     int drawCallCount() const { return drawCallCount_; }
     int spriteCount() const { return spriteCount_; }
+    const Mat4& viewProjection() const { return viewProjection_; }
 
     void setBlendMode(BlendMode mode);
 

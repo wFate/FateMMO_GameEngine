@@ -110,6 +110,19 @@ bool Tilemap::loadFromFile(const std::string& path) {
 
         chunkManager_.buildFromLayers(layers_, mapWidth_, mapHeight_);
 
+        // Initialize chunk VBO renderer and mark all chunks dirty for initial build
+        if (chunkRenderer_.init()) {
+            for (auto& cl : chunkManager_.layers()) {
+                for (auto& cd : cl.chunks) {
+                    cd.dirty = true;
+                }
+            }
+            useChunkVBOs_ = true;
+        } else {
+            LOG_WARN("Tilemap", "ChunkRenderer init failed, falling back to SpriteBatch rendering");
+            useChunkVBOs_ = false;
+        }
+
         LOG_INFO("Tilemap", "Loaded '%s': %dx%d tiles, %zu layers, %zu tilesets, %zu objects",
                  path.c_str(), mapWidth_, mapHeight_, layers_.size(),
                  tilesets_.size(), objects_.size());
@@ -127,50 +140,82 @@ void Tilemap::render(SpriteBatch& batch, Camera& camera, float depth) {
     // Update chunk states based on camera proximity
     chunkManager_.updateChunkStates(visible, origin, tileWidth_, tileHeight_);
 
-    for (auto& cl : chunkManager_.layers()) {
-        if (!cl.visible || cl.isCollisionLayer) continue;
+    if (useChunkVBOs_) {
+        // ---- Chunk VBO path: pre-built static geometry per chunk ----
+        for (auto& cl : chunkManager_.layers()) {
+            if (!cl.visible || cl.isCollisionLayer) continue;
 
-        for (auto& chunk : cl.chunks) {
-            if (chunk.state != ChunkState::Active) continue;
-
-            // Frustum-cull the entire chunk
-            float chunkWorldX = origin.x + chunk.chunkX * CHUNK_SIZE * tileWidth_;
-            float chunkWorldY = origin.y + chunk.chunkY * CHUNK_SIZE * tileHeight_;
-            float chunkWorldW = CHUNK_SIZE * (float)tileWidth_;
-            float chunkWorldH = CHUNK_SIZE * (float)tileHeight_;
-            Rect chunkBounds(chunkWorldX, chunkWorldY, chunkWorldW, chunkWorldH);
-
-            if (!visible.overlaps(chunkBounds)) continue;
-
-            // Render each tile in this active chunk
-            for (int ly = 0; ly < CHUNK_SIZE; ++ly) {
-                for (int lx = 0; lx < CHUNK_SIZE; ++lx) {
-                    int gid = chunk.tiles[ly * CHUNK_SIZE + lx];
-                    if (gid <= 0) continue;
-
-                    const Tileset* ts = findTileset(gid);
-                    if (!ts || !ts->texture) continue;
-
-                    int globalCol = chunk.chunkX * CHUNK_SIZE + lx;
-                    int globalRow = chunk.chunkY * CHUNK_SIZE + ly;
-
-                    int localId = gid - ts->firstGid;
-                    Rect uv = ts->getTileUV(localId);
-                    Vec2 worldPos = tileToWorld(globalCol, globalRow);
-
-                    SpriteDrawParams params;
-                    params.position = worldPos;
-                    params.size = {(float)tileWidth_, (float)tileHeight_};
-                    params.sourceRect = uv;
-                    params.color = Color(1, 1, 1, cl.opacity);
-                    params.depth = depth;
-
-                    batch.draw(ts->texture, params);
+            // Rebuild dirty Active chunks
+            for (auto& chunk : cl.chunks) {
+                if (chunk.state != ChunkState::Active) continue;
+                if (chunk.dirty) {
+                    chunkRenderer_.rebuildChunk(chunk, tilesets_, origin,
+                                                tileWidth_, tileHeight_,
+                                                depth, cl.opacity);
+                    chunk.dirty = false;
                 }
             }
-        }
 
-        depth += 0.1f; // each layer slightly in front
+            // Release GPU resources for evicted chunks
+            for (auto& chunk : cl.chunks) {
+                if (chunk.state == ChunkState::Evicted) {
+                    chunkRenderer_.releaseChunk(chunk.chunkX, chunk.chunkY, chunk.layerIndex);
+                }
+            }
+
+            // Render all active chunks for this layer
+            chunkRenderer_.renderLayer(cl, batch.viewProjection(), visible,
+                                       origin, tileWidth_, tileHeight_);
+
+            depth += 0.1f; // each layer slightly in front
+        }
+    } else {
+        // ---- Fallback: per-tile SpriteBatch rendering ----
+        for (auto& cl : chunkManager_.layers()) {
+            if (!cl.visible || cl.isCollisionLayer) continue;
+
+            for (auto& chunk : cl.chunks) {
+                if (chunk.state != ChunkState::Active) continue;
+
+                // Frustum-cull the entire chunk
+                float chunkWorldX = origin.x + chunk.chunkX * CHUNK_SIZE * tileWidth_;
+                float chunkWorldY = origin.y + chunk.chunkY * CHUNK_SIZE * tileHeight_;
+                float chunkWorldW = CHUNK_SIZE * (float)tileWidth_;
+                float chunkWorldH = CHUNK_SIZE * (float)tileHeight_;
+                Rect chunkBounds(chunkWorldX, chunkWorldY, chunkWorldW, chunkWorldH);
+
+                if (!visible.overlaps(chunkBounds)) continue;
+
+                // Render each tile in this active chunk
+                for (int ly = 0; ly < CHUNK_SIZE; ++ly) {
+                    for (int lx = 0; lx < CHUNK_SIZE; ++lx) {
+                        int gid = chunk.tiles[ly * CHUNK_SIZE + lx];
+                        if (gid <= 0) continue;
+
+                        const Tileset* ts = findTileset(gid);
+                        if (!ts || !ts->texture) continue;
+
+                        int globalCol = chunk.chunkX * CHUNK_SIZE + lx;
+                        int globalRow = chunk.chunkY * CHUNK_SIZE + ly;
+
+                        int localId = gid - ts->firstGid;
+                        Rect uv = ts->getTileUV(localId);
+                        Vec2 worldPos = tileToWorld(globalCol, globalRow);
+
+                        SpriteDrawParams params;
+                        params.position = worldPos;
+                        params.size = {(float)tileWidth_, (float)tileHeight_};
+                        params.sourceRect = uv;
+                        params.color = Color(1, 1, 1, cl.opacity);
+                        params.depth = depth;
+
+                        batch.draw(ts->texture, params);
+                    }
+                }
+            }
+
+            depth += 0.1f; // each layer slightly in front
+        }
     }
 }
 
