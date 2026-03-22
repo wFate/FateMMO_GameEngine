@@ -549,7 +549,7 @@ void Editor::drawSceneViewport() {
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 3.0f));
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0f, 2.0f));
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.10f, 0.12f, 1.00f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.145f, 0.145f, 0.157f, 1.00f));
 
             float toolbarHeight = ImGui::GetFrameHeight() + 6.0f;
             ImGui::BeginChild("##ViewportToolbar", ImVec2(0, toolbarHeight), false,
@@ -561,9 +561,17 @@ void Editor::drawSceneViewport() {
             // Left side: tool buttons
             auto toolBtn = [&](const char* label, EditorTool tool) {
                 bool active = (currentTool_ == tool);
-                if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.80f, 1.00f));
+                if (active) {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.290f, 0.541f, 0.859f, 1.00f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.369f, 0.604f, 0.910f, 1.00f));
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.502f, 0.502f, 0.533f, 1.0f));
+                }
                 if (ImGui::Button(label, ImVec2(0, btnH))) currentTool_ = tool;
-                if (active) ImGui::PopStyleColor();
+                if (active) ImGui::PopStyleColor(2);
+                else ImGui::PopStyleColor(3);
                 ImGui::SameLine();
             };
             toolBtn("Move", EditorTool::Move);
@@ -581,9 +589,17 @@ void Editor::drawSceneViewport() {
             // Toggle buttons
             auto toggleBtn = [&](const char* label, bool* val) {
                 bool wasActive = *val;
-                if (wasActive) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.45f, 0.80f, 1.00f));
+                if (wasActive) {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.290f, 0.541f, 0.859f, 0.50f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.290f, 0.541f, 0.859f, 0.70f));
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.502f, 0.502f, 0.533f, 1.0f));
+                }
                 if (ImGui::Button(label, ImVec2(0, btnH))) *val = !(*val);
-                if (wasActive) ImGui::PopStyleColor();
+                if (wasActive) ImGui::PopStyleColor(2);
+                else ImGui::PopStyleColor(3);
                 ImGui::SameLine();
             };
             toggleBtn("Grid", &showGrid_);
@@ -598,7 +614,7 @@ void Editor::drawSceneViewport() {
                 float playBtnW = 50.0f;
                 if (!inPlayMode_) {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
-                    if (ImGui::Button("|>", ImVec2(playBtnW, btnH))) {
+                    if (ImGui::Button("Play", ImVec2(playBtnW, btnH))) {
                         // Save editor camera state, reset to default zoom for play
                         if (dockCamera_) {
                             savedCamPos_ = dockCamera_->position();
@@ -610,7 +626,7 @@ void Editor::drawSceneViewport() {
                     ImGui::PopStyleColor();
                 } else {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.20f, 0.20f, 1.00f));
-                    if (ImGui::Button("||", ImVec2(playBtnW, btnH))) {
+                    if (ImGui::Button("Stop", ImVec2(playBtnW, btnH))) {
                         // Restore editor camera state
                         if (dockCamera_) {
                             dockCamera_->setPosition(savedCamPos_);
@@ -660,12 +676,14 @@ void Editor::drawSceneViewport() {
                 char stats[64];
                 snprintf(stats, sizeof(stats), "%.0f FPS | %zu ent",
                          io.Framerate, dockWorld_ ? dockWorld_->entityCount() : 0u);
+                if (fontSmall_) ImGui::PushFont(fontSmall_);
                 float textW = ImGui::CalcTextSize(stats).x;
                 float regionW = ImGui::GetContentRegionAvail().x;
                 if (regionW > textW + 4.0f) {
                     ImGui::SameLine(ImGui::GetCursorPosX() + regionW - textW);
                     ImGui::TextColored(ImVec4(0.45f, 0.45f, 0.50f, 1.0f), "%s", stats);
                 }
+                if (fontSmall_) ImGui::PopFont();
             }
 
             ImGui::EndChild();
@@ -2356,6 +2374,10 @@ void Editor::drawHierarchy(World* world) {
                 if (hasTag) ImGui::PopStyleColor();
 
                 if (open) {
+                    ImDrawList* dl = ImGui::GetWindowDrawList();
+                    float indentX = ImGui::GetCursorScreenPos().x - ImGui::GetStyle().IndentSpacing * 0.5f + 4.0f;
+                    float startY = ImGui::GetCursorScreenPos().y;
+
                     for (auto* entity : group.entities) {
                         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen
                                                  | ImGuiTreeNodeFlags_SpanAvailWidth;
@@ -2365,6 +2387,14 @@ void Editor::drawHierarchy(World* world) {
 
                         if (ImGui::IsItemClicked()) selectedEntity_ = entity;
                     }
+
+                    float endY = ImGui::GetCursorScreenPos().y - ImGui::GetStyle().ItemSpacing.y;
+                    if (endY > startY) {
+                        dl->AddLine(
+                            ImVec2(indentX, startY), ImVec2(indentX, endY),
+                            IM_COL32(255, 255, 255, 25), 1.0f);
+                    }
+
                     ImGui::TreePop();
                 }
             }
@@ -2446,10 +2476,12 @@ void Editor::drawInspector() {
         char nameBuf[128];
         strncpy(nameBuf, selectedEntity_->name().c_str(), sizeof(nameBuf) - 1);
         nameBuf[sizeof(nameBuf) - 1] = '\0';
+        if (fontHeading_) ImGui::PushFont(fontHeading_);
         ImGui::SetNextItemWidth(-1);
         if (ImGui::InputText("##EntityName", nameBuf, sizeof(nameBuf))) {
             selectedEntity_->setName(nameBuf);
         }
+        if (fontHeading_) ImGui::PopFont();
 
         // Tag + Active on same line
         {
@@ -2481,7 +2513,10 @@ void Editor::drawInspector() {
 
         // Transform
         if (auto* t = selectedEntity_->getComponent<Transform>()) {
-            if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool transformOpen = ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen);
+            if (fontHeading_) ImGui::PopFont();
+            if (transformOpen) {
                 if (ImGui::BeginTable("##TransformProps", 2, ImGuiTableFlags_SizingStretchProp)) {
                     ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
                     ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
@@ -2512,7 +2547,10 @@ void Editor::drawInspector() {
 
         // Sprite
         if (auto* s = selectedEntity_->getComponent<SpriteComponent>()) {
-            if (ImGui::CollapsingHeader("Sprite", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool spriteOpen = ImGui::CollapsingHeader("Sprite", ImGuiTreeNodeFlags_DefaultOpen);
+            if (fontHeading_) ImGui::PopFont();
+            if (spriteOpen) {
                 if (ImGui::BeginTable("##SpriteProps", 2, ImGuiTableFlags_SizingStretchProp)) {
                     ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
                     ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
@@ -2585,7 +2623,9 @@ void Editor::drawInspector() {
 
         // BoxCollider
         if (auto* c = selectedEntity_->getComponent<BoxCollider>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Box Collider", ImGuiTreeNodeFlags_DefaultOpen);
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmBoxCollider")) {
                 if (ImGui::MenuItem("Remove Component")) {
                     selectedEntity_->removeComponent<BoxCollider>();
@@ -2624,7 +2664,9 @@ void Editor::drawInspector() {
 
         // PolygonCollider
         if (auto* pc = selectedEntity_->getComponent<PolygonCollider>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Polygon Collider", ImGuiTreeNodeFlags_DefaultOpen);
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmPolyCollider")) {
                 if (ImGui::MenuItem("Remove Component")) {
                     selectedEntity_->removeComponent<PolygonCollider>();
@@ -2686,7 +2728,9 @@ void Editor::drawInspector() {
 
         // PlayerController
         if (auto* p = selectedEntity_->getComponent<PlayerController>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Player Controller", ImGuiTreeNodeFlags_DefaultOpen);
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmPlayerCtrl")) {
                 if (ImGui::MenuItem("Remove Component")) {
                     selectedEntity_->removeComponent<PlayerController>();
@@ -2717,7 +2761,9 @@ void Editor::drawInspector() {
 
         // Animator
         if (auto* a = selectedEntity_->getComponent<Animator>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Animator");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmAnimator")) {
                 if (ImGui::MenuItem("Remove Component")) {
                     selectedEntity_->removeComponent<Animator>();
@@ -2747,7 +2793,9 @@ void Editor::drawInspector() {
 
         // ZoneComponent
         if (auto* z = selectedEntity_->getComponent<ZoneComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Zone", ImGuiTreeNodeFlags_DefaultOpen);
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmZone")) {
                 if (ImGui::MenuItem("Remove Component")) {
                     selectedEntity_->removeComponent<ZoneComponent>();
@@ -2807,7 +2855,9 @@ void Editor::drawInspector() {
 
         // PortalComponent
         if (auto* p = selectedEntity_->getComponent<PortalComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Portal", ImGuiTreeNodeFlags_DefaultOpen);
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmPortal")) {
                 if (ImGui::MenuItem("Remove Component")) {
                     selectedEntity_->removeComponent<PortalComponent>();
@@ -2865,7 +2915,9 @@ void Editor::drawInspector() {
 
         // Character Stats
         if (auto* cs = selectedEntity_->getComponent<CharacterStatsComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Character Stats");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmCharStats")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<CharacterStatsComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -2954,7 +3006,9 @@ void Editor::drawInspector() {
 
         // Enemy Stats
         if (auto* es = selectedEntity_->getComponent<EnemyStatsComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Enemy Stats");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmEnemyStats")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<EnemyStatsComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -2988,7 +3042,9 @@ void Editor::drawInspector() {
 
         // Mob AI
         if (auto* ai = selectedEntity_->getComponent<MobAIComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Mob AI");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmMobAI")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<MobAIComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3018,7 +3074,9 @@ void Editor::drawInspector() {
 
         // Combat Controller
         if (auto* cc = selectedEntity_->getComponent<CombatControllerComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Combat Controller");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmCombat")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<CombatControllerComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3038,7 +3096,9 @@ void Editor::drawInspector() {
 
         // Inventory
         if (auto* inv = selectedEntity_->getComponent<InventoryComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Inventory");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmInv")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<InventoryComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3051,7 +3111,9 @@ void Editor::drawInspector() {
 
         // Skill Manager
         if (auto* sk = selectedEntity_->getComponent<SkillManagerComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Skill Manager");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmSkill")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<SkillManagerComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3063,7 +3125,9 @@ void Editor::drawInspector() {
 
         // Status Effects
         if (auto* se = selectedEntity_->getComponent<StatusEffectComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Status Effects");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmSE")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<StatusEffectComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3077,7 +3141,9 @@ void Editor::drawInspector() {
 
         // Crowd Control
         if (auto* ccC = selectedEntity_->getComponent<CrowdControlComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Crowd Control");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmCC")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<CrowdControlComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3092,7 +3158,9 @@ void Editor::drawInspector() {
 
         // Nameplate
         if (auto* np = selectedEntity_->getComponent<NameplateComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Nameplate");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmNP")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<NameplateComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3109,7 +3177,9 @@ void Editor::drawInspector() {
 
         // Mob Nameplate
         if (auto* mnp = selectedEntity_->getComponent<MobNameplateComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Mob Nameplate");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmMNP")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<MobNameplateComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3129,7 +3199,9 @@ void Editor::drawInspector() {
 
         // Targeting
         if (auto* tgt = selectedEntity_->getComponent<TargetingComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Targeting");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmTgt")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<TargetingComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3143,7 +3215,9 @@ void Editor::drawInspector() {
 
         // Marker components with remove support
         if (selectedEntity_->hasComponent<DamageableComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Damageable");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmDmg")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<DamageableComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3153,42 +3227,54 @@ void Editor::drawInspector() {
 
         // Social components (removable)
         if (selectedEntity_->hasComponent<PartyComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             ImGui::CollapsingHeader("Party Manager");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmParty")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<PartyComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
         }
         if (selectedEntity_->hasComponent<GuildComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             ImGui::CollapsingHeader("Guild Manager");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmGuild")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<GuildComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
         }
         if (selectedEntity_->hasComponent<ChatComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             ImGui::CollapsingHeader("Chat Manager");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmChat")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<ChatComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
         }
         if (selectedEntity_->hasComponent<FriendsComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             ImGui::CollapsingHeader("Friends Manager");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmFriends")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<FriendsComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
         }
         if (selectedEntity_->hasComponent<TradeComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             ImGui::CollapsingHeader("Trade Manager");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmTrade")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<TradeComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
         }
         if (selectedEntity_->hasComponent<MarketComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             ImGui::CollapsingHeader("Market Manager");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmMarket")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<MarketComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3197,7 +3283,9 @@ void Editor::drawInspector() {
 
         // Spawn Zone
         if (auto* szComp = selectedEntity_->getComponent<SpawnZoneComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Spawn Zone");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmSpawnZone")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<SpawnZoneComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3257,7 +3345,9 @@ void Editor::drawInspector() {
 
         // Faction
         if (auto* fc = selectedEntity_->getComponent<FactionComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Faction");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmFaction")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<FactionComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3273,7 +3363,9 @@ void Editor::drawInspector() {
 
         // Pet
         if (auto* pc = selectedEntity_->getComponent<PetComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
             bool open = ImGui::CollapsingHeader("Pet");
+            if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmPet")) {
                 if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<PetComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
@@ -3329,7 +3421,10 @@ void Editor::drawInspector() {
                 auto* meta = ComponentMetaRegistry::instance().findById(id);
                 if (!meta || meta->fields.empty()) return;
 
-                if (ImGui::CollapsingHeader(meta->name)) {
+                if (fontHeading_) ImGui::PushFont(fontHeading_);
+                bool reflOpen = ImGui::CollapsingHeader(meta->name);
+                if (fontHeading_) ImGui::PopFont();
+                if (reflOpen) {
                     drawReflectedComponent(*meta, data);
                 }
             });
@@ -3338,8 +3433,21 @@ void Editor::drawInspector() {
         endInspectorComponents:;
 
         // Add Component
-        ImGui::Separator();
-        if (ImGui::Button("+ Add Component")) ImGui::OpenPopup("AddComponent");
+        ImGui::Spacing();
+        ImGui::Spacing();
+        {
+            float availW = ImGui::GetContentRegionAvail().x;
+            ImVec2 btnPos = ImGui::GetCursorScreenPos();
+            ImVec2 btnSize(availW, ImGui::GetFrameHeight());
+            ImGui::GetWindowDrawList()->AddRect(
+                btnPos, ImVec2(btnPos.x + btnSize.x, btnPos.y + btnSize.y),
+                IM_COL32(128, 128, 128, 80), 3.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.06f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, 0.10f));
+            if (ImGui::Button("+ Add Component", btnSize)) ImGui::OpenPopup("AddComponent");
+            ImGui::PopStyleColor(3);
+        }
         if (ImGui::BeginPopup("AddComponent")) {
             if (!selectedEntity_->hasComponent<Transform>() && ImGui::MenuItem("Transform"))
                 selectedEntity_->addComponent<Transform>();
