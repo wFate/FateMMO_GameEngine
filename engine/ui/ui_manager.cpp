@@ -21,6 +21,8 @@
 #include "engine/ui/widgets/inventory_panel.h"
 #include "engine/ui/widgets/status_panel.h"
 #include "engine/ui/widgets/skill_panel.h"
+#include "engine/ui/widgets/character_select_screen.h"
+#include "engine/ui/widgets/character_creation_screen.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -441,6 +443,15 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     else if (type == "skill_panel") {
         auto skp = std::make_unique<SkillPanel>(id);
         node = std::move(skp);
+    }
+    else if (type == "character_select_screen") {
+        auto css = std::make_unique<CharacterSelectScreen>(id);
+        css->slotCircleSize = j.value("slotCircleSize", 52.0f);
+        node = std::move(css);
+    }
+    else if (type == "character_creation_screen") {
+        auto ccs = std::make_unique<CharacterCreationScreen>(id);
+        node = std::move(ccs);
     }
     else {
         node = std::make_unique<UINode>(id, type);
