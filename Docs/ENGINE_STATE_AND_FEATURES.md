@@ -4,7 +4,7 @@
 
 Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landscape gameplay with a built-in Unity-style editor for scene building, tile painting, and rapid iteration. All game systems from the Unity/C# prototype have been ported to C++ as server-authoritative logic.
 
-**Tech Stack:** C++23, SDL2, OpenGL 3.3 Core, Dear ImGui (docking), ImGuizmo, ImPlot, imnodes, SoLoud (audio), Tracy Profiler, spdlog, nlohmann/json, stb_image, stb_truetype, Winsock2 + POSIX sockets
+**Tech Stack:** C++23, SDL2, OpenGL 3.3 Core, Dear ImGui (docking) + FreeType, ImGuizmo, ImPlot, imnodes, SoLoud (audio), Tracy Profiler, spdlog, nlohmann/json, stb_image, stb_truetype, Inter font family, Winsock2 + POSIX sockets
 
 **Build System:** CMake with FetchContent (auto-downloads all dependencies)
 
@@ -115,10 +115,11 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 ### Editor (Dear ImGui)
 | Feature | Status | Notes |
 |---------|--------|-------|
+| **Visual Theme** | Done | **Custom polished dark theme** — Inter font family (14px body, 16px SemiBold headings, 12px metadata) rendered via FreeType LightHinting. Layered background hierarchy (#141416→#1E1E22→#2A2A2E→#303036), blue accent (#4A8ADB) with hover/active/muted states, tab overlines, 3px modern rounding, 8px grid spacing. Professionally styled toolbar, inspector, hierarchy, and all panels |
 | Toggle with F3 | Done | Auto-pauses game when opened |
-| Entity Hierarchy | Done | Grouped by name+tag (collapsible), color-coded (player/ground/obstacle/mob/boss), error badges |
-| Inspector Panel | Done | Edit all engine + game component properties live, sprite preview thumbnail, reflection-driven generic fallback |
-| Project Browser | Done | Tabs: Sprites, Scripts, Scenes, Shaders, Prefabs. Delete confirmation dialogs, path traversal validation on save. **Enhanced Asset Browser** (toggleable): directory navigation with breadcrumb, thumbnail grid (32-128px resizable), search filtering, lazy texture cache, drag-and-drop, type-colored placeholders |
+| Entity Hierarchy | Done | Grouped by name+tag (collapsible), color-coded (player/ground/obstacle/mob/boss), error badges, **vertical tree indentation guides** for expanded groups |
+| Inspector Panel | Done | Edit all engine + game component properties live, sprite preview thumbnail, reflection-driven generic fallback. **SemiBold heading font** on entity name and all 28 component CollapsingHeaders, **1px separator lines** between sections, **outlined Add Component button** |
+| Project Browser | Done | Tabs: Sprites, Scripts, Scenes, Shaders, Prefabs. Delete confirmation dialogs, path traversal validation on save. **Enhanced Asset Browser** (toggleable): directory navigation with breadcrumb (small font, ">" separators), thumbnail grid (32-128px resizable), search filtering, lazy texture cache, drag-and-drop, **checkerboard transparency backgrounds** on sprite thumbnails, **hover overlays**, **accent selection borders**, desaturated type-colored placeholders |
 | Right-Click Context Menus | Done | Open in VS Code, Show in Explorer, Copy Path, Delete |
 | Asset Placement | Done | Click sprite thumbnail, click scene to stamp entities |
 | Tile Palette | Done | Collapsible panel, load tilesets (recursive subdirectory scan), scrollable tile grid, paint/drag to place, **multi-tile stamp selection** (click-drag in palette to select rectangular region) |
@@ -127,7 +128,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Grid Snapping | Done | Ground tiles snap to grid, other entities move freely |
 | Camera Pan | Done | Right-click drag to pan scene |
 | Camera Zoom | Done | Mouse scroll wheel, 0.05x to 8x range |
-| Play/Pause | Done | Toolbar button, auto-pause on editor open. **Play-in-Editor**: enterPlayMode snapshots all entities to JSON, exitPlayMode destroys and restores from snapshot (full ECS state round-trip). Camera position saved/restored |
+| Play/Pause | Done | "Play"/"Stop" toolbar buttons (green/red), auto-pause on editor open. **Play-in-Editor**: enterPlayMode snapshots all entities to JSON, exitPlayMode destroys and restores from snapshot (full ECS state round-trip). Camera position saved/restored |
 | Create/Delete Entities | Done | Menu + Delete key, works while paused |
 | Duplicate Entity | Done | Full deep copy via JSON serialization, offset by 32px |
 | Add Components | Done | Popup with engine, game systems, social, NPC, and player quest/bank sections |
@@ -140,7 +141,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Resize Handles | Done | 8 drag handles (4 corners + 4 edges), E key for resize tool mode |
 | Source Rect Editor | Done | UV region editing in Sprite inspector for tileset splicing |
 | Undo/Redo | Done | Ctrl+Z/Ctrl+Y, 200 action history, tracks move/resize/delete/duplicate/tile paint. **CompoundCommand** groups multi-tile operations (fill/rect/line) into single undo step. **Handle remap** — entity handles remapped after delete+undo recreate, so subsequent undo operations resolve to the new handle |
-| Tool Modes | Done | W=Move, E=Resize, B=Paint, X=Erase, **G=Fill, U=RectFill, L=LineTool**. Active tool highlighted in toolbar. Fill uses BFS flood fill, Rect/Line use drag start→end with visual preview |
+| Tool Modes | Done | W=Move, E=Resize, B=Paint, X=Erase, **G=Fill, U=RectFill, L=LineTool**. Active tool gets accent-blue background, inactive tools transparent with muted text. Fill uses BFS flood fill, Rect/Line use drag start→end with visual preview |
 | Keyboard Shortcuts | Done | Ctrl+Z undo, Ctrl+Y redo, Ctrl+S save, Ctrl+D duplicate, Ctrl+A select all, Delete |
 | Eraser Tool | Done | X key, click/drag to delete ground tiles with undo support |
 | Layer Visibility | Done | Gnd/Obj toggles in toolbar to show/hide entity layers |
@@ -153,9 +154,9 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Post-Process Panel | Done | Live tweaking bloom/vignette/color grading |
 | Network Panel | Done | Connect/disconnect to server, host/port config, shows client ID and ghost count, docked in bottom panel |
 | ImGuizmo | Done | Visual translate/scale/rotate handles on selected entities |
-| Dialogue Node Editor | Done | Visual node-based dialogue tree editor using **imnodes** library. Nodes with speaker/text, choice output pins, link creation/deletion, right-click add node, JSON load/save. Window > Dialogue Editor toggle |
-| Animation Editor | Done | TWOM-style visual animation panel. Import individual frame PNGs, arrange into sequences per state (idle/walk/attack/cast/death) and direction (down/up/side), set hitFrame visually, preview with play/pause/step, pack into runtime sprite sheets on save. Template presets for Player/Mob/NPC. Layer support (Body/Weapon/Gloves). `.anim` template + `.frameset` file formats. `AnimationLoader` runtime utility reads packed metadata into Animator + SpriteComponent. 3-direction authoring → 4-direction runtime (side → left+right with flipX). Asset browser classifies `.anim`/`.frameset`, double-click to open. Animator inspector "Open in Animation Editor" button. Window > Animation Editor toggle |
-| EDITOR_BUILD | Done | Compile definition on FateEngine and fate_tests targets only (not FateServer). `editor_build.h` documents `#ifdef EDITOR_BUILD` guard pattern. Groundwork for editor/runtime separation |
+| Dialogue Node Editor | Done | Visual node-based dialogue tree editor using **imnodes** library. Nodes with speaker/text, choice output pins, link creation/deletion, right-click add node, JSON load/save. Window > Dialogue Editor toggle. **Colors harmonized** with editor palette (node backgrounds, title bars, links, grid, pins) |
+| Animation Editor | Done | TWOM-style visual animation panel. Import individual frame PNGs, arrange into sequences per state (idle/walk/attack/cast/death) and direction (down/up/side), set hitFrame visually, preview with play/pause/step, pack into runtime sprite sheets on save. Template presets for Player/Mob/NPC. Layer support (Body/Weapon/Gloves). `.anim` template + `.frameset` file formats. `AnimationLoader` runtime utility reads packed metadata into Animator + SpriteComponent. 3-direction authoring → 4-direction runtime (side → left+right with flipX). Asset browser classifies `.anim`/`.frameset`, double-click to open. Animator inspector "Open in Animation Editor" button. Window > Animation Editor toggle. **Visual polish**: checkerboard transparency behind frame thumbnails and preview, accent-blue selection borders, outlined drop target, small-font frame counter, accent highlight on selected state |
+| EDITOR_BUILD | Done | Compile definition on FateEngine and fate_tests targets only (not FateServer). `editor_build.h` documents `#ifdef EDITOR_BUILD` guard pattern. Groundwork for editor/runtime separation. `IMGUI_ENABLE_FREETYPE` defined on imgui_lib target for font rendering |
 
 ### Game UI (ImGui-based, in-game panels)
 | Feature | Status | Notes |
