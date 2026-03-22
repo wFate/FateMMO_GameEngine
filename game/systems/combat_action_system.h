@@ -13,7 +13,9 @@
 #include "game/components/sprite_component.h"
 #include "game/shared/spatial_hash.h"
 #include "imgui.h"
+#ifndef FATE_SHIPPING
 #include "engine/editor/editor.h"
+#endif
 
 #include "game/systems/quest_system.h"
 #include "game/components/faction_component.h"
@@ -53,26 +55,35 @@ public:
     // GameApp wires this to do a PID reverse-lookup and call netClient_.sendAction().
     std::function<void(Entity* target)> onSendAttack;
 
+    // Audio callback wired by GameApp (plays optimistic hit sound on the attack hit frame)
+    std::function<void(const std::string&)> onPlaySFX;
+
     // Clear current combat target (called by GameApp when server confirms kill)
     void serverClearTarget() { currentTargetId_ = INVALID_ENTITY; autoAttackEnabled_ = false; }
 
-    // Trigger an optimistic attack flash on the local player sprite.
-    // Called by GameApp when a skill is activated via the skill bar so the same
-    // flash/decay logic applies as for auto-attacks.
-    void triggerAttackFlash(bool isSpell) {
+    // Trigger attack windup animation on the local player sprite.
+    // Called by GameApp when a skill is activated via the skill bar.
+    // Plays the lunge animation toward the current target (no damage text —
+    // skill results come from the server via SvSkillResultMsg).
+    void triggerAttackWindup() {
         if (!world_) return;
-        world_->forEach<PlayerController, SpriteComponent>(
-            [&](Entity* entity, PlayerController* ctrl, SpriteComponent* spr) {
+        world_->forEach<PlayerController, Animator>(
+            [&](Entity* entity, PlayerController* ctrl, Animator* anim) {
                 if (!ctrl->isLocalPlayer) return;
-                spr->tint = isSpell ? Color(0.7f, 0.85f, 1.0f, 1.0f)
-                                    : Color(1.0f, 0.95f, 0.75f, 1.0f);
-                auto* anim = entity->getComponent<Animator>();
-                if (anim && anim->animations.count("attack")) {
-                    anim->play("attack");
-                }
+                auto* spr = entity->getComponent<SpriteComponent>();
+
+                attackIsMage_ = true;  // skills always use channeling pose
+                ensureAttackAnimation(anim);
+
+                anim->onHitFrame = nullptr;  // skills don't predict damage
+                anim->onComplete = [this, spr]() {
+                    attackAnimActive_ = false;
+                    if (spr) spr->renderOffset = {0, 0};
+                };
+                anim->play("attack");
+                attackAnimActive_ = true;
             }
         );
-        attackFlashTimer_ = kAttackFlashDuration;
     }
 
     void update(float dt) override {
@@ -89,23 +100,9 @@ public:
         );
         mobGrid_.finalize();
 
-        // Decay optimistic attack flash on the local player sprite
-        if (attackFlashTimer_ > 0.0f) {
-            attackFlashTimer_ -= dt;
-            if (attackFlashTimer_ <= 0.0f) {
-                attackFlashTimer_ = 0.0f;
-                // Restore player sprite tint to white
-                world_->forEach<PlayerController, SpriteComponent>(
-                    [](Entity*, PlayerController* ctrl, SpriteComponent* spr) {
-                        if (!ctrl->isLocalPlayer) return;
-                        spr->tint = Color::white();
-                    }
-                );
-            }
-        }
-
         processClickTargeting();
         processPlayerCombat(dt);
+        updateAttackLunge();
         updateFloatingTexts(dt);
     }
 
@@ -426,10 +423,10 @@ private:
     bool autoAttackEnabled_ = false;
     float attackCooldownRemaining_ = 0.0f;
 
-    // Optimistic combat feedback — brief tint flash on the player sprite
-    // when an attack fires, giving instant visual response before server confirms.
-    float attackFlashTimer_ = 0.0f;
-    static constexpr float kAttackFlashDuration = 0.12f; // seconds
+    // Attack windup animation state
+    Vec2 lungeDirection_ = {0, 0};   // normalized direction toward target
+    bool attackAnimActive_ = false;
+    bool attackIsMage_ = false;      // true = channeling pose, false = melee lunge
 
     // Spatial hash for mob lookups (rebuilt each frame)
     SpatialHash mobGrid_{128.0f};  // 4-tile cells
@@ -445,6 +442,11 @@ private:
     static constexpr float kMageRange      = 7.0f;    // tiles
     static constexpr float kTargetSearchRange = 10.0f; // tiles
 
+    // Procedural attack offsets (temporary — replaced by real sprite frames later)
+    static constexpr float kPullbackPx  = 2.0f;  // melee: pixels to pull back during windup
+    static constexpr float kLungePx     = 3.0f;  // melee: pixels to lunge forward on strike
+    static constexpr float kChannelDipPx = 1.5f;  // mage: pixels to settle downward while channeling
+
     // ------------------------------------------------------------------
     // processClickTargeting — left-click mob to target, click empty to deselect
     // ------------------------------------------------------------------
@@ -458,6 +460,7 @@ private:
 
         // In editor mode, ImGui reports WantCaptureMouse=true for the game viewport
         // (it IS an ImGui window). Only block clicks that are outside the viewport.
+#ifndef FATE_SHIPPING
         if (Editor::instance().isOpen()) {
             Vec2 mpos = input.mousePosition();
             Vec2 vp = Editor::instance().viewportPos();
@@ -465,7 +468,9 @@ private:
             bool inViewport = mpos.x >= vp.x && mpos.x <= vp.x + vs.x &&
                               mpos.y >= vp.y && mpos.y <= vp.y + vs.y;
             if (!inViewport) return;
-        } else {
+        } else
+#endif
+        {
             if (ImGui::GetIO().WantCaptureMouse) return;
         }
 
@@ -484,12 +489,17 @@ private:
         Vec2 screenPos = touched ? input.touchPosition(0) : input.mousePosition();
 
         // Convert screen coords to viewport-relative coords for editor mode
+        Vec2 vpPos = {0, 0};
+        Vec2 vpSize = {0, 0};
+#ifndef FATE_SHIPPING
         auto& ed = Editor::instance();
-        Vec2 vpPos = ed.viewportPos();
-        Vec2 vpSize = ed.viewportSize();
+        vpPos = ed.viewportPos();
+        vpSize = ed.viewportSize();
         if (ed.isOpen() && vpSize.x > 0 && vpSize.y > 0) {
             screenPos = screenPos - vpPos;
-        } else {
+        } else
+#endif
+        {
             ImVec2 displaySize = ImGui::GetIO().DisplaySize;
             vpSize = {displaySize.x, displaySize.y};
         }
@@ -645,7 +655,11 @@ private:
     }
 
     // ------------------------------------------------------------------
-    // tryAttackTarget — resolve one attack (physical or spell)
+    // tryAttackTarget — start attack windup animation + send to server
+    //
+    // Prediction (damage text, audio) is deferred to the animation hit frame
+    // (~100ms after button press). The server message is sent immediately so
+    // the response arrives by the time the hit frame fires.
     // ------------------------------------------------------------------
     void tryAttackTarget(Entity* player, Entity* target) {
         auto* statsComp = player->getComponent<CharacterStatsComponent>();
@@ -709,157 +723,209 @@ private:
         float cooldown = combatCtrl ? combatCtrl->baseAttackCooldown : 1.5f;
         attackCooldownRemaining_ = cooldown;
 
-        // ---- Optimistic attack flash — instant visual feedback ----
-        // Briefly tint the player sprite to signal the attack fired,
-        // eliminating the perceived 100-300ms latency to server response.
-        auto* playerSpr = player->getComponent<SpriteComponent>();
-        if (playerSpr) {
-            playerSpr->tint = isMage ? Color(0.7f, 0.85f, 1.0f, 1.0f)   // cool blue-white for spells
-                                     : Color(1.0f, 0.95f, 0.75f, 1.0f);  // warm yellow-white for melee
-            attackFlashTimer_ = kAttackFlashDuration;
-        }
-
-        // Play attack animation if the entity has one (safe no-op if absent)
-        auto* playerAnim = player->getComponent<Animator>();
-        if (playerAnim && playerAnim->animations.count("attack")) {
-            playerAnim->play("attack");
-        }
-
+        // ---- Predict damage for deferred display on hit frame ----
         Vec2 textPos = targetT->position;
-
-        // Status effects, CC, PK status transitions are all handled server-side now.
-        // Client only does prediction (damage text) and sends CmdAction.
+        struct PendingHit {
+            Vec2 pos;
+            int damage = 0;
+            bool isCrit = false;
+            bool hit = true;
+            bool resisted = false;
+        };
+        PendingHit pending;
+        pending.pos = textPos;
 
         if (targetIsMob) {
-            // ================================================================
-            // MOB TARGET — existing PvE attack logic
-            // ================================================================
             EnemyStats& es = enemyComp->stats;
-
             if (isMage) {
-                // ---- Spell attack (PvE) — prediction only ----
-                // Predict resist for visual feedback
-                bool resisted = CombatSystem::rollSpellResist(
+                pending.resisted = CombatSystem::rollSpellResist(
                     ps.level, ps.getIntelligence(), es.level, es.magicResist);
-
-                if (resisted) {
-                    spawnResistText(textPos);
-                    LOG_DEBUG("Combat", "[predict] Spell resisted by %s", es.enemyName.c_str());
-                }
-
-                // Predict damage for floating text
-                bool isCrit = false;
-                int damage = ps.calculateDamage(false, isCrit);
-
-                float mrReduction = CombatSystem::getMobMagicDamageReduction(es.magicResist);
-                damage = static_cast<int>(damage * (1.0f - mrReduction));
-                if (damage < 1) damage = 1;
-
-                if (!resisted) {
-                    spawnDamageText(textPos, damage, isCrit);
-                }
-
-                // Send attack to server (authoritative damage/kill)
-                if (onSendAttack) onSendAttack(target);
-
-                LOG_DEBUG("Combat", "[predict] Spell on %s for %d%s (sent to server)",
-                          es.enemyName.c_str(), damage, isCrit ? " (CRIT)" : "");
-
+                pending.damage = ps.calculateDamage(false, pending.isCrit);
+                float mr = CombatSystem::getMobMagicDamageReduction(es.magicResist);
+                pending.damage = static_cast<int>(pending.damage * (1.0f - mr));
+                if (pending.damage < 1) pending.damage = 1;
+                LOG_DEBUG("Combat", "[predict] Spell on %s for %d%s",
+                          es.enemyName.c_str(), pending.damage, pending.isCrit ? " (CRIT)" : "");
             } else {
-                // ---- Physical attack (PvE) — prediction only ----
-                // Predict hit/miss for visual feedback
-                bool hit = CombatSystem::rollToHit(
+                pending.hit = CombatSystem::rollToHit(
                     ps.level, static_cast<int>(ps.getHitRate()), es.level, 0);
-
-                if (!hit) {
-                    spawnMissText(textPos);
-                    LOG_DEBUG("Combat", "[predict] Attack missed %s", es.enemyName.c_str());
-                }
-
-                // Predict damage for floating text
-                bool isCrit = false;
-                int damage = ps.calculateDamage(false, isCrit);
-                damage = CombatSystem::applyArmorReduction(damage, es.armor);
-                if (damage < 1) damage = 1;
-
-                if (hit) {
-                    spawnDamageText(textPos, damage, isCrit);
-                }
-
-                // Send attack to server (authoritative damage/kill)
-                if (onSendAttack) onSendAttack(target);
-
-                LOG_DEBUG("Combat", "[predict] Physical on %s for %d%s (sent to server)",
-                          es.enemyName.c_str(), damage, isCrit ? " (CRIT)" : "");
+                pending.damage = ps.calculateDamage(false, pending.isCrit);
+                pending.damage = CombatSystem::applyArmorReduction(pending.damage, es.armor);
+                if (pending.damage < 1) pending.damage = 1;
+                LOG_DEBUG("Combat", "[predict] Physical on %s for %d%s",
+                          es.enemyName.c_str(), pending.damage, pending.isCrit ? " (CRIT)" : "");
             }
-
-            // Server determines mob death via SvCombatEvent.isKill — no local death check
-
         } else {
-            // ================================================================
-            // PLAYER TARGET — PvP attack prediction only (server authoritative)
-            // ================================================================
             CharacterStats& ts = targetCharStats->stats;
-
             if (isMage) {
-                // ---- Spell attack (PvP) — prediction only ----
-                bool resisted = CombatSystem::rollSpellResist(
+                pending.resisted = CombatSystem::rollSpellResist(
                     ps.level, ps.getIntelligence(), ts.level, ts.getMagicResist());
-
-                if (resisted) {
-                    spawnResistText(textPos);
-                    LOG_DEBUG("Combat", "[predict] PvP spell resisted by %s", ts.characterName.c_str());
-                }
-
-                // Predict damage for floating text
-                bool isCrit = false;
-                int damage = ps.calculateDamage(false, isCrit);
-                damage = static_cast<int>(std::round(damage * CombatSystem::getPvPDamageMultiplier()));
-                float mrReduction = CombatSystem::getPlayerMagicDamageReduction(ts.getMagicResist());
-                damage = static_cast<int>(damage * (1.0f - mrReduction));
-                if (damage < 1) damage = 1;
-
-                if (!resisted) {
-                    spawnDamageText(textPos, damage, isCrit);
-                }
-
-                // Send attack to server (authoritative damage/kill/PK status)
-                if (onSendAttack) onSendAttack(target);
-
-                LOG_DEBUG("Combat", "[predict] PvP spell on %s for %d%s (sent to server)",
-                          ts.characterName.c_str(), damage, isCrit ? " (CRIT)" : "");
-
+                pending.damage = ps.calculateDamage(false, pending.isCrit);
+                pending.damage = static_cast<int>(std::round(pending.damage * CombatSystem::getPvPDamageMultiplier()));
+                float mr = CombatSystem::getPlayerMagicDamageReduction(ts.getMagicResist());
+                pending.damage = static_cast<int>(pending.damage * (1.0f - mr));
+                if (pending.damage < 1) pending.damage = 1;
+                LOG_DEBUG("Combat", "[predict] PvP spell on %s for %d%s",
+                          ts.characterName.c_str(), pending.damage, pending.isCrit ? " (CRIT)" : "");
             } else {
-                // ---- Physical attack (PvP) — prediction only ----
-                bool hit = CombatSystem::rollToHit(
+                pending.hit = CombatSystem::rollToHit(
                     ps.level, static_cast<int>(ps.getHitRate()),
                     ts.level, static_cast<int>(ts.getEvasion()));
-
-                if (!hit) {
-                    spawnMissText(textPos);
-                    LOG_DEBUG("Combat", "[predict] PvP attack missed %s", ts.characterName.c_str());
-                }
-
-                // Predict damage for floating text
-                bool isCrit = false;
-                int damage = ps.calculateDamage(false, isCrit);
-                damage = static_cast<int>(std::round(damage * CombatSystem::getPvPDamageMultiplier()));
-                damage = CombatSystem::applyArmorReduction(damage, ts.getArmor());
-                if (damage < 1) damage = 1;
-
-                if (hit) {
-                    spawnDamageText(textPos, damage, isCrit);
-                }
-
-                // Send attack to server (authoritative damage/kill/PK status)
-                if (onSendAttack) onSendAttack(target);
-
-                LOG_DEBUG("Combat", "[predict] PvP physical on %s for %d%s (sent to server)",
-                          ts.characterName.c_str(), damage, isCrit ? " (CRIT)" : "");
+                pending.damage = ps.calculateDamage(false, pending.isCrit);
+                pending.damage = static_cast<int>(std::round(pending.damage * CombatSystem::getPvPDamageMultiplier()));
+                pending.damage = CombatSystem::applyArmorReduction(pending.damage, ts.getArmor());
+                if (pending.damage < 1) pending.damage = 1;
+                LOG_DEBUG("Combat", "[predict] PvP physical on %s for %d%s",
+                          ts.characterName.c_str(), pending.damage, pending.isCrit ? " (CRIT)" : "");
             }
-
-            // Server determines player death via SvCombatEvent — no local death check
         }
+
+        // ---- Send attack to server immediately (in-flight during windup) ----
+        if (onSendAttack) onSendAttack(target);
+
+        // ---- Start windup animation with deferred hit-frame callback ----
+        auto* playerAnim = player->getComponent<Animator>();
+        auto* playerSpr  = player->getComponent<SpriteComponent>();
+
+        if (playerAnim) {
+            attackIsMage_ = isMage;
+            if (!isMage) computeLungeDirection(player);
+            ensureAttackAnimation(playerAnim);
+
+            // On hit frame (~100ms): show predicted damage text + play audio
+            playerAnim->onHitFrame = [this, pending, isMage]() {
+                if (pending.resisted) {
+                    spawnResistText(pending.pos);
+                } else if (!pending.hit) {
+                    spawnMissText(pending.pos);
+                } else {
+                    spawnDamageText(pending.pos, pending.damage, pending.isCrit);
+                }
+                // Optimistic audio on hit frame
+                if (onPlaySFX) {
+                    if (!pending.hit || pending.resisted) onPlaySFX("miss");
+                    else if (pending.isCrit) onPlaySFX("hit_crit");
+                    else onPlaySFX(isMage ? "hit_skill" : "hit_melee");
+                }
+            };
+
+            playerAnim->onComplete = [this, playerSpr]() {
+                attackAnimActive_ = false;
+                if (playerSpr) playerSpr->renderOffset = {0, 0};
+            };
+
+            playerAnim->play("attack");
+            attackAnimActive_ = true;
+        } else {
+            // No animator — immediate fallback (same feel as before, minus flash)
+            if (pending.resisted) spawnResistText(pending.pos);
+            else if (!pending.hit) spawnMissText(pending.pos);
+            else spawnDamageText(pending.pos, pending.damage, pending.isCrit);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // ensureAttackAnimation — register placeholder if no real sprite sheet yet
+    //
+    // Uses the current sprite frame as the base so the sprite doesn't visually
+    // change (no attack frames exist yet). The windup feel comes entirely from
+    // the procedural renderOffset lunge. When real sprites arrive, register
+    // a proper "attack" animation with real frames and remove the lunge code.
+    // ------------------------------------------------------------------
+    void ensureAttackAnimation(Animator* anim) {
+        if (anim->animations.count("attack")) return;
+        int baseFrame = anim->getCurrentFrame();
+        //                name       start  frames  fps   loop   hitFrame
+        anim->addAnimation("attack", baseFrame, 3, 10.0f, false, 1);
+    }
+
+    // ------------------------------------------------------------------
+    // computeLungeDirection — normalized vector from player toward target
+    // ------------------------------------------------------------------
+    void computeLungeDirection(Entity* player) {
+        lungeDirection_ = {0, -1};  // default: lunge upward
+        if (currentTargetId_ == INVALID_ENTITY || !world_) return;
+        Entity* target = world_->getEntity(currentTargetId_);
+        if (!target) return;
+        auto* pt = player->getComponent<Transform>();
+        auto* tt = target->getComponent<Transform>();
+        if (!pt || !tt) return;
+        Vec2 dir = tt->position - pt->position;
+        float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        if (len > 0.001f) {
+            lungeDirection_ = {dir.x / len, dir.y / len};
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // updateAttackLunge — per-frame procedural offset during attack animation
+    //
+    // Temporary until real sprite animation frames exist.
+    //   Melee (Warrior/Archer): directional pullback → lunge → recover
+    //   Mage:  stationary channeling settle (slight downward dip → release)
+    // ------------------------------------------------------------------
+    void updateAttackLunge() {
+        if (!attackAnimActive_) return;
+
+        world_->forEach<PlayerController, Animator>(
+            [&](Entity* entity, PlayerController* ctrl, Animator* anim) {
+                if (!ctrl->isLocalPlayer) return;
+                auto* spr = entity->getComponent<SpriteComponent>();
+                if (!spr) return;
+
+                if (anim->currentAnimation != "attack" || !anim->playing) {
+                    spr->renderOffset = {0, 0};
+                    attackAnimActive_ = false;
+                    return;
+                }
+
+                auto it = anim->animations.find("attack");
+                if (it == anim->animations.end()) return;
+                const auto& def = it->second;
+
+                // Normalized progress through the animation (0 to 1)
+                float progress = anim->timer * def.frameRate / def.frameCount;
+                if (progress > 1.0f) progress = 1.0f;
+
+                if (attackIsMage_) {
+                    // Mage channeling: settle into casting stance then release.
+                    // Slight downward dip (positive Y = down in screen space)
+                    // that holds through the channel and snaps back on cast.
+                    //   0.00–0.33  Settle into stance (0 → +dip)
+                    //   0.33–0.80  Hold channel (stay at +dip)
+                    //   0.80–1.00  Release (dip → 0)
+                    float dip;
+                    if (progress < 0.33f) {
+                        float t = progress / 0.33f;
+                        dip = kChannelDipPx * t * t;  // ease-in
+                    } else if (progress < 0.80f) {
+                        dip = kChannelDipPx;
+                    } else {
+                        float t = (progress - 0.80f) / 0.20f;
+                        dip = kChannelDipPx * (1.0f - t);
+                    }
+                    spr->renderOffset = {0, dip};
+                } else {
+                    // Melee lunge: pullback → strike → recover along
+                    // the direction vector from player to target.
+                    //   0.00–0.33  Windup:  ease from 0 → -pullback
+                    //   0.33–0.50  Strike:  snap from -pullback → +lunge
+                    //   0.50–1.00  Recover: ease from +lunge → 0
+                    float offset;
+                    if (progress < 0.33f) {
+                        float t = progress / 0.33f;
+                        offset = -kPullbackPx * t;
+                    } else if (progress < 0.50f) {
+                        float t = (progress - 0.33f) / 0.17f;
+                        offset = -kPullbackPx + (kPullbackPx + kLungePx) * t;
+                    } else {
+                        float t = (progress - 0.50f) / 0.50f;
+                        offset = kLungePx * (1.0f - t * t);  // ease-out
+                    }
+                    spr->renderOffset = lungeDirection_ * offset;
+                }
+            }
+        );
     }
 
     // ------------------------------------------------------------------

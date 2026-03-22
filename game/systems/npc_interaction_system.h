@@ -8,7 +8,9 @@
 #include "game/components/sprite_component.h"
 #include "engine/core/logger.h"
 #include "imgui.h"
+#ifndef FATE_SHIPPING
 #include "engine/editor/editor.h"
+#endif
 
 #include "game/systems/quest_system.h"
 #include <cmath>
@@ -74,12 +76,17 @@ public:
 
         // Screen-to-world conversion (viewport-aware for editor mode)
         Vec2 screenPos = touched ? input.touchPosition(0) : input.mousePosition();
+        Vec2 vpPos = {0, 0};
+        Vec2 vpSize = {0, 0};
+#ifndef FATE_SHIPPING
         auto& ed = Editor::instance();
-        Vec2 vpPos = ed.viewportPos();
-        Vec2 vpSize = ed.viewportSize();
+        vpPos = ed.viewportPos();
+        vpSize = ed.viewportSize();
         if (ed.isOpen() && vpSize.x > 0 && vpSize.y > 0) {
             screenPos = screenPos - vpPos;
-        } else {
+        } else
+#endif
+        {
             ImVec2 displaySize = ImGui::GetIO().DisplaySize;
             vpSize = {displaySize.x, displaySize.y};
         }

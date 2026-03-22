@@ -6155,7 +6155,7 @@ void ServerApp::tickPetAutoLoot(float dt) {
             if (info.drop->isGold) {
                 auto* client = server_.connections().findById(clientId);
                 if (client) wal_.appendGoldChange(client->character_id, static_cast<int64_t>(info.drop->goldAmount));
-                inv->inventory.addGold(info.drop->goldAmount);
+                inv->inventory.setGold(inv->inventory.getGold() + info.drop->goldAmount);
 
                 SvLootPickupMsg pickup;
                 pickup.isGold = 1;
