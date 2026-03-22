@@ -253,7 +253,7 @@ build/Debug/fate_tests.exe -tc="PersistenceQueue*"
 **Engine Architecture** · **Networking** · **Server Systems** · **Cross-Platform Tooling**
 
 ```
- 80,000+ lines of C++     ·     450+ files     ·     844 tests     ·     1 developer
+ 80,000+ lines of C++     ·     450+ files     ·     844 tests
 ```
 
 [![GitHub](https://img.shields.io/badge/GitHub-wFate-181717?style=flat-square&logo=github)](https://github.com/wFate)
