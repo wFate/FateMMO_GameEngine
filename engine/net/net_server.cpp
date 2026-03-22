@@ -131,12 +131,10 @@ void NetServer::handleConnect(const NetAddress& from, const uint8_t* payload, si
         payloadSize -= 1;
     }
 
-    // Add new client
-    uint16_t clientId = connections_.addClient(from);
+    // Add new client (initializes lastHeartbeat to currentTime)
+    uint16_t clientId = connections_.addClient(from, currentTime);
     ClientConnection* client = connections_.findById(clientId);
     if (!client) return;
-
-    client->lastHeartbeat = currentTime;
 
     // Read auth token from Connect payload (16 bytes)
     if (payloadSize >= 16 && payload) {
