@@ -2000,6 +2000,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     lastValidPositions_[clientId] = move.position;
                     lastMoveTime_[clientId] = gameTime_;
                     playerDirty_[clientId].position = true;
+                    enqueuePersist(clientId, PersistPriority::NORMAL, PersistType::Position);
                     break;
                 }
 
@@ -2032,6 +2033,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     lastValidPositions_[clientId] = move.position;
                     lastMoveTime_[clientId] = now;
                     playerDirty_[clientId].position = true;
+                    enqueuePersist(clientId, PersistPriority::NORMAL, PersistType::Position);
                 }
             }
             break;
@@ -2196,6 +2198,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         // Remove from inventory
                         inv->inventory.removeItem(slot);
                         playerDirty_[clientId].inventory = true;
+                        enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
 
                         SvMarketResultMsg resp;
                         resp.action = MarketAction::ListItem;
@@ -2307,6 +2310,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                                                      listing->rolledStatsJson,
                                                      listing->priceGold, tax, sellerReceived);
 
+                        enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
+
                         SvMarketResultMsg resp;
                         resp.action = MarketAction::BuyItem;
                         resp.resultCode = 0;
@@ -2407,6 +2412,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                                 wal_.appendGoldChange(client->character_id, refund);
                                 inv->inventory.addGold(refund);
                                 playerDirty_[clientId].inventory = true;
+                                enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
                                 sendPlayerState(clientId);
                             }
                         }
@@ -2453,6 +2459,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         inv->inventory.removeGold(GuildConstants::CREATION_COST);
                         playerDirty_[clientId].inventory = true;
                         playerDirty_[clientId].guild = true;
+                        enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
                         auto* guildComp = e->getComponent<GuildComponent>();
                         if (guildComp) {
                             guildComp->guild.setGuildData(guildId, guildName, {},
@@ -2740,6 +2747,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
 
                             sendTradeResult(5, 0, "Trade completed!");
                             playerDirty_[clientId].inventory = true;
+                            enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
                             LOG_INFO("Server", "Trade %d completed: %s <-> %s",
                                      session->sessionId,
                                      session->playerACharacterId.c_str(),
@@ -2751,6 +2759,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                             server_.connections().forEach([&](ClientConnection& c) {
                                 if (c.character_id == otherCharId) {
                                     playerDirty_[c.clientId].inventory = true;
+                                    enqueuePersist(c.clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
                                     saveInventoryForClient(c.clientId);
                                 }
                             });
@@ -2837,6 +2846,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         playerDirty_[clientId].quests = true;
                         playerDirty_[clientId].stats = true;
                         playerDirty_[clientId].inventory = true;
+                        enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Quests);
                         questRepo_->completeQuest(client->character_id, questIdStr);
                         SvQuestUpdateMsg resp;
                         resp.updateType = 2;
@@ -3409,6 +3419,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                     if (casterClient) wal_.appendXPGain(casterClient->character_id, static_cast<int64_t>(xp));
                     casterStatsComp->stats.addXP(xp);
                     playerDirty_[clientId].stats = true;
+                    enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
                     LOG_INFO("Server", "Client %d gained %d XP from '%s' (base=%d, mob Lv%d, player Lv%d)",
                              clientId, xp, es.enemyName.c_str(), es.xpReward,
                              es.level, casterStatsComp->stats.level);
@@ -3749,6 +3760,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                     if (attackerClient) wal_.appendXPGain(attackerClient->character_id, static_cast<int64_t>(xp));
                     charStats->stats.addXP(xp);
                     playerDirty_[clientId].stats = true;
+                    enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
                     LOG_INFO("Server", "Client %d gained %d XP from '%s' (base=%d, mob Lv%d, player Lv%d)",
                              clientId, xp, es.enemyName.c_str(), es.xpReward,
                              es.level, charStats->stats.level);
@@ -4113,6 +4125,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             }
             inv->inventory.addGold(dropComp->goldAmount);
             playerDirty_[clientId].inventory = true;
+            enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
             pickupMsg.isGold = 1;
             pickupMsg.goldAmount = dropComp->goldAmount;
             pickupMsg.displayName = "Gold";
@@ -4215,6 +4228,7 @@ void ServerApp::processPetCommand(uint16_t clientId, const CmdPetMsg& msg) {
         playerDirty_[clientId].pet = true;
         playerDirty_[clientId].vitals = true;
         playerDirty_[clientId].stats = true;
+        enqueuePersist(clientId, PersistPriority::LOW, PersistType::Pet);
         sendPlayerState(clientId);
         sendPetUpdate(clientId, player);
         LOG_INFO("Server", "Client %d equipped pet '%s' (Lv%d)",
@@ -4230,6 +4244,7 @@ void ServerApp::processPetCommand(uint16_t clientId, const CmdPetMsg& msg) {
         playerDirty_[clientId].pet = true;
         playerDirty_[clientId].vitals = true;
         playerDirty_[clientId].stats = true;
+        enqueuePersist(clientId, PersistPriority::LOW, PersistType::Pet);
         sendPlayerState(clientId);
         sendPetUpdate(clientId, player);
         LOG_INFO("Server", "Client %d unequipped pet", clientId);
@@ -5008,6 +5023,7 @@ void ServerApp::processEnchant(uint16_t clientId, const CmdEnchantMsg& msg) {
 
     // 13. Dirty flags: gold deducted + item modified
     playerDirty_[clientId].inventory = true;
+    enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
 
     // 14. Send result and sync
     sendResult(success, static_cast<uint8_t>(item.enchantLevel), broke,
@@ -5089,6 +5105,7 @@ void ServerApp::processRepair(uint16_t clientId, const CmdRepairMsg& msg) {
 
     // 8. Dirty flags: gold deducted + item repaired
     playerDirty_[clientId].inventory = true;
+    enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
 
     // 9. Send result and sync
     sendResult(true, static_cast<uint8_t>(item.enchantLevel), "Item repaired successfully!");
@@ -5166,6 +5183,7 @@ void ServerApp::processExtractCore(uint16_t clientId, const CmdExtractCoreMsg& m
 
     // 7. Dirty flag: item consumed + core added
     playerDirty_[clientId].inventory = true;
+    enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
 
     // 8. Send result and sync
     sendResult(true, coreResult.coreItemId, static_cast<uint8_t>(coreResult.quantity),
@@ -5298,6 +5316,7 @@ void ServerApp::processCraft(uint16_t clientId, const CmdCraftMsg& msg) {
 
     // 11. Dirty flag: gold + ingredients consumed + item created
     playerDirty_[clientId].inventory = true;
+    enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
 
     // 12. Send result and sync inventory
     std::string displayLabel = resultDef ? resultDef->displayName : recipe->resultItemId;
@@ -5498,6 +5517,7 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
 
             playerDirty_[clientId].bank = true;
             playerDirty_[clientId].inventory = true;
+            enqueuePersist(clientId, PersistPriority::LOW, PersistType::Bank);
             sendResult(0, true, "Item deposited");
             sendInventorySync(clientId);
 
@@ -5535,6 +5555,7 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
 
             playerDirty_[clientId].bank = true;
             playerDirty_[clientId].inventory = true;
+            enqueuePersist(clientId, PersistPriority::LOW, PersistType::Bank);
             sendResult(1, true, "Item withdrawn");
             sendInventorySync(clientId);
 
@@ -5575,6 +5596,7 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
 
             playerDirty_[clientId].bank = true;
             playerDirty_[clientId].inventory = true;
+            enqueuePersist(clientId, PersistPriority::LOW, PersistType::Bank);
             sendResult(2, true, "Gold deposited");
             sendPlayerState(clientId);
             sendInventorySync(clientId);
@@ -5607,6 +5629,7 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
 
             playerDirty_[clientId].bank = true;
             playerDirty_[clientId].inventory = true;
+            enqueuePersist(clientId, PersistPriority::LOW, PersistType::Bank);
             sendResult(3, true, "Gold withdrawn");
             sendPlayerState(clientId);
             sendInventorySync(clientId);
@@ -5709,6 +5732,7 @@ void ServerApp::processSocketItem(uint16_t clientId, const CmdSocketItemMsg& msg
     playerDirty_[clientId].inventory = true;
     playerDirty_[clientId].vitals = true;
     playerDirty_[clientId].stats = true;
+    enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
 
     // 12. Send results to client
     sendResult(true,
