@@ -4,6 +4,7 @@
 #include "engine/ui/ui_input.h"
 #include "engine/ui/widgets/tooltip.h"
 #include "engine/ui/ui_data_binding.h"
+#include "engine/ui/ui_hot_reload.h"
 #include <nlohmann/json_fwd.hpp>
 #include <string>
 #include <unordered_map>
@@ -75,6 +76,10 @@ private:
     static constexpr float TOOLTIP_DELAY = 0.5f;
 
     UIDataBinding dataBinding_;
+
+    UIHotReload hotReload_;
+    float hotReloadTimer_ = 0.0f;
+    std::unordered_map<std::string, std::string> screenFilePaths_;
 
     std::unique_ptr<UINode> parseNode(const nlohmann::json& j);
     AnchorPreset parsePreset(const std::string& name);

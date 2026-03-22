@@ -42,7 +42,12 @@ bool UIManager::loadScreen(const std::string& filepath) {
             return false;
         }
         std::string screenId = data["screen"].get<std::string>();
-        return loadScreenFromString(screenId, content);
+        bool ok = loadScreenFromString(screenId, content);
+        if (ok) {
+            hotReload_.watchFile(filepath);
+            screenFilePaths_[screenId] = filepath;
+        }
+        return ok;
     }
     catch (const nlohmann::json::exception& e) {
         LOG_ERROR("UI", "UIManager: JSON parse error in %s: %s", filepath.c_str(), e.what());
@@ -167,6 +172,17 @@ void UIManager::update(float dt) {
             for (auto& child : node->children()) resolveBindings(child.get());
         };
         resolveBindings(root.get());
+    }
+
+    // Hot-reload check every 0.5s
+    hotReloadTimer_ += dt;
+    if (hotReloadTimer_ >= 0.5f) {
+        hotReloadTimer_ = 0.0f;
+        auto changed = hotReload_.checkForChanges();
+        for (auto& path : changed) {
+            LOG_INFO("UI", "Hot-reloading: %s", path.c_str());
+            loadScreen(path);
+        }
     }
 }
 
