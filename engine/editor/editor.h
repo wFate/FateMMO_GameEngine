@@ -212,6 +212,10 @@ private:
     Vec2 savedCamPos_ = {0, 0};
     float savedCamZoom_ = 1.0f;
 
+    // Saved gameplay camera state — restored when resuming from pause
+    Vec2 pausedCamPos_ = {0, 0};
+    float pausedCamZoom_ = 1.0f;
+
     bool openSavePrefab_ = false;
     bool resetLayout_ = false;  // Set via View > Reset Layout
     std::string currentScenePath_;  // Path of currently loaded/saved scene

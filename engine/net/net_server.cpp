@@ -51,6 +51,9 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
     // Validate session token
     if (hdr.sessionToken != client->sessionToken) return;
 
+    // Any valid packet from a known client resets the heartbeat timeout
+    client->lastHeartbeat = currentTime;
+
     // Process acks on client's reliability layer
     client->reliability.processAck(hdr.ack, hdr.ackBits, currentTime);
     bool isNewPacket = client->reliability.onReceive(hdr.sequence);
@@ -61,8 +64,7 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
     }
 
     if (hdr.packetType == PacketType::Heartbeat) {
-        client->lastHeartbeat = currentTime;
-        return;
+        return; // heartbeat is just a keep-alive, no payload to process
     }
 
     if (hdr.packetType == PacketType::Disconnect) {
@@ -148,6 +150,14 @@ void NetServer::handleConnect(const NetAddress& from, const uint8_t* payload, si
     // Read auth token from Connect payload (16 bytes)
     if (payloadSize >= 16 && payload) {
         std::memcpy(client->authToken.data(), payload, 16);
+        payload += 16;
+        payloadSize -= 16;
+    }
+
+    // Read client DH public key if present (32 bytes appended after auth token)
+    if (payloadSize >= PacketCrypto::PUBLIC_KEY_SIZE && payload) {
+        std::memcpy(client->clientPublicKey.data(), payload, PacketCrypto::PUBLIC_KEY_SIZE);
+        client->hasClientPublicKey = true;
     }
 
     // Build and send ConnectAccept

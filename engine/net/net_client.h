@@ -28,6 +28,7 @@ public:
     void sendUseConsumable(uint8_t inventorySlot);
 
     bool isConnected() const { return connected_; }
+    bool isWaitingForConnection() const { return waitingForAccept_; }
     uint16_t clientId() const { return clientId_; }
 
     // Reconnect state queries
@@ -91,6 +92,8 @@ private:
     float lastPollTime_ = 0.0f;  // cached from poll() for RTT tracking
     AuthToken authToken_ = {};
     PacketCrypto crypto_;
+    PacketCrypto::Keypair clientKeypair_ = {};
+    bool keypairGenerated_ = false;
 
     // Reconnect state machine
     enum class ReconnectPhase : uint8_t { None, Reconnecting, Failed };

@@ -5,6 +5,7 @@
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <filesystem>
+#include <cstring>
 #include "stb_image.h"
 
 namespace fate {
@@ -27,6 +28,17 @@ static bool textureReload(void* existing, const std::string& path) {
 }
 
 static bool textureValidate(const std::string& path) {
+    // KTX files: check for valid identifier (first 12 bytes)
+    if (path.size() >= 4 && path.substr(path.size() - 4) == ".ktx") {
+        std::ifstream f(path, std::ios::binary);
+        if (!f.is_open()) return false;
+        uint8_t id[12];
+        f.read(reinterpret_cast<char*>(id), 12);
+        static constexpr uint8_t KTX_ID[12] = {
+            0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A
+        };
+        return f.good() && std::memcmp(id, KTX_ID, 12) == 0;
+    }
     int w, h, c;
     return stbi_info(path.c_str(), &w, &h, &c) != 0;
 }
@@ -42,7 +54,7 @@ AssetLoader makeTextureLoader() {
         .reload = textureReload,
         .validate = textureValidate,
         .destroy = textureDestroy,
-        .extensions = {".png", ".jpg", ".bmp"}
+        .extensions = {".png", ".jpg", ".bmp", ".ktx"}
     };
 }
 

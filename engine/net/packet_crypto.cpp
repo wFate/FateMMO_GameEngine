@@ -43,6 +43,64 @@ PacketCrypto::SessionKeys PacketCrypto::generateSessionKeys() {
     return keys;
 }
 
+PacketCrypto::Keypair PacketCrypto::generateKeypair() {
+    Keypair kp{};
+#if FATE_HAS_SODIUM
+    crypto_kx_keypair(kp.pk.data(), kp.sk.data());
+#else
+    kp.pk.fill(0);
+    kp.sk.fill(0);
+#endif
+    return kp;
+}
+
+PacketCrypto::SessionKeys PacketCrypto::deriveClientSessionKeys(
+    const PublicKey& clientPk, const SecretKey& clientSk, const PublicKey& serverPk) {
+    SessionKeys keys{};
+#if FATE_HAS_SODIUM
+    // crypto_kx_client_session_keys: 1st = rx (client receives), 2nd = tx (client sends)
+    if (crypto_kx_client_session_keys(keys.rxKey.data(), keys.txKey.data(),
+                                       clientPk.data(), clientSk.data(),
+                                       serverPk.data()) != 0) {
+        LOG_ERROR("PacketCrypto", "DH client session key derivation failed (suspect server key)");
+        keys.txKey.fill(0);
+        keys.rxKey.fill(0);
+    }
+#else
+    keys.txKey.fill(0);
+    keys.rxKey.fill(0);
+#endif
+    return keys;
+}
+
+PacketCrypto::SessionKeys PacketCrypto::deriveServerSessionKeys(
+    const PublicKey& serverPk, const SecretKey& serverSk, const PublicKey& clientPk) {
+    SessionKeys keys{};
+#if FATE_HAS_SODIUM
+    // crypto_kx_server_session_keys: 1st = rx (server receives), 2nd = tx (server sends)
+    if (crypto_kx_server_session_keys(keys.rxKey.data(), keys.txKey.data(),
+                                       serverPk.data(), serverSk.data(),
+                                       clientPk.data()) != 0) {
+        LOG_ERROR("PacketCrypto", "DH server session key derivation failed (suspect client key)");
+        keys.txKey.fill(0);
+        keys.rxKey.fill(0);
+    }
+#else
+    keys.txKey.fill(0);
+    keys.rxKey.fill(0);
+#endif
+    return keys;
+}
+
+void PacketCrypto::secureWipe(void* data, size_t size) {
+#if FATE_HAS_SODIUM
+    sodium_memzero(data, size);
+#else
+    volatile uint8_t* p = static_cast<volatile uint8_t*>(data);
+    while (size--) *p++ = 0;
+#endif
+}
+
 void PacketCrypto::setKeys(const Key& encryptKey, const Key& decryptKey) {
     encryptKey_ = encryptKey;
     decryptKey_ = decryptKey;

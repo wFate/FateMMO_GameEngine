@@ -16,6 +16,8 @@ public:
     ShaderHandle createShaderFromFiles(const std::string& vertPath, const std::string& fragPath);
     TextureHandle createTexture(int width, int height, TextureFormat format,
                                 const void* data = nullptr);
+    TextureHandle createCompressedTexture(int width, int height, TextureFormat format,
+                                          const void* data, size_t dataSize);
     BufferHandle createBuffer(BufferType type, BufferUsage usage,
                               size_t size, const void* data = nullptr);
     PipelineHandle createPipeline(const PipelineDesc& desc);

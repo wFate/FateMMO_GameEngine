@@ -9,6 +9,16 @@
 
 namespace fate {
 
+// GPU compressed texture format support flags (queried once at startup)
+struct GPUCompressedFormats {
+    bool etc2   = false;  // GL_COMPRESSED_RGBA8_ETC2_EAC (mandatory in GLES 3.0)
+    bool astc   = false;  // GL_COMPRESSED_RGBA_ASTC_*_KHR (most mobile GPUs since ~2015)
+
+    // Call once after GL context creation to probe supported formats.
+    static GPUCompressedFormats& instance();
+    void detect();
+};
+
 class Texture {
 public:
     Texture() = default;
@@ -17,6 +27,7 @@ public:
     bool loadFromFile(const std::string& path);
     bool reloadFromFile(const std::string& path);
     bool loadFromMemory(const unsigned char* data, int width, int height, int channels);
+    bool loadFromKTX(const std::string& path);
 
     void bind(unsigned int slot = 0) const;
     void unbind() const;
@@ -26,12 +37,14 @@ public:
     int height() const { return height_; }
     const std::string& path() const { return path_; }
     gfx::TextureHandle gfxHandle() const { return gfxHandle_; }
+    gfx::TextureFormat format() const { return format_; }
 
 private:
     unsigned int textureId_ = 0;
     gfx::TextureHandle gfxHandle_{};
     int width_ = 0;
     int height_ = 0;
+    gfx::TextureFormat format_ = gfx::TextureFormat::RGBA8;
     std::string path_;
 };
 

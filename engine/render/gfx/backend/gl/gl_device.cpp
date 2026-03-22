@@ -205,6 +205,46 @@ TextureHandle Device::createTexture(int width, int height, TextureFormat format,
     return { id };
 }
 
+TextureHandle Device::createCompressedTexture(int width, int height, TextureFormat format,
+                                               const void* data, size_t dataSize) {
+    // Map compressed TextureFormat to GL internal format
+    GLenum internalFmt = 0;
+    switch (format) {
+        case TextureFormat::ETC2_RGBA8:    internalFmt = 0x9278; break; // GL_COMPRESSED_RGBA8_ETC2_EAC
+        case TextureFormat::ASTC_4x4_RGBA: internalFmt = 0x93B0; break; // GL_COMPRESSED_RGBA_ASTC_4x4_KHR
+        case TextureFormat::ASTC_8x8_RGBA: internalFmt = 0x93B7; break; // GL_COMPRESSED_RGBA_ASTC_8x8_KHR
+        default:
+            LOG_ERROR("gfx", "createCompressedTexture called with non-compressed format");
+            return {};
+    }
+
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+
+    glCompressedTexImage2D(GL_TEXTURE_2D, 0, internalFmt, width, height, 0,
+                           static_cast<GLsizei>(dataSize), data);
+
+    // Check for GL errors (unsupported format on this GPU)
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        LOG_ERROR("gfx", "glCompressedTexImage2D failed (0x%X) — format 0x%X may not be supported", err, internalFmt);
+        glDeleteTextures(1, &tex);
+        return {};
+    }
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    uint32_t id = impl_->allocId();
+    impl_->textures[id] = tex;
+    return { id };
+}
+
 // ============================================================================
 // Buffer
 // ============================================================================

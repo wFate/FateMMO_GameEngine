@@ -74,6 +74,7 @@ PFNGLRENDERBUFFERSTORAGEPROC        glRenderbufferStorage_fp = nullptr;
 PFNGLFRAMEBUFFERRENDERBUFFERPROC    glFramebufferRenderbuffer_fp = nullptr;
 PFNGLTEXIMAGE3DPROC                 glTexImage3D_fp = nullptr;
 PFNGLTEXSUBIMAGE3DPROC              glTexSubImage3D_fp = nullptr;
+PFNGLCOMPRESSEDTEXIMAGE2DPROC       glCompressedTexImage2D_fp = nullptr;
 
 namespace fate {
 
@@ -135,6 +136,7 @@ bool loadGLFunctions() {
     LOAD_GL(glFramebufferRenderbuffer);
     LOAD_GL(glTexImage3D);
     LOAD_GL(glTexSubImage3D);
+    LOAD_GL(glCompressedTexImage2D);
 
     #undef LOAD_GL
 

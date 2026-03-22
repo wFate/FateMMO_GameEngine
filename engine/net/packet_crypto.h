@@ -9,19 +9,44 @@ class PacketCrypto {
 public:
     static constexpr size_t KEY_SIZE = 32;
     static constexpr size_t TAG_SIZE = 16;
+    static constexpr size_t PUBLIC_KEY_SIZE = 32;
+    static constexpr size_t SECRET_KEY_SIZE = 32;
 
     using Key = std::array<uint8_t, KEY_SIZE>;
+    using PublicKey = std::array<uint8_t, PUBLIC_KEY_SIZE>;
+    using SecretKey = std::array<uint8_t, SECRET_KEY_SIZE>;
 
     struct SessionKeys {
-        Key txKey;  // encrypt key for sender (client)
-        Key rxKey;  // decrypt key for sender (client) — i.e. server encrypt key
+        Key txKey;  // encrypt key for this side
+        Key rxKey;  // decrypt key for this side
+    };
+
+    struct Keypair {
+        PublicKey pk;  // public key (safe to send over network)
+        SecretKey sk;  // secret key (never leaves this process)
     };
 
     // Initialize the crypto library. Returns true on success.
     static bool initLibrary();
 
-    // Generate a pair of session keys (one for each direction).
+    // Generate a pair of session keys (one for each direction). LEGACY — prefer DH exchange.
     static SessionKeys generateSessionKeys();
+
+    // Generate an X25519 keypair for Diffie-Hellman key exchange.
+    static Keypair generateKeypair();
+
+    // Derive session keys on the client side from client keypair + server public key.
+    // Returns keys from the client's perspective (txKey = client encrypts, rxKey = client decrypts).
+    static SessionKeys deriveClientSessionKeys(const PublicKey& clientPk, const SecretKey& clientSk,
+                                               const PublicKey& serverPk);
+
+    // Derive session keys on the server side from server keypair + client public key.
+    // Returns keys from the server's perspective (txKey = server encrypts, rxKey = server decrypts).
+    static SessionKeys deriveServerSessionKeys(const PublicKey& serverPk, const SecretKey& serverSk,
+                                               const PublicKey& clientPk);
+
+    // Securely wipe sensitive memory (e.g. secret keys after use).
+    static void secureWipe(void* data, size_t size);
 
     // Set the encrypt/decrypt keys for this session.
     void setKeys(const Key& encryptKey, const Key& decryptKey);
