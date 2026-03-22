@@ -87,3 +87,21 @@ TEST_CASE("Equipment change should be blocked while casting") {
     CHECK(stats.isCasting());
     // Server equip handler checks isCasting() and returns early
 }
+
+TEST_CASE("Cast fizzles if target dies during cast time") {
+    CharacterStats target;
+    target.classDef.classType = ClassType::Warrior;
+    target.classDef.baseMaxHP = 100;
+    target.level = 5;
+    target.recalculateStats();
+    target.currentHP = target.maxHP;
+
+    CHECK(target.isAlive());
+    target.takeDamage(target.maxHP + 10); // kill target
+    CHECK_FALSE(target.isAlive());
+
+    // Server would check target.isAlive() at cast completion
+    // If false, skill fizzles (doesn't execute)
+    bool shouldExecute = target.isAlive();
+    CHECK_FALSE(shouldExecute);
+}

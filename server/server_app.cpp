@@ -689,6 +689,25 @@ void ServerApp::tick(float dt) {
             });
             if (ownerClientId == 0) return;
 
+            // Re-validate target is still alive before executing
+            if (cs->stats.castingState.targetEntityId != 0) {
+                PersistentId targetPid(cs->stats.castingState.targetEntityId);
+                EntityHandle targetH = replication_.getEntityHandle(targetPid);
+                Entity* targetE = world_.getEntity(targetH);
+                if (!targetE) {
+                    LOG_INFO("Server", "Cast fizzled: target entity gone during cast");
+                    return; // inside forEach lambda
+                }
+                auto* targetCs = targetE->getComponent<CharacterStatsComponent>();
+                auto* targetEs = targetE->getComponent<EnemyStatsComponent>();
+                bool targetAlive = (targetCs && targetCs->stats.isAlive()) ||
+                                   (targetEs && targetEs->stats.isAlive);
+                if (!targetAlive) {
+                    LOG_INFO("Server", "Cast fizzled: target died during cast");
+                    return; // inside forEach lambda
+                }
+            }
+
             // Erase cooldown so processUseSkill doesn't reject (cooldown was set at cast start)
             skillCooldowns_[ownerClientId].erase(castSkillId);
 
@@ -1548,19 +1567,37 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         LOG_INFO("Server", "Client %d reconnected dead — sent death notification", clientId);
     }
 
-    // Send AEAD encryption keys (KeyExchange)
+    // Establish AEAD encryption via key exchange
     if (PacketCrypto::isAvailable()) {
-        auto keys = PacketCrypto::generateSessionKeys();
-        // Server encrypts with rxKey, decrypts with txKey (mirror of client)
-        client->crypto.setKeys(keys.rxKey, keys.txKey);
+        if (client->hasClientPublicKey) {
+            // Secure DH exchange: derive shared keys, send only our public key
+            auto serverKp = PacketCrypto::generateKeypair();
+            auto keys = PacketCrypto::deriveServerSessionKeys(
+                serverKp.pk, serverKp.sk, client->clientPublicKey);
+            client->crypto.setKeys(keys.txKey, keys.rxKey);
 
-        // Send txKey (client's encrypt key) and rxKey (client's decrypt key)
-        uint8_t keyBuf[64];
-        ByteWriter kw(keyBuf, sizeof(keyBuf));
-        kw.writeBytes(keys.txKey.data(), 32);
-        kw.writeBytes(keys.rxKey.data(), 32);
-        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::KeyExchange, keyBuf, kw.size());
-        LOG_INFO("Server", "Sent AEAD session keys to client %d", clientId);
+            uint8_t keyBuf[32];
+            ByteWriter kw(keyBuf, sizeof(keyBuf));
+            kw.writeBytes(serverKp.pk.data(), 32);
+            server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::KeyExchange, keyBuf, kw.size());
+
+            // Wipe ephemeral secret key and client public key from connection state
+            PacketCrypto::secureWipe(serverKp.sk.data(), serverKp.sk.size());
+            PacketCrypto::secureWipe(client->clientPublicKey.data(), client->clientPublicKey.size());
+            client->hasClientPublicKey = false;
+            LOG_INFO("Server", "DH key exchange with client %d — encryption active", clientId);
+        } else {
+            // Legacy fallback: send raw session keys (client doesn't support DH)
+            auto keys = PacketCrypto::generateSessionKeys();
+            client->crypto.setKeys(keys.rxKey, keys.txKey);
+
+            uint8_t keyBuf[64];
+            ByteWriter kw(keyBuf, sizeof(keyBuf));
+            kw.writeBytes(keys.txKey.data(), 32);
+            kw.writeBytes(keys.rxKey.data(), 32);
+            server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::KeyExchange, keyBuf, kw.size());
+            LOG_WARN("Server", "Sent plaintext session keys to client %d (legacy — no DH public key)", clientId);
+        }
     }
 
     LOG_INFO("Server", "Client %d connected: account=%d char='%s' level=%d guild=%d",
