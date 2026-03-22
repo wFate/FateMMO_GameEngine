@@ -244,8 +244,18 @@ build/Debug/fate_tests.exe -tc="PersistenceQueue*"
 
 ---
 
-## Contributor
+<div align="center">
 
-**Caleb Kious** — Engine Architecture, Networking, Server Systems, Cross-Platform Tooling
+## Forged by
+
+<img src="https://img.shields.io/badge/Caleb_Kious-Solo_Dev-8B5CF6?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAyTDEgMjFoMjJMMTIgMnptMCAxNy41M0w0LjI0IDE5LjVIMTkuNzZMMTIgMTkuNTN6Ii8+PC9zdmc+&logoColor=white" alt="Caleb Kious" />
+
+**Engine Architecture** · **Networking** · **Server Systems** · **Cross-Platform Tooling**
+
+```
+ 80,000+ lines of C++     ·     450+ files     ·     844 tests     ·     1 developer
+```
 
 [![GitHub](https://img.shields.io/badge/GitHub-wFate-181717?style=flat-square&logo=github)](https://github.com/wFate)
+
+</div>
