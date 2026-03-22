@@ -4,6 +4,7 @@
 #include <optional>
 #include <cstdint>
 #include <pqxx/pqxx>
+#include "server/db/db_pool.h"
 
 namespace fate {
 
@@ -21,7 +22,10 @@ struct PetRecord {
 
 class PetRepository {
 public:
-    explicit PetRepository(pqxx::connection& conn) : conn_(conn) {}
+    // Legacy: direct connection (for temp repos in async fibers)
+    explicit PetRepository(pqxx::connection& conn) : connRef_(&conn), pool_(nullptr) {}
+    // Pool-based: acquires connection per operation
+    explicit PetRepository(DbPool& pool) : connRef_(nullptr), pool_(&pool) {}
 
     // Load all pets for a character
     std::vector<PetRecord> loadPets(const std::string& characterId);
@@ -43,7 +47,13 @@ public:
     bool addPetXP(const std::string& characterId, int petId, int64_t xp);
 
 private:
-    pqxx::connection& conn_;
+    pqxx::connection* connRef_ = nullptr;
+    DbPool* pool_ = nullptr;
+
+    DbPool::Guard acquireConn() {
+        if (pool_) return pool_->acquire_guard();
+        return DbPool::Guard::wrap(*connRef_);
+    }
 };
 
 } // namespace fate

@@ -4,14 +4,12 @@
 
 namespace fate {
 
-ZoneMobStateRepository::ZoneMobStateRepository(pqxx::connection& conn)
-    : conn_(conn) {}
-
 bool ZoneMobStateRepository::saveZoneDeaths(
     const std::string& sceneName, const std::string& zoneName,
     const std::vector<DeadMobRecord>& deadMobs) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "DELETE FROM zone_mob_deaths WHERE scene_name = $1 AND zone_name = $2",
             sceneName, zoneName);
@@ -34,7 +32,8 @@ std::vector<DeadMobRecord> ZoneMobStateRepository::loadZoneDeaths(
     const std::string& sceneName, const std::string& zoneName) {
     std::vector<DeadMobRecord> records;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT enemy_id, mob_index, died_at_unix, respawn_seconds "
             "FROM zone_mob_deaths WHERE scene_name = $1 AND zone_name = $2",
@@ -57,7 +56,8 @@ std::vector<DeadMobRecord> ZoneMobStateRepository::loadZoneDeaths(
 bool ZoneMobStateRepository::clearZoneDeaths(
     const std::string& sceneName, const std::string& zoneName) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "DELETE FROM zone_mob_deaths WHERE scene_name = $1 AND zone_name = $2",
             sceneName, zoneName);
@@ -72,7 +72,8 @@ bool ZoneMobStateRepository::clearZoneDeaths(
 int ZoneMobStateRepository::cleanupExpiredDeaths() {
     try {
         int64_t now = static_cast<int64_t>(std::time(nullptr));
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "DELETE FROM zone_mob_deaths WHERE (died_at_unix + respawn_seconds) < $1",
             now);

@@ -79,12 +79,18 @@ public:
 
     // Check a packet. Updates internal state and returns Ok/Dropped/Disconnect.
     RateLimitResult check(uint8_t packetType, double now) {
+        // Decay violations after 60 seconds of no violations
+        if (violations_ > 0 && (now - lastViolationTime_) >= 60.0) {
+            violations_ = 0;
+        }
+
         TokenBucket& bucket = buckets_[packetType];
         if (bucket.tryConsume(now)) {
             return RateLimitResult::Ok;
         }
         // Token exhausted — count as violation
         ++violations_;
+        lastViolationTime_ = now;
         if (violations_ >= disconnectThresholds_[packetType]) {
             return RateLimitResult::Disconnect;
         }
@@ -97,6 +103,7 @@ private:
     std::array<TokenBucket, 256> buckets_;
     std::array<uint32_t, 256>    disconnectThresholds_;
     uint32_t                     violations_ = 0;
+    double                       lastViolationTime_ = 0.0;
 
     void configure(uint8_t type, float burst, float sustained, uint32_t disconnectAt) {
         buckets_[type].capacity   = burst;

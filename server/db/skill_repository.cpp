@@ -6,7 +6,8 @@ namespace fate {
 SkillPointsRecord SkillRepository::loadSkillPoints(const std::string& characterId) {
     SkillPointsRecord rec;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT total_earned, total_spent FROM character_skill_points "
             "WHERE character_id = $1", characterId);
@@ -23,7 +24,8 @@ SkillPointsRecord SkillRepository::loadSkillPoints(const std::string& characterI
 
 bool SkillRepository::saveSkillPoints(const std::string& characterId, int earned, int spent) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "INSERT INTO character_skill_points (character_id, total_earned, total_spent, updated_at) "
             "VALUES ($1, $2, $3, NOW()) "
@@ -40,7 +42,8 @@ bool SkillRepository::saveSkillPoints(const std::string& characterId, int earned
 std::vector<CharacterSkillRecord> SkillRepository::loadCharacterSkills(const std::string& characterId) {
     std::vector<CharacterSkillRecord> skills;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT skill_id, unlocked_rank, activated_rank "
             "FROM character_skills WHERE character_id = $1", characterId);
@@ -62,7 +65,8 @@ std::vector<CharacterSkillRecord> SkillRepository::loadCharacterSkills(const std
 bool SkillRepository::saveCharacterSkill(const std::string& characterId, const std::string& skillId,
                                           int unlockedRank, int activatedRank) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "INSERT INTO character_skills (character_id, skill_id, unlocked_rank, activated_rank, learned_at) "
             "VALUES ($1, $2, $3, $4, NOW()) "
@@ -79,7 +83,8 @@ bool SkillRepository::saveCharacterSkill(const std::string& characterId, const s
 bool SkillRepository::saveAllCharacterSkills(const std::string& characterId,
                                               const std::vector<CharacterSkillRecord>& skills) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         for (const auto& s : skills) {
             txn.exec_params(
                 "INSERT INTO character_skills (character_id, skill_id, unlocked_rank, activated_rank, learned_at) "
@@ -98,7 +103,8 @@ bool SkillRepository::saveAllCharacterSkills(const std::string& characterId,
 std::vector<std::string> SkillRepository::loadSkillBar(const std::string& characterId) {
     std::vector<std::string> bar(20, ""); // 20 slots, empty by default
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT slot_index, skill_id FROM character_skill_bar "
             "WHERE character_id = $1", characterId);
@@ -117,13 +123,14 @@ std::vector<std::string> SkillRepository::loadSkillBar(const std::string& charac
 
 bool SkillRepository::saveSkillBar(const std::string& characterId, const std::vector<std::string>& slots) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
+        txn.exec_params("DELETE FROM character_skill_bar WHERE character_id = $1", characterId);
         for (int i = 0; i < static_cast<int>(slots.size()) && i < 20; ++i) {
             if (slots[i].empty()) continue;
             txn.exec_params(
                 "INSERT INTO character_skill_bar (character_id, slot_index, skill_id) "
-                "VALUES ($1, $2, $3) "
-                "ON CONFLICT (character_id, slot_index) DO UPDATE SET skill_id = $3",
+                "VALUES ($1, $2, $3)",
                 characterId, i, slots[i]);
         }
         txn.commit();

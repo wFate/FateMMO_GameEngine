@@ -3,6 +3,7 @@
 #include <vector>
 #include <optional>
 #include <pqxx/pqxx>
+#include "server/db/db_pool.h"
 
 namespace fate {
 
@@ -19,7 +20,10 @@ struct SkillPointsRecord {
 
 class SkillRepository {
 public:
-    explicit SkillRepository(pqxx::connection& conn) : conn_(conn) {}
+    // Legacy: direct connection (for temp repos in async fibers)
+    explicit SkillRepository(pqxx::connection& conn) : connRef_(&conn), pool_(nullptr) {}
+    // Pool-based: acquires connection per operation
+    explicit SkillRepository(DbPool& pool) : connRef_(nullptr), pool_(&pool) {}
 
     // Skill points
     SkillPointsRecord loadSkillPoints(const std::string& characterId);
@@ -37,7 +41,13 @@ public:
     bool saveSkillBar(const std::string& characterId, const std::vector<std::string>& slots);
 
 private:
-    pqxx::connection& conn_;
+    pqxx::connection* connRef_ = nullptr;
+    DbPool* pool_ = nullptr;
+
+    DbPool::Guard acquireConn() {
+        if (pool_) return pool_->acquire_guard();
+        return DbPool::Guard::wrap(*connRef_);
+    }
 };
 
 } // namespace fate

@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <pqxx/pqxx>
+#include "server/db/db_pool.h"
 
 namespace fate {
 
@@ -16,7 +17,10 @@ struct QuestProgressRecord {
 
 class QuestRepository {
 public:
-    explicit QuestRepository(pqxx::connection& conn) : conn_(conn) {}
+    // Legacy: direct connection (for temp repos in async fibers)
+    explicit QuestRepository(pqxx::connection& conn) : connRef_(&conn), pool_(nullptr) {}
+    // Pool-based: acquires connection per operation
+    explicit QuestRepository(DbPool& pool) : connRef_(nullptr), pool_(&pool) {}
 
     // Load all quest progress for a character
     std::vector<QuestProgressRecord> loadQuestProgress(const std::string& characterId);
@@ -39,7 +43,13 @@ public:
                               const std::vector<QuestProgressRecord>& quests);
 
 private:
-    pqxx::connection& conn_;
+    pqxx::connection* connRef_ = nullptr;
+    DbPool* pool_ = nullptr;
+
+    DbPool::Guard acquireConn() {
+        if (pool_) return pool_->acquire_guard();
+        return DbPool::Guard::wrap(*connRef_);
+    }
 };
 
 } // namespace fate

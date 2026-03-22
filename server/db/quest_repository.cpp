@@ -6,7 +6,8 @@ namespace fate {
 std::vector<QuestProgressRecord> QuestRepository::loadQuestProgress(const std::string& characterId) {
     std::vector<QuestProgressRecord> quests;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT progress_id, character_id, quest_id, status, current_count, target_count "
             "FROM quest_progress WHERE character_id = $1 AND status = 'active'",
@@ -32,7 +33,8 @@ std::vector<QuestProgressRecord> QuestRepository::loadQuestProgress(const std::s
 std::vector<std::string> QuestRepository::loadCompletedQuests(const std::string& characterId) {
     std::vector<std::string> completed;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT quest_id FROM quest_progress "
             "WHERE character_id = $1 AND status = 'completed'",
@@ -51,7 +53,8 @@ std::vector<std::string> QuestRepository::loadCompletedQuests(const std::string&
 bool QuestRepository::saveQuestProgress(const std::string& characterId, const std::string& questId,
                                          const std::string& status, int currentCount, int targetCount) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "INSERT INTO quest_progress (character_id, quest_id, status, current_count, target_count, started_at) "
             "VALUES ($1, $2, $3, $4, $5, NOW()) "
@@ -67,7 +70,8 @@ bool QuestRepository::saveQuestProgress(const std::string& characterId, const st
 
 bool QuestRepository::completeQuest(const std::string& characterId, const std::string& questId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE quest_progress SET status = 'completed', completed_at = NOW() "
             "WHERE character_id = $1 AND quest_id = $2",
@@ -82,7 +86,8 @@ bool QuestRepository::completeQuest(const std::string& characterId, const std::s
 
 bool QuestRepository::abandonQuest(const std::string& characterId, const std::string& questId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "DELETE FROM quest_progress WHERE character_id = $1 AND quest_id = $2 AND status = 'active'",
             characterId, questId);
@@ -97,7 +102,8 @@ bool QuestRepository::abandonQuest(const std::string& characterId, const std::st
 bool QuestRepository::saveAllQuestProgress(const std::string& characterId,
                                             const std::vector<QuestProgressRecord>& quests) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         for (const auto& q : quests) {
             txn.exec_params(
                 "INSERT INTO quest_progress (character_id, quest_id, status, current_count, target_count, started_at) "

@@ -6,7 +6,8 @@ namespace fate {
 std::vector<BountyInfo> BountyRepository::getBountyBoard() {
     std::vector<BountyInfo> board;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec(
             "SELECT bounty_id, target_character_id, target_character_name, total_amount, "
             "EXTRACT(EPOCH FROM (expires_at - NOW()))::BIGINT AS seconds_remaining "
@@ -31,7 +32,8 @@ std::vector<BountyInfo> BountyRepository::getBountyBoard() {
 
 int BountyRepository::getActiveBountyCount() {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec(
             "SELECT COUNT(*) FROM bounties WHERE is_active = TRUE AND expires_at > NOW()");
         txn.commit();
@@ -44,7 +46,8 @@ int BountyRepository::getActiveBountyCount() {
 
 bool BountyRepository::hasActiveBounty(const std::string& targetCharId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT EXISTS(SELECT 1 FROM bounties "
             "WHERE target_character_id = $1 AND is_active = TRUE AND expires_at > NOW())",
@@ -59,7 +62,8 @@ bool BountyRepository::hasActiveBounty(const std::string& targetCharId) {
 
 std::optional<BountyInfo> BountyRepository::getBountyForTarget(const std::string& targetCharId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT bounty_id, target_character_id, target_character_name, total_amount, "
             "EXTRACT(EPOCH FROM (expires_at - NOW()))::BIGINT AS seconds_remaining "
@@ -85,7 +89,8 @@ int BountyRepository::placeBounty(const std::string& targetCharId, const std::st
                                    const std::string& contributorCharId, const std::string& contributorCharName,
                                    int64_t amount, BountyResult& result) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
 
         // Check if bounty already exists for this target
         auto existing = txn.exec_params(
@@ -144,7 +149,8 @@ int64_t BountyRepository::cancelContribution(const std::string& targetCharId,
                                               const std::string& contributorCharId,
                                               int64_t& taxAmount, BountyResult& result) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
 
         // Get bounty
         auto bounty = txn.exec_params(
@@ -201,7 +207,8 @@ int64_t BountyRepository::claimBounty(const std::string& targetCharId,
                                        int partySize, int64_t& taxAmount, int64_t& amountPerMember,
                                        BountyResult& result) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
 
         auto bounty = txn.exec_params(
             "SELECT bounty_id, total_amount, target_character_name FROM bounties "
@@ -247,7 +254,8 @@ int64_t BountyRepository::claimBounty(const std::string& targetCharId,
 std::vector<BountyRepository::ExpiredRefund> BountyRepository::processExpiredBounties() {
     std::vector<ExpiredRefund> refunds;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
 
         // Find expired bounties
         auto expired = txn.exec(
@@ -298,13 +306,15 @@ std::vector<BountyRepository::ExpiredRefund> BountyRepository::processExpiredBou
 
 bool BountyRepository::recentlyLeftGuild(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT guild_left_at FROM characters WHERE character_id = $1", characterId);
         txn.commit();
         if (result.empty() || result[0]["guild_left_at"].is_null()) return false;
         // Check if left within 12 hours — use DB-side comparison
-        pqxx::work txn2(conn_);
+        auto guard2 = acquireConn();
+        pqxx::work txn2(guard2.connection());
         auto check = txn2.exec_params(
             "SELECT guild_left_at > NOW() - INTERVAL '12 hours' AS recent "
             "FROM characters WHERE character_id = $1 AND guild_left_at IS NOT NULL",

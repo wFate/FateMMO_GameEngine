@@ -37,8 +37,8 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | OpenGL 3.3 Rendering | Done | Custom function loader, no GLAD dependency, shader preamble injection for GL/GLES portability |
 | Batched Sprite Renderer | Done | Sorts by depth + texture, 10k capacity, dirty-flag sort skip (hash-based), palette swap shader (RenderType 5: indexed grayscale → 16-color palette lookup) |
 | 2D Orthographic Camera | Done | 480x270 virtual resolution (pixel art scale), 0.05x-8x zoom |
-| Archetype ECS | Done | Contiguous SoA component storage, O(matching) forEach queries, generational handles, command buffer for deferred structural changes |
-| Action Map Input | Done | 23 logical ActionIds, hardcoded WASD+arrow bindings, Gameplay/Chat context switching, 6-frame input buffer for combat skill queuing, programmatic injection API for touch/gamepad |
+| Archetype ECS | Done | Contiguous SoA component storage, O(matching) forEach queries, generational handles, command buffer for deferred structural changes, **forEach iteration guard** (RAII flag + assert on structural change during iteration), archetype hash collision probing (secondary hash), arena allocation null check, PersistentId acq_rel memory ordering |
+| Action Map Input | Done | 23 logical ActionIds, hardcoded WASD+arrow bindings, Gameplay/Chat context switching, 6-frame input buffer for combat skill queuing, programmatic injection API for touch/gamepad, **focus-loss key reset** (SDL_WINDOWEVENT_FOCUS_LOST clears all key/action/touch states) |
 | Structured Logging | Done | spdlog-backed, per-subsystem named loggers, rotating file sink (5MB/3 files), backtrace ring buffer (64 entries), callback sink for LogViewer, Android logcat ready |
 | SDF Text Rendering | Done | MTSDF uber-shader (normal/outlined/glow/shadow styles), runtime atlas generation from TTF, UTF-8 decode, resolution-independent at any zoom |
 | Tilemap System | Done | Tiled JSON loader, frustum-culled, collision layers, Blob-47 autotiling (8-bit bitmask with diagonal gating, 256-entry O(1) lookup table), **chunk-based pre-built VBOs** (per-chunk VAO/VBO, multi-tileset sub-batching, static buffers rebuilt only on dirty flag), **GL_TEXTURE_2D_ARRAY** (zero-bleed tile rendering, one array layer per tile, custom tile_chunk.vert/frag shaders with sampler2DArray) |
@@ -68,24 +68,24 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Post-Processing | Done | Bloom (extract + Gaussian blur + composite), vignette, color grading |
 | Fiber Job System | Done | Win32 fibers + minicoro (iOS/Android/Linux), 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas |
 | Graphics RHI | Done | gfx::Device + CommandList + Pipeline State Objects, GL backend, typed 32-bit handles, uniform cache |
-| Networking Transport | Done | Custom reliable UDP (Winsock2 + POSIX), ByteWriter/ByteReader (NaN/Inf rejection, string length cap, enum bounds, sticky error), 16-byte packet header, 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation, per-tick skill command cap, **IPv6 dual-stack sockets** (sockaddr_storage, AF_INET6 with IPV6_V6ONLY=0, IPv4 fallback, DNS64/NAT64 compatible — iOS App Store mandatory), protocol version handshake (rejects outdated clients with reason string) |
+| Networking Transport | Done | Custom reliable UDP (Winsock2 + POSIX), ByteWriter/ByteReader (NaN/Inf rejection, string length cap, enum bounds, sticky error), **18-byte packet header** (32-bit ack bitfield), 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation, per-tick skill command cap, **IPv6 dual-stack sockets** (sockaddr_storage, AF_INET6 with IPV6_V6ONLY=0, IPv4 fallback, DNS64/NAT64 compatible — iOS App Store mandatory), protocol version handshake (rejects outdated clients with reason string), **payload size validation** (cross-checks header vs actual packet), **pending packet cap** (256 max), **auth DNS resolution** (getaddrinfo replaces sscanf) |
 | AEAD Packet Encryption | Done | XChaCha20-Poly1305 via libsodium. Per-session key pair generated on connect, sent via KeyExchange (0x82) packet. All non-system payloads encrypted/authenticated. Sequence number as 24-byte nonce. Tampered packets silently dropped. Separate tx/rx keys prevent reflection attacks. Compiles in plaintext fallback mode without libsodium (`FATE_HAS_SODIUM` guard) |
 | Auto-Reconnect | Done | `ReconnectPhase` state machine in NetClient. Heartbeat timeout (8s) triggers auto-reconnect with stored auth token. Exponential backoff (1s→2s→4s...30s cap), 60s total timeout. ConnectAccept clears reconnect state. Anonymous connections skip auto-reconnect. Every 3rd heartbeat sent via reliable channel as fallback |
 | Economic Nonces | Done | `NonceManager` on server issues random uint64_t per-client nonces for trade/market actions. Single-use (replay rejected), wrong-client rejected, 60s expiry. Cleaned on disconnect and in maintenance tick. Infrastructure ready — protocol message nonce fields are next step |
-| Rate Limiting | Done | Per-client, per-message-type token buckets (O(1) per packet). Configurable burst/sustained rates per command (CmdMove: 65/60 for 60fps clients). Cumulative violation tracking with auto-disconnect threshold. Silent drop policy (never reveals limits to probers) |
+| Rate Limiting | Done | Per-client, per-message-type token buckets (O(1) per packet). Configurable burst/sustained rates per command (CmdMove: 65/60 for 60fps clients). Cumulative violation tracking with auto-disconnect threshold. Silent drop policy (never reveals limits to probers). **Per-account state preservation** — rate limiter survives reconnect (moved to `accountRateLimiters_` on disconnect, restored on auth) |
 | Connection Cookies | Done | HMAC-based challenge cookie generator (FNV-1a keyed hash, 10s time-bucketed). Foundation for netcode.io-style stateless handshake to prevent spoofed-IP connection flooding |
 | Server Target Validation | Done | Every CmdAction/CmdUseSkill validates target exists in server-side AOI (binary search on sorted visibility set) and is within action range with latency tolerance. **Full PvP validation:** `canAttackPlayer()` checks safe zone → party member → dead/dying target → same-faction innocents → different factions. Same-faction players can only attack Red/Black (PK-flagged) targets |
 | Profanity Filter (Server) | Done | ProfanityFilter::filterChatMessage wired into CmdChat handler. Censor mode (asterisks) applied before broadcast. 50+ word list, leetspeak normalization, blocked phrases, max 200 char |
 | Mobile Reconnection | Done | ReconnectState machine: exponential backoff (1s→2s→4s...cap 30s), 60s timeout. **Wired into NetClient:** heartbeat timeout detection (8s) triggers auto-reconnect with stored auth token. ConnectAccept clears state. Reliable heartbeat fallback every 3rd beat prevents false timeouts on lossy WiFi/mobile |
 | Entity Replication | Done | AOI-driven enter/leave/update, delta compression with 16-field bitmask (position, animFrame, flipX, currentHP, maxHP, moveState, animId, statusEffectMask, deathState, casting, targetEntityId, level, faction, equipVisuals, pkStatus, **honorRank**), per-entity sequence counters (stale update rejection), distance-based tiered update frequency (Near 20Hz/Mid 7Hz/Far 4Hz/Edge 2Hz with HP-change priority override), ghost entities, client-side position interpolation, spatial-indexed visibility |
-| Client-Server Architecture | Done | Headless 20 tick/sec server (FateServer), NetClient/NetServer, session tokens, heartbeat/timeout |
+| Client-Server Architecture | Done | Headless 20 tick/sec server (FateServer), NetClient/NetServer, session tokens, heartbeat/timeout, **max 2000 client connection cap** (configurable via `setMaxClients()`), **atomic character save** (single pqxx transaction for character+skills+skillbar+skillpoints) |
 | Platform Detection | Done | Compile-time defines: FATEMMO_PLATFORM_WINDOWS/IOS/ANDROID/MACOS/LINUX, FATEMMO_MOBILE, FATEMMO_GLES |
 | Mobile Lifecycle | Done | SDL event filter for background/foreground/low-memory, virtual callbacks (onEnterBackground/Foreground/LowMemory), game loop pause on background, 4 unit tests |
 | Touch Controls | Done | TWOM-style D-pad (bottom-left), attack + 5 skill buttons (bottom-right arc), tap-to-target, multi-finger support, F4 desktop toggle, ImGui ForegroundDrawList rendering |
 | iOS Build Pipeline | Done | CMake Xcode generator, Info.plist.in (CMake variables, landscape-only, fullscreen), LaunchScreen.storyboard, GLES 3.0 context, static GL linking, asset bundling, free Apple ID signing. **`ios/build.sh`** accepts `[debug/release] [build/device/testflight]` — generates Xcode project, builds, deploys to device via ios-deploy, or archives + uploads to TestFlight. ExportOptions.plist for App Store export |
 | Android Build Pipeline | Done | Gradle wrapper project (AGP 8.7, NDK r27, C++23, arm64-v8a), `FateMMOActivity` extends SDLActivity via JNI, GLES 3.0 required, INTERNET permission, 16KB page size support, shared assets dir, `./gradlew installDebug` one-command deploy, `android/build.sh` convenience script |
-| Write-Ahead Log | Done | Binary WAL with CRC32 per entry, batched fsync per tick. Journals gold/item/XP mutations. Replay on crash recovery. Truncate after successful DB checkpoint |
-| DB Circuit Breaker | Done | 3-state machine (Closed→Open→HalfOpen) on connection pool. 5 consecutive failures opens for 30s cooldown. Auto-probe on cooldown expiry. WAL queues writes during outage |
+| Write-Ahead Log | Done | Binary WAL with CRC32 per entry, **fflush after every append** (crash-safe). Journals gold/item/XP mutations. **Replay on crash recovery** (GoldChange/XPGain entries replayed to DB in a single transaction before truncation). Truncate after successful replay |
+| DB Circuit Breaker | Done | 3-state machine (Closed→Open→HalfOpen) on connection pool. 5 consecutive failures opens for 30s cooldown. Auto-probe on cooldown expiry. WAL queues writes during outage. **`DbPool::Guard` has `operator bool()`** — callers check for null before dereferencing (circuit breaker open returns empty guard) |
 | Priority DB Flushing | Done | `PersistenceQueue` with 4 tiers: IMMEDIATE (0s, gold/inventory/trades), HIGH (5s, level-ups/PK status), NORMAL (60s, position), LOW (300s, pet/bank). **Fully wired:** `enqueuePersist()` with 1s dedup window at 30 handler sites, `tickPersistQueue()` dequeues up to 10/tick, 5-minute auto-save kept as safety-net catch-all |
 | Dirty Flag Persistence | Done | `PlayerDirtyFlags` (position/vitals/stats/inventory/skills/quests/bank/pet) gates `savePlayerToDB` and `savePlayerToDBAsync` via `forceSaveAll` param. **95 dirty-flag sets** at mutation sites (13 position, 33 vitals, 18 stats, 26 inventory, 5 quests, 4 bank, 4 pet, 1 guild). Regen skipped intentionally (runs on all players). Disconnect and auto-save bypass flags with forceSaveAll=true |
 | Tracked<T> Template | Done | Template `Tracked<T>` with `mutate()` (auto-sets dirty flag + increments version counter), `clearDirty()`. Available for future per-field tracking |
@@ -139,7 +139,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Remove Components | Done | Right-click any component header to remove it (all 38+ component types) |
 | Resize Handles | Done | 8 drag handles (4 corners + 4 edges), E key for resize tool mode |
 | Source Rect Editor | Done | UV region editing in Sprite inspector for tileset splicing |
-| Undo/Redo | Done | Ctrl+Z/Ctrl+Y, 200 action history, tracks move/resize/delete/duplicate/tile paint. **CompoundCommand** groups multi-tile operations (fill/rect/line) into single undo step |
+| Undo/Redo | Done | Ctrl+Z/Ctrl+Y, 200 action history, tracks move/resize/delete/duplicate/tile paint. **CompoundCommand** groups multi-tile operations (fill/rect/line) into single undo step. **Handle remap** — entity handles remapped after delete+undo recreate, so subsequent undo operations resolve to the new handle |
 | Tool Modes | Done | W=Move, E=Resize, B=Paint, X=Erase, **G=Fill, U=RectFill, L=LineTool**. Active tool highlighted in toolbar. Fill uses BFS flood fill, Rect/Line use drag start→end with visual preview |
 | Keyboard Shortcuts | Done | Ctrl+Z undo, Ctrl+Y redo, Ctrl+S save, Ctrl+D duplicate, Ctrl+A select all, Delete |
 | Eraser Tool | Done | X key, click/drag to delete ground tiles with undo support |
@@ -200,7 +200,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 |-----------|--------|-------|
 | Transform | Done | Position (px), scale, rotation, depth; tile coord display |
 | SpriteComponent | Done | Texture (via AssetHandle), sourceRect (tileset support), spritesheet frames, tint, flip, renderOffset (procedural visual offset, applied at draw time) |
-| Animator | Done | Frame-based animation with hit-frame events (`onHitFrame` callback), completion callbacks (`onComplete`), auto-transition (`returnAnimation`), non-looping support. Editor: "Open in Animation Editor" inspector button |
+| Animator | Done | Frame-based animation with hit-frame events (`onHitFrame` callback), completion callbacks (`onComplete`), auto-transition (`returnAnimation`), non-looping support, **frameCount==0 guard** (returns frame 0 instead of div-by-zero). Editor: "Open in Animation Editor" inspector button |
 | PlayerController | Done | Cardinal movement, speed, facing, isLocalPlayer flag |
 | BoxCollider | Done | AABB with offset, trigger/static flags, "Fit to Sprite" button |
 | PolygonCollider | Done | SAT collision, vertex editing, make box/circle presets (auto-sized to sprite) |
@@ -256,7 +256,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | CameraFollowSystem | Done | Locked to local player, smooth (no pixel-snap jitter) |
 | SpriteRenderSystem | Done | Frustum culled, depth sorted, respects sprite enabled flag |
 | GameplaySystem | Done | Ticks StatusEffects, CrowdControl, SkillManager cooldowns, HP/MP regen, PK decay, death visual (rotation + gray tint), respawn countdown, nameplates |
-| MobAISystem | Done | Ticks MobAI for all mobs, threat-based targeting (top damager holds aggro, overrides nearest-player when in leash range), applies movement, fires attacks. Matches Unity ServerZoneMobAI threat swap behavior |
+| MobAISystem | Done | Ticks MobAI for all mobs, threat-based targeting (top damager holds aggro, overrides nearest-player when in **acquire range**), applies movement, fires attacks. Matches Unity ServerZoneMobAI threat swap behavior |
 | CombatActionSystem | Done | **Prediction-only with animation windup** — viewport-aware click/touch-to-target, auto-clear off-screen. On attack: sends CmdAction to server immediately, starts 3-frame windup animation (10 fps). Hit frame (~100 ms) defers predicted damage text + optimistic audio. Procedural lunge offset (pullback → strike → recover) until real sprites exist. Does NOT modify mob/player HP, award XP/gold/honor, or determine kills. All state changes come from server messages (SvCombatEvent, SvPlayerState). CombatPredictionBuffer (32 slots) tracks pending attacks for reconciliation |
 | SpawnSystem | Done | Region-based mob spawning, death detection, respawn timers, zone containment, deferred entity creation (safe during archetype iteration) |
 | NPCInteractionSystem | Done | Click-to-interact with NPCs, viewport-aware screen-to-world, range check, dialogue open/close, click consumption (prevents combat targeting) |
@@ -326,7 +326,7 @@ All 37 game systems from the C#/Unity prototype have been converted to C++ and l
 | Quest Data | `quest_data.h` | Hardcoded quest registry with 6 starter quests, 4 TWOM tiers (Starter/Novice/Apprentice/Adept) |
 | NPC Types | `npc_types.h` | NPCTemplate, ShopItem, TrainableSkill, TeleportDestination structs |
 | Dialogue Tree | `dialogue_tree.h` | Branching dialogue with enum-based actions (GiveItem/GiveXP/GiveGold/SetFlag/Heal) and conditions (HasFlag/MinLevel/HasItem/HasClass) |
-| Bank Storage | `bank_storage.h` | Persistent bank storage with item slots, gold deposit/withdraw, configurable fee |
+| Bank Storage | `bank_storage.h` | Persistent bank storage with full `ItemInstance` metadata (enchant, stats, sockets, rarity preserved through deposit/withdraw), gold deposit/withdraw, configurable fee |
 | Serialization | `register_components.h` | Custom toJson/fromJson for all complex NPC/Quest components (shops, skills, dialogue trees, quest progress, bank storage). NPC entities fully persist across scene save/load and prefab round-trips |
 
 See `Docs/Guides/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and NPCs.
@@ -346,7 +346,7 @@ See `Docs/Guides/QUEST_AND_NPC_GUIDE.md` for full guide on creating quests and N
 | Faction System | `faction.h` | ~130 | FactionRegistry + FactionChatGarbler | 4 factions (Xyros/Fenor/Zethos/Solis), registry, deterministic chat garbling, same-faction checks, faction picker on registration screen |
 | Pet System | `pet_system.h/.cpp` | ~120 | PetDefinition + PetInstance + PetSystem | Leveling, rarity-tiered stats (HP/Crit/XP bonus), XP sharing (50%), player-level cap, equip/unequip wired with stat bonuses applied to CharacterStats, **auto-loot** (0.5s tick, 64px radius, ownership+party aware) **(DB wired — load/save on connect/disconnect, PetDefinitionCache loaded from DB at startup)** |
 | Stat Enchant System | `stat_enchant_system.h` | ~70 | StatEnchantSystem | Accessory enchanting (Belt/Ring/Necklace/Cloak), 6-tier roll table, HP/MP x10 scaling |
-| Bounty System | `bounty_system.h` | ~200 | NetworkBountyManager + BountyService + BountyRepository | PvE bounty board (max 10 active, 50K-500M gold, 48hr expiry), 2% tax, guild-mate protection, 12hr guild-leave cooldown, party split on claim, cancel/refund, expiration processing **(DB wired — place/cancel handlers + expiry maintenance)** |
+| Bounty System | `bounty_system.h` | ~200 | NetworkBountyManager + BountyService + BountyRepository | PvE bounty board (max 10 active, 50K-500M gold, 48hr expiry), 2% tax, guild-mate protection, 12hr guild-leave cooldown, party split on claim, cancel/refund, expiration processing **(DB wired — place/cancel handlers + expiry maintenance, gold deducted on placement)** |
 | Ranking System | `ranking_system.h` | ~170 | NetworkRankingManager + RankingRepository | Global/class/guild/honor leaderboards, paginated (50/page), 60s cache, PlayerRankInfo (global+class+guild rank), K/D ratio, honor rankings **(repo built, needs integration)** |
 | Profanity Filter | `profanity_filter.h` | ~260 | ProfanityFilter (351L) | Leetspeak normalization (8 mappings), 50+ word list (EN+ES), 4 blocked phrases, 3 modes (Validate/Censor/Remove), character/guild name validation, chat filtering, word-boundary logic for short words |
 | Input Validator | `input_validator.h` | ~75 | InputValidator (76L) | Chat/Name validation modes, per-character rejection, username (3-20 alphanumeric+underscore) and password (8-128) validation, delegates to ProfanityFilter |
@@ -412,6 +412,95 @@ classBonus    = classAdvantageMatrix[attacker][defender] // default 1.0
 ---
 
 ## Changelog
+
+### March 22, 2026 - High-Severity Bug Sweep (20 fixes)
+
+Systematic audit of 22 high-severity findings — 20 confirmed and fixed, 1 false positive (H22: skill rank already validated by `executeSkill()`), 1 deferred (H14: replication placeholders for unimplemented features).
+
+**Economy Exploits (4 fixes):**
+- H1: Bounty placement now deducts gold from placer (was free — infinite bounty exploit)
+- H2: Market cancel listing returns item to seller inventory (was deleted — item loss)
+- H3: Trade SetGold rejects negative gold values (negative gold passed `getGold() < gold` check)
+- H8: GM `/givegold` now sets dirty flag, WAL entry, and enqueuePersist (gold vanished on restart)
+
+**Trade/Equipment Safety (2 fixes):**
+- H4: Equipment changes blocked during active trade session (could equip items offered in trade)
+- H5: Enchant stone removal uses higher-indexed slot first (prevents index invalidation if inventory compacts)
+
+**Data Integrity (5 fixes):**
+- H6: Bank deposit/withdraw preserves full `ItemInstance` metadata — enchant level, rolled stats, sockets, rarity (`StoredItem` extended with `fullItem` field)
+- H7: WAL crash recovery now replays GoldChange/XPGain entries to DB in a single transaction (was log-and-truncate only — data loss on crash)
+- H9: Dungeon auto-loot (gold and item paths) now calls `enqueuePersist()` (dirty flag was set but flush never queued)
+- H10: Character save (`savePlayerToDBAsync`) uses single `pqxx::work` transaction for character record + skills + skill bar + skill points (was 4 separate transactions — partial save on crash)
+- H20: Zone transition clears `combatTimer` and auto-attack state (stale combat state carried across zones)
+
+**Network/Security (3 fixes):**
+- H11: `DbPool::Guard` gains `operator bool()` + null checks at market buy and trade execute call sites (circuit breaker open → nullptr deref → server crash)
+- H12: Rate limiter state preserved per-account across reconnects via `accountRateLimiters_` map (disconnect+reconnect reset gave fresh token buckets)
+- H13: `ConnectionManager::addClient()` enforces `maxClients_` cap (default 2000, configurable via `setMaxClients()`)
+
+**Game Logic (4 fixes):**
+- H15: ArmorShred stacks now reduce effective armor in physical damage calculation (`skill_manager.cpp` — was applied but never read)
+- H16: Collision check lambdas early-exit on first hit (`if (blocked) return` — avoids redundant overlap tests)
+- H18: Mob threat-target override uses `acquireRadius` instead of `contactRadius` (mobs oscillated at leash boundary)
+- H19: Animator `getFrameIndex()` guards against `frameCount == 0` (returns 0 instead of div-by-zero crash)
+
+**Editor (1 fix):**
+- H21: Undo system gains entity handle remap table — `DeleteCommand::undo` registers old→new handle mapping, all transform commands (`Move/Rotate/Scale`) resolve through remap before operating
+
+### March 22, 2026 - Production Readiness Hardening (24 fixes) + Connection Pool Migration
+
+Security, persistence, network, and ECS hardening pass. 28 findings from production readiness review — 24 fixed, 4 deferred. Plus: migrated all 12 game repositories from shared single DB connection to pool-based per-operation acquisition.
+
+**Server Security (5 fixes):**
+- First move after connect now bounds-checked (0..32768) — prevents teleport exploit on reconnect (M2)
+- Skill cooldown tolerance tightened 80% → 90% — closes faster-than-intended casting (M3)
+- Combat results (SvSkillResult) now scene-filtered — only clients in caster's scene receive broadcasts (M4)
+- Trade gold reserved on SetGold — deducted immediately, restored on cancel (M5)
+- NPC interaction range validation helper added to NPCTemplate (M27)
+
+**Persistence & DB (6 fixes):**
+- Dungeon boss gold reward: inventory dirty + enqueuePersist added (M9)
+- Phoenix Down consumption: WAL-logged + enqueuePersist(IMMEDIATE) (M10)
+- SkillBar save: DELETE-then-INSERT clears removed skills (M11)
+- WAL: fflush after every append (M12)
+- Trade gold SQL: `AND gold + $2 >= 0` guard (M8)
+- Trade history: in-transaction overload prevents lost audit trail (M15)
+
+**Items & Inventory (2 fixes):**
+- Bag-in-bag prevention via isBag flag check (M6)
+- Bank StoredItem uint16_t overflow guard (M7)
+
+**Network (4 fixes):**
+- Ack bitfield expanded 16→32 bits, header 16→18 bytes (M17)
+- Pending reliable packet queue capped at 256 (M16)
+- payloadSize cross-validated against actual packet length (M18)
+- Auth client uses getaddrinfo for DNS resolution (M20)
+
+**ECS (4 fixes):**
+- forEach RAII iteration guard + assert on structural change during iteration (M21)
+- Arena allocation null check with LOG_ERROR (M22)
+- PersistentId memory ordering upgraded to acq_rel/acquire/release (M23)
+- Archetype hash collision probing with secondary hash (M24)
+
+**Input & UI (3 fixes):**
+- Focus loss resets all key/action/touch states (M25)
+- Arena match cleanup: endedAt + purgeEndedMatches(60s retention) (M26)
+- Quest setProgress matches by objective index, not targetCount (M28)
+
+**Connection Pool Migration (M13 resolution):**
+- All 12 game repositories migrated from `pqxx::connection& conn_` to `DbPool& pool_`
+- Each repo method now acquires its own pooled connection via `acquireConn()` (RAII auto-release)
+- Dual constructors: pool-based for persistent ServerApp repos, legacy `pqxx::connection&` for temp repos in async fibers
+- `DbPool::Guard::wrap()` added for non-owned connection references
+- `gameDbConn_` retained for one-time startup operations (definition caches, WAL replay)
+- ~101 transaction sites across 24 files (12 headers + 12 sources) migrated
+- `AccountRepository` unchanged (belongs to AuthServer, separate connection)
+
+**Deferred (3 remaining):**
+- M1: Key exchange sends AEAD keys in plaintext UDP — needs DH/HKDF redesign
+- M14: DbConnection::reconnect blocks up to 6s — needs async pattern
+- M19: Connection cookie FNV-1a hash — acceptable short-term with secret key
 
 ### March 21, 2026 - Instanced Dungeons (Production)
 
@@ -513,6 +602,7 @@ Wired 6 remaining game systems into the server with protocol messages, command h
 
 **Bank system:**
 - `processBank()` handler with 4 actions: deposit gold (2% fee), withdraw gold, deposit item (stacks), withdraw item
+- **Full item metadata preserved** — deposit captures `ItemInstance` from inventory (enchant level, rolled stats, sockets, rarity), withdraw restores complete item
 - Validates player alive, sufficient gold/items, bank capacity (30 slots)
 - DB persistence via `bankRepo_->depositGold()`, `withdrawGold()`, `depositItem()`, `withdrawItem()`
 - 16 new tests (gold fee calculation, edge cases, item stacking, serialization roundtrips)
@@ -1247,7 +1337,7 @@ Cross-referenced 9 research documents against the full engine codebase. Implemen
 
 **Connection pool, startup caches, and game data migration from Unity DB:**
 
-- **Connection Pool** (`server/db/db_pool.h/.cpp`): Thread-safe pqxx connection pool. Min 5, max 50 connections. RAII `Guard` class for automatic release. Eager creation of min connections at startup, overflow safety valve, dead connection detection on release, `testConnection()` health check.
+- **Connection Pool** (`server/db/db_pool.h/.cpp`): Thread-safe pqxx connection pool. Min 5, max 50 connections. RAII `Guard` class for automatic release (+ `Guard::wrap()` for non-owned connections). Eager creation of min connections at startup, overflow safety valve, dead connection detection on release, `testConnection()` health check. **All 12 game repos now pool-based** — each operation acquires its own connection via `acquireConn()`, legacy single-connection constructor preserved for temp repos in async fibers.
 - **Mob Definition Cache** (`server/db/definition_caches.h/.cpp`): Loads 73 mobs from `mob_definitions` at startup. Full stat loading (HP, damage, armor, crit, speed, scaling per level, aggro/attack/leash ranges, spawn weights, loot table IDs, gold drops, honor rewards).
 - **Skill Definition Cache** (`server/db/definition_caches.h/.cpp`): Loads 60 skills + 174 ranks from `skill_definitions` and `skill_ranks`. Lookup by ID, by class, rank data with all passive/active/transform/resurrect fields.
 - **Scene Cache** (`server/db/definition_caches.h/.cpp`): Loads 3 scenes from `scenes` table. PvP status queries.

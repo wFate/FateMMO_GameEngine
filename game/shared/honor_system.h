@@ -68,12 +68,20 @@ public:
     /// Process a full PvP kill — calculates honor changes for both players.
     /// Handles kill tracking, capping gain to what victim can pay out,
     /// and capping loss to what victim actually has.
-    /// Matches C# HonorSystem.ProcessPvPKill() exactly.
+    /// Uses in-memory kill tracking (lost on restart).
     static PvPKillHonorResult processKill(PKStatus attackerStatus,
                                           PKStatus victimStatus,
                                           const std::string& attackerId,
                                           const std::string& victimId,
                                           int victimCurrentHonor);
+
+    /// DB-backed variant: caller provides the recent kill count from the database
+    /// instead of relying on in-memory tracking. The caller is responsible for
+    /// recording the kill to the DB after this returns.
+    static PvPKillHonorResult processKillWithCount(PKStatus attackerStatus,
+                                                    PKStatus victimStatus,
+                                                    int recentKillCount,
+                                                    int victimCurrentHonor);
 
     /// Clears all kill tracking data.
     static void clearKillTracking();

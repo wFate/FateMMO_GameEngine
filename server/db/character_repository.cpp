@@ -11,7 +11,8 @@ std::string CharacterRepository::createDefaultCharacter(int accountId, const std
             std::chrono::system_clock::now().time_since_epoch()).count();
         std::string charId = "chr_" + std::to_string(accountId) + "_" + std::to_string(now);
 
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "INSERT INTO characters (character_id, account_id, character_name, class_name) "
             "VALUES ($1, $2, $3, $4) RETURNING character_id",
@@ -76,7 +77,8 @@ CharacterRecord CharacterRepository::rowToRecord(const pqxx::row& row) {
 
 std::optional<CharacterRecord> CharacterRepository::loadCharacter(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT character_id, account_id, character_name, class_name, "
             "level, current_xp, xp_to_next_level, "
@@ -101,7 +103,8 @@ std::optional<CharacterRecord> CharacterRepository::loadCharacter(const std::str
 
 std::optional<CharacterRecord> CharacterRepository::loadCharacterByAccount(int accountId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT character_id, account_id, character_name, class_name, "
             "level, current_xp, xp_to_next_level, "
@@ -126,7 +129,8 @@ std::optional<CharacterRecord> CharacterRepository::loadCharacterByAccount(int a
 
 bool CharacterRepository::saveCharacter(const CharacterRecord& rec) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE characters SET "
             "level = $2, current_xp = $3, xp_to_next_level = $4, "

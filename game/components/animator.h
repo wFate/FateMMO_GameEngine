@@ -85,6 +85,7 @@ private:
     bool hitFrameFired_ = false;
 
     int getFrameIndex(const AnimationDef& anim) const {
+        if (anim.frameCount <= 0) return 0;
         int idx = (int)(timer * anim.frameRate);
         if (anim.loop) {
             idx = idx % anim.frameCount;

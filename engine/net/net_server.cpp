@@ -20,6 +20,7 @@ void NetServer::stop() {
 }
 
 void NetServer::poll(float currentTime) {
+    lastPollTime_ = currentTime;
     uint8_t buf[MAX_PACKET_SIZE];
     NetAddress from;
     int received;
@@ -76,6 +77,14 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
     if (onPacketReceived) {
         const uint8_t* payloadData = data + r.position();
         size_t payloadLen = hdr.payloadSize;
+
+        // Validate payloadSize against actual remaining bytes in packet
+        size_t actualRemaining = static_cast<size_t>(size) - r.position();
+        if (payloadLen > actualRemaining) {
+            LOG_WARN("NetServer", "Client %d payloadSize mismatch: claimed %zu, actual %zu",
+                     client->clientId, payloadLen, actualRemaining);
+            return;
+        }
 
         uint8_t decryptedBuf[MAX_PACKET_SIZE];
         if (client->crypto.hasKeys() && !isSystemPacket(hdr.packetType) && payloadLen > 0) {
@@ -191,7 +200,8 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
     uint8_t buf[MAX_PACKET_SIZE];
     ByteWriter w(buf, sizeof(buf));
 
-    uint16_t ack, ackBits;
+    uint16_t ack;
+    uint32_t ackBits;
     client.reliability.buildAckFields(ack, ackBits);
 
     PacketHeader hdr;
@@ -223,10 +233,16 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
         w.writeBytes(sendPayload, sendPayloadSize);
     }
 
+    if (w.overflowed()) {
+        LOG_ERROR("NetServer", "Packet overflow: type=0x%02X payloadSize=%zu capacity=%zu for client %d",
+                  packetType, payloadSize, MAX_PACKET_SIZE, client.clientId);
+        return;
+    }
+
     socket_.sendTo(buf, w.size(), client.address);
 
     if (channel != Channel::Unreliable) {
-        client.reliability.trackReliable(hdr.sequence, buf, w.size());
+        client.reliability.trackReliable(hdr.sequence, buf, w.size(), lastPollTime_);
     }
 }
 
@@ -239,7 +255,8 @@ void NetServer::broadcast(Channel channel, uint8_t packetType,
 
 void NetServer::processRetransmits(float currentTime) {
     connections_.forEach([&](ClientConnection& client) {
-        auto retransmits = client.reliability.getRetransmits(currentTime);
+        float retransmitDelay = (std::max)(0.2f, client.reliability.rtt() * 2.0f);
+        auto retransmits = client.reliability.getRetransmits(currentTime, retransmitDelay);
         for (auto& pkt : retransmits) {
             socket_.sendTo(pkt.data.data(), pkt.data.size(), client.address);
             client.reliability.markRetransmitted(pkt.sequence, currentTime);

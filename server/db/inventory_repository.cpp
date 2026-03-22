@@ -6,7 +6,8 @@ namespace fate {
 std::vector<InventorySlotRecord> InventoryRepository::loadInventory(const std::string& characterId) {
     std::vector<InventorySlotRecord> slots;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT instance_id, character_id, item_id, "
             "slot_index, bag_slot_index, bag_item_slot, "
@@ -48,7 +49,8 @@ std::vector<InventorySlotRecord> InventoryRepository::loadInventory(const std::s
 bool InventoryRepository::saveInventory(const std::string& characterId,
                                          const std::vector<InventorySlotRecord>& slots) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
 
         // Delete existing inventory for this character
         txn.exec_params("DELETE FROM character_inventory WHERE character_id = $1", characterId);

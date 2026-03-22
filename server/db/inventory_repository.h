@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <pqxx/pqxx>
+#include "server/db/db_pool.h"
 
 namespace fate {
 
@@ -26,7 +27,10 @@ struct InventorySlotRecord {
 
 class InventoryRepository {
 public:
-    explicit InventoryRepository(pqxx::connection& conn) : conn_(conn) {}
+    // Legacy: direct connection (for temp repos in async fibers)
+    explicit InventoryRepository(pqxx::connection& conn) : connRef_(&conn), pool_(nullptr) {}
+    // Pool-based: acquires connection per operation
+    explicit InventoryRepository(DbPool& pool) : connRef_(nullptr), pool_(&pool) {}
 
     // Load all inventory items for a character
     std::vector<InventorySlotRecord> loadInventory(const std::string& characterId);
@@ -36,7 +40,13 @@ public:
     bool saveInventory(const std::string& characterId, const std::vector<InventorySlotRecord>& slots);
 
 private:
-    pqxx::connection& conn_;
+    pqxx::connection* connRef_ = nullptr;
+    DbPool* pool_ = nullptr;
+
+    DbPool::Guard acquireConn() {
+        if (pool_) return pool_->acquire_guard();
+        return DbPool::Guard::wrap(*connRef_);
+    }
 };
 
 } // namespace fate

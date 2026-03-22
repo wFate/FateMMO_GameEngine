@@ -363,6 +363,12 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                                 const SkillExecutionContext& ctx) {
     // ---- Validation Phase ----
 
+    // 0. Caster must be alive
+    if (ctx.casterStats && !ctx.casterStats->isAlive()) {
+        if (onSkillFailed) onSkillFailed(skillId, "Caster is dead");
+        return 0;
+    }
+
     // 1. Check skill learned and activated (rank must be >= 1)
     if (rank < 1) {
         if (onSkillFailed) onSkillFailed(skillId, "Invalid rank");
@@ -658,8 +664,13 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                     damage = static_cast<int>(std::round(damage * (1.0f - elemResist)));
                 }
             } else {
-                // Physical armor
-                damage = CombatSystem::applyArmorReduction(damage, ctx.targetArmor);
+                // Physical armor (reduced by ArmorShred stacks on target)
+                float effectiveArmor = ctx.targetArmor;
+                if (ctx.targetSEM) {
+                    float shred = ctx.targetSEM->getArmorShred();
+                    if (shred > 0.0f) effectiveArmor = (std::max)(0.0f, effectiveArmor - shred);
+                }
+                damage = CombatSystem::applyArmorReduction(damage, effectiveArmor);
             }
         }
     }
@@ -727,16 +738,12 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
         }
     }
 
-    // 14. Apply crowd control (stun)
+    // 14. Apply crowd control (stun — only if skill doesn't already apply freeze above)
     if (ctx.targetCC && ctx.targetSEM && actualDamage > 0) {
         float stunDuration = (ri < static_cast<int>(def->stunDurationPerRank.size()))
                              ? def->stunDurationPerRank[ri] : 0.0f;
-        if (stunDuration > 0.0f) {
-            if (def->appliesFreeze) {
-                ctx.targetCC->applyFreeze(stunDuration, ctx.targetSEM, ctx.casterEntityId);
-            } else {
-                ctx.targetCC->applyStun(stunDuration, ctx.targetSEM, ctx.casterEntityId);
-            }
+        if (stunDuration > 0.0f && !def->appliesFreeze) {
+            ctx.targetCC->applyStun(stunDuration, ctx.targetSEM, ctx.casterEntityId);
         }
     }
 
@@ -820,6 +827,12 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
 int SkillManager::executeSkillAOE(const std::string& skillId, int rank,
                                    const SkillExecutionContext& primaryCtx,
                                    std::vector<SkillExecutionContext>& targets) {
+    // Caster must be alive
+    if (primaryCtx.casterStats && !primaryCtx.casterStats->isAlive()) {
+        if (onSkillFailed) onSkillFailed(skillId, "Caster is dead");
+        return 0;
+    }
+
     // Validate using primary context (resource cost, cooldown, CC check)
     const LearnedSkill* learned = getLearnedSkill(skillId);
     if (!learned || learned->activatedRank < rank) {

@@ -10,8 +10,23 @@
 #include <vector>
 #include <unordered_map>
 #include <random>
+#include <functional>
 
 namespace fate {
+
+// Hash function for NetAddress so it can be used as unordered_map key
+struct NetAddressHash {
+    size_t operator()(const NetAddress& addr) const {
+        // FNV-1a hash over the raw address bytes
+        size_t hash = 14695981039346656037ULL;
+        auto* bytes = reinterpret_cast<const uint8_t*>(&addr.storage);
+        for (int i = 0; i < addr.addrLen; ++i) {
+            hash ^= static_cast<size_t>(bytes[i]);
+            hash *= 1099511628211ULL;
+        }
+        return hash;
+    }
+};
 
 struct ClientConnection {
     uint16_t clientId = 0;
@@ -21,7 +36,7 @@ struct ClientConnection {
     ReliabilityLayer reliability;
 
     VisibilitySet aoi;
-    std::unordered_map<uint64_t, SvEntityUpdateMsg> lastAckedState; // keyed by PersistentId value
+    std::unordered_map<uint64_t, SvEntityUpdateMsg> lastSentState; // keyed by PersistentId value
     uint64_t playerEntityId = 0; // PersistentId of this client's player entity
 
     int account_id = 0;
@@ -41,6 +56,9 @@ public:
     std::vector<uint16_t> getTimedOutClients(float currentTime, float timeoutSeconds);
     size_t clientCount() const { return clients_.size(); }
 
+    void setMaxClients(size_t max) { maxClients_ = max; }
+    size_t getMaxClients() const { return maxClients_; }
+
     template<typename F>
     void forEach(F&& fn) {
         for (auto& [id, client] : clients_) fn(client);
@@ -48,7 +66,9 @@ public:
 
 private:
     uint16_t nextClientId_ = 1;
+    size_t maxClients_ = 2000; // default cap to prevent DoS
     std::unordered_map<uint16_t, ClientConnection> clients_;
+    std::unordered_map<NetAddress, uint16_t, NetAddressHash> addressToClient_;
     std::mt19937 rng_{std::random_device{}()};
     uint32_t generateToken();
 };

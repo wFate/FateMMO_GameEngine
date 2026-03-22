@@ -22,6 +22,7 @@
 #include "server/db/bank_repository.h"
 #include "server/db/pet_repository.h"
 #include "server/db/zone_mob_state_repository.h"
+#include "server/db/pvp_kill_log_repository.h"
 #include "server/db/definition_caches.h"
 #include "server/rate_limiter.h"
 #include "server/wal/write_ahead_log.h"
@@ -110,6 +111,7 @@ private:
     std::unique_ptr<BankRepository> bankRepo_;
     std::unique_ptr<PetRepository> petRepo_;
     std::unique_ptr<ZoneMobStateRepository> mobStateRepo_;
+    std::unique_ptr<PvPKillLogRepository> pvpKillLogRepo_;
 
     // Definition caches (read-only, loaded at startup)
     ItemDefinitionCache itemDefCache_;
@@ -170,6 +172,7 @@ private:
 
     // Per-client token bucket rate limiters
     std::unordered_map<uint16_t, ClientRateLimiter> rateLimiters_;
+    std::unordered_map<int, ClientRateLimiter> accountRateLimiters_;
 
     // Per-client skill cooldown tracking: clientId -> skillId -> last cast gameTime
     std::unordered_map<uint16_t, std::unordered_map<std::string, float>> skillCooldowns_;
@@ -193,6 +196,7 @@ private:
     float marketExpiryTimer_ = 0.0f;
     float bountyExpiryTimer_ = 0.0f;
     float tradeCleanupTimer_ = 0.0f;
+    float pvpKillLogPruneTimer_ = 0.0f;
 
     void tick(float dt);
     void onClientConnected(uint16_t clientId);

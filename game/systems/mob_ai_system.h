@@ -142,7 +142,7 @@ public:
                                 && (stats.sceneId.empty() || threatStats->stats.currentScene == stats.sceneId);
                             if (valid) {
                                 float dist = currentPos.distance(threatTransform->position);
-                                if (dist <= ai.contactRadius) {
+                                if (dist <= ai.acquireRadius) {
                                     nearestPlayer = topThreatEntity;  // Override to top threat
                                 }
                             }

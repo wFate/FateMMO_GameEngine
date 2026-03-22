@@ -131,10 +131,10 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
                       PacketType::SvEntityEnter,
                       writer.data(), writer.size());
 
-        // Initialize last acked state
+        // Initialize last sent state
         auto state = buildCurrentState(world, entity, pid);
         state.updateSeq = entitySeqCounters_[handle.value];
-        client.lastAckedState[pid.value()] = state;
+        client.lastSentState[pid.value()] = state;
     }
 
     // Process left entities
@@ -152,7 +152,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
                       PacketType::SvEntityLeave,
                       writer.data(), writer.size());
 
-        client.lastAckedState.erase(pid.value());
+        client.lastSentState.erase(pid.value());
     }
 
     // Process stayed entities (delta updates)
@@ -177,9 +177,9 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
 
         SvEntityUpdateMsg current = buildCurrentState(world, entity, pid);
 
-        // Compare against last acked state to build delta
-        auto lastIt = client.lastAckedState.find(pid.value());
-        if (lastIt == client.lastAckedState.end()) continue;
+        // Compare against last sent state to build delta
+        auto lastIt = client.lastSentState.find(pid.value());
+        if (lastIt == client.lastSentState.end()) continue;
 
         const SvEntityUpdateMsg& last = lastIt->second;
 
@@ -266,7 +266,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
                       PacketType::SvEntityUpdate,
                       writer.data(), writer.size());
 
-        // Update last acked state
+        // Update last sent state
         lastIt->second = current;
         lastIt->second.updateSeq = seq;
     }

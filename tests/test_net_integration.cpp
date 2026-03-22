@@ -58,7 +58,7 @@ TEST_CASE("Net Integration: reliable connect handshake via loopback") {
     REQUIRE(client != nullptr);
 
     // Server sends ConnectAccept
-    uint16_t ack; uint16_t ackBits;
+    uint16_t ack; uint32_t ackBits;
     serverRel.buildAckFields(ack, ackBits);
 
     uint8_t respBuf[MAX_PACKET_SIZE];

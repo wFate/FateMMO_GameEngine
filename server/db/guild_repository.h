@@ -4,6 +4,7 @@
 #include <optional>
 #include <cstdint>
 #include <pqxx/pqxx>
+#include "server/db/db_pool.h"
 
 namespace fate {
 
@@ -40,7 +41,10 @@ struct GuildDisplayRecord {
 
 class GuildRepository {
 public:
-    explicit GuildRepository(pqxx::connection& conn) : conn_(conn) {}
+    // Legacy: direct connection (for temp repos in async fibers)
+    explicit GuildRepository(pqxx::connection& conn) : connRef_(&conn), pool_(nullptr) {}
+    // Pool-based: acquires connection per operation
+    explicit GuildRepository(DbPool& pool) : connRef_(nullptr), pool_(&pool) {}
 
     // Guild lifecycle
     int createGuild(const std::string& guildName, const std::string& ownerCharId,
@@ -66,7 +70,13 @@ public:
     int64_t addGuildXP(int guildId, const std::string& contributorId, int64_t xpAmount);
 
 private:
-    pqxx::connection& conn_;
+    pqxx::connection* connRef_ = nullptr;
+    DbPool* pool_ = nullptr;
+
+    DbPool::Guard acquireConn() {
+        if (pool_) return pool_->acquire_guard();
+        return DbPool::Guard::wrap(*connRef_);
+    }
 };
 
 } // namespace fate

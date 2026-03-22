@@ -36,6 +36,9 @@ public:
     size_t size() const { return queue_.size(); }
 
 private:
+    // L28: Promote starved requests that have exceeded their maxDelay
+    void promoteStarved(float gameTime);
+
     struct PriorityCompare {
         bool operator()(const PersistRequest& a, const PersistRequest& b) const {
             if (a.priority != b.priority)

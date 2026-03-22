@@ -1,8 +1,15 @@
 #include "engine/net/connection.h"
+#include "engine/core/logger.h"
 
 namespace fate {
 
 uint16_t ConnectionManager::addClient(const NetAddress& address, float currentTime) {
+    // Reject if at capacity
+    if (clients_.size() >= maxClients_) {
+        LOG_WARN("Connection", "Max client limit reached (%zu), rejecting new connection", maxClients_);
+        return 0;
+    }
+
     // Find unused ID (skip 0, skip in-use IDs)
     while (nextClientId_ == 0 || clients_.count(nextClientId_)) {
         ++nextClientId_;
@@ -19,11 +26,16 @@ uint16_t ConnectionManager::addClient(const NetAddress& address, float currentTi
     conn.lastHeartbeat = currentTime;
 
     clients_.emplace(id, std::move(conn));
+    addressToClient_[address] = id;
     return id;
 }
 
 void ConnectionManager::removeClient(uint16_t clientId) {
-    clients_.erase(clientId);
+    auto it = clients_.find(clientId);
+    if (it != clients_.end()) {
+        addressToClient_.erase(it->second.address);
+        clients_.erase(it);
+    }
 }
 
 ClientConnection* ConnectionManager::findById(uint16_t clientId) {
@@ -33,10 +45,9 @@ ClientConnection* ConnectionManager::findById(uint16_t clientId) {
 }
 
 ClientConnection* ConnectionManager::findByAddress(const NetAddress& address) {
-    for (auto& [id, client] : clients_) {
-        if (client.address == address) return &client;
-    }
-    return nullptr;
+    auto it = addressToClient_.find(address);
+    if (it == addressToClient_.end()) return nullptr;
+    return findById(it->second);
 }
 
 bool ConnectionManager::validateToken(const NetAddress& address, uint32_t token) {

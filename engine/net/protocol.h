@@ -215,8 +215,8 @@ struct SvEntityUpdateMsg {
     uint8_t moveState = 0;
     // Bit 6: animId (uint16, 2B) — current skill/animation ID
     uint16_t animId = 0;
-    // Bit 7: statusEffectMask (uint16, 2B) — bitfield of 16 status effects
-    uint16_t statusEffectMask = 0;
+    // Bit 7: statusEffectMask (uint32, 4B) — bitfield of up to 32 status effects
+    uint32_t statusEffectMask = 0;
     // Bit 8: deathState (uint8, 1B) — alive/dying/dead/ghost
     uint8_t deathState = 0;
     // Bit 9: castingSkillId (uint16, 2B) + castingProgress (uint8, 1B)
@@ -248,7 +248,7 @@ struct SvEntityUpdateMsg {
         if (fieldMask & (1 << 4))  w.writeI32(maxHP);
         if (fieldMask & (1 << 5))  w.writeU8(moveState);
         if (fieldMask & (1 << 6))  w.writeU16(animId);
-        if (fieldMask & (1 << 7))  w.writeU16(statusEffectMask);
+        if (fieldMask & (1 << 7))  w.writeU32(statusEffectMask);
         if (fieldMask & (1 << 8))  w.writeU8(deathState);
         if (fieldMask & (1 << 9))  { w.writeU16(castingSkillId); w.writeU8(castingProgress); }
         if (fieldMask & (1 << 10)) w.writeU16(targetEntityId);
@@ -271,7 +271,7 @@ struct SvEntityUpdateMsg {
         if (m.fieldMask & (1 << 4))  m.maxHP     = r.readI32();
         if (m.fieldMask & (1 << 5))  m.moveState = r.readU8();
         if (m.fieldMask & (1 << 6))  m.animId    = r.readU16();
-        if (m.fieldMask & (1 << 7))  m.statusEffectMask = r.readU16();
+        if (m.fieldMask & (1 << 7))  m.statusEffectMask = r.readU32();
         if (m.fieldMask & (1 << 8))  m.deathState = r.readU8();
         if (m.fieldMask & (1 << 9))  { m.castingSkillId = r.readU16(); m.castingProgress = r.readU8(); }
         if (m.fieldMask & (1 << 10)) m.targetEntityId = r.readU16();

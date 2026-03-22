@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -63,22 +64,36 @@ public:
     class Guard {
     public:
         Guard(DbPool& pool, std::unique_ptr<pqxx::connection> conn)
-            : pool_(pool), conn_(std::move(conn)) {}
-        ~Guard() { if (conn_) pool_.release(std::move(conn_)); }
+            : pool_(&pool), conn_(std::move(conn)) {}
+        ~Guard() { if (conn_ && pool_) pool_->release(std::move(conn_)); }
 
         Guard(Guard&&) = default;
         Guard& operator=(Guard&&) = default;
         Guard(const Guard&) = delete;
         Guard& operator=(const Guard&) = delete;
 
-        pqxx::connection& connection() { return *conn_; }
+        /// Returns true if a valid connection was acquired.
+        explicit operator bool() const { return conn_ != nullptr || raw_ != nullptr; }
+
+        pqxx::connection& connection() { return conn_ ? *conn_ : *raw_; }
+
+        /// Wrap a raw connection reference (no pool release on destruction).
+        /// Used by repos that already have a connection (e.g., temp repos in fibers).
+        static Guard wrap(pqxx::connection& conn) {
+            Guard g;
+            g.raw_ = &conn;
+            return g;
+        }
 
     private:
-        DbPool& pool_;
+        Guard() : pool_(nullptr), raw_(nullptr) {}
+        DbPool* pool_ = nullptr;
         std::unique_ptr<pqxx::connection> conn_;
+        pqxx::connection* raw_ = nullptr;
     };
 
-    /// Acquire with RAII auto-release.
+    /// Acquire with RAII auto-release. Check guard with `if (guard)` before use —
+    /// returns an empty guard (null connection) when the circuit breaker is open.
     Guard acquire_guard() { return Guard(*this, acquire()); }
 
     /// Advance the circuit breaker's notion of time (call from server tick).
@@ -94,9 +109,13 @@ private:
     std::unique_ptr<pqxx::connection> createConnection();
 
     mutable std::mutex mutex_;
+    std::condition_variable shutdownCv_;  // L29: signaled when active connections return
     std::vector<std::unique_ptr<pqxx::connection>> idle_;
     Config config_;
     int totalCreated_ = 0;
+    int activeOut_ = 0;          // L29: connections currently checked out
+    int overflowCreated_ = 0;    // L26: connections created beyond maxConnections
+    static constexpr int kMaxOverflow = 10;  // L26: hard cap on overflow connections
     bool initialized_ = false;
     DbCircuitBreaker breaker_{5, 30.0}; // open after 5 consecutive failures, 30s cooldown
     double currentBreakerTime_ = 0.0;  // mirrors breaker_.currentTime_ for use in acquire/release

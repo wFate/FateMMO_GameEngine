@@ -291,7 +291,9 @@ public:
                         Vec2 barPos = {t->position.x, t->position.y + spriteH * 0.5f + 1.0f};
                         float barW = 28.0f;
                         float barH = 2.0f;
-                        float hpPct = (float)enemyComp->stats.currentHP / (float)enemyComp->stats.maxHP;
+                        float hpPct = (enemyComp->stats.maxHP > 0)
+                            ? (float)enemyComp->stats.currentHP / (float)enemyComp->stats.maxHP
+                            : 0.0f;
 
                         // Background (dark red)
                         batch.drawRect(barPos, {barW, barH}, Color(0.3f, 0.0f, 0.0f, 0.8f), 84.0f);

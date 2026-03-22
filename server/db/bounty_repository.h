@@ -4,13 +4,17 @@
 #include <optional>
 #include <cstdint>
 #include <pqxx/pqxx>
+#include "server/db/db_pool.h"
 #include "game/shared/bounty_system.h"
 
 namespace fate {
 
 class BountyRepository {
 public:
-    explicit BountyRepository(pqxx::connection& conn) : conn_(conn) {}
+    // Legacy: direct connection (for temp repos in async fibers)
+    explicit BountyRepository(pqxx::connection& conn) : connRef_(&conn), pool_(nullptr) {}
+    // Pool-based: acquires connection per operation
+    explicit BountyRepository(DbPool& pool) : connRef_(nullptr), pool_(&pool) {}
 
     // Board queries
     std::vector<BountyInfo> getBountyBoard();
@@ -48,7 +52,13 @@ public:
     bool recentlyLeftGuild(const std::string& characterId);
 
 private:
-    pqxx::connection& conn_;
+    pqxx::connection* connRef_ = nullptr;
+    DbPool* pool_ = nullptr;
+
+    DbPool::Guard acquireConn() {
+        if (pool_) return pool_->acquire_guard();
+        return DbPool::Guard::wrap(*connRef_);
+    }
 
     void recordHistory(pqxx::work& txn, const std::string& eventType,
                        const std::string& targetCharId, const std::string& targetCharName,

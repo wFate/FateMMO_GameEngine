@@ -140,8 +140,8 @@ TEST_CASE("AOI: mob within activation radius appears in entered set") {
         if (h == mob->handle()) foundInEntered = true;
     }
     // The entered set was computed before advance() and consumed by sendDiffs,
-    // but we can verify the mob is now tracked by checking lastAckedState.
-    CHECK(client->lastAckedState.count(mobPid.value()) == 1);
+    // but we can verify the mob is now tracked by checking lastSentState.
+    CHECK(client->lastSentState.count(mobPid.value()) == 1);
 
     clientSock.close();
     server.stop();
@@ -198,7 +198,7 @@ TEST_CASE("AOI: unregistered mob does not appear in visibility") {
     // The mob was never registered with the replication manager.
     // Only the player entity is registered, and the player's own entity is
     // excluded from its own visibility set. So nothing should be visible.
-    CHECK(client->lastAckedState.empty());
+    CHECK(client->lastSentState.empty());
     CHECK(client->aoi.previous.empty());
 
     clientSock.close();
@@ -252,8 +252,8 @@ TEST_CASE("AOI: clearing client AOI causes re-enter on next tick") {
     // --- Pass 1: mob enters visibility ---
     repl.update(world, server);
 
-    // Mob should now be tracked in lastAckedState
-    REQUIRE(client->lastAckedState.count(mobPid.value()) == 1);
+    // Mob should now be tracked in lastSentState
+    REQUIRE(client->lastSentState.count(mobPid.value()) == 1);
     // And in previous (was current, then advance moved it)
     bool mobInPrevious = false;
     for (const auto& h : client->aoi.previous) {
@@ -261,16 +261,16 @@ TEST_CASE("AOI: clearing client AOI causes re-enter on next tick") {
     }
     REQUIRE(mobInPrevious);
 
-    // --- Simulate zone transition: clear AOI previous and lastAckedState ---
+    // --- Simulate zone transition: clear AOI previous and lastSentState ---
     client->aoi.previous.clear();
-    client->lastAckedState.clear();
+    client->lastSentState.clear();
 
     // --- Pass 2: mob should re-enter (not stay) ---
     repl.update(world, server);
 
     // After clearing previous, the mob appears as brand new.
-    // sendDiffs should have created a new lastAckedState entry for it.
-    CHECK(client->lastAckedState.count(mobPid.value()) == 1);
+    // sendDiffs should have created a new lastSentState entry for it.
+    CHECK(client->lastSentState.count(mobPid.value()) == 1);
 
     // The mob should be back in the visibility set (now in previous after advance)
     bool mobInPreviousAgain = false;

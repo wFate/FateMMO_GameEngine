@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <random>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -56,7 +57,7 @@ struct DungeonInstance {
 class DungeonManager {
 public:
     inline uint32_t createInstance(const std::string& sceneId, int partyId, int difficultyTier = 1) {
-        uint32_t id = nextInstanceId_++;
+        uint32_t id = generateInstanceId();
         auto inst = std::make_unique<DungeonInstance>(id, sceneId, partyId, difficultyTier);
         LOG_INFO("DungeonManager", "Created instance %u for scene '%s' party %d",
                  id, sceneId.c_str(), partyId);
@@ -160,9 +161,22 @@ public:
 
 private:
     uint32_t nextInstanceId_ = 1;
+    std::mt19937 rng_{std::random_device{}()};
     std::unordered_map<uint32_t, std::unique_ptr<DungeonInstance>> instances_;
     std::unordered_map<int, uint32_t> partyToInstance_;
     std::unordered_map<uint16_t, uint32_t> clientToInstance_;
+
+    uint32_t generateInstanceId() {
+        uint32_t id;
+        do {
+            // Combine counter with random bits to be unpredictable but collision-resistant
+            uint32_t counter = nextInstanceId_++;
+            uint32_t rand = rng_();
+            id = (rand & 0xFFFF0000u) | (counter & 0x0000FFFFu);
+            if (id == 0) id = 1; // 0 is reserved for "no instance"
+        } while (instances_.count(id));
+        return id;
+    }
 };
 
 } // namespace fate

@@ -109,27 +109,47 @@ bool ServerApp::init(uint16_t port) {
         auto walEntries = wal_.readAll();
         if (!walEntries.empty()) {
             LOG_WARN("Server", "WAL recovery: %zu entries found from previous crash", walEntries.size());
-            for (const auto& e : walEntries) {
-                LOG_INFO("WAL", "Recovery entry: seq=%llu type=%d char=%s val=%lld",
-                         e.sequence, static_cast<int>(e.type), e.characterId.c_str(), e.intValue);
+            // H7-FIX: Replay WAL entries to DB
+            try {
+                pqxx::work txn(gameDbConn_.connection());
+                for (const auto& e : walEntries) {
+                    LOG_INFO("WAL", "Replaying: seq=%llu type=%d char=%s val=%lld",
+                             e.sequence, static_cast<int>(e.type), e.characterId.c_str(), e.intValue);
+                    switch (e.type) {
+                        case WalEntryType::GoldChange:
+                            txn.exec_params("UPDATE characters SET gold = gold + $1 WHERE character_id = $2",
+                                e.intValue, e.characterId);
+                            break;
+                        case WalEntryType::XPGain:
+                            txn.exec_params("UPDATE characters SET current_xp = current_xp + $1 WHERE character_id = $2",
+                                e.intValue, e.characterId);
+                            break;
+                        default: break;
+                    }
+                }
+                txn.commit();
+                LOG_INFO("WAL", "Replayed %zu entries", walEntries.size());
+            } catch (const std::exception& ex) {
+                LOG_ERROR("WAL", "Replay failed: %s", ex.what());
             }
-            wal_.truncate(); // Clear after logging
+            wal_.truncate();
         }
     }
 
-    // Create repositories (all use gameDbConn_ for synchronous operations)
-    characterRepo_ = std::make_unique<CharacterRepository>(gameDbConn_.connection());
-    inventoryRepo_ = std::make_unique<InventoryRepository>(gameDbConn_.connection());
-    skillRepo_     = std::make_unique<SkillRepository>(gameDbConn_.connection());
-    guildRepo_     = std::make_unique<GuildRepository>(gameDbConn_.connection());
-    socialRepo_    = std::make_unique<SocialRepository>(gameDbConn_.connection());
-    marketRepo_    = std::make_unique<MarketRepository>(gameDbConn_.connection());
-    tradeRepo_     = std::make_unique<TradeRepository>(gameDbConn_.connection());
-    bountyRepo_    = std::make_unique<BountyRepository>(gameDbConn_.connection());
-    questRepo_     = std::make_unique<QuestRepository>(gameDbConn_.connection());
-    bankRepo_      = std::make_unique<BankRepository>(gameDbConn_.connection());
-    petRepo_       = std::make_unique<PetRepository>(gameDbConn_.connection());
-    mobStateRepo_  = std::make_unique<ZoneMobStateRepository>(gameDbConn_.connection());
+    // Create repositories (pool-based: each operation acquires its own connection)
+    characterRepo_ = std::make_unique<CharacterRepository>(dbPool_);
+    inventoryRepo_ = std::make_unique<InventoryRepository>(dbPool_);
+    skillRepo_     = std::make_unique<SkillRepository>(dbPool_);
+    guildRepo_     = std::make_unique<GuildRepository>(dbPool_);
+    socialRepo_    = std::make_unique<SocialRepository>(dbPool_);
+    marketRepo_    = std::make_unique<MarketRepository>(dbPool_);
+    tradeRepo_     = std::make_unique<TradeRepository>(dbPool_);
+    bountyRepo_    = std::make_unique<BountyRepository>(dbPool_);
+    questRepo_     = std::make_unique<QuestRepository>(dbPool_);
+    bankRepo_      = std::make_unique<BankRepository>(dbPool_);
+    petRepo_       = std::make_unique<PetRepository>(dbPool_);
+    mobStateRepo_  = std::make_unique<ZoneMobStateRepository>(dbPool_);
+    pvpKillLogRepo_ = std::make_unique<PvPKillLogRepository>(dbPool_);
 
     // Initialize definition caches
     itemDefCache_.initialize(gameDbConn_.connection());
@@ -228,7 +248,7 @@ bool ServerApp::init(uint16_t port) {
             conn.aoi.entered.clear();
             conn.aoi.left.clear();
             conn.aoi.stayed.clear();
-            conn.lastAckedState.clear();
+            conn.lastSentState.clear();
         });
 
         SvChatMessageMsg msg;
@@ -316,7 +336,7 @@ bool ServerApp::init(uint16_t port) {
             conn.aoi.entered.clear();
             conn.aoi.left.clear();
             conn.aoi.stayed.clear();
-            conn.lastAckedState.clear();
+            conn.lastSentState.clear();
 
             playerEventLocks_.erase(eid);
         });
@@ -391,7 +411,7 @@ bool ServerApp::init(uint16_t port) {
                         client->aoi.entered.clear();
                         client->aoi.left.clear();
                         client->aoi.stayed.clear();
-                        client->lastAckedState.clear();
+                        client->lastSentState.clear();
                     }
 
                     // Send SvArenaUpdate with match result
@@ -868,7 +888,7 @@ void ServerApp::tick(float dt) {
                 client->aoi.entered.clear();
                 client->aoi.left.clear();
                 client->aoi.stayed.clear();
-                client->lastAckedState.clear();
+                client->lastSentState.clear();
 
                 // Notify client of countdown state
                 SvArenaUpdateMsg arenaMsg;
@@ -1061,6 +1081,15 @@ void ServerApp::onClientConnected(uint16_t clientId) {
 
     client->account_id = session.account_id;
     client->character_id = session.character_id;
+
+    // H12-FIX: Restore rate limiter from previous session
+    {
+        auto rlIt = accountRateLimiters_.find(session.account_id);
+        if (rlIt != accountRateLimiters_.end()) {
+            rateLimiters_[clientId] = std::move(rlIt->second);
+            accountRateLimiters_.erase(rlIt);
+        }
+    }
 
     // Load character from DB
     auto recOpt = characterRepo_->loadCharacter(session.character_id);
@@ -1773,18 +1802,51 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll) {
     dbDispatcher_.dispatchVoid([this, rec, charId, skillRecords, skillEarned, skillSpent, skillBar, saveSkills]
                                (pqxx::connection& conn) {
         std::lock_guard<std::mutex> lock(playerLocks_.get(charId));
-        CharacterRepository charRepo(conn);
-        charRepo.saveCharacter(rec);
-
-        if (saveSkills) {
-            SkillRepository skillRepo(conn);
-            skillRepo.saveAllCharacterSkills(charId, skillRecords);
-            skillRepo.saveSkillBar(charId, skillBar);
-            skillRepo.saveSkillPoints(charId, skillEarned, skillSpent);
+        try {
+            pqxx::work txn(conn);
+            txn.exec_params(
+                "UPDATE characters SET "
+                "level = $2, current_xp = $3, xp_to_next_level = $4, "
+                "current_scene = $5, position_x = $6, position_y = $7, "
+                "current_hp = $8, max_hp = $9, current_mp = $10, max_mp = $11, current_fury = $12, "
+                "base_strength = $13, base_vitality = $14, base_intelligence = $15, "
+                "base_dexterity = $16, base_wisdom = $17, "
+                "gold = $18, honor = $19, pvp_kills = $20, pvp_deaths = $21, "
+                "is_dead = $22, death_timestamp = $23, total_playtime_seconds = $24, "
+                "pk_status = $25, faction = $26, last_saved_at = NOW(), last_online = NOW() "
+                "WHERE character_id = $1",
+                rec.character_id,
+                rec.level, rec.current_xp, rec.xp_to_next_level,
+                rec.current_scene, rec.position_x, rec.position_y,
+                rec.current_hp, rec.max_hp, rec.current_mp, rec.max_mp, rec.current_fury,
+                rec.base_strength, rec.base_vitality, rec.base_intelligence,
+                rec.base_dexterity, rec.base_wisdom,
+                rec.gold, rec.honor, rec.pvp_kills, rec.pvp_deaths,
+                rec.is_dead, rec.death_timestamp, rec.total_playtime_seconds,
+                rec.pk_status, rec.faction);
+            if (saveSkills) {
+                for (const auto& s : skillRecords)
+                    txn.exec_params(
+                        "INSERT INTO character_skills (character_id, skill_id, unlocked_rank, activated_rank, learned_at) "
+                        "VALUES ($1, $2, $3, $4, NOW()) "
+                        "ON CONFLICT (character_id, skill_id) DO UPDATE SET unlocked_rank = $3, activated_rank = $4",
+                        charId, s.skillId, s.unlockedRank, s.activatedRank);
+                txn.exec_params("DELETE FROM character_skill_bar WHERE character_id = $1", charId);
+                for (int i = 0; i < static_cast<int>(skillBar.size()) && i < 20; ++i) {
+                    if (skillBar[i].empty()) continue;
+                    txn.exec_params("INSERT INTO character_skill_bar (character_id, slot_index, skill_id) VALUES ($1, $2, $3)",
+                        charId, i, skillBar[i]);
+                }
+                txn.exec_params(
+                    "INSERT INTO character_skill_points (character_id, total_earned, total_spent, updated_at) "
+                    "VALUES ($1, $2, $3, NOW()) "
+                    "ON CONFLICT (character_id) DO UPDATE SET total_earned = $2, total_spent = $3, updated_at = NOW()",
+                    charId, skillEarned, skillSpent);
+            }
+            txn.commit();
+        } catch (const std::exception& e) {
+            LOG_ERROR("Server", "Atomic save failed for %s: %s", charId.c_str(), e.what());
         }
-
-        SocialRepository socialRepo(conn);
-        socialRepo.updateLastOnline(charId);
     });
 }
 
@@ -1952,6 +2014,12 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     needsFirstMoveSync_.erase(clientId);
     lastAutoAttackTime_.erase(clientId);
     skillCooldowns_.erase(clientId);
+    // H12-FIX: Preserve rate limiter for this account
+    if (client && client->account_id != 0) {
+        auto rlIt = rateLimiters_.find(clientId);
+        if (rlIt != rateLimiters_.end())
+            accountRateLimiters_[client->account_id] = std::move(rlIt->second);
+    }
     rateLimiters_.erase(clientId);
     nonceManager_.removeClient(clientId);
     clientAdminRoles_.erase(clientId);
@@ -2365,6 +2433,21 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     int activeCount = bountyRepo_->getActiveBountyCount();
                     bool targetHasBounty = bountyRepo_->hasActiveBounty(targetCharId);
 
+                    // H1-FIX: Validate placer has enough gold
+                    Entity* bountyEntity = getWorldForClient(clientId).getEntity(
+                        getReplicationForClient(clientId).getEntityHandle(PersistentId(client->playerEntityId)));
+                    auto* bountyInv = bountyEntity ? bountyEntity->getComponent<InventoryComponent>() : nullptr;
+                    if (!bountyInv || amount <= 0 || bountyInv->inventory.getGold() < amount) {
+                        SvBountyUpdateMsg errResp;
+                        errResp.updateType = 4;
+                        errResp.resultCode = static_cast<uint8_t>(BountyResult::InsufficientGold);
+                        errResp.message = "Not enough gold";
+                        uint8_t buf2[256]; ByteWriter w2(buf2, sizeof(buf2));
+                        errResp.write(w2);
+                        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvBountyUpdate, buf2, w2.size());
+                        break;
+                    }
+
                     BountyResult canPlace = BountyManager::canPlaceBounty(
                         client->character_id, targetCharId, amount,
                         placerGuildId, targetGuildId, activeCount, targetHasBounty);
@@ -2375,6 +2458,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         resp.resultCode = static_cast<uint8_t>(canPlace);
                         resp.message = BountyManager::getResultMessage(canPlace, targetCharId);
                     } else {
+                        wal_.appendGoldChange(client->character_id, -amount);
+                        bountyInv->inventory.setGold(bountyInv->inventory.getGold() - amount);
+                        playerDirty_[clientId].inventory = true;
+                        enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
+
                         BountyResult dbResult;
                         bountyRepo_->placeBounty(targetCharId, targetCharId,
                                                   client->character_id, "",
@@ -2664,6 +2752,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                 }
                 case TradeAction::SetGold: {
                     int64_t gold = detail::readI64(payload);
+                    if (gold < 0) { sendTradeResult(6, 6, "Invalid gold amount"); break; }
                     auto session = tradeRepo_->getActiveSession(client->character_id);
                     if (!session) break;
 
@@ -2921,8 +3010,12 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     Entity* e2 = getWorldForClient(clientId).getEntity(h2);
                     if (e2) {
                         auto* sc2 = e2->getComponent<CharacterStatsComponent>();
-                        if (sc2) sc2->stats.currentScene = cmd.targetScene;
+                        if (sc2) {
+                            sc2->stats.currentScene = cmd.targetScene;
+                            sc2->stats.combatTimer = 0.0f; // H20-FIX
+                        }
                     }
+                    lastAutoAttackTime_.erase(clientId);
                     playerDirty_[clientId].position = true;
 
                     // Clear AOI state so the replication system sends fresh
@@ -2935,7 +3028,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     client->aoi.entered.clear();
                     client->aoi.left.clear();
                     client->aoi.stayed.clear();
-                    client->lastAckedState.clear();
+                    client->lastSentState.clear();
                 }
             }
 
@@ -3015,7 +3108,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                 client->aoi.entered.clear();
                 client->aoi.left.clear();
                 client->aoi.stayed.clear();
-                client->lastAckedState.clear();
+                client->lastSentState.clear();
 
                 // Send zone transition to Town
                 SvZoneTransitionMsg ztResp;
@@ -3417,6 +3510,11 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             if (casterStatsComp) {
                 int xp = XPCalculator::calculateXPReward(
                     es.xpReward, es.level, casterStatsComp->stats.level);
+                // Party XP bonus (L33)
+                auto* partyXP = caster->getComponent<PartyComponent>();
+                if (partyXP && partyXP->party.isInParty()) {
+                    xp = static_cast<int>(xp * (1.0f + partyXP->party.getXPBonus()));
+                }
                 if (xp > 0) {
                     // WAL: record XP gain before mutating
                     auto* casterClient = server_.connections().findById(clientId);
@@ -3762,6 +3860,11 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             if (charStats) {
                 int xp = XPCalculator::calculateXPReward(
                     es.xpReward, es.level, charStats->stats.level);
+                // Party XP bonus (L33)
+                auto* partyXPAA = attacker->getComponent<PartyComponent>();
+                if (partyXPAA && partyXPAA->party.isInParty()) {
+                    xp = static_cast<int>(xp * (1.0f + partyXPAA->party.getXPBonus()));
+                }
                 if (xp > 0) {
                     // WAL: record XP gain before mutating
                     auto* attackerClient = server_.connections().findById(clientId);
@@ -4057,11 +4160,44 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 // Record PvP death on target
                 targetCharStats->stats.pvpDeaths++;
 
-                // Send death notification to the killed player
+                // Honor system (DB-backed kill tracking)
                 uint16_t targetClientId = 0;
+                std::string targetCharId;
                 server_.connections().forEach([&](const ClientConnection& conn) {
-                    if (conn.playerEntityId == targetPid.value()) targetClientId = conn.clientId;
+                    if (conn.playerEntityId == targetPid.value()) {
+                        targetClientId = conn.clientId;
+                        targetCharId = conn.character_id;
+                    }
                 });
+
+                if (charStats && !targetCharId.empty()) {
+                    int recentKills = pvpKillLogRepo_->countRecentKills(
+                        client->character_id, targetCharId);
+                    auto honorResult = HonorSystem::processKillWithCount(
+                        charStats->stats.pkStatus, targetCharStats->stats.pkStatus,
+                        recentKills, targetCharStats->stats.honor);
+
+                    if (honorResult.attackerGain > 0) {
+                        charStats->stats.honor = (std::min)(HonorSystem::MAX_HONOR,
+                            charStats->stats.honor + honorResult.attackerGain);
+                        playerDirty_[clientId].stats = true;
+                        enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
+                    }
+                    if (honorResult.victimLoss > 0 && targetClientId != 0) {
+                        targetCharStats->stats.honor = (std::max)(0,
+                            targetCharStats->stats.honor - honorResult.victimLoss);
+                        playerDirty_[targetClientId].stats = true;
+                        enqueuePersist(targetClientId, PersistPriority::HIGH, PersistType::Character);
+                    }
+
+                    pvpKillLogRepo_->recordKill(client->character_id, targetCharId);
+
+                    LOG_INFO("Server", "PvP honor: %s gained %d, %s lost %d (recent=%d)",
+                             client->character_id.c_str(), honorResult.attackerGain,
+                             targetCharId.c_str(), honorResult.victimLoss, recentKills);
+                }
+
+                // Send death notification to the killed player
                 if (targetClientId != 0) {
                     playerDirty_[targetClientId].stats = true;
                     playerDirty_[targetClientId].vitals = true;
@@ -4349,6 +4485,16 @@ void ServerApp::processEquip(uint16_t clientId, const CmdEquipMsg& msg) {
     // Block equipment changes while dead or dying
     if (!charStats->stats.isAlive()) return;
 
+    // H4-FIX: Block equipment changes during an active trade session
+    if (tradeRepo_->getActiveSession(client->character_id)) {
+        LOG_WARN("Server", "Client %d tried to change equipment during active trade", clientId);
+        return;
+    }
+
+    if (!isValidEquipmentSlot(msg.equipSlot)) {
+        LOG_WARN("Server", "Client %d sent invalid equipment slot %d", clientId, msg.equipSlot);
+        return;
+    }
     auto targetSlot = static_cast<EquipmentSlot>(msg.equipSlot);
 
     bool success = false;
@@ -4591,6 +4737,16 @@ void ServerApp::tickMaintenance(float dt) {
         int cleaned = tradeRepo_->cleanStaleSessions(30);
         if (cleaned > 0) {
             LOG_INFO("Server", "Cleaned %d stale trade sessions", cleaned);
+        }
+    }
+
+    // Prune old PvP kill log entries (every 5 minutes)
+    pvpKillLogPruneTimer_ += dt;
+    if (pvpKillLogPruneTimer_ >= 300.0f) {
+        pvpKillLogPruneTimer_ = 0.0f;
+        int pruned = pvpKillLogRepo_->pruneOldEntries();
+        if (pruned > 0) {
+            LOG_INFO("Server", "Pruned %d old PvP kill log entries", pruned);
         }
     }
 
@@ -4949,6 +5105,12 @@ void ServerApp::processEnchant(uint16_t clientId, const CmdEnchantMsg& msg) {
         return;
     }
 
+    // 1b. Validate: item is not locked for trade (L17)
+    if (inv->inventory.isSlotLocked(msg.inventorySlot)) {
+        sendResult(false, 0, false, "Cannot enchant a trade-locked item");
+        return;
+    }
+
     // 2. Validate: item is not already broken
     if (item.isBroken) {
         sendResult(false, static_cast<uint8_t>(item.enchantLevel), false, "Item is broken — repair it first");
@@ -5006,11 +5168,16 @@ void ServerApp::processEnchant(uint16_t clientId, const CmdEnchantMsg& msg) {
     // 9. WAL: log gold deduction before consuming
     wal_.appendGoldChange(client->character_id, -static_cast<int64_t>(goldCost));
 
-    // 10. Consume resources
+    // 10. Consume resources (H5-FIX: remove higher-indexed slot first)
     inv->inventory.setGold(currentGold - goldCost);
-    inv->inventory.removeItemQuantity(stoneSlot, 1);
-    if (protectSlot >= 0) {
+    if (protectSlot >= 0 && protectSlot > stoneSlot) {
         inv->inventory.removeItemQuantity(protectSlot, 1);
+        inv->inventory.removeItemQuantity(stoneSlot, 1);
+    } else {
+        inv->inventory.removeItemQuantity(stoneSlot, 1);
+        if (protectSlot >= 0) {
+            inv->inventory.removeItemQuantity(protectSlot, 1);
+        }
     }
 
     // 11. Roll enchant
@@ -5516,18 +5683,16 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
                 return;
             }
 
-            // Try deposit into bank storage
-            if (!bankComp->storage.depositItem(msg.itemId, msg.itemCount)) {
+            // Get full item data before depositing (preserves metadata)
+            ItemInstance depositedItem = inv->inventory.getSlot(slot);
+            depositedItem.quantity = msg.itemCount;
+            if (!bankComp->storage.depositItem(depositedItem)) {
                 sendResult(0, false, "Bank is full");
                 return;
             }
-
-            // Remove from inventory
             inv->inventory.removeItemQuantity(slot, msg.itemCount);
-
-            // Persist to DB
             bankRepo_->depositItem(client->character_id, -1, msg.itemId,
-                                   msg.itemCount, "", "", 0, 0, false);
+                                   msg.itemCount, "", "", depositedItem.enchantLevel, 0, false);
 
             playerDirty_[clientId].bank = true;
             playerDirty_[clientId].inventory = true;
@@ -5551,17 +5716,18 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
                 return;
             }
 
-            // Try withdraw from bank
-            if (!bankComp->storage.withdrawItem(msg.itemId, msg.itemCount)) {
+            // Try withdraw from bank (retrieves full item metadata)
+            ItemInstance withdrawnItem;
+            if (!bankComp->storage.withdrawItem(msg.itemId, msg.itemCount, &withdrawnItem)) {
                 sendResult(1, false, "Item not in bank or insufficient quantity");
                 return;
             }
 
-            // Add to inventory
-            ItemInstance item;
-            item.itemId = msg.itemId;
-            item.quantity = msg.itemCount;
-            inv->inventory.addItem(item);
+            // Add to inventory with preserved metadata
+            if (withdrawnItem.instanceId.empty()) withdrawnItem.instanceId = generateItemInstanceId();
+            withdrawnItem.itemId = msg.itemId;
+            withdrawnItem.quantity = msg.itemCount;
+            inv->inventory.addItem(withdrawnItem);
 
             // Persist to DB: find slot index of item in bank (or -1 for removal)
             // Bank items are saved on-demand; withdraw removes the slot
@@ -5693,6 +5859,10 @@ void ServerApp::processSocketItem(uint16_t clientId, const CmdSocketItemMsg& msg
     };
 
     // 1. Validate equipment slot enum range
+    if (!isValidEquipmentSlot(msg.equipSlot)) {
+        sendResult(false, 0, 0, false, "Invalid equipment slot");
+        return;
+    }
     auto equipSlot = static_cast<EquipmentSlot>(msg.equipSlot);
 
     // 2. Validate slot is socketable (Ring, Necklace, Cloak only)
@@ -5795,6 +5965,10 @@ void ServerApp::processStatEnchant(uint16_t clientId, const CmdStatEnchantMsg& m
     };
 
     // 1. Validate equipment slot enum range
+    if (!isValidEquipmentSlot(msg.equipSlot)) {
+        sendResult(false, 0, 0, "Invalid equipment slot");
+        return;
+    }
     auto equipSlot = static_cast<EquipmentSlot>(msg.equipSlot);
 
     // 2. Get equipped item from the slot
@@ -5945,7 +6119,7 @@ void ServerApp::initGMCommands() {
             callerClient->aoi.entered.clear();
             callerClient->aoi.left.clear();
             callerClient->aoi.stayed.clear();
-            callerClient->lastAckedState.clear();
+            callerClient->lastSentState.clear();
             SvZoneTransitionMsg zt;
             zt.targetScene = targetStats->stats.currentScene;
             zt.spawnX = targetTransform->position.x;
@@ -5986,7 +6160,7 @@ void ServerApp::initGMCommands() {
             targetClient->aoi.entered.clear();
             targetClient->aoi.left.clear();
             targetClient->aoi.stayed.clear();
-            targetClient->lastAckedState.clear();
+            targetClient->lastSentState.clear();
             SvZoneTransitionMsg zt;
             zt.targetScene = callerStats->stats.currentScene;
             zt.spawnX = callerTransform->position.x;
@@ -6084,7 +6258,10 @@ void ServerApp::initGMCommands() {
         auto* inv = targetEntity->getComponent<InventoryComponent>();
         if (!inv) return;
 
+        wal_.appendGoldChange(targetClient->character_id, amount);
         inv->inventory.setGold(inv->inventory.getGold() + amount);
+        playerDirty_[targetId].inventory = true;
+        enqueuePersist(targetId, PersistPriority::IMMEDIATE, PersistType::Inventory);
         sendPlayerState(targetId);
         sendSystemMsg(callerId, "Gave " + args[0] + " " + std::to_string(amount) + " gold");
         LOG_INFO("GM", "Client %d gave '%s' %lld gold", callerId, args[0].c_str(),
@@ -6291,6 +6468,22 @@ void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMs
         if (elapsed < CONSUMABLE_COOLDOWN) {
             sendResult(false, "Still on cooldown");
             return;
+        }
+    }
+
+    // 4b. Check cooldown group -- items sharing a group share cooldowns (L16)
+    int cooldownGroup = def ? def->getIntAttribute("cooldown_group", 0) : 0;
+    if (cooldownGroup > 0) {
+        for (const auto& [cdItemId, cdTime] : cooldowns) {
+            if (cdItemId == item.itemId) continue;
+            float elapsed = gameTime_ - cdTime;
+            if (elapsed < CONSUMABLE_COOLDOWN) {
+                const CachedItemDefinition* cdDef = itemDefCache_.getDefinition(cdItemId);
+                if (cdDef && cdDef->getIntAttribute("cooldown_group", 0) == cooldownGroup) {
+                    sendResult(false, "Another item in this group is on cooldown");
+                    return;
+                }
+            }
         }
     }
 
@@ -6609,6 +6802,7 @@ void ServerApp::tickPetAutoLoot(float dt) {
                     if (client) wal_.appendGoldChange(client->character_id, static_cast<int64_t>(info.drop->goldAmount));
                     inv->inventory.setGold(inv->inventory.getGold() + info.drop->goldAmount);
                     playerDirty_[clientId].inventory = true;
+                    enqueuePersist(clientId, PersistPriority::LOW, PersistType::Inventory);
 
                     SvLootPickupMsg pickup;
                     pickup.isGold = 1;
@@ -7111,7 +7305,7 @@ EntityHandle ServerApp::transferPlayerToWorld(uint16_t clientId,
     conn->aoi.entered.clear();
     conn->aoi.left.clear();
     conn->aoi.stayed.clear();
-    conn->lastAckedState.clear();
+    conn->lastSentState.clear();
 
     // Mark first-move sync so server accepts position unconditionally
     needsFirstMoveSync_.insert(clientId);

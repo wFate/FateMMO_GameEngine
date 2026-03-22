@@ -6,7 +6,8 @@ namespace fate {
 std::vector<PetRecord> PetRepository::loadPets(const std::string& characterId) {
     std::vector<PetRecord> pets;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT id, character_id, pet_def_id, pet_name, level, current_xp, "
             "is_equipped, is_soulbound, auto_loot_enabled "
@@ -35,7 +36,8 @@ std::vector<PetRecord> PetRepository::loadPets(const std::string& characterId) {
 
 std::optional<PetRecord> PetRepository::loadEquippedPet(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT id, character_id, pet_def_id, pet_name, level, current_xp, "
             "is_equipped, is_soulbound, auto_loot_enabled "
@@ -64,7 +66,8 @@ std::optional<PetRecord> PetRepository::loadEquippedPet(const std::string& chara
 
 bool PetRepository::savePet(const PetRecord& pet) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         if (pet.id > 0) {
             txn.exec_params(
                 "UPDATE character_pets SET pet_name = $2, level = $3, current_xp = $4, "
@@ -89,7 +92,8 @@ bool PetRepository::savePet(const PetRecord& pet) {
 
 bool PetRepository::saveAllPets(const std::string& characterId, const std::vector<PetRecord>& pets) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         for (const auto& pet : pets) {
             if (pet.id > 0) {
                 txn.exec_params(
@@ -109,7 +113,8 @@ bool PetRepository::saveAllPets(const std::string& characterId, const std::vecto
 
 bool PetRepository::equipPet(const std::string& characterId, int petId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         // Unequip all first
         txn.exec_params(
             "UPDATE character_pets SET is_equipped = FALSE WHERE character_id = $1",
@@ -128,7 +133,8 @@ bool PetRepository::equipPet(const std::string& characterId, int petId) {
 
 bool PetRepository::unequipAllPets(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE character_pets SET is_equipped = FALSE WHERE character_id = $1",
             characterId);
@@ -142,7 +148,8 @@ bool PetRepository::unequipAllPets(const std::string& characterId) {
 
 bool PetRepository::addPetXP(const std::string& characterId, int petId, int64_t xp) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE character_pets SET current_xp = current_xp + $3 "
             "WHERE id = $1 AND character_id = $2",

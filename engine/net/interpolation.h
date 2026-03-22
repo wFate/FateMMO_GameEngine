@@ -40,9 +40,24 @@ public:
         states_[persistentId].onServerUpdate(position);
     }
 
-    Vec2 getInterpolatedPosition(uint64_t persistentId, float dt) {
+    // Pre-seed position for a new entity (e.g. from SvEntityEnter) so the first
+    // interpolation sample never returns a zero vector / flash-to-origin.
+    void initEntity(uint64_t persistentId, const Vec2& spawnPosition) {
+        auto& s = states_[persistentId];
+        if (!s.hasData) {
+            s.previousPosition = spawnPosition;
+            s.targetPosition   = spawnPosition;
+            s.hasData = true;
+        }
+    }
+
+    Vec2 getInterpolatedPosition(uint64_t persistentId, float dt, bool* valid = nullptr) {
         auto it = states_.find(persistentId);
-        if (it == states_.end()) return {};
+        if (it == states_.end()) {
+            if (valid) *valid = false;
+            return {};
+        }
+        if (valid) *valid = it->second.hasData;
         return it->second.interpolate(dt);
     }
 

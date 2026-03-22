@@ -36,7 +36,7 @@ TEST_CASE("ReliabilityLayer: build ack fields") {
     rel.onReceive(9);
     rel.onReceive(7); // missing 8
 
-    uint16_t ack, ackBits;
+    uint16_t ack; uint32_t ackBits;
     rel.buildAckFields(ack, ackBits);
     CHECK(ack == 10);
     CHECK((ackBits & 0x01) == 1); // bit 0 = seq 9

@@ -4,6 +4,7 @@
 #include <optional>
 #include <cstdint>
 #include <pqxx/pqxx>
+#include "server/db/db_pool.h"
 #include "game/shared/market_manager.h"  // JackpotState
 
 namespace fate {
@@ -48,7 +49,10 @@ struct MarketTransactionRecord {
 
 class MarketRepository {
 public:
-    explicit MarketRepository(pqxx::connection& conn) : conn_(conn) {}
+    // Legacy: direct connection (for temp repos in async fibers)
+    explicit MarketRepository(pqxx::connection& conn) : connRef_(&conn), pool_(nullptr) {}
+    // Pool-based: acquires connection per operation
+    explicit MarketRepository(DbPool& pool) : connRef_(nullptr), pool_(&pool) {}
 
     // Listings
     int countActiveListings(const std::string& characterId);
@@ -82,7 +86,13 @@ public:
     int deactivateExpiredListings();
 
 private:
-    pqxx::connection& conn_;
+    pqxx::connection* connRef_ = nullptr;
+    DbPool* pool_ = nullptr;
+
+    DbPool::Guard acquireConn() {
+        if (pool_) return pool_->acquire_guard();
+        return DbPool::Guard::wrap(*connRef_);
+    }
 
     static MarketListingRecord rowToListing(const pqxx::row& row);
 };

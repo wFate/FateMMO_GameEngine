@@ -6,7 +6,8 @@ namespace fate {
 int GuildRepository::createGuild(const std::string& guildName, const std::string& ownerCharId,
                                   int maxMembers, GuildDbResult& result) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
 
         // Check name availability
         auto check = txn.exec_params(
@@ -59,7 +60,8 @@ int GuildRepository::createGuild(const std::string& guildName, const std::string
 
 bool GuildRepository::disbandGuild(int guildId, const std::string& requesterId, GuildDbResult& result) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
 
         // Verify requester is owner
         auto check = txn.exec_params(
@@ -93,7 +95,8 @@ bool GuildRepository::disbandGuild(int guildId, const std::string& requesterId, 
 
 std::optional<GuildInfoRecord> GuildRepository::getGuildInfo(int guildId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT g.guild_id, g.guild_name, g.guild_level, g.guild_xp, "
             "g.member_count, g.max_members, g.owner_character_id, "
@@ -121,7 +124,8 @@ std::optional<GuildInfoRecord> GuildRepository::getGuildInfo(int guildId) {
 
 int GuildRepository::getPlayerGuildId(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT guild_id FROM guild_members WHERE character_id = $1", characterId);
         txn.commit();
@@ -134,7 +138,8 @@ int GuildRepository::getPlayerGuildId(const std::string& characterId) {
 
 std::optional<GuildDisplayRecord> GuildRepository::getPlayerGuildDisplay(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT g.guild_id, g.guild_name "
             "FROM guild_members gm JOIN guilds g ON g.guild_id = gm.guild_id "
@@ -154,7 +159,8 @@ std::optional<GuildDisplayRecord> GuildRepository::getPlayerGuildDisplay(const s
 
 int GuildRepository::getPlayerRank(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT rank FROM guild_members WHERE character_id = $1", characterId);
         txn.commit();
@@ -168,7 +174,8 @@ int GuildRepository::getPlayerRank(const std::string& characterId) {
 std::vector<GuildMemberRecord> GuildRepository::getGuildMembers(int guildId) {
     std::vector<GuildMemberRecord> members;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT gm.character_id, c.character_name, gm.rank, c.level, "
             "gm.xp_contributed, EXTRACT(EPOCH FROM gm.joined_at)::BIGINT AS joined_unix "
@@ -194,7 +201,8 @@ std::vector<GuildMemberRecord> GuildRepository::getGuildMembers(int guildId) {
 
 int GuildRepository::getOfficerCount(int guildId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT COUNT(*) FROM guild_members WHERE guild_id = $1 AND rank = 1", guildId);
         txn.commit();
@@ -207,7 +215,8 @@ int GuildRepository::getOfficerCount(int guildId) {
 
 bool GuildRepository::addMember(int guildId, const std::string& characterId, int rank, GuildDbResult& result) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
 
         // Check guild capacity
         auto cap = txn.exec_params(
@@ -247,7 +256,8 @@ bool GuildRepository::addMember(int guildId, const std::string& characterId, int
 
 bool GuildRepository::removeMember(int guildId, const std::string& characterId, GuildDbResult& result) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
 
         txn.exec_params(
             "DELETE FROM guild_members WHERE guild_id = $1 AND character_id = $2",
@@ -270,7 +280,8 @@ bool GuildRepository::removeMember(int guildId, const std::string& characterId, 
 
 bool GuildRepository::setMemberRank(int guildId, const std::string& characterId, int newRank) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE guild_members SET rank = $3 WHERE guild_id = $1 AND character_id = $2",
             guildId, characterId, newRank);
@@ -285,7 +296,8 @@ bool GuildRepository::setMemberRank(int guildId, const std::string& characterId,
 bool GuildRepository::transferOwnership(int guildId, const std::string& currentOwnerId,
                                          const std::string& newOwnerId, GuildDbResult& result) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
 
         // Demote current owner to officer
         txn.exec_params(
@@ -314,7 +326,8 @@ bool GuildRepository::transferOwnership(int guildId, const std::string& currentO
 
 int64_t GuildRepository::addGuildXP(int guildId, const std::string& contributorId, int64_t xpAmount) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
 
         auto result = txn.exec_params(
             "UPDATE guilds SET guild_xp = guild_xp + $2 WHERE guild_id = $1 "

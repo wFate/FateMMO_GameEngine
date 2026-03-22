@@ -21,6 +21,9 @@ void PersistenceQueue::enqueue(uint16_t clientId, PersistPriority priority,
 }
 
 std::vector<PersistRequest> PersistenceQueue::dequeue(int maxCount, float gameTime) {
+    // L28: Promote any requests that have exceeded their maxDelay
+    promoteStarved(gameTime);
+
     std::vector<PersistRequest> batch;
     batch.reserve(static_cast<size_t>(maxCount));
 
@@ -30,6 +33,32 @@ std::vector<PersistRequest> PersistenceQueue::dequeue(int maxCount, float gameTi
     }
 
     return batch;
+}
+
+void PersistenceQueue::promoteStarved(float gameTime) {
+    // Drain the priority queue, promote any starved requests to HIGH, re-insert all
+    std::vector<PersistRequest> temp;
+    temp.reserve(queue_.size());
+    bool anyPromoted = false;
+
+    while (!queue_.empty()) {
+        auto req = queue_.top();
+        queue_.pop();
+
+        if (req.priority > PersistPriority::HIGH) {
+            float waited = gameTime - req.queuedAt;
+            if (waited >= req.maxDelay) {
+                req.priority = PersistPriority::HIGH;
+                anyPromoted = true;
+            }
+        }
+        temp.push_back(std::move(req));
+    }
+
+    for (auto& r : temp) {
+        queue_.push(std::move(r));
+    }
+    (void)anyPromoted; // suppress unused warning; useful for future logging
 }
 
 } // namespace fate

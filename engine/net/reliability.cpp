@@ -3,12 +3,17 @@
 
 namespace fate {
 
-void ReliabilityLayer::trackReliable(uint16_t sequence, const uint8_t* data, size_t size) {
+void ReliabilityLayer::trackReliable(uint16_t sequence, const uint8_t* data, size_t size, float currentTime) {
+    if (pending_.size() >= MAX_PENDING_PACKETS) {
+        // Drop oldest unacked packet to prevent memory exhaustion
+        pending_.erase(pending_.begin());
+    }
+
     PendingPacket pkt;
     pkt.sequence = sequence;
     pkt.data.assign(data, data + size);
-    pkt.timeSent = 0.0f;
-    pkt.lastRetransmit = 0.0f;
+    pkt.timeSent = currentTime;
+    pkt.lastRetransmit = currentTime;
     pkt.retransmitCount = 0;
     pending_.push_back(std::move(pkt));
 }
@@ -52,12 +57,12 @@ bool ReliabilityLayer::onReceive(uint16_t remoteSequence) {
     }
 }
 
-void ReliabilityLayer::buildAckFields(uint16_t& ack, uint16_t& ackBits) const {
+void ReliabilityLayer::buildAckFields(uint16_t& ack, uint32_t& ackBits) const {
     ack = remoteSequence_;
-    ackBits = static_cast<uint16_t>(receivedBits_ & 0xFFFF);
+    ackBits = receivedBits_;
 }
 
-void ReliabilityLayer::processAck(uint16_t ack, uint16_t ackBits, float currentTime) {
+void ReliabilityLayer::processAck(uint16_t ack, uint32_t ackBits, float currentTime) {
     pending_.erase(
         std::remove_if(pending_.begin(), pending_.end(),
             [&](const PendingPacket& pkt) {
@@ -66,7 +71,7 @@ void ReliabilityLayer::processAck(uint16_t ack, uint16_t ackBits, float currentT
                     acked = true;
                 } else {
                     int16_t diff = static_cast<int16_t>(ack - pkt.sequence);
-                    if (diff > 0 && diff <= 16) {
+                    if (diff > 0 && diff <= 32) {
                         if (ackBits & (1u << (diff - 1))) {
                             acked = true;
                         }

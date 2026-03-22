@@ -29,7 +29,8 @@ MarketListingRecord MarketRepository::rowToListing(const pqxx::row& row) {
 
 int MarketRepository::countActiveListings(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT COUNT(*) FROM market_listings "
             "WHERE seller_character_id = $1 AND is_active = TRUE AND expires_at > NOW()",
@@ -50,7 +51,8 @@ int MarketRepository::createListing(const std::string& sellerId, const std::stri
                                      const std::string& category, const std::string& subtype,
                                      const std::string& rarity, int itemLevel) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "INSERT INTO market_listings ("
             "seller_character_id, seller_character_name, item_instance_id, item_id, "
@@ -76,7 +78,8 @@ int MarketRepository::createListing(const std::string& sellerId, const std::stri
 
 std::optional<MarketListingRecord> MarketRepository::getListing(int listingId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT listing_id, seller_character_id, seller_character_name, "
             "item_instance_id::text, item_id, item_name, quantity, enchant_level, "
@@ -97,7 +100,8 @@ std::optional<MarketListingRecord> MarketRepository::getListing(int listingId) {
 std::vector<MarketListingRecord> MarketRepository::getPlayerListings(const std::string& characterId) {
     std::vector<MarketListingRecord> listings;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT listing_id, seller_character_id, seller_character_name, "
             "item_instance_id::text, item_id, item_name, quantity, enchant_level, "
@@ -121,7 +125,8 @@ std::vector<MarketListingRecord> MarketRepository::getPlayerListings(const std::
 
 bool MarketRepository::cancelListing(int listingId, const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE market_listings SET is_active = FALSE "
             "WHERE listing_id = $1 AND seller_character_id = $2 AND is_active = TRUE",
@@ -152,7 +157,8 @@ bool MarketRepository::logTransaction(int listingId, const std::string& sellerId
                                        const std::string& rolledStats, int64_t salePrice,
                                        int64_t taxAmount, int64_t sellerReceived) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "INSERT INTO market_transactions ("
             "listing_id, seller_character_id, seller_character_name, "
@@ -175,7 +181,8 @@ std::vector<MarketTransactionRecord> MarketRepository::getPlayerTransactions(
     const std::string& characterId, int limit) {
     std::vector<MarketTransactionRecord> txns;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT transaction_id, seller_character_id, seller_character_name, "
             "buyer_character_id, buyer_character_name, item_id, item_name, "
@@ -212,7 +219,8 @@ std::vector<MarketTransactionRecord> MarketRepository::getPlayerTransactions(
 JackpotState MarketRepository::getJackpotState() {
     JackpotState state;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec(
             "SELECT current_pool, EXTRACT(EPOCH FROM next_payout_at)::BIGINT AS next_unix "
             "FROM jackpot_pool WHERE id = 1");
@@ -229,7 +237,8 @@ JackpotState MarketRepository::getJackpotState() {
 
 int64_t MarketRepository::addToJackpot(int64_t amount) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "UPDATE jackpot_pool SET current_pool = current_pool + $1, last_updated_at = NOW() "
             "WHERE id = 1 RETURNING current_pool", amount);
@@ -243,7 +252,8 @@ int64_t MarketRepository::addToJackpot(int64_t amount) {
 
 bool MarketRepository::resetJackpot(int64_t nextPayoutAtUnix) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE jackpot_pool SET current_pool = 0, "
             "next_payout_at = to_timestamp($1), last_updated_at = NOW() WHERE id = 1",
@@ -258,7 +268,8 @@ bool MarketRepository::resetJackpot(int64_t nextPayoutAtUnix) {
 
 int MarketRepository::deactivateExpiredListings() {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec(
             "UPDATE market_listings SET is_active = FALSE "
             "WHERE is_active = TRUE AND expires_at <= NOW()");

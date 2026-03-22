@@ -97,6 +97,7 @@ void NetClient::disconnect() {
 }
 
 void NetClient::poll(float currentTime) {
+    lastPollTime_ = currentTime;
     // --- Reconnect state machine ---
     if (reconnectPhase_ == ReconnectPhase::Reconnecting) {
         // Use currentTime for elapsed tracking; on first tick set baseline
@@ -181,7 +182,8 @@ void NetClient::poll(float currentTime) {
 
     // Process retransmits
     if (connected_ || waitingForAccept_) {
-        auto retransmits = reliability_.getRetransmits(currentTime);
+        float retransmitDelay = (std::max)(0.2f, reliability_.rtt() * 2.0f);
+        auto retransmits = reliability_.getRetransmits(currentTime, retransmitDelay);
         for (auto& pkt : retransmits) {
             socket_.sendTo(pkt.data.data(), pkt.data.size(), serverAddress_);
             reliability_.markRetransmitted(pkt.sequence, currentTime);
@@ -596,7 +598,8 @@ void NetClient::sendPacket(Channel channel, uint8_t packetType,
     uint8_t buf[MAX_PACKET_SIZE];
     ByteWriter w(buf, sizeof(buf));
 
-    uint16_t ack, ackBits;
+    uint16_t ack;
+    uint32_t ackBits;
     reliability_.buildAckFields(ack, ackBits);
 
     PacketHeader hdr;
@@ -631,7 +634,7 @@ void NetClient::sendPacket(Channel channel, uint8_t packetType,
     socket_.sendTo(buf, w.size(), serverAddress_);
 
     if (channel != Channel::Unreliable) {
-        reliability_.trackReliable(hdr.sequence, buf, w.size());
+        reliability_.trackReliable(hdr.sequence, buf, w.size(), lastPollTime_);
     }
 }
 

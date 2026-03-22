@@ -4,6 +4,7 @@
 #include <optional>
 #include <cstdint>
 #include <pqxx/pqxx>
+#include "server/db/db_pool.h"
 
 namespace fate {
 
@@ -41,7 +42,10 @@ struct TradeOfferRecord {
 
 class TradeRepository {
 public:
-    explicit TradeRepository(pqxx::connection& conn) : conn_(conn) {}
+    // Legacy: direct connection (for temp repos in async fibers)
+    explicit TradeRepository(pqxx::connection& conn) : connRef_(&conn), pool_(nullptr) {}
+    // Pool-based: acquires connection per operation
+    explicit TradeRepository(DbPool& pool) : connRef_(nullptr), pool_(&pool) {}
 
     // Sessions
     int createSession(const std::string& playerAId, const std::string& playerBId,
@@ -72,12 +76,22 @@ public:
     bool logTradeHistory(int sessionId, const std::string& playerAId, const std::string& playerBId,
                          int64_t goldA, int64_t goldB,
                          const std::string& itemsAJson, const std::string& itemsBJson);
+    // In-transaction overload (for atomic trade execution)
+    bool logTradeHistory(pqxx::work& txn, int sessionId, const std::string& playerAId, const std::string& playerBId,
+                         int64_t goldA, int64_t goldB,
+                         const std::string& itemsAJson, const std::string& itemsBJson);
 
     // Cleanup
     int cleanStaleSessions(int maxAgeMinutes = 30);
 
 private:
-    pqxx::connection& conn_;
+    pqxx::connection* connRef_ = nullptr;
+    DbPool* pool_ = nullptr;
+
+    DbPool::Guard acquireConn() {
+        if (pool_) return pool_->acquire_guard();
+        return DbPool::Guard::wrap(*connRef_);
+    }
 };
 
 } // namespace fate

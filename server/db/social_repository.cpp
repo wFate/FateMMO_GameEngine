@@ -7,7 +7,8 @@ namespace fate {
 
 bool SocialRepository::sendFriendRequest(const std::string& fromId, const std::string& toId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "INSERT INTO friends (character_id, friend_character_id, status, created_at) "
             "VALUES ($1, $2, 'pending', NOW()) ON CONFLICT DO NOTHING",
@@ -22,7 +23,8 @@ bool SocialRepository::sendFriendRequest(const std::string& fromId, const std::s
 
 bool SocialRepository::acceptFriendRequest(const std::string& characterId, const std::string& fromId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         // Update existing request
         txn.exec_params(
             "UPDATE friends SET status = 'accepted', accepted_at = NOW() "
@@ -43,7 +45,8 @@ bool SocialRepository::acceptFriendRequest(const std::string& characterId, const
 
 bool SocialRepository::declineFriendRequest(const std::string& characterId, const std::string& fromId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "DELETE FROM friends WHERE character_id = $1 AND friend_character_id = $2 AND status = 'pending'",
             fromId, characterId);
@@ -57,7 +60,8 @@ bool SocialRepository::declineFriendRequest(const std::string& characterId, cons
 
 bool SocialRepository::removeFriend(const std::string& charId, const std::string& friendId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "DELETE FROM friends WHERE "
             "(character_id = $1 AND friend_character_id = $2) OR "
@@ -74,7 +78,8 @@ bool SocialRepository::removeFriend(const std::string& charId, const std::string
 std::vector<FriendRecord> SocialRepository::getFriends(const std::string& characterId) {
     std::vector<FriendRecord> friends;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT f.friend_character_id, f.status, f.note, "
             "EXTRACT(EPOCH FROM c.last_online)::BIGINT AS last_online "
@@ -99,7 +104,8 @@ std::vector<FriendRecord> SocialRepository::getFriends(const std::string& charac
 std::vector<FriendRequestRecord> SocialRepository::getIncomingRequests(const std::string& characterId) {
     std::vector<FriendRequestRecord> requests;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT character_id, EXTRACT(EPOCH FROM created_at)::BIGINT AS created_unix "
             "FROM friends WHERE friend_character_id = $1 AND status = 'pending'", characterId);
@@ -118,7 +124,8 @@ std::vector<FriendRequestRecord> SocialRepository::getIncomingRequests(const std
 
 int SocialRepository::getFriendCount(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT COUNT(*) FROM friends WHERE character_id = $1 AND status = 'accepted'",
             characterId);
@@ -132,7 +139,8 @@ int SocialRepository::getFriendCount(const std::string& characterId) {
 
 bool SocialRepository::areFriends(const std::string& char1, const std::string& char2) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT 1 FROM friends "
             "WHERE character_id = $1 AND friend_character_id = $2 AND status = 'accepted' LIMIT 1",
@@ -150,7 +158,8 @@ bool SocialRepository::areFriends(const std::string& char1, const std::string& c
 bool SocialRepository::blockPlayer(const std::string& blockerId, const std::string& blockedId,
                                     const std::string& reason) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         // Remove friendship first
         txn.exec_params(
             "DELETE FROM friends WHERE "
@@ -173,7 +182,8 @@ bool SocialRepository::blockPlayer(const std::string& blockerId, const std::stri
 
 bool SocialRepository::unblockPlayer(const std::string& blockerId, const std::string& blockedId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "DELETE FROM blocked_players WHERE blocker_character_id = $1 AND blocked_character_id = $2",
             blockerId, blockedId);
@@ -188,7 +198,8 @@ bool SocialRepository::unblockPlayer(const std::string& blockerId, const std::st
 std::vector<BlockRecord> SocialRepository::getBlockedPlayers(const std::string& characterId) {
     std::vector<BlockRecord> blocks;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT blocked_character_id, EXTRACT(EPOCH FROM blocked_at)::BIGINT AS blocked_unix "
             "FROM blocked_players WHERE blocker_character_id = $1", characterId);
@@ -207,7 +218,8 @@ std::vector<BlockRecord> SocialRepository::getBlockedPlayers(const std::string& 
 
 bool SocialRepository::isBlocked(const std::string& blockerId, const std::string& blockedId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT 1 FROM blocked_players "
             "WHERE blocker_character_id = $1 AND blocked_character_id = $2 LIMIT 1",
@@ -222,7 +234,8 @@ bool SocialRepository::isBlocked(const std::string& blockerId, const std::string
 
 int SocialRepository::getBlockCount(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT COUNT(*) FROM blocked_players WHERE blocker_character_id = $1", characterId);
         txn.commit();
@@ -238,7 +251,8 @@ int SocialRepository::getBlockCount(const std::string& characterId) {
 bool SocialRepository::setFriendNote(const std::string& charId, const std::string& friendId,
                                       const std::string& note) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE friends SET note = $3 WHERE character_id = $1 AND friend_character_id = $2",
             charId, friendId, note);
@@ -254,7 +268,8 @@ bool SocialRepository::setFriendNote(const std::string& charId, const std::strin
 
 bool SocialRepository::updateLastOnline(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params("UPDATE characters SET last_online = NOW() WHERE character_id = $1",
                          characterId);
         txn.commit();

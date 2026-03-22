@@ -6,7 +6,8 @@ namespace fate {
 int TradeRepository::createSession(const std::string& playerAId, const std::string& playerBId,
                                     const std::string& sceneName) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "INSERT INTO trade_sessions ("
             "player_a_character_id, player_b_character_id, scene_name, "
@@ -25,7 +26,8 @@ int TradeRepository::createSession(const std::string& playerAId, const std::stri
 
 std::optional<TradeSessionRecord> TradeRepository::loadSession(int sessionId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT session_id, player_a_character_id, player_b_character_id, "
             "player_a_locked, player_b_locked, player_a_confirmed, player_b_confirmed, "
@@ -56,7 +58,8 @@ std::optional<TradeSessionRecord> TradeRepository::loadSession(int sessionId) {
 
 std::optional<TradeSessionRecord> TradeRepository::getActiveSession(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT session_id, player_a_character_id, player_b_character_id, "
             "player_a_locked, player_b_locked, player_a_confirmed, player_b_confirmed, "
@@ -90,7 +93,8 @@ std::optional<TradeSessionRecord> TradeRepository::getActiveSession(const std::s
 
 bool TradeRepository::isPlayerInTrade(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT EXISTS(SELECT 1 FROM trade_sessions "
             "WHERE status = 'active' AND "
@@ -106,7 +110,8 @@ bool TradeRepository::isPlayerInTrade(const std::string& characterId) {
 
 bool TradeRepository::cancelSession(int sessionId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params("DELETE FROM trade_offers WHERE session_id = $1", sessionId);
         txn.exec_params(
             "UPDATE trade_sessions SET status = 'cancelled', completed_at = NOW() "
@@ -121,7 +126,8 @@ bool TradeRepository::cancelSession(int sessionId) {
 
 bool TradeRepository::setPlayerLocked(int sessionId, const std::string& characterId, bool locked) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE trade_sessions SET "
             "player_a_locked = CASE WHEN player_a_character_id = $2 THEN $3 ELSE player_a_locked END, "
@@ -138,7 +144,8 @@ bool TradeRepository::setPlayerLocked(int sessionId, const std::string& characte
 
 bool TradeRepository::setPlayerConfirmed(int sessionId, const std::string& characterId, bool confirmed) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE trade_sessions SET "
             "player_a_confirmed = CASE WHEN player_a_character_id = $2 THEN $3 ELSE player_a_confirmed END, "
@@ -155,7 +162,8 @@ bool TradeRepository::setPlayerConfirmed(int sessionId, const std::string& chara
 
 bool TradeRepository::setPlayerGold(int sessionId, const std::string& characterId, int64_t gold) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE trade_sessions SET "
             "player_a_gold = CASE WHEN player_a_character_id = $2 THEN $3 ELSE player_a_gold END, "
@@ -172,7 +180,8 @@ bool TradeRepository::setPlayerGold(int sessionId, const std::string& characterI
 
 bool TradeRepository::unlockBothPlayers(int sessionId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE trade_sessions SET "
             "player_a_locked = FALSE, player_b_locked = FALSE, "
@@ -188,7 +197,8 @@ bool TradeRepository::unlockBothPlayers(int sessionId) {
 
 bool TradeRepository::resetConfirms(int sessionId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE trade_sessions SET player_a_confirmed = FALSE, player_b_confirmed = FALSE "
             "WHERE session_id = $1 AND status = 'active'", sessionId);
@@ -203,7 +213,8 @@ bool TradeRepository::resetConfirms(int sessionId) {
 bool TradeRepository::addItemToTrade(int sessionId, const std::string& characterId, int slotIndex,
                                       int sourceSlot, const std::string& instanceId, int quantity) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "INSERT INTO trade_offers (session_id, character_id, slot_index, "
             "inventory_source_slot, item_instance_id, quantity) "
@@ -221,7 +232,8 @@ bool TradeRepository::addItemToTrade(int sessionId, const std::string& character
 
 bool TradeRepository::removeItemFromTrade(int sessionId, const std::string& characterId, int slotIndex) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "DELETE FROM trade_offers "
             "WHERE session_id = $1 AND character_id = $2 AND slot_index = $3",
@@ -236,7 +248,8 @@ bool TradeRepository::removeItemFromTrade(int sessionId, const std::string& char
 
 bool TradeRepository::clearPlayerOffers(int sessionId, const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "DELETE FROM trade_offers WHERE session_id = $1 AND character_id = $2",
             sessionId, characterId);
@@ -252,7 +265,8 @@ std::vector<TradeOfferRecord> TradeRepository::getTradeOffers(int sessionId,
                                                                const std::string& characterId) {
     std::vector<TradeOfferRecord> offers;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT t.offer_id, t.slot_index, t.inventory_source_slot, "
             "t.item_instance_id::text, t.quantity, "
@@ -303,9 +317,14 @@ bool TradeRepository::transferItem(pqxx::work& txn, const std::string& instanceI
 
 bool TradeRepository::updateGold(pqxx::work& txn, const std::string& characterId, int64_t delta) {
     try {
-        txn.exec_params(
-            "UPDATE characters SET gold = gold + $2 WHERE character_id = $1",
+        auto result = txn.exec_params(
+            "UPDATE characters SET gold = gold + $2 WHERE character_id = $1 AND gold + $2 >= 0",
             characterId, delta);
+        if (result.affected_rows() == 0) {
+            LOG_WARN("TradeRepo", "updateGold rejected: would go negative for %s (delta=%lld)",
+                     characterId.c_str(), static_cast<long long>(delta));
+            return false;
+        }
         return true;
     } catch (const std::exception& e) {
         LOG_ERROR("TradeRepo", "updateGold failed: %s", e.what());
@@ -326,11 +345,28 @@ bool TradeRepository::completeSession(pqxx::work& txn, int sessionId) {
     return false;
 }
 
+bool TradeRepository::logTradeHistory(pqxx::work& txn, int sessionId, const std::string& playerAId,
+                                       const std::string& playerBId, int64_t goldA, int64_t goldB,
+                                       const std::string& itemsAJson, const std::string& itemsBJson) {
+    try {
+        txn.exec_params(
+            "INSERT INTO trade_history (session_id, player_a_character_id, player_b_character_id, "
+            "player_a_gold, player_b_gold, player_a_items, player_b_items, completed_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, NOW())",
+            sessionId, playerAId, playerBId, goldA, goldB, itemsAJson, itemsBJson);
+        return true;
+    } catch (const std::exception& e) {
+        LOG_ERROR("TradeRepo", "logTradeHistory (in-txn) failed: %s", e.what());
+    }
+    return false;
+}
+
 bool TradeRepository::logTradeHistory(int sessionId, const std::string& playerAId,
                                        const std::string& playerBId, int64_t goldA, int64_t goldB,
                                        const std::string& itemsAJson, const std::string& itemsBJson) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "INSERT INTO trade_history (session_id, player_a_character_id, player_b_character_id, "
             "player_a_gold, player_b_gold, player_a_items, player_b_items, completed_at) "
@@ -346,7 +382,8 @@ bool TradeRepository::logTradeHistory(int sessionId, const std::string& playerAI
 
 int TradeRepository::cleanStaleSessions(int maxAgeMinutes) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "UPDATE trade_sessions SET status = 'cancelled', completed_at = NOW() "
             "WHERE status = 'active' AND created_at < NOW() - INTERVAL '1 minute' * $1",

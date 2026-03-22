@@ -6,7 +6,8 @@ namespace fate {
 std::vector<BankSlotRecord> BankRepository::loadBankItems(const std::string& characterId) {
     std::vector<BankSlotRecord> items;
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT slot_index, item_id, quantity, rolled_stats::text, "
             "socket_stat, socket_value, enchant_level, is_protected, instance_id::text "
@@ -38,7 +39,8 @@ bool BankRepository::depositItem(const std::string& characterId, int slotIndex,
                                   const std::string& rolledStats, const std::string& socketStat,
                                   int socketValue, int enchantLevel, bool isProtected) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "INSERT INTO character_bank (character_id, slot_index, item_id, quantity, "
             "rolled_stats, socket_stat, socket_value, enchant_level, is_protected) "
@@ -60,7 +62,8 @@ bool BankRepository::depositItem(const std::string& characterId, int slotIndex,
 
 bool BankRepository::withdrawItem(const std::string& characterId, int slotIndex) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "DELETE FROM character_bank WHERE character_id = $1 AND slot_index = $2",
             characterId, slotIndex);
@@ -75,7 +78,8 @@ bool BankRepository::withdrawItem(const std::string& characterId, int slotIndex)
 bool BankRepository::saveBankItems(const std::string& characterId,
                                     const std::vector<BankSlotRecord>& items) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         // Clear and re-insert (same pattern as inventory)
         txn.exec_params("DELETE FROM character_bank WHERE character_id = $1", characterId);
         for (const auto& r : items) {
@@ -98,7 +102,8 @@ bool BankRepository::saveBankItems(const std::string& characterId,
 
 int64_t BankRepository::loadBankGold(const std::string& characterId) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         auto result = txn.exec_params(
             "SELECT stored_gold FROM character_bank_gold WHERE character_id = $1",
             characterId);
@@ -112,7 +117,8 @@ int64_t BankRepository::loadBankGold(const std::string& characterId) {
 
 bool BankRepository::depositGold(const std::string& characterId, int64_t amount) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "INSERT INTO character_bank_gold (character_id, stored_gold) "
             "VALUES ($1, $2) "
@@ -128,7 +134,8 @@ bool BankRepository::depositGold(const std::string& characterId, int64_t amount)
 
 bool BankRepository::withdrawGold(const std::string& characterId, int64_t amount) {
     try {
-        pqxx::work txn(conn_);
+        auto guard = acquireConn();
+        pqxx::work txn(guard.connection());
         txn.exec_params(
             "UPDATE character_bank_gold SET stored_gold = stored_gold - $2 "
             "WHERE character_id = $1 AND stored_gold >= $2",
