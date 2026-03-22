@@ -151,28 +151,9 @@ bool ServerApp::init(uint16_t port) {
              sceneCache_.count());
     LOG_INFO("Server", "Spawn zones: %d rules", spawnZoneCache_.count());
 
-    // Initialize hardcoded pet definitions
-    {
-        PetDefinition wolf;
-        wolf.petId = "pet_wolf"; wolf.displayName = "Wolf";
-        wolf.baseHP = 10; wolf.baseCritRate = 0.01f; wolf.baseExpBonus = 0.0f;
-        wolf.hpPerLevel = 2.0f; wolf.critPerLevel = 0.002f; wolf.expBonusPerLevel = 0.0f;
-        petDefCache_.addDefinition(wolf);
-
-        PetDefinition hawk;
-        hawk.petId = "pet_hawk"; hawk.displayName = "Hawk";
-        hawk.baseHP = 5; hawk.baseCritRate = 0.02f; hawk.baseExpBonus = 0.05f;
-        hawk.hpPerLevel = 1.0f; hawk.critPerLevel = 0.003f; hawk.expBonusPerLevel = 0.005f;
-        petDefCache_.addDefinition(hawk);
-
-        PetDefinition turtle;
-        turtle.petId = "pet_turtle"; turtle.displayName = "Turtle";
-        turtle.baseHP = 20; turtle.baseCritRate = 0.0f; turtle.baseExpBonus = 0.0f;
-        turtle.hpPerLevel = 4.0f; turtle.critPerLevel = 0.0f; turtle.expBonusPerLevel = 0.0f;
-        petDefCache_.addDefinition(turtle);
-
-        LOG_INFO("Server", "Loaded %zu pet definitions", petDefCache_.size());
-    }
+    // Load pet definitions from database
+    petDefCache_.initialize(gameDbConn_.connection());
+    LOG_INFO("Server", "Loaded %zu pet definitions from DB", petDefCache_.size());
 
     // Initialize Gauntlet system
     initGauntlet();
