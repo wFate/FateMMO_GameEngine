@@ -2,6 +2,7 @@
 #include "engine/ui/widgets/panel.h"
 #include "engine/ui/widgets/label.h"
 #include "engine/ui/widgets/button.h"
+#include "engine/ui/widgets/text_input.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
 #include <nlohmann/json.hpp>
@@ -204,6 +205,13 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         button->text = j.value("text", "");
         button->icon = j.value("icon", "");
         node = std::move(button);
+    }
+    else if (type == "text_input") {
+        auto input = std::make_unique<TextInput>(id);
+        input->text = j.value("text", "");
+        input->placeholder = j.value("placeholder", "");
+        input->maxLength = j.value("maxLength", 0);
+        node = std::move(input);
     }
     else {
         node = std::make_unique<UINode>(id, type);
