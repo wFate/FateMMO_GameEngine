@@ -5,6 +5,8 @@
 #include "engine/ui/widgets/text_input.h"
 #include "engine/ui/widgets/scroll_view.h"
 #include "engine/ui/widgets/progress_bar.h"
+#include "engine/ui/widgets/slot.h"
+#include "engine/ui/widgets/slot_grid.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
 #include <nlohmann/json.hpp>
@@ -235,6 +237,25 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         else if (dir == "bottom_to_top") bar->direction = BarDirection::BottomToTop;
         else if (dir == "top_to_bottom") bar->direction = BarDirection::TopToBottom;
         node = std::move(bar);
+    }
+    else if (type == "slot_grid") {
+        auto grid = std::make_unique<SlotGrid>(id);
+        grid->columns = j.value("columns", 5);
+        grid->rows = j.value("rows", 3);
+        grid->slotSize = j.value("slotSize", 48.0f);
+        grid->slotPadding = j.value("slotPadding", 4.0f);
+        grid->acceptsDragType = j.value("acceptsDrag", "");
+        grid->generateSlots();
+        node = std::move(grid);
+    }
+    else if (type == "slot") {
+        auto slot = std::make_unique<Slot>(id);
+        slot->itemId = j.value("itemId", "");
+        slot->quantity = j.value("quantity", 0);
+        slot->icon = j.value("icon", "");
+        slot->slotType = j.value("slotType", "item");
+        slot->acceptsDragType = j.value("acceptsDrag", "");
+        node = std::move(slot);
     }
     else {
         node = std::make_unique<UINode>(id, type);
