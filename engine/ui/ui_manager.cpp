@@ -384,6 +384,16 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
             anchor.size.y = a["size"][1].get<float>();
         }
 
+        if (a.contains("offsetPercent") && a["offsetPercent"].is_array() && a["offsetPercent"].size() >= 2) {
+            anchor.offsetPercent.x = a["offsetPercent"][0].get<float>();
+            anchor.offsetPercent.y = a["offsetPercent"][1].get<float>();
+        }
+
+        if (a.contains("sizePercent") && a["sizePercent"].is_array() && a["sizePercent"].size() >= 2) {
+            anchor.sizePercent.x = a["sizePercent"][0].get<float>();
+            anchor.sizePercent.y = a["sizePercent"][1].get<float>();
+        }
+
         if (a.contains("margin") && a["margin"].is_array() && a["margin"].size() >= 4) {
             // x=top, y=right, z=bottom, w=left
             anchor.margin.x = a["margin"][0].get<float>();

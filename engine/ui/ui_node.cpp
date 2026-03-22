@@ -65,11 +65,14 @@ void UINode::computeLayout(const Rect& parentRect) {
     px += ml;  py += mt;
     pw -= (ml + mr);  ph -= (mt + mb);
 
-    // size == 0 means "inherit full parent dimension"
-    float w = (anchor_.size.x > 0.0f) ? anchor_.size.x : pw;
-    float h = (anchor_.size.y > 0.0f) ? anchor_.size.y : ph;
-    float ox = anchor_.offset.x;
-    float oy = anchor_.offset.y;
+    // Resolve size: percentSize overrides pixel size; 0 = inherit parent
+    float w = (anchor_.sizePercent.x > 0.0f) ? pw * anchor_.sizePercent.x
+            : (anchor_.size.x > 0.0f) ? anchor_.size.x : pw;
+    float h = (anchor_.sizePercent.y > 0.0f) ? ph * anchor_.sizePercent.y
+            : (anchor_.size.y > 0.0f) ? anchor_.size.y : ph;
+    // Resolve offset: percentOffset added to pixel offset
+    float ox = anchor_.offset.x + pw * anchor_.offsetPercent.x;
+    float oy = anchor_.offset.y + ph * anchor_.offsetPercent.y;
     float cx = 0.0f, cy = 0.0f;
 
     switch (anchor_.preset) {

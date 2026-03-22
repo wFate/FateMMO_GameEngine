@@ -55,6 +55,10 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
         a["preset"] = presetToString(anchor.preset);
         a["offset"] = { anchor.offset.x, anchor.offset.y };
         a["size"]   = { anchor.size.x,   anchor.size.y   };
+        if (anchor.offsetPercent.x != 0.0f || anchor.offsetPercent.y != 0.0f)
+            a["offsetPercent"] = { anchor.offsetPercent.x, anchor.offsetPercent.y };
+        if (anchor.sizePercent.x != 0.0f || anchor.sizePercent.y != 0.0f)
+            a["sizePercent"] = { anchor.sizePercent.x, anchor.sizePercent.y };
 
         // margin: only include if non-zero
         if (anchor.margin.x != 0.0f || anchor.margin.y != 0.0f ||
