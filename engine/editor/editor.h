@@ -14,6 +14,7 @@
 #endif
 #include "engine/editor/tile_tools.h"
 #include "engine/editor/node_editor.h"
+#include "engine/editor/animation_editor.h"
 #include "engine/editor/asset_browser.h"
 #include <ImGuizmo.h>
 #include <SDL.h>
@@ -278,6 +279,9 @@ private:
 
     // Dialogue node editor panel
     DialogueNodeEditor dialogueEditor_;
+
+    // Animation editor panel
+    AnimationEditor animationEditor_;
 
     // Enhanced asset browser
     AssetBrowser assetBrowser_;

@@ -149,6 +149,7 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     assetBrowser_.init(assetRoot_, sourceDir_);
 
     dialogueEditor_.init();
+    animationEditor_.init();
 
     LOG_INFO("Editor", "Editor initialized");
     return true;
@@ -269,6 +270,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     }
 
     dialogueEditor_.draw();
+    animationEditor_.draw();
 
     // Post-process config panel
     if (showPostProcessPanel_ && postProcessConfig_) {
@@ -433,6 +435,10 @@ void Editor::drawDockSpace() {
             if (ImGui::MenuItem("Dialogue Editor", nullptr, &dlgOpen)) {
                 dialogueEditor_.setOpen(dlgOpen);
             }
+            bool animOpen = animationEditor_.isOpen();
+            if (ImGui::MenuItem("Animation Editor", nullptr, &animOpen)) {
+                animationEditor_.setOpen(animOpen);
+            }
             ImGui::EndMenu();
         }
 
@@ -461,6 +467,7 @@ void Editor::drawDockSpace() {
         ImGui::DockBuilderDockWindow("Debug Info", dockBottom);
         ImGui::DockBuilderDockWindow("Tile Palette", dockRight);
         ImGui::DockBuilderDockWindow("Network", dockBottom);
+        ImGui::DockBuilderDockWindow("Animation Editor", dockBottom);
 
         ImGui::DockBuilderFinish(dockspaceId);
     }
