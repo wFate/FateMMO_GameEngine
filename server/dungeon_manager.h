@@ -1,36 +1,63 @@
 #pragma once
 #include "engine/ecs/world.h"
+#include "engine/net/replication.h"
 #include "engine/core/logger.h"
 #include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace fate {
 
 class ServerSpawnManager;
 
+struct DungeonReturnPoint {
+    std::string scene;
+    float x = 0.0f, y = 0.0f;
+};
+
 struct DungeonInstance {
     uint32_t instanceId = 0;
     std::string sceneId;
     int partyId = -1;
-    World world;
-    std::shared_ptr<ServerSpawnManager> spawnManager;
-    float elapsedTime = 0.0f;
-    float timeoutSeconds = 1800.0f;  // 30 min default
-    std::vector<uint16_t> playerClientIds;
+    int difficultyTier = 1;
 
-    DungeonInstance(uint32_t id, const std::string& scene, int party)
-        : instanceId(id), sceneId(scene), partyId(party) {}
+    // Isolated ECS
+    World world;
+    ReplicationManager replication;
+
+    // Lifecycle
+    float elapsedTime = 0.0f;
+    float timeLimitSeconds = 600.0f;      // 10 minutes
+    float celebrationTimer = -1.0f;       // set to 15.0f on boss kill
+    bool completed = false;
+    bool expired = false;
+
+    // Player tracking
+    std::vector<uint16_t> playerClientIds;
+    std::unordered_map<uint16_t, DungeonReturnPoint> returnPoints;
+
+    // Invite flow
+    std::unordered_set<uint16_t> pendingAccepts;
+    uint16_t leaderClientId = 0;
+    float inviteTimer = 0.0f;
+    static constexpr float INVITE_TIMEOUT = 30.0f;
+
+    DungeonInstance(uint32_t id, const std::string& scene, int party, int tier)
+        : instanceId(id), sceneId(scene), partyId(party), difficultyTier(tier) {}
+
+    bool allAccepted() const { return pendingAccepts.empty(); }
+    bool hasPlayers() const { return !playerClientIds.empty(); }
 };
 
 class DungeonManager {
 public:
-    inline uint32_t createInstance(const std::string& sceneId, int partyId) {
+    inline uint32_t createInstance(const std::string& sceneId, int partyId, int difficultyTier = 1) {
         uint32_t id = nextInstanceId_++;
-        auto inst = std::make_unique<DungeonInstance>(id, sceneId, partyId);
+        auto inst = std::make_unique<DungeonInstance>(id, sceneId, partyId, difficultyTier);
         LOG_INFO("DungeonManager", "Created instance %u for scene '%s' party %d",
                  id, sceneId.c_str(), partyId);
         if (partyId >= 0) partyToInstance_[partyId] = id;
@@ -69,18 +96,45 @@ public:
             inst->elapsedTime += dt;
             inst->world.update(dt);
             inst->world.processDestroyQueue();
+            if (inst->completed && inst->celebrationTimer > 0.0f) {
+                inst->celebrationTimer -= dt;
+            }
         }
     }
 
-    inline std::vector<uint32_t> getExpiredInstances() const {
-        std::vector<uint32_t> expired;
+    std::vector<uint32_t> getTimedOutInstances() const {
+        std::vector<uint32_t> result;
         for (const auto& [id, inst] : instances_) {
-            if (inst->elapsedTime >= inst->timeoutSeconds && inst->playerClientIds.empty()) {
-                expired.push_back(id);
+            if (!inst->completed && !inst->expired &&
+                inst->elapsedTime >= inst->timeLimitSeconds) {
+                result.push_back(id);
             }
         }
-        return expired;
+        return result;
     }
+
+    std::vector<uint32_t> getCelebrationFinishedInstances() const {
+        std::vector<uint32_t> result;
+        for (const auto& [id, inst] : instances_) {
+            if (inst->completed && inst->celebrationTimer <= 0.0f) {
+                result.push_back(id);
+            }
+        }
+        return result;
+    }
+
+    std::vector<uint32_t> getEmptyActiveInstances() const {
+        std::vector<uint32_t> result;
+        for (const auto& [id, inst] : instances_) {
+            if (!inst->expired && inst->elapsedTime > 0.0f && inst->playerClientIds.empty()) {
+                result.push_back(id);
+            }
+        }
+        return result;
+    }
+
+    const auto& allInstances() const { return instances_; }
+    auto& allInstances() { return instances_; }
 
     size_t instanceCount() const { return instances_.size(); }
 

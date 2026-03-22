@@ -6217,9 +6217,16 @@ void ServerApp::tickPetAutoLoot(float dt) {
 void ServerApp::tickDungeonInstances(float dt) {
     dungeonManager_.tick(dt);
 
-    auto expired = dungeonManager_.getExpiredInstances();
-    for (uint32_t id : expired) {
-        LOG_INFO("Server", "Dungeon instance %u expired, destroying", id);
+    for (uint32_t id : dungeonManager_.getTimedOutInstances()) {
+        LOG_INFO("Server", "Dungeon instance %u timed out, destroying", id);
+        dungeonManager_.destroyInstance(id);
+    }
+    for (uint32_t id : dungeonManager_.getCelebrationFinishedInstances()) {
+        LOG_INFO("Server", "Dungeon instance %u celebration finished, destroying", id);
+        dungeonManager_.destroyInstance(id);
+    }
+    for (uint32_t id : dungeonManager_.getEmptyActiveInstances()) {
+        LOG_INFO("Server", "Dungeon instance %u empty, destroying", id);
         dungeonManager_.destroyInstance(id);
     }
 }
