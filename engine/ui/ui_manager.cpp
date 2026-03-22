@@ -3,6 +3,7 @@
 #include "engine/ui/widgets/label.h"
 #include "engine/ui/widgets/button.h"
 #include "engine/ui/widgets/text_input.h"
+#include "engine/ui/widgets/scroll_view.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
 #include <nlohmann/json.hpp>
@@ -212,6 +213,11 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         input->placeholder = j.value("placeholder", "");
         input->maxLength = j.value("maxLength", 0);
         node = std::move(input);
+    }
+    else if (type == "scroll_view") {
+        auto sv = std::make_unique<ScrollView>(id);
+        sv->scrollSpeed = j.value("scrollSpeed", 30.0f);
+        node = std::move(sv);
     }
     else {
         node = std::make_unique<UINode>(id, type);
