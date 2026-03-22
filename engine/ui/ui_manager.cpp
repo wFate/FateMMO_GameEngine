@@ -10,6 +10,7 @@
 #include "engine/ui/widgets/window.h"
 #include "engine/ui/widgets/tab_container.h"
 #include "engine/ui/widgets/tooltip.h"
+#include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
 #include "engine/render/sdf_text.h"
@@ -17,6 +18,7 @@
 #include <SDL.h>
 #include <fstream>
 #include <algorithm>
+#include <functional>
 
 namespace fate {
 
@@ -138,6 +140,33 @@ void UIManager::update(float dt) {
         tooltip_.setVisible(false);
         tooltipTarget_ = nullptr;
         tooltipHoverTime_ = 0.0f;
+    }
+
+    // Resolve data bindings on all screen nodes
+    for (auto& [id, root] : screens_) {
+        std::function<void(UINode*)> resolveBindings = [&](UINode* node) {
+            if (!node->visible()) return;
+            if (node->dataBindings.count("text")) {
+                auto* label = dynamic_cast<Label*>(node);
+                if (label) label->text = dataBinding_.resolve(node->dataBindings["text"]);
+            }
+            if (node->dataBindings.count("value")) {
+                auto* bar = dynamic_cast<ProgressBar*>(node);
+                if (bar) {
+                    std::string val = dataBinding_.getValue(node->dataBindings["value"]);
+                    if (!val.empty()) bar->value = std::stof(val);
+                }
+            }
+            if (node->dataBindings.count("max")) {
+                auto* bar = dynamic_cast<ProgressBar*>(node);
+                if (bar) {
+                    std::string val = dataBinding_.getValue(node->dataBindings["max"]);
+                    if (!val.empty()) bar->maxValue = std::stof(val);
+                }
+            }
+            for (auto& child : node->children()) resolveBindings(child.get());
+        };
+        resolveBindings(root.get());
     }
 }
 

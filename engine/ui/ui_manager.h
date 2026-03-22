@@ -3,6 +3,7 @@
 #include "engine/ui/ui_theme.h"
 #include "engine/ui/ui_input.h"
 #include "engine/ui/widgets/tooltip.h"
+#include "engine/ui/ui_data_binding.h"
 #include <nlohmann/json_fwd.hpp>
 #include <string>
 #include <unordered_map>
@@ -25,6 +26,9 @@ public:
     // Theme
     UITheme& theme() { return theme_; }
     bool loadTheme(const std::string& filepath);
+
+    // Data binding
+    UIDataBinding& dataBinding() { return dataBinding_; }
 
     // Per-frame
     void update(float dt);
@@ -66,6 +70,8 @@ private:
     float screenWidth_ = 0.0f;
     float screenHeight_ = 0.0f;
     static constexpr float TOOLTIP_DELAY = 0.5f;
+
+    UIDataBinding dataBinding_;
 
     std::unique_ptr<UINode> parseNode(const nlohmann::json& j);
     AnchorPreset parsePreset(const std::string& name);
