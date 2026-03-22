@@ -230,6 +230,8 @@ private:
                                        const EnemyStats::LootOwnerResult& lootResult,
                                        const std::string& scene);
     void tickDungeonInstances(float dt);
+    void distributeDungeonRewards(DungeonInstance* inst);
+    void endDungeonInstance(uint32_t instanceId, uint8_t reason);
     void initGMCommands();
     uint16_t findClientByCharacterName(const std::string& name);
 

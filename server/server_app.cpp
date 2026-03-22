@@ -207,6 +207,7 @@ bool ServerApp::init(uint16_t port) {
                 auto* sc = e->getComponent<CharacterStatsComponent>();
                 if (sc) sc->stats.currentScene = "battlefield";
             }
+            playerDirty_[conn.clientId].position = true;
 
             // Send zone transition to battlefield
             float spawnX = 0.0f, spawnY = 0.0f;
@@ -287,6 +288,8 @@ bool ServerApp::init(uint16_t port) {
                     sc->stats.currentScene = bfPlayer.returnScene;
                 }
             }
+            playerDirty_[conn.clientId].stats = true;
+            playerDirty_[conn.clientId].position = true;
 
             // TODO: Add Pendants of Honor to inventory (3 for winners, 1 for losers)
 
@@ -360,6 +363,8 @@ bool ServerApp::init(uint16_t port) {
                             sc->stats.currentScene = stats.returnScene;
                         }
                     }
+                    playerDirty_[targetClientId].stats = true;
+                    playerDirty_[targetClientId].position = true;
 
                     // Send zone transition back to return scene
                     float retX = stats.returnPosition.x;
@@ -607,6 +612,7 @@ void ServerApp::tick(float dt) {
     }
 
     // 3d. HP/MP regen tick (server-authoritative)
+    // NOTE: No dirty flag for regen — runs on all players, 5-minute auto-save catches it
     regenTimer_ += dt;
     mpRegenTimer_ += dt;
     if (regenTimer_ >= 10.0f || mpRegenTimer_ >= 5.0f) {
@@ -839,6 +845,7 @@ void ServerApp::tick(float dt) {
                     // Teleport player to arena scene
                     sc->stats.currentScene = "arena";
                 }
+                playerDirty_[targetClientId].position = true;
 
                 float spawnX = 0.0f, spawnY = 0.0f;
                 auto* sceneDef = sceneCache_.get("arena");
@@ -1389,6 +1396,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
             if (!cs || !cs->stats.isAlive()) return;
 
             cs->stats.currentHP = (std::max)(0, cs->stats.currentHP - damage);
+            playerDirty_[clientId].vitals = true;
 
             // Broadcast DoT damage as a combat event
             SvCombatEventMsg evt;
@@ -1403,7 +1411,10 @@ void ServerApp::onClientConnected(uint16_t clientId) {
             server_.broadcast(Channel::Unreliable, PacketType::SvCombatEvent, buf, w.size());
 
             if (cs->stats.currentHP <= 0) {
-                cs->stats.die(DeathSource::PvE);
+                // No XP loss in dungeons
+                DeathSource deathSrc = dungeonManager_.getInstanceForClient(clientId)
+                    ? DeathSource::Dungeon : DeathSource::PvE;
+                cs->stats.die(deathSrc);
                 SvDeathNotifyMsg deathMsg;
                 deathMsg.deathSource = 0; // PvE
                 deathMsg.respawnTimer = 5.0f;
@@ -1961,6 +1972,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     if (t) t->position = move.position;
                     lastValidPositions_[clientId] = move.position;
                     lastMoveTime_[clientId] = gameTime_;
+                    playerDirty_[clientId].position = true;
                     break;
                 }
 
@@ -1992,6 +2004,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     if (t) t->position = move.position;
                     lastValidPositions_[clientId] = move.position;
                     lastMoveTime_[clientId] = now;
+                    playerDirty_[clientId].position = true;
                 }
             }
             break;
@@ -2155,6 +2168,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         wal_.appendItemRemove(client->character_id, slot);
                         // Remove from inventory
                         inv->inventory.removeItem(slot);
+                        playerDirty_[clientId].inventory = true;
 
                         SvMarketResultMsg resp;
                         resp.action = MarketAction::ListItem;
@@ -2243,6 +2257,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         // WAL: record item add (slot=-1 = auto-slot; recovery matches by instanceId)
                         wal_.appendItemAdd(client->character_id, -1, boughtItem.instanceId);
                         inv->inventory.addItem(boughtItem);
+                        playerDirty_[clientId].inventory = true;
 
                         // Credit seller gold (update DB directly — seller may be offline)
                         txn.exec_params(
@@ -2364,6 +2379,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                                 // WAL: record gold refund before mutating
                                 wal_.appendGoldChange(client->character_id, refund);
                                 inv->inventory.addGold(refund);
+                                playerDirty_[clientId].inventory = true;
                                 sendPlayerState(clientId);
                             }
                         }
@@ -2408,6 +2424,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         // WAL: record gold deduction before mutating
                         wal_.appendGoldChange(client->character_id, -static_cast<int64_t>(GuildConstants::CREATION_COST));
                         inv->inventory.removeGold(GuildConstants::CREATION_COST);
+                        playerDirty_[clientId].inventory = true;
+                        playerDirty_[clientId].guild = true;
                         auto* guildComp = e->getComponent<GuildComponent>();
                         if (guildComp) {
                             guildComp->guild.setGuildData(guildId, guildName, {},
@@ -2694,6 +2712,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                                 session->playerAGold, session->playerBGold, "[]", "[]");
 
                             sendTradeResult(5, 0, "Trade completed!");
+                            playerDirty_[clientId].inventory = true;
                             LOG_INFO("Server", "Trade %d completed: %s <-> %s",
                                      session->sessionId,
                                      session->playerACharacterId.c_str(),
@@ -2704,6 +2723,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                                 ? session->playerBCharacterId : session->playerACharacterId;
                             server_.connections().forEach([&](ClientConnection& c) {
                                 if (c.character_id == otherCharId) {
+                                    playerDirty_[c.clientId].inventory = true;
                                     saveInventoryForClient(c.clientId);
                                 }
                             });
@@ -2757,6 +2777,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                 case QuestAction::Accept: {
                     bool accepted = questComp->quests.acceptQuest(questId, charStats->stats.level);
                     if (accepted) {
+                        playerDirty_[clientId].quests = true;
                         questRepo_->saveQuestProgress(client->character_id, questIdStr, "active", 0, 1);
                         SvQuestUpdateMsg resp;
                         resp.updateType = 0;
@@ -2770,6 +2791,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                 }
                 case QuestAction::Abandon: {
                     questComp->quests.abandonQuest(questId);
+                    playerDirty_[clientId].quests = true;
                     questRepo_->abandonQuest(client->character_id, questIdStr);
                     SvQuestUpdateMsg resp;
                     resp.updateType = 3;
@@ -2785,6 +2807,9 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     if (!inv) break;
                     bool turnedIn = questComp->quests.turnInQuest(questId, charStats->stats, inv->inventory);
                     if (turnedIn) {
+                        playerDirty_[clientId].quests = true;
+                        playerDirty_[clientId].stats = true;
+                        playerDirty_[clientId].inventory = true;
                         questRepo_->completeQuest(client->character_id, questIdStr);
                         SvQuestUpdateMsg resp;
                         resp.updateType = 2;
@@ -2859,6 +2884,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         auto* sc2 = e2->getComponent<CharacterStatsComponent>();
                         if (sc2) sc2->stats.currentScene = cmd.targetScene;
                     }
+                    playerDirty_[clientId].position = true;
 
                     // Clear AOI state so the replication system sends fresh
                     // SvEntityEnter messages for all entities near the new position.
@@ -2919,6 +2945,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                     break;
                 }
                 invComp->inventory.removeItemQuantity(slot, 1);
+                playerDirty_[clientId].inventory = true;
                 LOG_INFO("Server", "Client %d used Phoenix Down to respawn", clientId);
             }
 
@@ -2940,6 +2967,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                 if (t) t->position = {spX, spY};
                 lastValidPositions_[clientId] = {spX, spY};
                 lastMoveTime_[clientId] = gameTime_;
+                playerDirty_[clientId].position = true;
+                playerDirty_[clientId].vitals = true;
 
                 // Clear AOI so client gets fresh SvEntityEnter in the new scene
                 client->aoi.previous.clear();
@@ -2983,6 +3012,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             // Update movement tracking so server doesn't rubber-band after teleport
             lastValidPositions_[clientId] = respawnPos;
             lastMoveTime_[clientId] = gameTime_;
+            playerDirty_[clientId].position = true;
+            playerDirty_[clientId].vitals = true;
 
             // Send SvRespawnMsg to client
             SvRespawnMsg resp;
@@ -3312,13 +3343,23 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
         auto* tgtCS = target->getComponent<CharacterStatsComponent>();
         if (tgtCS) {
             tgtCS->stats.enterCombat();
+            // Find target's clientId for dirty flags
+            uint16_t skillTargetClientId = 0;
+            server_.connections().forEach([&](const ClientConnection& conn) {
+                if (conn.playerEntityId == msg.targetId) skillTargetClientId = conn.clientId;
+            });
+            if (skillTargetClientId != 0) {
+                playerDirty_[skillTargetClientId].vitals = true;
+            }
             // Attacker becomes Aggressor if target is innocent
             if (tgtCS->stats.pkStatus == PKStatus::White) {
                 casterStatsComp->stats.flagAsAggressor();
+                playerDirty_[clientId].stats = true;
             }
             // If attacker kills a non-flagged player → Murderer
             if (isKill && tgtCS->stats.pkStatus == PKStatus::White) {
                 casterStatsComp->stats.flagAsMurderer();
+                playerDirty_[clientId].stats = true;
             }
         }
     }
@@ -3340,6 +3381,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                     auto* casterClient = server_.connections().findById(clientId);
                     if (casterClient) wal_.appendXPGain(casterClient->character_id, static_cast<int64_t>(xp));
                     casterStatsComp->stats.addXP(xp);
+                    playerDirty_[clientId].stats = true;
                     LOG_INFO("Server", "Client %d gained %d XP from '%s' (base=%d, mob Lv%d, player Lv%d)",
                              clientId, xp, es.enemyName.c_str(), es.xpReward,
                              es.level, casterStatsComp->stats.level);
@@ -3354,6 +3396,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                                 int levelBefore = petCompXP->equippedPet.level;
                                 PetSystem::addXP(*petDef, petCompXP->equippedPet, petXP,
                                                  casterStatsComp->stats.level);
+                                playerDirty_[clientId].pet = true;
                                 if (petCompXP->equippedPet.level != levelBefore) {
                                     recalcEquipmentBonuses(caster);
                                 }
@@ -3364,6 +3407,28 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                 } else {
                     LOG_INFO("Server", "Client %d: trivial mob '%s' Lv%d — no XP (player Lv%d)",
                              clientId, es.enemyName.c_str(), es.level, casterStatsComp->stats.level);
+                }
+            }
+
+            // Dungeon honor: +1 per mob, +50 for MiniBoss, to all party members in instance
+            {
+                uint32_t dungeonInstId = dungeonManager_.getInstanceForClient(clientId);
+                if (dungeonInstId) {
+                    auto* dInst = dungeonManager_.getInstance(dungeonInstId);
+                    if (dInst) {
+                        int honorAmount = (es.monsterType == "MiniBoss") ? 50 : 1;
+                        for (uint16_t memberCid : dInst->playerClientIds) {
+                            auto* memberConn = server_.connections().findById(memberCid);
+                            if (!memberConn) continue;
+                            Entity* memberPlayer = dInst->world.getEntity(EntityHandle(memberConn->playerEntityId));
+                            if (!memberPlayer) continue;
+                            auto* memberCS = memberPlayer->getComponent<CharacterStatsComponent>();
+                            if (memberCS) {
+                                memberCS->stats.honor += honorAmount;
+                                sendPlayerState(memberCid);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -3511,6 +3576,8 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                 }
             });
             if (targetClientId != 0) {
+                playerDirty_[targetClientId].vitals = true;
+                playerDirty_[targetClientId].stats = true;
                 SvDeathNotifyMsg deathMsg;
                 deathMsg.deathSource = 1;  // PvP
                 deathMsg.respawnTimer = 5.0f;
@@ -3525,6 +3592,9 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             }
         }
     }
+
+    // Caster vitals dirty (MP/Fury may have changed from skill use)
+    playerDirty_[clientId].vitals = true;
 
     // Send updated player state (HP/MP/Fury may have changed)
     sendPlayerState(clientId);
@@ -3633,6 +3703,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             float furyGain = isCrit ? charStats->stats.classDef.furyPerCriticalHit
                                     : charStats->stats.classDef.furyPerBasicAttack;
             charStats->stats.addFury(furyGain);
+            playerDirty_[clientId].vitals = true;
             sendPlayerState(clientId);
         }
 
@@ -3650,6 +3721,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                     auto* attackerClient = server_.connections().findById(clientId);
                     if (attackerClient) wal_.appendXPGain(attackerClient->character_id, static_cast<int64_t>(xp));
                     charStats->stats.addXP(xp);
+                    playerDirty_[clientId].stats = true;
                     LOG_INFO("Server", "Client %d gained %d XP from '%s' (base=%d, mob Lv%d, player Lv%d)",
                              clientId, xp, es.enemyName.c_str(), es.xpReward,
                              es.level, charStats->stats.level);
@@ -3664,6 +3736,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                                 int levelBefore = petCompXP->equippedPet.level;
                                 PetSystem::addXP(*petDef, petCompXP->equippedPet, petXP,
                                                  charStats->stats.level);
+                                playerDirty_[clientId].pet = true;
                                 if (petCompXP->equippedPet.level != levelBefore) {
                                     recalcEquipmentBonuses(attacker);
                                 }
@@ -3674,6 +3747,28 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 } else {
                     LOG_INFO("Server", "Client %d: trivial mob '%s' Lv%d — no XP (player Lv%d)",
                              clientId, es.enemyName.c_str(), es.level, charStats->stats.level);
+                }
+            }
+
+            // Dungeon honor: +1 per mob, +50 for MiniBoss, to all party members in instance
+            {
+                uint32_t dungeonInstId = dungeonManager_.getInstanceForClient(clientId);
+                if (dungeonInstId) {
+                    auto* dInst = dungeonManager_.getInstance(dungeonInstId);
+                    if (dInst) {
+                        int honorAmount = (es.monsterType == "MiniBoss") ? 50 : 1;
+                        for (uint16_t memberCid : dInst->playerClientIds) {
+                            auto* memberConn = server_.connections().findById(memberCid);
+                            if (!memberConn) continue;
+                            Entity* memberPlayer = dInst->world.getEntity(EntityHandle(memberConn->playerEntityId));
+                            if (!memberPlayer) continue;
+                            auto* memberCS = memberPlayer->getComponent<CharacterStatsComponent>();
+                            if (memberCS) {
+                                memberCS->stats.honor += honorAmount;
+                                sendPlayerState(memberCid);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -3855,15 +3950,26 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             targetCharStats->stats.takeDamage(damage);
             bool killed = !targetCharStats->stats.isAlive();
 
+            // Find target's clientId for dirty flags
+            uint16_t pvpTargetClientId = 0;
+            server_.connections().forEach([&](const ClientConnection& conn) {
+                if (conn.playerEntityId == targetPid.value()) pvpTargetClientId = conn.clientId;
+            });
+            if (pvpTargetClientId != 0) {
+                playerDirty_[pvpTargetClientId].vitals = true;
+            }
+
             // PK status transitions for auto-attacks (same as skill path)
             if (charStats) {
                 charStats->stats.enterCombat();
                 targetCharStats->stats.enterCombat();
                 if (targetCharStats->stats.pkStatus == PKStatus::White) {
                     charStats->stats.flagAsAggressor();
+                    playerDirty_[clientId].stats = true;
                 }
                 if (killed && targetCharStats->stats.pkStatus == PKStatus::White) {
                     charStats->stats.flagAsMurderer();
+                    playerDirty_[clientId].stats = true;
                 }
             }
 
@@ -3885,6 +3991,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 float furyGain = isCrit ? charStats->stats.classDef.furyPerCriticalHit
                                         : charStats->stats.classDef.furyPerBasicAttack;
                 charStats->stats.addFury(furyGain);
+                playerDirty_[clientId].vitals = true;
                 sendPlayerState(clientId);
             }
 
@@ -3892,6 +3999,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 // Award PvP kill to attacker
                 if (charStats) {
                     charStats->stats.pvpKills++;
+                    playerDirty_[clientId].stats = true;
                 }
                 // Record PvP death on target
                 targetCharStats->stats.pvpDeaths++;
@@ -3902,6 +4010,8 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                     if (conn.playerEntityId == targetPid.value()) targetClientId = conn.clientId;
                 });
                 if (targetClientId != 0) {
+                    playerDirty_[targetClientId].stats = true;
+                    playerDirty_[targetClientId].vitals = true;
                     SvDeathNotifyMsg deathMsg;
                     deathMsg.deathSource = 1; // PvP
                     deathMsg.xpLost = 0;
@@ -3975,6 +4085,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 if (lootClient) wal_.appendGoldChange(lootClient->character_id, static_cast<int64_t>(dropComp->goldAmount));
             }
             inv->inventory.addGold(dropComp->goldAmount);
+            playerDirty_[clientId].inventory = true;
             pickupMsg.isGold = 1;
             pickupMsg.goldAmount = dropComp->goldAmount;
             pickupMsg.displayName = "Gold";
@@ -3999,6 +4110,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 dropComp->releaseClaim();
                 return;
             }
+            playerDirty_[clientId].inventory = true;
 
             pickupMsg.itemId = dropComp->itemId;
             pickupMsg.quantity = dropComp->quantity;
@@ -4073,6 +4185,9 @@ void ServerApp::processPetCommand(uint16_t clientId, const CmdPetMsg& msg) {
         petComp->equippedPet.xpToNextLevel   = PetSystem::calculateXPToNextLevel(targetPet.level);
 
         recalcEquipmentBonuses(player);
+        playerDirty_[clientId].pet = true;
+        playerDirty_[clientId].vitals = true;
+        playerDirty_[clientId].stats = true;
         sendPlayerState(clientId);
         sendPetUpdate(clientId, player);
         LOG_INFO("Server", "Client %d equipped pet '%s' (Lv%d)",
@@ -4085,6 +4200,9 @@ void ServerApp::processPetCommand(uint16_t clientId, const CmdPetMsg& msg) {
         petComp->dbPetId     = 0;
 
         recalcEquipmentBonuses(player);
+        playerDirty_[clientId].pet = true;
+        playerDirty_[clientId].vitals = true;
+        playerDirty_[clientId].stats = true;
         sendPlayerState(clientId);
         sendPetUpdate(clientId, player);
         LOG_INFO("Server", "Client %d unequipped pet", clientId);
@@ -4187,6 +4305,9 @@ void ServerApp::processEquip(uint16_t clientId, const CmdEquipMsg& msg) {
 
     if (success) {
         recalcEquipmentBonuses(player);
+        playerDirty_[clientId].vitals = true;
+        playerDirty_[clientId].inventory = true;
+        playerDirty_[clientId].stats = true;
         sendPlayerState(clientId);
         sendInventorySync(clientId);
         LOG_INFO("Server", "Client %d %s slot %d",
@@ -4850,7 +4971,10 @@ void ServerApp::processEnchant(uint16_t clientId, const CmdEnchantMsg& msg) {
     inv->inventory.removeItem(msg.inventorySlot);
     inv->inventory.addItemToSlot(msg.inventorySlot, item);
 
-    // 13. Send result and sync
+    // 13. Dirty flags: gold deducted + item modified
+    playerDirty_[clientId].inventory = true;
+
+    // 14. Send result and sync
     sendResult(success, static_cast<uint8_t>(item.enchantLevel), broke,
                success ? "Enchant succeeded!" : (broke ? "Item was destroyed!" : "Enchant failed"));
     sendPlayerState(clientId);
@@ -4928,7 +5052,10 @@ void ServerApp::processRepair(uint16_t clientId, const CmdRepairMsg& msg) {
     inv->inventory.removeItem(msg.inventorySlot);
     inv->inventory.addItemToSlot(msg.inventorySlot, item);
 
-    // 8. Send result and sync
+    // 8. Dirty flags: gold deducted + item repaired
+    playerDirty_[clientId].inventory = true;
+
+    // 9. Send result and sync
     sendResult(true, static_cast<uint8_t>(item.enchantLevel), "Item repaired successfully!");
     sendInventorySync(clientId);
 
@@ -5002,7 +5129,10 @@ void ServerApp::processExtractCore(uint16_t clientId, const CmdExtractCoreMsg& m
     coreItem.rarity      = ItemRarity::Common;
     inv->inventory.addItem(coreItem);
 
-    // 7. Send result and sync
+    // 7. Dirty flag: item consumed + core added
+    playerDirty_[clientId].inventory = true;
+
+    // 8. Send result and sync
     sendResult(true, coreResult.coreItemId, static_cast<uint8_t>(coreResult.quantity),
                "Extracted " + std::to_string(coreResult.quantity) + "x core");
     sendInventorySync(clientId);
@@ -5131,7 +5261,10 @@ void ServerApp::processCraft(uint16_t clientId, const CmdCraftMsg& msg) {
         sendResult(false, "", 0, "Inventory full"); return;
     }
 
-    // 11. Send result and sync inventory
+    // 11. Dirty flag: gold + ingredients consumed + item created
+    playerDirty_[clientId].inventory = true;
+
+    // 12. Send result and sync inventory
     std::string displayLabel = resultDef ? resultDef->displayName : recipe->resultItemId;
     sendResult(true, recipe->resultItemId, static_cast<uint8_t>(recipe->resultQuantity),
                "Crafted " + displayLabel);
@@ -5328,6 +5461,8 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
             bankRepo_->depositItem(client->character_id, -1, msg.itemId,
                                    msg.itemCount, "", "", 0, 0, false);
 
+            playerDirty_[clientId].bank = true;
+            playerDirty_[clientId].inventory = true;
             sendResult(0, true, "Item deposited");
             sendInventorySync(clientId);
 
@@ -5363,6 +5498,8 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
             // Bank items are saved on-demand; withdraw removes the slot
             bankRepo_->withdrawItem(client->character_id, -1);
 
+            playerDirty_[clientId].bank = true;
+            playerDirty_[clientId].inventory = true;
             sendResult(1, true, "Item withdrawn");
             sendInventorySync(clientId);
 
@@ -5401,6 +5538,8 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
             int64_t deposited = amount - fee;
             bankRepo_->depositGold(client->character_id, deposited);
 
+            playerDirty_[clientId].bank = true;
+            playerDirty_[clientId].inventory = true;
             sendResult(2, true, "Gold deposited");
             sendPlayerState(clientId);
             sendInventorySync(clientId);
@@ -5431,6 +5570,8 @@ void ServerApp::processBank(uint16_t clientId, const CmdBankMsg& msg) {
             // Persist bank gold withdrawal to DB
             bankRepo_->withdrawGold(client->character_id, amount);
 
+            playerDirty_[clientId].bank = true;
+            playerDirty_[clientId].inventory = true;
             sendResult(3, true, "Gold withdrawn");
             sendPlayerState(clientId);
             sendInventorySync(clientId);
@@ -5529,7 +5670,12 @@ void ServerApp::processSocketItem(uint16_t clientId, const CmdSocketItemMsg& msg
     // 10. Save inventory
     saveInventoryForClient(clientId);
 
-    // 11. Send results to client
+    // 11. Dirty flags: scroll consumed + equipment modified
+    playerDirty_[clientId].inventory = true;
+    playerDirty_[clientId].vitals = true;
+    playerDirty_[clientId].stats = true;
+
+    // 12. Send results to client
     sendResult(true,
                static_cast<uint8_t>(result.rolledValue),
                static_cast<uint8_t>(result.previousValue),
@@ -5612,7 +5758,12 @@ void ServerApp::processStatEnchant(uint16_t clientId, const CmdStatEnchantMsg& m
     // 10. Save inventory
     saveInventoryForClient(clientId);
 
-    // 11. Send results to client
+    // 11. Dirty flags: equipment modified
+    playerDirty_[clientId].inventory = true;
+    playerDirty_[clientId].vitals = true;
+    playerDirty_[clientId].stats = true;
+
+    // 12. Send results to client
     if (tier > 0) {
         sendResult(true, static_cast<uint8_t>(tier), static_cast<int32_t>(value),
                    "Stat enchant success! Tier " + std::to_string(tier));
@@ -5729,6 +5880,7 @@ void ServerApp::initGMCommands() {
             server_.sendTo(callerId, Channel::ReliableOrdered, PacketType::SvZoneTransition, buf, w.size());
         }
         callerTransform->position = targetTransform->position;
+        playerDirty_[callerId].position = true;
         sendSystemMsg(callerId, "Teleported to: " + args[0]);
         LOG_INFO("GM", "Client %d teleported to '%s'", callerId, args[0].c_str());
     }});
@@ -5769,6 +5921,7 @@ void ServerApp::initGMCommands() {
             server_.sendTo(targetId, Channel::ReliableOrdered, PacketType::SvZoneTransition, buf, w.size());
         }
         targetTransform->position = callerTransform->position;
+        playerDirty_[targetId].position = true;
         sendSystemMsg(callerId, "Summoned: " + args[0]);
         LOG_INFO("GM", "Client %d summoned '%s'", callerId, args[0].c_str());
     }});
@@ -6002,7 +6155,11 @@ void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMs
     // 9. WAL log the item removal
     wal_.appendItemRemove(client->character_id, slotIndex);
 
-    // 10. Send results
+    // 10. Dirty flags: vitals changed (HP/MP), inventory changed (item consumed)
+    playerDirty_[clientId].vitals = true;
+    playerDirty_[clientId].inventory = true;
+
+    // 11. Send results
     sendResult(true, effectMsg);
     sendPlayerState(clientId);
     sendInventorySync(clientId);
@@ -6280,6 +6437,7 @@ void ServerApp::tickPetAutoLoot(float dt) {
                     auto* client = server_.connections().findById(clientId);
                     if (client) wal_.appendGoldChange(client->character_id, static_cast<int64_t>(info.drop->goldAmount));
                     inv->inventory.setGold(inv->inventory.getGold() + info.drop->goldAmount);
+                    playerDirty_[clientId].inventory = true;
 
                     SvLootPickupMsg pickup;
                     pickup.isGold = 1;
@@ -6309,6 +6467,7 @@ void ServerApp::tickPetAutoLoot(float dt) {
                         info.drop->releaseClaim();
                         continue;
                     }
+                    playerDirty_[clientId].inventory = true;
 
                     SvLootPickupMsg pickup;
                     pickup.itemId = info.drop->itemId;
@@ -6358,18 +6517,156 @@ void ServerApp::tickDungeonInstances(float dt) {
         }
     }
 
+    // Check invite timeouts (30s)
+    {
+        uint32_t cancelId = 0;
+        for (auto& [id, inst] : dungeonManager_.allInstances()) {
+            if (!inst->pendingAccepts.empty()) {
+                inst->inviteTimer += dt;
+                if (inst->inviteTimer >= DungeonInstance::INVITE_TIMEOUT) {
+                    cancelId = id;
+                    break;
+                }
+            }
+        }
+        if (cancelId) {
+            LOG_INFO("Server", "Dungeon invite timed out for instance %u", cancelId);
+            dungeonManager_.destroyInstance(cancelId);
+        }
+    }
+
+    // Boss kill detection -- check for dead MiniBoss in each active instance
+    for (auto& [id, inst] : dungeonManager_.allInstances()) {
+        if (inst->completed || inst->expired) continue;
+        bool bossKilled = false;
+        inst->world.forEach<EnemyStatsComponent>([&](Entity* e, EnemyStatsComponent* es) {
+            if (!bossKilled && !es->stats.isAlive && es->stats.monsterType == "MiniBoss") {
+                bossKilled = true;
+            }
+        });
+        if (bossKilled) {
+            inst->completed = true;
+            inst->celebrationTimer = 15.0f;
+            distributeDungeonRewards(inst.get());
+            LOG_INFO("Server", "Dungeon instance %u boss killed! 15s celebration", id);
+        }
+    }
+
+    // Handle timed-out instances (10 min expired, boss still alive)
     for (uint32_t id : dungeonManager_.getTimedOutInstances()) {
-        LOG_INFO("Server", "Dungeon instance %u timed out, destroying", id);
-        dungeonManager_.destroyInstance(id);
+        endDungeonInstance(id, 1); // reason=timeout
+        break; // iterator may be invalidated
     }
+
+    // Handle celebration finished (15s after boss kill)
     for (uint32_t id : dungeonManager_.getCelebrationFinishedInstances()) {
-        LOG_INFO("Server", "Dungeon instance %u celebration finished, destroying", id);
-        dungeonManager_.destroyInstance(id);
+        endDungeonInstance(id, 0); // reason=boss_killed
+        break; // iterator may be invalidated
     }
+
+    // Handle all-disconnect (no players left in active instance)
     for (uint32_t id : dungeonManager_.getEmptyActiveInstances()) {
-        LOG_INFO("Server", "Dungeon instance %u empty, destroying", id);
-        dungeonManager_.destroyInstance(id);
+        auto* inst = dungeonManager_.getInstance(id);
+        if (inst) {
+            LOG_INFO("Server", "Dungeon instance %u empty -- destroying (no loot)", id);
+            inst->expired = true;
+            dungeonManager_.destroyInstance(id);
+            break; // iterator invalidated
+        }
     }
+}
+
+// ---------------------------------------------------------------------------
+// distributeDungeonRewards -- gold, honor, treasure box to all party members
+// ---------------------------------------------------------------------------
+void ServerApp::distributeDungeonRewards(DungeonInstance* inst) {
+    int64_t goldReward = static_cast<int64_t>(10000) * inst->difficultyTier;
+    std::string treasureBoxId = "boss_treasure_box_t" + std::to_string(inst->difficultyTier);
+
+    for (uint16_t cid : inst->playerClientIds) {
+        auto* conn = server_.connections().findById(cid);
+        if (!conn) continue;
+        Entity* player = inst->world.getEntity(EntityHandle(conn->playerEntityId));
+        if (!player) continue;
+
+        auto* cs = player->getComponent<CharacterStatsComponent>();
+        auto* inv = player->getComponent<InventoryComponent>();
+        if (!cs || !inv) continue;
+
+        // Gold reward (WAL-logged, server-authoritative)
+        wal_.appendGoldChange(conn->character_id, goldReward);
+        inv->inventory.setGold(inv->inventory.getGold() + goldReward);
+
+        // Boss honor (+50)
+        cs->stats.honor += 50;
+
+        // Treasure box to inventory (silently skip if full)
+        auto* boxDef = itemDefCache_.getDefinition(treasureBoxId);
+        if (boxDef) {
+            ItemInstance box;
+            box.itemId = treasureBoxId;
+            box.quantity = 1;
+            box.instanceId = std::to_string(
+                std::chrono::steady_clock::now().time_since_epoch().count());
+            box.rarity = parseItemRarity(boxDef->rarity);
+            int slot = inv->inventory.addItem(box);
+            if (slot >= 0) {
+                wal_.appendItemAdd(conn->character_id, -1, box.instanceId);
+            }
+        }
+
+        sendPlayerState(cid);
+        sendInventorySync(cid);
+
+        LOG_INFO("Server", "Dungeon rewards for client %d: %lld gold, 50 honor, treasure box '%s'",
+                 cid, static_cast<long long>(goldReward), treasureBoxId.c_str());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// endDungeonInstance -- send end msg, teleport players back, cleanup
+// ---------------------------------------------------------------------------
+void ServerApp::endDungeonInstance(uint32_t instanceId, uint8_t reason) {
+    auto* inst = dungeonManager_.getInstance(instanceId);
+    if (!inst) return;
+
+    LOG_INFO("Server", "Ending dungeon instance %u (reason=%u)", instanceId, reason);
+
+    // Send end message to all players
+    SvDungeonEndMsg endMsg;
+    endMsg.reason = reason;
+    uint8_t buf[8];
+    ByteWriter w(buf, sizeof(buf));
+    endMsg.write(w);
+
+    // Copy client list (will be modified during iteration)
+    std::vector<uint16_t> clients = inst->playerClientIds;
+
+    for (uint16_t cid : clients) {
+        server_.sendTo(cid, Channel::ReliableOrdered, PacketType::SvDungeonEnd, buf, w.size());
+
+        // Get return point
+        Vec2 returnPos = {0.0f, 0.0f};
+        std::string returnScene = "WhisperingWoods";
+        auto it = inst->returnPoints.find(cid);
+        if (it != inst->returnPoints.end()) {
+            returnPos = {it->second.x, it->second.y};
+            returnScene = it->second.scene;
+        }
+
+        // Transfer back to overworld
+        transferPlayerToWorld(cid, inst->world, inst->replication, world_, replication_, returnPos, returnScene);
+
+        // Clear event lock (need to find new entityId after transfer)
+        auto* conn = server_.connections().findById(cid);
+        if (conn) {
+            playerEventLocks_.erase(conn->playerEntityId);
+        }
+
+        dungeonManager_.removePlayer(instanceId, cid);
+    }
+
+    dungeonManager_.destroyInstance(instanceId);
 }
 
 // ============================================================================
@@ -6551,6 +6848,7 @@ EntityHandle ServerApp::transferPlayerToWorld(uint16_t clientId,
     auto* newStats = dstWorld.addComponentToEntity<CharacterStatsComponent>(newEntity);
     newStats->stats = savedStats;
     newStats->stats.currentScene = newScene;
+    playerDirty_[clientId].position = true;
 
     // CombatController — copy config, reset cooldown
     auto* newCombat = dstWorld.addComponentToEntity<CombatControllerComponent>(newEntity);
