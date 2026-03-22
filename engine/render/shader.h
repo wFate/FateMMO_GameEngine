@@ -27,15 +27,25 @@ public:
     void setVec4(const std::string& name, float x, float y, float z, float w);
     void setMat4(const std::string& name, const Mat4& value);
 
+#ifndef FATEMMO_METAL
     unsigned int id() const { return programId_; }
+#else
+    unsigned int id() const { return 0; }
+#endif
     gfx::ShaderHandle gfxHandle() const { return gfxHandle_; }
 
 private:
+#ifndef FATEMMO_METAL
     unsigned int programId_ = 0;
+#endif
     gfx::ShaderHandle gfxHandle_{};
+#ifndef FATEMMO_METAL
     std::unordered_map<std::string, int> uniformCache_;
+#endif
 
+#ifndef FATEMMO_METAL
     int getUniformLocation(const std::string& name);
+#endif
     std::string vertPath_;
     std::string fragPath_;
 };

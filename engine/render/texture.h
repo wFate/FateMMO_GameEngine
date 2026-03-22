@@ -32,7 +32,13 @@ public:
     void bind(unsigned int slot = 0) const;
     void unbind() const;
 
-    unsigned int id() const { return textureId_; }
+    unsigned int id() const {
+#ifdef FATEMMO_METAL
+        return 0;
+#else
+        return textureId_;
+#endif
+    }
     int width() const { return width_; }
     int height() const { return height_; }
     const std::string& path() const { return path_; }
@@ -40,7 +46,9 @@ public:
     gfx::TextureFormat format() const { return format_; }
 
 private:
+#ifndef FATEMMO_METAL
     unsigned int textureId_ = 0;
+#endif
     gfx::TextureHandle gfxHandle_{};
     int width_ = 0;
     int height_ = 0;

@@ -1,6 +1,8 @@
 #include "engine/render/texture.h"
 #include "engine/render/gfx/device.h"
+#ifndef FATEMMO_METAL
 #include "engine/render/gfx/backend/gl/gl_loader.h"
+#endif
 #include "engine/core/logger.h"
 #include "engine/asset/asset_registry.h"
 #include "stb_image.h"
@@ -20,6 +22,12 @@ GPUCompressedFormats& GPUCompressedFormats::instance() {
 }
 
 void GPUCompressedFormats::detect() {
+#ifdef FATEMMO_METAL
+    // All Apple Silicon supports ETC2 and ASTC natively
+    etc2 = true;
+    astc = true;
+    LOG_INFO("GPUCaps", "Compressed textures: ETC2=yes ASTC=yes (Metal/Apple Silicon)");
+#else
     // ETC2 is mandatory in GLES 3.0, optional on desktop GL 4.3+
     // ASTC is an extension (GL_KHR_texture_compression_astc_ldr)
     const char* extensions = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
@@ -41,6 +49,7 @@ void GPUCompressedFormats::detect() {
 
     LOG_INFO("GPUCaps", "Compressed textures: ETC2=%s ASTC=%s (GL: %s)",
              etc2 ? "yes" : "no", astc ? "yes" : "no", version ? version : "?");
+#endif
 }
 
 // ============================================================================
@@ -98,7 +107,11 @@ bool Texture::loadFromFile(const std::string& path) {
         return loadFromKTX(path);
     }
 
-    stbi_set_flip_vertically_on_load(true);
+#ifdef FATEMMO_METAL
+    stbi_set_flip_vertically_on_load(false);  // Metal: top-left origin
+#else
+    stbi_set_flip_vertically_on_load(true);   // GL: bottom-left origin
+#endif
     int channels;
     unsigned char* data = stbi_load(path.c_str(), &width_, &height_, &channels, 4);
     if (!data) {
@@ -193,7 +206,9 @@ bool Texture::loadFromKTX(const std::string& path) {
         return false;
     }
 
+#ifndef FATEMMO_METAL
     textureId_ = device.resolveGLTexture(gfxHandle_);
+#endif
     path_ = path;
 
     LOG_INFO("Texture", "KTX loaded %s (%dx%d, fmt=0x%X, %zu bytes)",
@@ -202,7 +217,11 @@ bool Texture::loadFromKTX(const std::string& path) {
 }
 
 bool Texture::reloadFromFile(const std::string& path) {
-    stbi_set_flip_vertically_on_load(true);
+#ifdef FATEMMO_METAL
+    stbi_set_flip_vertically_on_load(false);  // Metal: top-left origin
+#else
+    stbi_set_flip_vertically_on_load(true);   // GL: bottom-left origin
+#endif
     int w, h, channels;
     unsigned char* data = stbi_load(path.c_str(), &w, &h, &channels, 4);
     if (!data) {
@@ -214,7 +233,9 @@ bool Texture::reloadFromFile(const std::string& path) {
     if (gfxHandle_.valid()) {
         gfx::Device::instance().destroy(gfxHandle_);
         gfxHandle_ = {};
+#ifndef FATEMMO_METAL
         textureId_ = 0;
+#endif
     }
 
     width_ = w;
@@ -242,17 +263,23 @@ bool Texture::loadFromMemory(const unsigned char* data, int width, int height, i
         return false;
     }
 
+#ifndef FATEMMO_METAL
     textureId_ = device.resolveGLTexture(gfxHandle_);
+#endif
     return true;
 }
 
 void Texture::bind(unsigned int slot) const {
+#ifndef FATEMMO_METAL
     glActiveTexture(GL_TEXTURE0 + slot);
     glBindTexture(GL_TEXTURE_2D, textureId_);
+#endif
 }
 
 void Texture::unbind() const {
+#ifndef FATEMMO_METAL
     glBindTexture(GL_TEXTURE_2D, 0);
+#endif
 }
 
 // TextureCache
@@ -335,7 +362,11 @@ void TextureCache::requestAsyncLoad(const std::string& path) {
     // (In production, this would use the fiber job system instead)
     std::thread([this, path]() {
         int w, h, ch;
-        stbi_set_flip_vertically_on_load(true);
+#ifdef FATEMMO_METAL
+        stbi_set_flip_vertically_on_load(false);  // Metal: top-left origin
+#else
+        stbi_set_flip_vertically_on_load(true);   // GL: bottom-left origin
+#endif
         // stbi_load is thread-safe for different files
         unsigned char* data = stbi_load(path.c_str(), &w, &h, &ch, 4); // force RGBA
         if (!data) return;
