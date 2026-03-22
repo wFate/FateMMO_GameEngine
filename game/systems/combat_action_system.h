@@ -13,9 +13,7 @@
 #include "game/components/sprite_component.h"
 #include "game/shared/spatial_hash.h"
 #include "imgui.h"
-#ifndef FATE_SHIPPING
-#include "engine/editor/editor.h"
-#endif
+#include "engine/editor/editor_shim.h"
 
 #include "game/systems/quest_system.h"
 #include "game/components/faction_component.h"
@@ -178,6 +176,9 @@ public:
         }
 
         // --- Nameplates above entities (ImGui screen-space overlay) ---
+        // Skip nameplates when a UI panel is open (ForegroundDrawList renders on top of ImGui windows)
+        if (Input::instance().isUIBlocking()) return;
+
         // Use GameViewport for screen-space positioning (accounts for letterboxing)
         float gvpX = GameViewport::x();
         float gvpY = GameViewport::y();

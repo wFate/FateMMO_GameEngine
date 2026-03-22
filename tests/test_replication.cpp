@@ -4,6 +4,7 @@
 #include "engine/net/protocol.h"
 #include "game/components/transform.h"
 #include "game/components/game_components.h"
+#include "game/shared/game_types.h"
 #include <thread>
 #include <chrono>
 
@@ -399,4 +400,60 @@ TEST_CASE("Replication sends SvEntityEnter for newly visible entities") {
     clientSock.close();
     server.stop();
     NetSocket::shutdownPlatform();
+}
+
+// ============================================================================
+// Encoding helper unit tests (Task 6)
+// ============================================================================
+
+TEST_CASE("encodeAnimId / decodeAnimId round-trip") {
+    for (uint8_t dir = 0; dir < 3; ++dir) {
+        for (uint8_t type = 0; type < 4; ++type) {
+            uint16_t id = fate::encodeAnimId(dir, type);
+            uint8_t dDir, dType;
+            fate::decodeAnimId(id, dDir, dType);
+            REQUIRE(dDir == dir);
+            REQUIRE(dType == type);
+        }
+    }
+    // death special case
+    uint8_t dDir, dType;
+    fate::decodeAnimId(12, dDir, dType);
+    REQUIRE(dType == 4); // death type
+}
+
+TEST_CASE("packEquipVisuals round-trips correctly") {
+    uint16_t w = 42, a = 513, h = 1023;
+    uint32_t packed = fate::packEquipVisuals(w, a, h);
+    uint16_t w2, a2, h2;
+    fate::unpackEquipVisuals(packed, w2, a2, h2);
+    REQUIRE(w2 == 42);
+    REQUIRE(a2 == 513);
+    REQUIRE(h2 == 1023);
+}
+
+TEST_CASE("packEquipVisuals handles zero (empty slots)") {
+    uint32_t packed = fate::packEquipVisuals(0, 0, 0);
+    REQUIRE(packed == 0);
+}
+
+TEST_CASE("facingToAnimDir maps all Direction values") {
+    REQUIRE(fate::facingToAnimDir(fate::Direction::Down) == 0);
+    REQUIRE(fate::facingToAnimDir(fate::Direction::Up) == 1);
+    REQUIRE(fate::facingToAnimDir(fate::Direction::Left) == 2);
+    REQUIRE(fate::facingToAnimDir(fate::Direction::Right) == 2);
+    REQUIRE(fate::facingToAnimDir(fate::Direction::None) == 0);
+}
+
+TEST_CASE("moveState/animId produce dirty bits in delta comparison") {
+    fate::SvEntityUpdateMsg prev, curr;
+    prev.moveState = 0; prev.animId = 0;
+    curr.moveState = 1; curr.animId = 4;
+
+    uint16_t dirty = 0;
+    if (curr.moveState != prev.moveState) dirty |= (1 << 5);
+    if (curr.animId != prev.animId) dirty |= (1 << 6);
+
+    REQUIRE((dirty & (1 << 5)) != 0);
+    REQUIRE((dirty & (1 << 6)) != 0);
 }

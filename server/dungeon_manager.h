@@ -54,8 +54,12 @@ struct DungeonInstance {
     bool hasPlayers() const { return !playerClientIds.empty(); }
 };
 
+class ItemDefinitionCache;
+
 class DungeonManager {
 public:
+    void setItemDefCache(const ItemDefinitionCache* cache) { itemDefCache_ = cache; }
+
     inline uint32_t createInstance(const std::string& sceneId, int partyId, int difficultyTier = 1) {
         uint32_t id = generateInstanceId();
         auto inst = std::make_unique<DungeonInstance>(id, sceneId, partyId, difficultyTier);
@@ -63,6 +67,7 @@ public:
                  id, sceneId.c_str(), partyId);
         if (partyId >= 0) partyToInstance_[partyId] = id;
         instances_[id] = std::move(inst);
+        if (itemDefCache_) instances_[id]->replication.setItemDefCache(itemDefCache_);
         return id;
     }
 
@@ -160,6 +165,7 @@ public:
     }
 
 private:
+    const ItemDefinitionCache* itemDefCache_ = nullptr;
     uint32_t nextInstanceId_ = 1;
     std::mt19937 rng_{std::random_device{}()};
     std::unordered_map<uint32_t, std::unique_ptr<DungeonInstance>> instances_;

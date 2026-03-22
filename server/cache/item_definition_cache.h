@@ -22,6 +22,7 @@ struct CachedItemDefinition {
     int damageMax = 0;
     int armor = 0;
     int maxEnchant = 12;
+    uint16_t visualIndex = 0;   // Deterministic index for network replication (1-based, 0 = none)
     bool isSocketable = false;
     bool isSoulbound = false;
     int maxStack = 1;
@@ -64,9 +65,17 @@ public:
         return it != definitions_.end() ? &it->second : nullptr;
     }
     std::vector<const CachedItemDefinition*> getItemsByType(const std::string& itemType) const;
+    uint16_t getVisualIndex(const std::string& itemId) const {
+        auto it = definitions_.find(itemId);
+        return it != definitions_.end() ? it->second.visualIndex : 0;
+    }
+    const CachedItemDefinition* getByVisualIndex(uint16_t idx) const {
+        return (idx > 0 && idx <= visualIndexList_.size()) ? visualIndexList_[idx - 1] : nullptr;
+    }
     size_t size() const { return definitions_.size(); }
 private:
     std::unordered_map<std::string, CachedItemDefinition> definitions_;
+    std::vector<const CachedItemDefinition*> visualIndexList_; // 0-based, visualIndex is 1-based
     static std::vector<PossibleStat> parsePossibleStats(const std::string& json);
 };
 

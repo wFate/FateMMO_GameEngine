@@ -2,9 +2,7 @@
 #include "engine/core/logger.h"
 #include "engine/render/gfx/backend/gl/gl_loader.h"
 #include "engine/scene/scene_manager.h"
-#ifndef FATE_SHIPPING
-#include "engine/editor/editor.h"
-#endif
+#include "engine/editor/editor_shim.h"
 #include "game/register_components.h"
 #include "game/components/transform.h"
 #include "game/components/sprite_component.h"
@@ -818,10 +816,10 @@ void GameApp::onInit() {
 
         zoneSystem_ = world.addSystem<ZoneSystem>();
         zoneSystem_->camera = &camera();
-        zoneSystem_->onSceneTransition = [this](const std::string& scene) {
+        zoneSystem_->onSceneTransition = [this](const std::string& scene, Vec2 spawnPos) {
             // Send zone transition request to server for validation (level gate, etc.)
             // Server will respond with SvZoneTransition if allowed
-            netClient_.sendZoneTransition(scene);
+            netClient_.sendZoneTransition(scene, spawnPos.x, spawnPos.y);
         };
 
         world.addSystem<SpawnSystem>();
@@ -942,6 +940,61 @@ void GameApp::onInit() {
                 nameplate->nameColor = pkStatusColor(static_cast<PKStatus>(msg.pkStatus));
             }
         }
+
+        // moveState (bit 5) — set ghost walking state
+        if (msg.fieldMask & (1 << 5)) {
+            auto* pc = ghost->getComponent<PlayerController>();
+            if (pc) {
+                pc->isMoving = (msg.moveState == static_cast<uint8_t>(MoveState::Walking));
+            }
+        }
+
+        // animId (bit 6) — set ghost animation direction + type
+        if (msg.fieldMask & (1 << 6)) {
+            auto* anim = ghost->getComponent<Animator>();
+            auto* pc = ghost->getComponent<PlayerController>();
+            auto* spr = ghost->getComponent<SpriteComponent>();
+            if (anim && pc) {
+                uint8_t animDir, animType;
+                decodeAnimId(msg.animId, animDir, animType);
+
+                // Map animDir back to Direction for PlayerController
+                if (animDir == 0) pc->facing = Direction::Down;
+                else if (animDir == 1) pc->facing = Direction::Up;
+                else if (animDir == 2) {
+                    // side — use flipX to determine left vs right
+                    if (spr) pc->facing = spr->flipX ? Direction::Left : Direction::Right;
+                    else pc->facing = Direction::Right;
+                }
+
+                // Map animType to animation name
+                static const char* typeNames[] = {"idle", "walk", "attack", "cast"};
+                static const char* dirNames[]  = {"_down", "_up", "_side"};
+                if (animType == 4) {
+                    // death (special)
+                    anim->currentAnimation = "death";
+                } else if (animType < 4 && animDir < 3) {
+                    anim->currentAnimation = std::string(typeNames[animType]) + dirNames[animDir];
+                }
+            }
+        }
+
+        // targetEntityId (bit 10) — store on ghost for display
+        if (msg.fieldMask & (1 << 10)) {
+            auto* tgt = ghost->getComponent<TargetingComponent>();
+            if (tgt) {
+                tgt->selectedTargetId = msg.targetEntityId;
+            }
+        }
+
+        // equipVisuals (bit 13) — unpack and store on ghost
+        if (msg.fieldMask & (1 << 13)) {
+            auto* ev = ghost->getComponent<EquipVisualsComponent>();
+            if (ev) {
+                unpackEquipVisuals(msg.equipVisuals,
+                    ev->weaponVisualIdx, ev->armorVisualIdx, ev->hatVisualIdx);
+            }
+        }
     };
 
     netClient_.onCombatEvent = [this](const SvCombatEventMsg& msg) {
@@ -961,9 +1014,12 @@ void GameApp::onInit() {
             combatPredictions_.resolveOldest();
         }
 
-        LOG_INFO("CombatDbg", "SvCombatEvent: attacker=%llu target=%llu dmg=%d kill=%d isLocal=%d ghosts=%zu",
-                 msg.attackerId, msg.targetId, msg.damage, (int)msg.isKill,
-                 (int)isLocalAttack, ghostEntities_.size());
+        // Only log combat events that deal damage or kill (skip mob-miss spam)
+        if (msg.damage > 0 || msg.isKill) {
+            LOG_DEBUG("CombatDbg", "SvCombatEvent: attacker=%llu target=%llu dmg=%d kill=%d isLocal=%d ghosts=%zu",
+                      msg.attackerId, msg.targetId, msg.damage, (int)msg.isKill,
+                      (int)isLocalAttack, ghostEntities_.size());
+        }
 
         // Find target entity position for floating text
         Vec2 targetPos{0, 0};
@@ -2637,6 +2693,17 @@ void GameApp::onUpdate(float deltaTime) {
             if (input.isActionPressed(ActionId::SkillPageNext) && !Editor::instance().wantsKeyboard()) {
                 SkillBarUI::instance().nextPage();
             }
+
+            // Set UI blocking flag — movement + nameplates suppressed while panels are open
+            input.setUIBlocking(
+                InventoryUI::instance().isOpen() ||
+                shopUI_.isOpen ||
+                bankStorageUI_.isOpen ||
+                skillTrainerUI_.isOpen ||
+                teleporterUI_.isOpen ||
+                questLogUI_.isOpen ||
+                (npcInteractionSystem_ && npcInteractionSystem_->dialogueOpen)
+            );
             break;
         }
     }
@@ -2719,10 +2786,12 @@ void GameApp::onRender(SpriteBatch& batch, Camera& camera) {
         }
     }
 
-    // Network config panel (always visible in editor)
+    // Network config panel (debug only — hidden in shipping builds)
+#ifndef FATE_SHIPPING
     if (Editor::instance().isOpen()) {
         drawNetworkPanel();
     }
+#endif
 
     // Zone transition fade overlay
     if (zoneSystem_ && zoneSystem_->isTransitioning()) {

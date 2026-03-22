@@ -8,9 +8,7 @@
 #include "game/components/sprite_component.h"
 #include "engine/core/logger.h"
 #include "imgui.h"
-#ifndef FATE_SHIPPING
-#include "engine/editor/editor.h"
-#endif
+#include "engine/editor/editor_shim.h"
 
 #include "game/systems/quest_system.h"
 #include <cmath>

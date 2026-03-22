@@ -9,6 +9,9 @@
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
 #endif
+#include "imgui.h"
+#include "imgui_impl_sdl2.h"
+#include "imgui_impl_opengl3.h"
 #include "engine/profiling/tracy_zones.h"
 #include "engine/job/job_system.h"
 #if defined(ENGINE_MEMORY_DEBUG)
@@ -119,6 +122,13 @@ bool App::init(const AppConfig& config) {
     Logger::instance().setLogCallback([](const std::string& msg, int level) {
         LogViewer::instance().addMessage(msg, level);
     });
+#else
+    // Shipping builds: initialize ImGui for game UI (no editor panels)
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+    ImGui_ImplSDL2_InitForOpenGL(window_, glContext_);
+    ImGui_ImplOpenGL3_Init("#version 330");
 #endif
 
     assetsDir_ = config.assetsDir;
@@ -194,10 +204,17 @@ void App::processEvents() {
     Input::instance().beginFrame();
 #ifndef FATE_SHIPPING
     Editor::instance().beginFrame();
+#else
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
 #endif
 
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+#ifdef FATE_SHIPPING
+        ImGui_ImplSDL2_ProcessEvent(&event);
+#endif
 #ifndef FATE_SHIPPING
         // Editor gets events first
         Editor::instance().processEvent(event);
@@ -477,8 +494,10 @@ void App::render() {
     ctx.viewportHeight = vpH;
     renderGraph_.execute(ctx);
 
+    // Bind default framebuffer and blit PostProcess result to screen
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, vpW, vpH);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     auto& postFbo = renderGraph_.getFBO("PostProcess", vpW, vpH);
@@ -505,6 +524,10 @@ void App::render() {
     }
 
     onRender(spriteBatch_, camera_);
+
+    // Render ImGui draw data
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 #endif
 
     SDL_GL_SwapWindow(window_);
@@ -537,6 +560,10 @@ void App::shutdown() {
 
 #ifndef FATE_SHIPPING
     Editor::instance().shutdown();
+#else
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
+    ImGui::DestroyContext();
 #endif
     spriteBatch_.shutdown();
     fileWatcher_.stop();

@@ -153,6 +153,8 @@ bool ServerApp::init(uint16_t port) {
 
     // Initialize definition caches
     itemDefCache_.initialize(gameDbConn_.connection());
+    replication_.setItemDefCache(&itemDefCache_);
+    dungeonManager_.setItemDefCache(&itemDefCache_);
     lootTableCache_.initialize(gameDbConn_.connection(), itemDefCache_);
     mobDefCache_.initialize(gameDbConn_.connection());
     skillDefCache_.initialize(gameDbConn_.connection());
@@ -2871,12 +2873,12 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                                     }
                                 }
                                 if (session->playerAGold > 0) {
-                                    invA->inventory.addGold(-session->playerAGold);
-                                    invB->inventory.addGold(session->playerAGold);
+                                    invA->inventory.setGold(invA->inventory.getGold() - session->playerAGold);
+                                    invB->inventory.setGold(invB->inventory.getGold() + session->playerAGold);
                                 }
                                 if (session->playerBGold > 0) {
-                                    invB->inventory.addGold(-session->playerBGold);
-                                    invA->inventory.addGold(session->playerBGold);
+                                    invB->inventory.setGold(invB->inventory.getGold() - session->playerBGold);
+                                    invA->inventory.setGold(invA->inventory.getGold() + session->playerBGold);
                                 }
                             }
                             if (invA) invA->inventory.unlockAllTradeSlots();
@@ -3012,8 +3014,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             Entity* e = getWorldForClient(clientId).getEntity(h);
             if (!e) break;
 
-            // Validate target scene exists
-            const SceneInfoRecord* targetScene = sceneCache_.getByName(cmd.targetScene);
+            // Validate target scene exists (lookup by scene_id, not display name)
+            const SceneInfoRecord* targetScene = sceneCache_.get(cmd.targetScene);
             if (!targetScene) {
                 LOG_WARN("Server", "Client %d zone transition to unknown scene '%s'",
                          clientId, cmd.targetScene.c_str());
@@ -3040,12 +3042,15 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             // Transition allowed — send SvZoneTransition back to client
             LOG_INFO("Server", "Client %d zone transition -> '%s'", clientId, cmd.targetScene.c_str());
 
-            // Look up spawn position from scene cache
-            float spawnX = 0.0f, spawnY = 0.0f;
-            auto* targetSceneDef = sceneCache_.get(cmd.targetScene);
-            if (targetSceneDef) {
-                spawnX = targetSceneDef->defaultSpawnX;
-                spawnY = targetSceneDef->defaultSpawnY;
+            // Use portal's spawn position if provided, otherwise fall back to scene default
+            float spawnX = cmd.spawnX;
+            float spawnY = cmd.spawnY;
+            if (spawnX == 0.0f && spawnY == 0.0f) {
+                auto* targetSceneDef = sceneCache_.get(cmd.targetScene);
+                if (targetSceneDef) {
+                    spawnX = targetSceneDef->defaultSpawnX;
+                    spawnY = targetSceneDef->defaultSpawnY;
+                }
             }
 
             SvZoneTransitionMsg resp;
@@ -4551,6 +4556,29 @@ void ServerApp::processEquip(uint16_t clientId, const CmdEquipMsg& msg) {
     }
     auto targetSlot = static_cast<EquipmentSlot>(msg.equipSlot);
 
+    // Validate class and level requirements before equipping
+    if (msg.action == 0) {
+        auto item = inv->inventory.getSlot(msg.inventorySlot);
+        if (item.isValid()) {
+            const auto* itemDef = itemDefCache_.getDefinition(item.itemId);
+            if (itemDef) {
+                if (!itemDef->classReq.empty() && itemDef->classReq != "All" &&
+                    charStats->stats.classDef.displayName != itemDef->classReq) {
+                    LOG_WARN("Server", "Client %d class %s cannot equip %s (requires %s)",
+                             clientId, charStats->stats.classDef.displayName.c_str(),
+                             item.itemId.c_str(), itemDef->classReq.c_str());
+                    return;
+                }
+                if (itemDef->levelReq > charStats->stats.level) {
+                    LOG_WARN("Server", "Client %d level %d too low for %s (requires %d)",
+                             clientId, charStats->stats.level,
+                             item.itemId.c_str(), itemDef->levelReq);
+                    return;
+                }
+            }
+        }
+    }
+
     bool success = false;
 
     if (msg.action == 0) {
@@ -5410,6 +5438,7 @@ void ServerApp::processExtractCore(uint16_t clientId, const CmdExtractCoreMsg& m
 
     // 6. Add cores to inventory
     ItemInstance coreItem;
+    coreItem.instanceId  = generateItemInstanceId();
     coreItem.itemId      = coreResult.coreItemId;
     coreItem.displayName = coreResult.coreItemId;
     coreItem.quantity    = coreResult.quantity;
@@ -5511,11 +5540,23 @@ void ServerApp::processCraft(uint16_t clientId, const CmdCraftMsg& msg) {
         sendResult(false, "", 0, "Not enough gold"); return;
     }
 
-    // 7. WAL + consume gold
+    // 7. Pre-check: verify inventory has space for result BEFORE consuming anything
+    {
+        bool hasSpace = false;
+        int slotCount2 = inv->inventory.totalSlots();
+        for (int i = 0; i < slotCount2; ++i) {
+            if (!inv->inventory.getSlot(i).isValid()) { hasSpace = true; break; }
+        }
+        if (!hasSpace) {
+            sendResult(false, "", 0, "Inventory full"); return;
+        }
+    }
+
+    // 8. WAL + consume gold
     wal_.appendGoldChange(client->character_id, -recipe->goldCost);
     inv->inventory.setGold(inv->inventory.getGold() - recipe->goldCost);
 
-    // 8. Consume ingredients
+    // 9. Consume ingredients
     for (const auto& ing : recipe->ingredients) {
         int remaining = ing.quantity;
         while (remaining > 0) {
@@ -5528,8 +5569,9 @@ void ServerApp::processCraft(uint16_t clientId, const CmdCraftMsg& msg) {
         }
     }
 
-    // 9. Create result item
+    // 10. Create result item
     ItemInstance resultItem;
+    resultItem.instanceId = generateItemInstanceId();
     resultItem.itemId    = recipe->resultItemId;
     resultItem.quantity  = recipe->resultQuantity;
 
@@ -5543,11 +5585,8 @@ void ServerApp::processCraft(uint16_t clientId, const CmdCraftMsg& msg) {
         else if (resultDef->rarity == "Legendary") resultItem.rarity = ItemRarity::Legendary;
     }
 
-    // 10. Add to inventory
-    bool added = inv->inventory.addItem(resultItem);
-    if (!added) {
-        sendResult(false, "", 0, "Inventory full"); return;
-    }
+    // 11. Add to inventory (space already verified above)
+    inv->inventory.addItem(resultItem);
 
     // 11. Dirty flag: gold + ingredients consumed + item created
     playerDirty_[clientId].inventory = true;

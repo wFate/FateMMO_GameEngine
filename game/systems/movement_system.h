@@ -18,6 +18,31 @@ public:
 
     void update(float dt) override {
         auto& input = Input::instance();
+
+        // Block movement when any UI panel is open (inventory, shop, bank, etc.)
+        if (input.isUIBlocking()) {
+            // Force idle animation for local player
+            world_->forEach<Transform, PlayerController>(
+                [&](Entity* entity, Transform*, PlayerController* ctrl) {
+                    if (!ctrl->isLocalPlayer) return;
+                    if (ctrl->isMoving) {
+                        ctrl->isMoving = false;
+                        auto* animator = entity->getComponent<Animator>();
+                        if (animator) {
+                            switch (ctrl->facing) {
+                                case Direction::Down:  animator->play("idle_down");  break;
+                                case Direction::Up:    animator->play("idle_up");    break;
+                                case Direction::Left:  animator->play("idle_left");  break;
+                                case Direction::Right: animator->play("idle_right"); break;
+                                default: break;
+                            }
+                        }
+                    }
+                }
+            );
+            return;
+        }
+
         Direction dir = input.getCardinalDirection();
 
         world_->forEach<Transform, PlayerController>(

@@ -13,7 +13,7 @@ void ItemDefinitionCache::initialize(pqxx::connection& conn) {
             "damage_min, damage_max, armor, attributes, description, "
             "gold_value, max_stack, icon_path, possible_stats, "
             "is_socketable, is_soulbound, rarity, max_enchant "
-            "FROM item_definitions"
+            "FROM item_definitions ORDER BY item_id"
         );
         txn.commit();
 
@@ -47,6 +47,19 @@ void ItemDefinitionCache::initialize(pqxx::connection& conn) {
             }
 
             definitions_[def.itemId] = std::move(def);
+        }
+
+        // Assign visual indices in deterministic DB order (ORDER BY item_id)
+        visualIndexList_.clear();
+        visualIndexList_.reserve(definitions_.size());
+        uint16_t nextIdx = 1;
+        for (const auto& row : result) {
+            std::string id = row["item_id"].as<std::string>();
+            auto it = definitions_.find(id);
+            if (it != definitions_.end()) {
+                it->second.visualIndex = nextIdx++;
+                visualIndexList_.push_back(&it->second);
+            }
         }
         LOG_INFO("ItemDefCache", "Loaded %zu item definitions", definitions_.size());
     } catch (const std::exception& e) {

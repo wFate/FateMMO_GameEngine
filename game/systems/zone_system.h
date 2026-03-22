@@ -20,7 +20,7 @@ public:
     Camera* camera = nullptr;
 
     // Callbacks for scene loading (wired by GameApp)
-    std::function<void(const std::string& scene)> onSceneTransition;
+    std::function<void(const std::string& scene, Vec2 spawnPos)> onSceneTransition;
     std::function<void()> onFadeStart;
     std::function<void()> onFadeEnd;
 
@@ -163,7 +163,7 @@ private:
             LOG_INFO("Zone", "Scene transition: -> %s (zone: %s)",
                      portal->targetScene.c_str(), portal->targetZone.c_str());
             if (onSceneTransition) {
-                onSceneTransition(portal->targetScene);
+                onSceneTransition(portal->targetScene, portal->targetSpawnPos);
             }
         } else {
             // Same-scene zone transition (teleport)

@@ -57,7 +57,7 @@ public:
         job.function = &TypedTask<Result>::execute;
         job.param = task;
 
-        JobSystem::instance().submit(&job, 1);
+        JobSystem::instance().submitFireAndForget(&job, 1);
     }
 
     /// Dispatch a fire-and-forget DB operation (no result needed).
@@ -72,7 +72,7 @@ public:
         job.function = &VoidTask::execute;
         job.param = task;
 
-        JobSystem::instance().submit(&job, 1);
+        JobSystem::instance().submitFireAndForget(&job, 1);
     }
 
     /// Dispatch a fire-and-forget with a completion callback.
@@ -89,7 +89,7 @@ public:
         job.function = &VoidCallbackTask::execute;
         job.param = task;
 
-        JobSystem::instance().submit(&job, 1);
+        JobSystem::instance().submitFireAndForget(&job, 1);
     }
 
     /// Call once per game tick on the main thread.

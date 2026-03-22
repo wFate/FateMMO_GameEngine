@@ -7,6 +7,8 @@
 #include "game/components/transform.h"
 #include "game/components/player_controller.h"
 #include "game/components/sprite_component.h"
+#include "game/components/box_collider.h"
+#include "game/components/polygon_collider.h"
 #include "engine/core/logger.h"
 
 #include <algorithm>
@@ -176,7 +178,10 @@ public:
                 // Tick MobAI with accumulated delta time
                 Vec2 velocity = ai.tick(gameTime_, aiDt, currentPos, targetPosPtr);
 
-                transform->position += velocity * aiDt;
+                Vec2 newPos = currentPos + velocity * aiDt;
+                if (!isBlockedByStatic(entity, newPos)) {
+                    transform->position = newPos;
+                }
 
                 auto* sprite = entity->getComponent<SpriteComponent>();
                 if (sprite) {
@@ -349,6 +354,47 @@ private:
     Vec2 localPlayerPos_{0, 0};
     bool hasLocalPlayer_ = false;
 
+    // Check if a position is blocked by static colliders (trees, buildings, walls).
+    // Only checks isStatic colliders — mobs pass through players and other mobs.
+    // Thread-safe: static collider transforms/shapes are read-only.
+    bool isBlockedByStatic(Entity* self, const Vec2& newPos) const {
+        auto* myBox = self->getComponent<BoxCollider>();
+        Rect mobBounds;
+        if (myBox) {
+            mobBounds = myBox->getBounds(newPos);
+        } else {
+            // Default collision size (slightly smaller than a tile)
+            mobBounds = {newPos.x - 12.0f, newPos.y - 12.0f, 24.0f, 24.0f};
+        }
+
+        bool blocked = false;
+
+        world_->forEach<Transform, BoxCollider>(
+            [&](Entity* other, Transform* otherT, BoxCollider* otherC) {
+                if (blocked) return;
+                if (other == self || otherC->isTrigger || !otherC->isStatic) return;
+                if (mobBounds.overlaps(otherC->getBounds(otherT->position))) {
+                    blocked = true;
+                }
+            }
+        );
+
+        if (!blocked) {
+            world_->forEach<Transform, PolygonCollider>(
+                [&](Entity* other, Transform* otherT, PolygonCollider* otherP) {
+                    if (blocked) return;
+                    if (other == self || otherP->isTrigger || !otherP->isStatic) return;
+                    if (CollisionUtil::polygonOverlapsRect(
+                            otherP->getWorldPoints(otherT->position), mobBounds)) {
+                        blocked = true;
+                    }
+                }
+            );
+        }
+
+        return blocked;
+    }
+
     // Process a group of mobs (runs on a worker fiber)
     void tickMobGroup(int start, int end) {
         for (int i = start; i < end; ++i) {
@@ -411,7 +457,10 @@ private:
             };
 
             Vec2 velocity = ai.tick(gameTime_, aiDt, currentPos, targetPosPtr);
-            mob.transform->position += velocity * aiDt;
+            Vec2 newPos = currentPos + velocity * aiDt;
+            if (!isBlockedByStatic(mob.entity, newPos)) {
+                mob.transform->position = newPos;
+            }
 
             auto* sprite = mob.entity->getComponent<SpriteComponent>();
             if (sprite) {

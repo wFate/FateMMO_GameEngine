@@ -11,9 +11,13 @@
 #include "game/components/sprite_component.h"
 #include "game/components/game_components.h"
 #include "game/components/faction_component.h"
+#include "game/components/player_controller.h"
+#include "game/components/animator.h"
 #include <unordered_map>
 
 namespace fate {
+
+class ItemDefinitionCache;
 
 class ReplicationManager {
 public:
@@ -31,6 +35,8 @@ public:
 
     // Get EntityHandle for a PersistentId (returns EntityHandle{} if not found)
     EntityHandle getEntityHandle(PersistentId pid) const;
+
+    void setItemDefCache(const ItemDefinitionCache* cache) { itemDefCache_ = cache; }
 
 private:
     AOIConfig aoiConfig_;
@@ -62,6 +68,8 @@ private:
 
     // Build delta-compressed update for a visible entity
     SvEntityUpdateMsg buildCurrentState(World& world, Entity* entity, PersistentId pid);
+
+    const ItemDefinitionCache* itemDefCache_ = nullptr;
 };
 
 } // namespace fate

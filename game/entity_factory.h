@@ -146,6 +146,9 @@ public:
         auto* factionComp = player->addComponent<FactionComponent>();
         factionComp->faction = faction;
 
+        // Equipment Visuals (for replicating appearance to other players)
+        player->addComponent<EquipVisualsComponent>();
+
         // Pet (empty by default — no pet equipped)
         player->addComponent<PetComponent>();
 
@@ -1043,6 +1046,11 @@ public:
         auto* controller = entity->addComponent<PlayerController>();
         controller->isLocalPlayer = false;
 
+        // Replication visual components — updated by onEntityUpdate handlers
+        entity->addComponent<Animator>();
+        entity->addComponent<TargetingComponent>();
+        entity->addComponent<EquipVisualsComponent>();
+
         return entity;
     }
 
@@ -1096,6 +1104,11 @@ public:
         np->level = level;
         np->isBoss = isBoss;
         np->visible = true;
+
+        // Replication visual components — updated by onEntityUpdate handlers
+        entity->addComponent<Animator>();
+        entity->addComponent<TargetingComponent>();
+        entity->addComponent<EquipVisualsComponent>();
 
         return entity;
     }

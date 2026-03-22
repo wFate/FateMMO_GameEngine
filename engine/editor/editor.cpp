@@ -2072,6 +2072,7 @@ void Editor::enterPlayMode(World* world) {
     inPlayMode_ = true;
 }
 
+
 void Editor::exitPlayMode(World* world) {
     if (!inPlayMode_ || !world) return;
     // Destroy all current entities

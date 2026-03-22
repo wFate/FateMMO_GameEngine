@@ -66,7 +66,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Audio System | Done | SoLoud engine (SDL2 backend, null driver fallback). SFX: preloaded WAV/OGG, fire-and-forget `playSFX(name)`, directory batch loading. Music: OGG streaming with looping, crossfade on zone change. 2D spatial audio: distance-based volume falloff + stereo pan. 3 volume buses (master/SFX/music), all clamped 0-1. Max 32 active voices (SoLoud auto-virtualizes overflow). Missing files warn once then silence. 10 game events wired: combat hit/crit/miss/kill, skill results, death, loot, respawn, zone music, chat |
 | 2D Lighting | Done | Ambient + point lights, light map FBO, additive accumulation, multiplicative composite |
 | Post-Processing | Done | Bloom (extract + Gaussian blur + composite), vignette, color grading |
-| Fiber Job System | Done | Win32 fibers + minicoro (iOS/Android/Linux), 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas |
+| Fiber Job System | Done | Win32 fibers + minicoro (iOS/Android/Linux), 4 workers, 32-fiber pool, lock-free MPMC queue, counter-based suspend/resume, fiber-local scratch arenas, **Release build hardening** (`#pragma optimize off` for job_system.cpp, `noinline` switchTo, leaked singleton prevents static destruction crash) |
 | Graphics RHI | Done | gfx::Device + CommandList + Pipeline State Objects, GL backend, typed 32-bit handles, uniform cache |
 | Networking Transport | Done | Custom reliable UDP (Winsock2 + POSIX), ByteWriter/ByteReader (NaN/Inf rejection, string length cap, enum bounds, sticky error), **18-byte packet header** (32-bit ack bitfield), 3 channels (unreliable/reliable-ordered/reliable-unordered), ack bitfields, RTT estimation, per-tick skill command cap, **IPv6 dual-stack sockets** (sockaddr_storage, AF_INET6 with IPV6_V6ONLY=0, IPv4 fallback, DNS64/NAT64 compatible — iOS App Store mandatory), protocol version handshake (rejects outdated clients with reason string), **payload size validation** (cross-checks header vs actual packet), **pending packet cap** (256 max), **auth DNS resolution** (getaddrinfo replaces sscanf) |
 | AEAD Packet Encryption | Done | XChaCha20-Poly1305 via libsodium. Per-session key pair generated on connect, sent via KeyExchange (0x82) packet. All non-system payloads encrypted/authenticated. Sequence number as 24-byte nonce. Tampered packets silently dropped. Separate tx/rx keys prevent reflection attacks. Compiles in plaintext fallback mode without libsodium (`FATE_HAS_SODIUM` guard) |
@@ -78,7 +78,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Profanity Filter (Server) | Done | ProfanityFilter::filterChatMessage wired into CmdChat handler. Censor mode (asterisks) applied before broadcast. 50+ word list, leetspeak normalization, blocked phrases, max 200 char |
 | Mobile Reconnection | Done | ReconnectState machine: exponential backoff (1s→2s→4s...cap 30s), 60s timeout. **Wired into NetClient:** heartbeat timeout detection (8s) triggers auto-reconnect with stored auth token. ConnectAccept clears state. Reliable heartbeat fallback every 3rd beat prevents false timeouts on lossy WiFi/mobile |
 | Entity Replication | Done | AOI-driven enter/leave/update, delta compression with 16-field bitmask (position, animFrame, flipX, currentHP, maxHP, moveState, animId, statusEffectMask, deathState, casting, targetEntityId, level, faction, equipVisuals, pkStatus, **honorRank**), per-entity sequence counters (stale update rejection), distance-based tiered update frequency (Near 20Hz/Mid 7Hz/Far 4Hz/Edge 2Hz with HP-change priority override), ghost entities, client-side position interpolation, spatial-indexed visibility |
-| Client-Server Architecture | Done | Headless 20 tick/sec server (FateServer), NetClient/NetServer, session tokens, heartbeat/timeout, **max 2000 client connection cap** (configurable via `setMaxClients()`), **atomic character save** (single pqxx transaction for character+skills+skillbar+skillpoints) |
+| Client-Server Architecture | Done | Headless 20 tick/sec server (FateServer), NetClient/NetServer, session tokens, heartbeat/timeout, **max 2000 client connection cap** (configurable via `setMaxClients()`), **atomic character save** (single pqxx transaction for character+skills+skillbar+skillpoints), **zone transition uses scene_id** (not display name) for portal lookups |
 | Platform Detection | Done | Compile-time defines: FATEMMO_PLATFORM_WINDOWS/IOS/ANDROID/MACOS/LINUX, FATEMMO_MOBILE, FATEMMO_GLES |
 | Mobile Lifecycle | Done | SDL event filter for background/foreground/low-memory, virtual callbacks (onEnterBackground/Foreground/LowMemory), game loop pause on background, 4 unit tests |
 | Touch Controls | Done | TWOM-style D-pad (bottom-left), attack + 5 skill buttons (bottom-right arc), tap-to-target, multi-finger support, F4 desktop toggle, ImGui ForegroundDrawList rendering |
@@ -108,7 +108,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Core Extraction | Done | Equipment disassembly into 7-tier crafting cores, rarity/level-based tier, enchant-level bonus quantity |
 | Crafting (Server) | Done | Recipe cache with tier-based lookup (Novice/Book I/II/III), ingredient validation, level/class/gold requirements, DB-loaded at startup |
 | DB Backup Script | Done | `scripts/backup_db.sh` — pg_dump custom format, 14-day retention, backup verification |
-| FATE_SHIPPING Flag | Done | `cmake -DFATE_SHIPPING=ON` strips `engine/editor/*` from build, `#ifndef FATE_SHIPPING` guards on all Editor references in app.h/cpp, game_app.cpp, combat_action_system.h, npc_interaction_system.h |
+| FATE_SHIPPING Flag | Done | `cmake -DFATE_SHIPPING=ON` strips `engine/editor/*` from build, `#ifndef FATE_SHIPPING` guards on all Editor references. **x64-Shipping CMake preset**, `editor_shim.h` no-op stubs, standalone ImGui init in app.cpp for game UI, network panel always visible in shipping |
 | Elemental Resists | Done | 6 element types (Fire/Water/Poison/Lightning/Void/Magic) with 75% cap, `getElementalResist(DamageType)` on CharacterStats, wired into both single-target and AOE skill damage paths (multiplicative with base MR) |
 | Instanced Dungeons | Done | TWOM-style per-party dungeon instances. `DungeonManager` + `DungeonInstance` with isolated `World` + `ReplicationManager` per instance. Full entry flow (leader start → member invite/accept → teleport in), 10-min timer, daily ticket (midnight CT reset), no mob respawn, boss kill detection, 15s celebration window. Rewards: honor (+1/mob, +50/boss to all members), gold (10K × tier), boss treasure box. All 30+ handlers routed via `getWorldForClient()`. `transferPlayerToWorld()` snapshots/restores player entities between worlds. GM `/dungeon start\|leave\|list` for testing. 3 dungeon scenes in DB (GoblinCave/UndeadCrypt/DragonLair). No XP loss on death. Event lock integration prevents multi-event enrollment |
 
@@ -128,7 +128,7 @@ Custom 2D game engine built in C++ for FateMMO. Designed for mobile-first landsc
 | Grid Snapping | Done | Ground tiles snap to grid, other entities move freely |
 | Camera Pan | Done | Right-click drag to pan scene |
 | Camera Zoom | Done | Mouse scroll wheel, 0.05x to 8x range |
-| Play/Pause | Done | "Play"/"Stop" toolbar buttons (green/red), auto-pause on editor open. **Play-in-Editor**: enterPlayMode snapshots all entities to JSON, exitPlayMode destroys and restores from snapshot (full ECS state round-trip). Camera position saved/restored |
+| Play/Pause | Done | "Play"/"Stop" toolbar buttons (green/red), auto-pause on editor open. **Play-in-Editor**: enterPlayMode snapshots all entities to JSON, exitPlayMode destroys and restores from snapshot (full ECS state round-trip). Camera position saved/restored. **PlayerController made Serializable** so `isLocalPlayer` survives play/stop/play cycle |
 | Create/Delete Entities | Done | Menu + Delete key, works while paused |
 | Duplicate Entity | Done | Full deep copy via JSON serialization, offset by 32px |
 | Add Components | Done | Popup with engine, game systems, social, NPC, and player quest/bank sections |
@@ -445,6 +445,33 @@ Full system-wide audit across all subsystems (server, combat, inventory, network
 
 **Files changed:** `server_app.cpp`, `skill_manager.cpp`, `game_types.h`, `spawn_system.h`, `npc_interaction_system.h`, `editor.cpp`, `account_repository.h/.cpp`, `auth_protocol.h`, `auth_server.cpp`
 
+### March 22, 2026 - Shipping Client Build + Engine Hardening
+
+Shipping client build pipeline, fiber system Release hardening, play-in-editor snapshot fix, zone transition portal fix, and combat log noise reduction.
+
+**Shipping Client Build (x64-Shipping preset):**
+- New CMake preset `x64-Shipping` with `FATE_SHIPPING=ON`
+- `editor_shim.h` provides no-op Editor stubs (beginFrame/endFrame/isPlaying/getPrefabManager/etc.) so game code compiles without editor dependency
+- ImGui initialized standalone in `app.cpp` for game UI (network panel, game HUD) without editor framework
+- Network panel always visible in shipping build (essential for connection diagnostics)
+- `glBindFramebuffer(GL_FRAMEBUFFER, 0)` fix ensures rendering targets default framebuffer in non-editor mode
+
+**Fiber System Release Build Hardening:**
+- `#pragma optimize("", off)` for entire `job_system.cpp` — prevents MSVC from reordering fiber context switches in Release/RelWithDebInfo
+- `__declspec(noinline)` on `fiber::switchTo` in `fiber_win32.cpp` — prevents inlining that corrupts fiber stack frames
+- Leaked singleton pattern for `JobSystem` instance — prevents static destruction order crash on shutdown (intentional leak, OS reclaims)
+
+**Play-in-Editor Fix:**
+- `PlayerController` changed from `ComponentFlags::None` to `ComponentFlags::Serializable` in `register_components.h`
+- Fixes play/stop/play cycle: `isLocalPlayer` field now survives ECS snapshot/restore round-trip
+
+**Zone Transition Fix:**
+- `CmdZoneTransition` handler changed `sceneCache_.getByName()` to `sceneCache_.get()` in `server_app.cpp`
+- Portals use `scene_id` (integer key), not display name — `getByName()` always failed
+
+**Combat Log Noise:**
+- `CombatDbg` log level changed from `LOG_INFO` to `LOG_DEBUG` in `game_app.cpp` to reduce console spam during normal gameplay
+
 ### March 22, 2026 - High-Severity Bug Sweep (20 fixes)
 
 Systematic audit of 22 high-severity findings — 20 confirmed and fixed, 1 false positive (H22: skill rank already validated by `executeSkill()`), 1 deferred (H14: replication placeholders for unimplemented features).
@@ -597,6 +624,11 @@ Implemented 7 deferred items from Phase 13 backlog. Test count: 758 → 801 (+43
 - `cmake -DFATE_SHIPPING=ON` excludes `engine/editor/*` from sources and defines `FATE_SHIPPING=1`
 - Guards in: `app.h`, `app.cpp`, `game_app.cpp`, `combat_action_system.h`, `npc_interaction_system.h`
 - Shipping mode: no editor UI, input goes directly to game, renders to default framebuffer
+- **x64-Shipping CMake preset** for one-command shipping builds
+- **`editor_shim.h`** provides no-op stubs (`Editor::beginFrame`, `endFrame`, `isPlaying`, `getPrefabManager`, etc.) so game code compiles without editor headers
+- ImGui initialized standalone in `app.cpp` (init/render/shutdown) for game UI without editor framework
+- Network panel always visible in shipping (connection diagnostics)
+- `glBindFramebuffer(GL_FRAMEBUFFER, 0)` ensures rendering targets default framebuffer in non-editor mode
 
 **Heartbeat timeout hardening:**
 - `lastHeartbeat` initialized to `currentTime` in `addClient()` (was 0.0f → premature timeout)
@@ -1447,7 +1479,7 @@ Cross-referenced 9 research documents against the full engine codebase. Implemen
 
 **Fiber-based parallelism and graphics abstraction layer:**
 
-- **Fiber Job System**: Win32 fibers with 4 worker threads and a 32-fiber pool. Lock-free MPMC queue for job dispatch. Counter-based suspend/resume so fibers can wait on dependencies without blocking. Fiber-local scratch arenas for per-job temporary allocations.
+- **Fiber Job System**: Win32 fibers with 4 worker threads and a 32-fiber pool. Lock-free MPMC queue for job dispatch. Counter-based suspend/resume so fibers can wait on dependencies without blocking. Fiber-local scratch arenas for per-job temporary allocations. **Release build hardening:** `#pragma optimize("", off)` for entire job_system.cpp (prevents MSVC reordering fiber context switches), `__declspec(noinline)` on `fiber::switchTo` (prevents inlining that corrupts fiber stack frames), leaked singleton pattern for JobSystem (prevents static destruction order crash on shutdown).
 - **Graphics RHI**: `gfx::Device` and `gfx::CommandList` interfaces abstracting the rendering backend. Pipeline State Objects (PSO) for state management. Typed 32-bit resource handles. Uniform cache to avoid redundant GL calls. OpenGL 3.3 backend implementation. Full render code migration from raw GL calls to the RHI layer.
 
 ### March 17, 2026 - Phase 4: Render Graph + Particles + Lighting + Post-Process

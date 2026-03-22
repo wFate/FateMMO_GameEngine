@@ -4,6 +4,19 @@
 #include <thread>
 #include <cassert>
 
+// ============================================================================
+// MSVC Release builds: the optimizer must not reorder or cache registers
+// across fiber switch boundaries. SwitchToFiber saves/restores the full
+// register set, but the optimizer doesn't know this — it assumes registers
+// are preserved and reuses them, corrupting state when the fiber resumes.
+//
+// Fix: disable optimizations for all functions that call fiber::switchTo().
+// This is the standard approach used by Naughty Dog, Our Machinery, etc.
+// ============================================================================
+#ifdef _MSC_VER
+#pragma optimize("", off)
+#endif
+
 namespace fate {
 
 thread_local int t_workerIndex = -1;
@@ -11,14 +24,16 @@ thread_local FiberHandle t_schedulerFiber = nullptr;
 thread_local int t_currentFiberIndex = -1;
 
 JobSystem& JobSystem::instance() {
-    static JobSystem s;
-    return s;
+    // Intentionally leaked — prevents static destruction order crash
+    // when worker threads outlive the static's destructor in Release builds.
+    static JobSystem* s = new JobSystem();
+    return *s;
 }
 
 void JobSystem::init(int workerCount) {
     assert(workerCount > 0 && workerCount <= 8);
     workerCount_ = workerCount;
-    running_.store(true, std::memory_order_relaxed);
+    running_.store(true, std::memory_order_seq_cst);
 
     for (int i = 0; i < MAX_FIBERS; ++i) {
         fiberPool_[i] = nullptr;
@@ -37,7 +52,7 @@ void JobSystem::init(int workerCount) {
 }
 
 void JobSystem::shutdown() {
-    running_.store(false, std::memory_order_relaxed);
+    running_.store(false, std::memory_order_seq_cst);
     for (int i = 0; i < workerCount_; ++i) {
         if (workers_[i].joinable())
             workers_[i].join();
@@ -58,6 +73,8 @@ void JobSystem::shutdown() {
 
 Counter* JobSystem::submit(Job* jobs, int count) {
     Counter* counter = counterPool_.acquire();
+    if (!counter) return nullptr;
+
     counter->value.store(count, std::memory_order_release);
 
     for (int i = 0; i < count; ++i) {
@@ -70,7 +87,18 @@ Counter* JobSystem::submit(Job* jobs, int count) {
     return counter;
 }
 
+void JobSystem::submitFireAndForget(Job* jobs, int count) {
+    for (int i = 0; i < count; ++i) {
+        Job j = jobs[i];
+        j.counter = nullptr;
+        bool ok = jobQueue_.push(j);
+        assert(ok && "Job queue full");
+        (void)ok;
+    }
+}
+
 void JobSystem::waitForCounter(Counter* counter, int target) {
+    if (!counter) return; // submit() can return nullptr if pool exhausted
     if (counter->value.load(std::memory_order_acquire) <= target) {
         counterPool_.release(counter);
         return;
@@ -111,7 +139,7 @@ void JobSystem::workerMain(int workerIndex) {
     FiberHandle schedulerFiber = fiber::convertThreadToFiber();
     t_schedulerFiber = schedulerFiber;
 
-    while (running_.load(std::memory_order_relaxed)) {
+    while (running_.load(std::memory_order_acquire)) {
         checkWaitList();
 
         auto maybeJob = jobQueue_.tryPop();
@@ -147,6 +175,8 @@ void __stdcall JobSystem::fiberEntry(void* param) {
 
     for (;;) {
         int idx = t_currentFiberIndex;
+        if (idx < 0) break; // safety: shouldn't happen
+
         auto& ctx = js.fiberContexts_[idx];
 
         if (ctx.currentJob.function) {
@@ -219,3 +249,7 @@ void JobSystem::checkWaitList() {
 }
 
 } // namespace fate
+
+#ifdef _MSC_VER
+#pragma optimize("", on)
+#endif

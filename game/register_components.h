@@ -46,9 +46,9 @@ template<> struct component_traits<BoxCollider> {
     static constexpr ComponentFlags flags = ComponentFlags::Serializable;
 };
 
-// --- PlayerController: runtime only (isLocalPlayer is set at spawn) ---
+// --- PlayerController: serializable (needed for play-in-editor snapshot/restore) ---
 template<> struct component_traits<PlayerController> {
-    static constexpr ComponentFlags flags = ComponentFlags::None;
+    static constexpr ComponentFlags flags = ComponentFlags::Serializable;
 };
 
 // --- MobAIComponent: runtime only ---
@@ -113,6 +113,12 @@ template<> struct component_traits<CharacterStatsComponent> {
 template<> struct component_traits<InventoryComponent> {
     static constexpr ComponentFlags flags =
         ComponentFlags::Serializable | ComponentFlags::Persistent;
+};
+
+// --- SkillManagerComponent: saved to DB, replicated (skill bar visible to others) ---
+template<> struct component_traits<SkillManagerComponent> {
+    static constexpr ComponentFlags flags =
+        ComponentFlags::Serializable | ComponentFlags::Networked | ComponentFlags::Persistent;
 };
 
 // --- StatusEffectComponent: runtime only (effects are transient) ---
@@ -246,12 +252,14 @@ inline void registerAllComponents() {
 
             auto& animsJ = j["animations"] = nlohmann::json::object();
             for (const auto& [name, anim] : c->animations) {
-                animsJ[name] = {
+                nlohmann::json aj = {
                     {"startFrame", anim.startFrame},
                     {"frameCount", anim.frameCount},
                     {"frameRate",  anim.frameRate},
                     {"loop",       anim.loop}
                 };
+                if (anim.hitFrame >= 0) aj["hitFrame"] = anim.hitFrame;
+                animsJ[name] = aj;
             }
         },
         [](const nlohmann::json& j, void* data) {
@@ -269,6 +277,7 @@ inline void registerAllComponents() {
                     if (aj.contains("frameCount")) anim.frameCount = aj["frameCount"].get<int>();
                     if (aj.contains("frameRate"))  anim.frameRate  = aj["frameRate"].get<float>();
                     if (aj.contains("loop"))       anim.loop       = aj["loop"].get<bool>();
+                    if (aj.contains("hitFrame"))   anim.hitFrame   = aj["hitFrame"].get<int>();
                     c->animations[name] = anim;
                 }
             }
@@ -483,6 +492,7 @@ inline void registerAllComponents() {
     reg.registerComponent<StatusEffectComponent>();
     reg.registerComponent<CrowdControlComponent>();
     reg.registerComponent<TargetingComponent>();
+    reg.registerComponent<EquipVisualsComponent>();
     reg.registerComponent<ChatComponent>();
     reg.registerComponent<GuildComponent>();
     reg.registerComponent<PartyComponent>();
@@ -550,6 +560,7 @@ inline void registerAllComponents() {
             j["npcId"]              = c->npcId;
             j["displayName"]       = c->displayName;
             j["dialogueGreeting"]  = c->dialogueGreeting;
+            j["sceneId"]           = c->sceneId;
             j["interactionRadius"] = c->interactionRadius;
             j["faceDirection"]     = static_cast<uint8_t>(c->faceDirection);
         },
@@ -558,6 +569,7 @@ inline void registerAllComponents() {
             if (j.contains("npcId"))              c->npcId              = j["npcId"].get<uint32_t>();
             if (j.contains("displayName"))        c->displayName        = j["displayName"].get<std::string>();
             if (j.contains("dialogueGreeting"))   c->dialogueGreeting   = j["dialogueGreeting"].get<std::string>();
+            if (j.contains("sceneId"))            c->sceneId            = j["sceneId"].get<std::string>();
             if (j.contains("interactionRadius"))  c->interactionRadius  = j["interactionRadius"].get<float>();
             if (j.contains("faceDirection"))       c->faceDirection      = static_cast<FaceDirection>(j["faceDirection"].get<uint8_t>());
         }
