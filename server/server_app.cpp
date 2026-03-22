@@ -3458,7 +3458,9 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                         for (uint16_t memberCid : dInst->playerClientIds) {
                             auto* memberConn = server_.connections().findById(memberCid);
                             if (!memberConn) continue;
-                            Entity* memberPlayer = dInst->world.getEntity(EntityHandle(memberConn->playerEntityId));
+                            PersistentId memberPid(memberConn->playerEntityId);
+                            EntityHandle memberH = dInst->replication.getEntityHandle(memberPid);
+                            Entity* memberPlayer = dInst->world.getEntity(memberH);
                             if (!memberPlayer) continue;
                             auto* memberCS = memberPlayer->getComponent<CharacterStatsComponent>();
                             if (memberCS) {
@@ -3799,7 +3801,9 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                         for (uint16_t memberCid : dInst->playerClientIds) {
                             auto* memberConn = server_.connections().findById(memberCid);
                             if (!memberConn) continue;
-                            Entity* memberPlayer = dInst->world.getEntity(EntityHandle(memberConn->playerEntityId));
+                            PersistentId memberPid(memberConn->playerEntityId);
+                            EntityHandle memberH = dInst->replication.getEntityHandle(memberPid);
+                            Entity* memberPlayer = dInst->world.getEntity(memberH);
                             if (!memberPlayer) continue;
                             auto* memberCS = memberPlayer->getComponent<CharacterStatsComponent>();
                             if (memberCS) {
@@ -6741,7 +6745,9 @@ void ServerApp::distributeDungeonRewards(DungeonInstance* inst) {
     for (uint16_t cid : inst->playerClientIds) {
         auto* conn = server_.connections().findById(cid);
         if (!conn) continue;
-        Entity* player = inst->world.getEntity(EntityHandle(conn->playerEntityId));
+        PersistentId pid(conn->playerEntityId);
+        EntityHandle ph = inst->replication.getEntityHandle(pid);
+        Entity* player = inst->world.getEntity(ph);
         if (!player) continue;
 
         auto* cs = player->getComponent<CharacterStatsComponent>();
@@ -6800,6 +6806,10 @@ void ServerApp::endDungeonInstance(uint32_t instanceId, uint8_t reason) {
     for (uint16_t cid : clients) {
         server_.sendTo(cid, Channel::ReliableOrdered, PacketType::SvDungeonEnd, buf, w.size());
 
+        // Save old entityId for event lock cleanup BEFORE transfer changes it
+        auto* conn = server_.connections().findById(cid);
+        uint64_t oldEntityId = conn ? conn->playerEntityId : 0;
+
         // Get return point
         Vec2 returnPos = {0.0f, 0.0f};
         std::string returnScene = "WhisperingWoods";
@@ -6812,10 +6822,9 @@ void ServerApp::endDungeonInstance(uint32_t instanceId, uint8_t reason) {
         // Transfer back to overworld
         transferPlayerToWorld(cid, inst->world, inst->replication, world_, replication_, returnPos, returnScene);
 
-        // Clear event lock (need to find new entityId after transfer)
-        auto* conn = server_.connections().findById(cid);
-        if (conn) {
-            playerEventLocks_.erase(conn->playerEntityId);
+        // Clear event lock using OLD entityId (before transfer changed it)
+        if (oldEntityId) {
+            playerEventLocks_.erase(static_cast<uint32_t>(oldEntityId));
         }
 
         dungeonManager_.removePlayer(instanceId, cid);
