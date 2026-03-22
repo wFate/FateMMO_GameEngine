@@ -89,6 +89,8 @@ namespace PacketType {
     constexpr uint8_t CmdStatEnchant  = 0x27;
     constexpr uint8_t CmdUseConsumable = 0x28;
     constexpr uint8_t CmdRankingQuery = 0x29;
+    constexpr uint8_t CmdStartDungeon    = 0x2A;
+    constexpr uint8_t CmdDungeonResponse = 0x2B;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
@@ -103,6 +105,9 @@ namespace PacketType {
     constexpr uint8_t SvStatEnchantResult = 0xB1;
     constexpr uint8_t SvConsumeResult     = 0xB2;
     constexpr uint8_t SvRankingResult     = 0xB3;
+    constexpr uint8_t SvDungeonInvite = 0xB4;
+    constexpr uint8_t SvDungeonStart  = 0xB5;
+    constexpr uint8_t SvDungeonEnd    = 0xB6;
 } // namespace PacketType
 
 // ============================================================================
