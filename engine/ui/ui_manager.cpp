@@ -10,6 +10,8 @@
 #include "engine/ui/widgets/window.h"
 #include "engine/ui/widgets/tab_container.h"
 #include "engine/ui/widgets/tooltip.h"
+#include "engine/ui/widgets/dpad.h"
+#include "engine/ui/widgets/skill_arc.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -360,6 +362,23 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
             }
         }
         node = std::move(tc);
+    }
+    else if (type == "dpad") {
+        auto dpad = std::make_unique<DPad>(id);
+        dpad->dpadSize       = j.value("dpadSize", 140.0f);
+        dpad->deadZoneRadius = j.value("deadZoneRadius", 15.0f);
+        dpad->opacity        = j.value("opacity", 0.6f);
+        node = std::move(dpad);
+    }
+    else if (type == "skill_arc") {
+        auto arc = std::make_unique<SkillArc>(id);
+        arc->attackButtonSize = j.value("attackButtonSize", 80.0f);
+        arc->slotSize         = j.value("slotSize", 52.0f);
+        arc->arcRadius        = j.value("arcRadius", 70.0f);
+        arc->slotCount        = j.value("slotCount", 5);
+        arc->startAngleDeg    = j.value("startAngleDeg", 210.0f);
+        arc->endAngleDeg      = j.value("endAngleDeg", 330.0f);
+        node = std::move(arc);
     }
     else {
         node = std::make_unique<UINode>(id, type);
