@@ -146,6 +146,7 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     SDL_SetWindowTitle(window, "FateMMO Engine | Editor");
 
     scanAssets();
+    assetBrowser_.init(assetRoot_, sourceDir_);
 
     dialogueEditor_.init();
 
@@ -1120,6 +1121,22 @@ void Editor::scanAssets() {
 
 void Editor::drawAssetBrowser(World* world, Camera* camera) {
     if (ImGui::Begin("Project")) {
+        // Toggle between enhanced and legacy browser
+        ImGui::Checkbox("Enhanced", &useEnhancedBrowser_);
+        ImGui::SameLine();
+
+        if (useEnhancedBrowser_) {
+            // Sync drag state from enhanced browser back to editor
+            if (assetBrowser_.isDraggingAsset()) {
+                isDraggingAsset_ = true;
+                draggedAssetPath_ = assetBrowser_.draggedAssetPath();
+            }
+            assetBrowser_.draw(world, camera);
+            ImGui::End();
+            return;
+        }
+
+        // --- Legacy browser below ---
         if (ImGui::Button("Refresh")) scanAssets();
         ImGui::SameLine();
         ImGui::Text("(%zu files)", assets_.size());
