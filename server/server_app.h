@@ -25,6 +25,7 @@
 #include "server/db/definition_caches.h"
 #include "server/rate_limiter.h"
 #include "server/wal/write_ahead_log.h"
+#include "server/db/persistence_priority.h"
 #include "server/player_lock.h"
 #include "server/nonce_manager.h"
 #include "game/shared/gauntlet.h"
@@ -77,6 +78,9 @@ private:
 
     // Write-Ahead Log for crash recovery
     WriteAheadLog wal_;
+
+    // Priority-based DB flush queue
+    PersistenceQueue persistQueue_;
 
     // Auth
     AuthServer authServer_;
