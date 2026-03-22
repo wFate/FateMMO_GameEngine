@@ -14,6 +14,24 @@ void DialogueNodeEditor::init() {
     if (initialized_) return;
     ImNodes::CreateContext();
     ImNodes::StyleColorsDark();
+
+    // Harmonize with editor palette
+    ImNodesStyle& nodeStyle = ImNodes::GetStyle();
+    nodeStyle.Colors[ImNodesCol_NodeBackground]       = IM_COL32(30, 30, 34, 255);
+    nodeStyle.Colors[ImNodesCol_NodeBackgroundHovered] = IM_COL32(38, 38, 44, 255);
+    nodeStyle.Colors[ImNodesCol_NodeBackgroundSelected]= IM_COL32(42, 45, 50, 255);
+    nodeStyle.Colors[ImNodesCol_TitleBar]              = IM_COL32(42, 45, 50, 255);
+    nodeStyle.Colors[ImNodesCol_TitleBarHovered]       = IM_COL32(51, 56, 66, 255);
+    nodeStyle.Colors[ImNodesCol_TitleBarSelected]      = IM_COL32(74, 138, 219, 255);
+    nodeStyle.Colors[ImNodesCol_Link]                  = IM_COL32(74, 138, 219, 200);
+    nodeStyle.Colors[ImNodesCol_LinkHovered]           = IM_COL32(94, 154, 232, 255);
+    nodeStyle.Colors[ImNodesCol_LinkSelected]          = IM_COL32(74, 138, 219, 255);
+    nodeStyle.Colors[ImNodesCol_GridBackground]        = IM_COL32(20, 20, 22, 255);
+    nodeStyle.Colors[ImNodesCol_GridLine]              = IM_COL32(42, 42, 48, 100);
+    nodeStyle.Colors[ImNodesCol_Pin]                   = IM_COL32(74, 138, 219, 255);
+    nodeStyle.Colors[ImNodesCol_PinHovered]            = IM_COL32(94, 154, 232, 255);
+    nodeStyle.Flags |= ImNodesStyleFlags_GridLines;
+
     initialized_ = true;
 }
 
