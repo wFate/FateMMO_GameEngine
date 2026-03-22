@@ -7,6 +7,7 @@
 #include "engine/ui/widgets/progress_bar.h"
 #include "engine/ui/widgets/slot.h"
 #include "engine/ui/widgets/slot_grid.h"
+#include "engine/ui/widgets/window.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
 #include <nlohmann/json.hpp>
@@ -257,6 +258,15 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         slot->acceptsDragType = j.value("acceptsDrag", "");
         node = std::move(slot);
     }
+    else if (type == "window") {
+        auto win = std::make_unique<Window>(id);
+        win->title = j.value("title", "");
+        win->closeable = j.value("closeable", true);
+        win->resizable = j.value("resizable", false);
+        win->minimizable = j.value("minimizable", false);
+        win->titleBarHeight = j.value("titleBarHeight", 28.0f);
+        node = std::move(win);
+    }
     else {
         node = std::make_unique<UINode>(id, type);
     }
@@ -363,13 +373,21 @@ void UIManager::handleInput() {
 
     updateHover(mousePos);
 
-    // Handle draggable panel movement while mouse is held
+    // Handle draggable panel/window movement while mouse is held
     if (pressedNode_ && input.isMouseDown(SDL_BUTTON_LEFT)) {
         auto* panel = dynamic_cast<Panel*>(pressedNode_);
         if (panel && panel->isDragging_) {
             Vec2 newPos = {mousePos.x - panel->dragOffset_.x,
                           mousePos.y - panel->dragOffset_.y};
             panel->anchor().offset = newPos;
+        }
+        if (!panel || !panel->isDragging_) {
+            auto* window = dynamic_cast<Window*>(pressedNode_);
+            if (window && window->isDragging()) {
+                Vec2 newPos = {mousePos.x - window->dragOffset().x,
+                              mousePos.y - window->dragOffset().y};
+                window->anchor().offset = newPos;
+            }
         }
     }
 
