@@ -9,6 +9,9 @@ public:
     static Device& instance();
 
     bool init();
+#ifdef FATEMMO_METAL
+    bool initMetal(void* metalLayer);
+#endif
     void shutdown();
 
     // Resource creation
@@ -40,17 +43,27 @@ public:
     TextureHandle getFramebufferTexture(FramebufferHandle h);
     void getFramebufferSize(FramebufferHandle h, int& outW, int& outH);
 
+#ifndef FATEMMO_METAL
     // GL backend helpers — resolve handles to GL names (for CommandList use)
     unsigned int resolveGLShader(ShaderHandle h) const;
     unsigned int resolveGLTexture(TextureHandle h) const;
     unsigned int resolveGLBuffer(BufferHandle h) const;
     unsigned int resolveGLFramebuffer(FramebufferHandle h) const;
     unsigned int resolveGLPipelineVAO(PipelineHandle h) const;
-    const PipelineDesc* resolvePipelineDesc(PipelineHandle h) const;
-    BufferType getBufferType(BufferHandle h) const;
 
     // Uniform location cache (per-shader program)
     int getUniformLocation(ShaderHandle shader, const char* name);
+#else
+    // Metal backend helpers — resolve handles to Metal objects (for CommandList use)
+    void* resolveMetalTexture(TextureHandle h) const;
+    void* resolveMetalBuffer(BufferHandle h) const;
+    void* resolveMetalPipelineState(PipelineHandle h) const;
+    void* resolveMetalDepthStencilState(PipelineHandle h) const;
+#endif
+
+    // Shared across backends
+    const PipelineDesc* resolvePipelineDesc(PipelineHandle h) const;
+    BufferType getBufferType(BufferHandle h) const;
 
 private:
     Device() = default;
