@@ -261,6 +261,12 @@ inline void registerAllComponents() {
                 if (anim.hitFrame >= 0) aj["hitFrame"] = anim.hitFrame;
                 animsJ[name] = aj;
             }
+            if (!c->flipXPerAnim.empty()) {
+                auto& flipJ = j["flipXPerAnim"] = nlohmann::json::object();
+                for (const auto& [name, flip] : c->flipXPerAnim) {
+                    flipJ[name] = flip;
+                }
+            }
         },
         [](const nlohmann::json& j, void* data) {
             auto* c = static_cast<Animator*>(data);
@@ -279,6 +285,12 @@ inline void registerAllComponents() {
                     if (aj.contains("loop"))       anim.loop       = aj["loop"].get<bool>();
                     if (aj.contains("hitFrame"))   anim.hitFrame   = aj["hitFrame"].get<int>();
                     c->animations[name] = anim;
+                }
+            }
+            if (j.contains("flipXPerAnim")) {
+                c->flipXPerAnim.clear();
+                for (auto& [name, flip] : j["flipXPerAnim"].items()) {
+                    c->flipXPerAnim[name] = flip.get<bool>();
                 }
             }
         }
