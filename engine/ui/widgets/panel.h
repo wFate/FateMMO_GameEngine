@@ -9,9 +9,15 @@ public:
 
     void render(SpriteBatch& batch, SDFText& text) override;
 
+    bool onPress(const Vec2& localPos) override;
+    void onRelease(const Vec2& localPos) override;
+
     bool draggable = false;
     bool closeable = false;
     std::string title;
+
+    Vec2 dragOffset_;
+    bool isDragging_ = false;
 };
 
 } // namespace fate

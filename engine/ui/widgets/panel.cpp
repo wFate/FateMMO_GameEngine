@@ -59,4 +59,15 @@ void Panel::render(SpriteBatch& batch, SDFText& text) {
     renderChildren(batch, text);
 }
 
+bool Panel::onPress(const Vec2& localPos) {
+    if (!enabled_ || !draggable) return false;
+    isDragging_ = true;
+    dragOffset_ = localPos;
+    return true;
+}
+
+void Panel::onRelease(const Vec2&) {
+    isDragging_ = false;
+}
+
 } // namespace fate

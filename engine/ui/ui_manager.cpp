@@ -325,6 +325,16 @@ void UIManager::handleInput() {
 
     updateHover(mousePos);
 
+    // Handle draggable panel movement while mouse is held
+    if (pressedNode_ && input.isMouseDown(SDL_BUTTON_LEFT)) {
+        auto* panel = dynamic_cast<Panel*>(pressedNode_);
+        if (panel && panel->isDragging_) {
+            Vec2 newPos = {mousePos.x - panel->dragOffset_.x,
+                          mousePos.y - panel->dragOffset_.y};
+            panel->anchor().offset = newPos;
+        }
+    }
+
     if (input.isMousePressed(SDL_BUTTON_LEFT)) {
         handlePress(mousePos);
     }
