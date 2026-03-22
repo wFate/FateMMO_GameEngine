@@ -50,9 +50,12 @@ public:
     // Draw a solid colored rectangle (no texture)
     void drawRect(const Vec2& position, const Vec2& size, const Color& color, float depth = 0.0f);
 
+#ifndef FATEMMO_METAL
     // Draw a quad with a raw GL texture ID (for font atlas, custom textures)
     void drawTexturedQuad(unsigned int glTexId, const SpriteDrawParams& params, float renderType = 0.0f);
+#endif
     // Draw a quad with a gfx::TextureHandle (preferred — works with CommandList path)
+    // Under Metal the glTexId parameter is ignored
     void drawTexturedQuad(gfx::TextureHandle gfxTex, unsigned int glTexId, const SpriteDrawParams& params, float renderType = 0.0f);
 
     int drawCallCount() const { return drawCallCount_; }
@@ -70,6 +73,10 @@ public:
 
     // Set the CommandList for gfx-abstracted drawing; nullptr = direct GL fallback
     void setCommandList(gfx::CommandList* cmd) { cmdList_ = cmd; }
+
+#ifdef FATEMMO_METAL
+    void setMetalEncoder(void* encoder);
+#endif
 
 private:
     static constexpr int MAX_SPRITES = 10000;
@@ -99,6 +106,10 @@ private:
     gfx::PipelineHandle pipelineMultiplicative_{};
     gfx::PipelineHandle pipelineNone_{};
     gfx::CommandList* cmdList_ = nullptr;
+
+#ifdef FATEMMO_METAL
+    void* metalEncoder_ = nullptr;
+#endif
 
     Mat4 viewProjection_;
     std::vector<BatchEntry> entries_;

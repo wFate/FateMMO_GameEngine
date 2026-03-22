@@ -1,5 +1,10 @@
 #include "engine/render/sprite_batch.h"
+#ifndef FATEMMO_METAL
 #include "engine/render/gfx/backend/gl/gl_loader.h"
+#endif
+#ifdef FATEMMO_METAL
+#import <Metal/Metal.h>
+#endif
 #include "engine/core/logger.h"
 #include <algorithm>
 #include <cmath>
@@ -236,15 +241,21 @@ void SpriteBatch::drawRect(const Vec2& position, const Vec2& size, const Color& 
     entries_.push_back({nullptr, 0, params});
 }
 
+#ifndef FATEMMO_METAL
 void SpriteBatch::drawTexturedQuad(unsigned int glTexId, const SpriteDrawParams& params, float renderType) {
     if (!drawing_) return;
     entries_.push_back({nullptr, glTexId, params, renderType});
 }
+#endif
 
 void SpriteBatch::drawTexturedQuad(gfx::TextureHandle gfxTex, unsigned int glTexId, const SpriteDrawParams& params, float renderType) {
     if (!drawing_) return;
     entries_.push_back({nullptr, glTexId, params, renderType, gfxTex});
 }
+
+#ifdef FATEMMO_METAL
+void SpriteBatch::setMetalEncoder(void* encoder) { metalEncoder_ = encoder; }
+#endif
 
 void SpriteBatch::end() {
     if (!drawing_) return;
@@ -310,11 +321,35 @@ void SpriteBatch::flush() {
         auto flushBatch = [&]() {
             if (vertices_.empty()) return;
 
-            device.updateBuffer(vboHandle_, vertices_.data(),
-                                vertices_.size() * sizeof(SpriteVertex));
+            int vertexCount = (int)vertices_.size();
+            int quadCount = vertexCount / 4;
 
-            int quadCount = (int)vertices_.size() / 4;
+#ifdef FATEMMO_METAL
+            // Metal direct draw path
+            id<MTLBuffer> vbo = (__bridge id<MTLBuffer>)device.resolveMetalBuffer(vboHandle_);
+            memcpy(vbo.contents, vertices_.data(), vertexCount * sizeof(SpriteVertex));
+
+            id<MTLRenderCommandEncoder> enc =
+                (__bridge id<MTLRenderCommandEncoder>)metalEncoder_;
+            [enc setRenderPipelineState:
+                (__bridge id<MTLRenderPipelineState>)device.resolveMetalPipelineState(currentPipeline())];
+            [enc setVertexBuffer:vbo offset:0 atIndex:0];
+
+            // Upload view-projection matrix via setVertexBytes at index 1
+            [enc setVertexBytes:&viewProjection_ length:sizeof(viewProjection_) atIndex:1];
+
+            // Index buffer
+            id<MTLBuffer> ebo = (__bridge id<MTLBuffer>)device.resolveMetalBuffer(eboHandle_);
+            [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                            indexCount:(NSUInteger)(quadCount * 6)
+                             indexType:MTLIndexTypeUInt32
+                           indexBuffer:ebo
+                     indexBufferOffset:0];
+#else
+            device.updateBuffer(vboHandle_, vertices_.data(),
+                                vertexCount * sizeof(SpriteVertex));
             cmdList_->drawIndexed(gfx::PrimitiveType::Triangles, quadCount * 6);
+#endif
             drawCallCount_++;
             vertices_.clear();
         };
@@ -332,15 +367,48 @@ void SpriteBatch::flush() {
                 currentTexKey = texKey;
 
                 if (entry.texture) {
+#ifdef FATEMMO_METAL
+                    id<MTLRenderCommandEncoder> enc =
+                        (__bridge id<MTLRenderCommandEncoder>)metalEncoder_;
+                    [enc setFragmentTexture:
+                        (__bridge id<MTLTexture>)device.resolveMetalTexture(entry.texture->gfxHandle())
+                                   atIndex:0];
+#else
                     cmdList_->bindTexture(0, entry.texture->gfxHandle());
+#endif
                 } else if (entry.gfxTexHandle.valid()) {
+#ifdef FATEMMO_METAL
+                    id<MTLRenderCommandEncoder> enc =
+                        (__bridge id<MTLRenderCommandEncoder>)metalEncoder_;
+                    [enc setFragmentTexture:
+                        (__bridge id<MTLTexture>)device.resolveMetalTexture(entry.gfxTexHandle)
+                                   atIndex:0];
+#else
                     cmdList_->bindTexture(0, entry.gfxTexHandle);
+#endif
                 } else if (entry.rawTexId) {
+#ifdef FATEMMO_METAL
+                    // rawTexId is a GL name — not usable on Metal; use whiteTexHandle_ as fallback
+                    id<MTLRenderCommandEncoder> enc =
+                        (__bridge id<MTLRenderCommandEncoder>)metalEncoder_;
+                    [enc setFragmentTexture:
+                        (__bridge id<MTLTexture>)device.resolveMetalTexture(whiteTexHandle_)
+                                   atIndex:0];
+#else
                     // Raw GL texture ID -- fall back to direct GL bind
                     glActiveTexture(GL_TEXTURE0);
                     glBindTexture(GL_TEXTURE_2D, entry.rawTexId);
+#endif
                 } else {
+#ifdef FATEMMO_METAL
+                    id<MTLRenderCommandEncoder> enc =
+                        (__bridge id<MTLRenderCommandEncoder>)metalEncoder_;
+                    [enc setFragmentTexture:
+                        (__bridge id<MTLTexture>)device.resolveMetalTexture(whiteTexHandle_)
+                                   atIndex:0];
+#else
                     cmdList_->bindTexture(0, whiteTexHandle_);
+#endif
                 }
             }
 
@@ -393,6 +461,7 @@ void SpriteBatch::flush() {
         return;
     }
 
+#ifndef FATEMMO_METAL
     // ------------------------------------------------------------------
     // Direct GL fallback path (editor/ImGui or when no CommandList is set)
     // ------------------------------------------------------------------
@@ -497,6 +566,7 @@ void SpriteBatch::flush() {
 
     glBindVertexArray(0);
     shader_.unbind();
+#endif // !FATEMMO_METAL
 }
 
 void SpriteBatch::setBlendMode(BlendMode mode) {
@@ -510,6 +580,7 @@ void SpriteBatch::setBlendMode(BlendMode mode) {
         return;
     }
 
+#ifndef FATEMMO_METAL
     // Direct GL fallback
     switch (mode) {
         case BlendMode::None:
@@ -528,6 +599,7 @@ void SpriteBatch::setBlendMode(BlendMode mode) {
             glBlendFunc(GL_DST_COLOR, GL_ZERO);
             break;
     }
+#endif
 }
 
 void SpriteBatch::setPalette(const Color* colors, int count) {
