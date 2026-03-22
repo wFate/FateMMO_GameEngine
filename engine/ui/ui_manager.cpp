@@ -13,6 +13,10 @@
 #include "engine/ui/widgets/dpad.h"
 #include "engine/ui/widgets/skill_arc.h"
 #include "engine/ui/widgets/player_info_block.h"
+#include "engine/ui/widgets/target_frame.h"
+#include "engine/ui/widgets/exp_bar.h"
+#include "engine/ui/widgets/menu_button_row.h"
+#include "engine/ui/widgets/chat_ticker.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -387,6 +391,28 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         pib->barWidth     = j.value("barWidth", 120.0f);
         pib->barHeight    = j.value("barHeight", 16.0f);
         node = std::move(pib);
+    }
+    else if (type == "target_frame") {
+        auto tf = std::make_unique<TargetFrame>(id);
+        node = std::move(tf);
+    }
+    else if (type == "exp_bar") {
+        auto eb = std::make_unique<EXPBar>(id);
+        node = std::move(eb);
+    }
+    else if (type == "menu_button_row") {
+        auto mbr = std::make_unique<MenuButtonRow>(id);
+        mbr->buttonSize = j.value("buttonSize", 36.0f);
+        mbr->spacing    = j.value("spacing", 8.0f);
+        if (j.contains("labels") && j["labels"].is_array()) {
+            for (auto& l : j["labels"]) mbr->labels.push_back(l.get<std::string>());
+        }
+        node = std::move(mbr);
+    }
+    else if (type == "chat_ticker") {
+        auto ct = std::make_unique<ChatTicker>(id);
+        ct->scrollSpeed = j.value("scrollSpeed", 40.0f);
+        node = std::move(ct);
     }
     else {
         node = std::make_unique<UINode>(id, type);
