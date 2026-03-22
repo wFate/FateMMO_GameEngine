@@ -939,4 +939,58 @@ struct SvRankingResultMsg {
     }
 };
 
+// ============================================================================
+// Dungeon Instance Messages
+// ============================================================================
+
+struct CmdStartDungeonMsg {
+    std::string sceneId;
+    void write(ByteWriter& w) const { w.writeString(sceneId); }
+    void read(ByteReader& r) { sceneId = r.readString(); }
+};
+
+struct CmdDungeonResponseMsg {
+    uint8_t accept = 0;  // 1 = accept, 0 = decline
+    void write(ByteWriter& w) const { w.writeU8(accept); }
+    void read(ByteReader& r) { accept = r.readU8(); }
+};
+
+struct SvDungeonInviteMsg {
+    std::string sceneId;
+    std::string dungeonName;
+    uint16_t timeLimitSeconds = 600;
+    uint8_t levelReq = 1;
+    void write(ByteWriter& w) const {
+        w.writeString(sceneId);
+        w.writeString(dungeonName);
+        w.writeU16(timeLimitSeconds);
+        w.writeU8(levelReq);
+    }
+    void read(ByteReader& r) {
+        sceneId = r.readString();
+        dungeonName = r.readString();
+        timeLimitSeconds = r.readU16();
+        levelReq = r.readU8();
+    }
+};
+
+struct SvDungeonStartMsg {
+    std::string sceneId;
+    uint16_t timeLimitSeconds = 600;
+    void write(ByteWriter& w) const {
+        w.writeString(sceneId);
+        w.writeU16(timeLimitSeconds);
+    }
+    void read(ByteReader& r) {
+        sceneId = r.readString();
+        timeLimitSeconds = r.readU16();
+    }
+};
+
+struct SvDungeonEndMsg {
+    uint8_t reason = 0;  // 0=boss_killed, 1=timeout, 2=abandoned
+    void write(ByteWriter& w) const { w.writeU8(reason); }
+    void read(ByteReader& r) { reason = r.readU8(); }
+};
+
 } // namespace fate
