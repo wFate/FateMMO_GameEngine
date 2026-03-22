@@ -7,6 +7,7 @@
 #include <thread>
 #include "engine/job/fiber.h"
 #include "engine/memory/arena.h"
+#include "engine/core/logger.h"
 
 namespace fate {
 
@@ -101,7 +102,7 @@ public:
                 return &counters_[i];
             }
         }
-        assert(false && "Counter pool exhausted");
+        LOG_ERROR("JobSystem", "Counter pool exhausted (%d counters)", POOL_SIZE);
         return nullptr;
     }
 
@@ -118,6 +119,7 @@ public:
     void shutdown();
 
     Counter* submit(Job* jobs, int count);
+    void submitFireAndForget(Job* jobs, int count);
     void waitForCounter(Counter* counter, int target = 0);
 
     Arena* fiberScratchArena();

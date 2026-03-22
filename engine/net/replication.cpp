@@ -2,6 +2,7 @@
 #include "engine/net/packet.h"
 #include "game/components/dropped_item_component.h"
 #include "game/shared/honor_system.h"
+#include "server/cache/item_definition_cache.h"
 #include <cmath>
 
 namespace fate {
@@ -99,6 +100,10 @@ void ReplicationManager::buildVisibility(World& world, ClientConnection& client)
             // Check player scene (CharacterStatsComponent::currentScene)
             auto* otherCs = entity->getComponent<CharacterStatsComponent>();
             if (otherCs && !otherCs->stats.currentScene.empty() && otherCs->stats.currentScene != clientScene) continue;
+
+            // Check NPC scene (NPCComponent::sceneId)
+            auto* npc = entity->getComponent<NPCComponent>();
+            if (npc && !npc->sceneId.empty() && npc->sceneId != clientScene) continue;
 
             // Check dropped item scene (DroppedItemComponent::sceneId)
             auto* drop = entity->getComponent<DroppedItemComponent>();
@@ -388,13 +393,63 @@ SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* en
         msg.deathState = (es2 && !es2->stats.isAlive) ? 2 : 0;
     }
 
-    // Placeholders for fields not yet driven by components
-    msg.moveState        = 0;
-    msg.animId           = 0;
-    msg.castingSkillId   = 0;
-    msg.castingProgress  = 0;
-    msg.targetEntityId   = 0;
-    msg.equipVisuals     = 0;
+    // moveState: walking/idle from PlayerController or MobAI
+    auto* pc = entity->getComponent<PlayerController>();
+    auto* mobAi = entity->getComponent<MobAIComponent>();
+    if (pc) {
+        msg.moveState = pc->isMoving ? static_cast<uint8_t>(MoveState::Walking)
+                                     : static_cast<uint8_t>(MoveState::Idle);
+    } else if (mobAi) {
+        auto mode = mobAi->ai.getMode();
+        msg.moveState = (mode == AIMode::Chase || mode == AIMode::ReturnHome || mode == AIMode::Roam)
+                        ? static_cast<uint8_t>(MoveState::Walking)
+                        : static_cast<uint8_t>(MoveState::Idle);
+    }
+
+    // animId: direction + animation type
+    // Note: animType 2=attack and 3=cast are deferred until server tracks attack/cast state per-entity
+    {
+        uint8_t animDir = 0;
+        uint8_t animType = msg.moveState; // 0=idle, 1=walk maps directly
+        if (pc) {
+            animDir = facingToAnimDir(pc->facing);
+        } else if (mobAi) {
+            animDir = facingToAnimDir(mobAi->ai.getFacingDirection());
+        }
+        // Death override
+        if (msg.deathState >= 2) {
+            msg.animId = 12; // death animation
+        } else {
+            msg.animId = encodeAnimId(animDir, animType);
+        }
+    }
+
+    // castingSkillId + castingProgress: deferred (no server-side cast times yet)
+    msg.castingSkillId  = 0;
+    msg.castingProgress = 0;
+
+    // targetEntityId: from TargetingComponent
+    auto* targeting = entity->getComponent<TargetingComponent>();
+    msg.targetEntityId = targeting ? static_cast<uint16_t>(targeting->selectedTargetId & 0xFFFF) : 0;
+
+    // equipVisuals: packed weapon/armor/hat visual indices
+    auto* invComp = entity->getComponent<InventoryComponent>();
+    if (invComp && itemDefCache_) {
+        const auto& equip = invComp->inventory.getEquipmentMap();
+        uint16_t weaponIdx = 0, armorIdx = 0, hatIdx = 0;
+        auto wit = equip.find(EquipmentSlot::Weapon);
+        if (wit != equip.end() && wit->second.isValid())
+            weaponIdx = itemDefCache_->getVisualIndex(wit->second.itemId);
+        auto ait = equip.find(EquipmentSlot::Armor);
+        if (ait != equip.end() && ait->second.isValid())
+            armorIdx = itemDefCache_->getVisualIndex(ait->second.itemId);
+        auto hit = equip.find(EquipmentSlot::Hat);
+        if (hit != equip.end() && hit->second.isValid())
+            hatIdx = itemDefCache_->getVisualIndex(hit->second.itemId);
+        msg.equipVisuals = packEquipVisuals(weaponIdx, armorIdx, hatIdx);
+    } else {
+        msg.equipVisuals = 0;
+    }
 
     return msg;
 }

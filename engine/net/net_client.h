@@ -22,7 +22,7 @@ public:
     void sendMove(const Vec2& position, const Vec2& velocity, float timestamp);
     void sendAction(uint8_t actionType, uint64_t targetId, uint16_t skillId);
     void sendChat(uint8_t channel, const std::string& message, const std::string& target);
-    void sendZoneTransition(const std::string& targetScene);
+    void sendZoneTransition(const std::string& targetScene, float spawnX = 0.0f, float spawnY = 0.0f);
     void sendRespawn(uint8_t respawnType);
     void sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId);
     void sendUseConsumable(uint8_t inventorySlot);

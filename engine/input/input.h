@@ -50,6 +50,10 @@ public:
     void setChatMode(bool enabled);
     bool isChatMode() const { return actionMap_.context() == InputContext::Chat; }
 
+    // UI panel blocking (set by GameApp each frame — blocks movement & nameplates)
+    bool isUIBlocking() const { return uiBlocking_; }
+    void setUIBlocking(bool v) { uiBlocking_ = v; }
+
     // Access for advanced use
     ActionMap& actionMap() { return actionMap_; }
     const ActionMap& actionMap() const { return actionMap_; }
@@ -79,6 +83,7 @@ private:
 
     ActionMap actionMap_;
     InputBuffer inputBuffer_;
+    bool uiBlocking_ = false;
 
     int windowWidth_ = 1280;
     int windowHeight_ = 720;

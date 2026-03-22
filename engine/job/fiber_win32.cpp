@@ -3,6 +3,12 @@
 #ifdef _WIN32
 #include <Windows.h>
 
+// Fiber switch functions must never be optimized — the compiler cannot know
+// that SwitchToFiber changes the entire register set and stack pointer.
+#ifdef _MSC_VER
+#pragma optimize("", off)
+#endif
+
 namespace fate {
 namespace fiber {
 
@@ -22,7 +28,7 @@ void destroy(FiberHandle f) {
     if (f) ::DeleteFiber(f);
 }
 
-void switchTo(FiberHandle f) {
+__declspec(noinline) void switchTo(FiberHandle f) {
     ::SwitchToFiber(f);
 }
 
@@ -32,5 +38,9 @@ FiberHandle current() {
 
 } // namespace fiber
 } // namespace fate
+
+#ifdef _MSC_VER
+#pragma optimize("", on)
+#endif
 
 #endif // _WIN32
