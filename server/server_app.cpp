@@ -3067,6 +3067,18 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             processRankingQuery(clientId, msg);
             break;
         }
+        case PacketType::CmdStartDungeon: {
+            CmdStartDungeonMsg msg;
+            msg.read(payload);
+            processStartDungeon(clientId, msg);
+            break;
+        }
+        case PacketType::CmdDungeonResponse: {
+            CmdDungeonResponseMsg msg;
+            msg.read(payload);
+            processDungeonResponse(clientId, msg);
+            break;
+        }
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;
@@ -6632,6 +6644,339 @@ EntityHandle ServerApp::transferPlayerToWorld(uint16_t clientId,
              clientId, newScene.c_str(), spawnPos.x, spawnPos.y);
 
     return newHandle;
+}
+
+// ---------------------------------------------------------------------------
+// processStartDungeon — leader requests dungeon entry, validate + invite
+// ---------------------------------------------------------------------------
+void ServerApp::processStartDungeon(uint16_t clientId, const CmdStartDungeonMsg& msg) {
+    auto* conn = server_.connections().findById(clientId);
+    if (!conn) return;
+    PersistentId pid(conn->playerEntityId);
+    EntityHandle h = replication_.getEntityHandle(pid);
+    Entity* player = world_.getEntity(h);
+    if (!player) return;
+
+    // 1. Validate scene is a dungeon
+    auto* sceneInfo = sceneCache_.get(msg.sceneId);
+    if (!sceneInfo || !sceneInfo->isDungeon) {
+        LOG_WARN("Server", "Client %d: invalid dungeon scene '%s'", clientId, msg.sceneId.c_str());
+        return;
+    }
+
+    // 2. Validate party (2+ members, caller is leader)
+    auto* partyComp = player->getComponent<PartyComponent>();
+    if (!partyComp || !partyComp->party.isInParty() || !partyComp->party.isLeader) {
+        LOG_WARN("Server", "Client %d: must be party leader to start dungeon", clientId);
+        return;
+    }
+    if (static_cast<int>(partyComp->party.members.size()) < 2) {
+        LOG_WARN("Server", "Client %d: party needs 2+ members for dungeon", clientId);
+        return;
+    }
+
+    // 3. Validate no event locks for any member
+    for (auto& member : partyComp->party.members) {
+        // Look up entityId via characterId
+        uint16_t memberCid = 0;
+        server_.connections().forEach([&](ClientConnection& c) {
+            if (c.character_id == member.characterId) memberCid = c.clientId;
+        });
+        if (memberCid == 0) continue;
+        auto* memberConn = server_.connections().findById(memberCid);
+        if (memberConn && playerEventLocks_.count(static_cast<uint32_t>(memberConn->playerEntityId))) {
+            LOG_WARN("Server", "Client %d: party member '%s' in another event",
+                     clientId, member.characterName.c_str());
+            return;
+        }
+    }
+
+    // 4. Validate level requirement for all members
+    for (auto& member : partyComp->party.members) {
+        if (member.level < sceneInfo->minLevel) {
+            LOG_WARN("Server", "Client %d: party member '%s' below min level %d",
+                     clientId, member.characterName.c_str(), sceneInfo->minLevel);
+            return;
+        }
+    }
+
+    // 5. Validate dungeon tickets for all members
+    for (auto& member : partyComp->party.members) {
+        if (!checkDungeonTicket(member.characterId)) {
+            LOG_WARN("Server", "Client %d: party member '%s' has no dungeon ticket",
+                     clientId, member.characterName.c_str());
+            return;
+        }
+    }
+
+    // 6. Create pending instance
+    uint32_t instId = dungeonManager_.createInstance(msg.sceneId, partyComp->party.partyId, sceneInfo->difficultyTier);
+    auto* inst = dungeonManager_.getInstance(instId);
+    inst->leaderClientId = clientId;
+
+    // 7. Send invite to non-leader members
+    for (auto& member : partyComp->party.members) {
+        if (member.isLeader) continue;
+        uint16_t memberClientId = 0;
+        server_.connections().forEach([&](ClientConnection& c) {
+            if (c.character_id == member.characterId) memberClientId = c.clientId;
+        });
+        if (memberClientId == 0) continue;
+        inst->pendingAccepts.insert(memberClientId);
+
+        SvDungeonInviteMsg invite;
+        invite.sceneId = msg.sceneId;
+        invite.dungeonName = sceneInfo->sceneName;
+        invite.timeLimitSeconds = static_cast<uint16_t>(inst->timeLimitSeconds);
+        invite.levelReq = static_cast<uint8_t>(sceneInfo->minLevel);
+        uint8_t buf[256];
+        ByteWriter w(buf, sizeof(buf));
+        invite.write(w);
+        server_.sendTo(memberClientId, Channel::ReliableOrdered, PacketType::SvDungeonInvite, buf, w.size());
+    }
+
+    // If no pending (shouldn't happen with 2+ members, but safety)
+    if (inst->allAccepted()) {
+        startDungeonInstance(inst);
+    }
+
+    LOG_INFO("Server", "Client %d started dungeon '%s', waiting for %zu accepts",
+             clientId, msg.sceneId.c_str(), inst->pendingAccepts.size());
+}
+
+// ---------------------------------------------------------------------------
+// processDungeonResponse — member accepts or declines dungeon invite
+// ---------------------------------------------------------------------------
+void ServerApp::processDungeonResponse(uint16_t clientId, const CmdDungeonResponseMsg& msg) {
+    // Find the instance this client was invited to
+    DungeonInstance* inst = nullptr;
+    uint32_t instId = 0;
+    for (auto& [id, i] : dungeonManager_.allInstances()) {
+        if (i->pendingAccepts.count(clientId)) {
+            inst = i.get();
+            instId = id;
+            break;
+        }
+    }
+    if (!inst) return;
+
+    if (msg.accept) {
+        inst->pendingAccepts.erase(clientId);
+        LOG_INFO("Server", "Client %d accepted dungeon invite (instance %u)", clientId, instId);
+        if (inst->allAccepted()) {
+            startDungeonInstance(inst);
+        }
+    } else {
+        LOG_INFO("Server", "Client %d declined dungeon invite, cancelling instance %u", clientId, instId);
+        dungeonManager_.destroyInstance(instId);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// startDungeonInstance — transfer all party members into the dungeon world
+// ---------------------------------------------------------------------------
+void ServerApp::startDungeonInstance(DungeonInstance* inst) {
+    auto* sceneInfo = sceneCache_.get(inst->sceneId);
+    if (!sceneInfo) return;
+
+    Vec2 spawnPos = {sceneInfo->defaultSpawnX, sceneInfo->defaultSpawnY};
+
+    // Collect all party member clientIds
+    std::vector<uint16_t> allClients;
+    allClients.push_back(inst->leaderClientId);
+
+    auto* leaderConn = server_.connections().findById(inst->leaderClientId);
+    if (!leaderConn) return;
+    PersistentId leaderPid(leaderConn->playerEntityId);
+    EntityHandle leaderH = replication_.getEntityHandle(leaderPid);
+    Entity* leader = world_.getEntity(leaderH);
+    if (!leader) return;
+    auto* partyComp = leader->getComponent<PartyComponent>();
+
+    if (partyComp) {
+        for (auto& member : partyComp->party.members) {
+            if (member.isLeader) continue;
+            server_.connections().forEach([&](ClientConnection& c) {
+                if (c.character_id == member.characterId) {
+                    allClients.push_back(c.clientId);
+                }
+            });
+        }
+    }
+
+    // Transfer each player
+    for (uint16_t cid : allClients) {
+        auto* conn = server_.connections().findById(cid);
+        if (!conn) continue;
+        PersistentId ppid(conn->playerEntityId);
+        EntityHandle ph = replication_.getEntityHandle(ppid);
+        Entity* player = world_.getEntity(ph);
+        if (!player) continue;
+
+        auto* cs = player->getComponent<CharacterStatsComponent>();
+        auto* transform = player->getComponent<Transform>();
+        if (!cs || !transform) continue;
+
+        // Save return point
+        inst->returnPoints[cid] = {cs->stats.currentScene, transform->position.x, transform->position.y};
+
+        // Event lock
+        playerEventLocks_[static_cast<uint32_t>(conn->playerEntityId)] = "Dungeon";
+
+        // Consume ticket
+        consumeDungeonTicket(conn->character_id);
+
+        // Transfer to instance world
+        transferPlayerToWorld(cid, world_, replication_, inst->world, inst->replication, spawnPos, inst->sceneId);
+
+        // Track
+        dungeonManager_.addPlayer(inst->instanceId, cid);
+
+        // Send start message
+        SvDungeonStartMsg start;
+        start.sceneId = inst->sceneId;
+        start.timeLimitSeconds = static_cast<uint16_t>(inst->timeLimitSeconds);
+        uint8_t buf[128];
+        ByteWriter w(buf, sizeof(buf));
+        start.write(w);
+        server_.sendTo(cid, Channel::ReliableOrdered, PacketType::SvDungeonStart, buf, w.size());
+    }
+
+    // Spawn dungeon mobs (no respawn)
+    spawnDungeonMobs(inst);
+
+    LOG_INFO("Server", "Dungeon instance %u started: scene=%s players=%zu",
+             inst->instanceId, inst->sceneId.c_str(), allClients.size());
+}
+
+// ---------------------------------------------------------------------------
+// spawnDungeonMobs — create mobs in dungeon instance (NO respawn)
+// ---------------------------------------------------------------------------
+void ServerApp::spawnDungeonMobs(DungeonInstance* inst) {
+    static thread_local std::mt19937 s_rng{std::random_device{}()};
+
+    const auto& zones = spawnZoneCache_.getZonesForScene(inst->sceneId);
+    for (const auto& zone : zones) {
+        const CachedMobDef* def = mobDefCache_.get(zone.mobDefId);
+        if (!def) {
+            LOG_WARN("Server", "Dungeon spawn: unknown mob_def_id '%s' in zone '%s'",
+                     zone.mobDefId.c_str(), zone.zoneName.c_str());
+            continue;
+        }
+
+        for (int i = 0; i < zone.targetCount; ++i) {
+            // Random level within mob def range
+            int level = def->minSpawnLevel;
+            if (def->maxSpawnLevel > def->minSpawnLevel) {
+                std::uniform_int_distribution<int> levelDist(def->minSpawnLevel, def->maxSpawnLevel);
+                level = levelDist(s_rng);
+            }
+
+            // Random position within zone bounds (square, same as ServerSpawnManager)
+            std::uniform_real_distribution<float> xDist(zone.centerX - zone.radius, zone.centerX + zone.radius);
+            std::uniform_real_distribution<float> yDist(zone.centerY - zone.radius, zone.centerY + zone.radius);
+            Vec2 pos = {xDist(s_rng), yDist(s_rng)};
+
+            // Create entity in instance world
+            Entity* mob = inst->world.createEntity(def->displayName);
+            if (!mob) continue;
+            mob->setTag("mob");
+
+            // Transform
+            auto* t = mob->addComponent<Transform>(pos);
+            t->depth = 1.0f;
+
+            // EnemyStatsComponent — fill all stats from CachedMobDef
+            auto* esComp = mob->addComponent<EnemyStatsComponent>();
+            EnemyStats& es = esComp->stats;
+            es.enemyId          = def->mobDefId;
+            es.enemyName        = def->displayName;
+            es.sceneId          = inst->sceneId;
+            es.level            = level;
+            es.baseDamage       = def->getDamageForLevel(level);
+            es.maxHP            = def->getHPForLevel(level);
+            es.currentHP        = es.maxHP;
+            es.armor            = def->getArmorForLevel(level);
+            es.magicResist      = def->magicResist;
+            es.critRate         = def->critRate;
+            es.attackSpeed      = def->attackSpeed;
+            es.moveSpeed        = def->moveSpeed;
+            es.mobHitRate       = def->mobHitRate;
+            es.xpReward         = def->getXPRewardForLevel(level);
+            es.dealsMagicDamage = def->dealsMagicDamage;
+            es.isAggressive     = def->isAggressive;
+            es.isBoss           = def->isBoss;
+            es.monsterType      = def->monsterType;
+            es.lootTableId      = def->lootTableId;
+            es.minGoldDrop      = def->minGoldDrop;
+            es.maxGoldDrop      = def->maxGoldDrop;
+            es.goldDropChance   = def->goldDropChance;
+            es.honorReward      = def->honorReward;
+            es.isAlive          = true;
+
+            // MobAIComponent — initialize AI with home position and ranges from def
+            auto* aiComp = mob->addComponent<MobAIComponent>();
+            aiComp->ai.acquireRadius  = def->aggroRange * 32.0f;
+            aiComp->ai.attackRange    = def->attackRange * 32.0f;
+            aiComp->ai.contactRadius  = def->leashRadius * 32.0f;
+            aiComp->ai.attackCooldown  = def->attackSpeed;
+            aiComp->ai.isPassive       = !def->isAggressive;
+            aiComp->ai.baseChaseSpeed  = def->moveSpeed * 32.0f;
+            aiComp->ai.baseReturnSpeed = def->moveSpeed * 32.0f;
+            aiComp->ai.baseRoamSpeed   = def->moveSpeed * 32.0f * 0.6f;
+            aiComp->ai.roamRadius      = zone.radius * 0.4f;
+            aiComp->ai.initialize(pos);
+
+            // MobNameplateComponent — for replication buildEnterMessage
+            auto* np = mob->addComponent<MobNameplateComponent>();
+            np->displayName = def->displayName;
+            np->level       = level;
+            np->isBoss      = def->isBoss;
+            np->visible     = true;
+
+            // Register with instance replication
+            PersistentId mobPid = PersistentId::generate(1);
+            inst->replication.registerEntity(mob->handle(), mobPid);
+        }
+    }
+
+    LOG_INFO("Server", "Spawned dungeon mobs for instance %u, scene '%s'",
+             inst->instanceId, inst->sceneId.c_str());
+}
+
+// ---------------------------------------------------------------------------
+// checkDungeonTicket — returns true if character can enter a dungeon today
+// ---------------------------------------------------------------------------
+bool ServerApp::checkDungeonTicket(const std::string& characterId) {
+    try {
+        pqxx::work txn(gameDbConn_.connection());
+        auto result = txn.exec_params(
+            "SELECT CASE WHEN last_dungeon_entry IS NULL THEN true "
+            "ELSE last_dungeon_entry < date_trunc('day', NOW() AT TIME ZONE 'America/Chicago') "
+            "END AS has_ticket FROM characters WHERE character_id = $1",
+            characterId);
+        txn.commit();
+        if (result.empty()) return false;
+        return result[0]["has_ticket"].as<bool>(false);
+    } catch (const std::exception& e) {
+        LOG_ERROR("Server", "Dungeon ticket check failed: %s", e.what());
+        return false;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// consumeDungeonTicket — mark character as having entered a dungeon today
+// ---------------------------------------------------------------------------
+void ServerApp::consumeDungeonTicket(const std::string& characterId) {
+    try {
+        pqxx::work txn(gameDbConn_.connection());
+        txn.exec_params(
+            "UPDATE characters SET last_dungeon_entry = NOW() WHERE character_id = $1",
+            characterId);
+        txn.commit();
+    } catch (const std::exception& e) {
+        LOG_ERROR("Server", "Failed to consume dungeon ticket: %s", e.what());
+    }
 }
 
 } // namespace fate
