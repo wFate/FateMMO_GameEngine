@@ -12,10 +12,12 @@ FullscreenQuad& FullscreenQuad::instance() {
 }
 
 void FullscreenQuad::init() {
+#ifndef FATEMMO_METAL
+    // On Metal: nothing to init — draw(encoder) just issues drawPrimitives;
+    // the caller (blit pass / render graph) binds the appropriate pipeline before calling draw.
     auto& device = gfx::Device::instance();
     gfx::PipelineDesc desc{};
     pipelineHandle_ = device.createPipeline(desc);
-#ifndef FATEMMO_METAL
     vao_ = device.resolveGLPipelineVAO(pipelineHandle_);
 #endif
 }
