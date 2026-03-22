@@ -34,6 +34,11 @@ public:
 
     void submit();
 
+#ifdef FATEMMO_METAL
+    void* currentEncoder() const;       // returns id<MTLRenderCommandEncoder>
+    void  setDrawable(void* drawable);  // sets the CAMetalDrawable for screen rendering
+#endif
+
 private:
     PipelineHandle currentPipeline_{};
 };

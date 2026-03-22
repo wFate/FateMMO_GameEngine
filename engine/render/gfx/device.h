@@ -59,6 +59,8 @@ public:
     void* resolveMetalBuffer(BufferHandle h) const;
     void* resolveMetalPipelineState(PipelineHandle h) const;
     void* resolveMetalDepthStencilState(PipelineHandle h) const;
+    void* resolveMetalCommandQueue() const;                  // returns id<MTLCommandQueue>
+    void* resolveMetalFramebufferPassDesc(FramebufferHandle h) const; // returns MTLRenderPassDescriptor*
 #endif
 
     // Shared across backends
