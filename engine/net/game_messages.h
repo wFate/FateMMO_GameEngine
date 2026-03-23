@@ -19,7 +19,7 @@ namespace TradeAction {
     constexpr uint8_t SetGold      = 4;  // + gold:i64
     constexpr uint8_t Lock         = 5;  // (no extra fields)
     constexpr uint8_t Unlock       = 6;
-    constexpr uint8_t Confirm      = 7;
+    constexpr uint8_t Confirm      = 7;  // + nonce:u64
     constexpr uint8_t Cancel       = 8;
 }
 
@@ -27,8 +27,8 @@ namespace TradeAction {
 // Client -> Server: CmdMarket sub-actions
 // ============================================================================
 namespace MarketAction {
-    constexpr uint8_t ListItem       = 0;  // + instanceId:string, priceGold:i64
-    constexpr uint8_t BuyItem        = 1;  // + listingId:i32
+    constexpr uint8_t ListItem       = 0;  // + instanceId:string, priceGold:i64 + nonce:u64
+    constexpr uint8_t BuyItem        = 1;  // + listingId:i32 + nonce:u64
     constexpr uint8_t CancelListing  = 2;  // + listingId:i32
     constexpr uint8_t GetListings    = 3;  // + page:i32, filterJson:string
     constexpr uint8_t GetMyListings  = 4;  // (no extra fields)
@@ -118,12 +118,14 @@ struct SvTradeUpdateMsg {
     int32_t sessionId  = 0;
     std::string otherPlayerName;
     uint8_t resultCode = 0;  // 0=success, 1+=error codes from TradeActionResult
+    uint64_t nonce = 0;
 
     void write(ByteWriter& w) const {
         w.writeU8(updateType);
         w.writeI32(sessionId);
         w.writeString(otherPlayerName);
         w.writeU8(resultCode);
+        detail::writeU64(w, nonce);
     }
     static SvTradeUpdateMsg read(ByteReader& r) {
         SvTradeUpdateMsg m;
@@ -131,6 +133,7 @@ struct SvTradeUpdateMsg {
         m.sessionId      = r.readI32();
         m.otherPlayerName = r.readString();
         m.resultCode     = r.readU8();
+        m.nonce          = detail::readU64(r);
         return m;
     }
 };
@@ -140,12 +143,14 @@ struct SvMarketResultMsg {
     uint8_t resultCode = 0;  // 0=success, 1+=error
     int32_t listingId  = 0;
     std::string message;
+    uint64_t nonce = 0;
 
     void write(ByteWriter& w) const {
         w.writeU8(action);
         w.writeU8(resultCode);
         w.writeI32(listingId);
         w.writeString(message);
+        detail::writeU64(w, nonce);
     }
     static SvMarketResultMsg read(ByteReader& r) {
         SvMarketResultMsg m;
@@ -153,6 +158,7 @@ struct SvMarketResultMsg {
         m.resultCode = r.readU8();
         m.listingId  = r.readI32();
         m.message    = r.readString();
+        m.nonce      = detail::readU64(r);
         return m;
     }
 };
@@ -837,18 +843,18 @@ struct SvSocketResultMsg {
 // Client -> Server: CmdStatEnchant / Server -> Client: SvStatEnchantResult
 // ============================================================================
 struct CmdStatEnchantMsg {
-    uint8_t equipSlot = 0;
+    uint8_t targetSlot = 0;
     uint8_t scrollStatType = 0;
     std::string scrollItemId;
 
     void write(ByteWriter& w) const {
-        w.writeU8(equipSlot);
+        w.writeU8(targetSlot);
         w.writeU8(scrollStatType);
         w.writeString(scrollItemId);
     }
     static CmdStatEnchantMsg read(ByteReader& r) {
         CmdStatEnchantMsg m;
-        m.equipSlot      = r.readU8();
+        m.targetSlot     = r.readU8();
         m.scrollStatType = r.readU8();
         m.scrollItemId   = r.readString();
         return m;
