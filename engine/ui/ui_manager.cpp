@@ -27,6 +27,10 @@
 #include "engine/ui/widgets/trade_window.h"
 #include "engine/ui/widgets/party_frame.h"
 #include "engine/ui/widgets/guild_panel.h"
+#include "engine/ui/widgets/npc_dialogue_panel.h"
+#include "engine/ui/widgets/shop_panel.h"
+#include "engine/ui/widgets/bank_panel.h"
+#include "engine/ui/widgets/teleporter_panel.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -474,6 +478,18 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     else if (type == "guild_panel") {
         auto gp = std::make_unique<GuildPanel>(id);
         node = std::move(gp);
+    }
+    else if (type == "npc_dialogue_panel") {
+        node = std::make_unique<NpcDialoguePanel>(id);
+    }
+    else if (type == "shop_panel") {
+        node = std::make_unique<ShopPanel>(id);
+    }
+    else if (type == "bank_panel") {
+        node = std::make_unique<BankPanel>(id);
+    }
+    else if (type == "teleporter_panel") {
+        node = std::make_unique<TeleporterPanel>(id);
     }
     else {
         node = std::make_unique<UINode>(id, type);
