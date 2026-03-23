@@ -47,9 +47,13 @@ public:
     void handleKeyInput(int scancode, bool pressed);
     void handleTextInput(const std::string& text);
 
-    // Set viewport offset for input — subtract from raw mouse position so widget
-    // coordinates (computed in FBO/viewport space) match the mouse coordinates.
-    void setInputOffset(float x, float y) { inputOffsetX_ = x; inputOffsetY_ = y; }
+    // Map raw (window-space) mouse coordinates into layout space.
+    // offset  = viewport top-left in window coords
+    // scale   = FBO size / displayed size  (>1 when FBO is larger than panel)
+    void setInputTransform(float offX, float offY, float scaleX, float scaleY) {
+        inputOffsetX_ = offX; inputOffsetY_ = offY;
+        inputScaleX_  = scaleX; inputScaleY_ = scaleY;
+    }
 
     UINode* hoveredNode() const { return hoveredNode_; }
     UINode* focusedNode() const { return focusedNode_; }
@@ -83,6 +87,8 @@ private:
 
     float inputOffsetX_ = 0.0f;
     float inputOffsetY_ = 0.0f;
+    float inputScaleX_  = 1.0f;
+    float inputScaleY_  = 1.0f;
 
     UIHotReload hotReload_;
     float hotReloadTimer_ = 0.0f;

@@ -588,7 +588,8 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
 void UIManager::handleInput() {
     auto& input = Input::instance();
     Vec2 rawPos = input.mousePosition();
-    Vec2 mousePos = {rawPos.x - inputOffsetX_, rawPos.y - inputOffsetY_};
+    Vec2 mousePos = {(rawPos.x - inputOffsetX_) * inputScaleX_,
+                     (rawPos.y - inputOffsetY_) * inputScaleY_};
 
     updateHover(mousePos);
 

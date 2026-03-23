@@ -473,6 +473,21 @@ void App::update() {
     uiManager_.update(deltaTime_);
 
     // Route mouse/keyboard input to the UI system (hover, focus, press, drag-drop)
+#ifndef FATE_SHIPPING
+    // Map window-space mouse coords into FBO-space so hit-testing matches
+    // the layout computed against FBO dimensions.
+    {
+        auto& ed = Editor::instance();
+        Vec2 vp  = ed.viewportPos();   // top-left of displayed image in window
+        Vec2 vs  = ed.viewportSize();  // displayed image size (may differ from FBO)
+        auto& fbo = ed.viewportFbo();
+        float fboW = static_cast<float>(fbo.width());
+        float fboH = static_cast<float>(fbo.height());
+        float sx = (vs.x > 0.0f) ? fboW / vs.x : 1.0f;
+        float sy = (vs.y > 0.0f) ? fboH / vs.y : 1.0f;
+        uiManager_.setInputTransform(vp.x, vp.y, sx, sy);
+    }
+#endif
     uiManager_.handleInput();
 
     // Always process destroy queue (so editor delete works while paused)

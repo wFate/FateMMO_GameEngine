@@ -26,7 +26,6 @@ enum class ActionId : uint8_t {
     ToggleInventory,
     ToggleSkillBar,
     ToggleQuestLog,
-    ToggleEditor,
     OpenChat,
     SubmitChat,
     Confirm,
@@ -165,7 +164,6 @@ private:
         bind(ActionId::ToggleInventory, SDL_SCANCODE_I);
         bind(ActionId::ToggleSkillBar,  SDL_SCANCODE_K);
         bind(ActionId::ToggleQuestLog,  SDL_SCANCODE_L);
-        bind(ActionId::ToggleEditor,    SDL_SCANCODE_F3);
 
         // Chat / confirm / cancel
         bind(ActionId::OpenChat,   SDL_SCANCODE_RETURN);
