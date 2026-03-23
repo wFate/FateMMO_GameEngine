@@ -1129,13 +1129,21 @@ struct SvRankingResultMsg {
 struct CmdStartDungeonMsg {
     std::string sceneId;
     void write(ByteWriter& w) const { w.writeString(sceneId); }
-    void read(ByteReader& r) { sceneId = r.readString(); }
+    static CmdStartDungeonMsg read(ByteReader& r) {
+        CmdStartDungeonMsg m;
+        m.sceneId = r.readString();
+        return m;
+    }
 };
 
 struct CmdDungeonResponseMsg {
     uint8_t accept = 0;  // 1 = accept, 0 = decline
     void write(ByteWriter& w) const { w.writeU8(accept); }
-    void read(ByteReader& r) { accept = r.readU8(); }
+    static CmdDungeonResponseMsg read(ByteReader& r) {
+        CmdDungeonResponseMsg m;
+        m.accept = r.readU8();
+        return m;
+    }
 };
 
 struct SvDungeonInviteMsg {
@@ -1149,11 +1157,13 @@ struct SvDungeonInviteMsg {
         w.writeU16(timeLimitSeconds);
         w.writeU8(levelReq);
     }
-    void read(ByteReader& r) {
-        sceneId = r.readString();
-        dungeonName = r.readString();
-        timeLimitSeconds = r.readU16();
-        levelReq = r.readU8();
+    static SvDungeonInviteMsg read(ByteReader& r) {
+        SvDungeonInviteMsg m;
+        m.sceneId = r.readString();
+        m.dungeonName = r.readString();
+        m.timeLimitSeconds = r.readU16();
+        m.levelReq = r.readU8();
+        return m;
     }
 };
 
@@ -1164,16 +1174,22 @@ struct SvDungeonStartMsg {
         w.writeString(sceneId);
         w.writeU16(timeLimitSeconds);
     }
-    void read(ByteReader& r) {
-        sceneId = r.readString();
-        timeLimitSeconds = r.readU16();
+    static SvDungeonStartMsg read(ByteReader& r) {
+        SvDungeonStartMsg m;
+        m.sceneId = r.readString();
+        m.timeLimitSeconds = r.readU16();
+        return m;
     }
 };
 
 struct SvDungeonEndMsg {
     uint8_t reason = 0;  // 0=boss_killed, 1=timeout, 2=abandoned
     void write(ByteWriter& w) const { w.writeU8(reason); }
-    void read(ByteReader& r) { reason = r.readU8(); }
+    static SvDungeonEndMsg read(ByteReader& r) {
+        SvDungeonEndMsg m;
+        m.reason = r.readU8();
+        return m;
+    }
 };
 
 } // namespace fate
