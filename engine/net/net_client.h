@@ -34,6 +34,8 @@ public:
     void sendBankDepositGold(uint32_t npcId, int64_t amount);
     void sendBankWithdrawGold(uint32_t npcId, int64_t amount);
     void sendTeleport(uint32_t npcId, uint8_t destinationIndex);
+    void sendStartDungeon(const std::string& sceneId);
+    void sendDungeonResponse(uint8_t accept);
 
     void sendTradeAction(uint8_t action);
     void sendTradeAction(uint8_t action, const std::string& data);
@@ -97,6 +99,9 @@ public:
     std::function<void(const SvAuroraStatusMsg&)> onAuroraStatus;
     std::function<void(const SvConsumeResultMsg&)> onConsumeResult;
     std::function<void(const SvRankingResultMsg&)> onRankingResult;
+    std::function<void(const SvDungeonInviteMsg&)> onDungeonInvite;
+    std::function<void(const SvDungeonStartMsg&)> onDungeonStart;
+    std::function<void(const SvDungeonEndMsg&)> onDungeonEnd;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:

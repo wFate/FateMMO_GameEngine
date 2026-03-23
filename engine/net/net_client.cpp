@@ -550,6 +550,24 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onRankingResult) onRankingResult(msg);
             break;
         }
+        case PacketType::SvDungeonInvite: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvDungeonInviteMsg::read(payload);
+            if (onDungeonInvite) onDungeonInvite(msg);
+            break;
+        }
+        case PacketType::SvDungeonStart: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvDungeonStartMsg::read(payload);
+            if (onDungeonStart) onDungeonStart(msg);
+            break;
+        }
+        case PacketType::SvDungeonEnd: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvDungeonEndMsg::read(payload);
+            if (onDungeonEnd) onDungeonEnd(msg);
+            break;
+        }
         default:
             break;
     }
@@ -646,6 +664,24 @@ void NetClient::sendTeleport(uint32_t npcId, uint8_t destinationIndex) {
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdTeleport, buf, w.size());
+}
+
+void NetClient::sendStartDungeon(const std::string& sceneId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdStartDungeonMsg msg;
+    msg.sceneId = sceneId;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdStartDungeon, w.data(), w.size());
+}
+
+void NetClient::sendDungeonResponse(uint8_t accept) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdDungeonResponseMsg msg;
+    msg.accept = accept;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdDungeonResponse, w.data(), w.size());
 }
 
 void NetClient::sendMove(const Vec2& position, const Vec2& velocity, float timestamp) {
