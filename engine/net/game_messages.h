@@ -749,30 +749,182 @@ struct SvPetUpdateMsg {
 };
 
 // ============================================================================
-// Client -> Server: CmdBank / Server -> Client: SvBankResult
+// Client -> Server: Shop messages
 // ============================================================================
-struct CmdBankMsg {
-    uint8_t action = 0;       // 0=deposit item, 1=withdraw item, 2=deposit gold, 3=withdraw gold
-    int64_t goldAmount = 0;
+struct CmdShopBuyMsg {
+    uint32_t npcId = 0;
     std::string itemId;
-    uint16_t itemCount = 0;
+    uint16_t quantity = 0;
 
     void write(ByteWriter& w) const {
-        w.writeU8(action);
-        detail::writeI64(w, goldAmount);
+        w.writeU32(npcId);
         w.writeString(itemId);
-        w.writeU16(itemCount);
+        w.writeU16(quantity);
     }
-    static CmdBankMsg read(ByteReader& r) {
-        CmdBankMsg m;
-        m.action    = r.readU8();
-        m.goldAmount = detail::readI64(r);
-        m.itemId    = r.readString();
-        m.itemCount = r.readU16();
+    static CmdShopBuyMsg read(ByteReader& r) {
+        CmdShopBuyMsg m;
+        m.npcId    = r.readU32();
+        m.itemId   = r.readString();
+        m.quantity = r.readU16();
         return m;
     }
 };
 
+struct CmdShopSellMsg {
+    uint32_t npcId = 0;
+    uint8_t inventorySlot = 0;
+    uint16_t quantity = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(npcId);
+        w.writeU8(inventorySlot);
+        w.writeU16(quantity);
+    }
+    static CmdShopSellMsg read(ByteReader& r) {
+        CmdShopSellMsg m;
+        m.npcId         = r.readU32();
+        m.inventorySlot = r.readU8();
+        m.quantity      = r.readU16();
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvShopResult
+// ============================================================================
+struct SvShopResultMsg {
+    uint8_t action = 0;
+    uint8_t success = 0;
+    int64_t updatedGold = 0;
+    std::string reason;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(action);
+        w.writeU8(success);
+        detail::writeI64(w, updatedGold);
+        w.writeString(reason);
+    }
+    static SvShopResultMsg read(ByteReader& r) {
+        SvShopResultMsg m;
+        m.action      = r.readU8();
+        m.success     = r.readU8();
+        m.updatedGold = detail::readI64(r);
+        m.reason      = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: Split bank messages
+// ============================================================================
+struct CmdBankDepositItemMsg {
+    uint32_t npcId = 0;
+    uint8_t inventorySlot = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(npcId);
+        w.writeU8(inventorySlot);
+    }
+    static CmdBankDepositItemMsg read(ByteReader& r) {
+        CmdBankDepositItemMsg m;
+        m.npcId         = r.readU32();
+        m.inventorySlot = r.readU8();
+        return m;
+    }
+};
+
+struct CmdBankWithdrawItemMsg {
+    uint32_t npcId = 0;
+    uint16_t itemIndex = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(npcId);
+        w.writeU16(itemIndex);
+    }
+    static CmdBankWithdrawItemMsg read(ByteReader& r) {
+        CmdBankWithdrawItemMsg m;
+        m.npcId     = r.readU32();
+        m.itemIndex = r.readU16();
+        return m;
+    }
+};
+
+struct CmdBankDepositGoldMsg {
+    uint32_t npcId = 0;
+    int64_t amount = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(npcId);
+        detail::writeI64(w, amount);
+    }
+    static CmdBankDepositGoldMsg read(ByteReader& r) {
+        CmdBankDepositGoldMsg m;
+        m.npcId  = r.readU32();
+        m.amount = detail::readI64(r);
+        return m;
+    }
+};
+
+struct CmdBankWithdrawGoldMsg {
+    uint32_t npcId = 0;
+    int64_t amount = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(npcId);
+        detail::writeI64(w, amount);
+    }
+    static CmdBankWithdrawGoldMsg read(ByteReader& r) {
+        CmdBankWithdrawGoldMsg m;
+        m.npcId  = r.readU32();
+        m.amount = detail::readI64(r);
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdTeleport / Server -> Client: SvTeleportResult
+// ============================================================================
+struct CmdTeleportMsg {
+    uint32_t npcId = 0;
+    uint8_t destinationIndex = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(npcId);
+        w.writeU8(destinationIndex);
+    }
+    static CmdTeleportMsg read(ByteReader& r) {
+        CmdTeleportMsg m;
+        m.npcId            = r.readU32();
+        m.destinationIndex = r.readU8();
+        return m;
+    }
+};
+
+struct SvTeleportResultMsg {
+    uint8_t success = 0;
+    std::string sceneId;
+    float posX = 0.0f;
+    float posY = 0.0f;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(success);
+        w.writeString(sceneId);
+        w.writeFloat(posX);
+        w.writeFloat(posY);
+    }
+    static SvTeleportResultMsg read(ByteReader& r) {
+        SvTeleportResultMsg m;
+        m.success = r.readU8();
+        m.sceneId = r.readString();
+        m.posX    = r.readFloat();
+        m.posY    = r.readFloat();
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvBankResult (unchanged legacy format)
+// ============================================================================
 struct SvBankResultMsg {
     uint8_t action = 0;
     uint8_t success = 0;

@@ -91,6 +91,13 @@ namespace PacketType {
     constexpr uint8_t CmdRankingQuery = 0x29;
     constexpr uint8_t CmdStartDungeon    = 0x2A;
     constexpr uint8_t CmdDungeonResponse = 0x2B;
+    constexpr uint8_t CmdShopBuy           = 0x2C;
+    constexpr uint8_t CmdShopSell          = 0x2D;
+    constexpr uint8_t CmdTeleport          = 0x2E;
+    constexpr uint8_t CmdBankDepositItem   = 0x2F;
+    constexpr uint8_t CmdBankWithdrawItem  = 0x30;
+    constexpr uint8_t CmdBankDepositGold   = 0x31;
+    constexpr uint8_t CmdBankWithdrawGold  = 0x32;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
@@ -107,7 +114,9 @@ namespace PacketType {
     constexpr uint8_t SvRankingResult     = 0xB3;
     constexpr uint8_t SvDungeonInvite = 0xB4;
     constexpr uint8_t SvDungeonStart  = 0xB5;
-    constexpr uint8_t SvDungeonEnd    = 0xB6;
+    constexpr uint8_t SvDungeonEnd       = 0xB6;
+    constexpr uint8_t SvShopResult       = 0xB7;
+    constexpr uint8_t SvTeleportResult   = 0xB8;
 } // namespace PacketType
 
 // ============================================================================
