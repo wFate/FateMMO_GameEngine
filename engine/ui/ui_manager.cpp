@@ -37,6 +37,7 @@
 #include "engine/ui/widgets/confirm_dialog.h"
 #include "engine/ui/widgets/notification_toast.h"
 #include "engine/ui/widgets/checkbox.h"
+#include "engine/ui/widgets/login_screen.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -555,6 +556,12 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         cb->boxSize = j.value("boxSize", 16.0f);
         cb->spacing = j.value("spacing", 6.0f);
         node = std::move(cb);
+    }
+    else if (type == "login_screen") {
+        auto ls = std::make_unique<LoginScreen>(id);
+        ls->serverHost = j.value("serverHost", "127.0.0.1");
+        ls->serverPort = j.value("serverPort", 7778);
+        node = std::move(ls);
     }
     else {
         node = std::make_unique<UINode>(id, type);
