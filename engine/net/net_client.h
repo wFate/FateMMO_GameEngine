@@ -26,6 +26,18 @@ public:
     void sendRespawn(uint8_t respawnType);
     void sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId);
     void sendUseConsumable(uint8_t inventorySlot);
+    void sendStatEnchant(uint8_t targetSlot, const std::string& scrollItemId);
+
+    void sendTradeAction(uint8_t action);
+    void sendTradeAction(uint8_t action, const std::string& data);
+    void sendTradeConfirm();
+    void sendTradeAddItem(uint8_t slotIdx, int32_t sourceSlot, const std::string& instanceId, int32_t quantity);
+    void sendTradeSetGold(int64_t gold);
+    void sendMarketBuy(int32_t listingId);
+    void sendMarketList(const std::string& instanceId, int64_t priceGold);
+    void sendMarketCancel(int32_t listingId);
+    void sendMarketGetListings(int32_t page, const std::string& filterJson);
+    void sendMarketGetMyListings();
 
     bool isConnected() const { return connected_; }
     bool isWaitingForConnection() const { return waitingForAccept_; }
@@ -108,6 +120,9 @@ private:
     int heartbeatCounter_ = 0;
     std::string lastHost_;
     uint16_t lastPort_ = 0;
+
+    uint64_t tradeNonce_ = 0;
+    uint64_t marketNonce_ = 0;
 
     void startReconnect();
 

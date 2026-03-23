@@ -359,12 +359,20 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         case PacketType::SvTradeUpdate: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvTradeUpdateMsg::read(payload);
+            // Store nonce from Lock response for Confirm
+            if (msg.updateType == 3 && msg.resultCode == 0 && msg.nonce != 0) {
+                tradeNonce_ = msg.nonce;
+            }
             if (onTradeUpdate) onTradeUpdate(msg);
             break;
         }
         case PacketType::SvMarketResult: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvMarketResultMsg::read(payload);
+            // Store nonce for next market operation
+            if (msg.nonce != 0) {
+                marketNonce_ = msg.nonce;
+            }
             if (onMarketResult) onMarketResult(msg);
             break;
         }
@@ -538,6 +546,18 @@ void NetClient::sendUseConsumable(uint8_t inventorySlot) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdUseConsumable, w.data(), w.size());
 }
 
+void NetClient::sendStatEnchant(uint8_t targetSlot, const std::string& scrollItemId) {
+    CmdStatEnchantMsg msg;
+    msg.targetSlot    = targetSlot;
+    msg.scrollStatType = 0; // server derives from item def
+    msg.scrollItemId  = scrollItemId;
+
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdStatEnchant, w.data(), w.size());
+}
+
 void NetClient::sendMove(const Vec2& position, const Vec2& velocity, float timestamp) {
     CmdMove move;
     move.position = position;
@@ -657,6 +677,91 @@ void NetClient::sendPacket(Channel channel, uint8_t packetType,
     if (channel != Channel::Unreliable) {
         reliability_.trackReliable(hdr.sequence, buf, w.size(), lastPollTime_);
     }
+}
+
+void NetClient::sendTradeAction(uint8_t action) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(action);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdTrade, w.data(), w.size());
+}
+
+void NetClient::sendTradeAction(uint8_t action, const std::string& data) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(action);
+    w.writeString(data);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdTrade, w.data(), w.size());
+}
+
+void NetClient::sendTradeConfirm() {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(TradeAction::Confirm);
+    detail::writeU64(w, tradeNonce_);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdTrade, w.data(), w.size());
+}
+
+void NetClient::sendTradeAddItem(uint8_t slotIdx, int32_t sourceSlot, const std::string& instanceId, int32_t quantity) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(TradeAction::AddItem);
+    w.writeU8(slotIdx);
+    w.writeI32(sourceSlot);
+    w.writeString(instanceId);
+    w.writeI32(quantity);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdTrade, w.data(), w.size());
+}
+
+void NetClient::sendTradeSetGold(int64_t gold) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(TradeAction::SetGold);
+    detail::writeI64(w, gold);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdTrade, w.data(), w.size());
+}
+
+void NetClient::sendMarketBuy(int32_t listingId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(MarketAction::BuyItem);
+    w.writeI32(listingId);
+    detail::writeU64(w, marketNonce_);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdMarket, w.data(), w.size());
+}
+
+void NetClient::sendMarketList(const std::string& instanceId, int64_t priceGold) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(MarketAction::ListItem);
+    w.writeString(instanceId);
+    detail::writeI64(w, priceGold);
+    detail::writeU64(w, marketNonce_);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdMarket, w.data(), w.size());
+}
+
+void NetClient::sendMarketCancel(int32_t listingId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(MarketAction::CancelListing);
+    w.writeI32(listingId);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdMarket, w.data(), w.size());
+}
+
+void NetClient::sendMarketGetListings(int32_t page, const std::string& filterJson) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(MarketAction::GetListings);
+    w.writeI32(page);
+    w.writeString(filterJson);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdMarket, w.data(), w.size());
+}
+
+void NetClient::sendMarketGetMyListings() {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(MarketAction::GetMyListings);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdMarket, w.data(), w.size());
 }
 
 } // namespace fate
