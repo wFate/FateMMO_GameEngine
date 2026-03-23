@@ -58,6 +58,7 @@ public:
     UINode* hoveredNode() const { return hoveredNode_; }
     UINode* focusedNode() const { return focusedNode_; }
     UINode* pressedNode() const { return pressedNode_; }
+    bool wantCaptureMouse() const { return hoveredNode_ != nullptr || pressedNode_ != nullptr; }
     DragPayload& dragPayload() { return dragPayload_; }
     bool isDragging() const { return dragPayload_.active; }
 
