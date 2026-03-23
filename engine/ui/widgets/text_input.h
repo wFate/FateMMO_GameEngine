@@ -18,6 +18,7 @@ public:
     std::string text;
     std::string placeholder;
     int maxLength = 0;
+    bool masked = false;
     int cursorPos = 0;
     UITextCallback onSubmit;
 };

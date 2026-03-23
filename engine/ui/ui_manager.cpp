@@ -31,6 +31,11 @@
 #include "engine/ui/widgets/shop_panel.h"
 #include "engine/ui/widgets/bank_panel.h"
 #include "engine/ui/widgets/teleporter_panel.h"
+#include "engine/ui/widgets/image_box.h"
+#include "engine/ui/widgets/buff_bar.h"
+#include "engine/ui/widgets/boss_hp_bar.h"
+#include "engine/ui/widgets/confirm_dialog.h"
+#include "engine/ui/widgets/notification_toast.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -320,12 +325,30 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         input->text = j.value("text", "");
         input->placeholder = j.value("placeholder", "");
         input->maxLength = j.value("maxLength", 0);
+        input->masked = j.value("masked", false);
         node = std::move(input);
     }
     else if (type == "scroll_view") {
         auto sv = std::make_unique<ScrollView>(id);
         sv->scrollSpeed = j.value("scrollSpeed", 30.0f);
         node = std::move(sv);
+    }
+    else if (type == "image_box") {
+        auto img = std::make_unique<ImageBox>(id);
+        img->textureKey = j.value("textureKey", "");
+        std::string fm = j.value("fitMode", "fit");
+        img->fitMode = (fm == "stretch") ? ImageFitMode::Stretch : ImageFitMode::Fit;
+        if (j.contains("tint") && j["tint"].is_array()) {
+            auto& c = j["tint"];
+            img->tint = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(),
+                         c.size() >= 4 ? c[3].get<float>() : 1.0f};
+        }
+        if (j.contains("sourceRect") && j["sourceRect"].is_array() && j["sourceRect"].size() >= 4) {
+            auto& r = j["sourceRect"];
+            img->sourceRect = {r[0].get<float>(), r[1].get<float>(),
+                               r[2].get<float>(), r[3].get<float>()};
+        }
+        node = std::move(img);
     }
     else if (type == "progress_bar") {
         auto bar = std::make_unique<ProgressBar>(id);
@@ -490,6 +513,39 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     }
     else if (type == "teleporter_panel") {
         node = std::make_unique<TeleporterPanel>(id);
+    }
+    else if (type == "buff_bar") {
+        auto bb = std::make_unique<BuffBar>(id);
+        bb->iconSize   = j.value("iconSize", 24.0f);
+        bb->spacing    = j.value("spacing", 3.0f);
+        bb->maxVisible = j.value("maxVisible", 12);
+        node = std::move(bb);
+    }
+    else if (type == "boss_hp_bar") {
+        auto bh = std::make_unique<BossHPBar>(id);
+        bh->bossName   = j.value("bossName", "");
+        bh->barHeight  = j.value("barHeight", 20.0f);
+        bh->barPadding = j.value("barPadding", 12.0f);
+        node = std::move(bh);
+    }
+    else if (type == "confirm_dialog") {
+        auto cd = std::make_unique<ConfirmDialog>(id);
+        cd->message       = j.value("message", "Are you sure?");
+        cd->confirmText   = j.value("confirmText", "Confirm");
+        cd->cancelText    = j.value("cancelText", "Cancel");
+        cd->buttonWidth   = j.value("buttonWidth", 100.0f);
+        cd->buttonHeight  = j.value("buttonHeight", 32.0f);
+        cd->buttonSpacing = j.value("buttonSpacing", 16.0f);
+        node = std::move(cd);
+    }
+    else if (type == "notification_toast") {
+        auto nt = std::make_unique<NotificationToast>(id);
+        nt->toastHeight  = j.value("toastHeight", 28.0f);
+        nt->toastSpacing = j.value("toastSpacing", 4.0f);
+        nt->fadeInTime   = j.value("fadeInTime", 0.3f);
+        nt->fadeOutTime  = j.value("fadeOutTime", 0.5f);
+        nt->maxToasts    = j.value("maxToasts", 5);
+        node = std::move(nt);
     }
     else {
         node = std::make_unique<UINode>(id, type);

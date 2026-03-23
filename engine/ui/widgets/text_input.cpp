@@ -77,7 +77,11 @@ void TextInput::render(SpriteBatch& batch, SDFText& sdf) {
     float textPadding = 6.0f;
     float textY = rect.y + (rect.h - fontSize) * 0.5f;
 
-    const std::string& displayText = text.empty() ? placeholder : text;
+    std::string maskedText;
+    if (masked && !text.empty()) {
+        maskedText = std::string(text.size(), '*');
+    }
+    const std::string& displayText = text.empty() ? placeholder : (masked ? maskedText : text);
     Color tc = text.empty() ? Color(0.5f, 0.5f, 0.5f, style.opacity) : style.textColor;
     tc.a *= style.opacity;
 
@@ -85,7 +89,9 @@ void TextInput::render(SpriteBatch& batch, SDFText& sdf) {
         sdf.drawScreen(batch, displayText, {rect.x + textPadding, textY}, fontSize, tc, d + 0.2f);
 
     if (focused_) {
-        std::string beforeCursor = text.substr(0, cursorPos);
+        std::string beforeCursor = masked
+            ? std::string(cursorPos, '*')
+            : text.substr(0, cursorPos);
         Vec2 cursorOffset = sdf.measure(beforeCursor, fontSize);
         float cx = rect.x + textPadding + cursorOffset.x;
         batch.drawRect({cx + 0.5f, rect.y + rect.h * 0.5f},

@@ -11,6 +11,11 @@
 #include "engine/ui/widgets/slot_grid.h"
 #include "engine/ui/widgets/slot.h"
 #include "engine/ui/widgets/scroll_view.h"
+#include "engine/ui/widgets/image_box.h"
+#include "engine/ui/widgets/buff_bar.h"
+#include "engine/ui/widgets/boss_hp_bar.h"
+#include "engine/ui/widgets/confirm_dialog.h"
+#include "engine/ui/widgets/notification_toast.h"
 #include "engine/ui/widgets/player_info_block.h"
 #include "engine/ui/widgets/skill_arc.h"
 #include "engine/ui/widgets/dpad.h"
@@ -131,11 +136,26 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             if (!w->icon.empty())   j["icon"] = w->icon;
         }
     }
+    else if (type == "image_box") {
+        if (auto* w = dynamic_cast<const ImageBox*>(node)) {
+            if (!w->textureKey.empty()) j["textureKey"] = w->textureKey;
+            j["fitMode"] = (w->fitMode == ImageFitMode::Stretch) ? "stretch" : "fit";
+            if (w->tint.r != 1.0f || w->tint.g != 1.0f || w->tint.b != 1.0f || w->tint.a != 1.0f) {
+                j["tint"] = { w->tint.r, w->tint.g, w->tint.b, w->tint.a };
+            }
+            if (w->sourceRect.x != 0.0f || w->sourceRect.y != 0.0f ||
+                w->sourceRect.w != 1.0f || w->sourceRect.h != 1.0f) {
+                j["sourceRect"] = { w->sourceRect.x, w->sourceRect.y,
+                                    w->sourceRect.w, w->sourceRect.h };
+            }
+        }
+    }
     else if (type == "text_input") {
         if (auto* w = dynamic_cast<const TextInput*>(node)) {
             if (!w->text.empty())        j["text"]        = w->text;
             if (!w->placeholder.empty()) j["placeholder"] = w->placeholder;
             if (w->maxLength != 0)       j["maxLength"]   = w->maxLength;
+            if (w->masked)               j["masked"]      = w->masked;
         }
     }
     else if (type == "progress_bar") {
@@ -269,6 +289,39 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
     else if (type == "skill_panel") {
         if (auto* w = dynamic_cast<const SkillPanel*>(node)) {
             j["activeSetPage"] = w->activeSetPage;
+        }
+    }
+    else if (type == "buff_bar") {
+        if (auto* w = dynamic_cast<const BuffBar*>(node)) {
+            j["iconSize"]   = w->iconSize;
+            j["spacing"]    = w->spacing;
+            j["maxVisible"] = w->maxVisible;
+        }
+    }
+    else if (type == "boss_hp_bar") {
+        if (auto* w = dynamic_cast<const BossHPBar*>(node)) {
+            if (!w->bossName.empty()) j["bossName"] = w->bossName;
+            j["barHeight"]  = w->barHeight;
+            j["barPadding"] = w->barPadding;
+        }
+    }
+    else if (type == "confirm_dialog") {
+        if (auto* w = dynamic_cast<const ConfirmDialog*>(node)) {
+            j["message"]       = w->message;
+            j["confirmText"]   = w->confirmText;
+            j["cancelText"]    = w->cancelText;
+            j["buttonWidth"]   = w->buttonWidth;
+            j["buttonHeight"]  = w->buttonHeight;
+            j["buttonSpacing"] = w->buttonSpacing;
+        }
+    }
+    else if (type == "notification_toast") {
+        if (auto* w = dynamic_cast<const NotificationToast*>(node)) {
+            j["toastHeight"]  = w->toastHeight;
+            j["toastSpacing"] = w->toastSpacing;
+            j["fadeInTime"]   = w->fadeInTime;
+            j["fadeOutTime"]  = w->fadeOutTime;
+            j["maxToasts"]    = w->maxToasts;
         }
     }
 
