@@ -15,8 +15,8 @@ public:
         int quantity = 0;
     };
 
-    TradeSlot mySlots[9];
-    TradeSlot theirSlots[9];
+    TradeSlot mySlots[8];
+    TradeSlot theirSlots[8];
     int myGold = 0;
     int theirGold = 0;
     std::string partnerName;

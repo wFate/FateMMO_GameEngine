@@ -1,9 +1,10 @@
 #pragma once
 #include <cstdint>
 #include <cstddef>
-#include <cassert>
+#include <cstdlib>
 #include <new>
 #include <utility>
+#include "engine/core/logger.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -35,7 +36,10 @@ public:
                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
         if (base_ == MAP_FAILED) base_ = nullptr;
 #endif
-        assert(base_ && "Arena: virtual memory reservation failed");
+        if (!base_) {
+            LOG_FATAL("Arena", "Virtual memory reservation failed (%zu bytes)", reserveSize_);
+            std::abort();
+        }
     }
 
     ~Arena() {

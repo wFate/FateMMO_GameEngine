@@ -64,10 +64,9 @@ struct AuthValidation {
     }
 
     static bool isValidCharacterName(const std::string& s) {
-        if (s.size() < 2 || s.size() > 16) return false;
-        if (s.front() == ' ' || s.back() == ' ') return false;
+        if (s.empty() || s.size() > 10) return false;
         for (char c : s) {
-            if (!std::isalnum(static_cast<unsigned char>(c)) && c != ' ') return false;
+            if (!std::isalnum(static_cast<unsigned char>(c))) return false;
         }
         return true;
     }

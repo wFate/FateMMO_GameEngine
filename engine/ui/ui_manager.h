@@ -47,6 +47,10 @@ public:
     void handleKeyInput(int scancode, bool pressed);
     void handleTextInput(const std::string& text);
 
+    // Set viewport offset for input — subtract from raw mouse position so widget
+    // coordinates (computed in FBO/viewport space) match the mouse coordinates.
+    void setInputOffset(float x, float y) { inputOffsetX_ = x; inputOffsetY_ = y; }
+
     UINode* hoveredNode() const { return hoveredNode_; }
     UINode* focusedNode() const { return focusedNode_; }
     UINode* pressedNode() const { return pressedNode_; }
@@ -76,6 +80,9 @@ private:
     static constexpr float TOOLTIP_DELAY = 0.5f;
 
     UIDataBinding dataBinding_;
+
+    float inputOffsetX_ = 0.0f;
+    float inputOffsetY_ = 0.0f;
 
     UIHotReload hotReload_;
     float hotReloadTimer_ = 0.0f;

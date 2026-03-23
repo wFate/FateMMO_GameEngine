@@ -10,6 +10,18 @@
 #include "engine/ui/widgets/tab_container.h"
 #include "engine/ui/widgets/slot_grid.h"
 #include "engine/ui/widgets/slot.h"
+#include "engine/ui/widgets/scroll_view.h"
+#include "engine/ui/widgets/player_info_block.h"
+#include "engine/ui/widgets/skill_arc.h"
+#include "engine/ui/widgets/dpad.h"
+#include "engine/ui/widgets/menu_button_row.h"
+#include "engine/ui/widgets/chat_ticker.h"
+#include "engine/ui/widgets/exp_bar.h"
+#include "engine/ui/widgets/target_frame.h"
+#include "engine/ui/widgets/left_sidebar.h"
+#include "engine/ui/widgets/inventory_panel.h"
+#include "engine/ui/widgets/status_panel.h"
+#include "engine/ui/widgets/skill_panel.h"
 #include "engine/core/logger.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -179,6 +191,84 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             if (!w->icon.empty())           j["icon"]        = w->icon;
             if (!w->slotType.empty())       j["slotType"]    = w->slotType;
             if (!w->acceptsDragType.empty()) j["acceptsDrag"] = w->acceptsDragType;
+        }
+    }
+    else if (type == "player_info_block") {
+        if (auto* w = dynamic_cast<const PlayerInfoBlock*>(node)) {
+            j["portraitSize"] = w->portraitSize;
+            j["barWidth"]     = w->barWidth;
+            j["barHeight"]    = w->barHeight;
+            j["barSpacing"]   = w->barSpacing;
+        }
+    }
+    else if (type == "skill_arc") {
+        if (auto* w = dynamic_cast<const SkillArc*>(node)) {
+            j["attackButtonSize"] = w->attackButtonSize;
+            j["slotSize"]         = w->slotSize;
+            j["arcRadius"]        = w->arcRadius;
+            j["slotCount"]        = w->slotCount;
+            j["startAngleDeg"]    = w->startAngleDeg;
+            j["endAngleDeg"]      = w->endAngleDeg;
+        }
+    }
+    else if (type == "dpad") {
+        if (auto* w = dynamic_cast<const DPad*>(node)) {
+            j["dpadSize"]       = w->dpadSize;
+            j["deadZoneRadius"] = w->deadZoneRadius;
+            j["opacity"]        = w->opacity;
+        }
+    }
+    else if (type == "menu_button_row") {
+        if (auto* w = dynamic_cast<const MenuButtonRow*>(node)) {
+            j["buttonSize"] = w->buttonSize;
+            j["spacing"]    = w->spacing;
+            if (!w->labels.empty())
+                j["labels"] = nlohmann::json(w->labels);
+        }
+    }
+    else if (type == "chat_ticker") {
+        if (auto* w = dynamic_cast<const ChatTicker*>(node)) {
+            j["scrollSpeed"] = w->scrollSpeed;
+        }
+    }
+    else if (type == "exp_bar") {
+        if (auto* w = dynamic_cast<const EXPBar*>(node)) {
+            j["xp"]        = w->xp;
+            j["xpToLevel"] = w->xpToLevel;
+        }
+    }
+    else if (type == "target_frame") {
+        if (auto* w = dynamic_cast<const TargetFrame*>(node)) {
+            if (!w->targetName.empty())
+                j["targetName"] = w->targetName;
+        }
+    }
+    else if (type == "left_sidebar") {
+        if (auto* w = dynamic_cast<const LeftSidebar*>(node)) {
+            j["buttonSize"] = w->buttonSize;
+            j["spacing"]    = w->spacing;
+            if (!w->panelLabels.empty())
+                j["panelLabels"] = nlohmann::json(w->panelLabels);
+            if (!w->activePanel.empty())
+                j["activePanel"] = w->activePanel;
+        }
+    }
+    else if (type == "inventory_panel") {
+        if (auto* w = dynamic_cast<const InventoryPanel*>(node)) {
+            j["gridColumns"]   = w->gridColumns;
+            j["gridRows"]      = w->gridRows;
+            j["slotSize"]      = w->slotSize;
+            j["equipSlotSize"] = w->equipSlotSize;
+        }
+    }
+    else if (type == "status_panel") {
+        if (auto* w = dynamic_cast<const StatusPanel*>(node)) {
+            (void)w; // layout-only; runtime stats are game-driven
+        }
+    }
+    else if (type == "skill_panel") {
+        if (auto* w = dynamic_cast<const SkillPanel*>(node)) {
+            j["activeSetPage"] = w->activeSetPage;
         }
     }
 

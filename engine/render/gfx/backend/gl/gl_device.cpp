@@ -28,7 +28,22 @@ struct Device::Impl {
     std::unordered_map<uint32_t, uint32_t>              fbTextureHandles; // fbo id -> tex handle id
     std::unordered_map<uint32_t, PipelineDesc>          pipelines;      // id -> desc
     std::unordered_map<uint32_t, GLuint>                pipelineVAOs;   // id -> GL VAO
-    std::unordered_map<uint64_t, int>                   uniformCache;   // key -> location
+    // Uniform location cache keyed by (program, name) to avoid hash collisions
+    struct UniformKey {
+        GLuint program;
+        std::string name;
+        bool operator==(const UniformKey& o) const {
+            return program == o.program && name == o.name;
+        }
+    };
+    struct UniformKeyHash {
+        size_t operator()(const UniformKey& k) const {
+            size_t h = std::hash<GLuint>{}(k.program);
+            h ^= std::hash<std::string>{}(k.name) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            return h;
+        }
+    };
+    std::unordered_map<UniformKey, int, UniformKeyHash> uniformCache;
 
     uint32_t allocId() { return nextId++; }
 };
@@ -515,10 +530,7 @@ int Device::getUniformLocation(ShaderHandle shader, const char* name) {
     GLuint prog = resolveGLShader(shader);
     if (!prog) return -1;
 
-    // Build cache key: upper 32 bits = program, lower 32 bits = name hash
-    uint64_t nameHash = std::hash<std::string>{}(name);
-    uint64_t key = (static_cast<uint64_t>(prog) << 32) | (nameHash & 0xFFFFFFFF);
-
+    DeviceImpl::UniformKey key{prog, name};
     auto it = impl_->uniformCache.find(key);
     if (it != impl_->uniformCache.end()) return it->second;
 

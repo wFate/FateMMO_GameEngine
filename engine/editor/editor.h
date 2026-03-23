@@ -148,6 +148,7 @@ public:
 
     void setPostProcessConfig(PostProcessConfig* cfg) { postProcessConfig_ = cfg; }
     void setUIManager(UIManager* mgr) { uiManager_ = mgr; }
+    UIManager* uiManager() const { return uiManager_; }
     UIEditorPanel& uiEditorPanel() { return uiEditorPanel_; }
 
     void setAssetRoot(const std::string& root) { assetRoot_ = root; }

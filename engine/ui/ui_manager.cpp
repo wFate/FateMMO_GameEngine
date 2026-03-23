@@ -587,7 +587,8 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
 
 void UIManager::handleInput() {
     auto& input = Input::instance();
-    Vec2 mousePos = input.mousePosition();
+    Vec2 rawPos = input.mousePosition();
+    Vec2 mousePos = {rawPos.x - inputOffsetX_, rawPos.y - inputOffsetY_};
 
     updateHover(mousePos);
 
@@ -627,7 +628,24 @@ void UIManager::updateHover(const Vec2& mousePos) {
 }
 
 void UIManager::handlePress(const Vec2& mousePos) {
-    UINode* target = hitTest(mousePos);
+    // Iterate screens back-to-front. For each, hit-test and try onPress.
+    // If onPress returns false (non-interactive container), continue to the
+    // next screen so clicks pass through StretchAll root panels to reach
+    // interactive widgets in screens underneath.
+    UINode* target = nullptr;
+    for (int i = static_cast<int>(screenOrder_.size()) - 1; i >= 0; --i) {
+        auto it = screens_.find(screenOrder_[i]);
+        if (it == screens_.end()) continue;
+        UINode* hit = hitTestNode(it->second.get(), mousePos);
+        if (hit) {
+            Vec2 localPos = {mousePos.x - hit->computedRect().x,
+                            mousePos.y - hit->computedRect().y};
+            if (hit->onPress(localPos)) {
+                target = hit;
+                break;
+            }
+        }
+    }
 
     if (target != focusedNode_) {
         if (focusedNode_) focusedNode_->onFocusLost();
@@ -637,12 +655,6 @@ void UIManager::handlePress(const Vec2& mousePos) {
 
     pressedNode_ = target;
     pressStartPos_ = mousePos;
-
-    if (target) {
-        Vec2 localPos = {mousePos.x - target->computedRect().x,
-                        mousePos.y - target->computedRect().y};
-        target->onPress(localPos);
-    }
 }
 
 void UIManager::handleRelease(const Vec2& mousePos) {

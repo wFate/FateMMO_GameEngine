@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/net/packet.h"
 #include <cstdint>
+#include <deque>
 #include <vector>
 
 namespace fate {
@@ -45,7 +46,7 @@ private:
     uint16_t remoteSequence_ = 0;
     bool receivedAny_ = false;
     uint32_t receivedBits_ = 0;
-    std::vector<PendingPacket> pending_;
+    std::deque<PendingPacket> pending_;
     float rtt_ = 0.1f;
 };
 

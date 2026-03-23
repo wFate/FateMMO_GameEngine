@@ -40,6 +40,7 @@
 #include "engine/scene/scene_manager.h"
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
+#include "engine/ui/ui_serializer.h"
 
 #include "engine/ecs/component_meta.h"
 
@@ -318,7 +319,7 @@ void Editor::drawSceneGridShader(Camera* camera) {
     gridShader_.setMat4("u_inverseVP", invVP);
     gridShader_.setFloat("u_gridSize", gridSize_);
     gridShader_.setFloat("u_zoom", camera->zoom());
-    gridShader_.setVec4("u_gridColor", 1.0f, 1.0f, 1.0f, 0.12f);
+    gridShader_.setVec4("u_gridColor", 1.0f, 1.0f, 1.0f, 0.2f);
     gridShader_.setVec2("u_cameraPos", camera->position());
 
     // Additive/transparent blend for grid overlay
@@ -369,6 +370,27 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     // UI editor panels (hierarchy tree + inspector)
     if (uiManager_) {
         uiEditorPanel_.draw(*uiManager_);
+    }
+
+    // Draw selection outline around selected UI widget in the viewport
+    if (uiManager_) {
+        auto* selNode = uiEditorPanel_.selectedNode();
+        if (selNode && selNode->visible()) {
+            const Rect& r = selNode->computedRect();
+            float vpX = viewportPos_.x;
+            float vpY = viewportPos_.y;
+            ImVec2 tl(vpX + r.x, vpY + r.y);
+            ImVec2 br(vpX + r.x + r.w, vpY + r.y + r.h);
+            auto* dl = ImGui::GetForegroundDrawList();
+            dl->AddRect(tl, br, IM_COL32(0, 255, 200, 200), 0.0f, 0, 2.0f);
+            // Corner handles (small squares at corners)
+            float hs = 4.0f;
+            ImU32 handleCol = IM_COL32(255, 255, 255, 220);
+            dl->AddRectFilled(ImVec2(tl.x - hs, tl.y - hs), ImVec2(tl.x + hs, tl.y + hs), handleCol);
+            dl->AddRectFilled(ImVec2(br.x - hs, tl.y - hs), ImVec2(br.x + hs, tl.y + hs), handleCol);
+            dl->AddRectFilled(ImVec2(tl.x - hs, br.y - hs), ImVec2(tl.x + hs, br.y + hs), handleCol);
+            dl->AddRectFilled(ImVec2(br.x - hs, br.y - hs), ImVec2(br.x + hs, br.y + hs), handleCol);
+        }
     }
 
     // Post-process config panel
@@ -3801,16 +3823,32 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     if (ctrl && scancode == SDL_SCANCODE_Z && !shift) {
         UndoSystem::instance().undo(world);
         clearSelection();
+        if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
     }
     // Ctrl+Y or Ctrl+Shift+Z = Redo
     if ((ctrl && scancode == SDL_SCANCODE_Y) ||
         (ctrl && shift && scancode == SDL_SCANCODE_Z)) {
         UndoSystem::instance().redo(world);
         clearSelection();
+        if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
     }
     // Ctrl+S = Save current scene
     if (ctrl && scancode == SDL_SCANCODE_S && !currentScenePath_.empty()) {
         saveScene(world, currentScenePath_);
+    }
+    // Also save the focused UI screen if a UI widget is selected
+    if (ctrl && scancode == SDL_SCANCODE_S) {
+        auto& uiPanel = uiEditorPanel_;
+        auto* selNode = uiPanel.selectedNode();
+        if (selNode && !uiPanel.selectedScreenId().empty() && uiManager_) {
+            std::string screenId = uiPanel.selectedScreenId();
+            auto* root = uiManager_->getScreen(screenId);
+            if (root) {
+                std::string path = "assets/ui/screens/" + screenId + ".json";
+                UISerializer::saveToFile(path, screenId, root);
+                LOG_INFO("Editor", "Saved UI screen: %s", path.c_str());
+            }
+        }
     }
     // Ctrl+D = Duplicate
     if (ctrl && scancode == SDL_SCANCODE_D && selectedEntity_) {

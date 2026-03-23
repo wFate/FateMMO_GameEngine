@@ -154,6 +154,14 @@ void AuthClient::doAuth(const std::string& host, uint16_t port,
         return;
     }
 
+    // Enforce TLS 1.2+ and restrict to AEAD cipher suites
+    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+    SSL_CTX_set_options(ctx, SSL_OP_NO_COMPRESSION);
+    SSL_CTX_set_cipher_list(ctx,
+        "ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS");
+    SSL_CTX_set_ciphersuites(ctx,
+        "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256");
+
 #ifdef FATE_DEV_TLS
     SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
 #endif

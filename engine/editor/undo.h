@@ -136,6 +136,20 @@ struct CompoundCommand : UndoCommand {
     bool empty() const { return commands.empty(); }
 };
 
+// UI widget property change (stores full screen JSON snapshot)
+class UIManager; // forward decl
+struct UIPropertyCommand : UndoCommand {
+    std::string screenId;
+    std::string oldJson, newJson;
+    std::string nodeId;
+    std::string desc;
+    UIManager* uiMgr = nullptr;
+
+    void undo(World* w) override;
+    void redo(World* w) override;
+    std::string description() const override { return desc; }
+};
+
 // Undo/Redo stack
 class UndoSystem {
 public:

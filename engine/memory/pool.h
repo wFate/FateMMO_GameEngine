@@ -2,8 +2,9 @@
 #include "engine/memory/arena.h"
 #include <cstdint>
 #include <cstddef>
-#include <cassert>
+#include <cstdlib>
 #include <cstring>
+#include "engine/core/logger.h"
 
 namespace fate {
 
@@ -23,7 +24,10 @@ public:
         activeCount_ = 0;
 
         memory_ = static_cast<uint8_t*>(arena.push(blockSize_ * blockCount_, 16));
-        assert(memory_ && "PoolAllocator: arena allocation failed");
+        if (!memory_) {
+            LOG_FATAL("Pool", "Arena allocation failed (%zu x %zu bytes)", blockCount, blockSize_);
+            std::abort();
+        }
 
         // Build free list — each free block stores pointer to next free block
         freeList_ = nullptr;
