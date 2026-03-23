@@ -36,6 +36,7 @@
 #include "engine/ui/widgets/boss_hp_bar.h"
 #include "engine/ui/widgets/confirm_dialog.h"
 #include "engine/ui/widgets/notification_toast.h"
+#include "engine/ui/widgets/checkbox.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -546,6 +547,14 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         nt->fadeOutTime  = j.value("fadeOutTime", 0.5f);
         nt->maxToasts    = j.value("maxToasts", 5);
         node = std::move(nt);
+    }
+    else if (type == "checkbox") {
+        auto cb = std::make_unique<Checkbox>(id);
+        cb->checked = j.value("checked", false);
+        cb->label = j.value("label", "");
+        cb->boxSize = j.value("boxSize", 16.0f);
+        cb->spacing = j.value("spacing", 6.0f);
+        node = std::move(cb);
     }
     else {
         node = std::make_unique<UINode>(id, type);

@@ -16,6 +16,7 @@
 #include "engine/ui/widgets/boss_hp_bar.h"
 #include "engine/ui/widgets/confirm_dialog.h"
 #include "engine/ui/widgets/notification_toast.h"
+#include "engine/ui/widgets/checkbox.h"
 #include "engine/ui/widgets/player_info_block.h"
 #include "engine/ui/widgets/skill_arc.h"
 #include "engine/ui/widgets/dpad.h"
@@ -322,6 +323,14 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["fadeInTime"]   = w->fadeInTime;
             j["fadeOutTime"]  = w->fadeOutTime;
             j["maxToasts"]    = w->maxToasts;
+        }
+    }
+    else if (type == "checkbox") {
+        if (auto* w = dynamic_cast<const Checkbox*>(node)) {
+            if (w->checked) j["checked"] = w->checked;
+            if (!w->label.empty()) j["label"] = w->label;
+            if (w->boxSize != 16.0f) j["boxSize"] = w->boxSize;
+            if (w->spacing != 6.0f) j["spacing"] = w->spacing;
         }
     }
 
