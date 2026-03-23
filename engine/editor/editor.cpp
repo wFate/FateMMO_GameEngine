@@ -3620,8 +3620,6 @@ void Editor::drawInspector() {
                 selectedEntity_->addComponent<QuestMarkerComponent>();
             if (!selectedEntity_->hasComponent<ShopComponent>() && ImGui::MenuItem("Shop"))
                 selectedEntity_->addComponent<ShopComponent>();
-            if (!selectedEntity_->hasComponent<SkillTrainerComponent>() && ImGui::MenuItem("Skill Trainer"))
-                selectedEntity_->addComponent<SkillTrainerComponent>();
             if (!selectedEntity_->hasComponent<BankerComponent>() && ImGui::MenuItem("Banker"))
                 selectedEntity_->addComponent<BankerComponent>();
             if (!selectedEntity_->hasComponent<GuildNPCComponent>() && ImGui::MenuItem("Guild NPC"))
