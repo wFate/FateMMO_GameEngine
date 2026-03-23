@@ -26,6 +26,7 @@ public:
     bool hasBank = false;
     bool hasTeleporter = false;
     bool hasGuild = false;
+    bool hasDungeon = false;
 
     // Quest data
     struct QuestEntry {
@@ -51,6 +52,7 @@ public:
     std::function<void(uint32_t npcId)> onOpenBank;
     std::function<void(uint32_t npcId)> onOpenTeleporter;
     std::function<void(uint32_t npcId)> onOpenGuildCreation;
+    std::function<void(uint32_t npcId)> onOpenDungeon;
     std::function<void(uint32_t questId)> onQuestAccept;
     std::function<void(uint32_t questId)> onQuestComplete;
     std::function<void(uint32_t nodeId)> onStoryChoice;

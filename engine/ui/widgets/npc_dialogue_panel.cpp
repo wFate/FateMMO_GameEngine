@@ -222,6 +222,7 @@ static void renderFunctionalMode(SpriteBatch& batch, SDFText& sdf,
                                   const std::string& greeting,
                                   bool hasShop, bool hasBank,
                                   bool hasTeleporter, bool hasGuild,
+                                  bool hasDungeon,
                                   const std::vector<NpcDialoguePanel::QuestEntry>& quests,
                                   int expandedQuestIndex) {
     // Title bar
@@ -260,6 +261,7 @@ static void renderFunctionalMode(SpriteBatch& batch, SDFText& sdf,
         {"Bank",     hasBank},
         {"Teleport", hasTeleporter},
         {"Guild",    hasGuild},
+        {"Dungeon",  hasDungeon},
     };
 
     for (const auto& role : roles) {
@@ -405,7 +407,7 @@ void NpcDialoguePanel::render(SpriteBatch& batch, SDFText& sdf) {
     } else {
         renderFunctionalMode(batch, sdf, rect, d, npcName, greeting,
                               hasShop, hasBank, hasTeleporter, hasGuild,
-                              quests, expandedQuestIndex_);
+                              hasDungeon, quests, expandedQuestIndex_);
     }
 
     renderChildren(batch, sdf);
@@ -512,7 +514,7 @@ bool NpcDialoguePanel::onPress(const Vec2& localPos) {
 
     // Role buttons
     struct RoleInfo { bool show; };
-    RoleInfo roles[] = { {hasShop}, {hasBank}, {hasTeleporter}, {hasGuild} };
+    RoleInfo roles[] = { {hasShop}, {hasBank}, {hasTeleporter}, {hasGuild}, {hasDungeon} };
 
     int roleIndex = 0;
     for (const auto& role : roles) {
@@ -523,6 +525,7 @@ bool NpcDialoguePanel::onPress(const Vec2& localPos) {
                 case 1: if (onOpenBank)          onOpenBank(npcId);         break;
                 case 2: if (onOpenTeleporter)    onOpenTeleporter(npcId);   break;
                 case 3: if (onOpenGuildCreation) onOpenGuildCreation(npcId); break;
+                case 4: if (onOpenDungeon) onOpenDungeon(npcId); break;
             }
             return true;
         }
