@@ -34,6 +34,10 @@ void ConnectionManager::removeClient(uint16_t clientId) {
     auto it = clients_.find(clientId);
     if (it != clients_.end()) {
         addressToClient_.erase(it->second.address);
+        if (it->second.playerEntityId != 0) {
+            entityToClient_.erase(it->second.playerEntityId);
+            entityToClientLow32_.erase(static_cast<uint32_t>(it->second.playerEntityId));
+        }
         clients_.erase(it);
     }
 }
@@ -42,6 +46,33 @@ ClientConnection* ConnectionManager::findById(uint16_t clientId) {
     auto it = clients_.find(clientId);
     if (it == clients_.end()) return nullptr;
     return &it->second;
+}
+
+ClientConnection* ConnectionManager::findByEntity(uint64_t playerEntityId) {
+    auto it = entityToClient_.find(playerEntityId);
+    return it != entityToClient_.end() ? findById(it->second) : nullptr;
+}
+
+const ClientConnection* ConnectionManager::findByEntity(uint64_t playerEntityId) const {
+    auto it = entityToClient_.find(playerEntityId);
+    if (it == entityToClient_.end()) return nullptr;
+    auto cit = clients_.find(it->second);
+    return cit != clients_.end() ? &cit->second : nullptr;
+}
+
+ClientConnection* ConnectionManager::findByEntityLow32(uint32_t entityId) {
+    auto it = entityToClientLow32_.find(entityId);
+    return it != entityToClientLow32_.end() ? findById(it->second) : nullptr;
+}
+
+void ConnectionManager::mapEntity(uint64_t playerEntityId, uint16_t clientId) {
+    entityToClient_[playerEntityId] = clientId;
+    entityToClientLow32_[static_cast<uint32_t>(playerEntityId)] = clientId;
+}
+
+void ConnectionManager::unmapEntity(uint64_t playerEntityId) {
+    entityToClient_.erase(playerEntityId);
+    entityToClientLow32_.erase(static_cast<uint32_t>(playerEntityId));
 }
 
 ClientConnection* ConnectionManager::findByAddress(const NetAddress& address) {

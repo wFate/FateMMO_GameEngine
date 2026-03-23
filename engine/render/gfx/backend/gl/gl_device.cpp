@@ -530,7 +530,7 @@ int Device::getUniformLocation(ShaderHandle shader, const char* name) {
     GLuint prog = resolveGLShader(shader);
     if (!prog) return -1;
 
-    DeviceImpl::UniformKey key{prog, name};
+    Device::Impl::UniformKey key{prog, name};
     auto it = impl_->uniformCache.find(key);
     if (it != impl_->uniformCache.end()) return it->second;
 

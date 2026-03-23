@@ -1,5 +1,6 @@
 #include "engine/asset/loaders.h"
 #include "engine/render/texture.h"
+#include "engine/render/gfx/types.h"
 #include "engine/render/shader.h"
 #include "engine/core/logger.h"
 #include <nlohmann/json.hpp>
@@ -47,6 +48,144 @@ static void textureDestroy(void* data) {
     delete static_cast<Texture*>(data);
 }
 
+// ---- Async decode/upload pipeline for textures ----------------------------
+
+// Intermediate data produced by fiber decode, consumed by main-thread upload.
+struct DecodedTexture {
+    std::vector<unsigned char> data;
+    int width = 0, height = 0;
+    int channels = 0;           // 0 for compressed formats
+    bool compressed = false;
+    gfx::TextureFormat format = gfx::TextureFormat::RGBA8;
+};
+
+// KTX1 header (duplicated here to keep decode self-contained on the fiber)
+static constexpr uint8_t ASYNC_KTX1_ID[12] = {
+    0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A
+};
+struct KTXHeaderLocal {
+    uint8_t  identifier[12];
+    uint32_t endianness;
+    uint32_t glType;
+    uint32_t glTypeSize;
+    uint32_t glFormat;
+    uint32_t glInternalFormat;
+    uint32_t glBaseInternalFormat;
+    uint32_t pixelWidth;
+    uint32_t pixelHeight;
+    uint32_t pixelDepth;
+    uint32_t numberOfArrayElements;
+    uint32_t numberOfFaces;
+    uint32_t numberOfMipmapLevels;
+    uint32_t bytesOfKeyValueData;
+};
+
+static gfx::TextureFormat asyncGLFmtToTexFmt(uint32_t glFmt) {
+    switch (glFmt) {
+        case 0x9278: return gfx::TextureFormat::ETC2_RGBA8;
+        case 0x93B0: return gfx::TextureFormat::ASTC_4x4_RGBA;
+        case 0x93B7: return gfx::TextureFormat::ASTC_8x8_RGBA;
+        default:     return gfx::TextureFormat::RGBA8;
+    }
+}
+
+// Fiber-safe: decodes image from disk (no GPU calls).
+static void* textureDecodeAsync(const std::string& path) {
+    namespace fs = std::filesystem;
+    std::string actualPath = path;
+
+    // On mobile, prefer .ktx compressed variant
+#ifdef FATEMMO_MOBILE
+    if (path.size() < 4 || path.substr(path.size() - 4) != ".ktx") {
+        auto ktxPath = (fs::path(path).parent_path() / fs::path(path).stem()).string() + ".ktx";
+        if (fs::exists(ktxPath)) actualPath = ktxPath;
+    }
+#endif
+
+    bool isKtx = actualPath.size() >= 4 &&
+                 actualPath.substr(actualPath.size() - 4) == ".ktx";
+
+    if (isKtx) {
+        // ---- KTX path: read header + compressed blob ----
+        std::ifstream file(actualPath, std::ios::binary);
+        if (!file.is_open()) return nullptr;
+
+        KTXHeaderLocal hdr{};
+        file.read(reinterpret_cast<char*>(&hdr), sizeof(KTXHeaderLocal));
+        if (!file || std::memcmp(hdr.identifier, ASYNC_KTX1_ID, 12) != 0) return nullptr;
+        if (hdr.endianness != 0x04030201) return nullptr;
+        if (hdr.glType != 0 || hdr.glFormat != 0) return nullptr;
+
+        gfx::TextureFormat fmt = asyncGLFmtToTexFmt(hdr.glInternalFormat);
+        if (!gfx::isCompressedFormat(fmt)) return nullptr;
+
+        // GPU capability check (read-only singleton, safe from any thread)
+        auto& caps = GPUCompressedFormats::instance();
+        if (fmt == gfx::TextureFormat::ETC2_RGBA8 && !caps.etc2) return nullptr;
+        if ((fmt == gfx::TextureFormat::ASTC_4x4_RGBA ||
+             fmt == gfx::TextureFormat::ASTC_8x8_RGBA) && !caps.astc) return nullptr;
+
+        file.seekg(hdr.bytesOfKeyValueData, std::ios::cur);
+
+        uint32_t imageSize = 0;
+        file.read(reinterpret_cast<char*>(&imageSize), 4);
+        if (!file || imageSize == 0 || imageSize > 64 * 1024 * 1024) return nullptr;
+
+        auto* decoded = new DecodedTexture();
+        decoded->data.resize(imageSize);
+        file.read(reinterpret_cast<char*>(decoded->data.data()), imageSize);
+        if (!file) { delete decoded; return nullptr; }
+
+        decoded->width = static_cast<int>(hdr.pixelWidth);
+        decoded->height = static_cast<int>(hdr.pixelHeight);
+        decoded->compressed = true;
+        decoded->format = fmt;
+        return decoded;
+    }
+
+    // ---- Regular image path: stbi_load (CPU decode) ----
+#ifdef FATEMMO_METAL
+    stbi_set_flip_vertically_on_load_thread(0);
+#else
+    stbi_set_flip_vertically_on_load_thread(1);
+#endif
+    int w, h, ch;
+    unsigned char* pixels = stbi_load(actualPath.c_str(), &w, &h, &ch, 4);
+    if (!pixels) return nullptr;
+
+    auto* decoded = new DecodedTexture();
+    decoded->width = w;
+    decoded->height = h;
+    decoded->channels = 4;
+    decoded->data.assign(pixels, pixels + (w * h * 4));
+    stbi_image_free(pixels);
+    return decoded;
+}
+
+// Main-thread only: creates GPU texture from decoded data, consumes decoded.
+static void* textureUploadToGPU(void* raw) {
+    auto* decoded = static_cast<DecodedTexture*>(raw);
+
+    auto* tex = new Texture();
+    bool ok = false;
+    if (decoded->compressed) {
+        ok = tex->loadFromMemoryCompressed(
+            decoded->data.data(), decoded->data.size(),
+            decoded->width, decoded->height, decoded->format);
+    } else {
+        ok = tex->loadFromMemory(
+            decoded->data.data(), decoded->width, decoded->height, decoded->channels);
+    }
+
+    delete decoded;
+    if (!ok) { delete tex; return nullptr; }
+    return tex;
+}
+
+static void textureDestroyDecoded(void* raw) {
+    delete static_cast<DecodedTexture*>(raw);
+}
+
 AssetLoader makeTextureLoader() {
     return {
         .kind = AssetKind::Texture,
@@ -54,7 +193,10 @@ AssetLoader makeTextureLoader() {
         .reload = textureReload,
         .validate = textureValidate,
         .destroy = textureDestroy,
-        .extensions = {".png", ".jpg", ".bmp", ".ktx"}
+        .extensions = {".png", ".jpg", ".bmp", ".ktx"},
+        .decode = textureDecodeAsync,
+        .upload = textureUploadToGPU,
+        .destroyDecoded = textureDestroyDecoded,
     };
 }
 
@@ -109,7 +251,8 @@ AssetLoader makeJsonLoader() {
         .reload = jsonReload,
         .validate = jsonValidate,
         .destroy = jsonDestroy,
-        .extensions = {".json"}
+        .extensions = {".json"},
+        .decode = jsonLoad,  // JSON is CPU-only; decode result IS the final asset
     };
 }
 

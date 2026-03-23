@@ -1,10 +1,10 @@
 #pragma once
 #include "engine/render/gfx/types.h"
+#include "engine/asset/asset_handle.h"
 #include <string>
 #include <unordered_map>
 #include <memory>
 #include <cstdint>
-#include <mutex>
 #include <vector>
 
 namespace fate {
@@ -27,6 +27,8 @@ public:
     bool loadFromFile(const std::string& path);
     bool reloadFromFile(const std::string& path);
     bool loadFromMemory(const unsigned char* data, int width, int height, int channels);
+    bool loadFromMemoryCompressed(const unsigned char* data, size_t dataSize,
+                                  int width, int height, gfx::TextureFormat fmt);
     bool loadFromKTX(const std::string& path);
 
     void bind(unsigned int slot = 0) const;
@@ -77,15 +79,7 @@ public:
     size_t entryCount() const { return cache_.size(); }
     void advanceFrame() { ++frameCounter_; }
 
-    // Async loading: decode on worker, upload on main thread
-    struct PendingUpload {
-        std::string path;
-        std::vector<unsigned char> pixelData;
-        int width = 0;
-        int height = 0;
-        int channels = 0;
-    };
-
+    // Async loading: decode on fiber job, GPU upload on main thread via AssetRegistry
     void requestAsyncLoad(const std::string& path);
     void processUploads(int maxPerFrame = 2);
     bool hasPendingLoads() const;
@@ -102,8 +96,8 @@ private:
     size_t estimatedVRAM_ = 0;
     uint64_t frameCounter_ = 0;
 
-    std::mutex uploadMutex_;
-    std::vector<PendingUpload> pendingUploads_;
+    // Pending async handles awaiting finalization
+    std::vector<std::pair<std::string, AssetHandle>> pendingHandles_;
     std::shared_ptr<Texture> placeholderTexture_;
 
     void ensurePlaceholder();

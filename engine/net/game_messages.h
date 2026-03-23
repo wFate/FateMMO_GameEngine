@@ -839,15 +839,18 @@ struct SvSocketResultMsg {
 struct CmdStatEnchantMsg {
     uint8_t equipSlot = 0;
     uint8_t scrollStatType = 0;
+    std::string scrollItemId;
 
     void write(ByteWriter& w) const {
         w.writeU8(equipSlot);
         w.writeU8(scrollStatType);
+        w.writeString(scrollItemId);
     }
     static CmdStatEnchantMsg read(ByteReader& r) {
         CmdStatEnchantMsg m;
         m.equipSlot      = r.readU8();
         m.scrollStatType = r.readU8();
+        m.scrollItemId   = r.readString();
         return m;
     }
 };

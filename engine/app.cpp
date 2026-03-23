@@ -465,6 +465,7 @@ void App::update() {
     // Process asset reloads unconditionally (hot-reload works while editing)
     elapsedTime_ += deltaTime_;
     AssetRegistry::instance().processReloads(elapsedTime_);
+    AssetRegistry::instance().processAsyncLoads();
 
     onUpdate(deltaTime_);
 

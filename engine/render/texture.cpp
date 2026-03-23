@@ -6,7 +6,6 @@
 #include "engine/core/logger.h"
 #include "engine/asset/asset_registry.h"
 #include "stb_image.h"
-#include <thread>
 #include <fstream>
 #include <cstring>
 #include <filesystem>
@@ -269,6 +268,25 @@ bool Texture::loadFromMemory(const unsigned char* data, int width, int height, i
     return true;
 }
 
+bool Texture::loadFromMemoryCompressed(const unsigned char* data, size_t dataSize,
+                                       int width, int height, gfx::TextureFormat fmt) {
+    width_ = width;
+    height_ = height;
+    format_ = fmt;
+
+    auto& device = gfx::Device::instance();
+    gfxHandle_ = device.createCompressedTexture(width, height, fmt, data, dataSize);
+    if (!gfxHandle_.valid()) {
+        LOG_ERROR("Texture", "createCompressedTexture failed");
+        return false;
+    }
+
+#ifndef FATEMMO_METAL
+    textureId_ = device.resolveGLTexture(gfxHandle_);
+#endif
+    return true;
+}
+
 void Texture::bind(unsigned int slot) const {
 #ifndef FATEMMO_METAL
     glActiveTexture(GL_TEXTURE0 + slot);
@@ -358,60 +376,43 @@ void TextureCache::requestAsyncLoad(const std::string& path) {
     ensurePlaceholder();
     cache_[path] = CacheEntry{placeholderTexture_};
 
-    // Spawn a detached thread to decode the image
-    // (In production, this would use the fiber job system instead)
-    std::thread([this, path]() {
-        int w, h, ch;
-#ifdef FATEMMO_METAL
-        stbi_set_flip_vertically_on_load(false);  // Metal: top-left origin
-#else
-        stbi_set_flip_vertically_on_load(true);   // GL: bottom-left origin
-#endif
-        // stbi_load is thread-safe for different files
-        unsigned char* data = stbi_load(path.c_str(), &w, &h, &ch, 4); // force RGBA
-        if (!data) return;
-
-        PendingUpload upload;
-        upload.path = path;
-        upload.width = w;
-        upload.height = h;
-        upload.channels = 4;
-        upload.pixelData.assign(data, data + (w * h * 4));
-        stbi_image_free(data);
-
-        std::lock_guard<std::mutex> lock(uploadMutex_);
-        pendingUploads_.push_back(std::move(upload));
-    }).detach();
+    // Submit decode to fiber job via AssetRegistry; GPU upload happens in processUploads
+    AssetHandle h = AssetRegistry::instance().loadAsync(path);
+    if (h.valid()) {
+        pendingHandles_.push_back({path, h});
+    }
 }
 
 void TextureCache::processUploads(int maxPerFrame) {
-    std::vector<PendingUpload> batch;
-    {
-        std::lock_guard<std::mutex> lock(uploadMutex_);
-        int count = (std::min)(maxPerFrame, static_cast<int>(pendingUploads_.size()));
-        if (count == 0) return;
-        batch.assign(
-            std::make_move_iterator(pendingUploads_.begin()),
-            std::make_move_iterator(pendingUploads_.begin() + count)
-        );
-        pendingUploads_.erase(pendingUploads_.begin(), pendingUploads_.begin() + count);
-    }
+    // Finalize any completed async decodes (GPU upload on main thread)
+    AssetRegistry::instance().processAsyncLoads(maxPerFrame);
 
-    for (auto& upload : batch) {
-        auto tex = std::make_shared<Texture>();
-        if (tex->loadFromMemory(upload.pixelData.data(), upload.width, upload.height, upload.channels)) {
-            // Replace placeholder entry
-            cache_[upload.path] = CacheEntry{tex};
-            LOG_DEBUG("Texture", "Async uploaded %s (%dx%d)", upload.path.c_str(), upload.width, upload.height);
+    // Check pending handles for newly-ready textures
+    auto it = pendingHandles_.begin();
+    while (it != pendingHandles_.end()) {
+        auto& reg = AssetRegistry::instance();
+        if (reg.isReady(it->second)) {
+            Texture* raw = reg.get<Texture>(it->second);
+            if (raw) {
+                // Non-owning shared_ptr — AssetRegistry owns the lifetime
+                auto tex = std::shared_ptr<Texture>(raw, [](Texture*){});
+                size_t bytes = gfx::estimateTextureBytes(tex->width(), tex->height(), tex->format());
+                cache_[it->first] = {tex, frameCounter_, bytes};
+                estimatedVRAM_ += bytes;
+                LOG_DEBUG("Texture", "Async uploaded %s (%dx%d)",
+                          it->first.c_str(), raw->width(), raw->height());
+            }
+            it = pendingHandles_.erase(it);
         } else {
-            LOG_ERROR("Texture", "Async upload failed for %s", upload.path.c_str());
+            ++it;
         }
     }
+
+    evictIfOverBudget();
 }
 
 bool TextureCache::hasPendingLoads() const {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(uploadMutex_));
-    return !pendingUploads_.empty();
+    return !pendingHandles_.empty();
 }
 
 } // namespace fate

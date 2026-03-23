@@ -1,7 +1,9 @@
 #include "engine/asset/asset_registry.h"
+#include "engine/job/job_system.h"
 #include "engine/core/logger.h"
 #include <algorithm>
 #include <filesystem>
+#include <thread>
 
 namespace fate {
 
@@ -50,9 +52,9 @@ AssetHandle AssetRegistry::load(const std::string& path) {
     slot.path = canon;
     slot.kind = loader->kind;
     slot.data = loader->load(canon);
-    slot.loaded = (slot.data != nullptr);
+    slot.state = slot.data ? AssetState::Ready : AssetState::Failed;
 
-    if (!slot.loaded) {
+    if (slot.state != AssetState::Ready) {
         LOG_ERROR("AssetRegistry", "Failed to load: %s", canon.c_str());
         slot.generation++; // invalidate any handle already issued to this index
         freeList_.push_back(idx);
@@ -133,6 +135,125 @@ void AssetRegistry::processReloads(float currentTime) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Async loading via fiber jobs
+// ---------------------------------------------------------------------------
+
+void AssetRegistry::asyncDecodeJobFunc(void* param) {
+    auto* req = static_cast<AsyncDecodeRequest*>(param);
+    req->result = req->decode(req->path);
+    req->failed = (req->result == nullptr);
+    req->complete.store(true, std::memory_order_release);
+}
+
+AssetHandle AssetRegistry::loadAsync(const std::string& path) {
+    std::string canon = canonicalizePath(path);
+
+    // Already loaded or in-flight?
+    auto it = pathToIndex_.find(canon);
+    if (it != pathToIndex_.end()) {
+        auto& slot = slots_[it->second];
+        return AssetHandle::make(it->second, slot.generation);
+    }
+
+    // Find loader by extension
+    const AssetLoader* loader = findLoader(canon);
+    if (!loader) {
+        LOG_ERROR("AssetRegistry", "No loader for: %s", canon.c_str());
+        return AssetHandle{};
+    }
+
+    // If loader has no async decode, fall back to synchronous load
+    if (!loader->decode) {
+        return load(canon);
+    }
+
+    // Allocate slot in Loading state
+    uint32_t idx = allocSlot();
+    auto& slot = slots_[idx];
+    slot.path = canon;
+    slot.kind = loader->kind;
+    slot.state = AssetState::Loading;
+
+    pathToIndex_[canon] = idx;
+
+    // Create async request and submit fiber job
+    auto req = std::make_unique<AsyncDecodeRequest>();
+    req->slotIndex = idx;
+    req->path = canon;
+    req->decode = loader->decode;
+    req->upload = loader->upload;
+    req->destroyDecoded = loader->destroyDecoded;
+
+    auto* rawReq = req.get();
+    activeDecodes_.push_back(std::move(req));
+
+    Job job;
+    job.function = &asyncDecodeJobFunc;
+    job.param = rawReq;
+    JobSystem::instance().submitFireAndForget(&job, 1);
+
+    return AssetHandle::make(idx, slot.generation);
+}
+
+void AssetRegistry::processAsyncLoads(int maxPerFrame) {
+    int processed = 0;
+    auto it = activeDecodes_.begin();
+    while (it != activeDecodes_.end() && processed < maxPerFrame) {
+        auto& req = *it;
+        if (!req->complete.load(std::memory_order_acquire)) {
+            ++it;
+            continue;
+        }
+
+        auto& slot = slots_[req->slotIndex];
+        bool ok = false;
+
+        if (!req->failed) {
+            if (req->upload) {
+                // Main-thread GPU finalize — upload() consumes the decoded data
+                slot.data = req->upload(req->result);
+                ok = (slot.data != nullptr);
+            } else {
+                // No upload step: decoded result IS the final asset
+                slot.data = req->result;
+                ok = true;
+            }
+        }
+
+        if (ok) {
+            slot.state = AssetState::Ready;
+            LOG_DEBUG("AssetRegistry", "Async loaded: %s", slot.path.c_str());
+        } else {
+            LOG_ERROR("AssetRegistry", "Async load failed: %s", slot.path.c_str());
+            // Clean up decoded data if upload failed (decode succeeded but upload didn't)
+            if (!req->failed && req->upload && req->result && req->destroyDecoded) {
+                req->destroyDecoded(req->result);
+            }
+            pathToIndex_.erase(slot.path);
+            slot.state = AssetState::Empty;
+            slot.path.clear();
+            slot.generation++;
+            freeList_.push_back(req->slotIndex);
+        }
+
+        it = activeDecodes_.erase(it);
+        ++processed;
+    }
+}
+
+bool AssetRegistry::isReady(AssetHandle handle) const {
+    if (!handle.valid()) return false;
+    uint32_t idx = handle.index();
+    if (idx >= slots_.size()) return false;
+    auto& slot = slots_[idx];
+    return slot.state == AssetState::Ready && slot.generation == handle.generation();
+}
+
+size_t AssetRegistry::pendingAsyncCount() const {
+    return activeDecodes_.size();
+}
+
 AssetHandle AssetRegistry::find(const std::string& path) const {
     std::string canon = canonicalizePath(path);
     auto it = pathToIndex_.find(canon);
@@ -141,13 +262,29 @@ AssetHandle AssetRegistry::find(const std::string& path) const {
 }
 
 void AssetRegistry::clear() {
+    // Drain in-flight async decodes before destroying slots
+    for (auto& req : activeDecodes_) {
+        while (!req->complete.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+        if (req->result) {
+            if (req->upload && req->destroyDecoded) {
+                req->destroyDecoded(req->result);
+            } else if (!req->upload) {
+                const AssetLoader* loader = findLoader(req->path);
+                if (loader) loader->destroy(req->result);
+            }
+        }
+    }
+    activeDecodes_.clear();
+
     for (size_t i = 1; i < slots_.size(); ++i) {
         auto& slot = slots_[i];
-        if (slot.loaded && slot.data) {
+        if (slot.state == AssetState::Ready && slot.data) {
             const AssetLoader* loader = findLoader(slot.path);
             if (loader) loader->destroy(slot.data);
             slot.data = nullptr;
-            slot.loaded = false;
+            slot.state = AssetState::Empty;
         }
     }
     slots_.resize(1); // keep slot 0
@@ -164,7 +301,7 @@ void AssetRegistry::clear() {
 size_t AssetRegistry::assetCount() const {
     size_t count = 0;
     for (size_t i = 1; i < slots_.size(); ++i) {
-        if (slots_[i].loaded) ++count;
+        if (slots_[i].state == AssetState::Ready) ++count;
     }
     return count;
 }
@@ -188,7 +325,7 @@ uint32_t AssetRegistry::allocSlot() {
         auto& slot = slots_[idx];
         slot.path.clear();
         slot.data = nullptr;
-        slot.loaded = false;
+        slot.state = AssetState::Empty;
         slot.kind = {};
         return idx;
     }

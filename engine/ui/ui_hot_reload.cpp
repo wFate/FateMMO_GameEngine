@@ -26,7 +26,8 @@ uint64_t UIHotReload::getFileModTime(const std::string& path) {
     try {
         auto ftime = std::filesystem::last_write_time(path);
         return static_cast<uint64_t>(ftime.time_since_epoch().count());
-    } catch (...) {
+    } catch (const std::exception& e) {
+        LOG_WARN("UIHotReload", "getFileModTime failed for %s: %s", path.c_str(), e.what());
         return 0;
     }
 }

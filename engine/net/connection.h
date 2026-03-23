@@ -53,6 +53,11 @@ public:
     void removeClient(uint16_t clientId);
     ClientConnection* findById(uint16_t clientId);
     ClientConnection* findByAddress(const NetAddress& address);
+    ClientConnection* findByEntity(uint64_t playerEntityId);
+    const ClientConnection* findByEntity(uint64_t playerEntityId) const;
+    ClientConnection* findByEntityLow32(uint32_t entityId);
+    void mapEntity(uint64_t playerEntityId, uint16_t clientId);
+    void unmapEntity(uint64_t playerEntityId);
     bool validateToken(const NetAddress& address, uint32_t token);
     void heartbeat(uint16_t clientId, float currentTime);
     std::vector<uint16_t> getTimedOutClients(float currentTime, float timeoutSeconds);
@@ -71,6 +76,8 @@ private:
     size_t maxClients_ = 2000; // default cap to prevent DoS
     std::unordered_map<uint16_t, ClientConnection> clients_;
     std::unordered_map<NetAddress, uint16_t, NetAddressHash> addressToClient_;
+    std::unordered_map<uint64_t, uint16_t> entityToClient_;      // playerEntityId → clientId
+    std::unordered_map<uint32_t, uint16_t> entityToClientLow32_; // lower-32 → clientId (arena interop)
     std::mt19937 rng_{std::random_device{}()};
     uint32_t generateToken();
 };
