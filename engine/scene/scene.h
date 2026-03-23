@@ -60,6 +60,7 @@ public:
         int maxLevel = 99;
         bool pvpEnabled = false;
         bool isDungeon = false;
+        bool isAurora = false;
     };
 
     const Metadata& metadata() const { return metadata_; }
