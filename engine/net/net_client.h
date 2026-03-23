@@ -27,6 +27,13 @@ public:
     void sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId);
     void sendUseConsumable(uint8_t inventorySlot);
     void sendStatEnchant(uint8_t targetSlot, const std::string& scrollItemId);
+    void sendShopBuy(uint32_t npcId, const std::string& itemId, uint16_t quantity);
+    void sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t quantity);
+    void sendBankDepositItem(uint32_t npcId, uint8_t inventorySlot);
+    void sendBankWithdrawItem(uint32_t npcId, uint16_t itemIndex);
+    void sendBankDepositGold(uint32_t npcId, int64_t amount);
+    void sendBankWithdrawGold(uint32_t npcId, int64_t amount);
+    void sendTeleport(uint32_t npcId, uint8_t destinationIndex);
 
     void sendTradeAction(uint8_t action);
     void sendTradeAction(uint8_t action, const std::string& data);
@@ -85,6 +92,8 @@ public:
     std::function<void(const SvBankResultMsg&)> onBankResult;
     std::function<void(const SvSocketResultMsg&)> onSocketResult;
     std::function<void(const SvStatEnchantResultMsg&)> onStatEnchantResult;
+    std::function<void(const SvShopResultMsg&)> onShopResult;
+    std::function<void(const SvTeleportResultMsg&)> onTeleportResult;
     std::function<void(const SvConsumeResultMsg&)> onConsumeResult;
     std::function<void(const SvRankingResultMsg&)> onRankingResult;
     std::function<void(const std::string& reason)> onConnectRejected;

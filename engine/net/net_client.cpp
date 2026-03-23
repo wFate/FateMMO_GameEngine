@@ -520,6 +520,18 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onStatEnchantResult) onStatEnchantResult(msg);
             break;
         }
+        case PacketType::SvShopResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvShopResultMsg::read(payload);
+            if (onShopResult) onShopResult(msg);
+            break;
+        }
+        case PacketType::SvTeleportResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvTeleportResultMsg::read(payload);
+            if (onTeleportResult) onTeleportResult(msg);
+            break;
+        }
         case PacketType::SvConsumeResult: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvConsumeResultMsg::read(payload);
@@ -556,6 +568,78 @@ void NetClient::sendStatEnchant(uint8_t targetSlot, const std::string& scrollIte
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdStatEnchant, w.data(), w.size());
+}
+
+void NetClient::sendShopBuy(uint32_t npcId, const std::string& itemId, uint16_t quantity) {
+    CmdShopBuyMsg msg;
+    msg.npcId = npcId;
+    msg.itemId = itemId;
+    msg.quantity = quantity;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdShopBuy, buf, w.size());
+}
+
+void NetClient::sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t quantity) {
+    CmdShopSellMsg msg;
+    msg.npcId = npcId;
+    msg.inventorySlot = inventorySlot;
+    msg.quantity = quantity;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdShopSell, buf, w.size());
+}
+
+void NetClient::sendBankDepositItem(uint32_t npcId, uint8_t inventorySlot) {
+    CmdBankDepositItemMsg msg;
+    msg.npcId = npcId;
+    msg.inventorySlot = inventorySlot;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBankDepositItem, buf, w.size());
+}
+
+void NetClient::sendBankWithdrawItem(uint32_t npcId, uint16_t itemIndex) {
+    CmdBankWithdrawItemMsg msg;
+    msg.npcId = npcId;
+    msg.itemIndex = itemIndex;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBankWithdrawItem, buf, w.size());
+}
+
+void NetClient::sendBankDepositGold(uint32_t npcId, int64_t amount) {
+    CmdBankDepositGoldMsg msg;
+    msg.npcId = npcId;
+    msg.amount = amount;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBankDepositGold, buf, w.size());
+}
+
+void NetClient::sendBankWithdrawGold(uint32_t npcId, int64_t amount) {
+    CmdBankWithdrawGoldMsg msg;
+    msg.npcId = npcId;
+    msg.amount = amount;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBankWithdrawGold, buf, w.size());
+}
+
+void NetClient::sendTeleport(uint32_t npcId, uint8_t destinationIndex) {
+    CmdTeleportMsg msg;
+    msg.npcId = npcId;
+    msg.destinationIndex = destinationIndex;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdTeleport, buf, w.size());
 }
 
 void NetClient::sendMove(const Vec2& position, const Vec2& velocity, float timestamp) {
