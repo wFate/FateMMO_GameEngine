@@ -1,5 +1,7 @@
 #include "engine/ui/ui_node.h"
 #include "engine/ui/ui_input.h"
+#include "engine/render/sprite_batch.h"
+#include "engine/render/texture.h"
 #include <algorithm>
 
 namespace fate {
@@ -144,6 +146,31 @@ void UINode::computeLayout(const Rect& parentRect) {
         if (child->visible_) {
             child->computeLayout(contentRect);
         }
+    }
+}
+
+void UINode::drawBackground(SpriteBatch& batch, float depth) {
+    const auto& style = resolvedStyle_;
+    const auto& rect = computedRect_;
+
+    // 9-slice textured background (if style specifies a texture)
+    if (!style.backgroundTexture.empty()) {
+        auto tex = TextureCache::instance().get(style.backgroundTexture);
+        if (!tex) tex = TextureCache::instance().load(style.backgroundTexture);
+        if (tex && tex->width() > 0 && tex->height() > 0) {
+            Color tint = (style.backgroundColor.a > 0.0f) ? style.backgroundColor : Color::white();
+            tint.a *= style.opacity;
+            batch.drawNineSlice(tex, rect, style.nineSlice, tint, depth);
+            return;
+        }
+    }
+
+    // Fallback: solid color rect
+    if (style.backgroundColor.a > 0.0f) {
+        Color bg = style.backgroundColor;
+        bg.a *= style.opacity;
+        batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
+                       {rect.w, rect.h}, bg, depth);
     }
 }
 

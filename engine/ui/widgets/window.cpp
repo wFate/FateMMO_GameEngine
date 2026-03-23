@@ -60,11 +60,15 @@ void Window::render(SpriteBatch& batch, SDFText& sdf) {
         return;
     }
 
-    // Window background
-    Color bg = style.backgroundColor.a > 0 ? style.backgroundColor : Color(0.08f, 0.08f, 0.12f, 0.95f);
-    bg.a *= style.opacity;
-    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
-                   {rect.w, rect.h}, bg, d);
+    // Window background (9-slice texture if set, otherwise solid color)
+    if (!style.backgroundTexture.empty()) {
+        drawBackground(batch, d);
+    } else {
+        Color bg = style.backgroundColor.a > 0 ? style.backgroundColor : Color(0.08f, 0.08f, 0.12f, 0.95f);
+        bg.a *= style.opacity;
+        batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
+                       {rect.w, rect.h}, bg, d);
+    }
 
     // Title bar
     Color titleBg(0.15f, 0.12f, 0.1f, 0.95f);

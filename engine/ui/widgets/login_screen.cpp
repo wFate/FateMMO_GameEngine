@@ -222,9 +222,11 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
         float tfs = 22.0f;
         Vec2 tsz = sdf.measure(title, tfs);
         Color gold(0.95f, 0.80f, 0.20f, 1.0f);
-        sdf.drawScreen(batch, title,
-                       {panelX + (PANEL_WIDTH - tsz.x) * 0.5f, curY},
-                       tfs, gold, d + 0.2f);
+        float titleX = panelX + (PANEL_WIDTH - tsz.x) * 0.5f;
+        // DEBUG: draw red rect where title should be
+        batch.drawRect({titleX + tsz.x * 0.5f, curY + tfs * 0.5f},
+                       {tsz.x, tfs}, Color(1, 0, 0, 1), d + 2.0f);
+        sdf.drawScreen(batch, title, {titleX, curY}, tfs, gold, d + 3.0f);
         curY += titleH;
     }
 
@@ -235,7 +237,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
         Vec2 ssz = sdf.measure(sub, sfs);
         sdf.drawScreen(batch, sub,
                        {panelX + (PANEL_WIDTH - ssz.x) * 0.5f, curY},
-                       sfs, {0.65f, 0.65f, 0.75f, 1.0f}, d + 0.2f);
+                       sfs, {0.65f, 0.65f, 0.75f, 1.0f}, d + 1.0f);
         curY += subtitleH;
     }
 
@@ -253,7 +255,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
     auto drawField = [&](const char* label, float fx, float fy, float fw,
                          const std::string& value, bool focused, bool masked) {
         // Label
-        sdf.drawScreen(batch, label, {fx, fy}, labelFs, labelColor, d + 0.2f);
+        sdf.drawScreen(batch, label, {fx, fy}, labelFs, labelColor, d + 1.0f);
         float fFieldY = fy + labelH;
 
         // Background
@@ -274,7 +276,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
         if (!value.empty()) {
             std::string displayText = masked ? std::string(value.size(), '*') : value;
             sdf.drawScreen(batch, displayText, {fx + fieldPad, textY},
-                           fieldFs, Color::white(), d + 0.2f);
+                           fieldFs, Color::white(), d + 1.0f);
         }
 
         // Cursor
@@ -283,7 +285,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
             Vec2 cOff = sdf.measure(before, fieldFs);
             float cx = fx + fieldPad + cOff.x;
             batch.drawRect({cx + 0.5f, fFieldY + FIELD_HEIGHT * 0.5f},
-                           {1.0f, FIELD_HEIGHT - 8.0f}, Color::white(), d + 0.3f);
+                           {1.0f, FIELD_HEIGHT - 8.0f}, Color::white(), d + 1.1f);
         }
     };
 
@@ -367,7 +369,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
             float inset = 3.0f;
             batch.drawRect({checkX + checkSize * 0.5f, checkY + checkSize * 0.5f},
                            {checkSize - inset * 2.0f, checkSize - inset * 2.0f},
-                           Color::white(), d + 0.2f);
+                           Color::white(), d + 1.0f);
         }
 
         // Label
@@ -376,7 +378,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
         Vec2 rmSz = sdf.measure(rmLabel, rmFs);
         sdf.drawScreen(batch, rmLabel,
                        {checkX + checkSize + 6.0f, checkY + (checkSize - rmSz.y) * 0.5f},
-                       rmFs, {0.65f, 0.65f, 0.75f, 1.0f}, d + 0.2f);
+                       rmFs, {0.65f, 0.65f, 0.75f, 1.0f}, d + 1.0f);
 
         curY += rememberH + FIELD_SPACING;
     }
@@ -393,11 +395,11 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
 
         Color toggleColor = togglePressed_ ? Color(0.95f, 0.80f, 0.20f, 1.0f)
                                             : Color(0.5f, 0.7f, 0.9f, 1.0f);
-        sdf.drawScreen(batch, toggleLabel, {toggleX, toggleY}, tfs, toggleColor, d + 0.2f);
+        sdf.drawScreen(batch, toggleLabel, {toggleX, toggleY}, tfs, toggleColor, d + 1.0f);
 
         // Underline
         batch.drawRect({toggleX + tsz.x * 0.5f, toggleY + tsz.y + 1.0f},
-                       {tsz.x, 1.0f}, toggleColor, d + 0.2f);
+                       {tsz.x, 1.0f}, toggleColor, d + 1.0f);
 
         curY += toggleH + FIELD_SPACING;
     }
@@ -410,7 +412,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
                            : Color(0.35f, 0.95f, 0.45f, 1.0f);
         sdf.drawScreen(batch, statusMessage,
                        {panelX + (PANEL_WIDTH - ssz.x) * 0.5f, curY},
-                       sfs, sc, d + 0.2f);
+                       sfs, sc, d + 1.0f);
     }
 
     renderChildren(batch, sdf);

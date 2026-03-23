@@ -13,16 +13,8 @@ void Panel::render(SpriteBatch& batch, SDFText& text) {
     const auto& style = resolvedStyle_;
     const auto& rect = computedRect_;
 
-    // Draw background fill
-    if (style.backgroundColor.a > 0.0f) {
-        Color bg = style.backgroundColor;
-        bg.a *= style.opacity;
-        batch.drawRect(
-            {rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
-            {rect.w, rect.h},
-            bg,
-            static_cast<float>(zOrder_));
-    }
+    // Draw background (9-slice texture if set, otherwise solid color)
+    drawBackground(batch, static_cast<float>(zOrder_));
 
     // Draw border (4 non-overlapping edge rects — avoids double-blend at corners)
     if (style.borderWidth > 0.0f && style.borderColor.a > 0.0f) {

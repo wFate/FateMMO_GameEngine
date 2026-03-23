@@ -100,6 +100,10 @@ protected:
     bool pressed_ = false;
     int zOrder_ = 0;
 
+    // Draw widget background: uses 9-slice texture if backgroundTexture is set,
+    // otherwise solid color rect. Call this from render() instead of manual drawRect.
+    void drawBackground(SpriteBatch& batch, float depth);
+
     // Render children (called by subclass render after drawing self)
     void renderChildren(SpriteBatch& batch, SDFText& text);
 };
