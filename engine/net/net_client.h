@@ -94,6 +94,7 @@ public:
     std::function<void(const SvStatEnchantResultMsg&)> onStatEnchantResult;
     std::function<void(const SvShopResultMsg&)> onShopResult;
     std::function<void(const SvTeleportResultMsg&)> onTeleportResult;
+    std::function<void(const SvAuroraStatusMsg&)> onAuroraStatus;
     std::function<void(const SvConsumeResultMsg&)> onConsumeResult;
     std::function<void(const SvRankingResultMsg&)> onRankingResult;
     std::function<void(const std::string& reason)> onConnectRejected;

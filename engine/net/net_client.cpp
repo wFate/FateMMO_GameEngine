@@ -532,6 +532,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onTeleportResult) onTeleportResult(msg);
             break;
         }
+        case PacketType::SvAuroraStatus: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvAuroraStatusMsg::read(payload);
+            if (onAuroraStatus) onAuroraStatus(msg);
+            break;
+        }
         case PacketType::SvConsumeResult: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvConsumeResultMsg::read(payload);

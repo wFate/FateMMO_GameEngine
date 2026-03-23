@@ -922,6 +922,22 @@ struct SvTeleportResultMsg {
     }
 };
 
+struct SvAuroraStatusMsg {
+    uint8_t  favoredFaction = 0;   // Faction enum value
+    uint32_t secondsRemaining = 0; // time until next rotation
+
+    void write(ByteWriter& w) const {
+        w.writeU8(favoredFaction);
+        w.writeU32(secondsRemaining);
+    }
+    static SvAuroraStatusMsg read(ByteReader& r) {
+        SvAuroraStatusMsg m;
+        m.favoredFaction   = r.readU8();
+        m.secondsRemaining = r.readU32();
+        return m;
+    }
+};
+
 // ============================================================================
 // Server -> Client: SvBankResult (unchanged legacy format)
 // ============================================================================

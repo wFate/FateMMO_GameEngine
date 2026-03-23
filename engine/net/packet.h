@@ -117,6 +117,7 @@ namespace PacketType {
     constexpr uint8_t SvDungeonEnd       = 0xB6;
     constexpr uint8_t SvShopResult       = 0xB7;
     constexpr uint8_t SvTeleportResult   = 0xB8;
+    constexpr uint8_t SvAuroraStatus    = 0xB9;
 } // namespace PacketType
 
 // ============================================================================
