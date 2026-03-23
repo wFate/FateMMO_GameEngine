@@ -38,6 +38,7 @@
 #include "engine/ui/widgets/notification_toast.h"
 #include "engine/ui/widgets/checkbox.h"
 #include "engine/ui/widgets/login_screen.h"
+#include "engine/ui/widgets/death_overlay.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -562,6 +563,9 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         ls->serverHost = j.value("serverHost", "127.0.0.1");
         ls->serverPort = j.value("serverPort", 7778);
         node = std::move(ls);
+    }
+    else if (type == "death_overlay") {
+        node = std::make_unique<DeathOverlay>(id);
     }
     else {
         node = std::make_unique<UINode>(id, type);

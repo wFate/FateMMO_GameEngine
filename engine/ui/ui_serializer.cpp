@@ -18,6 +18,7 @@
 #include "engine/ui/widgets/notification_toast.h"
 #include "engine/ui/widgets/checkbox.h"
 #include "engine/ui/widgets/login_screen.h"
+#include "engine/ui/widgets/death_overlay.h"
 #include "engine/ui/widgets/player_info_block.h"
 #include "engine/ui/widgets/skill_arc.h"
 #include "engine/ui/widgets/dpad.h"
@@ -339,6 +340,9 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["serverHost"] = w->serverHost;
             j["serverPort"] = w->serverPort;
         }
+    }
+    else if (type == "death_overlay") {
+        // Runtime state only -- no persistent properties to serialize
     }
 
     // --- Event bindings ---
