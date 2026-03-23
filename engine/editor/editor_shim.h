@@ -11,7 +11,6 @@
 #include "engine/core/logger.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/prefab.h"
-#include "imgui.h"
 #include <string>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -36,9 +35,8 @@ public:
 
     Vec2 viewportPos() const { return {0, 0}; }
     Vec2 viewportSize() const {
-        // Return actual window size via ImGui display size
-        auto& io = ImGui::GetIO();
-        return {io.DisplaySize.x, io.DisplaySize.y};
+        // Shipping has no editor viewport — callers use windowWidth/Height directly.
+        return {0, 0};
     }
     const std::string& currentScenePath() const { return currentScene_; }
 

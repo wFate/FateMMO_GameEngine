@@ -262,6 +262,8 @@ else()
 endif()
 
 # ImGui is not a cmake project - build it as a static library
+# Shipping builds have no ImGui dependency — skip the entire lib.
+if(NOT FATE_SHIPPING)
 add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -298,6 +300,7 @@ else()
     target_link_libraries(imgui_lib PUBLIC SDL2::SDL2-static ${OPENGL_LIB} Freetype::Freetype)
 endif()
 # No loader define = ImGui uses its own minimal GL loader
+endif() # NOT FATE_SHIPPING
 
 # =============================================================================
 # Engine Library
@@ -368,13 +371,15 @@ target_link_libraries(fate_engine PUBLIC
     SDL2::SDL2-static
     nlohmann_json::nlohmann_json
     stb_image
-    imgui_lib
     ${OPENGL_LIB}
     TracyClient
     spdlog::spdlog
     physfs-static
     soloud_lib
 )
+if(NOT FATE_SHIPPING)
+    target_link_libraries(fate_engine PUBLIC imgui_lib)
+endif()
 if(APPLE)
     target_link_libraries(fate_engine PUBLIC ${METAL_LIBS})
 endif()
@@ -573,13 +578,19 @@ endif()
 if(MSVC)
     target_compile_definitions(fate_engine PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_definitions(FateEngine PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_definitions(imgui_lib PRIVATE _CRT_SECURE_NO_WARNINGS IMGUI_DEFINE_MATH_OPERATORS IMGUI_ENABLE_FREETYPE)
+    if(NOT FATE_SHIPPING)
+        target_compile_definitions(imgui_lib PRIVATE _CRT_SECURE_NO_WARNINGS IMGUI_DEFINE_MATH_OPERATORS IMGUI_ENABLE_FREETYPE)
+    endif()
     target_compile_options(fate_engine PRIVATE /W4 /wd4100 /wd4201 /wd4458)
     target_compile_options(FateEngine PRIVATE /W4 /wd4100 /wd4201 /wd4458 /bigobj)
-    target_compile_options(imgui_lib PRIVATE /W4 /wd4100 /wd4201 /wd4458 /wd4996)
+    if(NOT FATE_SHIPPING)
+        target_compile_options(imgui_lib PRIVATE /W4 /wd4100 /wd4201 /wd4458 /wd4996)
+    endif()
     target_compile_options(fate_engine PRIVATE /MP /bigobj)
     target_compile_options(FateEngine PRIVATE /MP)
-    target_compile_options(imgui_lib PRIVATE /MP)
+    if(NOT FATE_SHIPPING)
+        target_compile_options(imgui_lib PRIVATE /MP)
+    endif()
 else()
     target_compile_options(fate_engine PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(FateEngine PRIVATE -Wall -Wextra -Wpedantic)

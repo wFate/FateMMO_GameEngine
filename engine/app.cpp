@@ -17,6 +17,7 @@
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
 #endif
+#ifndef FATE_SHIPPING
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #ifndef FATEMMO_METAL
@@ -24,6 +25,7 @@
 #else
 #include "imgui_impl_metal.h"
 #endif
+#endif // !FATE_SHIPPING
 #include "engine/render/sdf_text.h"
 #include "engine/profiling/tracy_zones.h"
 #include "engine/job/job_system.h"
@@ -184,19 +186,6 @@ bool App::init(const AppConfig& config) {
     Logger::instance().setLogCallback([](const std::string& msg, int level) {
         LogViewer::instance().addMessage(msg, level);
     });
-#else
-    // Shipping builds: initialize ImGui for game UI (no editor panels)
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-#ifdef FATEMMO_METAL
-    ImGui_ImplSDL2_InitForMetal(window_);
-    id<MTLDevice> mtlDevice = ((__bridge CAMetalLayer*)metalLayer_).device;
-    ImGui_ImplMetal_Init(mtlDevice);
-#else
-    ImGui_ImplSDL2_InitForOpenGL(window_, glContext_);
-    ImGui_ImplOpenGL3_Init("#version 330");
-#endif
 #endif
 
     assetsDir_ = config.assetsDir;
@@ -275,21 +264,10 @@ void App::processEvents() {
     Input::instance().beginFrame();
 #ifndef FATE_SHIPPING
     Editor::instance().beginFrame();
-#else
-#ifdef FATEMMO_METAL
-    ImGui_ImplMetal_NewFrame(nullptr);
-#else
-    ImGui_ImplOpenGL3_NewFrame();
-#endif
-    ImGui_ImplSDL2_NewFrame();
-    ImGui::NewFrame();
 #endif
 
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-#ifdef FATE_SHIPPING
-        ImGui_ImplSDL2_ProcessEvent(&event);
-#endif
 #ifndef FATE_SHIPPING
         // Editor gets events first
         Editor::instance().processEvent(event);
@@ -591,7 +569,7 @@ void App::render() {
         ctx.viewportHeight = vpH;
         renderGraph_.execute(ctx);
 
-        // Blit PostProcess result to drawable via Metal pipeline, then render ImGui on top
+        // Blit PostProcess result to drawable via Metal pipeline
         onRender(spriteBatch_, camera_);
 
         // UI system: render loaded screens in screen-space on top of game world
@@ -603,7 +581,6 @@ void App::render() {
             spriteBatch_.end();
         }
 
-        ImGui::Render();
         MTLRenderPassDescriptor* passDesc = [MTLRenderPassDescriptor renderPassDescriptor];
         passDesc.colorAttachments[0].texture = drawable.texture;
         passDesc.colorAttachments[0].loadAction = MTLLoadActionClear;
@@ -613,7 +590,6 @@ void App::render() {
             [commandBuffer renderCommandEncoderWithDescriptor:passDesc];
         // FullscreenQuad blit pass — draw the PostProcess result into the drawable
         FullscreenQuad::instance().draw((__bridge void*)encoder);
-        ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), commandBuffer, encoder);
         [encoder endEncoding];
 #endif
 
@@ -748,9 +724,6 @@ void App::render() {
         spriteBatch_.end();
     }
 
-    // Render ImGui draw data
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 #endif
 
     SDL_GL_SwapWindow(window_);
@@ -784,14 +757,6 @@ void App::shutdown() {
 
 #ifndef FATE_SHIPPING
     Editor::instance().shutdown();
-#else
-#ifdef FATEMMO_METAL
-    ImGui_ImplMetal_Shutdown();
-#else
-    ImGui_ImplOpenGL3_Shutdown();
-#endif
-    ImGui_ImplSDL2_Shutdown();
-    ImGui::DestroyContext();
 #endif
     spriteBatch_.shutdown();
     fileWatcher_.stop();

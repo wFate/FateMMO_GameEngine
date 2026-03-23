@@ -92,6 +92,12 @@ public:
                             const SpriteDrawParams& params,
                             const Color* palette, int paletteSize);
 
+    // Scissor clipping (nestable stack — intersection of all active rects)
+    // Coordinates are screen-space (top-left origin, pixels).
+    // Calling push/pop forces a mid-frame flush of pending sprites.
+    void pushScissorRect(const Rect& rect);
+    void popScissorRect();
+
     // Set the CommandList for gfx-abstracted drawing; nullptr = direct GL fallback
     void setCommandList(gfx::CommandList* cmd) { cmdList_ = cmd; }
 
@@ -147,7 +153,11 @@ private:
     BlendMode blendMode_ = BlendMode::Alpha;
 
     void flush();
+    void flushPending();           // sort + flush + clear entries mid-frame
+    void applyScissorState();      // set GL/Metal scissor from stack
     void createWhiteTexture();
+
+    std::vector<Rect> scissorStack_;
 
     // Get the pipeline handle for the current blend mode
     gfx::PipelineHandle currentPipeline() const;

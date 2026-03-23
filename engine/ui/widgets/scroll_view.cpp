@@ -48,14 +48,17 @@ void ScrollView::render(SpriteBatch& batch, SDFText& sdf) {
         if (childBottom > contentHeight) contentHeight = childBottom;
     }
 
-    // Render children (simplified — no scissor clipping yet)
+    // Scissor-clip children to scroll viewport
+    batch.pushScissorRect({rect.x, rect.y, rect.w, rect.h});
     for (auto& child : children_) {
         if (!child->visible()) continue;
         float childTop = child->computedRect().y - scrollOffset;
         float childBottom = childTop + child->computedRect().h;
+        // Skip fully off-screen children (saves draw calls)
         if (childBottom < rect.y || childTop > rect.y + rect.h) continue;
         child->render(batch, sdf);
     }
+    batch.popScissorRect();
 
     // Scrollbar
     float maxScroll = std::max(0.0f, contentHeight - rect.h);

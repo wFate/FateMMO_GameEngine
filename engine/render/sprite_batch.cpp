@@ -298,6 +298,105 @@ void SpriteBatch::end() {
     flush();
 }
 
+// ---------------------------------------------------------------------------
+// Scissor clipping
+// ---------------------------------------------------------------------------
+
+void SpriteBatch::flushPending() {
+    if (entries_.empty()) return;
+
+    // Same sort logic as end()
+    auto texKey = [](const BatchEntry& e) -> uintptr_t {
+        if (e.texture) return (uintptr_t)e.texture.get();
+        if (e.rawTexId) return (uintptr_t)e.rawTexId;
+        return 0;
+    };
+
+    std::sort(entries_.begin(), entries_.end(),
+        [&texKey](const BatchEntry& a, const BatchEntry& b) {
+            if (a.params.depth != b.params.depth)
+                return a.params.depth < b.params.depth;
+            return texKey(a) < texKey(b);
+        });
+
+    flush();
+    entries_.clear();
+    sortDirty_ = true;
+}
+
+void SpriteBatch::applyScissorState() {
+    if (scissorStack_.empty()) {
+#ifndef FATEMMO_METAL
+        glDisable(GL_SCISSOR_TEST);
+#else
+        // Reset to full viewport (Metal has no "disable scissor" — set to max)
+        if (metalEncoder_) {
+            id<MTLRenderCommandEncoder> enc =
+                (__bridge id<MTLRenderCommandEncoder>)metalEncoder_;
+            MTLScissorRect full = {0, 0, 16384, 16384};
+            [enc setScissorRect:full];
+        }
+#endif
+        return;
+    }
+
+    // Intersect all rects in the stack
+    // Note: (std::max)(...) parenthesization avoids Windows min/max macro clash
+    Rect clip = scissorStack_[0];
+    for (size_t i = 1; i < scissorStack_.size(); ++i) {
+        float x1 = (std::max)(clip.x, scissorStack_[i].x);
+        float y1 = (std::max)(clip.y, scissorStack_[i].y);
+        float x2 = (std::min)(clip.x + clip.w, scissorStack_[i].x + scissorStack_[i].w);
+        float y2 = (std::min)(clip.y + clip.h, scissorStack_[i].y + scissorStack_[i].h);
+        float rw = x2 - x1; if (rw < 0.0f) rw = 0.0f;
+        float rh = y2 - y1; if (rh < 0.0f) rh = 0.0f;
+        clip = {x1, y1, rw, rh};
+    }
+
+    int cx = static_cast<int>(clip.x);
+    int cy = static_cast<int>(clip.y);
+    int cw = static_cast<int>(clip.w);
+    int ch = static_cast<int>(clip.h);
+
+#ifndef FATEMMO_METAL
+    // GL scissor uses bottom-left origin — flip Y
+    GLint vp[4];
+    glGetIntegerv(GL_VIEWPORT, vp);
+    int vpH = vp[3];
+
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(cx, vpH - cy - ch, cw, ch);
+#else
+    // Metal uses top-left origin (same as screen space)
+    if (metalEncoder_) {
+        id<MTLRenderCommandEncoder> enc =
+            (__bridge id<MTLRenderCommandEncoder>)metalEncoder_;
+        MTLScissorRect sr;
+        sr.x      = static_cast<NSUInteger>(cx > 0 ? cx : 0);
+        sr.y      = static_cast<NSUInteger>(cy > 0 ? cy : 0);
+        sr.width  = static_cast<NSUInteger>(cw > 0 ? cw : 0);
+        sr.height = static_cast<NSUInteger>(ch > 0 ? ch : 0);
+        [enc setScissorRect:sr];
+    }
+#endif
+}
+
+void SpriteBatch::pushScissorRect(const Rect& rect) {
+    flushPending();
+    scissorStack_.push_back(rect);
+    applyScissorState();
+}
+
+void SpriteBatch::popScissorRect() {
+    flushPending();
+    if (!scissorStack_.empty()) scissorStack_.pop_back();
+    applyScissorState();
+}
+
+// ---------------------------------------------------------------------------
+// flush
+// ---------------------------------------------------------------------------
+
 void SpriteBatch::flush() {
     // ------------------------------------------------------------------
     // CommandList path (gfx-abstracted)
