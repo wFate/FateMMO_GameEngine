@@ -26,11 +26,11 @@ bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath)
 
     // Load atlas PNG via stb_image (4 channels: RGBA)
     int w = 0, h = 0, channels = 0;
-#ifdef FATEMMO_METAL
+    // Atlas UVs are computed in image-space (y-down from top). Loading
+    // without a vertical flip keeps the UV coordinates correct on all
+    // backends.  Regular sprite textures flip for GL elsewhere, but the
+    // SDF atlas deliberately does NOT flip.
     stbi_set_flip_vertically_on_load(false);
-#else
-    stbi_set_flip_vertically_on_load(true);
-#endif
     unsigned char* data = stbi_load(atlasPath.c_str(), &w, &h, &channels, 4);
     if (!data) {
         LOG_ERROR("SDFText", "Failed to load atlas image: %s", atlasPath.c_str());
@@ -40,12 +40,12 @@ bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath)
     atlasWidth_  = static_cast<float>(w);
     atlasHeight_ = static_cast<float>(h);
 
-    // Create texture via Device
+    // Create texture via Device (for gfx handle / drawTexturedQuad path)
     auto& device = gfx::Device::instance();
     atlasGfxHandle_ = device.createTexture(w, h, gfx::TextureFormat::RGBA8, data);
-    stbi_image_free(data);
 
     if (!atlasGfxHandle_.valid()) {
+        stbi_image_free(data);
         LOG_ERROR("SDFText", "Device::createTexture failed for atlas");
         return false;
     }
@@ -59,6 +59,8 @@ bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
 #endif
+
+    stbi_image_free(data);
 
     // Load glyph metrics from JSON
     loadMetrics(metricsPath);
@@ -163,7 +165,15 @@ void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 pos
 #ifdef FATEMMO_METAL
     if (glyphs_.empty() || !atlasGfxHandle_.valid()) return;
 #else
-    if (glyphs_.empty() || !atlasTexId_) return;
+    if (glyphs_.empty() || !atlasTexId_) {
+        static bool logged = false;
+        if (!logged) {
+            LOG_ERROR("SDFText", "drawInternal BAIL: glyphs=%zu atlasTexId=%u",
+                      glyphs_.size(), atlasTexId_);
+            logged = true;
+        }
+        return;
+    }
 #endif
 
     const float scale = fontSize;
@@ -207,11 +217,15 @@ void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 pos
             params.sourceRect = {gm.uvX, gm.uvY, gm.uvW, gm.uvH};
             params.color     = color;
             params.depth     = depth;
-            // Raster atlas: use regular sprite rendering (not SDF shader)
+            // World-space (y-up): quad bottom is -hh with v0 (glyph top), which
+            // maps glyph top to screen bottom — upside down.  Flip UV Y to fix.
+            if (!yDown) params.flipY = true;
+            // Route through MSDF shader (renderType 1-4 based on TextStyle)
+            float rt = static_cast<float>(style);
 #ifdef FATEMMO_METAL
-            batch.drawTexturedQuad(atlasGfxHandle_, 0, params, 0.0f);
+            batch.drawTexturedQuad(atlasGfxHandle_, 0, params, rt);
 #else
-            batch.drawTexturedQuad(atlasGfxHandle_, atlasTexId_, params, 0.0f);
+            batch.drawTexturedQuad(atlasGfxHandle_, atlasTexId_, params, rt);
 #endif
         }
 
