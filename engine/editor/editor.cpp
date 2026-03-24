@@ -1786,6 +1786,8 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
 
     // --- Fill tool: flood fill on click ---
     if (currentTool_ == EditorTool::Fill) {
+        // Collision layer has no source rects — fill is not meaningful
+        if (isCollisionLayer) return;
         // Build a lookup of occupied tile positions (same tileset, same GID)
         int srcCol = selectedTileIndex_ % paletteColumns_;
         int srcRow = selectedTileIndex_ / paletteColumns_;
@@ -1908,6 +1910,7 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
 
                     auto cmd = std::make_unique<CreateCommand>();
                     cmd->createdHandle = tile->handle();
+                    cmd->entityData = PrefabLibrary::entityToJson(tile);
                     if (!pendingBrushStroke_) {
                         pendingBrushStroke_ = std::make_unique<CompoundCommand>();
                         pendingBrushStroke_->desc = "Paint brush stroke";
