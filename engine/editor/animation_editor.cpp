@@ -198,6 +198,13 @@ void AnimationEditor::drawMenuBar() {
                 if (ImGui::MenuItem("Player")) newTemplate("player");
                 if (ImGui::MenuItem("Mob"))    newTemplate("mob");
                 if (ImGui::MenuItem("NPC"))    newTemplate("npc");
+                ImGui::Separator();
+                if (ImGui::MenuItem("Mob (idle/walk/attack/death)")) {
+                    newMobTemplate();
+                }
+                if (ImGui::MenuItem("Player (idle/walk/attack/cast/death)")) {
+                    newPlayerTemplate();
+                }
                 ImGui::EndMenu();
             }
 
@@ -1265,14 +1272,49 @@ void AnimationEditor::reconstructStatesFromMeta(const PackedSheetMeta& meta) {
 }
 
 // ---------------------------------------------------------------------------
-// Slicer Mode: quick-template stubs (implemented in Task 6)
+// Slicer Mode: quick templates for mob / player
 // ---------------------------------------------------------------------------
 void AnimationEditor::newMobTemplate() {
-    // Implemented in Task 6
+    auto makeState = [](const std::string& n, float rate, bool lp, int hit) {
+        AnimState s;
+        s.name = n;
+        s.frameRate = rate;
+        s.loop = lp;
+        s.hitFrame = hit;
+        s.frameCount = {{"down", 0}};
+        return s;
+    };
+    template_ = {};
+    template_.name = "new_mob";
+    template_.entityType = "mob";
+    template_.states.push_back(makeState("idle",   8.0f, true,  -1));
+    template_.states.push_back(makeState("walk",   8.0f, true,  -1));
+    template_.states.push_back(makeState("attack", 10.0f, false, -1));
+    template_.states.push_back(makeState("death",  6.0f, false, -1));
+    slicerFrameAssignments_.clear();
+    selectedStateIdx_ = 0;
 }
 
 void AnimationEditor::newPlayerTemplate() {
-    // Implemented in Task 6
+    auto makeState = [](const std::string& n, float rate, bool lp, int hit) {
+        AnimState s;
+        s.name = n;
+        s.frameRate = rate;
+        s.loop = lp;
+        s.hitFrame = hit;
+        s.frameCount = {{"down", 0}};
+        return s;
+    };
+    template_ = {};
+    template_.name = "new_player";
+    template_.entityType = "player";
+    template_.states.push_back(makeState("idle",   8.0f, true,  -1));
+    template_.states.push_back(makeState("walk",   8.0f, true,  -1));
+    template_.states.push_back(makeState("attack", 10.0f, false, -1));
+    template_.states.push_back(makeState("cast",   8.0f, false, -1));
+    template_.states.push_back(makeState("death",  6.0f, false, -1));
+    slicerFrameAssignments_.clear();
+    selectedStateIdx_ = 0;
 }
 
 } // namespace fate
