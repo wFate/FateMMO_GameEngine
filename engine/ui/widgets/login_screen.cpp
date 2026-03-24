@@ -223,10 +223,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
         Vec2 tsz = sdf.measure(title, tfs);
         Color gold(0.95f, 0.80f, 0.20f, 1.0f);
         float titleX = panelX + (PANEL_WIDTH - tsz.x) * 0.5f;
-        // DEBUG: draw red rect where title should be
-        batch.drawRect({titleX + tsz.x * 0.5f, curY + tfs * 0.5f},
-                       {tsz.x, tfs}, Color(1, 0, 0, 1), d + 2.0f);
-        sdf.drawScreen(batch, title, {titleX, curY}, tfs, gold, d + 3.0f);
+        sdf.drawScreen(batch, title, {titleX, curY}, tfs, gold, d + 1.0f);
         curY += titleH;
     }
 

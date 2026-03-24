@@ -269,33 +269,75 @@ void App::processEvents() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
 #ifndef FATE_SHIPPING
-        // Editor gets events first
+        // ---- Input priority chain (editor build) ----
+        //
+        //   PAUSED (editing):  ImGui → Editor shortcuts → (game gets nothing)
+        //   PLAYING:           ImGui → UI text fields → Game Input
+        //
+        // ImGui always sees events (it needs them for its own panels).
+        // Key-UP is always forwarded to Input to prevent stuck keys.
         Editor::instance().processEvent(event);
 
-        // Keyboard routing: when paused (editing), editor captures keyboard.
-        // When playing, game keys go through unless an ImGui text field has focus.
-        bool editorWantsKeyboard = Editor::instance().wantsKeyboard() && Editor::instance().isPaused();
-        if (!editorWantsKeyboard) {
-            Input::instance().processEvent(event);
-        } else {
-            // Still process window events and quit
-            if (event.type == SDL_QUIT) {
-                running_ = false;
-            } else if (event.type == SDL_WINDOWEVENT &&
-                       event.window.event == SDL_WINDOWEVENT_RESIZED) {
-                config_.windowWidth = event.window.data1;
-                config_.windowHeight = event.window.data2;
-#ifndef FATEMMO_METAL
-                glViewport(0, 0, config_.windowWidth, config_.windowHeight);
-#endif
-            }
-            // Always forward key events so keys don't get stuck
-            if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+        bool paused = Editor::instance().isPaused();
+        bool isKeyboard = (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP ||
+                           event.type == SDL_TEXTINPUT);
+
+        if (paused) {
+            // Editor owns everything. Only forward key-UP to clear held state.
+            if (event.type == SDL_KEYUP) {
                 Input::instance().processEvent(event);
             }
+        } else if (isKeyboard) {
+            // Playing — UI text fields get first crack at keyboard/text
+            bool uiConsumed = false;
+            if (uiManager_.focusedNode() && uiManager_.focusedNode()->visible()) {
+                if (event.type == SDL_TEXTINPUT) {
+                    uiManager_.handleTextInput(event.text.text);
+                    uiConsumed = true;
+                } else if (event.type == SDL_KEYDOWN) {
+                    uiConsumed = uiManager_.focusedNode()->onKeyInput(
+                        event.key.keysym.scancode, true);
+                } else if (event.type == SDL_KEYUP) {
+                    uiManager_.focusedNode()->onKeyInput(
+                        event.key.keysym.scancode, false);
+                }
+            }
+
+            if (!uiConsumed) {
+                // Game Input gets the event
+                Input::instance().processEvent(event);
+            } else if (event.type == SDL_KEYUP) {
+                // Always forward key-UP to clear held state
+                Input::instance().processEvent(event);
+            }
+        } else {
+            // Non-keyboard events (mouse, window, touch) go to game Input
+            Input::instance().processEvent(event);
         }
 #else
-        Input::instance().processEvent(event);
+        // Shipping build: UI text fields still need priority keyboard routing
+        bool uiConsumedShipping = false;
+        if (uiManager_.focusedNode() && uiManager_.focusedNode()->visible()) {
+            if (event.type == SDL_TEXTINPUT) {
+                uiManager_.handleTextInput(event.text.text);
+                uiConsumedShipping = true;
+            } else if (event.type == SDL_KEYDOWN) {
+                uiConsumedShipping = uiManager_.focusedNode()->onKeyInput(
+                    event.key.keysym.scancode, true);
+            } else if (event.type == SDL_KEYUP) {
+                uiManager_.focusedNode()->onKeyInput(
+                    event.key.keysym.scancode, false);
+            }
+        }
+        if (!uiConsumedShipping) {
+            Input::instance().processEvent(event);
+        } else if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+            Input::instance().processEvent(event);
+            if (event.type == SDL_KEYDOWN) {
+                Input::instance().consumeKeyPress(
+                    event.key.keysym.scancode);
+            }
+        }
 #endif
 
         switch (event.type) {
@@ -445,12 +487,11 @@ void App::update() {
     AssetRegistry::instance().processReloads(elapsedTime_);
     AssetRegistry::instance().processAsyncLoads();
 
-    onUpdate(deltaTime_);
-
     // Update retained-mode UI system (data binding resolution, hot-reload checks)
     uiManager_.update(deltaTime_);
 
-    // Route mouse/keyboard input to the UI system (hover, focus, press, drag-drop)
+    // Route mouse/keyboard input to the UI system BEFORE game logic so
+    // wantCaptureMouse() is accurate when onUpdate() runs.
 #ifndef FATE_SHIPPING
     // Map window-space mouse coords into FBO-space so hit-testing matches
     // the layout computed against FBO dimensions.
@@ -467,6 +508,15 @@ void App::update() {
     }
 #endif
     uiManager_.handleInput();
+
+    // Only consume the mouse press when a UI node actually accepted it
+    // (onPress returned true).  Don't use wantCaptureMouse() — that checks
+    // hoveredNode_ which is non-null over any StretchAll HUD root.
+    if (uiManager_.pressedNode()) {
+        Input::instance().consumeMousePress(SDL_BUTTON_LEFT);
+    }
+
+    onUpdate(deltaTime_);
 
     // Always process destroy queue (so editor delete works while paused)
     auto* activeScene = SceneManager::instance().currentScene();
@@ -547,11 +597,18 @@ void App::render() {
 
             // UI system: render loaded screens in screen-space on top of game world
             {
+                gfx::CommandList uiCmdList;
+                uiCmdList.begin();
+                spriteBatch_.setCommandList(&uiCmdList);
+
                 Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
                 spriteBatch_.begin(screenProj);
                 uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
                 uiManager_.render(spriteBatch_, SDFText::instance());
                 spriteBatch_.end();
+
+                spriteBatch_.setCommandList(nullptr);
+                uiCmdList.end();
             }
         }
 
@@ -574,11 +631,18 @@ void App::render() {
 
         // UI system: render loaded screens in screen-space on top of game world
         {
+            gfx::CommandList uiCmdList;
+            uiCmdList.begin();
+            spriteBatch_.setCommandList(&uiCmdList);
+
             Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
             spriteBatch_.begin(screenProj);
             uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
             uiManager_.render(spriteBatch_, SDFText::instance());
             spriteBatch_.end();
+
+            spriteBatch_.setCommandList(nullptr);
+            uiCmdList.end();
         }
 
         MTLRenderPassDescriptor* passDesc = [MTLRenderPassDescriptor renderPassDescriptor];
@@ -654,11 +718,18 @@ void App::render() {
 
         // UI system: render loaded screens in screen-space on top of game world
         {
+            gfx::CommandList uiCmdList;
+            uiCmdList.begin();
+            spriteBatch_.setCommandList(&uiCmdList);
+
             Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
             spriteBatch_.begin(screenProj);
             uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
             uiManager_.render(spriteBatch_, SDFText::instance());
             spriteBatch_.end();
+
+            spriteBatch_.setCommandList(nullptr);
+            uiCmdList.end();
         }
 
         editorFbo.unbind();
@@ -717,11 +788,18 @@ void App::render() {
 
     // UI system: render loaded screens in screen-space on top of game world
     {
+        gfx::CommandList uiCmdList;
+        uiCmdList.begin();
+        spriteBatch_.setCommandList(&uiCmdList);
+
         Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
         spriteBatch_.begin(screenProj);
         uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
         uiManager_.render(spriteBatch_, SDFText::instance());
         spriteBatch_.end();
+
+        spriteBatch_.setCommandList(nullptr);
+        uiCmdList.end();
     }
 
 #endif

@@ -342,6 +342,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
 
     dockWorld_ = world;
     dockCamera_ = camera;
+    refreshSelection(world);
     drawDockSpace();
     drawMenuBar(world);
     drawSceneViewport();
@@ -449,19 +450,20 @@ void Editor::drawDockSpace() {
     // ---- Main menu bar (File / Edit / View / Entity) ----
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("New Scene")) {
+            if (ImGui::MenuItem("New Scene", nullptr, false, !inPlayMode_)) {
                 if (dockWorld_) {
                     dockWorld_->forEachEntity([&](Entity* e) {
                         dockWorld_->destroyEntity(e->handle());
                     });
                     dockWorld_->processDestroyQueue();
                     selectedEntity_ = nullptr;
+                    selectedHandle_ = {};
                     currentScenePath_.clear();
                     LOG_INFO("Editor", "New scene");
                 }
             }
             ImGui::Separator();
-            if (ImGui::BeginMenu("Open Scene")) {
+            if (ImGui::BeginMenu("Open Scene", !inPlayMode_)) {
                 std::string scenesDir = "assets/scenes";
                 if (fs::exists(scenesDir)) {
                     for (auto& entry : fs::directory_iterator(scenesDir)) {
@@ -477,11 +479,11 @@ void Editor::drawDockSpace() {
             }
             ImGui::Separator();
             // Save — overwrites current scene file (grayed out if no scene loaded)
-            if (ImGui::MenuItem("Save", "Ctrl+S", false, !currentScenePath_.empty())) {
+            if (ImGui::MenuItem("Save", "Ctrl+S", false, !currentScenePath_.empty() && !inPlayMode_)) {
                 saveScene(dockWorld_, currentScenePath_);
             }
             // Save As — always prompts for a new name
-            if (ImGui::BeginMenu("Save As...")) {
+            if (ImGui::BeginMenu("Save As...", !inPlayMode_)) {
                 static char saveNameBuf[64] = "WhisperingWoods";
                 ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
                 if (ImGui::Button("Save")) {
@@ -501,8 +503,8 @@ void Editor::drawDockSpace() {
         if (ImGui::BeginMenu("Edit")) {
             bool canUndo = UndoSystem::instance().canUndo();
             bool canRedo = UndoSystem::instance().canRedo();
-            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo)) { UndoSystem::instance().undo(dockWorld_); clearSelection(); }
-            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo)) { UndoSystem::instance().redo(dockWorld_); clearSelection(); }
+            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo)) { UndoSystem::instance().undo(dockWorld_); refreshSelection(dockWorld_); }
+            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo)) { UndoSystem::instance().redo(dockWorld_); refreshSelection(dockWorld_); }
             ImGui::EndMenu();
         }
 
@@ -533,6 +535,7 @@ void Editor::drawDockSpace() {
                     auto* e = dockWorld_->createEntity("New Entity");
                     e->addComponent<Transform>();
                     selectedEntity_ = e;
+                    selectedHandle_ = e ? e->handle() : EntityHandle{};
                 }
             }
             if (ImGui::MenuItem("Duplicate Selected", "Ctrl+D", false, selectedEntity_ != nullptr)) {
@@ -542,15 +545,17 @@ void Editor::drawDockSpace() {
                     auto* t = copy->getComponent<Transform>();
                     if (t) t->position += Vec2(32.0f, 0.0f);
                     selectedEntity_ = copy;
+                    selectedHandle_ = copy ? copy->handle() : EntityHandle{};
                 }
             }
             if (ImGui::MenuItem("Save as Prefab", nullptr, false, selectedEntity_ != nullptr)) {
                 openSavePrefab_ = true;
             }
-            if (ImGui::MenuItem("Delete Selected", "Delete", false, selectedEntity_ != nullptr)) {
+            if (ImGui::MenuItem("Delete Selected", "Delete", false, selectedEntity_ != nullptr && !isEntityLocked(selectedEntity_))) {
                 if (dockWorld_ && selectedEntity_) {
                     dockWorld_->destroyEntity(selectedEntity_->handle());
                     selectedEntity_ = nullptr;
+                    selectedHandle_ = {};
                 }
             }
             ImGui::EndMenu();
@@ -983,6 +988,7 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
 
         if (entity) {
             selectedEntity_ = entity;
+            selectedHandle_ = entity->handle();
             LOG_INFO("Editor", "Placed at (%.0f, %.0f)", placePos.x, placePos.y);
 
             // Record undo for asset placement
@@ -1043,7 +1049,7 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
             bool allowResize = (currentTool_ == EditorTool::Scale);
             float handleZone = 6.0f / camera->zoom(); // tighter hit zone
 
-            if (allowResize) {
+            if (allowResize && !isEntityLocked(selectedEntity_)) {
                 Vec2 handles[8] = {
                     {t->position.x - hw, t->position.y + hh},
                     {t->position.x + hw, t->position.y + hh},
@@ -1072,7 +1078,7 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
             // If click is inside the selected entity's bounds, drag it (don't reselect)
             Rect selBounds = {t->position.x - hw, t->position.y - hh, hw * 2.0f, hh * 2.0f};
             if (selBounds.contains(worldPos)) {
-                isDraggingEntity_ = true;
+                isDraggingEntity_ = !isEntityLocked(selectedEntity_);
                 isResizingEntity_ = false;
                 dragStartWorldPos_ = worldPos;
                 dragStartEntityPos_ = t->position;
@@ -1102,7 +1108,8 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
     // Click was outside the selected entity — select a new one
     if (best) {
         selectedEntity_ = best;
-        isDraggingEntity_ = true;
+        selectedHandle_ = best->handle();
+        isDraggingEntity_ = !isEntityLocked(best);
         isResizingEntity_ = false;
         auto* t = best->getComponent<Transform>();
         dragStartWorldPos_ = worldPos;
@@ -1113,6 +1120,7 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
         else if (s) dragStartEntitySize_ = s->size;
     } else {
         selectedEntity_ = nullptr;
+        selectedHandle_ = {};
         isDraggingEntity_ = false;
     }
 }
@@ -1248,6 +1256,14 @@ void Editor::handleMouseUp() {
     isToolDragging_ = false;
     toolDragStart_ = {-1, -1};
     toolDragEnd_ = {-1, -1};
+
+    // Flush pending brush stroke compound
+    if (pendingBrushStroke_ && !pendingBrushStroke_->empty()) {
+        pendingBrushStroke_->desc = "Paint (" +
+            std::to_string(pendingBrushStroke_->commands.size()) + " tiles)";
+        UndoSystem::instance().push(std::move(pendingBrushStroke_));
+    }
+    pendingBrushStroke_.reset();
 }
 
 // ============================================================================
@@ -1797,10 +1813,16 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
         return;
     }
 
-    // --- Paint tool: single tile (existing behavior) ---
+    // --- Paint tool: single tile (accumulated into brush stroke compound) ---
     auto cmd = paintOneTile(world, worldPos, selectedTileIndex_, paletteColumns_,
                             paletteTileSize_, gridSize_, paletteTexture_, paletteTexturePath_);
-    if (cmd) UndoSystem::instance().push(std::move(cmd));
+    if (cmd) {
+        if (!pendingBrushStroke_) {
+            pendingBrushStroke_ = std::make_unique<CompoundCommand>();
+            pendingBrushStroke_->desc = "Paint brush stroke";
+        }
+        pendingBrushStroke_->commands.push_back(std::move(cmd));
+    }
 }
 
 void Editor::drawTilePalette(World* world, Camera* camera) {
@@ -2151,9 +2173,12 @@ void Editor::drawImGuizmo(Camera* camera) {
 
 void Editor::enterPlayMode(World* world) {
     if (inPlayMode_ || !world) return;
-    // Snapshot all entities
     playModeSnapshot_ = nlohmann::json::array();
     world->forEachEntity([&](Entity* e) {
+        // Skip transient runtime entities — same filter as saveScene
+        std::string tag = e->tag();
+        if (tag == "mob" || tag == "boss" || tag == "player" ||
+            tag == "ghost" || tag == "dropped_item") return;
         playModeSnapshot_.push_back(PrefabLibrary::entityToJson(e));
     });
     paused_ = false;
@@ -2201,9 +2226,12 @@ void Editor::saveScene(World* world, const std::string& path) {
     nlohmann::json entitiesJson = nlohmann::json::array();
 
     world->forEachEntity([&](Entity* entity) {
-        // Skip transient entities — mobs/bosses are spawned at runtime by SpawnSystem
+        // Skip transient runtime entities — these are not part of the scene:
+        // mob/boss: spawned by SpawnSystem, player: created on server connect,
+        // ghost: networked other-player entities, dropped_item: runtime loot
         std::string tag = entity->tag();
-        if (tag == "mob" || tag == "boss") return;
+        if (tag == "mob" || tag == "boss" || tag == "player" ||
+            tag == "ghost" || tag == "dropped_item") return;
 
         // Registry-based serialization — all registered components are handled
         entitiesJson.push_back(PrefabLibrary::entityToJson(entity));
@@ -2233,7 +2261,7 @@ void Editor::saveScene(World* world, const std::string& path) {
         }
     }
 
-    LOG_INFO("Editor", "Scene saved to %s (%zu entities)", path.c_str(), world->entityCount());
+    LOG_INFO("Editor", "Scene saved to %s (%zu entities)", path.c_str(), entitiesJson.size());
 }
 
 void Editor::loadScene(World* world, const std::string& path) {
@@ -2281,6 +2309,7 @@ void Editor::loadScene(World* world, const std::string& path) {
         ++loadedCount;
     }
     selectedEntity_ = nullptr;
+    selectedHandle_ = {};
     LOG_INFO("Editor", "Scene loaded v%d from %s (%zu entities)",
              version, path.c_str(), world->entityCount());
 }
@@ -2447,7 +2476,7 @@ void Editor::drawHierarchy(World* world) {
                 ImGui::TreeNodeEx((void*)(intptr_t)entity->id(), flags, "%s%s",
                     entity->name().c_str(), hasError ? " (!)" : "");
 
-                if (ImGui::IsItemClicked()) selectedEntity_ = entity;
+                if (ImGui::IsItemClicked()) { selectedEntity_ = entity; selectedHandle_ = entity->handle(); }
                 if (hasError || hasTag) ImGui::PopStyleColor();
             } else {
                 // Multiple entities -- group with child count badge
@@ -2474,7 +2503,7 @@ void Editor::drawHierarchy(World* world) {
 
                         ImGui::TreeNodeEx((void*)(intptr_t)entity->id(), flags, "%s", entity->name().c_str());
 
-                        if (ImGui::IsItemClicked()) selectedEntity_ = entity;
+                        if (ImGui::IsItemClicked()) { selectedEntity_ = entity; selectedHandle_ = entity->handle(); }
                     }
 
                     float endY = ImGui::GetCursorScreenPos().y - ImGui::GetStyle().ItemSpacing.y;
@@ -2502,12 +2531,15 @@ static void drawReflectedComponent(const fate::ComponentMeta& meta, void* data) 
         switch (field.type) {
             case fate::FieldType::Float:
                 ImGui::DragFloat(field.name, reinterpret_cast<float*>(ptr), 0.1f);
+                fate::Editor::instance().captureInspectorUndo();
                 break;
             case fate::FieldType::Int:
                 ImGui::DragInt(field.name, reinterpret_cast<int*>(ptr));
+                fate::Editor::instance().captureInspectorUndo();
                 break;
             case fate::FieldType::Bool:
                 ImGui::Checkbox(field.name, reinterpret_cast<bool*>(ptr));
+                fate::Editor::instance().captureInspectorUndo();
                 break;
             case fate::FieldType::Vec2: {
                 auto* v = reinterpret_cast<fate::Vec2*>(ptr);
@@ -2515,11 +2547,13 @@ static void drawReflectedComponent(const fate::ComponentMeta& meta, void* data) 
                 if (ImGui::DragFloat2(field.name, vals, 0.5f)) {
                     v->x = vals[0]; v->y = vals[1];
                 }
+                fate::Editor::instance().captureInspectorUndo();
                 break;
             }
             case fate::FieldType::Color: {
                 auto* c = reinterpret_cast<fate::Color*>(ptr);
                 ImGui::ColorEdit4(field.name, &c->r);
+                fate::Editor::instance().captureInspectorUndo();
                 break;
             }
             case fate::FieldType::Rect: {
@@ -2528,6 +2562,7 @@ static void drawReflectedComponent(const fate::ComponentMeta& meta, void* data) 
                 if (ImGui::DragFloat4(field.name, vals, 0.5f)) {
                     r->x = vals[0]; r->y = vals[1]; r->w = vals[2]; r->h = vals[3];
                 }
+                fate::Editor::instance().captureInspectorUndo();
                 break;
             }
             case fate::FieldType::String: {
@@ -2537,15 +2572,41 @@ static void drawReflectedComponent(const fate::ComponentMeta& meta, void* data) 
                 if (ImGui::InputText(field.name, buf, sizeof(buf))) {
                     *s = buf;
                 }
+                fate::Editor::instance().captureInspectorUndo();
                 break;
             }
             case fate::FieldType::UInt:
                 ImGui::DragScalar(field.name, ImGuiDataType_U32, reinterpret_cast<uint32_t*>(ptr));
+                fate::Editor::instance().captureInspectorUndo();
                 break;
             default:
                 ImGui::TextDisabled("%s: [custom/unsupported]", field.name);
                 break;
         }
+    }
+}
+
+// ============================================================================
+// Inspector undo capture
+// ============================================================================
+
+void Editor::captureInspectorUndo() {
+    if (!selectedEntity_) return;
+    if (ImGui::IsItemActivated()) {
+        pendingInspectorSnapshot_ = PrefabLibrary::entityToJson(selectedEntity_);
+        pendingInspectorHandle_ = selectedEntity_->handle();
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit() && !pendingInspectorSnapshot_.is_null()) {
+        auto newState = PrefabLibrary::entityToJson(selectedEntity_);
+        if (newState != pendingInspectorSnapshot_) {
+            auto cmd = std::make_unique<PropertyCommand>();
+            cmd->entityHandle = pendingInspectorHandle_;
+            cmd->oldState = std::move(pendingInspectorSnapshot_);
+            cmd->newState = std::move(newState);
+            cmd->desc = "Inspector edit";
+            UndoSystem::instance().push(std::move(cmd));
+        }
+        pendingInspectorSnapshot_ = nlohmann::json();
     }
 }
 
@@ -2570,6 +2631,7 @@ void Editor::drawInspector() {
         if (ImGui::InputText("##EntityName", nameBuf, sizeof(nameBuf))) {
             selectedEntity_->setName(nameBuf);
         }
+        captureInspectorUndo();
         if (fontHeading_) ImGui::PopFont();
 
         // Tag + Active on same line
@@ -2582,11 +2644,13 @@ void Editor::drawInspector() {
             if (ImGui::Checkbox("##Active", &active)) {
                 selectedEntity_->setActive(active);
             }
+            captureInspectorUndo();
             ImGui::SameLine();
             ImGui::SetNextItemWidth(-1);
             if (ImGui::InputTextWithHint("##Tag", "Tag", tagBuf, sizeof(tagBuf))) {
                 selectedEntity_->setTag(tagBuf);
             }
+            captureInspectorUndo();
         }
 
         ImGui::Spacing();
@@ -2612,6 +2676,7 @@ void Editor::drawInspector() {
 
                     INSPECTOR_ROW("Position");
                     ImGui::DragFloat2("##pos", &t->position.x, 1.0f);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Tile");
                     Vec2 tile = Coords::toTile(t->position);
@@ -2619,15 +2684,18 @@ void Editor::drawInspector() {
 
                     INSPECTOR_ROW("Scale");
                     ImGui::DragFloat2("##scale", &t->scale.x, 0.01f, 0.01f, 10.0f);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Rotation");
                     float degrees = t->rotation * 57.2957795f;
                     if (ImGui::DragFloat("##rot", &degrees, 1.0f, -360.0f, 360.0f)) {
                         t->rotation = degrees * 0.0174532925f;
                     }
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Depth");
                     ImGui::DragFloat("##depth", &t->depth, 0.1f);
+                    captureInspectorUndo();
 
                     ImGui::EndTable();
                 }
@@ -2650,6 +2718,7 @@ void Editor::drawInspector() {
                         std::string currentName = s->texturePath.empty() ? "(none)" :
                             fs::path(s->texturePath).filename().string();
                         ImGui::SetNextItemWidth(-1);
+                        auto beforeTexCombo = PrefabLibrary::entityToJson(selectedEntity_);
                         if (ImGui::BeginCombo("##sprTex", currentName.c_str())) {
                             // Option to clear
                             if (ImGui::Selectable("(none)", s->texturePath.empty())) {
@@ -2670,6 +2739,15 @@ void Editor::drawInspector() {
                             }
                             ImGui::EndCombo();
                         }
+                        auto afterTexCombo = PrefabLibrary::entityToJson(selectedEntity_);
+                        if (afterTexCombo != beforeTexCombo) {
+                            auto cmd = std::make_unique<PropertyCommand>();
+                            cmd->entityHandle = selectedEntity_->handle();
+                            cmd->oldState = std::move(beforeTexCombo);
+                            cmd->newState = std::move(afterTexCombo);
+                            cmd->desc = "Inspector combo change";
+                            UndoSystem::instance().push(std::move(cmd));
+                        }
                     }
 
                     if (s->texture) {
@@ -2683,14 +2761,18 @@ void Editor::drawInspector() {
 
                     INSPECTOR_ROW("Size");
                     ImGui::DragFloat2("##sprSize", &s->size.x, 1.0f, 1.0f, 2048.0f);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Tint");
                     ImGui::ColorEdit4("##tint", &s->tint.r, ImGuiColorEditFlags_NoLabel);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Flip");
                     ImGui::Checkbox("X##flipX", &s->flipX);
+                    captureInspectorUndo();
                     ImGui::SameLine();
                     ImGui::Checkbox("Y##flipY", &s->flipY);
+                    captureInspectorUndo();
 
                     ImGui::EndTable();
                 }
@@ -2698,6 +2780,7 @@ void Editor::drawInspector() {
                 // Source rect (UV region of the texture -- for tileset tiles)
                 if (ImGui::TreeNode("Source Rect (UV)")) {
                     ImGui::DragFloat4("XYWH", &s->sourceRect.x, 0.01f, 0.0f, 1.0f);
+                    captureInspectorUndo();
                     if (s->texture) {
                         int px = (int)(s->sourceRect.x * s->texture->width());
                         int py = (int)(s->sourceRect.y * s->texture->height());
@@ -2730,15 +2813,19 @@ void Editor::drawInspector() {
 
                     INSPECTOR_ROW("Size");
                     ImGui::DragFloat2("##boxSize", &c->size.x, 0.5f, 1.0f, 512.0f);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Offset");
                     ImGui::DragFloat2("##boxOff", &c->offset.x, 0.5f);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Trigger");
                     ImGui::Checkbox("##boxTrig", &c->isTrigger);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Static");
                     ImGui::Checkbox("##boxStatic", &c->isStatic);
+                    captureInspectorUndo();
 
                     ImGui::EndTable();
                 }
@@ -2771,9 +2858,11 @@ void Editor::drawInspector() {
 
                     INSPECTOR_ROW("Trigger");
                     ImGui::Checkbox("##polyTrig", &pc->isTrigger);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Static");
                     ImGui::Checkbox("##polyStatic", &pc->isStatic);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Vertices");
                     ImGui::Text("%zu", pc->points.size());
@@ -2787,6 +2876,7 @@ void Editor::drawInspector() {
                     char label[16];
                     snprintf(label, sizeof(label), "V%d", i);
                     ImGui::DragFloat2(label, &pc->points[i].x, 0.5f);
+                    captureInspectorUndo();
                     ImGui::SameLine();
                     if (ImGui::SmallButton("X")) removeIdx = i;
                     ImGui::PopID();
@@ -2835,9 +2925,11 @@ void Editor::drawInspector() {
 
                     INSPECTOR_ROW("Speed");
                     ImGui::DragFloat("##moveSpd", &p->moveSpeed, 1.0f, 0.0f, 500.0f);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Local");
                     ImGui::Checkbox("##isLocal", &p->isLocalPlayer);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Facing");
                     const char* dirs[] = {"None", "Up", "Down", "Left", "Right"};
@@ -2903,25 +2995,40 @@ void Editor::drawInspector() {
                     strncpy(znameBuf, z->zoneName.c_str(), sizeof(znameBuf) - 1);
                     znameBuf[sizeof(znameBuf) - 1] = '\0';
                     if (ImGui::InputText("##zoneName", znameBuf, sizeof(znameBuf))) z->zoneName = znameBuf;
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Display");
                     char dispBuf[64];
                     strncpy(dispBuf, z->displayName.c_str(), sizeof(dispBuf) - 1);
                     dispBuf[sizeof(dispBuf) - 1] = '\0';
                     if (ImGui::InputText("##zoneDisp", dispBuf, sizeof(dispBuf))) z->displayName = dispBuf;
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Size");
                     ImGui::DragFloat2("##zoneSize", &z->size.x, 8.0f, 32.0f, 10000.0f);
+                    captureInspectorUndo();
 
                     ImGui::EndTable();
                 }
 
-                const char* types[] = {"town", "zone", "dungeon"};
-                int typeIdx = 0;
-                if (z->zoneType == "zone") typeIdx = 1;
-                if (z->zoneType == "dungeon") typeIdx = 2;
-                if (ImGui::Combo("##zoneType", &typeIdx, types, 3)) {
-                    z->zoneType = types[typeIdx];
+                {
+                    const char* types[] = {"town", "zone", "dungeon"};
+                    int typeIdx = 0;
+                    if (z->zoneType == "zone") typeIdx = 1;
+                    if (z->zoneType == "dungeon") typeIdx = 2;
+                    auto beforeZoneType = PrefabLibrary::entityToJson(selectedEntity_);
+                    if (ImGui::Combo("##zoneType", &typeIdx, types, 3)) {
+                        z->zoneType = types[typeIdx];
+                        auto afterZoneType = PrefabLibrary::entityToJson(selectedEntity_);
+                        if (afterZoneType != beforeZoneType) {
+                            auto cmd = std::make_unique<PropertyCommand>();
+                            cmd->entityHandle = selectedEntity_->handle();
+                            cmd->oldState = std::move(beforeZoneType);
+                            cmd->newState = std::move(afterZoneType);
+                            cmd->desc = "Inspector combo change";
+                            UndoSystem::instance().push(std::move(cmd));
+                        }
+                    }
                 }
 
                 if (ImGui::BeginTable("##ZoneProps2", 2, ImGuiTableFlags_SizingStretchProp)) {
@@ -2930,12 +3037,15 @@ void Editor::drawInspector() {
 
                     INSPECTOR_ROW("Min Level");
                     ImGui::DragInt("##zMinLvl", &z->minLevel, 1, 1, 99);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Max Level");
                     ImGui::DragInt("##zMaxLvl", &z->maxLevel, 1, 1, 99);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("PvP");
                     ImGui::Checkbox("##zPvp", &z->pvpEnabled);
+                    captureInspectorUndo();
 
                     ImGui::EndTable();
                 }
@@ -2962,38 +3072,46 @@ void Editor::drawInspector() {
 
                     INSPECTOR_ROW("Trigger");
                     ImGui::DragFloat2("##pTrigSz", &p->triggerSize.x, 1.0f, 8.0f, 256.0f);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Scene");
                     char sceneBuf[64];
                     strncpy(sceneBuf, p->targetScene.c_str(), sizeof(sceneBuf) - 1);
                     sceneBuf[sizeof(sceneBuf) - 1] = '\0';
                     if (ImGui::InputText("##pScene", sceneBuf, sizeof(sceneBuf))) p->targetScene = sceneBuf;
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Zone");
                     char zoneBuf[64];
                     strncpy(zoneBuf, p->targetZone.c_str(), sizeof(zoneBuf) - 1);
                     zoneBuf[sizeof(zoneBuf) - 1] = '\0';
                     if (ImGui::InputText("##pZone", zoneBuf, sizeof(zoneBuf))) p->targetZone = zoneBuf;
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Spawn Pos");
                     ImGui::DragFloat2("##pSpawn", &p->targetSpawnPos.x, 1.0f);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Fade");
                     ImGui::Checkbox("##pFade", &p->useFadeTransition);
+                    captureInspectorUndo();
 
                     if (p->useFadeTransition) {
                         INSPECTOR_ROW("Duration");
                         ImGui::DragFloat("##pFadeDur", &p->fadeDuration, 0.05f, 0.1f, 2.0f);
+                        captureInspectorUndo();
                     }
 
                     INSPECTOR_ROW("Label");
                     ImGui::Checkbox("##pShowLbl", &p->showLabel);
+                    captureInspectorUndo();
 
                     INSPECTOR_ROW("Override");
                     char labelBuf[64];
                     strncpy(labelBuf, p->label.c_str(), sizeof(labelBuf) - 1);
                     labelBuf[sizeof(labelBuf) - 1] = '\0';
                     if (ImGui::InputText("##pLabel", labelBuf, sizeof(labelBuf))) p->label = labelBuf;
+                    captureInspectorUndo();
 
                     ImGui::EndTable();
                 }
@@ -3015,70 +3133,106 @@ void Editor::drawInspector() {
                 auto& s = cs->stats;
                 char nameBuf[64]; strncpy(nameBuf, s.characterName.c_str(), sizeof(nameBuf)-1); nameBuf[sizeof(nameBuf)-1]=0;
                 if (ImGui::InputText("Char Name##cs", nameBuf, sizeof(nameBuf))) s.characterName = nameBuf;
+                captureInspectorUndo();
 
                 // Class selector - reconfigures ClassDefinition on change
-                const char* classNames[] = {"Warrior", "Mage", "Archer"};
-                int classIdx = (int)s.classDef.classType;
-                if (ImGui::Combo("Class##cs", &classIdx, classNames, 3)) {
-                    auto& cd = s.classDef;
-                    cd.classType = (ClassType)classIdx;
-                    switch (cd.classType) {
-                        case ClassType::Warrior:
-                            cd.displayName = "Warrior"; s.className = "Warrior";
-                            cd.baseMaxHP = 70; cd.baseMaxMP = 30;
-                            cd.baseStrength = 14; cd.baseVitality = 12;
-                            cd.baseIntelligence = 5; cd.baseDexterity = 8; cd.baseWisdom = 5;
-                            cd.baseHitRate = 4.0f; cd.attackRange = 1.0f;
-                            cd.primaryResource = ResourceType::Fury;
-                            cd.hpPerLevel = 7.0f; cd.mpPerLevel = 2.0f;
-                            cd.strPerLevel = 0.25f; cd.vitPerLevel = 0.25f;
-                            cd.intPerLevel = 0.0f; cd.dexPerLevel = 0.0f; cd.wisPerLevel = 0.0f;
-                            break;
-                        case ClassType::Mage:
-                            cd.displayName = "Mage"; s.className = "Mage";
-                            cd.baseMaxHP = 50; cd.baseMaxMP = 150;
-                            cd.baseStrength = 4; cd.baseVitality = 6;
-                            cd.baseIntelligence = 16; cd.baseDexterity = 6; cd.baseWisdom = 14;
-                            cd.baseHitRate = 0.0f; cd.attackRange = 7.0f;
-                            cd.primaryResource = ResourceType::Mana;
-                            cd.hpPerLevel = 5.0f; cd.mpPerLevel = 10.0f;
-                            cd.strPerLevel = 0.0f; cd.vitPerLevel = 0.25f;
-                            cd.intPerLevel = 0.25f; cd.dexPerLevel = 0.0f; cd.wisPerLevel = 0.25f;
-                            break;
-                        case ClassType::Archer:
-                            cd.displayName = "Archer"; s.className = "Archer";
-                            cd.baseMaxHP = 50; cd.baseMaxMP = 40;
-                            cd.baseStrength = 8; cd.baseVitality = 9;
-                            cd.baseIntelligence = 7; cd.baseDexterity = 18; cd.baseWisdom = 8;
-                            cd.baseHitRate = 4.0f; cd.attackRange = 7.0f;
-                            cd.primaryResource = ResourceType::Fury;
-                            cd.hpPerLevel = 5.0f; cd.mpPerLevel = 2.0f;
-                            cd.strPerLevel = 0.0f; cd.vitPerLevel = 0.25f;
-                            cd.intPerLevel = 0.0f; cd.dexPerLevel = 0.25f; cd.wisPerLevel = 0.5f;
-                            break;
+                {
+                    const char* classNames[] = {"Warrior", "Mage", "Archer"};
+                    int classIdx = (int)s.classDef.classType;
+                    auto beforeClassCombo = PrefabLibrary::entityToJson(selectedEntity_);
+                    if (ImGui::Combo("Class##cs", &classIdx, classNames, 3)) {
+                        auto& cd = s.classDef;
+                        cd.classType = (ClassType)classIdx;
+                        switch (cd.classType) {
+                            case ClassType::Warrior:
+                                cd.displayName = "Warrior"; s.className = "Warrior";
+                                cd.baseMaxHP = 70; cd.baseMaxMP = 30;
+                                cd.baseStrength = 14; cd.baseVitality = 12;
+                                cd.baseIntelligence = 5; cd.baseDexterity = 8; cd.baseWisdom = 5;
+                                cd.baseHitRate = 4.0f; cd.attackRange = 1.0f;
+                                cd.primaryResource = ResourceType::Fury;
+                                cd.hpPerLevel = 7.0f; cd.mpPerLevel = 2.0f;
+                                cd.strPerLevel = 0.25f; cd.vitPerLevel = 0.25f;
+                                cd.intPerLevel = 0.0f; cd.dexPerLevel = 0.0f; cd.wisPerLevel = 0.0f;
+                                break;
+                            case ClassType::Mage:
+                                cd.displayName = "Mage"; s.className = "Mage";
+                                cd.baseMaxHP = 50; cd.baseMaxMP = 150;
+                                cd.baseStrength = 4; cd.baseVitality = 6;
+                                cd.baseIntelligence = 16; cd.baseDexterity = 6; cd.baseWisdom = 14;
+                                cd.baseHitRate = 0.0f; cd.attackRange = 7.0f;
+                                cd.primaryResource = ResourceType::Mana;
+                                cd.hpPerLevel = 5.0f; cd.mpPerLevel = 10.0f;
+                                cd.strPerLevel = 0.0f; cd.vitPerLevel = 0.25f;
+                                cd.intPerLevel = 0.25f; cd.dexPerLevel = 0.0f; cd.wisPerLevel = 0.25f;
+                                break;
+                            case ClassType::Archer:
+                                cd.displayName = "Archer"; s.className = "Archer";
+                                cd.baseMaxHP = 50; cd.baseMaxMP = 40;
+                                cd.baseStrength = 8; cd.baseVitality = 9;
+                                cd.baseIntelligence = 7; cd.baseDexterity = 18; cd.baseWisdom = 8;
+                                cd.baseHitRate = 4.0f; cd.attackRange = 7.0f;
+                                cd.primaryResource = ResourceType::Fury;
+                                cd.hpPerLevel = 5.0f; cd.mpPerLevel = 2.0f;
+                                cd.strPerLevel = 0.0f; cd.vitPerLevel = 0.25f;
+                                cd.intPerLevel = 0.0f; cd.dexPerLevel = 0.25f; cd.wisPerLevel = 0.5f;
+                                break;
+                        }
+                        s.recalculateStats();
+                        s.recalculateXPRequirement();
+                        s.currentHP = s.maxHP;
+                        s.currentMP = s.maxMP;
+                        s.currentFury = 0.0f;
+                        auto afterClassCombo = PrefabLibrary::entityToJson(selectedEntity_);
+                        if (afterClassCombo != beforeClassCombo) {
+                            auto cmd = std::make_unique<PropertyCommand>();
+                            cmd->entityHandle = selectedEntity_->handle();
+                            cmd->oldState = std::move(beforeClassCombo);
+                            cmd->newState = std::move(afterClassCombo);
+                            cmd->desc = "Inspector combo change";
+                            UndoSystem::instance().push(std::move(cmd));
+                        }
                     }
-                    s.recalculateStats();
-                    s.recalculateXPRequirement();
-                    s.currentHP = s.maxHP;
-                    s.currentMP = s.maxMP;
-                    s.currentFury = 0.0f;
                 }
 
                 ImGui::DragInt("Level##cs", &s.level, 0.1f, 1, 70);
                 if (ImGui::IsItemDeactivatedAfterEdit()) { s.recalculateStats(); s.recalculateXPRequirement(); s.currentHP = s.maxHP; s.currentMP = s.maxMP; }
+                captureInspectorUndo();
                 ImGui::DragInt("Current HP##cs", &s.currentHP, 1.0f, 0, 999999);
+                captureInspectorUndo();
                 ImGui::DragInt("Max HP##cs", &s.maxHP, 1.0f, 1, 999999);
+                captureInspectorUndo();
                 ImGui::DragInt("Current MP##cs", &s.currentMP, 1.0f, 0, 999999);
+                captureInspectorUndo();
                 ImGui::DragInt("Max MP##cs", &s.maxMP, 1.0f, 1, 999999);
+                captureInspectorUndo();
                 if (s.classDef.usesFury()) {
                     ImGui::DragFloat("Fury##cs", &s.currentFury, 0.1f, 0.0f, 20.0f);
+                    captureInspectorUndo();
                     ImGui::DragInt("Max Fury##cs", &s.maxFury, 0.1f, 1, 20);
+                    captureInspectorUndo();
                 }
                 ImGui::DragInt("Honor##cs", &s.honor, 1.0f, 0, 1000000);
+                captureInspectorUndo();
                 ImGui::Checkbox("Is Dead##cs", &s.isDead);
-                const char* pkNames[] = {"White","Purple","Red","Black"};
-                int pkIdx = (int)s.pkStatus;
-                if (ImGui::Combo("PK Status##cs", &pkIdx, pkNames, 4)) s.pkStatus = (PKStatus)pkIdx;
+                captureInspectorUndo();
+                {
+                    const char* pkNames[] = {"White","Purple","Red","Black"};
+                    int pkIdx = (int)s.pkStatus;
+                    auto beforePkCombo = PrefabLibrary::entityToJson(selectedEntity_);
+                    if (ImGui::Combo("PK Status##cs", &pkIdx, pkNames, 4)) {
+                        s.pkStatus = (PKStatus)pkIdx;
+                        auto afterPkCombo = PrefabLibrary::entityToJson(selectedEntity_);
+                        if (afterPkCombo != beforePkCombo) {
+                            auto cmd = std::make_unique<PropertyCommand>();
+                            cmd->entityHandle = selectedEntity_->handle();
+                            cmd->oldState = std::move(beforePkCombo);
+                            cmd->newState = std::move(afterPkCombo);
+                            cmd->desc = "Inspector combo change";
+                            UndoSystem::instance().push(std::move(cmd));
+                        }
+                    }
+                }
                 ImGui::Separator();
                 ImGui::Text("Class: %s  Resource: %s", s.classDef.displayName.c_str(), s.classDef.usesFury() ? "Fury" : "Mana");
                 ImGui::Text("Base: HP:%d MP:%d STR:%d VIT:%d INT:%d DEX:%d WIS:%d",
@@ -3106,24 +3260,41 @@ void Editor::drawInspector() {
                 auto& s = es->stats;
                 char eName[64]; strncpy(eName, s.enemyName.c_str(), sizeof(eName)-1); eName[sizeof(eName)-1]=0;
                 if (ImGui::InputText("Name##es", eName, sizeof(eName))) s.enemyName = eName;
+                captureInspectorUndo();
                 char eType[32]; strncpy(eType, s.monsterType.c_str(), sizeof(eType)-1); eType[sizeof(eType)-1]=0;
                 if (ImGui::InputText("Type##es", eType, sizeof(eType))) s.monsterType = eType;
+                captureInspectorUndo();
                 ImGui::DragInt("Level##es", &s.level, 0.1f, 1, 70);
+                captureInspectorUndo();
                 ImGui::DragInt("HP##es", &s.currentHP, 1.0f, 0, 999999);
+                captureInspectorUndo();
                 ImGui::DragInt("Max HP##es", &s.maxHP, 1.0f, 1, 999999);
+                captureInspectorUndo();
                 ImGui::DragInt("Base Damage##es", &s.baseDamage, 1.0f, 0, 99999);
+                captureInspectorUndo();
                 ImGui::DragInt("Armor##es", &s.armor, 1.0f, 0, 9999);
+                captureInspectorUndo();
                 ImGui::DragInt("Magic Resist##es", &s.magicResist, 1.0f, 0, 9999);
+                captureInspectorUndo();
                 ImGui::DragInt("Hit Rate##es", &s.mobHitRate, 0.5f, 0, 100);
+                captureInspectorUndo();
                 ImGui::DragFloat("Crit Rate##es", &s.critRate, 0.01f, 0.0f, 1.0f, "%.2f");
+                captureInspectorUndo();
                 ImGui::DragFloat("Attack Speed##es", &s.attackSpeed, 0.1f, 0.1f, 10.0f);
+                captureInspectorUndo();
                 ImGui::DragFloat("Move Speed##es", &s.moveSpeed, 0.1f, 0.1f, 10.0f);
+                captureInspectorUndo();
                 ImGui::DragInt("XP Reward##es", &s.xpReward, 1.0f, 0, 99999);
+                captureInspectorUndo();
                 ImGui::DragInt("Honor##es", &s.honorReward, 1.0f, 0, 1000);
+                captureInspectorUndo();
                 ImGui::Checkbox("Aggressive##es", &s.isAggressive);
+                captureInspectorUndo();
                 ImGui::SameLine();
                 ImGui::Checkbox("Magic Dmg##es", &s.dealsMagicDamage);
+                captureInspectorUndo();
                 ImGui::Checkbox("Alive##es", &s.isAlive);
+                captureInspectorUndo();
                 ImGui::Text("Threat entries: %zu", s.damageByAttacker.size());
                 if (!s.damageByAttacker.empty() && ImGui::Button("Clear Threat##es")) s.clearThreatTable();
             }
@@ -3144,20 +3315,34 @@ void Editor::drawInspector() {
                 const char* dN[] = {"None","Up","Down","Left","Right"};
                 ImGui::Text("Mode: %s  Facing: %s", mN[(int)a.getMode()], dN[(int)a.getFacingDirection()]);
                 ImGui::DragFloat("Aggro Radius##ai", &a.acquireRadius, 1.0f, 0.0f, 1000.0f);
+                captureInspectorUndo();
                 ImGui::DragFloat("Leash Radius##ai", &a.contactRadius, 1.0f, 0.0f, 1000.0f);
+                captureInspectorUndo();
                 ImGui::DragFloat("Attack Range##ai", &a.attackRange, 1.0f, 0.0f, 500.0f);
+                captureInspectorUndo();
                 ImGui::DragFloat("Roam Radius##ai", &a.roamRadius, 1.0f, 0.0f, 500.0f);
+                captureInspectorUndo();
                 ImGui::DragFloat("Chase Speed##ai", &a.baseChaseSpeed, 1.0f, 0.0f, 500.0f);
+                captureInspectorUndo();
                 ImGui::DragFloat("Return Speed##ai", &a.baseReturnSpeed, 1.0f, 0.0f, 500.0f);
+                captureInspectorUndo();
                 ImGui::DragFloat("Roam Speed##ai", &a.baseRoamSpeed, 1.0f, 0.0f, 500.0f);
+                captureInspectorUndo();
                 ImGui::DragFloat("Attack CD##ai", &a.attackCooldown, 0.05f, 0.1f, 10.0f, "%.2fs");
+                captureInspectorUndo();
                 ImGui::DragFloat("Think Interval##ai", &a.serverTickInterval, 0.01f, 0.05f, 1.0f, "%.2fs");
+                captureInspectorUndo();
                 ImGui::Checkbox("Passive##ai", &a.isPassive);
+                captureInspectorUndo();
                 ImGui::Checkbox("Can Roam##ai", &a.canRoam);
+                captureInspectorUndo();
                 ImGui::SameLine();
                 ImGui::Checkbox("Can Chase##ai", &a.canChase);
+                captureInspectorUndo();
                 ImGui::Checkbox("Roam While Idle##ai", &a.roamWhileIdle);
+                captureInspectorUndo();
                 ImGui::Checkbox("Show Aggro Radius##ai", &a.showAggroRadius);
+                captureInspectorUndo();
             }
         }
 
@@ -3172,8 +3357,10 @@ void Editor::drawInspector() {
             }
             if (open && selectedEntity_->hasComponent<CombatControllerComponent>()) {
                 ImGui::DragFloat("Base Cooldown##cc", &cc->baseAttackCooldown, 0.05f, 0.1f, 5.0f, "%.2fs");
+                captureInspectorUndo();
                 ImGui::Text("CD Remaining: %.2f", cc->attackCooldownRemaining);
                 ImGui::Checkbox("Show Attack Range##cc", &cc->showAttackRange);
+                captureInspectorUndo();
                 auto* statsComp = selectedEntity_->getComponent<CharacterStatsComponent>();
                 if (statsComp) {
                     bool isMage = (statsComp->stats.classDef.classType == ClassType::Mage);
@@ -3257,10 +3444,15 @@ void Editor::drawInspector() {
             if (open && selectedEntity_->hasComponent<NameplateComponent>()) {
                 char npName[64]; strncpy(npName, np->displayName.c_str(), sizeof(npName)-1); npName[sizeof(npName)-1]=0;
                 if (ImGui::InputText("Name##np", npName, sizeof(npName))) np->displayName = npName;
+                captureInspectorUndo();
                 ImGui::DragInt("Level##np", &np->displayLevel, 0.1f, 1, 70);
+                captureInspectorUndo();
                 ImGui::Checkbox("Show Level##np", &np->showLevel);
+                captureInspectorUndo();
                 ImGui::DragFloat("Font Size##np", &np->fontSize, 0.02f, 0.3f, 2.0f, "%.2f");
+                captureInspectorUndo();
                 ImGui::Checkbox("Visible##np", &np->visible);
+                captureInspectorUndo();
             }
         }
 
@@ -3276,13 +3468,20 @@ void Editor::drawInspector() {
             if (open && selectedEntity_->hasComponent<MobNameplateComponent>()) {
                 char mnName[64]; strncpy(mnName, mnp->displayName.c_str(), sizeof(mnName)-1); mnName[sizeof(mnName)-1]=0;
                 if (ImGui::InputText("Name##mnp", mnName, sizeof(mnName))) mnp->displayName = mnName;
+                captureInspectorUndo();
                 ImGui::DragInt("Level##mnp", &mnp->level, 0.1f, 1, 70);
+                captureInspectorUndo();
                 ImGui::Checkbox("Boss##mnp", &mnp->isBoss);
+                captureInspectorUndo();
                 ImGui::SameLine();
                 ImGui::Checkbox("Elite##mnp", &mnp->isElite);
+                captureInspectorUndo();
                 ImGui::Checkbox("Show Level##mnp", &mnp->showLevel);
+                captureInspectorUndo();
                 ImGui::DragFloat("Font Size##mnp", &mnp->fontSize, 0.02f, 0.3f, 2.0f, "%.2f");
+                captureInspectorUndo();
                 ImGui::Checkbox("Visible##mnp", &mnp->visible);
+                captureInspectorUndo();
             }
         }
 
@@ -3297,6 +3496,7 @@ void Editor::drawInspector() {
             }
             if (open && selectedEntity_->hasComponent<TargetingComponent>()) {
                 ImGui::DragFloat("Max Range##tgt", &tgt->maxTargetRange, 0.5f, 1.0f, 50.0f);
+                captureInspectorUndo();
                 ImGui::Text("Target: %u", tgt->selectedTargetId);
                 if (tgt->hasTarget() && ImGui::Button("Clear Target##tgt")) tgt->clearTarget();
             }
@@ -3384,12 +3584,17 @@ void Editor::drawInspector() {
 
                 char znBuf[64]; strncpy(znBuf, cfg.zoneName.c_str(), sizeof(znBuf)-1); znBuf[sizeof(znBuf)-1]=0;
                 if (ImGui::InputText("Zone Name##sz", znBuf, sizeof(znBuf))) cfg.zoneName = znBuf;
+                captureInspectorUndo();
 
                 ImGui::TextColored(ImVec4(0.6f,0.6f,0.6f,1), "(Move zone via Transform position)");
                 ImGui::DragFloat2("Zone Size##sz", &cfg.size.x, 4.0f, 32.0f, 5000.0f);
+                captureInspectorUndo();
                 ImGui::DragFloat("Min Spawn Dist##sz", &cfg.minSpawnDistance, 0.5f, 0.0f, 500.0f);
+                captureInspectorUndo();
                 ImGui::DragFloat("Tick Interval##sz", &cfg.serverTickInterval, 0.01f, 0.05f, 5.0f, "%.2fs");
+                captureInspectorUndo();
                 ImGui::Checkbox("Show Bounds##sz", &szComp->showBounds);
+                captureInspectorUndo();
 
                 ImGui::Text("Tracked mobs: %zu  Rules: %zu", szComp->trackedMobs.size(), cfg.rules.size());
                 ImGui::Separator();
@@ -3403,16 +3608,25 @@ void Editor::drawInspector() {
                     if (ImGui::TreeNode(ruleLabel)) {
                         char eidBuf[64]; strncpy(eidBuf, rule.enemyId.c_str(), sizeof(eidBuf)-1); eidBuf[sizeof(eidBuf)-1]=0;
                         if (ImGui::InputText("Enemy ID##r", eidBuf, sizeof(eidBuf))) rule.enemyId = eidBuf;
+                        captureInspectorUndo();
 
                         ImGui::DragInt("Target Count##r", &rule.targetCount, 0.1f, 0, 100);
+                        captureInspectorUndo();
                         ImGui::DragInt("Min Level##r", &rule.minLevel, 0.1f, 1, 70);
+                        captureInspectorUndo();
                         ImGui::DragInt("Max Level##r", &rule.maxLevel, 0.1f, 1, 70);
+                        captureInspectorUndo();
                         ImGui::DragInt("Base HP##r", &rule.baseHP, 1.0f, 1, 999999);
+                        captureInspectorUndo();
                         ImGui::DragInt("Base Damage##r", &rule.baseDamage, 1.0f, 0, 99999);
+                        captureInspectorUndo();
                         ImGui::DragFloat("Respawn Time##r", &rule.respawnSeconds, 0.5f, 1.0f, 600.0f, "%.1fs");
+                        captureInspectorUndo();
                         ImGui::Checkbox("Aggressive##r", &rule.isAggressive);
+                        captureInspectorUndo();
                         ImGui::SameLine();
                         ImGui::Checkbox("Boss##r", &rule.isBoss);
+                        captureInspectorUndo();
 
                         if (ImGui::Button("Remove Rule##r")) removeIdx = ri;
 
@@ -3444,8 +3658,18 @@ void Editor::drawInspector() {
             if (open && selectedEntity_->hasComponent<FactionComponent>()) {
                 static const char* factionNames[] = { "None", "Xyros", "Fenor", "Zethos", "Solis" };
                 int current = static_cast<int>(fc->faction);
+                auto beforeFactionCombo = PrefabLibrary::entityToJson(selectedEntity_);
                 if (ImGui::Combo("Faction##fc", &current, factionNames, 5)) {
                     fc->faction = static_cast<Faction>(current);
+                    auto afterFactionCombo = PrefabLibrary::entityToJson(selectedEntity_);
+                    if (afterFactionCombo != beforeFactionCombo) {
+                        auto cmd = std::make_unique<PropertyCommand>();
+                        cmd->entityHandle = selectedEntity_->handle();
+                        cmd->oldState = std::move(beforeFactionCombo);
+                        cmd->newState = std::move(afterFactionCombo);
+                        cmd->desc = "Inspector combo change";
+                        UndoSystem::instance().push(std::move(cmd));
+                    }
                 }
             }
         }
@@ -3466,8 +3690,10 @@ void Editor::drawInspector() {
                     ImGui::Text("Definition: %s", pc->equippedPet.petDefinitionId.c_str());
                     ImGui::Text("Level: %d  XP: %lld/%lld", pc->equippedPet.level, (long long)pc->equippedPet.currentXP, (long long)pc->equippedPet.xpToNextLevel);
                     ImGui::Checkbox("Auto-Loot##pet", &pc->equippedPet.autoLootEnabled);
+                    captureInspectorUndo();
                 }
                 ImGui::DragFloat("Auto-Loot Radius##pet", &pc->autoLootRadius, 1.0f, 0.0f, 512.0f);
+                captureInspectorUndo();
             }
         }
 
@@ -3817,21 +4043,26 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     bool ctrl = (event.key.keysym.mod & KMOD_CTRL) != 0;
     bool shift = (event.key.keysym.mod & KMOD_SHIFT) != 0;
 
+    // Non-modifier shortcuts (W/E/R/B/X/Delete) only fire when paused.
+    // In Play mode the game owns the keyboard — tool switching would
+    // conflict with WASD movement, chat, and other gameplay keys.
+    bool allowToolKeys = paused_;
+
     // Ctrl+Z = Undo
     if (ctrl && scancode == SDL_SCANCODE_Z && !shift) {
         UndoSystem::instance().undo(world);
-        clearSelection();
+        refreshSelection(world);
         if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
     }
     // Ctrl+Y or Ctrl+Shift+Z = Redo
     if ((ctrl && scancode == SDL_SCANCODE_Y) ||
         (ctrl && shift && scancode == SDL_SCANCODE_Z)) {
         UndoSystem::instance().redo(world);
-        clearSelection();
+        refreshSelection(world);
         if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
     }
     // Ctrl+S = Save current scene
-    if (ctrl && scancode == SDL_SCANCODE_S && !currentScenePath_.empty()) {
+    if (ctrl && scancode == SDL_SCANCODE_S && !currentScenePath_.empty() && !inPlayMode_) {
         saveScene(world, currentScenePath_);
     }
     // Also save the focused UI screen if a UI widget is selected
@@ -3856,6 +4087,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
             auto* t = copy->getComponent<Transform>();
             if (t) t->position += Vec2(32.0f, 0.0f);
             selectedEntity_ = copy;
+            selectedHandle_ = copy->handle();
 
             auto cmd = std::make_unique<CreateCommand>();
             cmd->entityData = PrefabLibrary::entityToJson(copy);
@@ -3876,8 +4108,8 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
         // Store in clipboard (just log for now, full clipboard later)
         LOG_INFO("Editor", "Copied entity '%s'", selectedEntity_->name().c_str());
     }
-    // Delete = Delete selected
-    if (scancode == SDL_SCANCODE_DELETE && selectedEntity_) {
+    // Delete = Delete selected (paused only)
+    if (allowToolKeys && scancode == SDL_SCANCODE_DELETE && selectedEntity_ && !isEntityLocked(selectedEntity_)) {
         auto cmd = std::make_unique<DeleteCommand>();
         cmd->entityData = PrefabLibrary::entityToJson(selectedEntity_);
         cmd->deletedHandle = selectedEntity_->handle();
@@ -3885,38 +4117,47 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
 
         world->destroyEntity(selectedEntity_->handle());
         selectedEntity_ = nullptr;
+        selectedHandle_ = {};
     }
-    // W = Move tool
-    if (scancode == SDL_SCANCODE_W && !ctrl) {
+    // W = Move tool (paused only — W is move-up in Play mode)
+    if (allowToolKeys && scancode == SDL_SCANCODE_W && !ctrl) {
         currentTool_ = EditorTool::Move;
+        pendingBrushStroke_.reset();
     }
-    // E = Scale tool (was Resize)
-    if (scancode == SDL_SCANCODE_E && !ctrl) {
+    // E = Scale tool (paused only)
+    if (allowToolKeys && scancode == SDL_SCANCODE_E && !ctrl) {
         currentTool_ = EditorTool::Scale;
+        pendingBrushStroke_.reset();
     }
-    // R = Rotate tool
-    if (scancode == SDL_SCANCODE_R && !ctrl) {
+    // R = Rotate tool (paused only)
+    if (allowToolKeys && scancode == SDL_SCANCODE_R && !ctrl) {
         currentTool_ = EditorTool::Rotate;
+        pendingBrushStroke_.reset();
     }
-    // B = Paint tool
-    if (scancode == SDL_SCANCODE_B && !ctrl) {
+    // B = Paint tool (paused only)
+    if (allowToolKeys && scancode == SDL_SCANCODE_B && !ctrl) {
         currentTool_ = EditorTool::Paint;
+        pendingBrushStroke_.reset();
     }
-    // X = Erase tool
-    if (scancode == SDL_SCANCODE_X && !ctrl) {
+    // X = Erase tool (paused only)
+    if (allowToolKeys && scancode == SDL_SCANCODE_X && !ctrl) {
         currentTool_ = EditorTool::Erase;
+        pendingBrushStroke_.reset();
     }
     // G = Flood fill tool
     if (scancode == SDL_SCANCODE_G && !ctrl) {
         currentTool_ = EditorTool::Fill;
+        pendingBrushStroke_.reset();
     }
     // U = Rectangle fill tool
     if (scancode == SDL_SCANCODE_U && !ctrl) {
         currentTool_ = EditorTool::RectFill;
+        pendingBrushStroke_.reset();
     }
     // L = Line tool
     if (scancode == SDL_SCANCODE_L && !ctrl) {
         currentTool_ = EditorTool::LineTool;
+        pendingBrushStroke_.reset();
     }
 }
 

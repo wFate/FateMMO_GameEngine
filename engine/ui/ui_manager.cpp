@@ -117,6 +117,19 @@ bool UIManager::loadScreenFromString(const std::string& screenId, const std::str
 }
 
 void UIManager::unloadScreen(const std::string& screenId) {
+    // Clear focus/hover/press if they point into the screen being removed
+    auto it = screens_.find(screenId);
+    if (it != screens_.end()) {
+        auto* root = it->second.get();
+        auto isChild = [&](UINode* n) -> bool {
+            for (UINode* p = n; p; p = p->parent())
+                if (p == root) return true;
+            return false;
+        };
+        if (focusedNode_ && isChild(focusedNode_))  focusedNode_ = nullptr;
+        if (hoveredNode_ && isChild(hoveredNode_))   hoveredNode_ = nullptr;
+        if (pressedNode_ && isChild(pressedNode_))   pressedNode_ = nullptr;
+    }
     screens_.erase(screenId);
     screenOrder_.erase(
         std::remove(screenOrder_.begin(), screenOrder_.end(), screenId),
@@ -678,6 +691,14 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
 // ---------------------------------------------------------------------------
 
 void UIManager::handleInput() {
+    // Clear stale focus/press if the node was hidden or removed since last frame
+    if (focusedNode_ && !focusedNode_->visible()) {
+        focusedNode_->onFocusLost();
+        focusedNode_ = nullptr;
+    }
+    if (pressedNode_ && !pressedNode_->visible())  pressedNode_ = nullptr;
+    if (hoveredNode_ && !hoveredNode_->visible())   hoveredNode_ = nullptr;
+
     auto& input = Input::instance();
     Vec2 rawPos = input.mousePosition();
     Vec2 mousePos = {(rawPos.x - inputOffsetX_) * inputScaleX_,

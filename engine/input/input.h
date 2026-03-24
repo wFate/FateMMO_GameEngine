@@ -54,6 +54,18 @@ public:
     bool isUIBlocking() const { return uiBlocking_; }
     void setUIBlocking(bool v) { uiBlocking_ = v; }
 
+    // Consume press state so downstream code sees "held" instead of "just pressed"
+    void consumeMousePress(int button) {
+        auto it = mouseButtons_.find(button);
+        if (it != mouseButtons_.end() && it->second == KeyState::Pressed)
+            it->second = KeyState::Down;
+    }
+    void consumeKeyPress(SDL_Scancode key) {
+        auto it = keys_.find(key);
+        if (it != keys_.end() && it->second == KeyState::Pressed)
+            it->second = KeyState::Down;
+    }
+
     // Access for advanced use
     ActionMap& actionMap() { return actionMap_; }
     const ActionMap& actionMap() const { return actionMap_; }

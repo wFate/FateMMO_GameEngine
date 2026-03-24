@@ -48,7 +48,13 @@ public:
     void setResolvedStyle(const UIStyle& s) { resolvedStyle_ = s; }
 
     // State
-    bool visible() const { return visible_; }
+    bool visible() const {
+        // Walk up parent chain — a node is only visible if ALL ancestors are
+        for (const UINode* n = this; n; n = n->parent_)
+            if (!n->visible_) return false;
+        return true;
+    }
+    bool visibleSelf() const { return visible_; } // own flag only (layout/render)
     void setVisible(bool v) { visible_ = v; }
     bool enabled() const { return enabled_; }
     void setEnabled(bool e) { enabled_ = e; }

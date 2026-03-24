@@ -13,6 +13,7 @@
 #include <implot.h>
 #endif
 #include "engine/editor/tile_tools.h"
+#include "engine/editor/undo.h"
 #include "engine/editor/node_editor.h"
 #include "engine/editor/animation_editor.h"
 #include "engine/editor/asset_browser.h"
@@ -122,8 +123,13 @@ public:
     bool wantsMouse() const { return open_ && wantsMouse_; }
 
     Entity* selectedEntity() const { return selectedEntity_; }
-    void clearSelection() { selectedEntity_ = nullptr; isDraggingEntity_ = false; selectedEntities_.clear(); }
-    void cancelPlacement() { isDraggingAsset_ = false; draggedAssetPath_.clear(); }
+    void clearSelection() { selectedHandle_ = {}; selectedEntity_ = nullptr; isDraggingEntity_ = false; selectedEntities_.clear(); }
+    void cancelPlacement() { isDraggingAsset_ = false; draggedAssetPath_.clear(); pendingBrushStroke_.reset(); }
+    void refreshSelection(World* world) {
+        if (selectedHandle_.isNull()) { selectedEntity_ = nullptr; return; }
+        selectedEntity_ = world ? world->getEntity(selectedHandle_) : nullptr;
+        if (!selectedEntity_) { selectedHandle_ = {}; selectedEntities_.clear(); }
+    }
     bool isTilePaintMode() const {
         return (currentTool_ == EditorTool::Paint ||
                 currentTool_ == EditorTool::Fill ||
@@ -165,6 +171,9 @@ public:
         }
         return false;
     }
+
+    // Inspector undo capture (call after each editable ImGui widget)
+    void captureInspectorUndo();
 
     // Entity locking
     static bool isEntityLocked(Entity* e) { return e && e->tag() == "ground"; }
@@ -236,6 +245,7 @@ private:
     float gridSize_ = 32.0f;
 
     // Selection
+    EntityHandle selectedHandle_;                       // authoritative — survives entity recreation
     Entity* selectedEntity_ = nullptr;
     std::set<EntityHandle> selectedEntities_; // multi-select
     bool isDraggingEntity_ = false;
@@ -277,8 +287,15 @@ private:
     Vec2i toolDragEnd_ = {-1, -1};
     bool isToolDragging_ = false;
 
+    // Brush stroke grouping (Paint tool)
+    std::unique_ptr<CompoundCommand> pendingBrushStroke_;
+
     // Console command
     char consoleCmdBuf_[256] = "";
+
+    // Inspector undo capture (snapshot before/after field edit)
+    nlohmann::json pendingInspectorSnapshot_;
+    EntityHandle pendingInspectorHandle_;
 
     // Delete confirmation state
     bool pendingDeleteFile_ = false;

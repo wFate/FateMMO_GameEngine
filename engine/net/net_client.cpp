@@ -92,6 +92,7 @@ void NetClient::disconnect() {
     waitingForAccept_ = false;
     clientId_ = 0;
     sessionToken_ = 0;
+    authToken_ = {};
     reliability_.reset();
     crypto_.clearKeys();
     lastHeartbeatSent_ = 0.0f;
@@ -299,6 +300,7 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             waitingForAccept_ = false;
             connected_ = false;
             socket_.close();
+            authToken_ = {};
             // Stop reconnect — token is invalid, must re-authenticate
             reconnectPhase_ = ReconnectPhase::Failed;
             reconnectAttempts_ = 0;
