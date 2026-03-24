@@ -171,22 +171,24 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
     const auto& rect = computedRect_;
     float d = static_cast<float>(zOrder_);
 
+    // Recompute scale from viewport height
+    recomputeScale(rect.h);
+    float s = uiScale_;
+
     // --- Full-screen dark background ---
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
                    {rect.w, rect.h},
                    {0.04f, 0.04f, 0.07f, 1.0f}, d);
 
     // --- Compute panel dimensions ---
-    // Field count: serverHost+port row, username, password, [email, confirmPassword in Register]
     int fieldCount = (mode == LoginMode::Login) ? 3 : 5;
-    // label height (12px + 2px gap) + field + spacing per field
-    float labelH = 14.0f;
+    float labelH = 14.0f * s;
     float fieldBlock = labelH + FIELD_HEIGHT + FIELD_SPACING;
-    float titleH = 40.0f;
-    float subtitleH = 24.0f;
-    float rememberH = 24.0f;
-    float statusH = 20.0f;
-    float toggleH = 24.0f;
+    float titleH = 40.0f * s;
+    float subtitleH = 24.0f * s;
+    float rememberH = 24.0f * s;
+    float statusH = 20.0f * s;
+    float toggleH = 24.0f * s;
 
     float panelH = PADDING + titleH + subtitleH +
                    static_cast<float>(fieldCount) * fieldBlock +
@@ -205,7 +207,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
 
     // --- Panel border ---
     Color bc(0.6f, 0.5f, 0.25f, 1.0f);
-    float bw = 2.0f;
+    float bw = 2.0f * s;
     float innerH = panelH - bw * 2.0f;
     batch.drawRect({panelX + PANEL_WIDTH * 0.5f, panelY + bw * 0.5f}, {PANEL_WIDTH, bw}, bc, d + 0.15f);
     batch.drawRect({panelX + PANEL_WIDTH * 0.5f, panelY + panelH - bw * 0.5f}, {PANEL_WIDTH, bw}, bc, d + 0.15f);
@@ -219,7 +221,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
     // --- Title ---
     {
         const char* title = "FateMMO";
-        float tfs = 22.0f;
+        float tfs = 22.0f * s;
         Vec2 tsz = sdf.measure(title, tfs);
         Color gold(0.95f, 0.80f, 0.20f, 1.0f);
         float titleX = panelX + (PANEL_WIDTH - tsz.x) * 0.5f;
@@ -230,7 +232,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
     // --- Subtitle ---
     {
         const char* sub = (mode == LoginMode::Login) ? "Sign In" : "Create Account";
-        float sfs = 13.0f;
+        float sfs = 13.0f * s;
         Vec2 ssz = sdf.measure(sub, sfs);
         sdf.drawScreen(batch, sub,
                        {panelX + (PANEL_WIDTH - ssz.x) * 0.5f, curY},
@@ -244,10 +246,10 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
     Color fieldBorder(0.35f, 0.35f, 0.50f, 1.0f);
     Color fieldBorderFocused(0.6f, 0.5f, 0.3f, 1.0f);
     Color labelColor(0.55f, 0.55f, 0.65f, 1.0f);
-    float labelFs = 11.0f;
-    float fieldFs = 14.0f;
-    float fieldPad = 8.0f;
-    float fbw = 1.5f;
+    float labelFs = 11.0f * s;
+    float fieldFs = 14.0f * s;
+    float fieldPad = 8.0f * s;
+    float fbw = 1.5f * s;
 
     auto drawField = [&](const char* label, float fx, float fy, float fw,
                          const std::string& value, bool focused, bool masked) {
@@ -282,14 +284,14 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
             Vec2 cOff = sdf.measure(before, fieldFs);
             float cx = fx + fieldPad + cOff.x;
             batch.drawRect({cx + 0.5f, fFieldY + FIELD_HEIGHT * 0.5f},
-                           {1.0f, FIELD_HEIGHT - 8.0f}, Color::white(), d + 1.1f);
+                           {1.0f * s, FIELD_HEIGHT - 8.0f * s}, Color::white(), d + 1.1f);
         }
     };
 
     // --- Server Host + Port (side by side) ---
     {
-        float portW = 70.0f;
-        float gap = 8.0f;
+        float portW = 70.0f * s;
+        float gap = 8.0f * s;
         float hostW = contentW - portW - gap;
         drawField("Server", contentX, curY, hostW, serverHost, focusedField_ == 0, false);
         drawField("Port", contentX + hostW + gap, curY, portW, portStr_, focusedField_ == 1, false);
@@ -332,7 +334,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
         batch.drawRect({contentX + fbw * 0.5f, curY + BUTTON_HEIGHT * 0.5f}, {fbw, bih}, btnBorder, d + 0.15f);
         batch.drawRect({contentX + contentW - fbw * 0.5f, curY + BUTTON_HEIGHT * 0.5f}, {fbw, bih}, btnBorder, d + 0.15f);
 
-        float bfs = 14.0f;
+        float bfs = 14.0f * s;
         Vec2 bsz = sdf.measure(btnLabel, bfs);
         sdf.drawScreen(batch, btnLabel,
                        {contentX + (contentW - bsz.x) * 0.5f,
@@ -343,7 +345,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
 
     // --- Remember Me checkbox ---
     {
-        float checkSize = 16.0f;
+        float checkSize = 16.0f * s;
         float checkX = contentX;
         float checkY = curY + (rememberH - checkSize) * 0.5f;
 
@@ -355,15 +357,16 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
                        {checkSize, checkSize}, boxBg, d + 0.1f);
         // Box border
         Color boxBorder(0.45f, 0.45f, 0.55f, 1.0f);
-        float bxih = checkSize - 1.0f * 2.0f;
-        batch.drawRect({checkX + checkSize * 0.5f, checkY + 0.5f}, {checkSize, 1.0f}, boxBorder, d + 0.15f);
-        batch.drawRect({checkX + checkSize * 0.5f, checkY + checkSize - 0.5f}, {checkSize, 1.0f}, boxBorder, d + 0.15f);
-        batch.drawRect({checkX + 0.5f, checkY + checkSize * 0.5f}, {1.0f, bxih}, boxBorder, d + 0.15f);
-        batch.drawRect({checkX + checkSize - 0.5f, checkY + checkSize * 0.5f}, {1.0f, bxih}, boxBorder, d + 0.15f);
+        float bbw = 1.0f * s;
+        float bxih = checkSize - bbw * 2.0f;
+        batch.drawRect({checkX + checkSize * 0.5f, checkY + bbw * 0.5f}, {checkSize, bbw}, boxBorder, d + 0.15f);
+        batch.drawRect({checkX + checkSize * 0.5f, checkY + checkSize - bbw * 0.5f}, {checkSize, bbw}, boxBorder, d + 0.15f);
+        batch.drawRect({checkX + bbw * 0.5f, checkY + checkSize * 0.5f}, {bbw, bxih}, boxBorder, d + 0.15f);
+        batch.drawRect({checkX + checkSize - bbw * 0.5f, checkY + checkSize * 0.5f}, {bbw, bxih}, boxBorder, d + 0.15f);
 
         // Check mark
         if (rememberMe) {
-            float inset = 3.0f;
+            float inset = 3.0f * s;
             batch.drawRect({checkX + checkSize * 0.5f, checkY + checkSize * 0.5f},
                            {checkSize - inset * 2.0f, checkSize - inset * 2.0f},
                            Color::white(), d + 1.0f);
@@ -371,10 +374,10 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
 
         // Label
         const char* rmLabel = "Remember Me";
-        float rmFs = 12.0f;
+        float rmFs = 12.0f * s;
         Vec2 rmSz = sdf.measure(rmLabel, rmFs);
         sdf.drawScreen(batch, rmLabel,
-                       {checkX + checkSize + 6.0f, checkY + (checkSize - rmSz.y) * 0.5f},
+                       {checkX + checkSize + 6.0f * s, checkY + (checkSize - rmSz.y) * 0.5f},
                        rmFs, {0.65f, 0.65f, 0.75f, 1.0f}, d + 1.0f);
 
         curY += rememberH + FIELD_SPACING;
@@ -383,7 +386,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
     // --- Toggle mode link ---
     {
         const char* toggleLabel = (mode == LoginMode::Login) ? "Create Account" : "Back to Login";
-        float tfs = 12.0f;
+        float tfs = 12.0f * s;
         Vec2 tsz = sdf.measure(toggleLabel, tfs);
         float toggleX = panelX + (PANEL_WIDTH - tsz.x) * 0.5f;
         float toggleY = curY;
@@ -403,7 +406,7 @@ void LoginScreen::render(SpriteBatch& batch, SDFText& sdf) {
 
     // --- Status message ---
     if (!statusMessage.empty()) {
-        float sfs = 12.0f;
+        float sfs = 12.0f * s;
         Vec2 ssz = sdf.measure(statusMessage, sfs);
         Color sc = isError ? Color(1.0f, 0.35f, 0.35f, 1.0f)
                            : Color(0.35f, 0.95f, 0.45f, 1.0f);
@@ -424,16 +427,18 @@ bool LoginScreen::onPress(const Vec2& localPos) {
 
     // Convert local to panel-relative coords
     const auto& rect = computedRect_;
+    recomputeScale(rect.h);
+    float s = uiScale_;
     float panelX = (rect.w - PANEL_WIDTH) * 0.5f;
 
     int fieldCount = (mode == LoginMode::Login) ? 3 : 5;
-    float labelH = 14.0f;
+    float labelH = 14.0f * s;
     float fieldBlock = labelH + FIELD_HEIGHT + FIELD_SPACING;
-    float titleH = 40.0f;
-    float subtitleH = 24.0f;
-    float rememberH = 24.0f;
-    float statusH = 20.0f;
-    float toggleH = 24.0f;
+    float titleH = 40.0f * s;
+    float subtitleH = 24.0f * s;
+    float rememberH = 24.0f * s;
+    float statusH = 20.0f * s;
+    float toggleH = 24.0f * s;
 
     float totalPanelH = PADDING + titleH + subtitleH +
                         static_cast<float>(fieldCount) * fieldBlock +
@@ -458,8 +463,8 @@ bool LoginScreen::onPress(const Vec2& localPos) {
 
     // --- Server Host field ---
     {
-        float portW = 70.0f;
-        float gap = 8.0f;
+        float portW = 70.0f * s;
+        float gap = 8.0f * s;
         float hostW = contentW - portW - gap;
         Rect hostR = {contentX, curY + labelH, hostW, FIELD_HEIGHT};
         Rect portR = {contentX + hostW + gap, curY + labelH, portW, FIELD_HEIGHT};
@@ -542,16 +547,18 @@ void LoginScreen::onRelease(const Vec2& localPos) {
     }
 
     const auto& rect = computedRect_;
+    recomputeScale(rect.h);
+    float s = uiScale_;
     float pX = (rect.w - PANEL_WIDTH) * 0.5f;
 
     int fieldCount = (mode == LoginMode::Login) ? 3 : 5;
-    float labelH = 14.0f;
+    float labelH = 14.0f * s;
     float fieldBlock = labelH + FIELD_HEIGHT + FIELD_SPACING;
-    float titleH = 40.0f;
-    float subtitleH = 24.0f;
-    float rememberH = 24.0f;
-    float statusH = 20.0f;
-    float toggleH = 24.0f;
+    float titleH = 40.0f * s;
+    float subtitleH = 24.0f * s;
+    float rememberH = 24.0f * s;
+    float statusH = 20.0f * s;
+    float toggleH = 24.0f * s;
 
     float totalPanelH = PADDING + titleH + subtitleH +
                         static_cast<float>(fieldCount) * fieldBlock +

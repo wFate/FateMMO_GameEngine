@@ -445,11 +445,21 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     else if (type == "skill_arc") {
         auto arc = std::make_unique<SkillArc>(id);
         arc->attackButtonSize = j.value("attackButtonSize", 80.0f);
-        arc->slotSize         = j.value("slotSize", 52.0f);
-        arc->arcRadius        = j.value("arcRadius", 70.0f);
+        arc->pickUpButtonSize = j.value("pickUpButtonSize", 60.0f);
+        arc->slotSize         = j.value("slotSize", 60.0f);
+        arc->arcRadius        = j.value("arcRadius", 180.0f);
         arc->slotCount        = j.value("slotCount", 5);
-        arc->startAngleDeg    = j.value("startAngleDeg", 210.0f);
-        arc->endAngleDeg      = j.value("endAngleDeg", 330.0f);
+        arc->startAngleDeg    = j.value("startAngleDeg", 290.0f);
+        arc->endAngleDeg      = j.value("endAngleDeg", 190.0f);
+        // Individual button offsets (relative to widget bottom-center, in unscaled pixels)
+        if (j.contains("attackOffset")) {
+            auto& ao = j["attackOffset"];
+            arc->attackOffset = {ao[0].get<float>(), ao[1].get<float>()};
+        }
+        if (j.contains("pickUpOffset")) {
+            auto& po = j["pickUpOffset"];
+            arc->pickUpOffset = {po[0].get<float>(), po[1].get<float>()};
+        }
         node = std::move(arc);
     }
     else if (type == "player_info_block") {

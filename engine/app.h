@@ -84,6 +84,7 @@ public:
     void setLoadingScreen(LoadingScreen* ls) { loadingScreen_ = ls; }
     void setLoadingProgress(float p) { loadingProgress_ = p; }
     void setIsLoading(bool loading) { isLoading_ = loading; }
+    bool isLoading() const { return isLoading_; }
 
 protected:
     AppConfig config_;

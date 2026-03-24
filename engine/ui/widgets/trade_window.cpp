@@ -60,37 +60,37 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
 
     Color titleColor = {0.28f, 0.18f, 0.08f, 1.0f};
     sdf.drawScreen(batch, titleBuf,
-        {rect.x + 10.0f, rect.y + 6.0f},
-        15.0f, titleColor, d + 0.2f);
+        {rect.x + 10.0f * layoutScale_, rect.y + 6.0f * layoutScale_},
+        scaledFont(15.0f), titleColor, d + 0.2f);
 
     // ---- Close button (X circle, top-right) ----
-    float closeR  = 11.0f;
-    float closeCX = rect.x + rect.w - closeR - 6.0f;
-    float closeCY = rect.y + closeR + 5.0f;
+    float closeR  = 11.0f * layoutScale_;
+    float closeCX = rect.x + rect.w - closeR - 6.0f * layoutScale_;
+    float closeCY = rect.y + closeR + 5.0f * layoutScale_;
     Color closeBg  = {0.55f, 0.42f, 0.28f, 1.0f};
     Color closeBdr = {0.30f, 0.20f, 0.10f, 1.0f};
     Color closeXC  = {1.0f, 0.95f, 0.88f, 1.0f};
     batch.drawCircle({closeCX, closeCY}, closeR, closeBg,  d + 0.2f, 16);
-    batch.drawRing  ({closeCX, closeCY}, closeR, 1.5f, closeBdr, d + 0.3f, 16);
-    Vec2 xts = sdf.measure("X", 11.0f);
+    batch.drawRing  ({closeCX, closeCY}, closeR, 1.5f * layoutScale_, closeBdr, d + 0.3f, 16);
+    Vec2 xts = sdf.measure("X", scaledFont(11.0f));
     sdf.drawScreen(batch, "X",
         {closeCX - xts.x * 0.5f, closeCY - xts.y * 0.5f},
-        11.0f, closeXC, d + 0.4f);
+        scaledFont(11.0f), closeXC, d + 0.4f);
 
     // ---- Layout constants ----
-    float headerH  = 28.0f;
-    float buttonH  = 30.0f;
-    float padding  = 6.0f;
+    float headerH  = 28.0f * layoutScale_;
+    float buttonH  = 30.0f * layoutScale_;
+    float padding  = 6.0f * layoutScale_;
     float contentY = rect.y + headerH;
     float contentH = rect.h - headerH - buttonH - padding * 2.0f;
     float halfW    = rect.w * 0.5f;
 
     // Slot grid: 3x3, slot size adapts to available space
-    float slotPad  = 4.0f;
+    float slotPad  = 4.0f * layoutScale_;
     float maxSlotW = (halfW - padding * 3.0f - slotPad * 2.0f) / 3.0f;
-    float maxSlotH = (contentH - 40.0f - slotPad * 2.0f) / 3.0f;  // 40 for gold row
+    float maxSlotH = (contentH - 40.0f * layoutScale_ - slotPad * 2.0f) / 3.0f;  // 40 for gold row
     float slotSize = std::min(maxSlotW, maxSlotH);
-    if (slotSize < 20.0f) slotSize = 20.0f;
+    if (slotSize < 20.0f * layoutScale_) slotSize = 20.0f * layoutScale_;
 
     float gridW = slotSize * 3.0f + slotPad * 2.0f;
     float gridH = slotSize * 3.0f + slotPad * 2.0f;
@@ -104,8 +104,8 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
         // "My Offer" label
         Color myLabelColor = {0.25f, 0.18f, 0.10f, 1.0f};
         sdf.drawScreen(batch, "My Offer",
-            {sideX + 4.0f, contentY + 4.0f},
-            12.0f, myLabelColor, d + 0.2f);
+            {sideX + 4.0f * layoutScale_, contentY + 4.0f * layoutScale_},
+            scaledFont(12.0f), myLabelColor, d + 0.2f);
 
         // Locked status border
         if (myLocked) {
@@ -120,7 +120,7 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
 
         // 3x3 slot grid
         float gridStartX = sideX + (sideW - gridW) * 0.5f;
-        float gridStartY = contentY + 20.0f;
+        float gridStartY = contentY + 20.0f * layoutScale_;
 
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 3; ++col) {
@@ -136,8 +136,8 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
                     snprintf(qbuf, sizeof(qbuf), "%d", mySlots[idx].quantity);
                     Color qColor = {1.0f, 1.0f, 0.85f, 1.0f};
                     sdf.drawScreen(batch, qbuf,
-                        {cx + slotSize * 0.5f - 13.0f, cy + slotSize * 0.5f - 10.0f},
-                        9.0f, qColor, d + 0.3f);
+                        {cx + slotSize * 0.5f - 13.0f * layoutScale_, cy + slotSize * 0.5f - 10.0f * layoutScale_},
+                        scaledFont(9.0f), qColor, d + 0.3f);
                 }
             }
         }
@@ -145,15 +145,15 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
         // Gold display
         char goldBuf[32];
         snprintf(goldBuf, sizeof(goldBuf), "Gold: %d", myGold);
-        float goldY = gridStartY + gridH + 6.0f;
+        float goldY = gridStartY + gridH + 6.0f * layoutScale_;
         Color goldColor = {0.65f, 0.52f, 0.0f, 1.0f};
-        sdf.drawScreen(batch, goldBuf, {sideX + 4.0f, goldY}, 11.0f, goldColor, d + 0.2f);
+        sdf.drawScreen(batch, goldBuf, {sideX + 4.0f * layoutScale_, goldY}, scaledFont(11.0f), goldColor, d + 0.2f);
 
         // Lock button
         float lockBtnW = sideW * 0.55f;
-        float lockBtnH = 22.0f;
+        float lockBtnH = 22.0f * layoutScale_;
         float lockBtnX = sideX + (sideW - lockBtnW) * 0.5f;
-        float lockBtnY = goldY + 14.0f;
+        float lockBtnY = goldY + 14.0f * layoutScale_;
         Color lockBtnBg  = myLocked ? Color{0.2f, 0.65f, 0.3f, 0.95f}
                                      : Color{0.50f, 0.40f, 0.28f, 0.95f};
         Color lockBtnBdr = myLocked ? Color{0.15f, 0.45f, 0.20f, 1.0f}
@@ -170,17 +170,17 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
         batch.drawRect({lockBtnX + lockBtnW - 1.0f, lbCY}, {2.0f, lbH},     lockBtnBdr, d + 0.3f);
 
         const char* lockLabel = myLocked ? "Locked" : "Lock";
-        Vec2 lts = sdf.measure(lockLabel, 11.0f);
+        Vec2 lts = sdf.measure(lockLabel, scaledFont(11.0f));
         sdf.drawScreen(batch, lockLabel,
             {lbCX - lts.x * 0.5f, lbCY - lts.y * 0.5f},
-            11.0f, lockBtnTxt, d + 0.4f);
+            scaledFont(11.0f), lockBtnTxt, d + 0.4f);
     }
 
     // ---- Divider ----
     {
         float divX = rect.x + halfW;
         Color divColor = {0.38f, 0.28f, 0.18f, 0.6f};
-        batch.drawRect({divX, contentY + contentH * 0.5f}, {2.0f, contentH}, divColor, d + 0.1f);
+        batch.drawRect({divX, contentY + contentH * 0.5f}, {2.0f * layoutScale_, contentH}, divColor, d + 0.1f);
     }
 
     // ---- Right half: Their Offer ----
@@ -192,16 +192,16 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
         // "Their Offer" label + lock status
         Color theirLabelColor = {0.25f, 0.18f, 0.10f, 1.0f};
         sdf.drawScreen(batch, "Their Offer",
-            {sideX + 4.0f, contentY + 4.0f},
-            12.0f, theirLabelColor, d + 0.2f);
+            {sideX + 4.0f * layoutScale_, contentY + 4.0f * layoutScale_},
+            scaledFont(12.0f), theirLabelColor, d + 0.2f);
 
         // Locked indicator text
         if (theirLocked) {
             Color lockInd = {0.2f, 0.75f, 0.3f, 0.90f};
-            Vec2 lits = sdf.measure("[Locked]", 9.0f);
+            Vec2 lits = sdf.measure("[Locked]", scaledFont(9.0f));
             sdf.drawScreen(batch, "[Locked]",
-                {sideX + sideW - lits.x - 4.0f, contentY + 6.0f},
-                9.0f, lockInd, d + 0.2f);
+                {sideX + sideW - lits.x - 4.0f * layoutScale_, contentY + 6.0f * layoutScale_},
+                scaledFont(9.0f), lockInd, d + 0.2f);
 
             // Green border
             float lbw = 2.5f;
@@ -214,7 +214,7 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
 
         // 3x3 slot grid (read-only — slightly darker)
         float gridStartX = sideX + (sideW - gridW) * 0.5f;
-        float gridStartY = contentY + 20.0f;
+        float gridStartY = contentY + 20.0f * layoutScale_;
 
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 3; ++col) {
@@ -229,8 +229,8 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
                     snprintf(qbuf, sizeof(qbuf), "%d", theirSlots[idx].quantity);
                     Color qColor = {1.0f, 1.0f, 0.85f, 1.0f};
                     sdf.drawScreen(batch, qbuf,
-                        {cx + slotSize * 0.5f - 13.0f, cy + slotSize * 0.5f - 10.0f},
-                        9.0f, qColor, d + 0.3f);
+                        {cx + slotSize * 0.5f - 13.0f * layoutScale_, cy + slotSize * 0.5f - 10.0f * layoutScale_},
+                        scaledFont(9.0f), qColor, d + 0.3f);
                 }
             }
         }
@@ -238,9 +238,9 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
         // Their gold display
         char goldBuf[32];
         snprintf(goldBuf, sizeof(goldBuf), "Gold: %d", theirGold);
-        float goldY = gridStartY + gridH + 6.0f;
+        float goldY = gridStartY + gridH + 6.0f * layoutScale_;
         Color goldColor = {0.65f, 0.52f, 0.0f, 1.0f};
-        sdf.drawScreen(batch, goldBuf, {sideX + 4.0f, goldY}, 11.0f, goldColor, d + 0.2f);
+        sdf.drawScreen(batch, goldBuf, {sideX + 4.0f * layoutScale_, goldY}, scaledFont(11.0f), goldColor, d + 0.2f);
     }
 
     // ---- Bottom buttons: Accept + Cancel ----
@@ -248,9 +248,9 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
         bool canAccept = myLocked && theirLocked;
 
         float btnY  = rect.y + rect.h - buttonH - padding;
-        float btnH  = 24.0f;
+        float btnH  = 24.0f * layoutScale_;
         float btnW  = rect.w * 0.35f;
-        float gap   = 8.0f;
+        float gap   = 8.0f * layoutScale_;
 
         // Accept button (left of center)
         float acceptX = rect.x + rect.w * 0.5f - btnW - gap * 0.5f;
@@ -271,10 +271,10 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
         batch.drawRect({acceptX + 1.0f, acceptCY},     {2.0f, abH},  acceptBdr, d + 0.3f);
         batch.drawRect({acceptX + btnW - 1.0f, acceptCY}, {2.0f, abH}, acceptBdr, d + 0.3f);
 
-        Vec2 ats = sdf.measure("Accept", 12.0f);
+        Vec2 ats = sdf.measure("Accept", scaledFont(12.0f));
         sdf.drawScreen(batch, "Accept",
             {acceptCX - ats.x * 0.5f, acceptCY - ats.y * 0.5f},
-            12.0f, acceptTxt, d + 0.4f);
+            scaledFont(12.0f), acceptTxt, d + 0.4f);
 
         // Cancel button (right of center)
         float cancelX  = rect.x + rect.w * 0.5f + gap * 0.5f;
@@ -292,10 +292,10 @@ void TradeWindow::render(SpriteBatch& batch, SDFText& sdf) {
         batch.drawRect({cancelX + 1.0f, cancelCY},     {2.0f, cbH},  cancelBdr, d + 0.3f);
         batch.drawRect({cancelX + btnW - 1.0f, cancelCY}, {2.0f, cbH}, cancelBdr, d + 0.3f);
 
-        Vec2 cts = sdf.measure("Cancel", 12.0f);
+        Vec2 cts = sdf.measure("Cancel", scaledFont(12.0f));
         sdf.drawScreen(batch, "Cancel",
             {cancelCX - cts.x * 0.5f, cancelCY - cts.y * 0.5f},
-            12.0f, cancelTxt, d + 0.4f);
+            scaledFont(12.0f), cancelTxt, d + 0.4f);
     }
 
     renderChildren(batch, sdf);

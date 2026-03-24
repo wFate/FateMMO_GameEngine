@@ -27,13 +27,24 @@ public:
     // hitSlotIndex returns: -1=Attack, -2=PickUp, -10..-13=page 0-3, 0..N=skill slot, -99=miss
     int hitSlotIndex(const Vec2& localPos) const;
 
-    float attackButtonSize = 80.0f;  // diameter of the central attack button
+    float attackButtonSize = 80.0f;  // diameter of the attack button
     float pickUpButtonSize = 60.0f;  // diameter of the pick up button
-    float slotSize         = 52.0f;  // diameter of each skill slot
-    float arcRadius        = 70.0f;  // distance from center to slot centers
-    int   slotCount        = 3;
-    float startAngleDeg    = 200.0f; // arc start angle in degrees (0=right, CCW)
-    float endAngleDeg      = 310.0f; // arc end angle in degrees
+    float slotSize         = 60.0f;  // diameter of each skill slot
+    float arcRadius        = 180.0f; // distance from arc origin to slot centers
+    int   slotCount        = 5;
+    float startAngleDeg    = 290.0f; // arc start angle in degrees (0=right, CCW)
+    float endAngleDeg      = 190.0f; // arc end angle in degrees
+
+    // Individual button positions (pixels, relative to widget origin, scaled by layoutScale_)
+    // Widget origin = top-left of the widget rect
+    Vec2 attackOffset = {0.0f, 0.0f};  // offset from bottom-center of widget
+    Vec2 pickUpOffset = {-50.0f, -80.0f}; // offset from attack button center
+
+    // SlotArc — the page selector (1,2,3,4) follows its own C-arc
+    float slotArcRadius    = 50.0f;   // distance from slot arc center to page dots
+    float slotArcStartDeg  = 290.0f;  // start angle (0=right, CCW)
+    float slotArcEndDeg    = 190.0f;  // end angle
+    Vec2  slotArcOffset    = {0.0f, -160.0f}; // offset from attack button center
 
     std::vector<SkillSlotData> slots;
 
@@ -46,7 +57,7 @@ public:
 
     // Page management (replaces SkillBarUI singleton)
     int currentPage = 0;
-    static constexpr int SLOTS_PER_PAGE = 3;
+    static constexpr int SLOTS_PER_PAGE = 5;
     static constexpr int TOTAL_PAGES = 4;
 
     void nextPage();

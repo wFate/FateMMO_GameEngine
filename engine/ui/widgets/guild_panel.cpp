@@ -33,35 +33,35 @@ void GuildPanel::render(SpriteBatch& batch, SDFText& sdf) {
 
     // ---- Title: "GUILD" ----
     Color titleColor = {0.28f, 0.18f, 0.08f, 1.0f};
-    Vec2 titleSize = sdf.measure("GUILD", 16.0f);
+    Vec2 titleSize = sdf.measure("GUILD", scaledFont(16.0f));
     sdf.drawScreen(batch, "GUILD",
-        {rect.x + (rect.w - titleSize.x) * 0.5f, rect.y + 7.0f},
-        16.0f, titleColor, d + 0.2f);
+        {rect.x + (rect.w - titleSize.x) * 0.5f, rect.y + 7.0f * layoutScale_},
+        scaledFont(16.0f), titleColor, d + 0.2f);
 
     // ---- Close button (X circle, top-right) ----
-    float closeR  = 11.0f;
-    float closeCX = rect.x + rect.w - closeR - 6.0f;
-    float closeCY = rect.y + closeR + 5.0f;
+    float closeR  = 11.0f * layoutScale_;
+    float closeCX = rect.x + rect.w - closeR - 6.0f * layoutScale_;
+    float closeCY = rect.y + closeR + 5.0f * layoutScale_;
     Color closeBg  = {0.55f, 0.42f, 0.28f, 1.0f};
     Color closeBdr = {0.30f, 0.20f, 0.10f, 1.0f};
     Color closeXC  = {1.0f, 0.95f, 0.88f, 1.0f};
     batch.drawCircle({closeCX, closeCY}, closeR, closeBg,  d + 0.2f, 16);
-    batch.drawRing  ({closeCX, closeCY}, closeR, 1.5f, closeBdr, d + 0.3f, 16);
-    Vec2 xts = sdf.measure("X", 10.0f);
+    batch.drawRing  ({closeCX, closeCY}, closeR, 1.5f * layoutScale_, closeBdr, d + 0.3f, 16);
+    Vec2 xts = sdf.measure("X", scaledFont(10.0f));
     sdf.drawScreen(batch, "X",
         {closeCX - xts.x * 0.5f, closeCY - xts.y * 0.5f},
-        10.0f, closeXC, d + 0.4f);
+        scaledFont(10.0f), closeXC, d + 0.4f);
 
     // ---- Horizontal divider below title ----
-    float headerH = 32.0f;
+    float headerH = 32.0f * layoutScale_;
     Color divColor = {0.38f, 0.28f, 0.18f, 0.5f};
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + headerH},
-                   {rect.w - bw * 2.0f, 1.5f}, divColor, d + 0.1f);
+                   {rect.w - bw * 2.0f, 1.5f * layoutScale_}, divColor, d + 0.1f);
 
     // ---- Top section: guild info + emblem ----
-    float topSectionY  = rect.y + headerH + 6.0f;
-    float emblemSize   = 64.0f;
-    float emblemX      = rect.x + 10.0f;
+    float topSectionY  = rect.y + headerH + 6.0f * layoutScale_;
+    float emblemSize   = 64.0f * layoutScale_;
+    float emblemX      = rect.x + 10.0f * layoutScale_;
     float emblemY      = topSectionY;
     float emblemCX     = emblemX + emblemSize * 0.5f;
     float emblemCY     = emblemY + emblemSize * 0.5f;
@@ -69,7 +69,7 @@ void GuildPanel::render(SpriteBatch& batch, SDFText& sdf) {
     // Emblem placeholder: inset parchment rect with "?"
     Color emblemBg  = {0.78f, 0.70f, 0.55f, 1.0f};
     Color emblemBdr = {0.42f, 0.32f, 0.20f, 0.80f};
-    float ebw = 1.5f;
+    float ebw = 1.5f * layoutScale_;
     float eibH = emblemSize - ebw * 2.0f;
     batch.drawRect({emblemCX, emblemCY}, {emblemSize, emblemSize}, emblemBg, d + 0.1f);
     batch.drawRect({emblemCX, emblemY + ebw * 0.5f},                {emblemSize, ebw}, emblemBdr, d + 0.2f);
@@ -78,57 +78,57 @@ void GuildPanel::render(SpriteBatch& batch, SDFText& sdf) {
     batch.drawRect({emblemX + emblemSize - ebw * 0.5f, emblemCY},   {ebw, eibH},       emblemBdr, d + 0.2f);
 
     Color emblemQ = {0.45f, 0.35f, 0.22f, 0.70f};
-    Vec2  qts = sdf.measure("?", 22.0f);
+    Vec2  qts = sdf.measure("?", scaledFont(22.0f));
     sdf.drawScreen(batch, "?",
         {emblemCX - qts.x * 0.5f, emblemCY - qts.y * 0.5f},
-        22.0f, emblemQ, d + 0.3f);
+        scaledFont(22.0f), emblemQ, d + 0.3f);
 
     // Guild name, level, member count (right of emblem)
-    float infoX = emblemX + emblemSize + 10.0f;
-    float infoY = topSectionY + 4.0f;
+    float infoX = emblemX + emblemSize + 10.0f * layoutScale_;
+    float infoY = topSectionY + 4.0f * layoutScale_;
 
     std::string displayName = guildName.empty() ? "[No Guild]" : guildName;
     Color gnColor = {0.25f, 0.15f, 0.05f, 1.0f};
-    sdf.drawScreen(batch, displayName.c_str(), {infoX, infoY}, 14.0f, gnColor, d + 0.2f);
+    sdf.drawScreen(batch, displayName.c_str(), {infoX, infoY}, scaledFont(14.0f), gnColor, d + 0.2f);
 
     char lvBuf[32];
     snprintf(lvBuf, sizeof(lvBuf), "Level %d", guildLevel);
     Color metaColor = {0.42f, 0.32f, 0.18f, 1.0f};
-    sdf.drawScreen(batch, lvBuf, {infoX, infoY + 18.0f}, 11.0f, metaColor, d + 0.2f);
+    sdf.drawScreen(batch, lvBuf, {infoX, infoY + 18.0f * layoutScale_}, scaledFont(11.0f), metaColor, d + 0.2f);
 
     char mbBuf[32];
     snprintf(mbBuf, sizeof(mbBuf), "Members: %d", memberCount > 0 ? memberCount
                                                                     : static_cast<int>(members.size()));
-    sdf.drawScreen(batch, mbBuf, {infoX, infoY + 33.0f}, 11.0f, metaColor, d + 0.2f);
+    sdf.drawScreen(batch, mbBuf, {infoX, infoY + 33.0f * layoutScale_}, scaledFont(11.0f), metaColor, d + 0.2f);
 
     // ---- Divider above roster ----
-    float rosterTopY = topSectionY + emblemSize + 8.0f;
+    float rosterTopY = topSectionY + emblemSize + 8.0f * layoutScale_;
     batch.drawRect({rect.x + rect.w * 0.5f, rosterTopY},
-                   {rect.w - bw * 2.0f, 1.5f}, divColor, d + 0.1f);
+                   {rect.w - bw * 2.0f, 1.5f * layoutScale_}, divColor, d + 0.1f);
 
     // ---- Roster header ----
-    float rosterHeaderY = rosterTopY + 4.0f;
-    float rosterHeaderH = 18.0f;
+    float rosterHeaderY = rosterTopY + 4.0f * layoutScale_;
+    float rosterHeaderH = 18.0f * layoutScale_;
     Color hdrBg = {0.72f, 0.64f, 0.50f, 0.80f};
     batch.drawRect({rect.x + rect.w * 0.5f, rosterHeaderY + rosterHeaderH * 0.5f},
                    {rect.w - bw * 2.0f, rosterHeaderH}, hdrBg, d + 0.1f);
 
-    float col1X = rect.x + 8.0f;
+    float col1X = rect.x + 8.0f * layoutScale_;
     float col2X = rect.x + rect.w * 0.48f;
     float col3X = rect.x + rect.w * 0.65f;
     float col4X = rect.x + rect.w * 0.84f;
 
     Color hdrColor = {0.25f, 0.15f, 0.05f, 1.0f};
-    float hdrFS = 9.5f;
-    sdf.drawScreen(batch, "Name",   {col1X, rosterHeaderY + 3.0f}, hdrFS, hdrColor, d + 0.2f);
-    sdf.drawScreen(batch, "Lv",     {col2X, rosterHeaderY + 3.0f}, hdrFS, hdrColor, d + 0.2f);
-    sdf.drawScreen(batch, "Rank",   {col3X, rosterHeaderY + 3.0f}, hdrFS, hdrColor, d + 0.2f);
-    sdf.drawScreen(batch, "Status", {col4X, rosterHeaderY + 3.0f}, hdrFS, hdrColor, d + 0.2f);
+    float hdrFS = scaledFont(9.5f);
+    sdf.drawScreen(batch, "Name",   {col1X, rosterHeaderY + 3.0f * layoutScale_}, hdrFS, hdrColor, d + 0.2f);
+    sdf.drawScreen(batch, "Lv",     {col2X, rosterHeaderY + 3.0f * layoutScale_}, hdrFS, hdrColor, d + 0.2f);
+    sdf.drawScreen(batch, "Rank",   {col3X, rosterHeaderY + 3.0f * layoutScale_}, hdrFS, hdrColor, d + 0.2f);
+    sdf.drawScreen(batch, "Status", {col4X, rosterHeaderY + 3.0f * layoutScale_}, hdrFS, hdrColor, d + 0.2f);
 
     // ---- Roster rows ----
-    float rowH        = 22.0f;
-    float rowAreaY    = rosterHeaderY + rosterHeaderH + 2.0f;
-    float rowAreaH    = rect.y + rect.h - rowAreaY - 6.0f;
+    float rowH        = 22.0f * layoutScale_;
+    float rowAreaY    = rosterHeaderY + rosterHeaderH + 2.0f * layoutScale_;
+    float rowAreaH    = rect.y + rect.h - rowAreaY - 6.0f * layoutScale_;
     int   maxRows     = static_cast<int>(rowAreaH / rowH);
 
     // Apply scroll: determine start index
@@ -152,27 +152,27 @@ void GuildPanel::render(SpriteBatch& batch, SDFText& sdf) {
         }
 
         Color rowColor = {0.22f, 0.14f, 0.06f, 1.0f};
-        float rowFS = 10.0f;
+        float rowFS = scaledFont(10.0f);
 
         // Name
-        sdf.drawScreen(batch, gm.name.c_str(), {col1X, rowY + 5.0f}, rowFS, rowColor, d + 0.2f);
+        sdf.drawScreen(batch, gm.name.c_str(), {col1X, rowY + 5.0f * layoutScale_}, rowFS, rowColor, d + 0.2f);
 
         // Level
         char lvbuf[8];
         snprintf(lvbuf, sizeof(lvbuf), "%d", gm.level);
-        sdf.drawScreen(batch, lvbuf, {col2X, rowY + 5.0f}, rowFS, rowColor, d + 0.2f);
+        sdf.drawScreen(batch, lvbuf, {col2X, rowY + 5.0f * layoutScale_}, rowFS, rowColor, d + 0.2f);
 
         // Rank badge
         Color rankColor = {0.28f, 0.18f, 0.08f, 1.0f};
         if (gm.rank == "Leader") rankColor = {0.75f, 0.55f, 0.0f, 1.0f};
         else if (gm.rank == "Officer") rankColor = {0.35f, 0.52f, 0.75f, 1.0f};
-        sdf.drawScreen(batch, gm.rank.c_str(), {col3X, rowY + 5.0f}, 9.0f, rankColor, d + 0.2f);
+        sdf.drawScreen(batch, gm.rank.c_str(), {col3X, rowY + 5.0f * layoutScale_}, scaledFont(9.0f), rankColor, d + 0.2f);
 
         // Online dot
         Color dotColor = gm.online
             ? Color{0.2f, 0.85f, 0.3f, 1.0f}
             : Color{0.45f, 0.45f, 0.45f, 0.8f};
-        batch.drawCircle({col4X + 4.0f, rowCY}, 4.5f, dotColor, d + 0.2f, 12);
+        batch.drawCircle({col4X + 4.0f * layoutScale_, rowCY}, 4.5f * layoutScale_, dotColor, d + 0.2f, 12);
     }
 
     renderChildren(batch, sdf);

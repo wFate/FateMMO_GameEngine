@@ -102,7 +102,7 @@ void BuffBar::render(SpriteBatch& batch, SDFText& sdf) {
         if (buff.stacks > 1) {
             char stackBuf[8];
             std::snprintf(stackBuf, sizeof(stackBuf), "%d", buff.stacks);
-            float fontSize = 8.0f;
+            float fontSize = scaledFont(8.0f);
             Vec2 ts = sdf.measure(stackBuf, fontSize);
             Color stackColor = {1.0f, 1.0f, 1.0f, 1.0f};
             // Position at bottom-right of icon

@@ -93,63 +93,63 @@ void DeathOverlay::render(SpriteBatch& batch, SDFText& sdf) {
     // "You have died" title
     {
         Color titleColor(0.9f, 0.2f, 0.2f, 1.0f);
-        float titleSize = 22.0f;
+        float titleSize = scaledFont(22.0f);
         std::string title = "You have died";
         Vec2 ts = sdf.measure(title, titleSize);
         float tx = rect.x + (centerX - ts.x * 0.5f);
         float ty = rect.y + cursorY;
         sdf.drawScreen(batch, title, {tx, ty}, titleSize, titleColor, d + 0.2f);
-        cursorY += ts.y + 16.0f;
+        cursorY += ts.y + 16.0f * layoutScale_;
     }
 
     // XP loss line
     if (xpLost > 0) {
         Color white = Color::white();
-        float fontSize = 13.0f;
+        float fontSize = scaledFont(13.0f);
         std::string line = "XP Lost: " + std::to_string(xpLost);
         Vec2 ts = sdf.measure(line, fontSize);
         float tx = rect.x + (centerX - ts.x * 0.5f);
         float ty = rect.y + cursorY;
         sdf.drawScreen(batch, line, {tx, ty}, fontSize, white, d + 0.2f);
-        cursorY += ts.y + 6.0f;
+        cursorY += ts.y + 6.0f * layoutScale_;
     }
 
     // Honor loss line
     if (honorLost > 0) {
         Color white = Color::white();
-        float fontSize = 13.0f;
+        float fontSize = scaledFont(13.0f);
         std::string line = "Honor Lost: " + std::to_string(honorLost);
         Vec2 ts = sdf.measure(line, fontSize);
         float tx = rect.x + (centerX - ts.x * 0.5f);
         float ty = rect.y + cursorY;
         sdf.drawScreen(batch, line, {tx, ty}, fontSize, white, d + 0.2f);
-        cursorY += ts.y + 6.0f;
+        cursorY += ts.y + 6.0f * layoutScale_;
     }
 
     // Countdown timer
     if (countdown > 0.0f) {
         Color gold(0.85f, 0.75f, 0.35f, 1.0f);
-        float fontSize = 14.0f;
+        float fontSize = scaledFont(14.0f);
         int secs = static_cast<int>(countdown) + 1;
         std::string line = "Respawn in: " + std::to_string(secs) + "s";
         Vec2 ts = sdf.measure(line, fontSize);
         float tx = rect.x + (centerX - ts.x * 0.5f);
         float ty = rect.y + cursorY;
         sdf.drawScreen(batch, line, {tx, ty}, fontSize, gold, d + 0.2f);
-        cursorY += ts.y + 16.0f;
+        cursorY += ts.y + 16.0f * layoutScale_;
     } else {
-        cursorY += 16.0f;
+        cursorY += 16.0f * layoutScale_;
     }
 
     // Button constants
-    float btnW = 200.0f;
-    float btnH = 36.0f;
-    float btnSpacing = 8.0f;
+    float btnW = 200.0f * layoutScale_;
+    float btnH = 36.0f * layoutScale_;
+    float btnSpacing = 8.0f * layoutScale_;
     Color btnBg(0.12f, 0.10f, 0.08f, 0.95f);
     Color btnBorder(0.6f, 0.5f, 0.25f, 1.0f);
     Color btnText = Color::white();
-    float btnFontSize = 13.0f;
-    float borderW = 2.0f;
+    float btnFontSize = scaledFont(13.0f);
+    float borderW = 2.0f * layoutScale_;
 
     auto drawButton = [&](const std::string& label, Rect& outRect) {
         float bx = centerX - btnW * 0.5f;

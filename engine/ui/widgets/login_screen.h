@@ -66,12 +66,30 @@ private:
     bool validate();
     void submit();
 
-    // Layout constants
-    static constexpr float PANEL_WIDTH = 360.0f;
-    static constexpr float FIELD_HEIGHT = 32.0f;
-    static constexpr float FIELD_SPACING = 8.0f;
-    static constexpr float BUTTON_HEIGHT = 36.0f;
-    static constexpr float PADDING = 20.0f;
+    // Layout constants (reference values at 270px viewport height)
+    static constexpr float REF_HEIGHT = 270.0f;
+    static constexpr float REF_PANEL_WIDTH = 360.0f;
+    static constexpr float REF_FIELD_HEIGHT = 32.0f;
+    static constexpr float REF_FIELD_SPACING = 8.0f;
+    static constexpr float REF_BUTTON_HEIGHT = 36.0f;
+    static constexpr float REF_PADDING = 20.0f;
+
+    // Cached scaled values (recomputed each render from viewport height)
+    float uiScale_ = 1.0f;
+    float PANEL_WIDTH = REF_PANEL_WIDTH;
+    float FIELD_HEIGHT = REF_FIELD_HEIGHT;
+    float FIELD_SPACING = REF_FIELD_SPACING;
+    float BUTTON_HEIGHT = REF_BUTTON_HEIGHT;
+    float PADDING = REF_PADDING;
+
+    void recomputeScale(float viewportH) {
+        uiScale_ = std::min(viewportH / REF_HEIGHT, 2.5f);
+        PANEL_WIDTH = REF_PANEL_WIDTH * uiScale_;
+        FIELD_HEIGHT = REF_FIELD_HEIGHT * uiScale_;
+        FIELD_SPACING = REF_FIELD_SPACING * uiScale_;
+        BUTTON_HEIGHT = REF_BUTTON_HEIGHT * uiScale_;
+        PADDING = REF_PADDING * uiScale_;
+    }
 };
 
 } // namespace fate

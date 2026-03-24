@@ -27,7 +27,7 @@ void LeftSidebar::render(SpriteBatch& batch, SDFText& sdf) {
     batch.drawRect({rect.x + rect.w - 1.0f, rect.y + rect.h * 0.5f},
                    {2.0f, rect.h}, stripBorder, d + 0.05f);
 
-    float labelFontSize = 7.0f * s;
+    float labelFontSize = scaledFont(7.0f);
 
     for (int i = 0; i < static_cast<int>(panelLabels.size()); ++i) {
         float cx = rect.x + rect.w * 0.5f;

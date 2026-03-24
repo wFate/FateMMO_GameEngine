@@ -16,13 +16,14 @@ SkillPanel::SkillPanel(const std::string& id)
 // ---------------------------------------------------------------------------
 void SkillPanel::renderSkillWheel(SpriteBatch& batch, SDFText& sdf,
                                     const Rect& area, float depth) {
+    float s = layoutScale_;
     // ---- 5 numbered page tabs at top ----
     int numTabs = 5;
-    float tabR  = 14.0f;
+    float tabR  = 14.0f * s;
     float tabSpacing = tabR * 2.5f;
     float totalTabW  = static_cast<float>(numTabs) * tabSpacing;
     float tabStartX  = area.x + area.w * 0.5f - totalTabW * 0.5f + tabR;
-    float tabY = area.y + tabR + 2.0f;
+    float tabY = area.y + tabR + 2.0f * s;
 
     for (int i = 0; i < numTabs; ++i) {
         float cx = tabStartX + static_cast<float>(i) * tabSpacing;
@@ -40,7 +41,7 @@ void SkillPanel::renderSkillWheel(SpriteBatch& batch, SDFText& sdf,
 
         char tabNum[4];
         snprintf(tabNum, sizeof(tabNum), "%d", i + 1);
-        float numFontSize = 11.0f;
+        float numFontSize = scaledFont(11.0f);
         Color numColor = isActive
             ? Color{1.0f, 1.0f, 1.0f, 1.0f}
             : Color{0.85f, 0.80f, 0.72f, 1.0f};
@@ -52,7 +53,7 @@ void SkillPanel::renderSkillWheel(SpriteBatch& batch, SDFText& sdf,
 
     // ---- Semicircular arc showing current slot assignments ----
     // Arc center in the lower half of the area
-    float arcContentY = tabY + tabR + 4.0f;
+    float arcContentY = tabY + tabR + 4.0f * s;
     float arcAvailH   = area.y + area.h - arcContentY - 30.0f; // leave room for remaining pts
     float arcRadius   = (arcAvailH * 0.48f < area.w * 0.38f)
                           ? arcAvailH * 0.48f : area.w * 0.38f;
@@ -85,7 +86,7 @@ void SkillPanel::renderSkillWheel(SpriteBatch& batch, SDFText& sdf,
         // Slot number label
         char sNum[4];
         snprintf(sNum, sizeof(sNum), "%d", i + 1);
-        float snFontSize = 8.0f;
+        float snFontSize = scaledFont(8.0f);
         Color snColor = {0.35f, 0.25f, 0.14f, 0.85f};
         Vec2 snts = sdf.measure(sNum, snFontSize);
         sdf.drawScreen(batch, sNum,
@@ -94,9 +95,9 @@ void SkillPanel::renderSkillWheel(SpriteBatch& batch, SDFText& sdf,
     }
 
     // ---- "Remaining Points N" at bottom with orange badge ----
-    float ptsBadgeR = 12.0f;
+    float ptsBadgeR = 12.0f * s;
     float ptsCX = arcCX;
-    float ptsCY = area.y + area.h - ptsBadgeR - 4.0f;
+    float ptsCY = area.y + area.h - ptsBadgeR - 4.0f * s;
 
     Color badgeBg  = (remainingPoints > 0)
         ? Color{0.88f, 0.50f, 0.10f, 1.0f}   // orange if points available
@@ -108,7 +109,7 @@ void SkillPanel::renderSkillWheel(SpriteBatch& batch, SDFText& sdf,
 
     char ptsBuf[8];
     snprintf(ptsBuf, sizeof(ptsBuf), "%d", remainingPoints);
-    float ptsFontSize = 10.0f;
+    float ptsFontSize = scaledFont(10.0f);
     Color ptsTextColor = {1.0f, 1.0f, 0.9f, 1.0f};
     Vec2 pts = sdf.measure(ptsBuf, ptsFontSize);
     sdf.drawScreen(batch, ptsBuf,
@@ -116,10 +117,10 @@ void SkillPanel::renderSkillWheel(SpriteBatch& batch, SDFText& sdf,
         ptsFontSize, ptsTextColor, depth + 0.3f);
 
     // "pts" label beside badge
-    float lblFontSize = 8.0f;
+    float lblFontSize = scaledFont(8.0f);
     Color lblColor = {0.35f, 0.25f, 0.14f, 0.9f};
     sdf.drawScreen(batch, "pts",
-        {ptsCX + ptsBadgeR + 3.0f, ptsCY - lblFontSize * 0.5f},
+        {ptsCX + ptsBadgeR + 3.0f * s, ptsCY - lblFontSize * 0.5f},
         lblFontSize, lblColor, depth + 0.3f);
 }
 
@@ -128,36 +129,37 @@ void SkillPanel::renderSkillWheel(SpriteBatch& batch, SDFText& sdf,
 // ---------------------------------------------------------------------------
 void SkillPanel::renderSkillList(SpriteBatch& batch, SDFText& sdf,
                                    const Rect& area, float depth) {
+    float s = layoutScale_;
     // "Skills" header
-    float headerFontSize = 13.0f;
+    float headerFontSize = scaledFont(13.0f);
     Color headerColor = {0.28f, 0.18f, 0.08f, 1.0f};
     sdf.drawScreen(batch, "Skills",
-        {area.x + 4.0f, area.y + 2.0f},
+        {area.x + 4.0f * s, area.y + 2.0f * s},
         headerFontSize, headerColor, depth + 0.1f);
 
-    float headerH = headerFontSize + 6.0f;
+    float headerH = headerFontSize + 6.0f * s;
     float gridY   = area.y + headerH;
     float gridH   = area.h - headerH;
 
     // 4-column grid of skill circles
     int cols = 4;
-    float cellSize = (area.w - 8.0f) / static_cast<float>(cols);
-    if (cellSize < 16.0f) cellSize = 16.0f;
+    float cellSize = (area.w - 8.0f * s) / static_cast<float>(cols);
+    if (cellSize < 16.0f * s) cellSize = 16.0f * s;
 
     float skillR = cellSize * 0.38f;
     int numSkills = static_cast<int>(classSkills.size());
 
     int dotsCount  = 5;  // level dots below each skill
-    float dotSize  = 4.0f;
-    float dotSpacing = dotSize + 2.0f;
-    float cellH    = skillR * 2.0f + dotSize + 8.0f + 4.0f;  // circle + dot row + label space
+    float dotSize  = 4.0f * s;
+    float dotSpacing = dotSize + 2.0f * s;
+    float cellH    = skillR * 2.0f + dotSize + 8.0f * s + 4.0f * s;  // circle + dot row + label space
 
     for (int i = 0; i < numSkills; ++i) {
         int col = i % cols;
         int row = i / cols;
 
-        float cx = area.x + 4.0f + cellSize * 0.5f + static_cast<float>(col) * cellSize;
-        float cy = gridY + skillR + 4.0f + static_cast<float>(row) * cellH;
+        float cx = area.x + 4.0f * s + cellSize * 0.5f + static_cast<float>(col) * cellSize;
+        float cy = gridY + skillR + 4.0f * s + static_cast<float>(row) * cellH;
 
         const SkillInfo& sk = classSkills[static_cast<size_t>(i)];
         bool isSelected = (i == selectedSkillIndex);
@@ -176,8 +178,8 @@ void SkillPanel::renderSkillList(SpriteBatch& batch, SDFText& sdf,
         batch.drawRing({cx, cy}, skillR, ringW, ringColor, depth + 0.2f, 20);
 
         // Level dots below the circle
-        float dotsStartX = cx - (static_cast<float>(dotsCount) * dotSpacing - 2.0f) * 0.5f;
-        float dotsY      = cy + skillR + 4.0f;
+        float dotsStartX = cx - (static_cast<float>(dotsCount) * dotSpacing - 2.0f * s) * 0.5f;
+        float dotsY      = cy + skillR + 4.0f * s;
 
         for (int d = 0; d < dotsCount; ++d) {
             float dotCX = dotsStartX + static_cast<float>(d) * dotSpacing;
@@ -190,7 +192,7 @@ void SkillPanel::renderSkillList(SpriteBatch& batch, SDFText& sdf,
 
         // Skill name truncated below dots
         if (!sk.name.empty()) {
-            float nameFontSize = 7.0f;
+            float nameFontSize = scaledFont(7.0f);
             Color nameColor = sk.unlocked
                 ? Color{0.22f, 0.15f, 0.08f, 1.0f}
                 : Color{0.50f, 0.44f, 0.35f, 0.75f};
@@ -198,7 +200,7 @@ void SkillPanel::renderSkillList(SpriteBatch& batch, SDFText& sdf,
             std::string displayName = sk.name.substr(0, 5);
             Vec2 nts = sdf.measure(displayName.c_str(), nameFontSize);
             sdf.drawScreen(batch, displayName.c_str(),
-                {cx - nts.x * 0.5f, dotsY + dotSize + 2.0f},
+                {cx - nts.x * 0.5f, dotsY + dotSize + 2.0f * s},
                 nameFontSize, nameColor, depth + 0.3f);
         }
     }
@@ -232,36 +234,39 @@ void SkillPanel::render(SpriteBatch& batch, SDFText& sdf) {
     batch.drawRect({rect.x + bw * 0.5f,     rect.y + rect.h * 0.5f},      {bw, innerH}, bdr, d + 0.1f);
     batch.drawRect({rect.x + rect.w - bw * 0.5f, rect.y + rect.h * 0.5f}, {bw, innerH}, bdr, d + 0.1f);
 
+    float s = layoutScale_;
+
     // ---- "SKILL" title ----
     Color titleColor = style.textColor;
     sdf.drawScreen(batch, "SKILL",
-        {rect.x + 10.0f, rect.y + 6.0f},
-        16.0f, titleColor, d + 0.2f);
+        {rect.x + 10.0f * s, rect.y + 6.0f * s},
+        scaledFont(16.0f), titleColor, d + 0.2f);
 
     // ---- Close button (X circle at top-right) ----
-    float closeR  = 12.0f;
-    float closeCX = rect.x + rect.w - closeR - 6.0f;
-    float closeCY = rect.y + closeR + 6.0f;
+    float closeR  = 12.0f * s;
+    float closeCX = rect.x + rect.w - closeR - 6.0f * s;
+    float closeCY = rect.y + closeR + 6.0f * s;
     Color closeBg  = {0.55f, 0.42f, 0.28f, 1.0f};
     Color closeBdr = {0.30f, 0.20f, 0.10f, 1.0f};
     Color closeX   = {1.0f, 0.95f, 0.88f, 1.0f};
     batch.drawCircle({closeCX, closeCY}, closeR, closeBg,  d + 0.2f, 16);
     batch.drawRing  ({closeCX, closeCY}, closeR, 1.5f, closeBdr, d + 0.3f, 16);
-    Vec2 xts = sdf.measure("X", 12.0f);
+    float closeFontSize = scaledFont(12.0f);
+    Vec2 xts = sdf.measure("X", closeFontSize);
     sdf.drawScreen(batch, "X",
         {closeCX - xts.x * 0.5f, closeCY - xts.y * 0.5f},
-        12.0f, closeX, d + 0.4f);
+        closeFontSize, closeX, d + 0.4f);
 
     // ---- Layout: left ~40% = skill wheel, right ~60% = skill list ----
-    float headerH = 28.0f;
+    float headerH = 28.0f * s;
     float contentY = rect.y + headerH;
     float contentH = rect.h - headerH;
 
     float leftW  = rect.w * 0.42f;
     float rightW = rect.w - leftW;
 
-    Rect wheelArea = {rect.x + 4.0f,         contentY + 2.0f, leftW  - 8.0f, contentH - 4.0f};
-    Rect listArea  = {rect.x + leftW + 4.0f,  contentY + 2.0f, rightW - 8.0f, contentH - 4.0f};
+    Rect wheelArea = {rect.x + 4.0f * s,         contentY + 2.0f * s, leftW  - 8.0f * s, contentH - 4.0f * s};
+    Rect listArea  = {rect.x + leftW + 4.0f * s,  contentY + 2.0f * s, rightW - 8.0f * s, contentH - 4.0f * s};
 
     // Divider line between the two sides
     Color divColor = {0.40f, 0.30f, 0.20f, 0.50f};
@@ -280,10 +285,12 @@ void SkillPanel::render(SpriteBatch& batch, SDFText& sdf) {
 bool SkillPanel::onPress(const Vec2& localPos) {
     if (!enabled_) return false;
 
+    float s = layoutScale_;
+
     // Close button hit test
-    float closeR  = 12.0f;
-    float closeCX = computedRect_.w - closeR - 6.0f;
-    float closeCY = closeR + 6.0f;
+    float closeR  = 12.0f * s;
+    float closeCX = computedRect_.w - closeR - 6.0f * s;
+    float closeCY = closeR + 6.0f * s;
     float dx = localPos.x - closeCX;
     float dy = localPos.y - closeCY;
     if (dx * dx + dy * dy <= closeR * closeR) {
@@ -292,16 +299,16 @@ bool SkillPanel::onPress(const Vec2& localPos) {
     }
 
     // Skill set page tabs (top of left side)
-    float headerH = 28.0f;
+    float headerH = 28.0f * s;
     float leftW   = computedRect_.w * 0.42f;
-    Rect wheelArea = {4.0f, headerH + 2.0f, leftW - 8.0f, computedRect_.h - headerH - 4.0f};
+    Rect wheelArea = {4.0f * s, headerH + 2.0f * s, leftW - 8.0f * s, computedRect_.h - headerH - 4.0f * s};
 
     int numTabs   = 5;
-    float tabR    = 14.0f;
+    float tabR    = 14.0f * s;
     float tabSpacing = tabR * 2.5f;
     float totalTabW  = static_cast<float>(numTabs) * tabSpacing;
     float tabStartX  = wheelArea.x + wheelArea.w * 0.5f - totalTabW * 0.5f + tabR;
-    float tabY       = wheelArea.y + tabR + 2.0f;
+    float tabY       = wheelArea.y + tabR + 2.0f * s;
 
     for (int i = 0; i < numTabs; ++i) {
         float cx = tabStartX + static_cast<float>(i) * tabSpacing;
@@ -314,23 +321,23 @@ bool SkillPanel::onPress(const Vec2& localPos) {
     }
 
     // Skill list grid — select skill
-    Rect listArea  = {leftW + 4.0f, headerH + 2.0f, computedRect_.w - leftW - 8.0f, computedRect_.h - headerH - 4.0f};
-    float headerFontH = 13.0f + 6.0f;
+    Rect listArea  = {leftW + 4.0f * s, headerH + 2.0f * s, computedRect_.w - leftW - 8.0f * s, computedRect_.h - headerH - 4.0f * s};
+    float headerFontH = scaledFont(13.0f) + 6.0f * s;
     float gridY = listArea.y + headerFontH;
 
     int cols = 4;
-    float cellSize = (listArea.w - 8.0f) / static_cast<float>(cols);
-    if (cellSize < 16.0f) cellSize = 16.0f;
+    float cellSize = (listArea.w - 8.0f * s) / static_cast<float>(cols);
+    if (cellSize < 16.0f * s) cellSize = 16.0f * s;
     float skillR = cellSize * 0.38f;
-    float dotSize = 4.0f;
-    float cellH  = skillR * 2.0f + dotSize + 8.0f + 4.0f;
+    float dotSize = 4.0f * s;
+    float cellH  = skillR * 2.0f + dotSize + 8.0f * s + 4.0f * s;
 
     int numSkills = static_cast<int>(classSkills.size());
     for (int i = 0; i < numSkills; ++i) {
         int col = i % cols;
         int row = i / cols;
-        float cx = listArea.x + 4.0f + cellSize * 0.5f + static_cast<float>(col) * cellSize;
-        float cy = gridY + skillR + 4.0f + static_cast<float>(row) * cellH;
+        float cx = listArea.x + 4.0f * s + cellSize * 0.5f + static_cast<float>(col) * cellSize;
+        float cy = gridY + skillR + 4.0f * s + static_cast<float>(row) * cellH;
         float dx2 = localPos.x - cx;
         float dy2 = localPos.y - cy;
         if (dx2 * dx2 + dy2 * dy2 <= skillR * skillR) {

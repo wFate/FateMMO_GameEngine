@@ -40,6 +40,12 @@ public:
     void computeLayout(const Rect& parentRect, float scale = 1.0f);
     const Rect& computedRect() const { return computedRect_; }
     float layoutScale() const { return layoutScale_; }
+    // Scale a font size with a minimum floor so text stays readable on small viewports
+    static constexpr float MIN_FONT_SIZE = 7.0f;
+    float scaledFont(float baseFontSize) const {
+        float scaled = baseFontSize * layoutScale_;
+        return scaled < MIN_FONT_SIZE ? MIN_FONT_SIZE : scaled;
+    }
 
     // Style
     const std::string& styleName() const { return styleName_; }

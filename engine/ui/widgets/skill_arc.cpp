@@ -37,26 +37,24 @@ std::vector<Vec2> SkillArc::computeSlotPositions() const {
 }
 
 int SkillArc::hitSlotIndex(const Vec2& localPos) const {
-    // localPos is relative to arc center (0,0)
+    // localPos is relative to attack button center (0,0)
     float s = layoutScale_;
-    float dist = localPos.length();
 
-    // Attack button: centered at origin, circular hit area
-    float attackRadius = attackButtonSize * s * 0.5f;
-    if (dist <= attackRadius) return -1;
+    // Attack button
+    float attackR = attackButtonSize * s * 0.5f;
+    if (localPos.length() <= attackR) return -1;
 
-    // Pick Up button: centered above attack button
-    Vec2 pickUpCenter{0, -85.0f * s};
-    float pickUpRadius = pickUpButtonSize * s * 0.5f;
-    float pdx = localPos.x - pickUpCenter.x;
-    float pdy = localPos.y - pickUpCenter.y;
-    float pickUpDist = std::sqrt(pdx * pdx + pdy * pdy);
-    if (pickUpDist <= pickUpRadius) return -2;
+    // Pick Up button (at pickUpOffset relative to attack)
+    Vec2 puCenter{pickUpOffset.x * s, pickUpOffset.y * s};
+    float puR = pickUpButtonSize * s * 0.5f;
+    float pdx = localPos.x - puCenter.x;
+    float pdy = localPos.y - puCenter.y;
+    if (std::sqrt(pdx * pdx + pdy * pdy) <= puR) return -2;
 
-    // Page selector circles (4 circles near top of arc)
+    // Page selector circles (4 circles above the skill arc)
     float pageDotRadius = 12.0f * s;  // 24px diameter
-    float pageDotSpacing = 28.0f * s;
-    float pageDotY = -120.0f * s;     // above pick up button
+    float pageDotSpacing = 30.0f * s;
+    float pageDotY = -(arcRadius * s + slotSize * s * 0.5f + 20.0f * s);
     float pageDotStartX = -1.5f * pageDotSpacing;
     for (int i = 0; i < TOTAL_PAGES; ++i) {
         float dotX = pageDotStartX + static_cast<float>(i) * pageDotSpacing;
@@ -81,9 +79,11 @@ int SkillArc::hitSlotIndex(const Vec2& localPos) const {
 
 bool SkillArc::onPress(const Vec2& localPos) {
     if (!enabled_) return false;
-    float cx = computedRect_.w * 0.5f;
-    float cy = computedRect_.h * 0.5f;
-    Vec2 rel{localPos.x - cx, localPos.y - cy};
+    float s = layoutScale_;
+    // Attack button position = bottom-center + attackOffset
+    float atkX = computedRect_.w * 0.5f + attackOffset.x * s;
+    float atkY = computedRect_.h - 50.0f * s + attackOffset.y * s;
+    Vec2 rel{localPos.x - atkX, localPos.y - atkY};
     int hit = hitSlotIndex(rel);
     if (hit == -1) {
         if (onAttack) onAttack(id_);
@@ -106,9 +106,10 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
 
     const auto& rect = computedRect_;
     float d = static_cast<float>(zOrder_);
-    float cx = rect.x + rect.w * 0.5f;
-    float cy = rect.y + rect.h * 0.5f;
     float s = layoutScale_;
+    // Attack button position = bottom-center of widget + attackOffset
+    float cx = rect.x + rect.w * 0.5f + attackOffset.x * s;
+    float cy = rect.y + rect.h - 50.0f * s + attackOffset.y * s;
 
     // Draw skill slots (positions already scaled via computeSlotPositions)
     auto positions = computeSlotPositions();
@@ -231,10 +232,10 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
             actionFontSize, actionTextColor, d + 0.45f);
     }
 
-    // Pick Up button — above Attack
+    // Pick Up button — positioned via pickUpOffset relative to Attack center
     {
         float pickUpR = pickUpButtonSize * s * 0.5f;
-        Vec2 pickUpCenter{cx, cy - 85.0f * s};
+        Vec2 pickUpCenter{cx + pickUpOffset.x * s, cy + pickUpOffset.y * s};
         drawMetallicCircle(batch, pickUpCenter, pickUpR, d + 0.3f);
 
         // "Pick up" text centered in button
@@ -247,11 +248,12 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
             puFontSize, puTextColor, d + 0.45f);
     }
 
-    // Page selector circles (4 dots near top of arc)
+    // Page selector circles (4 dots above the skill arc)
     {
         float pageDotR = 12.0f * s;
-        float pageDotSpacing = 28.0f * s;
-        float pageDotY = cy - 120.0f * s;
+        float pageDotSpacing = 30.0f * s;
+        // Position above the highest skill slot (arcRadius + slotSize/2 + gap)
+        float pageDotY = cy - (arcRadius * s + slotSize * s * 0.5f + 20.0f * s);
         float pageDotStartX = cx - 1.5f * pageDotSpacing;
         for (int i = 0; i < TOTAL_PAGES; ++i) {
             float dotX = pageDotStartX + static_cast<float>(i) * pageDotSpacing;
@@ -265,7 +267,7 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
             // Page number label
             char pgBuf[4];
             std::snprintf(pgBuf, sizeof(pgBuf), "%d", i + 1);
-            float pgFontSize = scaledFont(8.0f);
+            float pgFontSize = scaledFont(11.0f);
             Vec2 pgTs = sdf.measure(pgBuf, pgFontSize);
             Color pgTextColor = (i == currentPage)
                 ? Color{0.30f, 0.20f, 0.10f, 0.95f}

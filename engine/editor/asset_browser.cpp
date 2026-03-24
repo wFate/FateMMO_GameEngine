@@ -406,6 +406,9 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
                     isDraggingAsset_ = true;
                     draggedAssetPath_ = entry.relativePath;
                 }
+                if (ImGui::MenuItem("Open in Animation Editor")) {
+                    if (onOpenAnimation) onOpenAnimation(entry.fullPath);
+                }
             }
 #ifdef _WIN32
             if ((entry.type == AssetType::Script || entry.type == AssetType::Shader) && !entry.isDirectory) {

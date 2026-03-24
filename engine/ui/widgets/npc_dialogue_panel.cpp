@@ -61,7 +61,7 @@ static constexpr float kBorderW     = 2.0f;
 // ---------------------------------------------------------------------------
 static void drawButton(SpriteBatch& batch, SDFText& sdf, const char* label,
                        float x, float y, float w, float h, float depth,
-                       const Color& bg, const Color& textColor) {
+                       const Color& bg, const Color& textColor, float fontSize) {
     float cx = x + w * 0.5f;
     float cy = y + h * 0.5f;
     float bw = 1.5f;
@@ -75,10 +75,10 @@ static void drawButton(SpriteBatch& batch, SDFText& sdf, const char* label,
     batch.drawRect({x + w - bw * 0.5f, cy}, {bw, iH}, kBtnBdr, depth + 0.05f);
 
     // Centered text
-    Vec2 ts = sdf.measure(label, 12.0f);
+    Vec2 ts = sdf.measure(label, fontSize);
     sdf.drawScreen(batch, label,
         {cx - ts.x * 0.5f, cy - ts.y * 0.5f},
-        12.0f, textColor, depth + 0.1f);
+        fontSize, textColor, depth + 0.1f);
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +87,8 @@ static void drawButton(SpriteBatch& batch, SDFText& sdf, const char* label,
 static float drawWrappedText(SpriteBatch& batch, SDFText& sdf,
                              const std::string& text,
                              float x, float y, float maxW,
-                             float fontSize, const Color& color, float depth) {
+                             float fontSize, const Color& color, float depth,
+                             float lineSpacing = 2.0f) {
     if (text.empty()) return y;
 
     float lineY = y;
@@ -119,7 +120,7 @@ static float drawWrappedText(SpriteBatch& batch, SDFText& sdf,
                     line.clear();
                     lineW = 0.0f;
                 }
-                lineY += fontSize + 2.0f;
+                lineY += fontSize + lineSpacing;
             }
             continue;
         }
@@ -131,7 +132,7 @@ static float drawWrappedText(SpriteBatch& batch, SDFText& sdf,
         if (testW > maxW && !line.empty()) {
             // Flush current line
             sdf.drawScreen(batch, line, {x, lineY}, fontSize, color, depth);
-            lineY += fontSize + 2.0f;
+            lineY += fontSize + lineSpacing;
             line = word;
             lineW = wordW;
         } else {
@@ -145,7 +146,7 @@ static float drawWrappedText(SpriteBatch& batch, SDFText& sdf,
 
         if (newline && !line.empty()) {
             sdf.drawScreen(batch, line, {x, lineY}, fontSize, color, depth);
-            lineY += fontSize + 2.0f;
+            lineY += fontSize + lineSpacing;
             line.clear();
             lineW = 0.0f;
         }
@@ -154,7 +155,7 @@ static float drawWrappedText(SpriteBatch& batch, SDFText& sdf,
     // Flush remaining text
     if (!line.empty()) {
         sdf.drawScreen(batch, line, {x, lineY}, fontSize, color, depth);
-        lineY += fontSize + 2.0f;
+        lineY += fontSize + lineSpacing;
     }
 
     return lineY;
@@ -172,52 +173,57 @@ static bool hitRect(const Vec2& localPos, float x, float y, float w, float h) {
 // Render: Story mode
 // ---------------------------------------------------------------------------
 static void renderStoryMode(SpriteBatch& batch, SDFText& sdf,
-                            const Rect& rect, float d,
+                            const Rect& rect, float d, float s,
+                            float titleFont, float bodyFont, float btnFont,
                             const std::string& npcName,
                             const std::string& storyText,
                             const std::vector<NpcDialoguePanel::StoryChoice>& storyChoices) {
     // Title bar
-    Vec2 titleSize = sdf.measure(npcName, 14.0f);
+    Vec2 titleSize = sdf.measure(npcName, titleFont);
     sdf.drawScreen(batch, npcName,
-        {rect.x + (rect.w - titleSize.x) * 0.5f, rect.y + 7.0f},
-        14.0f, kTitleColor, d + 0.2f);
+        {rect.x + (rect.w - titleSize.x) * 0.5f, rect.y + 7.0f * s},
+        titleFont, kTitleColor, d + 0.2f);
 
     // Divider below title
-    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + kTitleBarH},
-                   {rect.w - kBorderW * 2.0f, 1.5f}, kDivider, d + 0.1f);
+    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + kTitleBarH * s},
+                   {rect.w - kBorderW * s * 2.0f, 1.5f}, kDivider, d + 0.1f);
 
     // Story text area
-    float textX = rect.x + 8.0f;
-    float textY = rect.y + kTitleBarH + 6.0f;
-    float maxTextW = rect.w - 16.0f;
+    float textX = rect.x + 8.0f * s;
+    float textY = rect.y + kTitleBarH * s + 6.0f * s;
+    float maxTextW = rect.w - 16.0f * s;
     float storyEndY = drawWrappedText(batch, sdf, storyText,
                                        textX, textY, maxTextW,
-                                       11.0f, kText, d + 0.2f);
+                                       bodyFont, kText, d + 0.2f, 2.0f * s);
 
     // Story choice buttons
-    float choiceY = storyEndY + 8.0f;
-    float choiceBtnW = rect.w - kBtnMargin * 2.0f;
+    float choiceY = storyEndY + 8.0f * s;
+    float choiceBtnW = rect.w - kBtnMargin * s * 2.0f;
 
     for (size_t i = 0; i < storyChoices.size(); ++i) {
-        float btnY = choiceY + static_cast<float>(i) * (kBtnH + kBtnGap);
+        float btnY = choiceY + static_cast<float>(i) * (kBtnH * s + kBtnGap * s);
         drawButton(batch, sdf, storyChoices[i].text.c_str(),
-                   rect.x + kBtnMargin, btnY, choiceBtnW, kBtnH, d + 0.2f,
-                   kBtnBg, kText);
+                   rect.x + kBtnMargin * s, btnY, choiceBtnW, kBtnH * s, d + 0.2f,
+                   kBtnBg, kText, btnFont);
     }
 
     // Close button at bottom
-    float closeBtnX = rect.x + (rect.w - kCloseBtnW) * 0.5f;
-    float closeBtnY = rect.y + rect.h - kCloseBtnH - 6.0f;
+    float closeBtnX = rect.x + (rect.w - kCloseBtnW * s) * 0.5f;
+    float closeBtnY = rect.y + rect.h - kCloseBtnH * s - 6.0f * s;
     drawButton(batch, sdf, "Close",
-               closeBtnX, closeBtnY, kCloseBtnW, kCloseBtnH, d + 0.2f,
-               kBtnBg, kText);
+               closeBtnX, closeBtnY, kCloseBtnW * s, kCloseBtnH * s, d + 0.2f,
+               kBtnBg, kText, btnFont);
 }
 
 // ---------------------------------------------------------------------------
 // Render: Functional NPC mode
 // ---------------------------------------------------------------------------
 static void renderFunctionalMode(SpriteBatch& batch, SDFText& sdf,
-                                  const Rect& rect, float d,
+                                  const Rect& rect, float d, float s,
+                                  float titleFont, float bodyFont, float btnFont,
+                                  float questNameFont, float questStatusFont,
+                                  float questDescFont, float questLabelFont,
+                                  float actionBtnFont,
                                   const std::string& npcName,
                                   const std::string& greeting,
                                   bool hasShop, bool hasBank,
@@ -226,33 +232,33 @@ static void renderFunctionalMode(SpriteBatch& batch, SDFText& sdf,
                                   const std::vector<NpcDialoguePanel::QuestEntry>& quests,
                                   int expandedQuestIndex) {
     // Title bar
-    Vec2 titleSize = sdf.measure(npcName, 14.0f);
+    Vec2 titleSize = sdf.measure(npcName, titleFont);
     sdf.drawScreen(batch, npcName,
-        {rect.x + (rect.w - titleSize.x) * 0.5f, rect.y + 7.0f},
-        14.0f, kTitleColor, d + 0.2f);
+        {rect.x + (rect.w - titleSize.x) * 0.5f, rect.y + 7.0f * s},
+        titleFont, kTitleColor, d + 0.2f);
 
     // Divider below title
-    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + kTitleBarH},
-                   {rect.w - kBorderW * 2.0f, 1.5f}, kDivider, d + 0.1f);
+    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + kTitleBarH * s},
+                   {rect.w - kBorderW * s * 2.0f, 1.5f}, kDivider, d + 0.1f);
 
     // Greeting text (word-wrapped)
-    float textX = rect.x + 8.0f;
-    float textY = rect.y + kTitleBarH + 6.0f;
-    float maxTextW = rect.w - 16.0f;
+    float textX = rect.x + 8.0f * s;
+    float textY = rect.y + kTitleBarH * s + 6.0f * s;
+    float maxTextW = rect.w - 16.0f * s;
     float greetEndY = textY;
 
     if (!greeting.empty()) {
         greetEndY = drawWrappedText(batch, sdf, greeting,
                                      textX, textY, maxTextW,
-                                     11.0f, kText, d + 0.2f);
+                                     bodyFont, kText, d + 0.2f, 2.0f * s);
     }
 
     // Clamp greeting area to at most kGreetingH
-    float contentY = rect.y + kTitleBarH + kGreetingH;
-    if (greetEndY > contentY) contentY = greetEndY + 4.0f;
+    float contentY = rect.y + kTitleBarH * s + kGreetingH * s;
+    if (greetEndY > contentY) contentY = greetEndY + 4.0f * s;
 
     // Role buttons
-    float btnW = rect.w - kBtnMargin * 2.0f;
+    float btnW = rect.w - kBtnMargin * s * 2.0f;
     float curY = contentY;
 
     struct RoleBtn { const char* label; bool show; };
@@ -267,24 +273,24 @@ static void renderFunctionalMode(SpriteBatch& batch, SDFText& sdf,
     for (const auto& role : roles) {
         if (!role.show) continue;
         drawButton(batch, sdf, role.label,
-                   rect.x + kBtnMargin, curY, btnW, kBtnH, d + 0.2f,
-                   kBtnBg, kText);
-        curY += kBtnH + kBtnGap;
+                   rect.x + kBtnMargin * s, curY, btnW, kBtnH * s, d + 0.2f,
+                   kBtnBg, kText, btnFont);
+        curY += kBtnH * s + kBtnGap * s;
     }
 
     // Quest section
     if (!quests.empty()) {
         // Divider above quests
         if (curY > contentY) {
-            batch.drawRect({rect.x + rect.w * 0.5f, curY + 2.0f},
-                           {rect.w - kBorderW * 2.0f, 1.0f}, kDivider, d + 0.1f);
-            curY += 6.0f;
+            batch.drawRect({rect.x + rect.w * 0.5f, curY + 2.0f * s},
+                           {rect.w - kBorderW * s * 2.0f, 1.0f}, kDivider, d + 0.1f);
+            curY += 6.0f * s;
         }
 
         // "Quests" label
         sdf.drawScreen(batch, "Quests",
-            {rect.x + 8.0f, curY}, 10.0f, kGold, d + 0.2f);
-        curY += 14.0f;
+            {rect.x + 8.0f * s, curY}, questLabelFont, kGold, d + 0.2f);
+        curY += 14.0f * s;
 
         for (int i = 0; i < static_cast<int>(quests.size()); ++i) {
             const auto& quest = quests[static_cast<size_t>(i)];
@@ -294,77 +300,77 @@ static void renderFunctionalMode(SpriteBatch& batch, SDFText& sdf,
             Color rowBg = (i % 2 == 0)
                 ? Color{0.12f, 0.12f, 0.16f, 0.6f}
                 : Color{0.10f, 0.10f, 0.14f, 0.6f};
-            float rowH = expanded ? kQuestExpandH : kQuestRowH;
+            float rowH = expanded ? kQuestExpandH * s : kQuestRowH * s;
 
             batch.drawRect(
                 {rect.x + rect.w * 0.5f, curY + rowH * 0.5f},
-                {rect.w - kBtnMargin * 2.0f, rowH},
+                {rect.w - kBtnMargin * s * 2.0f, rowH},
                 rowBg, d + 0.1f);
 
             // Quest name
             Color nameColor = quest.isCompletable ? kGold : kText;
             sdf.drawScreen(batch, quest.questName,
-                {rect.x + 12.0f, curY + 6.0f},
-                11.0f, nameColor, d + 0.2f);
+                {rect.x + 12.0f * s, curY + 6.0f * s},
+                questNameFont, nameColor, d + 0.2f);
 
             // Status indicator
             if (quest.isCompletable) {
                 sdf.drawScreen(batch, "[Complete]",
-                    {rect.x + rect.w - 70.0f, curY + 8.0f},
-                    9.0f, kGold, d + 0.2f);
+                    {rect.x + rect.w - 70.0f * s, curY + 8.0f * s},
+                    questStatusFont, kGold, d + 0.2f);
             } else if (quest.isAccepted) {
                 Color activeColor = {0.5f, 0.7f, 1.0f, 1.0f};
                 sdf.drawScreen(batch, "[Active]",
-                    {rect.x + rect.w - 56.0f, curY + 8.0f},
-                    9.0f, activeColor, d + 0.2f);
+                    {rect.x + rect.w - 56.0f * s, curY + 8.0f * s},
+                    questStatusFont, activeColor, d + 0.2f);
             }
 
             // Expanded content: description + action buttons
             if (expanded) {
                 // Description
                 drawWrappedText(batch, sdf, quest.description,
-                                rect.x + 16.0f, curY + kQuestRowH,
-                                rect.w - 32.0f,
-                                9.0f, kText, d + 0.2f);
+                                rect.x + 16.0f * s, curY + kQuestRowH * s,
+                                rect.w - 32.0f * s,
+                                questDescFont, kText, d + 0.2f, 2.0f * s);
 
                 // Action buttons at bottom of expanded area
-                float actionBtnY = curY + kQuestExpandH - 24.0f;
-                float actionBtnW = 70.0f;
-                float actionBtnH = 20.0f;
+                float actionBtnY = curY + kQuestExpandH * s - 24.0f * s;
+                float actionBtnW = 70.0f * s;
+                float actionBtnH = 20.0f * s;
 
                 if (quest.isCompletable) {
                     // Complete button
                     Color completeBg = {0.2f, 0.55f, 0.2f, 0.9f};
                     drawButton(batch, sdf, "Complete",
-                               rect.x + rect.w - actionBtnW - 12.0f,
+                               rect.x + rect.w - actionBtnW - 12.0f * s,
                                actionBtnY, actionBtnW, actionBtnH,
-                               d + 0.3f, completeBg, kText);
+                               d + 0.3f, completeBg, kText, actionBtnFont);
                 } else if (!quest.isAccepted) {
                     // Accept + Decline buttons
                     Color acceptBg  = {0.2f, 0.55f, 0.2f, 0.9f};
                     Color declineBg = {0.55f, 0.2f, 0.2f, 0.9f};
-                    float gap = 6.0f;
+                    float gap = 6.0f * s;
                     drawButton(batch, sdf, "Accept",
-                               rect.x + rect.w - actionBtnW * 2.0f - gap - 12.0f,
+                               rect.x + rect.w - actionBtnW * 2.0f - gap - 12.0f * s,
                                actionBtnY, actionBtnW, actionBtnH,
-                               d + 0.3f, acceptBg, kText);
+                               d + 0.3f, acceptBg, kText, actionBtnFont);
                     drawButton(batch, sdf, "Decline",
-                               rect.x + rect.w - actionBtnW - 12.0f,
+                               rect.x + rect.w - actionBtnW - 12.0f * s,
                                actionBtnY, actionBtnW, actionBtnH,
-                               d + 0.3f, declineBg, kText);
+                               d + 0.3f, declineBg, kText, actionBtnFont);
                 }
             }
 
-            curY += rowH + 2.0f;
+            curY += rowH + 2.0f * s;
         }
     }
 
     // Close button at bottom
-    float closeBtnX = rect.x + (rect.w - kCloseBtnW) * 0.5f;
-    float closeBtnY = rect.y + rect.h - kCloseBtnH - 6.0f;
+    float closeBtnX = rect.x + (rect.w - kCloseBtnW * s) * 0.5f;
+    float closeBtnY = rect.y + rect.h - kCloseBtnH * s - 6.0f * s;
     drawButton(batch, sdf, "Close",
-               closeBtnX, closeBtnY, kCloseBtnW, kCloseBtnH, d + 0.2f,
-               kBtnBg, kText);
+               closeBtnX, closeBtnY, kCloseBtnW * s, kCloseBtnH * s, d + 0.2f,
+               kBtnBg, kText, btnFont);
 }
 
 // ---------------------------------------------------------------------------
@@ -375,37 +381,57 @@ void NpcDialoguePanel::render(SpriteBatch& batch, SDFText& sdf) {
 
     const auto& rect = computedRect_;
     float d = static_cast<float>(zOrder_);
+    float s = layoutScale_;
+
+    // Pre-compute scaled fonts
+    float titleFont      = scaledFont(14.0f);
+    float bodyFont       = scaledFont(11.0f);
+    float btnFont        = scaledFont(12.0f);
+    float closeXFont     = scaledFont(10.0f);
+    float questNameFont  = scaledFont(11.0f);
+    float questStatusFont = scaledFont(9.0f);
+    float questDescFont  = scaledFont(9.0f);
+    float questLabelFont = scaledFont(10.0f);
+    float actionBtnFont  = scaledFont(12.0f);
 
     // ---- Dark background panel ----
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
                    {rect.w, rect.h}, kBg, d);
 
     // Border edges
-    float innerH = rect.h - kBorderW * 2.0f;
+    float bdrW = kBorderW * s;
+    float innerH = rect.h - bdrW * 2.0f;
     Color bdr = {0.3f, 0.3f, 0.35f, 0.8f};
-    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + kBorderW * 0.5f},
-                   {rect.w, kBorderW}, bdr, d + 0.1f);
-    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h - kBorderW * 0.5f},
-                   {rect.w, kBorderW}, bdr, d + 0.1f);
-    batch.drawRect({rect.x + kBorderW * 0.5f, rect.y + rect.h * 0.5f},
-                   {kBorderW, innerH}, bdr, d + 0.1f);
-    batch.drawRect({rect.x + rect.w - kBorderW * 0.5f, rect.y + rect.h * 0.5f},
-                   {kBorderW, innerH}, bdr, d + 0.1f);
+    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + bdrW * 0.5f},
+                   {rect.w, bdrW}, bdr, d + 0.1f);
+    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h - bdrW * 0.5f},
+                   {rect.w, bdrW}, bdr, d + 0.1f);
+    batch.drawRect({rect.x + bdrW * 0.5f, rect.y + rect.h * 0.5f},
+                   {bdrW, innerH}, bdr, d + 0.1f);
+    batch.drawRect({rect.x + rect.w - bdrW * 0.5f, rect.y + rect.h * 0.5f},
+                   {bdrW, innerH}, bdr, d + 0.1f);
 
     // ---- Close X button (top-right corner) ----
-    float closeXCX = rect.x + rect.w - kCloseCircleR - 5.0f;
-    float closeXCY = rect.y + kCloseCircleR + 5.0f;
-    batch.drawCircle({closeXCX, closeXCY}, kCloseCircleR, kCloseBg, d + 0.2f, 16);
-    Vec2 xts = sdf.measure("X", 10.0f);
+    float closeR = kCloseCircleR * s;
+    float closeXCX = rect.x + rect.w - closeR - 5.0f * s;
+    float closeXCY = rect.y + closeR + 5.0f * s;
+    batch.drawCircle({closeXCX, closeXCY}, closeR, kCloseBg, d + 0.2f, 16);
+    Vec2 xts = sdf.measure("X", closeXFont);
     sdf.drawScreen(batch, "X",
         {closeXCX - xts.x * 0.5f, closeXCY - xts.y * 0.5f},
-        10.0f, kCloseX, d + 0.4f);
+        closeXFont, kCloseX, d + 0.4f);
 
     // ---- Mode-specific rendering ----
     if (isStoryMode) {
-        renderStoryMode(batch, sdf, rect, d, npcName, storyText, storyChoices);
+        renderStoryMode(batch, sdf, rect, d, s,
+                        titleFont, bodyFont, btnFont,
+                        npcName, storyText, storyChoices);
     } else {
-        renderFunctionalMode(batch, sdf, rect, d, npcName, greeting,
+        renderFunctionalMode(batch, sdf, rect, d, s,
+                              titleFont, bodyFont, btnFont,
+                              questNameFont, questStatusFont,
+                              questDescFont, questLabelFont, actionBtnFont,
+                              npcName, greeting,
                               hasShop, hasBank, hasTeleporter, hasGuild,
                               hasDungeon, quests, expandedQuestIndex_);
     }

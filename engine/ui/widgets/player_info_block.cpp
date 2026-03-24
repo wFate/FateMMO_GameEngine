@@ -67,7 +67,7 @@ void PlayerInfoBlock::render(SpriteBatch& batch, SDFText& sdf) {
     // HP text overlay (shadow + white)
     char hpBuf[32];
     snprintf(hpBuf, sizeof(hpBuf), "%.0f / %.0f", hp, maxHp);
-    float fontSize = 12.0f * s;
+    float fontSize = scaledFont(12.0f);
     Vec2 hpTs = sdf.measure(hpBuf, fontSize);
     Color white = (style.textColor.a > 0.0f)
                ? style.textColor
@@ -108,7 +108,7 @@ void PlayerInfoBlock::render(SpriteBatch& batch, SDFText& sdf) {
     float levelY = rect.y + 4.0f * s + ps + 4.0f * s;
     char lvBuf[16];
     snprintf(lvBuf, sizeof(lvBuf), "LV %d", level);
-    float lvFontSize = 12.0f * s;
+    float lvFontSize = scaledFont(12.0f);
     Vec2 lvTs = sdf.measure(lvBuf, lvFontSize);
     sdf.drawScreen(batch, lvBuf,
         {rect.x + 4.0f * s + (ps - lvTs.x) * 0.5f, levelY},
@@ -118,7 +118,7 @@ void PlayerInfoBlock::render(SpriteBatch& batch, SDFText& sdf) {
     if (!goldText.empty()) {
         float goldY = levelY + lvTs.y + 3.0f * s;
         Color goldColor = {1.0f, 0.85f, 0.2f, 1.0f};
-        float goldFontSize = 11.0f * s;
+        float goldFontSize = scaledFont(11.0f);
         // Gold circle placeholder
         batch.drawCircle({rect.x + 10.0f * s, goldY + 6.0f * s}, 5.0f * s, goldColor, d + 0.1f, 12);
         sdf.drawScreen(batch, goldText.c_str(),

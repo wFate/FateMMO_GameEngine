@@ -231,7 +231,10 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     scanAssets();
     assetBrowser_.init(assetRoot_, sourceDir_);
     assetBrowser_.onOpenAnimation = [this](const std::string& path) {
-        animationEditor_.openFile(path);
+        if (path.find(".png") != std::string::npos || path.find(".jpg") != std::string::npos)
+            animationEditor_.openWithSheet(path);
+        else
+            animationEditor_.openFile(path);
     };
 
     dialogueEditor_.init();
@@ -385,7 +388,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     drawDockSpace();
     drawMenuBar(world);
     drawSceneViewport();
-    drawViewportHUD(world);
+    // drawViewportHUD removed — coordinates now shown by FateStatusBar in the game HUD
     drawHierarchy(world);
     drawInspector();
     drawConsole(world);
@@ -710,6 +713,24 @@ void Editor::drawSceneViewport() {
             toggleBtn("Snap", &gridSnap_);
             toggleBtn("Colliders", &showCollisionDebug_);
 
+            // Ground tile lock toggle (inverted: button shows locked state)
+            {
+                bool locked = groundLocked_;
+                if (locked) {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.3f, 0.2f, 0.60f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.3f, 0.2f, 0.80f));
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, 0.08f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.502f, 0.502f, 0.533f, 1.0f));
+                }
+                if (ImGui::Button(locked ? "Locked" : "Unlocked", ImVec2(0, btnH)))
+                    groundLocked_ = !groundLocked_;
+                if (locked) ImGui::PopStyleColor(2);
+                else ImGui::PopStyleColor(3);
+                ImGui::SameLine();
+            }
+
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
             ImGui::SameLine();
 
@@ -921,37 +942,7 @@ void Editor::drawSceneViewport() {
     ImGui::PopStyleVar();
 }
 
-void Editor::drawViewportHUD(World* world) {
-    if (!world || viewportSize_.x <= 0 || viewportSize_.y <= 0) return;
-
-    Entity* player = world->findByTag("player");
-    if (!player) return;
-
-    auto* t = player->getComponent<Transform>();
-    if (!t) return;
-
-    char buf[64];
-    snprintf(buf, sizeof(buf), "(%d, %d)", Coords::tileX(t->position.x), Coords::tileY(t->position.y));
-
-    ImVec2 textSize = ImGui::CalcTextSize(buf);
-    ImVec2 padding(12.0f, 6.0f);
-    float winWidth = textSize.x + padding.x * 2.0f;
-    float x = viewportPos_.x + (viewportSize_.x - winWidth) * 0.5f;
-    float y = viewportPos_.y + 6.0f;
-
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                             ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_AlwaysAutoResize |
-                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing;
-
-    ImGui::SetNextWindowPos(ImVec2(x, y));
-    ImGui::SetNextWindowBgAlpha(0.5f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
-    ImGui::Begin("##HUD_Viewport", nullptr, flags);
-    ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "%s", buf);
-    ImGui::End();
-    ImGui::PopStyleVar(2);
-}
+// drawViewportHUD removed — coordinates now shown by FateStatusBar in the game HUD
 
 void Editor::drawDebugInfoPanel(World* world) {
     if (ImGui::Begin("Debug Info")) {
@@ -1409,6 +1400,9 @@ void Editor::drawAssetBrowser(World* world, Camera* camera) {
                                 if (ImGui::MenuItem("Place in Scene")) {
                                     isDraggingAsset_ = true;
                                     draggedAssetPath_ = asset.relativePath;
+                                }
+                                if (ImGui::MenuItem("Open in Animation Editor")) {
+                                    animationEditor_.openWithSheet(asset.fullPath);
                                 }
                             }
                             if (asset.type == AssetType::Script || asset.type == AssetType::Shader) {
@@ -4268,6 +4262,17 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     // In Play mode the game owns the keyboard — tool switching would
     // conflict with WASD movement, chat, and other gameplay keys.
     bool allowToolKeys = paused_;
+
+    // Escape = Cancel placement / clear selection
+    if (scancode == SDL_SCANCODE_ESCAPE) {
+        if (isDraggingAsset_) {
+            isDraggingAsset_ = false;
+            draggedAssetPath_.clear();
+            pendingBrushStroke_.reset();
+        } else if (selectedEntity_) {
+            clearSelection();
+        }
+    }
 
     // Ctrl+Z = Undo
     if (ctrl && scancode == SDL_SCANCODE_Z && !shift) {

@@ -55,7 +55,7 @@ void StatusPanel::renderCharacterDisplay(SpriteBatch& batch, SDFText& sdf,
         batch.drawRect({bannerCX, bannerCY}, {bannerW, bannerH}, bannerBg, depth + 0.1f);
         batch.drawRing({bannerCX, bannerCY}, bannerW * 0.5f, 1.0f, bannerBdr, depth + 0.15f, 4);
 
-        float factionFontSize = 9.0f * s;
+        float factionFontSize = scaledFont(9.0f);
         Color factionColor = {1.0f, 0.92f, 0.75f, 1.0f};
         Vec2 fts = sdf.measure(factionName.c_str(), factionFontSize);
         sdf.drawScreen(batch, factionName.c_str(),
@@ -98,8 +98,8 @@ void StatusPanel::renderStatGrid(SpriteBatch& batch, SDFText& sdf,
     int rows = 3;
     float cellW = (area.w - insetPad * 2.0f) / static_cast<float>(cols);
     float cellH = (area.h - insetPad * 2.0f) / static_cast<float>(rows);
-    float labelFontSize = 9.0f * s;
-    float valueFontSize = 11.0f * s;
+    float labelFontSize = scaledFont(9.0f);
+    float valueFontSize = scaledFont(11.0f);
     Color labelColor = {0.50f, 0.40f, 0.30f, 1.0f};
     Color valueColor = resolvedStyle_.textColor;
 
@@ -112,7 +112,7 @@ void StatusPanel::renderStatGrid(SpriteBatch& batch, SDFText& sdf,
             // Abbreviation label
             Vec2 lts = sdf.measure(labels[idx], labelFontSize);
             sdf.drawScreen(batch, labels[idx],
-                {cellX + cellW * 0.5f - lts.x * 0.5f, cellY + 2.0f},
+                {cellX + cellW * 0.5f - lts.x * 0.5f, cellY + 2.0f * s},
                 labelFontSize, labelColor, depth + 0.1f);
 
             // Value
@@ -120,7 +120,7 @@ void StatusPanel::renderStatGrid(SpriteBatch& batch, SDFText& sdf,
             snprintf(vbuf, sizeof(vbuf), "%d", values[idx]);
             Vec2 vts = sdf.measure(vbuf, valueFontSize);
             sdf.drawScreen(batch, vbuf,
-                {cellX + cellW * 0.5f - vts.x * 0.5f, cellY + labelFontSize + 4.0f},
+                {cellX + cellW * 0.5f - vts.x * 0.5f, cellY + labelFontSize + 4.0f * s},
                 valueFontSize, valueColor, depth + 0.1f);
         }
     }
@@ -159,7 +159,7 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
     Color titleColor = style.textColor;
     sdf.drawScreen(batch, "STATUS",
         {rect.x + 10.0f * s, rect.y + 6.0f * s},
-        16.0f * s, titleColor, d + 0.2f);
+        scaledFont(16.0f), titleColor, d + 0.2f);
 
     // ---- Close button (X circle at top-right) ----
     float closeR  = 12.0f * s;
@@ -170,7 +170,7 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
     Color closeX   = {1.0f, 0.95f, 0.88f, 1.0f};
     batch.drawCircle({closeCX, closeCY}, closeR, closeBg,  d + 0.2f, 16);
     batch.drawRing  ({closeCX, closeCY}, closeR, 1.5f, closeBdr, d + 0.3f, 16);
-    float closeFontSize = 12.0f * s;
+    float closeFontSize = scaledFont(12.0f);
     Vec2 xts = sdf.measure("X", closeFontSize);
     sdf.drawScreen(batch, "X",
         {closeCX - xts.x * 0.5f, closeCY - xts.y * 0.5f},
@@ -194,7 +194,7 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
 
     // Player name (large, dark brown)
     if (!playerName.empty()) {
-        float nameFontSize = 15.0f * s;
+        float nameFontSize = scaledFont(15.0f);
         Color nameColor = {0.25f, 0.16f, 0.08f, 1.0f};
         sdf.drawScreen(batch, playerName.c_str(),
             {statsArea.x, curY}, nameFontSize, nameColor, d + 0.2f);
@@ -205,7 +205,7 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
     {
         char lvBuf[24];
         snprintf(lvBuf, sizeof(lvBuf), "Lv %d  %s", level, className.c_str());
-        float lvFontSize = 11.0f * s;
+        float lvFontSize = scaledFont(11.0f);
         Color lvColor = {0.40f, 0.28f, 0.16f, 1.0f};
         sdf.drawScreen(batch, lvBuf,
             {statsArea.x, curY}, lvFontSize, lvColor, d + 0.2f);

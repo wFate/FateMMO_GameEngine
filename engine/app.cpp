@@ -529,6 +529,11 @@ void App::update() {
     if (Editor::instance().isPaused()) return;
 #endif
 
+    // Skip system updates during async scene loading — tickFinalization
+    // destroys/creates entities mid-frame, so running systems against a
+    // half-built world causes use-after-free crashes.
+    if (isLoading_) return;
+
     fixedTimeAccumulator_ += deltaTime_;
     while (fixedTimeAccumulator_ >= config_.fixedTimestep) {
         onFixedUpdate(config_.fixedTimestep);

@@ -33,8 +33,10 @@ void BossHPBar::render(SpriteBatch& batch, SDFText& sdf) {
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
                    {rect.w, rect.h}, panelBg, d);
 
+    float s = layoutScale_;
+
     // Boss name centered above the bar (gold text, 14px)
-    float nameFontSize = 14.0f;
+    float nameFontSize = scaledFont(14.0f);
     Color goldText = {1.0f, 0.84f, 0.0f, 1.0f};
     float nameY = rect.y + 4.0f;
 
@@ -46,7 +48,7 @@ void BossHPBar::render(SpriteBatch& batch, SDFText& sdf) {
     }
 
     // HP bar positioned below the name
-    float nameBlockH = nameFontSize + 8.0f;
+    float nameBlockH = nameFontSize + 8.0f * s;
     float barX = rect.x + barPadding;
     float barY = rect.y + nameBlockH;
     float barW = rect.w - barPadding * 2.0f;
@@ -86,7 +88,7 @@ void BossHPBar::render(SpriteBatch& batch, SDFText& sdf) {
                    {bw, innerH}, borderColor, d + 0.3f);
 
     // HP percentage text centered on bar (white, 11px)
-    float pctFontSize = 11.0f;
+    float pctFontSize = scaledFont(11.0f);
     Color white = (style.textColor.a > 0.0f)
                ? style.textColor
                : Color{1.0f, 1.0f, 1.0f, 1.0f};

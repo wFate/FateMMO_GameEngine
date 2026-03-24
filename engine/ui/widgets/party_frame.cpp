@@ -21,6 +21,8 @@ void PartyFrame::render(SpriteBatch& batch, SDFText& sdf) {
 
     int count = (std::min)(static_cast<int>(members.size()), 2);
 
+    float s = layoutScale_;
+
     for (int i = 0; i < count; ++i) {
         const PartyFrameMemberInfo& m = members[static_cast<size_t>(i)];
 
@@ -44,8 +46,8 @@ void PartyFrame::render(SpriteBatch& batch, SDFText& sdf) {
         batch.drawRect({cardX + cardWidth - bw * 0.5f, cardY + cardHeight * 0.5f}, {bw, ibH},      bdr, d + 0.05f);
 
         // ---- Portrait circle ----
-        float portR  = 10.0f;
-        float portCX = cardX + 6.0f + portR;
+        float portR  = 10.0f * s;
+        float portCX = cardX + 6.0f * s + portR;
         float portCY = cardY + cardHeight * 0.5f;
 
         Color portBg  = {0.20f, 0.22f, 0.30f, 0.95f};
@@ -58,34 +60,34 @@ void PartyFrame::render(SpriteBatch& batch, SDFText& sdf) {
             // Small yellow diamond above portrait top-right
             float cx = portCX + portR * 0.6f;
             float cy = portCY - portR * 0.6f;
-            float sz = 5.0f;
+            float sz = 5.0f * s;
             Color crown = {1.0f, 0.82f, 0.0f, 1.0f};
             // Draw diamond as two triangles via thin rects at angle — approximate with a small rect
             batch.drawRect({cx, cy}, {sz, sz}, crown, d + 0.3f);
         }
 
         // ---- Text layout ----
-        float textX    = portCX + portR + 6.0f;
+        float textX    = portCX + portR + 6.0f * s;
         float textMaxW = cardWidth - (textX - cardX) - 4.0f;
 
         // Name (white, 11px)
-        float nameY = cardY + 6.0f;
+        float nameY = cardY + 6.0f * s;
         Color nameColor = {1.0f, 1.0f, 1.0f, 0.95f};
-        sdf.drawScreen(batch, m.name.c_str(), {textX, nameY}, 11.0f, nameColor, d + 0.2f);
+        sdf.drawScreen(batch, m.name.c_str(), {textX, nameY}, scaledFont(11.0f), nameColor, d + 0.2f);
 
         // "Lv N" right-aligned (grey, 10px)
         char lvBuf[16];
         snprintf(lvBuf, sizeof(lvBuf), "Lv %d", m.level);
         Color lvColor = {0.65f, 0.65f, 0.70f, 0.85f};
-        Vec2 lvSize = sdf.measure(lvBuf, 10.0f);
+        Vec2 lvSize = sdf.measure(lvBuf, scaledFont(10.0f));
         float lvX = cardX + cardWidth - lvSize.x - 5.0f;
-        sdf.drawScreen(batch, lvBuf, {lvX, nameY}, 10.0f, lvColor, d + 0.2f);
+        sdf.drawScreen(batch, lvBuf, {lvX, nameY}, scaledFont(10.0f), lvColor, d + 0.2f);
 
         // ---- HP bar (red, 8px tall) ----
         float barX  = textX;
         float barW  = textMaxW;
-        float hpBarY = nameY + 13.0f;
-        float hpBarH = 8.0f;
+        float hpBarY = nameY + 13.0f * s;
+        float hpBarH = 8.0f * s;
 
         Color hpBg   = {0.15f, 0.08f, 0.08f, 0.85f};
         Color hpFill = {0.80f, 0.18f, 0.18f, 1.0f};
@@ -100,8 +102,8 @@ void PartyFrame::render(SpriteBatch& batch, SDFText& sdf) {
         }
 
         // ---- MP bar (blue, 6px tall) ----
-        float mpBarY = hpBarY + hpBarH + 2.0f;
-        float mpBarH = 6.0f;
+        float mpBarY = hpBarY + hpBarH + 2.0f * s;
+        float mpBarH = 6.0f * s;
 
         Color mpBg   = {0.08f, 0.08f, 0.18f, 0.85f};
         Color mpFill = {0.18f, 0.40f, 0.85f, 1.0f};

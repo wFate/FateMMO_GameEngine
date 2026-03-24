@@ -144,13 +144,16 @@ private:
     }
 
     static size_t pageSize() {
+        static const size_t cached = []() -> size_t {
 #ifdef _WIN32
-        SYSTEM_INFO si;
-        GetSystemInfo(&si);
-        return si.dwPageSize;
+            SYSTEM_INFO si;
+            GetSystemInfo(&si);
+            return si.dwPageSize;
 #else
-        return static_cast<size_t>(sysconf(_SC_PAGESIZE));
+            return static_cast<size_t>(sysconf(_SC_PAGESIZE));
 #endif
+        }();
+        return cached;
     }
 };
 

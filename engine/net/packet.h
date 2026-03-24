@@ -118,6 +118,7 @@ namespace PacketType {
     constexpr uint8_t SvShopResult       = 0xB7;
     constexpr uint8_t SvTeleportResult   = 0xB8;
     constexpr uint8_t SvAuroraStatus    = 0xB9;
+    constexpr uint8_t SvEntityUpdateBatch = 0xBA; // Multiple delta updates in one packet
 } // namespace PacketType
 
 // ============================================================================

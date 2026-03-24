@@ -77,9 +77,9 @@ void NotificationToast::render(SpriteBatch& batch, SDFText& sdf) {
     const auto& rect = computedRect_;
     float d = static_cast<float>(zOrder_);
 
-    float accentWidth = 4.0f;
-    float textLeftMargin = accentWidth + 8.0f;
-    float textFontSize = 12.0f;
+    float accentWidth = 4.0f * layoutScale_;
+    float textLeftMargin = accentWidth + 8.0f * layoutScale_;
+    float textFontSize = scaledFont(12.0f);
 
     float currentY = rect.y;
 

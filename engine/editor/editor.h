@@ -46,15 +46,16 @@ struct DisplayPreset {
     int height;
 };
 
+// Native pixel resolutions (what the device actually renders at)
 static constexpr DisplayPreset kDisplayPresets[] = {
     {"Free Aspect",         0,    0},
-    {"iPhone 16 Pro",     852,  393},
-    {"iPhone 16 Pro Max", 932,  430},
-    {"iPhone SE",         667,  375},
-    {"iPad Pro 11\"",    1194,  834},
-    {"iPad Pro 12.9\"",  1366, 1024},
-    {"Samsung S24",       780,  360},
-    {"Pixel 9",           915,  412},
+    {"iPhone 16 Pro",    2556, 1179},  // 3x Retina (logical 852x393)
+    {"iPhone 16 Pro Max",2796, 1290},  // 3x Retina (logical 932x430)
+    {"iPhone SE",        1334,  750},  // 2x Retina (logical 667x375)
+    {"iPad Pro 11\"",    2388, 1668},  // 2x Retina (logical 1194x834)
+    {"iPad Pro 12.9\"",  2732, 2048},  // 2x Retina (logical 1366x1024)
+    {"Samsung S24",      2340, 1080},  // ~3x (logical 780x360)
+    {"Pixel 9",          2424, 1080},  // ~2.6x (logical 915x412)
     {"1080p",            1920, 1080},
     {"720p",             1280,  720},
     {"4K",               3840, 2160},
@@ -186,8 +187,9 @@ public:
     // Inspector undo capture (call after each editable ImGui widget)
     void captureInspectorUndo();
 
-    // Entity locking
-    static bool isEntityLocked(Entity* e) { return e && e->tag() == "ground"; }
+    // Entity locking (ground tiles locked by default, toggleable via toolbar)
+    bool groundLocked_ = true;
+    bool isEntityLocked(Entity* e) const { return groundLocked_ && e && e->tag() == "ground"; }
 
     // Erase tile at position
     void eraseTileAt(World* world, Camera* camera, const Vec2& screenPos,

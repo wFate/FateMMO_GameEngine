@@ -60,8 +60,8 @@ void BankPanel::render(SpriteBatch& batch, SDFText& sdf) {
     float d = static_cast<float>(zOrder_);
 
     // Layout constants
-    float headerH = 28.0f;
-    float bottomBarH = 80.0f;
+    float headerH = 28.0f * layoutScale_;
+    float bottomBarH = 80.0f * layoutScale_;
     float bw = 2.0f;
     float leftW = rect.w * 0.5f;
     float rightW = rect.w - leftW;
@@ -95,19 +95,19 @@ void BankPanel::render(SpriteBatch& batch, SDFText& sdf) {
                    {rect.w - bw * 2.0f, headerH}, titleBarBg, d + 0.05f);
 
     sdf.drawScreen(batch, "Bank",
-        {rect.x + 10.0f, rect.y + 7.0f},
-        14.0f, textColor, d + 0.2f);
+        {rect.x + 10.0f * layoutScale_, rect.y + 7.0f * layoutScale_},
+        scaledFont(14.0f), textColor, d + 0.2f);
 
     // ---- Close button (X at top-right, 20x20) ----
-    float closeSize = 20.0f;
-    float closeCX = rect.x + rect.w - closeSize * 0.5f - 6.0f;
+    float closeSize = 20.0f * layoutScale_;
+    float closeCX = rect.x + rect.w - closeSize * 0.5f - 6.0f * layoutScale_;
     float closeCY = rect.y + headerH * 0.5f;
     Color closeBg = {0.3f, 0.15f, 0.15f, 0.9f};
     batch.drawRect({closeCX, closeCY}, {closeSize, closeSize}, closeBg, d + 0.2f);
-    Vec2 xts = sdf.measure("X", 12.0f);
+    Vec2 xts = sdf.measure("X", scaledFont(12.0f));
     sdf.drawScreen(batch, "X",
         {closeCX - xts.x * 0.5f, closeCY - xts.y * 0.5f},
-        12.0f, textColor, d + 0.3f);
+        scaledFont(12.0f), textColor, d + 0.3f);
 
     // ---- Divider below title ----
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + headerH},
@@ -121,18 +121,18 @@ void BankPanel::render(SpriteBatch& batch, SDFText& sdf) {
     // =====================================================================
     // LEFT PANE: Bank Storage
     // =====================================================================
-    float leftPaneX = rect.x + 4.0f;
-    float leftPaneW = leftW - 8.0f;
+    float leftPaneX = rect.x + 4.0f * layoutScale_;
+    float leftPaneW = leftW - 8.0f * layoutScale_;
 
     // "Bank Storage" sub-header
     sdf.drawScreen(batch, "Bank Storage",
-        {leftPaneX, contentY + 4.0f},
-        12.0f, textColor, d + 0.2f);
+        {leftPaneX, contentY + 4.0f * layoutScale_},
+        scaledFont(12.0f), textColor, d + 0.2f);
 
     // Scrollable bank item rows
-    float rowH = 36.0f;
-    float bankListY = contentY + 22.0f;
-    float bankListH = contentH - 24.0f;
+    float rowH = 36.0f * layoutScale_;
+    float bankListY = contentY + 22.0f * layoutScale_;
+    float bankListH = contentH - 24.0f * layoutScale_;
     int maxVisibleRows = static_cast<int>(bankListH / rowH);
     if (maxVisibleRows < 1) maxVisibleRows = 1;
 
@@ -140,8 +140,8 @@ void BankPanel::render(SpriteBatch& batch, SDFText& sdf) {
     if (startRow < 0) startRow = 0;
     if (startRow >= static_cast<int>(bankItems.size())) startRow = 0;
 
-    float withdrawBtnW = 70.0f;
-    float withdrawBtnH = 22.0f;
+    float withdrawBtnW = 70.0f * layoutScale_;
+    float withdrawBtnH = 22.0f * layoutScale_;
 
     for (int i = 0; i < maxVisibleRows; ++i) {
         int itemIdx = startRow + i;
@@ -165,52 +165,52 @@ void BankPanel::render(SpriteBatch& batch, SDFText& sdf) {
 
         // Item name
         sdf.drawScreen(batch, item.displayName,
-            {leftPaneX + 4.0f, rowY + 4.0f},
-            11.0f, textColor, d + 0.2f);
+            {leftPaneX + 4.0f * layoutScale_, rowY + 4.0f * layoutScale_},
+            scaledFont(11.0f), textColor, d + 0.2f);
 
         // Quantity
         char qbuf[16];
         snprintf(qbuf, sizeof(qbuf), "x%u", item.count);
         sdf.drawScreen(batch, qbuf,
-            {leftPaneX + 4.0f, rowY + 18.0f},
-            9.0f, goldColor, d + 0.2f);
+            {leftPaneX + 4.0f * layoutScale_, rowY + 18.0f * layoutScale_},
+            scaledFont(9.0f), goldColor, d + 0.2f);
 
         // "Withdraw" button (right side of row)
-        float wBtnX = leftPaneX + leftPaneW - withdrawBtnW - 4.0f;
+        float wBtnX = leftPaneX + leftPaneW - withdrawBtnW - 4.0f * layoutScale_;
         float wBtnCX = wBtnX + withdrawBtnW * 0.5f;
         batch.drawRect({wBtnCX, rowCY}, {withdrawBtnW, withdrawBtnH}, withdrawBg, d + 0.15f);
-        Vec2 wts = sdf.measure("Withdraw", 9.0f);
+        Vec2 wts = sdf.measure("Withdraw", scaledFont(9.0f));
         sdf.drawScreen(batch, "Withdraw",
             {wBtnCX - wts.x * 0.5f, rowCY - wts.y * 0.5f},
-            9.0f, textColor, d + 0.25f);
+            scaledFont(9.0f), textColor, d + 0.25f);
     }
 
     // Empty state
     if (bankItems.empty()) {
         Color emptyColor = {0.5f, 0.5f, 0.5f, 0.7f};
         sdf.drawScreen(batch, "No items stored",
-            {leftPaneX + 10.0f, bankListY + 10.0f},
-            10.0f, emptyColor, d + 0.2f);
+            {leftPaneX + 10.0f * layoutScale_, bankListY + 10.0f * layoutScale_},
+            scaledFont(10.0f), emptyColor, d + 0.2f);
     }
 
     // =====================================================================
     // RIGHT PANE: Player Inventory
     // =====================================================================
-    float rightPaneX = rect.x + leftW + 4.0f;
-    float rightPaneW = rightW - 8.0f;
+    float rightPaneX = rect.x + leftW + 4.0f * layoutScale_;
+    float rightPaneW = rightW - 8.0f * layoutScale_;
 
     // "Your Inventory" sub-header
     sdf.drawScreen(batch, "Your Inventory",
-        {rightPaneX, contentY + 4.0f},
-        12.0f, textColor, d + 0.2f);
+        {rightPaneX, contentY + 4.0f * layoutScale_},
+        scaledFont(12.0f), textColor, d + 0.2f);
 
     // 4x4 grid of inventory slots
-    float slotSize = 40.0f;
-    float slotPad = 4.0f;
+    float slotSize = 40.0f * layoutScale_;
+    float slotPad = 4.0f * layoutScale_;
     int gridCols = 4;
     int gridRows = 4;
     float gridStartX = rightPaneX + (rightPaneW - (slotSize * gridCols + slotPad * (gridCols - 1))) * 0.5f;
-    float gridStartY = contentY + 24.0f;
+    float gridStartY = contentY + 24.0f * layoutScale_;
 
     for (int row = 0; row < gridRows; ++row) {
         for (int col = 0; col < gridCols; ++col) {
@@ -239,18 +239,18 @@ void BankPanel::render(SpriteBatch& batch, SDFText& sdf) {
                 // Item name (truncated)
                 const std::string& name = playerItems[idx].displayName;
                 std::string shortName = name.size() > 5 ? name.substr(0, 5) : name;
-                Vec2 ns = sdf.measure(shortName, 8.0f);
+                Vec2 ns = sdf.measure(shortName, scaledFont(8.0f));
                 sdf.drawScreen(batch, shortName,
-                    {cx - ns.x * 0.5f, cy - 6.0f},
-                    8.0f, textColor, d + 0.2f);
+                    {cx - ns.x * 0.5f, cy - 6.0f * layoutScale_},
+                    scaledFont(8.0f), textColor, d + 0.2f);
 
                 // Quantity badge
                 if (playerItems[idx].quantity > 1) {
                     char qbuf[16];
                     snprintf(qbuf, sizeof(qbuf), "%d", playerItems[idx].quantity);
                     sdf.drawScreen(batch, qbuf,
-                        {cx + slotSize * 0.5f - 14.0f, cy + slotSize * 0.5f - 10.0f},
-                        9.0f, goldColor, d + 0.25f);
+                        {cx + slotSize * 0.5f - 14.0f * layoutScale_, cy + slotSize * 0.5f - 10.0f * layoutScale_},
+                        scaledFont(9.0f), goldColor, d + 0.25f);
                 }
             }
         }
@@ -258,10 +258,10 @@ void BankPanel::render(SpriteBatch& batch, SDFText& sdf) {
 
     // "Double-click to deposit" hint
     Color hintColor = {0.5f, 0.5f, 0.5f, 0.6f};
-    float hintY = gridStartY + static_cast<float>(gridRows) * (slotSize + slotPad) + 4.0f;
+    float hintY = gridStartY + static_cast<float>(gridRows) * (slotSize + slotPad) + 4.0f * layoutScale_;
     sdf.drawScreen(batch, "Double-click item to deposit",
-        {rightPaneX + 4.0f, hintY},
-        8.0f, hintColor, d + 0.2f);
+        {rightPaneX + 4.0f * layoutScale_, hintY},
+        scaledFont(8.0f), hintColor, d + 0.2f);
 
     // =====================================================================
     // BOTTOM BAR: Gold operations
@@ -277,10 +277,10 @@ void BankPanel::render(SpriteBatch& batch, SDFText& sdf) {
     batch.drawRect({rect.x + rect.w * 0.5f, barY + bottomBarH * 0.5f},
                    {rect.w - bw * 2.0f, bottomBarH - bw}, barBg, d + 0.05f);
 
-    float barPadX = 10.0f;
-    float lineY1 = barY + 6.0f;
-    float lineY2 = barY + 22.0f;
-    float lineY3 = barY + 42.0f;
+    float barPadX = 10.0f * layoutScale_;
+    float lineY1 = barY + 6.0f * layoutScale_;
+    float lineY2 = barY + 22.0f * layoutScale_;
+    float lineY3 = barY + 42.0f * layoutScale_;
 
     // Gold labels
     char playerGoldBuf[48];
@@ -288,49 +288,49 @@ void BankPanel::render(SpriteBatch& batch, SDFText& sdf) {
              static_cast<long long>(playerGold));
     sdf.drawScreen(batch, playerGoldBuf,
         {rect.x + barPadX, lineY1},
-        11.0f, goldColor, d + 0.2f);
+        scaledFont(11.0f), goldColor, d + 0.2f);
 
     char bankGoldBuf[48];
     snprintf(bankGoldBuf, sizeof(bankGoldBuf), "Bank Gold: %lld",
              static_cast<long long>(bankGold));
     sdf.drawScreen(batch, bankGoldBuf,
         {rect.x + rect.w * 0.5f, lineY1},
-        11.0f, goldColor, d + 0.2f);
+        scaledFont(11.0f), goldColor, d + 0.2f);
 
     // Gold input: +1K, +10K buttons and amount display
-    float btnW = 40.0f;
-    float btnH = 20.0f;
+    float btnW = 40.0f * layoutScale_;
+    float btnH = 20.0f * layoutScale_;
     float inputRowX = rect.x + barPadX;
 
     // "+1K" button
     float btn1kCX = inputRowX + btnW * 0.5f;
     float btn1kCY = lineY2 + btnH * 0.5f;
     batch.drawRect({btn1kCX, btn1kCY}, {btnW, btnH}, depositBg, d + 0.15f);
-    Vec2 b1kts = sdf.measure("+1K", 9.0f);
+    Vec2 b1kts = sdf.measure("+1K", scaledFont(9.0f));
     sdf.drawScreen(batch, "+1K",
         {btn1kCX - b1kts.x * 0.5f, btn1kCY - b1kts.y * 0.5f},
-        9.0f, textColor, d + 0.25f);
+        scaledFont(9.0f), textColor, d + 0.25f);
 
     // "+10K" button
-    float btn10kCX = inputRowX + btnW + 6.0f + btnW * 0.5f;
+    float btn10kCX = inputRowX + btnW + 6.0f * layoutScale_ + btnW * 0.5f;
     float btn10kCY = lineY2 + btnH * 0.5f;
     batch.drawRect({btn10kCX, btn10kCY}, {btnW, btnH}, depositBg, d + 0.15f);
-    Vec2 b10kts = sdf.measure("+10K", 9.0f);
+    Vec2 b10kts = sdf.measure("+10K", scaledFont(9.0f));
     sdf.drawScreen(batch, "+10K",
         {btn10kCX - b10kts.x * 0.5f, btn10kCY - b10kts.y * 0.5f},
-        9.0f, textColor, d + 0.25f);
+        scaledFont(9.0f), textColor, d + 0.25f);
 
     // Amount display
     char amtBuf[48];
     snprintf(amtBuf, sizeof(amtBuf), "Amount: %lld",
              static_cast<long long>(goldInputAmount_));
     sdf.drawScreen(batch, amtBuf,
-        {inputRowX + btnW * 2 + 18.0f, lineY2 + 3.0f},
-        10.0f, textColor, d + 0.2f);
+        {inputRowX + btnW * 2 + 18.0f * layoutScale_, lineY2 + 3.0f * layoutScale_},
+        scaledFont(10.0f), textColor, d + 0.2f);
 
     // "Deposit (fee: 5,000)" button
-    float depBtnW = 150.0f;
-    float depBtnH = 24.0f;
+    float depBtnW = 150.0f * layoutScale_;
+    float depBtnH = 24.0f * layoutScale_;
     float depBtnCX = rect.x + barPadX + depBtnW * 0.5f;
     float depBtnCY = lineY3 + depBtnH * 0.5f;
 
@@ -343,15 +343,15 @@ void BankPanel::render(SpriteBatch& batch, SDFText& sdf) {
     char depLabel[64];
     snprintf(depLabel, sizeof(depLabel), "Deposit (fee: %lld)",
              static_cast<long long>(BankStorage::BANK_DEPOSIT_FEE));
-    Vec2 dts = sdf.measure(depLabel, 9.0f);
+    Vec2 dts = sdf.measure(depLabel, scaledFont(9.0f));
     Color depTextColor = canDeposit ? textColor : Color{0.5f, 0.5f, 0.5f, 0.7f};
     sdf.drawScreen(batch, depLabel,
         {depBtnCX - dts.x * 0.5f, depBtnCY - dts.y * 0.5f},
-        9.0f, depTextColor, d + 0.25f);
+        scaledFont(9.0f), depTextColor, d + 0.25f);
 
     // "Withdraw All" button
-    float wdBtnW = 100.0f;
-    float wdBtnH = 24.0f;
+    float wdBtnW = 100.0f * layoutScale_;
+    float wdBtnH = 24.0f * layoutScale_;
     float wdBtnCX = rect.x + rect.w - barPadX - wdBtnW * 0.5f;
     float wdBtnCY = lineY3 + wdBtnH * 0.5f;
 
@@ -359,21 +359,21 @@ void BankPanel::render(SpriteBatch& batch, SDFText& sdf) {
     Color wdColor = canWithdrawGold ? withdrawBg : disabledBg;
     batch.drawRect({wdBtnCX, wdBtnCY}, {wdBtnW, wdBtnH}, wdColor, d + 0.15f);
 
-    Vec2 wdts = sdf.measure("Withdraw All", 9.0f);
+    Vec2 wdts = sdf.measure("Withdraw All", scaledFont(9.0f));
     Color wdTextColor = canWithdrawGold ? textColor : Color{0.5f, 0.5f, 0.5f, 0.7f};
     sdf.drawScreen(batch, "Withdraw All",
         {wdBtnCX - wdts.x * 0.5f, wdBtnCY - wdts.y * 0.5f},
-        9.0f, wdTextColor, d + 0.25f);
+        scaledFont(9.0f), wdTextColor, d + 0.25f);
 
     // ---- Error message (if active) ----
     if (errorTimer > 0.0f && !errorMessage.empty()) {
         float errAlpha = (errorTimer < 1.0f) ? errorTimer : 1.0f;
         Color errColor = {0.8f, 0.2f, 0.2f, errAlpha};
-        Vec2 errSize = sdf.measure(errorMessage, 10.0f);
-        float errY = barY - 14.0f;
+        Vec2 errSize = sdf.measure(errorMessage, scaledFont(10.0f));
+        float errY = barY - 14.0f * layoutScale_;
         sdf.drawScreen(batch, errorMessage,
             {rect.x + rect.w * 0.5f - errSize.x * 0.5f, errY},
-            10.0f, errColor, d + 0.3f);
+            scaledFont(10.0f), errColor, d + 0.3f);
     }
 
     renderChildren(batch, sdf);

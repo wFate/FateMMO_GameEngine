@@ -28,7 +28,7 @@ public:
     bool hasGuild = false;
     bool hasDungeon = false;
 
-    // Quest data
+    // Quest data (shown in NPC dialogue; no separate quest tracker/journal UI)
     struct QuestEntry {
         uint32_t questId = 0;
         std::string questName;

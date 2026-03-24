@@ -9,8 +9,14 @@ namespace fate {
 
 void ReplicationManager::update(World& world, NetServer& server) {
     ++tickCounter_;
-    // Rebuild spatial index once per tick with all registered entity positions
-    rebuildSpatialIndex(world);
+    // NOTE: Spatial index rebuild is commented out — it was rebuilt every tick but
+    // never queried, wasting CPU. Scene-based filtering (buildVisibility iterates all
+    // entities in the same scene) is sufficient at current scale. Distance-based AOI
+    // was removed because a 128px hysteresis gap caused entity flickering at boundaries
+    // (activate 640px / deactivate 768px was too narrow for moving mobs). Re-enable
+    // distance-based AOI with wider hysteresis (e.g. 500/900 + min visibility duration)
+    // only when zone populations exceed ~200 entities and bandwidth becomes a bottleneck.
+    // rebuildSpatialIndex(world);
 
     server.connections().forEach([&](ClientConnection& client) {
         if (client.playerEntityId == 0) return; // not spawned yet
@@ -160,7 +166,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         client.lastSentState.erase(pid.value());
     }
 
-    // Process stayed entities (delta updates)
+    // Process stayed entities (delta updates) — batched into single packets
 
     // Compute client player position once for tier checks
     Vec2 clientPos{};
@@ -172,6 +178,26 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
             if (ct) clientPos = ct->position;
         }
     }
+
+    // Batch buffer: accumulate multiple entity deltas into one packet
+    uint8_t batchBuf[MAX_PAYLOAD_SIZE];
+    ByteWriter batchWriter(batchBuf, sizeof(batchBuf));
+    // Reserve 1 byte for entity count at the start
+    batchWriter.writeU8(0);
+    uint8_t batchCount = 0;
+
+    auto flushBatch = [&]() {
+        if (batchCount == 0) return;
+        // Patch the count byte at position 0
+        batchBuf[0] = batchCount;
+        server.sendTo(client.clientId, Channel::Unreliable,
+                      PacketType::SvEntityUpdateBatch,
+                      batchWriter.data(), batchWriter.size());
+        // Reset for next batch
+        batchWriter = ByteWriter(batchBuf, sizeof(batchBuf));
+        batchWriter.writeU8(0);
+        batchCount = 0;
+    };
 
     for (const auto& handle : client.aoi.stayed) {
         PersistentId pid = getPersistentId(handle);
@@ -264,17 +290,27 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         deltaMsg.honorRank       = current.honorRank;
         deltaMsg.updateSeq       = seq;
 
-        uint8_t buf[MAX_PAYLOAD_SIZE];
-        ByteWriter writer(buf, sizeof(buf));
-        deltaMsg.write(writer);
-        server.sendTo(client.clientId, Channel::Unreliable,
-                      PacketType::SvEntityUpdate,
-                      writer.data(), writer.size());
+        // Serialize delta into a temp buffer to check size
+        uint8_t tmpBuf[MAX_PAYLOAD_SIZE];
+        ByteWriter tmpWriter(tmpBuf, sizeof(tmpBuf));
+        deltaMsg.write(tmpWriter);
+
+        // If this delta won't fit in the current batch, flush first
+        if (batchWriter.size() + tmpWriter.size() > MAX_PAYLOAD_SIZE) {
+            flushBatch();
+        }
+
+        // Write delta into batch buffer
+        deltaMsg.write(batchWriter);
+        batchCount++;
 
         // Update last sent state
         lastIt->second = current;
         lastIt->second.updateSeq = seq;
     }
+
+    // Flush remaining deltas
+    flushBatch();
 }
 
 SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* entity, PersistentId pid) {

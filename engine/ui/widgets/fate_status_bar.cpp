@@ -10,15 +10,13 @@
 namespace fate {
 
 // ---- Constants (all in reference pixels, scaled by layoutScale_) -----------
-static constexpr float kTopBarHeight   = 44.0f;  // dark strip height
+static constexpr float kTopBarHeight   = 40.0f;  // dark strip height (TWOM-sized, text overflows slightly)
 static constexpr float kPortraitRadius = 20.0f;  // portrait circle
-static constexpr float kBarWidth       = 130.0f; // HP / MP bar width
-static constexpr float kBarHeight      = 14.0f;  // HP / MP bar height
-static constexpr float kBarGap         = 3.0f;   // gap between HP and MP bars
-static constexpr float kMenuBtnR       = 14.0f;  // Menu button radius
-static constexpr float kChatBtnR       = 14.0f;  // Chat button radius
-static constexpr float kMenuItemH      = 32.0f;  // menu overlay row height
-static constexpr float kMenuOverlayW   = 130.0f; // menu overlay width
+static constexpr float kBarHeight      = 18.0f;  // HP / MP bar height (TWOM bold)
+static constexpr float kMenuBtnR       = 21.0f;  // Menu button radius
+static constexpr float kChatBtnR       = 21.0f;  // Chat button radius
+static constexpr float kMenuItemH      = 36.0f;  // menu overlay row height
+static constexpr float kMenuOverlayW   = 140.0f; // menu overlay width
 
 static constexpr float kPi = 3.14159265358979f;
 
@@ -58,97 +56,107 @@ void FateStatusBar::renderTopBar(SpriteBatch& batch, SDFText& sdf,
 
     // Semi-transparent dark strip across top
     float barH = kTopBarHeight * s;
-    Color stripBg{0.08f, 0.08f, 0.12f, 0.80f};
-    stripBg.a *= resolvedStyle_.opacity;
+    Color stripBg{0.0f, 0.0f, 0.0f, 0.45f};
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + barH * 0.5f},
                    {rect.w, barH}, stripBg, d - 0.2f);
 
-    // Portrait circle (dark fill + lighter border)
-    float pr = kPortraitRadius * s;
-    Vec2 pc = {rect.x + 6.0f * s + pr, rect.y + barH * 0.5f};
-    Color portraitFill{0.15f, 0.15f, 0.2f, 0.9f};
-    Color portraitBorder{0.55f, 0.55f, 0.75f, 1.0f};
-    batch.drawCircle(pc, pr, portraitFill, d, 24);
-    batch.drawRing(pc, pr, 2.5f * s, portraitBorder, d + 0.05f, 24);
-
-    // "LV XX" text above portrait (centered)
-    char lvBuf[16];
-    snprintf(lvBuf, sizeof(lvBuf), "LV %d", level);
-    float lvFont = scaledFont(10.0f);
-    Vec2 lvSize = sdf.measure(lvBuf, lvFont);
     Color white{1.0f, 1.0f, 1.0f, 1.0f};
     Color shadow{0.0f, 0.0f, 0.0f, 0.85f};
-    float lvX = pc.x - lvSize.x * 0.5f;
-    float lvY = rect.y + 2.0f * s;
-    sdf.drawScreen(batch, std::string(lvBuf), Vec2{lvX + 1.0f, lvY + 1.0f}, lvFont, shadow, d + 0.15f);
-    sdf.drawScreen(batch, std::string(lvBuf), Vec2{lvX, lvY}, lvFont, white, d + 0.2f);
+    Color yellow{1.0f, 0.9f, 0.2f, 1.0f};
 
-    // HP / MP bars — positioned to the right of portrait
-    float barsX = pc.x + pr + 8.0f * s;
-    float bw = kBarWidth * s;
-    float bh = kBarHeight * s;
-    float hpY = rect.y + (barH - bh * 2.0f - kBarGap * s) * 0.5f;
-    float mpY = hpY + bh + kBarGap * s;
+    // Portrait circle (40px diameter)
+    float pr = kPortraitRadius * s;
+    Vec2 pc = {rect.x + 4.0f * s + pr, rect.y + 4.0f * s + pr};
+    batch.drawCircle(pc, pr, {0.15f, 0.15f, 0.2f, 0.9f}, d, 24);
+    batch.drawRing(pc, pr, 2.0f * s, {0.55f, 0.55f, 0.75f, 1.0f}, d + 0.05f, 24);
 
-    Color barBg{0.10f, 0.10f, 0.10f, 0.85f};
-    Color barBorder{0.35f, 0.35f, 0.45f, 0.9f};
-    Color hpColor{0.85f, 0.15f, 0.15f, 1.0f};
-    Color mpColor{0.15f, 0.40f, 0.85f, 1.0f};
-    float bord = 1.5f;
+    // --- TWOM horizontal row: [LV 20] [HP] [████] [149/149] [MP] [████] [419/505] ---
+    // Bars stretch to fill available space (like TWOM — fills portrait-to-edge)
+    float rowCenterY = rect.y + barH * 0.5f;
+    float bh = 22.0f * s;
+    float gap = 4.0f * s;  // small gaps between elements
 
-    // HP bar bg + border + fill
-    batch.drawRect({barsX + bw * 0.5f, hpY + bh * 0.5f},
-                   {bw + bord * 2, bh + bord * 2}, barBorder, d - 0.05f);
-    batch.drawRect({barsX + bw * 0.5f, hpY + bh * 0.5f},
-                   {bw, bh}, barBg, d);
+    // Pre-measure all fixed-width text elements
+    char lvBuf[16];
+    snprintf(lvBuf, sizeof(lvBuf), "LV %d", level);
+    float lvFont = scaledFont(26.0f);
+    Vec2 lvSz = sdf.measure(std::string(lvBuf), lvFont);
+
+    float labelFont = scaledFont(22.0f);
+    Vec2 hpLabelSz = sdf.measure("HP", labelFont);
+    Vec2 mpLabelSz = sdf.measure("MP", labelFont);
+
+    char hpBuf[32], mpBuf[32];
+    snprintf(hpBuf, sizeof(hpBuf), "%.0f/%.0f", hp, maxHp);
+    snprintf(mpBuf, sizeof(mpBuf), "%.0f/%.0f", mp, maxMp);
+    float numFont = scaledFont(28.0f);
+    Vec2 hpNumSz = sdf.measure(std::string(hpBuf), numFont);
+    Vec2 mpNumSz = sdf.measure(std::string(mpBuf), numFont);
+
+    // Calculate bar width: fill remaining space equally between HP and MP bars
+    float leftEdge = pc.x + pr + 8.0f * s;     // right of portrait
+    float rightEdge = rect.x + rect.w - 60.0f * s; // leave room for Chat button
+    float fixedWidth = lvSz.x + gap*2 + hpLabelSz.x + gap + hpNumSz.x + gap*2
+                     + mpLabelSz.x + gap + mpNumSz.x;
+    float availForBars = rightEdge - leftEdge - fixedWidth;
+    float bw = std::max(availForBars * 0.5f, 80.0f * s); // each bar gets half, min 80px
+
+    // Now draw left-to-right
+    float curX = leftEdge;
+
+    // LV text
+    float lvY = rowCenterY - lvSz.y * 0.5f;
+    sdf.drawScreen(batch, std::string(lvBuf), Vec2{curX + 1.5f, lvY + 1.5f}, lvFont, shadow, d + 0.15f);
+    sdf.drawScreen(batch, std::string(lvBuf), Vec2{curX, lvY}, lvFont, white, d + 0.2f);
+    curX += lvSz.x + gap * 2;
+
+    // HP label
+    float labelY = rowCenterY - hpLabelSz.y * 0.5f;
+    sdf.drawScreen(batch, "HP", Vec2{curX + 1.0f, labelY + 1.0f}, labelFont, shadow, d + 0.15f);
+    sdf.drawScreen(batch, "HP", Vec2{curX, labelY}, labelFont, white, d + 0.2f);
+    curX += hpLabelSz.x + gap;
+
+    // HP bar (stretches to fill)
+    batch.drawRect({curX + bw * 0.5f, rowCenterY}, {bw, bh}, {0.1f, 0.1f, 0.1f, 0.85f}, d);
     float hpRatio = (maxHp > 0.0f) ? std::clamp(hp / maxHp, 0.0f, 1.0f) : 0.0f;
     if (hpRatio > 0.0f) {
         float fw = bw * hpRatio;
-        batch.drawRect({barsX + fw * 0.5f, hpY + bh * 0.5f},
-                       {fw, bh}, hpColor, d + 0.1f);
+        batch.drawRect({curX + fw * 0.5f, rowCenterY}, {fw, bh}, {0.9f, 0.55f, 0.1f, 1.0f}, d + 0.01f);
     }
+    curX += bw + gap;
 
-    // HP number overlay (large yellow text)
-    char hpBuf[32];
-    snprintf(hpBuf, sizeof(hpBuf), "%.0f", hp);
-    float numFont = scaledFont(13.0f);
-    Vec2 hpTs = sdf.measure(hpBuf, numFont);
-    Color yellow{1.0f, 0.92f, 0.25f, 1.0f};
-    float hpTx = barsX + (bw - hpTs.x) * 0.5f;
-    float hpTy = hpY + (bh - hpTs.y) * 0.5f;
-    sdf.drawScreen(batch, std::string(hpBuf), Vec2{hpTx + 1.0f, hpTy + 1.0f}, numFont, shadow, d + 0.15f);
-    sdf.drawScreen(batch, std::string(hpBuf), Vec2{hpTx, hpTy}, numFont, yellow, d + 0.2f);
+    // HP numbers
+    float numY = rowCenterY - hpNumSz.y * 0.5f;
+    sdf.drawScreen(batch, std::string(hpBuf), Vec2{curX + 1.5f, numY + 1.5f}, numFont, shadow, d + 0.15f);
+    sdf.drawScreen(batch, std::string(hpBuf), Vec2{curX, numY}, numFont, yellow, d + 0.2f);
+    curX += hpNumSz.x + gap * 2;
 
-    // MP bar bg + border + fill
-    batch.drawRect({barsX + bw * 0.5f, mpY + bh * 0.5f},
-                   {bw + bord * 2, bh + bord * 2}, barBorder, d - 0.05f);
-    batch.drawRect({barsX + bw * 0.5f, mpY + bh * 0.5f},
-                   {bw, bh}, barBg, d);
+    // MP label
+    sdf.drawScreen(batch, "MP", Vec2{curX + 1.0f, labelY + 1.0f}, labelFont, shadow, d + 0.15f);
+    sdf.drawScreen(batch, "MP", Vec2{curX, labelY}, labelFont, white, d + 0.2f);
+    curX += mpLabelSz.x + gap;
+
+    // MP bar (stretches to fill, same width as HP)
+    batch.drawRect({curX + bw * 0.5f, rowCenterY}, {bw, bh}, {0.1f, 0.1f, 0.1f, 0.85f}, d);
     float mpRatio = (maxMp > 0.0f) ? std::clamp(mp / maxMp, 0.0f, 1.0f) : 0.0f;
     if (mpRatio > 0.0f) {
         float fw = bw * mpRatio;
-        batch.drawRect({barsX + fw * 0.5f, mpY + bh * 0.5f},
-                       {fw, bh}, mpColor, d + 0.1f);
+        batch.drawRect({curX + fw * 0.5f, rowCenterY}, {fw, bh}, {0.2f, 0.5f, 0.9f, 1.0f}, d + 0.01f);
     }
+    curX += bw + gap;
 
-    // MP number overlay (large yellow text)
-    char mpBuf[32];
-    snprintf(mpBuf, sizeof(mpBuf), "%.0f", mp);
-    Vec2 mpTs = sdf.measure(mpBuf, numFont);
-    float mpTx = barsX + (bw - mpTs.x) * 0.5f;
-    float mpTy = mpY + (bh - mpTs.y) * 0.5f;
-    sdf.drawScreen(batch, std::string(mpBuf), Vec2{mpTx + 1.0f, mpTy + 1.0f}, numFont, shadow, d + 0.15f);
-    sdf.drawScreen(batch, std::string(mpBuf), Vec2{mpTx, mpTy}, numFont, yellow, d + 0.2f);
+    // MP numbers
+    sdf.drawScreen(batch, std::string(mpBuf), Vec2{curX + 1.5f, numY + 1.5f}, numFont, shadow, d + 0.15f);
+    sdf.drawScreen(batch, std::string(mpBuf), Vec2{curX, numY}, numFont, yellow, d + 0.2f);
+    curX += mpNumSz.x;
 
-    // Coordinates below portrait (e.g. "128, 64")
+    // Coordinates centered below the bar strip (like TWOM's "777,2331")
     char coordBuf[32];
-    snprintf(coordBuf, sizeof(coordBuf), "%d, %d", playerTileX, playerTileY);
-    float coordFont = scaledFont(9.0f);
-    Vec2 coordSize = sdf.measure(coordBuf, coordFont);
-    Color coordColor{0.7f, 0.7f, 0.7f, 0.85f};
-    float coordX = pc.x - coordSize.x * 0.5f;
-    float coordY = rect.y + barH + 2.0f * s;
-    sdf.drawScreen(batch, std::string(coordBuf), Vec2{coordX, coordY}, coordFont, coordColor, d + 0.2f);
+    snprintf(coordBuf, sizeof(coordBuf), "%d,%d", playerTileX, playerTileY);
+    float coordFont = scaledFont(11.0f);
+    Vec2 coordSz = sdf.measure(std::string(coordBuf), coordFont);
+    float rowCenterX = (leftEdge + curX) * 0.5f;
+    sdf.drawScreen(batch, std::string(coordBuf), Vec2{rowCenterX - coordSz.x * 0.5f, rect.y + barH + 3.0f * s}, coordFont, {1.0f, 1.0f, 1.0f, 0.8f}, d + 0.2f);
 }
 
 // --------------------------------------------------------------------------

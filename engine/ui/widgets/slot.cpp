@@ -59,8 +59,8 @@ void Slot::render(SpriteBatch& batch, SDFText& sdf) {
     if (quantity > 1) {
         char buf[16];
         snprintf(buf, sizeof(buf), "%d", quantity);
-        float fontSize = 10.0f;
-        sdf.drawScreen(batch, buf, {rect.x + rect.w - 16.0f, rect.y + rect.h - 14.0f},
+        float fontSize = scaledFont(10.0f);
+        sdf.drawScreen(batch, buf, {rect.x + rect.w - 16.0f * layoutScale_, rect.y + rect.h - 14.0f * layoutScale_},
                        fontSize, Color::white(), d + 0.3f);
     }
 

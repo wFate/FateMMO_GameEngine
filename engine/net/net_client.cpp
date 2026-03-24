@@ -342,6 +342,15 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onEntityUpdate) onEntityUpdate(msg);
             break;
         }
+        case PacketType::SvEntityUpdateBatch: {
+            ByteReader payload(payloadData, payloadLen);
+            uint8_t count = payload.readU8();
+            for (uint8_t i = 0; i < count && payload.remaining() > 0; ++i) {
+                auto msg = SvEntityUpdateMsg::read(payload);
+                if (onEntityUpdate) onEntityUpdate(msg);
+            }
+            break;
+        }
         case PacketType::SvCombatEvent: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvCombatEventMsg::read(payload);
