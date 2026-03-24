@@ -21,11 +21,15 @@ float BossHPBar::hpRatio() const {
 void BossHPBar::render(SpriteBatch& batch, SDFText& sdf) {
     if (!visible_) return;
 
+    const auto& style = resolvedStyle_;
     const auto& rect = computedRect_;
     float d = static_cast<float>(zOrder_);
 
     // Semi-transparent dark background panel (full widget width)
-    Color panelBg = {0.04f, 0.04f, 0.08f, 0.82f};
+    Color panelBg = (style.backgroundColor.a > 0.0f)
+                  ? style.backgroundColor
+                  : Color{0.04f, 0.04f, 0.08f, 0.82f};
+    panelBg.a *= style.opacity;
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
                    {rect.w, rect.h}, panelBg, d);
 
@@ -63,7 +67,9 @@ void BossHPBar::render(SpriteBatch& batch, SDFText& sdf) {
     }
 
     // 1px border around bar
-    Color borderColor = {0.45f, 0.45f, 0.55f, 0.8f};
+    Color borderColor = (style.borderColor.a > 0.0f)
+                      ? style.borderColor
+                      : Color{0.45f, 0.45f, 0.55f, 0.8f};
     float bw = 1.0f;
     float innerH = barHeight - bw * 2.0f;
     // Top edge
@@ -81,7 +87,9 @@ void BossHPBar::render(SpriteBatch& batch, SDFText& sdf) {
 
     // HP percentage text centered on bar (white, 11px)
     float pctFontSize = 11.0f;
-    Color white = {1.0f, 1.0f, 1.0f, 1.0f};
+    Color white = (style.textColor.a > 0.0f)
+               ? style.textColor
+               : Color{1.0f, 1.0f, 1.0f, 1.0f};
     char pctBuf[128];
     float pctVal = ratio * 100.0f;
     if (!bossName.empty()) {
