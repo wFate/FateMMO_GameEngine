@@ -39,6 +39,7 @@
 #include "engine/ui/widgets/checkbox.h"
 #include "engine/ui/widgets/login_screen.h"
 #include "engine/ui/widgets/death_overlay.h"
+#include "engine/ui/widgets/fate_status_bar.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -101,8 +102,20 @@ bool UIManager::loadScreenFromString(const std::string& screenId, const std::str
 
         applyThemeStyles(root.get());
 
-        // Track insertion order (replace if already present)
-        if (screens_.find(screenId) == screens_.end()) {
+        // Clear stale focus/hover/press pointers before replacing the old screen
+        // (the old widget tree is about to be destroyed by the assignment below)
+        auto existingIt = screens_.find(screenId);
+        if (existingIt != screens_.end()) {
+            auto* oldRoot = existingIt->second.get();
+            auto isChild = [&](UINode* n) -> bool {
+                for (UINode* p = n; p; p = p->parent())
+                    if (p == oldRoot) return true;
+                return false;
+            };
+            if (focusedNode_ && isChild(focusedNode_))  focusedNode_ = nullptr;
+            if (hoveredNode_ && isChild(hoveredNode_))  hoveredNode_ = nullptr;
+            if (pressedNode_ && isChild(pressedNode_))  pressedNode_ = nullptr;
+        } else {
             screenOrder_.push_back(screenId);
         }
         screens_[screenId] = std::move(root);
@@ -580,6 +593,9 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     }
     else if (type == "death_overlay") {
         node = std::make_unique<DeathOverlay>(id);
+    }
+    else if (type == "fate_status_bar") {
+        node = std::make_unique<FateStatusBar>(id);
     }
     else {
         node = std::make_unique<UINode>(id, type);
