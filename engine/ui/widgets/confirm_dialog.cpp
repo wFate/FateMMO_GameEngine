@@ -63,7 +63,9 @@ void ConfirmDialog::render(SpriteBatch& batch, SDFText& sdf) {
     float d = static_cast<float>(zOrder_);
 
     // Dark background panel
-    Color bg(0.10f, 0.10f, 0.13f, 0.95f);
+    Color bg = (style.backgroundColor.a > 0.0f)
+             ? style.backgroundColor
+             : Color{0.10f, 0.10f, 0.13f, 0.95f};
     bg.a *= style.opacity;
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
                    {rect.w, rect.h}, bg, d);
