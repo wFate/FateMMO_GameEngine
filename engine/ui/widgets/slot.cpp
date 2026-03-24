@@ -44,7 +44,9 @@ void Slot::render(SpriteBatch& batch, SDFText& sdf) {
                    {rect.w, rect.h}, bg, d);
 
     // Border
-    Color bc = hovered_ ? Color(0.7f, 0.6f, 0.3f, 1.0f) : (style.borderColor.a > 0 ? style.borderColor : Color(0.35f, 0.3f, 0.2f, 0.8f));
+    Color bc = hovered_
+        ? ((style.hoverColor.a > 0.0f) ? style.hoverColor : Color{0.7f, 0.6f, 0.3f, 1.0f})
+        : (style.borderColor.a > 0 ? style.borderColor : Color(0.35f, 0.3f, 0.2f, 0.8f));
     bc.a *= style.opacity;
     float bw = 1.0f;
     float innerH = rect.h - bw * 2.0f;

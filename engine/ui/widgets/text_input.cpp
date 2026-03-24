@@ -62,7 +62,9 @@ void TextInput::render(SpriteBatch& batch, SDFText& sdf) {
                        {rect.w, rect.h}, bg, d);
 
     // Border (highlight when focused)
-    Color bc = focused_ ? Color(0.6f, 0.5f, 0.3f, 1.0f) : style.borderColor;
+    Color bc = focused_
+        ? ((style.hoverColor.a > 0.0f) ? style.hoverColor : Color{0.6f, 0.5f, 0.3f, 1.0f})
+        : style.borderColor;
     float bw = style.borderWidth > 0 ? style.borderWidth : 1.0f;
     if (bc.a > 0.0f) {
         bc.a *= style.opacity;
@@ -82,7 +84,9 @@ void TextInput::render(SpriteBatch& batch, SDFText& sdf) {
         maskedText = std::string(text.size(), '*');
     }
     const std::string& displayText = text.empty() ? placeholder : (masked ? maskedText : text);
-    Color tc = text.empty() ? Color(0.5f, 0.5f, 0.5f, style.opacity) : style.textColor;
+    Color tc = text.empty()
+        ? ((style.disabledColor.a > 0.0f) ? style.disabledColor : Color{0.5f, 0.5f, 0.5f, style.opacity})
+        : style.textColor;
     tc.a *= style.opacity;
 
     if (!displayText.empty())
