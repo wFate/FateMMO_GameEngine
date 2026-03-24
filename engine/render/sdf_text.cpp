@@ -91,11 +91,14 @@ void SDFText::loadMetrics(const std::string& jsonPath) {
     json root = json::parse(file);
 
     // Atlas metadata
+    bool yOriginBottom = false;
     if (root.contains("atlas")) {
         const auto& atlas = root["atlas"];
         atlasWidth_  = atlas.value("width",  512.0f);
         atlasHeight_ = atlas.value("height", 512.0f);
         pxRange_     = atlas.value("distanceRange", 4.0f);
+        std::string yOrig = atlas.value("yOrigin", std::string("top"));
+        yOriginBottom = (yOrig == "bottom");
     }
 
     // Font metrics
@@ -138,10 +141,16 @@ void SDFText::loadMetrics(const std::string& jsonPath) {
                 float abTop    = ab.value("top",    0.0f);
 
                 // Normalize to 0-1 UV space
-                gm.uvX = abLeft   / atlasWidth_;
-                gm.uvY = abBottom / atlasHeight_;  // top of glyph in atlas (yOrigin:top)
+                gm.uvX = abLeft / atlasWidth_;
                 gm.uvW = (abRight - abLeft) / atlasWidth_;
                 gm.uvH = (abTop - abBottom) / atlasHeight_;
+                if (yOriginBottom) {
+                    // msdf-atlas-gen yOrigin:"bottom": flip Y so UV origin is top-left
+                    gm.uvY = (atlasHeight_ - abTop) / atlasHeight_;
+                } else {
+                    // yOrigin:"top": atlasBounds already in image-space
+                    gm.uvY = abBottom / atlasHeight_;
+                }
             }
 
             glyphs_[unicode] = gm;
