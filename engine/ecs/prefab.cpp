@@ -4,6 +4,7 @@
 #include "engine/core/logger.h"
 
 #include "game/components/transform.h"  // needed by spawn() for position override
+#include "game/components/tile_layer_component.h"
 
 #include <fstream>
 #include <filesystem>
@@ -261,6 +262,12 @@ Entity* PrefabLibrary::jsonToEntity(const nlohmann::json& data, World& world) {
             if (meta->construct) meta->construct(ptr);
             meta->fromJson(compJson, ptr);
         }
+    }
+
+    // Backwards-compat: ground-tagged tiles without TileLayerComponent get default "ground" layer
+    if (entity->tag() == "ground" && !entity->getComponent<TileLayerComponent>()) {
+        auto* tlc = entity->addComponent<TileLayerComponent>();
+        tlc->layer = "ground";
     }
 
     return entity;
