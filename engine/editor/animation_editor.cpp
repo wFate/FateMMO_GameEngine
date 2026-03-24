@@ -232,6 +232,13 @@ void AnimationEditor::drawMenuBar() {
                 saveFrameSet(currentLayerVariantKey());
             }
 
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Save Meta JSON", nullptr, false,
+                                slicerMode_ && !sheetTexturePath_.empty())) {
+                saveMetaJson(sheetTexturePath_);
+            }
+
             ImGui::EndMenu();
         }
         ImGui::EndMenuBar();
@@ -1121,18 +1128,140 @@ void AnimationEditor::openWithSheet(const std::string& texturePath) {
 }
 
 // ---------------------------------------------------------------------------
-// Slicer Mode: meta JSON stubs (implemented in Task 5)
+// Slicer Mode: meta JSON save/load
 // ---------------------------------------------------------------------------
-void AnimationEditor::saveMetaJson(const std::string& /*sheetPath*/) {
-    // Implemented in Task 5
+void AnimationEditor::saveMetaJson(const std::string& sheetPath) {
+    std::string metaPath = sheetPath;
+    auto dotPos = metaPath.rfind('.');
+    if (dotPos != std::string::npos)
+        metaPath = metaPath.substr(0, dotPos) + ".meta.json";
+
+    auto tex = TextureCache::instance().get(sheetPath);
+    int sheetW = tex ? tex->width() : slicerCellW_;
+    int sheetH = tex ? tex->height() : slicerCellH_;
+    int columns = (slicerCellW_ > 0) ? sheetW / slicerCellW_ : 1;
+    int rows = (slicerCellH_ > 0) ? sheetH / slicerCellH_ : 1;
+
+    nlohmann::json j;
+    j["version"] = 1;
+    j["frameWidth"] = slicerCellW_;
+    j["frameHeight"] = slicerCellH_;
+    j["columns"] = columns;
+    j["totalFrames"] = columns * rows;
+    j["states"] = nlohmann::json::object();
+
+    static const char* dirs[] = {"down", "up", "side"};
+    for (auto& state : template_.states) {
+        for (int d = 0; d < 3; ++d) {
+            std::string dirKey = dirs[d];
+            auto& assigned = slicerFrameAssignments_[state.name][dirKey];
+            if (assigned.empty()) continue;
+
+            int startFrame = assigned.front();
+            int frameCount = (int)assigned.size();
+
+            nlohmann::json sj;
+            sj["startFrame"] = startFrame;
+            sj["frameCount"] = frameCount;
+            sj["frameRate"] = state.frameRate;
+            sj["loop"] = state.loop;
+            sj["hitFrame"] = state.hitFrame;
+
+            if (dirKey == "side") {
+                j["states"][state.name + "_right"] = sj;
+                sj["flipX"] = true;
+                j["states"][state.name + "_left"] = sj;
+            } else {
+                j["states"][state.name + "_" + dirKey] = sj;
+            }
+        }
+    }
+
+    // Save to build dir
+    {
+        auto parentDir = fs::path(metaPath).parent_path();
+        if (!parentDir.empty() && !fs::exists(parentDir))
+            fs::create_directories(parentDir);
+        std::ofstream f(metaPath);
+        if (f.is_open()) {
+            f << j.dump(2);
+            LOG_INFO("AnimEditor", "Saved meta: %s", metaPath.c_str());
+        }
+    }
+
+    // Dual-save to source dir
+    if (!sourceDir_.empty()) {
+        std::string srcPath = sourceDir_ + "/" + metaPath;
+        auto parentDir = fs::path(srcPath).parent_path();
+        if (!parentDir.empty() && !fs::exists(parentDir))
+            fs::create_directories(parentDir);
+        std::ofstream f(srcPath);
+        if (f.is_open()) {
+            f << j.dump(2);
+            LOG_INFO("AnimEditor", "Saved meta (source): %s", srcPath.c_str());
+        }
+    }
 }
 
-void AnimationEditor::loadMetaJson(const std::string& /*sheetPath*/) {
-    // Implemented in Task 5
+void AnimationEditor::loadMetaJson(const std::string& sheetPath) {
+    std::string metaPath = sheetPath;
+    auto dotPos = metaPath.rfind('.');
+    if (dotPos != std::string::npos)
+        metaPath = metaPath.substr(0, dotPos) + ".meta.json";
+
+    PackedSheetMeta meta;
+    if (!AnimationLoader::loadPackedMeta(metaPath, meta)) {
+        LOG_WARN("AnimEditor", "No meta found: %s", metaPath.c_str());
+        return;
+    }
+
+    slicerCellW_ = meta.frameWidth;
+    slicerCellH_ = meta.frameHeight;
+    reconstructStatesFromMeta(meta);
+    LOG_INFO("AnimEditor", "Loaded meta: %s (%d states)", metaPath.c_str(),
+             (int)template_.states.size());
 }
 
-void AnimationEditor::reconstructStatesFromMeta(const PackedSheetMeta& /*meta*/) {
-    // Implemented in Task 5
+void AnimationEditor::reconstructStatesFromMeta(const PackedSheetMeta& meta) {
+    static const char* directions[] = {"_down", "_up", "_left", "_right"};
+
+    std::unordered_map<std::string, std::unordered_map<std::string, const PackedStateMeta*>> grouped;
+    for (auto& [name, s] : meta.states) {
+        std::string base = name;
+        std::string dir = "down";
+        for (auto* suffix : directions) {
+            size_t dirLen = std::strlen(suffix);
+            if (name.size() > dirLen && name.substr(name.size() - dirLen) == suffix) {
+                base = name.substr(0, name.size() - dirLen);
+                dir = suffix + 1; // skip underscore
+                break;
+            }
+        }
+        if (dir == "left" || dir == "right") dir = "side";
+        grouped[base][dir] = &s;
+    }
+
+    template_.states.clear();
+    slicerFrameAssignments_.clear();
+
+    for (auto& [base, dirMap] : grouped) {
+        AnimState state;
+        state.name = base;
+        auto* first = dirMap.begin()->second;
+        state.frameRate = first->frameRate;
+        state.loop = first->loop;
+        state.hitFrame = first->hitFrame;
+
+        for (auto& [dir, sm] : dirMap) {
+            state.frameCount[dir] = sm->frameCount;
+            std::vector<int> frames;
+            for (int i = 0; i < sm->frameCount; ++i)
+                frames.push_back(sm->startFrame + i);
+            slicerFrameAssignments_[base][dir] = frames;
+        }
+
+        template_.states.push_back(state);
+    }
 }
 
 // ---------------------------------------------------------------------------
