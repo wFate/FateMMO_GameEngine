@@ -296,6 +296,29 @@ void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
     if (paused_) {
         drawSelectionOutlines(batch, camera);
     }
+
+    // Draw brush preview when in paint/erase mode
+    if (paused_ && (currentTool_ == EditorTool::Paint || currentTool_ == EditorTool::Erase) && brushSize_ > 0) {
+        ImVec2 imMouse = ImGui::GetMousePos();
+        Vec2 mouseScreen = {imMouse.x - viewportPos_.x, imMouse.y - viewportPos_.y};
+        Vec2 mouseWorld = camera->screenToWorld(mouseScreen, (int)viewportSize_.x, (int)viewportSize_.y);
+        float half = gridSize_ * 0.5f;
+        mouseWorld.x = std::floor(mouseWorld.x / gridSize_) * gridSize_ + half;
+        mouseWorld.y = std::floor(mouseWorld.y / gridSize_) * gridSize_ + half;
+
+        int bhalf = brushSize_ / 2;
+        float totalSize = brushSize_ * gridSize_;
+        Vec2 origin = {
+            mouseWorld.x + (-bhalf) * gridSize_ - half,
+            mouseWorld.y + (-bhalf) * gridSize_ - half
+        };
+
+        Color previewColor = (currentTool_ == EditorTool::Erase)
+            ? Color(1.0f, 0.3f, 0.3f, 0.3f)
+            : Color(0.3f, 1.0f, 0.3f, 0.3f);
+
+        batch->drawRect(origin, {totalSize, totalSize}, previewColor);
+    }
 }
 
 void Editor::drawSceneGridShader(Camera* camera) {
@@ -1747,9 +1770,10 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
         };
 
         // Collect existing ground tile positions and their source rects
-        std::unordered_map<int, Rect> tileMap; // pack(col,row) -> srcRect
-        int mapW = 256, mapH = 256; // generous bounds
-        auto pack = [mapW](int c, int r) { return r * mapW + c; };
+        auto pack = [](int c, int r) -> int64_t { return ((int64_t)r << 32) | (uint32_t)c; };
+        std::unordered_map<int64_t, Rect> tileMap;
+        int minCol = tileCol, maxCol = tileCol;
+        int minRow = tileRow, maxRow = tileRow;
 
         world->forEach<Transform, SpriteComponent>(
             [&](Entity* entity, Transform* t, SpriteComponent* s) {
@@ -1757,11 +1781,15 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
                 if (s->texturePath != paletteTexturePath_) return;
                 int tc = (int)std::floor(t->position.x / gridSize_);
                 int tr = (int)std::floor(t->position.y / gridSize_);
-                if (tc >= 0 && tc < mapW && tr >= 0 && tr < mapH) {
-                    tileMap[pack(tc, tr)] = s->sourceRect;
-                }
+                tileMap[pack(tc, tr)] = s->sourceRect;
+                if (tc < minCol) minCol = tc;
+                if (tc > maxCol) maxCol = tc;
+                if (tr < minRow) minRow = tr;
+                if (tr > maxRow) maxRow = tr;
             }
         );
+        // Pad bounds by 1 so fill can expand one tile beyond existing edges
+        minCol--; minRow--; maxCol += 2; maxRow += 2;
 
         // Fill target: tiles that have the same source rect as the clicked tile,
         // or empty tiles if the clicked tile was empty
@@ -1781,7 +1809,7 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
                    std::abs(sr.h - clickedRect.h) < 0.001f;
         };
 
-        auto coords = floodFill(tileCol, tileRow, mapW, mapH, matchesFillTarget);
+        auto coords = floodFill(tileCol, tileRow, minCol, minRow, maxCol, maxRow, matchesFillTarget);
         if (coords.empty()) return;
 
         // Don't fill if same tile already
@@ -1813,15 +1841,24 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
         return;
     }
 
-    // --- Paint tool: single tile (accumulated into brush stroke compound) ---
-    auto cmd = paintOneTile(world, worldPos, selectedTileIndex_, paletteColumns_,
-                            paletteTileSize_, gridSize_, paletteTexture_, paletteTexturePath_);
-    if (cmd) {
-        if (!pendingBrushStroke_) {
-            pendingBrushStroke_ = std::make_unique<CompoundCommand>();
-            pendingBrushStroke_->desc = "Paint brush stroke";
+    // --- Paint tool: NxN brush stamp (accumulated into brush stroke compound) ---
+    int bhalf = brushSize_ / 2;
+    for (int dy = 0; dy < brushSize_; ++dy) {
+        for (int dx = 0; dx < brushSize_; ++dx) {
+            Vec2 stampPos = {
+                worldPos.x + (dx - bhalf) * gridSize_,
+                worldPos.y + (dy - bhalf) * gridSize_
+            };
+            auto cmd = paintOneTile(world, stampPos, selectedTileIndex_, paletteColumns_,
+                                    paletteTileSize_, gridSize_, paletteTexture_, paletteTexturePath_);
+            if (cmd) {
+                if (!pendingBrushStroke_) {
+                    pendingBrushStroke_ = std::make_unique<CompoundCommand>();
+                    pendingBrushStroke_->desc = "Paint brush stroke";
+                }
+                pendingBrushStroke_->commands.push_back(std::move(cmd));
+            }
         }
-        pendingBrushStroke_->commands.push_back(std::move(cmd));
     }
 }
 
@@ -1869,6 +1906,12 @@ void Editor::drawTilePalette(World* world, Camera* camera) {
         if (paletteRows_ < 1) paletteRows_ = 1;
         selectedTileIndex_ = -1;
     }
+
+    // Brush size
+    ImGui::SetNextItemWidth(80);
+    ImGui::InputInt("Brush", &brushSize_, 1, 1);
+    if (brushSize_ < 1) brushSize_ = 1;
+    if (brushSize_ > 5) brushSize_ = 5;
 
     if (!paletteTexture_ || paletteColumns_ <= 0 || paletteRows_ <= 0) {
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1), "Place .png tilesets in assets/tiles/");
@@ -3884,29 +3927,48 @@ void Editor::eraseTileAt(World* world, Camera* camera, const Vec2& screenPos,
 
     Vec2 worldPos = camera->screenToWorld(screenPos, windowWidth, windowHeight);
 
-    // Find the nearest ground tile and delete it
-    Entity* nearest = nullptr;
-    float nearestDist = 999999.0f;
+    // Snap to grid center
+    float half = gridSize_ * 0.5f;
+    worldPos.x = std::floor(worldPos.x / gridSize_) * gridSize_ + half;
+    worldPos.y = std::floor(worldPos.y / gridSize_) * gridSize_ + half;
 
-    world->forEach<Transform, SpriteComponent>(
-        [&](Entity* entity, Transform* t, SpriteComponent*) {
-            if (entity->tag() != "ground") return;
-            float dist = worldPos.distance(t->position);
-            if (dist < gridSize_ * 0.6f && dist < nearestDist) {
-                nearest = entity;
-                nearestDist = dist;
+    auto compound = std::make_unique<CompoundCommand>();
+    compound->desc = "Erase (" + std::to_string(brushSize_ * brushSize_) + " tiles)";
+
+    int bhalf = brushSize_ / 2;
+    for (int dy = 0; dy < brushSize_; ++dy) {
+        for (int dx = 0; dx < brushSize_; ++dx) {
+            Vec2 erasePos = {
+                worldPos.x + (dx - bhalf) * gridSize_,
+                worldPos.y + (dy - bhalf) * gridSize_
+            };
+
+            Entity* nearest = nullptr;
+            float nearestDist = 999999.0f;
+
+            world->forEach<Transform, SpriteComponent>(
+                [&](Entity* entity, Transform* t, SpriteComponent*) {
+                    if (entity->tag() != "ground") return;
+                    float dist = erasePos.distance(t->position);
+                    if (dist < gridSize_ * 0.6f && dist < nearestDist) {
+                        nearest = entity;
+                        nearestDist = dist;
+                    }
+                }
+            );
+
+            if (nearest) {
+                auto cmd = std::make_unique<DeleteCommand>();
+                cmd->entityData = PrefabLibrary::entityToJson(nearest);
+                cmd->deletedHandle = nearest->handle();
+                compound->commands.push_back(std::move(cmd));
+                world->destroyEntity(nearest->handle());
             }
         }
-    );
+    }
 
-    if (nearest) {
-        // Record for undo
-        auto cmd = std::make_unique<DeleteCommand>();
-        cmd->entityData = PrefabLibrary::entityToJson(nearest);
-        cmd->deletedHandle = nearest->handle();
-        UndoSystem::instance().push(std::move(cmd));
-
-        world->destroyEntity(nearest->handle());
+    if (!compound->empty()) {
+        UndoSystem::instance().push(std::move(compound));
     }
 }
 
@@ -4073,9 +4135,15 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
             std::string screenId = uiPanel.selectedScreenId();
             auto* root = uiManager_->getScreen(screenId);
             if (root) {
-                std::string path = "assets/ui/screens/" + screenId + ".json";
-                UISerializer::saveToFile(path, screenId, root);
-                LOG_INFO("Editor", "Saved UI screen: %s", path.c_str());
+                std::string relPath = "assets/ui/screens/" + screenId + ".json";
+                UISerializer::saveToFile(relPath, screenId, root);
+                LOG_INFO("Editor", "Saved UI screen: %s", relPath.c_str());
+                // Also save to source directory so changes survive rebuilds
+                if (!sourceDir_.empty()) {
+                    std::string srcPath = sourceDir_ + "/" + relPath;
+                    UISerializer::saveToFile(srcPath, screenId, root);
+                    LOG_INFO("Editor", "Saved UI screen (source): %s", srcPath.c_str());
+                }
             }
         }
     }
@@ -4144,18 +4212,18 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
         currentTool_ = EditorTool::Erase;
         pendingBrushStroke_.reset();
     }
-    // G = Flood fill tool
-    if (scancode == SDL_SCANCODE_G && !ctrl) {
+    // G = Flood fill tool (paused only)
+    if (allowToolKeys && scancode == SDL_SCANCODE_G && !ctrl) {
         currentTool_ = EditorTool::Fill;
         pendingBrushStroke_.reset();
     }
-    // U = Rectangle fill tool
-    if (scancode == SDL_SCANCODE_U && !ctrl) {
+    // U = Rectangle fill tool (paused only)
+    if (allowToolKeys && scancode == SDL_SCANCODE_U && !ctrl) {
         currentTool_ = EditorTool::RectFill;
         pendingBrushStroke_.reset();
     }
-    // L = Line tool
-    if (scancode == SDL_SCANCODE_L && !ctrl) {
+    // L = Line tool (paused only)
+    if (allowToolKeys && scancode == SDL_SCANCODE_L && !ctrl) {
         currentTool_ = EditorTool::LineTool;
         pendingBrushStroke_.reset();
     }

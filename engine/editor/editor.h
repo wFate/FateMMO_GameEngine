@@ -158,19 +158,12 @@ public:
     UIEditorPanel& uiEditorPanel() { return uiEditorPanel_; }
 
     void setAssetRoot(const std::string& root) { assetRoot_ = root; }
-    void setSourceDir(const std::string& dir) { sourceDir_ = dir; }
+    void setSourceDir(const std::string& dir) { sourceDir_ = dir; uiEditorPanel_.setSourceDir(dir); }
     void scanAssets();
 
     // Multi-select
     const std::set<EntityHandle>& selectedEntities() const { return selectedEntities_; }
     bool isSelected(EntityHandle h) const { return selectedEntities_.count(h) > 0; }
-    bool isSelected(EntityId id) const {
-        // Legacy compat: search by raw id
-        for (auto& h : selectedEntities_) {
-            if (h.index() == id) return true;
-        }
-        return false;
-    }
 
     // Inspector undo capture (call after each editable ImGui widget)
     void captureInspectorUndo();
@@ -274,13 +267,7 @@ private:
     int paletteColumns_ = 0;
     int paletteRows_ = 0;
     int selectedTileIndex_ = -1;
-
-    // Multi-tile stamp selection
-    Vec2i stampStart_ = {-1, -1};
-    Vec2i stampEnd_ = {-1, -1};
-    std::vector<int> stampTiles_;
-    int stampWidth_ = 1;
-    int stampHeight_ = 1;
+    int brushSize_ = 1;
 
     // Rect/line tool drag state
     Vec2i toolDragStart_ = {-1, -1};
