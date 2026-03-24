@@ -572,6 +572,81 @@ void App::render() {
         if (vpW > 0 && vpH > 0 && editorFbo.isValid()) {
             camera_.setViewportSize(vpW, vpH);
 
+            if (isLoading_ && loadingScreen_) {
+                // Loading screen — skip render graph, just draw loading UI
+                gfx::CommandList uiCmdList;
+                uiCmdList.begin();
+                spriteBatch_.setCommandList(&uiCmdList);
+
+                Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
+                spriteBatch_.begin(screenProj);
+                loadingScreen_->render(spriteBatch_, SDFText::instance(), loadingProgress_, vpW, vpH);
+                spriteBatch_.end();
+
+                spriteBatch_.setCommandList(nullptr);
+                uiCmdList.end();
+            } else {
+                RenderPassContext ctx;
+                ctx.spriteBatch = &spriteBatch_;
+                ctx.camera = &camera_;
+                ctx.world = world;
+                ctx.viewportWidth = vpW;
+                ctx.viewportHeight = vpH;
+                renderGraph_.execute(ctx);
+
+                // Blit PostProcess result to editor viewport FBO via Metal pipeline
+                {
+                    MTLRenderPassDescriptor* blitPassDesc = [MTLRenderPassDescriptor renderPassDescriptor];
+                    blitPassDesc.colorAttachments[0].texture = drawable.texture;
+                    blitPassDesc.colorAttachments[0].loadAction = MTLLoadActionLoad;
+                    blitPassDesc.colorAttachments[0].storeAction = MTLStoreActionStore;
+                    id<MTLRenderCommandEncoder> blitEncoder =
+                        [commandBuffer renderCommandEncoderWithDescriptor:blitPassDesc];
+                    FullscreenQuad::instance().draw((__bridge void*)blitEncoder);
+                    [blitEncoder endEncoding];
+                }
+
+                onRender(spriteBatch_, camera_);
+                editor.renderScene(&spriteBatch_, &camera_);
+
+                // UI system: render loaded screens in screen-space on top of game world
+                {
+                    gfx::CommandList uiCmdList;
+                    uiCmdList.begin();
+                    spriteBatch_.setCommandList(&uiCmdList);
+
+                    Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
+                    spriteBatch_.begin(screenProj);
+                    uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
+                    uiManager_.render(spriteBatch_, SDFText::instance());
+                    spriteBatch_.end();
+
+                    spriteBatch_.setCommandList(nullptr);
+                    uiCmdList.end();
+                }
+            }
+        }
+
+        editor.renderUI(world, &camera_, &spriteBatch_, &frameArena_);
+#else
+        int vpW = config_.windowWidth;
+        int vpH = config_.windowHeight;
+        camera_.setViewportSize(vpW, vpH);
+
+        if (isLoading_ && loadingScreen_) {
+            // Loading screen — skip render graph, just draw loading UI
+            gfx::CommandList uiCmdList;
+            uiCmdList.begin();
+            spriteBatch_.setCommandList(&uiCmdList);
+
+            Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
+            spriteBatch_.begin(screenProj);
+            loadingScreen_->render(spriteBatch_, SDFText::instance(), loadingProgress_, vpW, vpH);
+            spriteBatch_.end();
+
+            spriteBatch_.setCommandList(nullptr);
+            uiCmdList.end();
+        } else {
             RenderPassContext ctx;
             ctx.spriteBatch = &spriteBatch_;
             ctx.camera = &camera_;
@@ -580,20 +655,8 @@ void App::render() {
             ctx.viewportHeight = vpH;
             renderGraph_.execute(ctx);
 
-            // Blit PostProcess result to editor viewport FBO via Metal pipeline
-            {
-                MTLRenderPassDescriptor* blitPassDesc = [MTLRenderPassDescriptor renderPassDescriptor];
-                blitPassDesc.colorAttachments[0].texture = drawable.texture;
-                blitPassDesc.colorAttachments[0].loadAction = MTLLoadActionLoad;
-                blitPassDesc.colorAttachments[0].storeAction = MTLStoreActionStore;
-                id<MTLRenderCommandEncoder> blitEncoder =
-                    [commandBuffer renderCommandEncoderWithDescriptor:blitPassDesc];
-                FullscreenQuad::instance().draw((__bridge void*)blitEncoder);
-                [blitEncoder endEncoding];
-            }
-
+            // Blit PostProcess result to drawable via Metal pipeline
             onRender(spriteBatch_, camera_);
-            editor.renderScene(&spriteBatch_, &camera_);
 
             // UI system: render loaded screens in screen-space on top of game world
             {
@@ -610,39 +673,6 @@ void App::render() {
                 spriteBatch_.setCommandList(nullptr);
                 uiCmdList.end();
             }
-        }
-
-        editor.renderUI(world, &camera_, &spriteBatch_, &frameArena_);
-#else
-        int vpW = config_.windowWidth;
-        int vpH = config_.windowHeight;
-        camera_.setViewportSize(vpW, vpH);
-
-        RenderPassContext ctx;
-        ctx.spriteBatch = &spriteBatch_;
-        ctx.camera = &camera_;
-        ctx.world = world;
-        ctx.viewportWidth = vpW;
-        ctx.viewportHeight = vpH;
-        renderGraph_.execute(ctx);
-
-        // Blit PostProcess result to drawable via Metal pipeline
-        onRender(spriteBatch_, camera_);
-
-        // UI system: render loaded screens in screen-space on top of game world
-        {
-            gfx::CommandList uiCmdList;
-            uiCmdList.begin();
-            spriteBatch_.setCommandList(&uiCmdList);
-
-            Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
-            spriteBatch_.begin(screenProj);
-            uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
-            uiManager_.render(spriteBatch_, SDFText::instance());
-            spriteBatch_.end();
-
-            spriteBatch_.setCommandList(nullptr);
-            uiCmdList.end();
         }
 
         MTLRenderPassDescriptor* passDesc = [MTLRenderPassDescriptor renderPassDescriptor];
@@ -672,7 +702,104 @@ void App::render() {
         // Adapt camera projection to FBO aspect ratio
         camera_.setViewportSize(vpW, vpH);
 
-        // Execute render graph — all passes render into internal FBOs
+        if (isLoading_ && loadingScreen_) {
+            // Loading screen — skip render graph, just draw loading UI into editor FBO
+            editorFbo.bind();
+            glClearColor(0.102f, 0.102f, 0.180f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
+            spriteBatch_.begin(screenProj);
+            loadingScreen_->render(spriteBatch_, SDFText::instance(), loadingProgress_, vpW, vpH);
+            spriteBatch_.end();
+            editorFbo.unbind();
+        } else {
+            // Execute render graph — all passes render into internal FBOs
+            RenderPassContext ctx;
+            ctx.spriteBatch = &spriteBatch_;
+            ctx.camera = &camera_;
+            ctx.world = world;
+            ctx.viewportWidth = vpW;
+            ctx.viewportHeight = vpH;
+            renderGraph_.execute(ctx);
+
+            // Blit final result (PostProcess FBO) to editor viewport FBO
+            editorFbo.bind();
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            auto& postFbo = renderGraph_.getFBO("PostProcess", vpW, vpH);
+
+            static Shader s_blitShader;
+            static bool s_blitLoaded = false;
+            if (!s_blitLoaded) {
+                s_blitLoaded = s_blitShader.loadFromFile(
+                    "assets/shaders/fullscreen_quad.vert",
+                    "assets/shaders/blit.frag"
+                );
+            }
+
+            if (s_blitLoaded) {
+                // Blit is a full copy — disable blending so prior GL state cannot corrupt it
+                glDisable(GL_BLEND);
+                s_blitShader.bind();
+                s_blitShader.setInt("u_texture", 0);
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, postFbo.textureId());
+                FullscreenQuad::instance().draw();
+                s_blitShader.unbind();
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            }
+
+            // Legacy onRender callback (for any remaining direct rendering)
+            onRender(spriteBatch_, camera_);
+
+            // Editor overlays (grid, selection, etc.) drawn on top
+            editor.renderScene(&spriteBatch_, &camera_);
+
+            // UI system: render loaded screens in screen-space on top of game world
+            {
+                gfx::CommandList uiCmdList;
+                uiCmdList.begin();
+                spriteBatch_.setCommandList(&uiCmdList);
+
+                Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
+                spriteBatch_.begin(screenProj);
+                uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
+                uiManager_.render(spriteBatch_, SDFText::instance());
+                spriteBatch_.end();
+
+                spriteBatch_.setCommandList(nullptr);
+                uiCmdList.end();
+            }
+
+            editorFbo.unbind();
+        }
+    }
+
+    // Editor UI fills the window
+    glViewport(0, 0, config_.windowWidth, config_.windowHeight);
+    glClearColor(0.12f, 0.12f, 0.15f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    editor.renderUI(world, &camera_, &spriteBatch_, &frameArena_);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+#else
+    // Shipping: render directly to the default framebuffer
+    int vpW = config_.windowWidth;
+    int vpH = config_.windowHeight;
+    camera_.setViewportSize(vpW, vpH);
+
+    if (isLoading_ && loadingScreen_) {
+        // Loading screen — skip render graph, just draw loading UI
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, vpW, vpH);
+        glClearColor(0.102f, 0.102f, 0.180f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
+        spriteBatch_.begin(screenProj);
+        loadingScreen_->render(spriteBatch_, SDFText::instance(), loadingProgress_, vpW, vpH);
+        spriteBatch_.end();
+    } else {
         RenderPassContext ctx;
         ctx.spriteBatch = &spriteBatch_;
         ctx.camera = &camera_;
@@ -681,9 +808,10 @@ void App::render() {
         ctx.viewportHeight = vpH;
         renderGraph_.execute(ctx);
 
-        // Blit final result (PostProcess FBO) to editor viewport FBO
-        editorFbo.bind();
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        // Bind default framebuffer and blit PostProcess result to screen
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, vpW, vpH);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         auto& postFbo = renderGraph_.getFBO("PostProcess", vpW, vpH);
@@ -698,7 +826,6 @@ void App::render() {
         }
 
         if (s_blitLoaded) {
-            // Blit is a full copy — disable blending so prior GL state cannot corrupt it
             glDisable(GL_BLEND);
             s_blitShader.bind();
             s_blitShader.setInt("u_texture", 0);
@@ -710,11 +837,7 @@ void App::render() {
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         }
 
-        // Legacy onRender callback (for any remaining direct rendering)
         onRender(spriteBatch_, camera_);
-
-        // Editor overlays (grid, selection, etc.) drawn on top
-        editor.renderScene(&spriteBatch_, &camera_);
 
         // UI system: render loaded screens in screen-space on top of game world
         {
@@ -731,75 +854,6 @@ void App::render() {
             spriteBatch_.setCommandList(nullptr);
             uiCmdList.end();
         }
-
-        editorFbo.unbind();
-    }
-
-    // Editor UI fills the window
-    glViewport(0, 0, config_.windowWidth, config_.windowHeight);
-    glClearColor(0.12f, 0.12f, 0.15f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    editor.renderUI(world, &camera_, &spriteBatch_, &frameArena_);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-#else
-    // Shipping: render directly to the default framebuffer
-    int vpW = config_.windowWidth;
-    int vpH = config_.windowHeight;
-    camera_.setViewportSize(vpW, vpH);
-
-    RenderPassContext ctx;
-    ctx.spriteBatch = &spriteBatch_;
-    ctx.camera = &camera_;
-    ctx.world = world;
-    ctx.viewportWidth = vpW;
-    ctx.viewportHeight = vpH;
-    renderGraph_.execute(ctx);
-
-    // Bind default framebuffer and blit PostProcess result to screen
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, vpW, vpH);
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    auto& postFbo = renderGraph_.getFBO("PostProcess", vpW, vpH);
-
-    static Shader s_blitShader;
-    static bool s_blitLoaded = false;
-    if (!s_blitLoaded) {
-        s_blitLoaded = s_blitShader.loadFromFile(
-            "assets/shaders/fullscreen_quad.vert",
-            "assets/shaders/blit.frag"
-        );
-    }
-
-    if (s_blitLoaded) {
-        glDisable(GL_BLEND);
-        s_blitShader.bind();
-        s_blitShader.setInt("u_texture", 0);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, postFbo.textureId());
-        FullscreenQuad::instance().draw();
-        s_blitShader.unbind();
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    }
-
-    onRender(spriteBatch_, camera_);
-
-    // UI system: render loaded screens in screen-space on top of game world
-    {
-        gfx::CommandList uiCmdList;
-        uiCmdList.begin();
-        spriteBatch_.setCommandList(&uiCmdList);
-
-        Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
-        spriteBatch_.begin(screenProj);
-        uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
-        uiManager_.render(spriteBatch_, SDFText::instance());
-        spriteBatch_.end();
-
-        spriteBatch_.setCommandList(nullptr);
-        uiCmdList.end();
     }
 
 #endif

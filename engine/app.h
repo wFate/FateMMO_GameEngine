@@ -5,6 +5,7 @@
 #include "engine/render/lighting.h"
 #include "engine/render/post_process.h"
 #include "engine/render/fullscreen_quad.h"
+#include "engine/render/loading_screen.h"
 #include "engine/scene/scene_manager.h"
 #ifndef FATE_SHIPPING
 #include "engine/editor/editor.h"
@@ -80,6 +81,9 @@ public:
     LightingConfig& lightingConfig() { return lightingConfig_; }
     PostProcessConfig& postProcessConfig() { return postProcessConfig_; }
     UIManager& uiManager() { return uiManager_; }
+    void setLoadingScreen(LoadingScreen* ls) { loadingScreen_ = ls; }
+    void setLoadingProgress(float p) { loadingProgress_ = p; }
+    void setIsLoading(bool loading) { isLoading_ = loading; }
 
 protected:
     AppConfig config_;
@@ -111,6 +115,9 @@ private:
     float elapsedTime_ = 0.0f;  // for reload debounce timestamps
     std::string assetsDir_;     // cached from config
     AppLifecycleState lifecycleState_ = AppLifecycleState::Active;
+    LoadingScreen* loadingScreen_ = nullptr;
+    float loadingProgress_ = 0.0f;
+    bool isLoading_ = false;
     static int SDLCALL lifecycleEventFilter(void* userdata, SDL_Event* event);
 
     void processEvents();
