@@ -37,8 +37,9 @@ public:
     UIAnchor& anchor() { return anchor_; }
     const UIAnchor& anchor() const { return anchor_; }
     void setAnchor(const UIAnchor& a) { anchor_ = a; }
-    void computeLayout(const Rect& parentRect);
+    void computeLayout(const Rect& parentRect, float scale = 1.0f);
     const Rect& computedRect() const { return computedRect_; }
+    float layoutScale() const { return layoutScale_; }
 
     // Style
     const std::string& styleName() const { return styleName_; }
@@ -99,6 +100,7 @@ protected:
     std::string styleName_;
     Rect computedRect_;
 
+    float layoutScale_ = 1.0f;
     bool visible_ = true;
     bool enabled_ = true;
     bool hovered_ = false;

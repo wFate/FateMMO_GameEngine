@@ -25,10 +25,16 @@ public:
     bool showHierarchy = true;
     bool showInspector = true;
 
+    void setSourceDir(const std::string& dir) { sourceDir_ = dir; }
+
 private:
+    std::string sourceDir_;
     UINode* selectedNode_ = nullptr;
     std::string selectedScreenId_;
     std::string selectedNodeId_;
+
+    // Monotonic counter for generating unique child IDs
+    int nextChildId_ = 0;
 
     // Undo snapshot: JSON of the screen before editing started
     std::string pendingSnapshot_;

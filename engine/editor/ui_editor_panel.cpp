@@ -178,15 +178,15 @@ void UIEditorPanel::drawNodeTree(UINode* node, const std::string& screenId) {
     // Right-click context menu
     if (ImGui::BeginPopupContextItem()) {
         if (ImGui::MenuItem("Add Panel Child")) {
-            std::string childId = "new_panel_" + std::to_string(node->childCount());
+            std::string childId = "new_panel_" + std::to_string(nextChildId_++);
             node->addChild(std::make_unique<Panel>(childId));
         }
         if (ImGui::MenuItem("Add Label Child")) {
-            std::string childId = "new_label_" + std::to_string(node->childCount());
+            std::string childId = "new_label_" + std::to_string(nextChildId_++);
             node->addChild(std::make_unique<Label>(childId));
         }
         if (ImGui::MenuItem("Add Button Child")) {
-            std::string childId = "new_button_" + std::to_string(node->childCount());
+            std::string childId = "new_button_" + std::to_string(nextChildId_++);
             node->addChild(std::make_unique<Button>(childId));
         }
         if (ImGui::MenuItem("Delete") && node->parent()) {
@@ -477,9 +477,14 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     // --- Save ---
     ImGui::Separator();
     if (ImGui::Button("Save Screen") && !selectedScreenId_.empty()) {
-        std::string path = "assets/ui/screens/" + selectedScreenId_ + ".json";
-        UISerializer::saveToFile(path, selectedScreenId_, uiMgr.getScreen(selectedScreenId_));
-        LOG_INFO("UI", "Saved screen: %s", path.c_str());
+        std::string relPath = "assets/ui/screens/" + selectedScreenId_ + ".json";
+        UISerializer::saveToFile(relPath, selectedScreenId_, uiMgr.getScreen(selectedScreenId_));
+        LOG_INFO("UI", "Saved screen: %s", relPath.c_str());
+        if (!sourceDir_.empty()) {
+            std::string srcPath = sourceDir_ + "/" + relPath;
+            UISerializer::saveToFile(srcPath, selectedScreenId_, uiMgr.getScreen(selectedScreenId_));
+            LOG_INFO("UI", "Saved screen (source): %s", srcPath.c_str());
+        }
     }
 
     ImGui::End();

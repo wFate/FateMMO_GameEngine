@@ -128,7 +128,8 @@ private:
     int reconnectAttempts_ = 0;
     float reconnectTimer_ = 0.0f;
     float reconnectDelay_ = 1.0f;
-    float reconnectElapsed_ = 0.0f;
+    float reconnectStartTime_ = 0.0f;  // when reconnect began (for total timeout)
+    float reconnectLastTick_ = 0.0f;   // last poll time (for delta-based timer)
     static constexpr float RECONNECT_TIMEOUT = 60.0f;
     static constexpr float MAX_RECONNECT_DELAY = 30.0f;
     static constexpr float HEARTBEAT_TIMEOUT = 8.0f;

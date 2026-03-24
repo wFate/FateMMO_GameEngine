@@ -12,7 +12,10 @@ void LeftSidebar::render(SpriteBatch& batch, SDFText& sdf) {
 
     const auto& rect = computedRect_;
     float d = static_cast<float>(zOrder_);
-    float r = buttonSize * 0.5f;
+    float s = layoutScale_;
+    float bs = buttonSize * s;
+    float sp = spacing * s;
+    float r = bs * 0.5f;
 
     // Background strip — dark semi-transparent
     Color stripBg = {0.08f, 0.08f, 0.12f, 0.88f};
@@ -24,11 +27,11 @@ void LeftSidebar::render(SpriteBatch& batch, SDFText& sdf) {
     batch.drawRect({rect.x + rect.w - 1.0f, rect.y + rect.h * 0.5f},
                    {2.0f, rect.h}, stripBorder, d + 0.05f);
 
-    float labelFontSize = 7.0f;
+    float labelFontSize = 7.0f * s;
 
     for (int i = 0; i < static_cast<int>(panelLabels.size()); ++i) {
         float cx = rect.x + rect.w * 0.5f;
-        float cy = rect.y + r + static_cast<float>(i) * (buttonSize + spacing);
+        float cy = rect.y + r + static_cast<float>(i) * (bs + sp);
 
         bool isActive = (!activePanel.empty() && panelLabels[i] == activePanel);
 
@@ -61,11 +64,14 @@ void LeftSidebar::render(SpriteBatch& batch, SDFText& sdf) {
 bool LeftSidebar::onPress(const Vec2& localPos) {
     if (!enabled_) return false;
 
-    float r = buttonSize * 0.5f;
+    float s = layoutScale_;
+    float bs = buttonSize * s;
+    float sp = spacing * s;
+    float r = bs * 0.5f;
     float cx = computedRect_.w * 0.5f;
 
     for (int i = 0; i < static_cast<int>(panelLabels.size()); ++i) {
-        float cy = r + static_cast<float>(i) * (buttonSize + spacing);
+        float cy = r + static_cast<float>(i) * (bs + sp);
         float dx = localPos.x - cx;
         float dy = localPos.y - cy;
         float dist2 = dx * dx + dy * dy;

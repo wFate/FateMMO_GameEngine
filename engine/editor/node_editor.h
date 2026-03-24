@@ -25,6 +25,7 @@ public:
 private:
     bool open_ = false;
     bool initialized_ = false;
+    bool needsPositionApply_ = false;
 
     // Node data matching DialogueNode structure
     struct EditorNode {

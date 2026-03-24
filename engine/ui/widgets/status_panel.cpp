@@ -14,8 +14,9 @@ StatusPanel::StatusPanel(const std::string& id)
 // ---------------------------------------------------------------------------
 void StatusPanel::renderCharacterDisplay(SpriteBatch& batch, SDFText& sdf,
                                           const Rect& area, float depth) {
+    float s = layoutScale_;
     // Class icon diamond — small rotated square above-left of character
-    float diamondSize = 16.0f;
+    float diamondSize = 16.0f * s;
     float diamondCX = area.x + diamondSize;
     float diamondCY = area.y + diamondSize;
     Color diamondFill   = {0.45f, 0.32f, 0.18f, 0.95f};
@@ -44,17 +45,17 @@ void StatusPanel::renderCharacterDisplay(SpriteBatch& batch, SDFText& sdf,
 
     // Faction name banner below character
     if (!factionName.empty()) {
-        float bannerW  = charW + 8.0f;
-        float bannerH  = 18.0f;
+        float bannerW  = charW + 8.0f * s;
+        float bannerH  = 18.0f * s;
         float bannerCX = charCX;
-        float bannerCY = charCY + charH * 0.5f + bannerH * 0.5f + 4.0f;
+        float bannerCY = charCY + charH * 0.5f + bannerH * 0.5f + 4.0f * s;
 
         Color bannerBg  = {0.40f, 0.30f, 0.18f, 0.90f};
         Color bannerBdr = {0.55f, 0.42f, 0.25f, 1.0f};
         batch.drawRect({bannerCX, bannerCY}, {bannerW, bannerH}, bannerBg, depth + 0.1f);
         batch.drawRing({bannerCX, bannerCY}, bannerW * 0.5f, 1.0f, bannerBdr, depth + 0.15f, 4);
 
-        float factionFontSize = 9.0f;
+        float factionFontSize = 9.0f * s;
         Color factionColor = {1.0f, 0.92f, 0.75f, 1.0f};
         Vec2 fts = sdf.measure(factionName.c_str(), factionFontSize);
         sdf.drawScreen(batch, factionName.c_str(),
@@ -68,10 +69,11 @@ void StatusPanel::renderCharacterDisplay(SpriteBatch& batch, SDFText& sdf,
 // ---------------------------------------------------------------------------
 void StatusPanel::renderStatGrid(SpriteBatch& batch, SDFText& sdf,
                                    const Rect& area, float depth) {
+    float s = layoutScale_;
     // Inset panel background
     Color insetBg  = {0.75f, 0.68f, 0.55f, 0.90f};
     Color insetBdr = {0.40f, 0.30f, 0.20f, 0.85f};
-    float insetPad = 4.0f;
+    float insetPad = 4.0f * s;
     batch.drawRect({area.x + area.w * 0.5f, area.y + area.h * 0.5f},
                    {area.w, area.h}, insetBg, depth);
     float iH = area.h - 2.0f;
@@ -96,8 +98,8 @@ void StatusPanel::renderStatGrid(SpriteBatch& batch, SDFText& sdf,
     int rows = 3;
     float cellW = (area.w - insetPad * 2.0f) / static_cast<float>(cols);
     float cellH = (area.h - insetPad * 2.0f) / static_cast<float>(rows);
-    float labelFontSize = 9.0f;
-    float valueFontSize = 11.0f;
+    float labelFontSize = 9.0f * s;
+    float valueFontSize = 11.0f * s;
     Color labelColor = {0.50f, 0.40f, 0.30f, 1.0f};
     Color valueColor = resolvedStyle_.textColor;
 
@@ -133,6 +135,7 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
     const auto& rect = computedRect_;
     const auto& style = resolvedStyle_;
     float d = static_cast<float>(zOrder_);
+    float s = layoutScale_;
 
     // ---- Parchment background ----
     Color bg  = (style.backgroundColor.a > 0.0f)
@@ -155,63 +158,64 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
     // ---- "STATUS" title ----
     Color titleColor = style.textColor;
     sdf.drawScreen(batch, "STATUS",
-        {rect.x + 10.0f, rect.y + 6.0f},
-        16.0f, titleColor, d + 0.2f);
+        {rect.x + 10.0f * s, rect.y + 6.0f * s},
+        16.0f * s, titleColor, d + 0.2f);
 
     // ---- Close button (X circle at top-right) ----
-    float closeR  = 12.0f;
-    float closeCX = rect.x + rect.w - closeR - 6.0f;
-    float closeCY = rect.y + closeR + 6.0f;
+    float closeR  = 12.0f * s;
+    float closeCX = rect.x + rect.w - closeR - 6.0f * s;
+    float closeCY = rect.y + closeR + 6.0f * s;
     Color closeBg  = {0.55f, 0.42f, 0.28f, 1.0f};
     Color closeBdr = {0.30f, 0.20f, 0.10f, 1.0f};
     Color closeX   = {1.0f, 0.95f, 0.88f, 1.0f};
     batch.drawCircle({closeCX, closeCY}, closeR, closeBg,  d + 0.2f, 16);
     batch.drawRing  ({closeCX, closeCY}, closeR, 1.5f, closeBdr, d + 0.3f, 16);
-    Vec2 xts = sdf.measure("X", 12.0f);
+    float closeFontSize = 12.0f * s;
+    Vec2 xts = sdf.measure("X", closeFontSize);
     sdf.drawScreen(batch, "X",
         {closeCX - xts.x * 0.5f, closeCY - xts.y * 0.5f},
-        12.0f, closeX, d + 0.4f);
+        closeFontSize, closeX, d + 0.4f);
 
     // ---- Layout: left ~40% = character, right ~60% = stats ----
-    float headerH = 28.0f;
+    float headerH = 28.0f * s;
     float contentY = rect.y + headerH;
     float contentH = rect.h - headerH;
 
     float leftW  = rect.w * 0.40f;
     float rightW = rect.w - leftW;
 
-    Rect charArea  = {rect.x + 4.0f,        contentY + 2.0f, leftW  - 8.0f, contentH - 4.0f};
-    Rect statsArea = {rect.x + leftW + 4.0f, contentY + 2.0f, rightW - 8.0f, contentH - 4.0f};
+    Rect charArea  = {rect.x + 4.0f * s,        contentY + 2.0f * s, leftW  - 8.0f * s, contentH - 4.0f * s};
+    Rect statsArea = {rect.x + leftW + 4.0f * s, contentY + 2.0f * s, rightW - 8.0f * s, contentH - 4.0f * s};
 
     renderCharacterDisplay(batch, sdf, charArea, d + 0.15f);
 
     // ---- Right side: name, level, XP bar, stat grid ----
-    float curY = statsArea.y + 2.0f;
+    float curY = statsArea.y + 2.0f * s;
 
     // Player name (large, dark brown)
     if (!playerName.empty()) {
-        float nameFontSize = 15.0f;
+        float nameFontSize = 15.0f * s;
         Color nameColor = {0.25f, 0.16f, 0.08f, 1.0f};
         sdf.drawScreen(batch, playerName.c_str(),
             {statsArea.x, curY}, nameFontSize, nameColor, d + 0.2f);
-        curY += nameFontSize + 3.0f;
+        curY += nameFontSize + 3.0f * s;
     }
 
     // "Lv N" below name
     {
         char lvBuf[24];
         snprintf(lvBuf, sizeof(lvBuf), "Lv %d  %s", level, className.c_str());
-        float lvFontSize = 11.0f;
+        float lvFontSize = 11.0f * s;
         Color lvColor = {0.40f, 0.28f, 0.16f, 1.0f};
         sdf.drawScreen(batch, lvBuf,
             {statsArea.x, curY}, lvFontSize, lvColor, d + 0.2f);
-        curY += lvFontSize + 5.0f;
+        curY += lvFontSize + 5.0f * s;
     }
 
     // XP bar
     {
-        float barW = statsArea.w - 4.0f;
-        float barH = 8.0f;
+        float barW = statsArea.w - 4.0f * s;
+        float barH = 8.0f * s;
         float barX = statsArea.x;
         float barY = curY;
 
@@ -235,7 +239,7 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
         batch.drawRect({barX,               barY + barH * 0.5f}, {1.0f, barH}, xpBdr, d + 0.3f);
         batch.drawRect({barX + barW,        barY + barH * 0.5f}, {1.0f, barH}, xpBdr, d + 0.3f);
 
-        curY += barH + 8.0f;
+        curY += barH + 8.0f * s;
     }
 
     // Stat grid fills the remaining right-side area
@@ -253,9 +257,10 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
 bool StatusPanel::onPress(const Vec2& localPos) {
     if (!enabled_) return false;
 
-    float closeR  = 12.0f;
-    float closeCX = computedRect_.w - closeR - 6.0f;
-    float closeCY = closeR + 6.0f;
+    float s = layoutScale_;
+    float closeR  = 12.0f * s;
+    float closeCX = computedRect_.w - closeR - 6.0f * s;
+    float closeCY = closeR + 6.0f * s;
     float dx = localPos.x - closeCX;
     float dy = localPos.y - closeCY;
     if (dx * dx + dy * dy <= closeR * closeR) {

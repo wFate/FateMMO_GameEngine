@@ -1,4 +1,5 @@
 #include "engine/editor/tile_tools.h"
+#include <cstdint>
 #include <queue>
 #include <unordered_set>
 #include <cmath>
@@ -6,14 +7,15 @@
 
 namespace fate {
 
-TileCoordList floodFill(int startCol, int startRow, int mapW, int mapH,
+TileCoordList floodFill(int startCol, int startRow,
+                        int minCol, int minRow, int maxCol, int maxRow,
                         std::function<bool(int, int)> matchesFillTarget) {
     TileCoordList result;
-    if (startCol < 0 || startCol >= mapW || startRow < 0 || startRow >= mapH) return result;
+    if (startCol < minCol || startCol >= maxCol || startRow < minRow || startRow >= maxRow) return result;
     if (!matchesFillTarget(startCol, startRow)) return result;
 
-    auto pack = [mapW](int c, int r) { return r * mapW + c; };
-    std::unordered_set<int> visited;
+    auto pack = [](int c, int r) -> int64_t { return ((int64_t)r << 32) | (uint32_t)c; };
+    std::unordered_set<int64_t> visited;
     std::queue<Vec2i> queue;
     queue.push({startCol, startRow});
     visited.insert(pack(startCol, startRow));
@@ -28,8 +30,8 @@ TileCoordList floodFill(int startCol, int startRow, int mapW, int mapH,
 
         for (int i = 0; i < 4; ++i) {
             int nx = cx + dx[i], ny = cy + dy[i];
-            if (nx < 0 || nx >= mapW || ny < 0 || ny >= mapH) continue;
-            int key = pack(nx, ny);
+            if (nx < minCol || nx >= maxCol || ny < minRow || ny >= maxRow) continue;
+            int64_t key = pack(nx, ny);
             if (visited.count(key)) continue;
             if (!matchesFillTarget(nx, ny)) continue;
             visited.insert(key);

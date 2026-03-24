@@ -53,28 +53,31 @@ bool UINode::hitTest(const Vec2& point) const {
     return visible_ && computedRect_.contains(point);
 }
 
-void UINode::computeLayout(const Rect& parentRect) {
+void UINode::computeLayout(const Rect& parentRect, float scale) {
+    layoutScale_ = scale;
+
     float px = parentRect.x;
     float py = parentRect.y;
     float pw = parentRect.w;
     float ph = parentRect.h;
 
-    // Apply margins to available parent area
-    float ml = anchor_.margin.w;  // left
-    float mr = anchor_.margin.y;  // right
-    float mt = anchor_.margin.x;  // top
-    float mb = anchor_.margin.z;  // bottom
+    // Apply margins to available parent area (scaled)
+    float ml = anchor_.margin.w * scale;  // left
+    float mr = anchor_.margin.y * scale;  // right
+    float mt = anchor_.margin.x * scale;  // top
+    float mb = anchor_.margin.z * scale;  // bottom
     px += ml;  py += mt;
     pw -= (ml + mr);  ph -= (mt + mb);
 
     // Resolve size: percentSize overrides pixel size; 0 = inherit parent
+    // Pixel sizes are scaled; percentage sizes are not (already relative)
     float w = (anchor_.sizePercent.x > 0.0f) ? pw * anchor_.sizePercent.x
-            : (anchor_.size.x > 0.0f) ? anchor_.size.x : pw;
+            : (anchor_.size.x > 0.0f) ? anchor_.size.x * scale : pw;
     float h = (anchor_.sizePercent.y > 0.0f) ? ph * anchor_.sizePercent.y
-            : (anchor_.size.y > 0.0f) ? anchor_.size.y : ph;
-    // Resolve offset: percentOffset added to pixel offset
-    float ox = anchor_.offset.x + pw * anchor_.offsetPercent.x;
-    float oy = anchor_.offset.y + ph * anchor_.offsetPercent.y;
+            : (anchor_.size.y > 0.0f) ? anchor_.size.y * scale : ph;
+    // Resolve offset: percentOffset added to scaled pixel offset
+    float ox = anchor_.offset.x * scale + pw * anchor_.offsetPercent.x;
+    float oy = anchor_.offset.y * scale + ph * anchor_.offsetPercent.y;
     float cx = 0.0f, cy = 0.0f;
 
     switch (anchor_.preset) {
@@ -134,17 +137,17 @@ void UINode::computeLayout(const Rect& parentRect) {
 
     computedRect_ = {cx, cy, w, h};
 
-    // Children layout in content area (minus padding)
+    // Children layout in content area (minus scaled padding)
     Rect contentRect = {
-        cx + anchor_.padding.w,
-        cy + anchor_.padding.x,
-        w - anchor_.padding.w - anchor_.padding.y,
-        h - anchor_.padding.x - anchor_.padding.z
+        cx + anchor_.padding.w * scale,
+        cy + anchor_.padding.x * scale,
+        w - (anchor_.padding.w + anchor_.padding.y) * scale,
+        h - (anchor_.padding.x + anchor_.padding.z) * scale
     };
 
     for (auto& child : children_) {
         if (child->visible_) {
-            child->computeLayout(contentRect);
+            child->computeLayout(contentRect, scale);
         }
     }
 }

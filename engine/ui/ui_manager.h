@@ -83,6 +83,8 @@ private:
     float screenWidth_ = 0.0f;
     float screenHeight_ = 0.0f;
     static constexpr float TOOLTIP_DELAY = 0.5f;
+    // UI authored at 900px height; pixel values scale proportionally for other viewports
+    static constexpr float UI_REFERENCE_HEIGHT = 900.0f;
 
     UIDataBinding dataBinding_;
 

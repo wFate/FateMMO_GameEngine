@@ -410,7 +410,7 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
 #ifdef _WIN32
             if ((entry.type == AssetType::Script || entry.type == AssetType::Shader) && !entry.isDirectory) {
                 if (ImGui::MenuItem("Open in VS Code")) {
-                    std::string cmd = "code \"" + entry.fullPath + "\"";
+                    std::string cmd = "start \"\" code \"" + entry.fullPath + "\"";
                     system(cmd.c_str());
                 }
             }
@@ -421,7 +421,7 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
                     if (lastSlash != std::string::npos) dir = dir.substr(0, lastSlash);
                 }
                 for (auto& c : dir) if (c == '/') c = '\\';
-                std::string cmd = "explorer \"" + dir + "\"";
+                std::string cmd = "start \"\" explorer \"" + dir + "\"";
                 system(cmd.c_str());
             }
 #endif

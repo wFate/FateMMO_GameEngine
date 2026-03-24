@@ -231,11 +231,12 @@ void UIManager::update(float dt) {
 void UIManager::computeLayout(float screenWidth, float screenHeight) {
     screenWidth_ = screenWidth;
     screenHeight_ = screenHeight;
+    float scale = screenHeight / UI_REFERENCE_HEIGHT;
     Rect screenRect{0.0f, 0.0f, screenWidth, screenHeight};
     for (const auto& id : screenOrder_) {
         auto it = screens_.find(id);
         if (it != screens_.end() && it->second->visible()) {
-            it->second->computeLayout(screenRect);
+            it->second->computeLayout(screenRect, scale);
         }
     }
 }

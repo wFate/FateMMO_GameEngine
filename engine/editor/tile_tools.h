@@ -8,7 +8,9 @@ namespace fate {
 using TileCoordList = std::vector<Vec2i>;
 
 // Flood fill (queue-based BFS, 4-connected)
-TileCoordList floodFill(int startCol, int startRow, int mapW, int mapH,
+// Bounds are inclusive min, exclusive max: [minCol, maxCol) x [minRow, maxRow)
+TileCoordList floodFill(int startCol, int startRow,
+                        int minCol, int minRow, int maxCol, int maxRow,
                         std::function<bool(int col, int row)> matchesFillTarget);
 
 // Rectangle fill

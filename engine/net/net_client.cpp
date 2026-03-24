@@ -110,22 +110,27 @@ void NetClient::poll(float currentTime) {
     lastPollTime_ = currentTime;
     // --- Reconnect state machine ---
     if (reconnectPhase_ == ReconnectPhase::Reconnecting) {
-        // Use currentTime for elapsed tracking; on first tick set baseline
-        if (reconnectElapsed_ == 0.0f && reconnectAttempts_ == 0) {
-            reconnectElapsed_ = currentTime;
+        // Track total reconnect time from when reconnect started
+        if (reconnectStartTime_ == 0.0f) {
+            reconnectStartTime_ = currentTime;
+            reconnectLastTick_ = currentTime;
         }
 
-        float elapsed = currentTime - reconnectElapsed_;
-        if (elapsed > RECONNECT_TIMEOUT) {
+        float totalElapsed = currentTime - reconnectStartTime_;
+        if (totalElapsed > RECONNECT_TIMEOUT) {
             LOG_WARN("NetClient", "Reconnect timed out after %d attempts", reconnectAttempts_);
             reconnectPhase_ = ReconnectPhase::Failed;
+            connected_ = false;
+            authToken_ = {};
             if (onDisconnected) onDisconnected();
             return;
         }
 
         // If not currently waiting for a connect accept, try reconnecting
         if (!waitingForAccept_) {
-            reconnectTimer_ -= (currentTime - (lastHeartbeatSent_ > 0.0f ? lastHeartbeatSent_ : currentTime));
+            float dt = currentTime - reconnectLastTick_;
+            reconnectLastTick_ = currentTime;
+            reconnectTimer_ -= dt;
             if (reconnectTimer_ <= 0.0f) {
                 LOG_INFO("NetClient", "Reconnect attempt %d (delay %.1fs)",
                          reconnectAttempts_ + 1, reconnectDelay_);
@@ -151,6 +156,15 @@ void NetClient::poll(float currentTime) {
             LOG_WARN("NetClient", "Connection timed out");
             waitingForAccept_ = false;
             socket_.close();
+            // If we were reconnecting, stop — the token is likely expired
+            // and retrying will just spam the server with rejected connections
+            if (reconnectPhase_ == ReconnectPhase::Reconnecting) {
+                LOG_WARN("NetClient", "Reconnect connect-attempt timed out, giving up");
+                reconnectPhase_ = ReconnectPhase::Failed;
+                connected_ = false;
+                authToken_ = {};
+                if (onDisconnected) onDisconnected();
+            }
             return;
         }
     }
@@ -746,7 +760,8 @@ void NetClient::startReconnect() {
     reconnectAttempts_ = 0;
     reconnectTimer_ = 0.0f;  // attempt immediately on next poll
     reconnectDelay_ = 1.0f;
-    reconnectElapsed_ = 0.0f;
+    reconnectStartTime_ = 0.0f;
+    reconnectLastTick_ = 0.0f;
     LOG_INFO("NetClient", "Starting auto-reconnect to %s:%d", lastHost_.c_str(), lastPort_);
 }
 

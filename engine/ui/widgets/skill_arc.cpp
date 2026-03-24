@@ -14,36 +14,39 @@ std::vector<Vec2> SkillArc::computeSlotPositions() const {
     std::vector<Vec2> positions;
     if (slotCount <= 0) return positions;
 
+    float s = layoutScale_;
+    float scaledRadius = arcRadius * s;
     float startRad = startAngleDeg * DEG_TO_RAD;
     float endRad   = endAngleDeg   * DEG_TO_RAD;
 
     if (slotCount == 1) {
         float mid = (startRad + endRad) * 0.5f;
-        positions.push_back({std::cos(mid) * arcRadius,
-                             std::sin(mid) * arcRadius});
+        positions.push_back({std::cos(mid) * scaledRadius,
+                             std::sin(mid) * scaledRadius});
         return positions;
     }
 
     float step = (endRad - startRad) / static_cast<float>(slotCount - 1);
     for (int i = 0; i < slotCount; ++i) {
         float angle = startRad + step * static_cast<float>(i);
-        positions.push_back({std::cos(angle) * arcRadius,
-                             std::sin(angle) * arcRadius});
+        positions.push_back({std::cos(angle) * scaledRadius,
+                             std::sin(angle) * scaledRadius});
     }
     return positions;
 }
 
 int SkillArc::hitSlotIndex(const Vec2& localPos) const {
     // localPos is relative to arc center (0,0)
+    float s = layoutScale_;
     float dist = localPos.length();
 
     // Attack button: centered at origin, circular hit area
-    float attackRadius = attackButtonSize * 0.5f;
+    float attackRadius = attackButtonSize * s * 0.5f;
     if (dist <= attackRadius) return -1;
 
-    // Check each slot
+    // Check each slot (positions already scaled via computeSlotPositions)
     auto positions = computeSlotPositions();
-    float slotRadius = slotSize * 0.5f;
+    float slotRadius = slotSize * s * 0.5f;
     for (int i = 0; i < static_cast<int>(positions.size()); ++i) {
         float dx = localPos.x - positions[i].x;
         float dy = localPos.y - positions[i].y;
@@ -78,12 +81,13 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
     float d = static_cast<float>(zOrder_);
     float cx = rect.x + rect.w * 0.5f;
     float cy = rect.y + rect.h * 0.5f;
+    float s = layoutScale_;
 
-    // Draw skill slots
+    // Draw skill slots (positions already scaled via computeSlotPositions)
     auto positions = computeSlotPositions();
     for (int i = 0; i < static_cast<int>(positions.size()); ++i) {
         Vec2 slotCenter = {cx + positions[i].x, cy + positions[i].y};
-        float slotR = slotSize * 0.5f;
+        float slotR = slotSize * s * 0.5f;
 
         bool hasFill = (i < static_cast<int>(slots.size()) && !slots[i].skillId.empty());
 
@@ -99,7 +103,7 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
             // Level indicator at bottom-right of slot
             char lvBuf[8];
             std::snprintf(lvBuf, sizeof(lvBuf), "LV%d", slots[i].level > 0 ? slots[i].level : 1);
-            float lvFontSize = 8.0f;
+            float lvFontSize = 8.0f * s;
             Vec2 lvTs = sdf.measure(lvBuf, lvFontSize);
             Color lvColor = {1.0f, 0.9f, 0.6f, 0.9f};
             sdf.drawScreen(batch, lvBuf,
@@ -161,7 +165,7 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
                     char cdBuf[8];
                     int secs = static_cast<int>(slots[i].cooldownRemaining + 0.5f);
                     std::snprintf(cdBuf, sizeof(cdBuf), "%d", secs);
-                    float cdFontSize = 11.0f;
+                    float cdFontSize = 11.0f * s;
                     Vec2 cdTs = sdf.measure(cdBuf, cdFontSize);
                     sdf.drawScreen(batch, cdBuf,
                         {slotCenter.x - cdTs.x * 0.5f, slotCenter.y - cdTs.y * 0.5f},
@@ -172,11 +176,11 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
     }
 
     // Central attack button (drawn on top of slots) — larger and more prominent
-    float attackR = attackButtonSize * 0.5f;
+    float attackR = attackButtonSize * s * 0.5f;
 
     // Subtle outer glow (larger faded circle behind)
     Color attackGlow = {0.9f, 0.3f, 0.2f, 0.25f};
-    batch.drawCircle({cx, cy}, attackR + 6.0f, attackGlow, d + 0.25f, 24);
+    batch.drawCircle({cx, cy}, attackR + 6.0f * s, attackGlow, d + 0.25f, 24);
 
     // Main attack button fill
     Color attackBg = {0.85f, 0.2f, 0.15f, 0.92f};
@@ -191,7 +195,7 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
     batch.drawRing({cx, cy}, attackR, 4.0f, attackBorder, d + 0.4f, 24);
 
     // "ATK" text inside attack button
-    float atkFontSize = 14.0f;
+    float atkFontSize = 14.0f * s;
     const char* atkText = "ATK";
     Vec2 atkTs = sdf.measure(atkText, atkFontSize);
     Color atkTextColor = {1.0f, 1.0f, 1.0f, 0.95f};

@@ -60,6 +60,14 @@ void DialogueNodeEditor::draw() {
 
     ImNodes::BeginNodeEditor();
 
+    // Apply saved positions after loading
+    if (needsPositionApply_) {
+        for (auto& node : nodes_) {
+            ImNodes::SetNodeEditorSpacePos(node.id, ImVec2(node.posX, node.posY));
+        }
+        needsPositionApply_ = false;
+    }
+
     // Draw nodes
     for (auto& node : nodes_) {
         ImNodes::BeginNode(node.id);
@@ -344,6 +352,7 @@ void DialogueNodeEditor::loadFromJson(const nlohmann::json& data) {
     }
 
     rebuildLinks();
+    needsPositionApply_ = true;
 }
 
 nlohmann::json DialogueNodeEditor::saveToJson() const {
@@ -355,8 +364,16 @@ nlohmann::json DialogueNodeEditor::saveToJson() const {
         jn["id"] = node.id;
         jn["speaker"] = node.speakerName;
         jn["text"] = node.text;
-        jn["posX"] = node.posX;
-        jn["posY"] = node.posY;
+
+        // Read current position from ImNodes (reflects user drags)
+        if (initialized_) {
+            ImVec2 pos = ImNodes::GetNodeEditorSpacePos(node.id);
+            jn["posX"] = pos.x;
+            jn["posY"] = pos.y;
+        } else {
+            jn["posX"] = node.posX;
+            jn["posY"] = node.posY;
+        }
 
         jn["choices"] = nlohmann::json::array();
         for (auto& choice : node.choices) {
