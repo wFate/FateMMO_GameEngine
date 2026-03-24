@@ -1,11 +1,13 @@
 #include "engine/editor/animation_editor.h"
 #include "engine/core/logger.h"
 #include "engine/render/texture.h"
+#include "game/animation_loader.h"
 #include <imgui.h>
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
 #include <cstring>
+#include <set>
 #include <stb_image.h>
 #include <stb_image_write.h>
 
@@ -196,6 +198,13 @@ void AnimationEditor::drawMenuBar() {
                 if (ImGui::MenuItem("Player")) newTemplate("player");
                 if (ImGui::MenuItem("Mob"))    newTemplate("mob");
                 if (ImGui::MenuItem("NPC"))    newTemplate("npc");
+                ImGui::Separator();
+                if (ImGui::MenuItem("Mob (idle/walk/attack/death)")) {
+                    newMobTemplate();
+                }
+                if (ImGui::MenuItem("Player (idle/walk/attack/cast/death)")) {
+                    newPlayerTemplate();
+                }
                 ImGui::EndMenu();
             }
 
@@ -228,6 +237,13 @@ void AnimationEditor::drawMenuBar() {
             if (ImGui::MenuItem("Save Frame Set", nullptr, false,
                                 !template_.name.empty())) {
                 saveFrameSet(currentLayerVariantKey());
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::MenuItem("Save Meta JSON", nullptr, false,
+                                slicerMode_ && !sheetTexturePath_.empty())) {
+                saveMetaJson(sheetTexturePath_);
             }
 
             ImGui::EndMenu();
@@ -498,6 +514,30 @@ void AnimationEditor::drawStateProperties() {
 // Task 4: Frame Workspace (combines state list + direction tabs + strip + properties)
 // ---------------------------------------------------------------------------
 void AnimationEditor::drawFrameWorkspace() {
+    if (slicerMode_) {
+        // Left panel: state list
+        ImGui::BeginChild("##stateListPanel", ImVec2(130, 0), true);
+        drawStateList();
+        ImGui::EndChild();
+        ImGui::SameLine();
+
+        // Right panel: slicer + strip + properties
+        ImGui::BeginChild("##slicerPanel", ImVec2(0, 0));
+        for (int d = 0; d < 3; ++d) {
+            if (d > 0) ImGui::SameLine();
+            if (ImGui::RadioButton(directionName(d), selectedDirection_ == d))
+                selectedDirection_ = d;
+        }
+        ImGui::Separator();
+        drawSlicerView();
+        ImGui::Separator();
+        drawSlicerFrameStrip();
+        ImGui::Separator();
+        drawStateProperties();
+        ImGui::EndChild();
+        return;
+    }
+
     drawStateList();
     ImGui::SameLine();
     ImGui::BeginGroup();
@@ -882,9 +922,8 @@ std::vector<std::string>& AnimationEditor::currentFrameList() {
         fs.variant = selectedVariant_;
     }
     if (selectedStateIdx_ < 0 || selectedStateIdx_ >= (int)template_.states.size()) {
-        static std::vector<std::string> fallback;
-        fallback.clear();
-        return fallback;
+        fallbackFrames_.clear();
+        return fallbackFrames_;
     }
     auto& state = template_.states[selectedStateIdx_];
     return fs.frames[state.name][directionName(selectedDirection_)];
@@ -912,6 +951,401 @@ unsigned int AnimationEditor::loadFrameTexture(const std::string& path) {
         return tex->id();
     }
     return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Slicer Mode: Grid View
+// ---------------------------------------------------------------------------
+void AnimationEditor::drawSlicerView() {
+    auto tex = TextureCache::instance().get(sheetTexturePath_);
+    if (!tex || tex->width() == 0) {
+        ImGui::TextDisabled("No sprite sheet loaded");
+        return;
+    }
+
+    int texW = tex->width();
+    int texH = tex->height();
+
+    // Cell size inputs
+    ImGui::Text("Cell Size:");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(60);
+    ImGui::InputInt("W##cellW", &slicerCellW_, 0, 0);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(60);
+    ImGui::InputInt("H##cellH", &slicerCellH_, 0, 0);
+    slicerCellW_ = std::max(1, slicerCellW_);
+    slicerCellH_ = std::max(1, slicerCellH_);
+
+    int columns = texW / slicerCellW_;
+    int rows = texH / slicerCellH_;
+    int totalFrames = columns * rows;
+
+    ImGui::SameLine();
+    ImGui::Text("(%d cols x %d rows = %d frames)", columns, rows, totalFrames);
+
+    if (texW % slicerCellW_ != 0 || texH % slicerCellH_ != 0) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1, 0.7f, 0, 1), "Sheet doesn't divide evenly!");
+    }
+
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80);
+    ImGui::SetNextItemWidth(80);
+    ImGui::SliderFloat("Zoom", &slicerZoom_, 0.5f, 8.0f, "%.1fx");
+
+    // Scrollable sheet view with grid overlay
+    ImVec2 canvasSize = ImGui::GetContentRegionAvail();
+    canvasSize.y = std::max(canvasSize.y * 0.6f, 200.0f);
+    ImGui::BeginChild("##slicerCanvas", canvasSize, true,
+                      ImGuiWindowFlags_HorizontalScrollbar);
+
+    ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    float dispW = texW * slicerZoom_;
+    float dispH = texH * slicerZoom_;
+
+    // Draw sprite sheet image
+    ImTextureID texId = (ImTextureID)(intptr_t)tex->id();
+    drawList->AddImage(texId, cursorPos,
+                       ImVec2(cursorPos.x + dispW, cursorPos.y + dispH),
+                       ImVec2(0, 1), ImVec2(1, 0));
+
+    float cellDispW = slicerCellW_ * slicerZoom_;
+    float cellDispH = slicerCellH_ * slicerZoom_;
+    ImU32 gridColor = IM_COL32(255, 255, 255, 60);
+    ImU32 hoverColor = IM_COL32(100, 180, 255, 100);
+    ImU32 assignedColor = IM_COL32(100, 255, 100, 80);
+
+    // Collect assigned frames for current state+direction
+    std::set<int> currentAssigned;
+    if (selectedStateIdx_ >= 0 && selectedStateIdx_ < (int)template_.states.size()) {
+        auto& state = template_.states[selectedStateIdx_];
+        std::string dir = directionName(selectedDirection_);
+        auto it = slicerFrameAssignments_.find(state.name);
+        if (it != slicerFrameAssignments_.end()) {
+            auto dit = it->second.find(dir);
+            if (dit != it->second.end()) {
+                for (int f : dit->second) currentAssigned.insert(f);
+            }
+        }
+    }
+
+    ImVec2 mousePos = ImGui::GetMousePos();
+    slicerHoveredFrame_ = -1;
+
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < columns; ++col) {
+            int frameIdx = row * columns + col;
+            float x0 = cursorPos.x + col * cellDispW;
+            float y0 = cursorPos.y + row * cellDispH;
+            float x1 = x0 + cellDispW;
+            float y1 = y0 + cellDispH;
+
+            drawList->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), gridColor);
+
+            if (currentAssigned.count(frameIdx)) {
+                drawList->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), assignedColor);
+            }
+
+            if (mousePos.x >= x0 && mousePos.x < x1 &&
+                mousePos.y >= y0 && mousePos.y < y1) {
+                slicerHoveredFrame_ = frameIdx;
+                drawList->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), hoverColor);
+            }
+
+            char label[8];
+            snprintf(label, sizeof(label), "%d", frameIdx);
+            drawList->AddText(ImVec2(x0 + 2, y0 + 1), IM_COL32(255, 255, 0, 200), label);
+        }
+    }
+
+    // Click to assign frame to current state+direction
+    if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(0) && slicerHoveredFrame_ >= 0) {
+        if (selectedStateIdx_ >= 0 && selectedStateIdx_ < (int)template_.states.size()) {
+            auto& state = template_.states[selectedStateIdx_];
+            std::string dir = directionName(selectedDirection_);
+            slicerFrameAssignments_[state.name][dir].push_back(slicerHoveredFrame_);
+            state.frameCount[dir] = (int)slicerFrameAssignments_[state.name][dir].size();
+        }
+    }
+
+    ImGui::Dummy(ImVec2(dispW, dispH));
+    ImGui::EndChild();
+}
+
+// ---------------------------------------------------------------------------
+// Slicer Mode: Frame Strip
+// ---------------------------------------------------------------------------
+void AnimationEditor::drawSlicerFrameStrip() {
+    if (selectedStateIdx_ < 0 || selectedStateIdx_ >= (int)template_.states.size()) return;
+
+    auto& state = template_.states[selectedStateIdx_];
+    std::string dir = directionName(selectedDirection_);
+    auto& frames = slicerFrameAssignments_[state.name][dir];
+
+    ImGui::Text("Frames (%d):", (int)frames.size());
+    ImGui::BeginChild("##slicerStrip", ImVec2(0, 64), true, ImGuiWindowFlags_HorizontalScrollbar);
+
+    auto tex = TextureCache::instance().get(sheetTexturePath_);
+    int texW = tex ? tex->width() : 1;
+    int texH = tex ? tex->height() : 1;
+    int columns = (slicerCellW_ > 0) ? texW / slicerCellW_ : 1;
+
+    for (int i = 0; i < (int)frames.size(); ++i) {
+        int frameIdx = frames[i];
+        int col = frameIdx % columns;
+        int row = frameIdx / columns;
+        float u0 = (float)(col * slicerCellW_) / texW;
+        float u1 = u0 + (float)slicerCellW_ / texW;
+        float v_bottom = (float)(row * slicerCellH_) / texH;
+        float v_top = v_bottom + (float)slicerCellH_ / texH;
+        ImVec2 uv0(u0, 1.0f - v_top);
+        ImVec2 uv1(u1, 1.0f - v_bottom);
+
+        ImGui::PushID(i);
+        ImTextureID slicerTexId = (ImTextureID)(intptr_t)(tex ? tex->id() : 0);
+        if (ImGui::ImageButton("##fr", slicerTexId, ImVec2(48, 48), uv0, uv1)) {
+            // Select frame
+        }
+        if (ImGui::BeginPopupContextItem()) {
+            if (ImGui::MenuItem("Remove Frame")) {
+                frames.erase(frames.begin() + i);
+                state.frameCount[dir] = (int)frames.size();
+                ImGui::EndPopup();
+                ImGui::PopID();
+                break;
+            }
+            ImGui::EndPopup();
+        }
+        ImGui::PopID();
+        ImGui::SameLine();
+    }
+
+    ImGui::EndChild();
+}
+
+// ---------------------------------------------------------------------------
+// Slicer Mode: openWithSheet entry point
+// ---------------------------------------------------------------------------
+void AnimationEditor::openWithSheet(const std::string& texturePath) {
+    open_ = true;
+    slicerMode_ = true;
+    sheetTexturePath_ = texturePath;
+
+    // Load the texture (populates TextureCache for later get() calls)
+    sheetTexture_ = loadFrameTexture(texturePath);
+
+    // Try loading existing .meta.json
+    std::string metaPath = texturePath;
+    auto dotPos = metaPath.rfind('.');
+    if (dotPos != std::string::npos) {
+        metaPath = metaPath.substr(0, dotPos) + ".meta.json";
+    }
+
+    PackedSheetMeta meta;
+    if (AnimationLoader::loadPackedMeta(metaPath, meta)) {
+        slicerCellW_ = meta.frameWidth;
+        slicerCellH_ = meta.frameHeight;
+        template_.states.clear();
+        template_.name = fs::path(texturePath).stem().string();
+        reconstructStatesFromMeta(meta);
+    } else {
+        // No metadata — start fresh, default cell = full texture size
+        auto tex = TextureCache::instance().get(texturePath);
+        if (tex && tex->width() > 0) {
+            slicerCellW_ = tex->width();
+            slicerCellH_ = tex->height();
+        }
+        template_ = {};
+        template_.name = fs::path(texturePath).stem().string();
+        slicerFrameAssignments_.clear();
+    }
+
+    selectedStateIdx_ = 0;
+    selectedDirection_ = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Slicer Mode: meta JSON save/load
+// ---------------------------------------------------------------------------
+void AnimationEditor::saveMetaJson(const std::string& sheetPath) {
+    std::string metaPath = sheetPath;
+    auto dotPos = metaPath.rfind('.');
+    if (dotPos != std::string::npos)
+        metaPath = metaPath.substr(0, dotPos) + ".meta.json";
+
+    auto tex = TextureCache::instance().get(sheetPath);
+    int sheetW = tex ? tex->width() : slicerCellW_;
+    int sheetH = tex ? tex->height() : slicerCellH_;
+    int columns = (slicerCellW_ > 0) ? sheetW / slicerCellW_ : 1;
+    int rows = (slicerCellH_ > 0) ? sheetH / slicerCellH_ : 1;
+
+    nlohmann::json j;
+    j["version"] = 1;
+    j["frameWidth"] = slicerCellW_;
+    j["frameHeight"] = slicerCellH_;
+    j["columns"] = columns;
+    j["totalFrames"] = columns * rows;
+    j["states"] = nlohmann::json::object();
+
+    static const char* dirs[] = {"down", "up", "side"};
+    for (auto& state : template_.states) {
+        for (int d = 0; d < 3; ++d) {
+            std::string dirKey = dirs[d];
+            auto& assigned = slicerFrameAssignments_[state.name][dirKey];
+            if (assigned.empty()) continue;
+
+            int startFrame = assigned.front();
+            int frameCount = (int)assigned.size();
+
+            nlohmann::json sj;
+            sj["startFrame"] = startFrame;
+            sj["frameCount"] = frameCount;
+            sj["frameRate"] = state.frameRate;
+            sj["loop"] = state.loop;
+            sj["hitFrame"] = state.hitFrame;
+
+            if (dirKey == "side") {
+                j["states"][state.name + "_right"] = sj;
+                sj["flipX"] = true;
+                j["states"][state.name + "_left"] = sj;
+            } else {
+                j["states"][state.name + "_" + dirKey] = sj;
+            }
+        }
+    }
+
+    // Save to build dir
+    {
+        auto parentDir = fs::path(metaPath).parent_path();
+        if (!parentDir.empty() && !fs::exists(parentDir))
+            fs::create_directories(parentDir);
+        std::ofstream f(metaPath);
+        if (f.is_open()) {
+            f << j.dump(2);
+            LOG_INFO("AnimEditor", "Saved meta: %s", metaPath.c_str());
+        }
+    }
+
+    // Dual-save to source dir
+    if (!sourceDir_.empty()) {
+        std::string srcPath = sourceDir_ + "/" + metaPath;
+        auto parentDir = fs::path(srcPath).parent_path();
+        if (!parentDir.empty() && !fs::exists(parentDir))
+            fs::create_directories(parentDir);
+        std::ofstream f(srcPath);
+        if (f.is_open()) {
+            f << j.dump(2);
+            LOG_INFO("AnimEditor", "Saved meta (source): %s", srcPath.c_str());
+        }
+    }
+}
+
+void AnimationEditor::loadMetaJson(const std::string& sheetPath) {
+    std::string metaPath = sheetPath;
+    auto dotPos = metaPath.rfind('.');
+    if (dotPos != std::string::npos)
+        metaPath = metaPath.substr(0, dotPos) + ".meta.json";
+
+    PackedSheetMeta meta;
+    if (!AnimationLoader::loadPackedMeta(metaPath, meta)) {
+        LOG_WARN("AnimEditor", "No meta found: %s", metaPath.c_str());
+        return;
+    }
+
+    slicerCellW_ = meta.frameWidth;
+    slicerCellH_ = meta.frameHeight;
+    reconstructStatesFromMeta(meta);
+    LOG_INFO("AnimEditor", "Loaded meta: %s (%d states)", metaPath.c_str(),
+             (int)template_.states.size());
+}
+
+void AnimationEditor::reconstructStatesFromMeta(const PackedSheetMeta& meta) {
+    static const char* directions[] = {"_down", "_up", "_left", "_right"};
+
+    std::unordered_map<std::string, std::unordered_map<std::string, const PackedStateMeta*>> grouped;
+    for (auto& [name, s] : meta.states) {
+        std::string base = name;
+        std::string dir = "down";
+        for (auto* suffix : directions) {
+            size_t dirLen = std::strlen(suffix);
+            if (name.size() > dirLen && name.substr(name.size() - dirLen) == suffix) {
+                base = name.substr(0, name.size() - dirLen);
+                dir = suffix + 1; // skip underscore
+                break;
+            }
+        }
+        if (dir == "left" || dir == "right") dir = "side";
+        grouped[base][dir] = &s;
+    }
+
+    template_.states.clear();
+    slicerFrameAssignments_.clear();
+
+    for (auto& [base, dirMap] : grouped) {
+        AnimState state;
+        state.name = base;
+        auto* first = dirMap.begin()->second;
+        state.frameRate = first->frameRate;
+        state.loop = first->loop;
+        state.hitFrame = first->hitFrame;
+
+        for (auto& [dir, sm] : dirMap) {
+            state.frameCount[dir] = sm->frameCount;
+            std::vector<int> frames;
+            for (int i = 0; i < sm->frameCount; ++i)
+                frames.push_back(sm->startFrame + i);
+            slicerFrameAssignments_[base][dir] = frames;
+        }
+
+        template_.states.push_back(state);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Slicer Mode: quick templates for mob / player
+// ---------------------------------------------------------------------------
+void AnimationEditor::newMobTemplate() {
+    auto makeState = [](const std::string& n, float rate, bool lp, int hit) {
+        AnimState s;
+        s.name = n;
+        s.frameRate = rate;
+        s.loop = lp;
+        s.hitFrame = hit;
+        s.frameCount = {{"down", 0}};
+        return s;
+    };
+    template_ = {};
+    template_.name = "new_mob";
+    template_.entityType = "mob";
+    template_.states.push_back(makeState("idle",   8.0f, true,  -1));
+    template_.states.push_back(makeState("walk",   8.0f, true,  -1));
+    template_.states.push_back(makeState("attack", 10.0f, false, -1));
+    template_.states.push_back(makeState("death",  6.0f, false, -1));
+    slicerFrameAssignments_.clear();
+    selectedStateIdx_ = 0;
+}
+
+void AnimationEditor::newPlayerTemplate() {
+    auto makeState = [](const std::string& n, float rate, bool lp, int hit) {
+        AnimState s;
+        s.name = n;
+        s.frameRate = rate;
+        s.loop = lp;
+        s.hitFrame = hit;
+        s.frameCount = {{"down", 0}};
+        return s;
+    };
+    template_ = {};
+    template_.name = "new_player";
+    template_.entityType = "player";
+    template_.states.push_back(makeState("idle",   8.0f, true,  -1));
+    template_.states.push_back(makeState("walk",   8.0f, true,  -1));
+    template_.states.push_back(makeState("attack", 10.0f, false, -1));
+    template_.states.push_back(makeState("cast",   8.0f, false, -1));
+    template_.states.push_back(makeState("death",  6.0f, false, -1));
+    slicerFrameAssignments_.clear();
+    selectedStateIdx_ = 0;
 }
 
 } // namespace fate

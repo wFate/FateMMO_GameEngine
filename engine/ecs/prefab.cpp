@@ -5,6 +5,7 @@
 
 #include "game/components/transform.h"  // needed by spawn() for position override
 #include "game/components/tile_layer_component.h"
+#include "game/components/sprite_component.h"  // needed for collision layer stripping
 
 #include <fstream>
 #include <filesystem>
@@ -269,6 +270,16 @@ Entity* PrefabLibrary::jsonToEntity(const nlohmann::json& data, World& world) {
         auto* tlc = entity->addComponent<TileLayerComponent>();
         tlc->layer = "ground";
     }
+
+    // Runtime: strip sprite from collision-layer tiles (invisible at runtime, editor-only visual)
+#ifndef EDITOR_BUILD
+    {
+        auto* tlc = entity->getComponent<TileLayerComponent>();
+        if (tlc && tlc->layer == "collision") {
+            entity->removeComponent<SpriteComponent>();
+        }
+    }
+#endif
 
     return entity;
 }

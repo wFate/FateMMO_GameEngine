@@ -13,6 +13,7 @@
 #include <implot.h>
 #endif
 #include "engine/editor/tile_tools.h"
+#include "game/components/tile_layer_component.h"
 #include "engine/editor/undo.h"
 #include "engine/editor/node_editor.h"
 #include "engine/editor/animation_editor.h"
@@ -131,10 +132,27 @@ public:
         if (!selectedEntity_) { selectedHandle_ = {}; selectedEntities_.clear(); }
     }
     bool isTilePaintMode() const {
-        return (currentTool_ == EditorTool::Paint ||
-                currentTool_ == EditorTool::Fill ||
-                currentTool_ == EditorTool::RectFill ||
-                currentTool_ == EditorTool::LineTool) && selectedTileIndex_ >= 0;
+        if (currentTool_ != EditorTool::Paint &&
+            currentTool_ != EditorTool::Fill &&
+            currentTool_ != EditorTool::RectFill &&
+            currentTool_ != EditorTool::LineTool) return false;
+        if (selectedTileLayer_ == "collision") return true;
+        return selectedTileIndex_ >= 0;
+    }
+
+    static int layerIndex(const std::string& layer) {
+        if (layer == "ground")    return 0;
+        if (layer == "detail")    return 1;
+        if (layer == "fringe")    return 2;
+        if (layer == "collision") return 3;
+        return 0;
+    }
+    static float layerBaseDepth(const std::string& layer) {
+        if (layer == "ground")    return 0.0f;
+        if (layer == "detail")    return 10.0f;
+        if (layer == "fringe")    return 100.0f;
+        if (layer == "collision") return -1.0f;
+        return 0.0f;
     }
     bool isEraseMode() const { return currentTool_ == EditorTool::Erase; }
     bool isScaleMode() const { return currentTool_ == EditorTool::Scale; }
@@ -158,7 +176,7 @@ public:
     UIEditorPanel& uiEditorPanel() { return uiEditorPanel_; }
 
     void setAssetRoot(const std::string& root) { assetRoot_ = root; }
-    void setSourceDir(const std::string& dir) { sourceDir_ = dir; uiEditorPanel_.setSourceDir(dir); }
+    void setSourceDir(const std::string& dir) { sourceDir_ = dir; uiEditorPanel_.setSourceDir(dir); animationEditor_.setSourceDir(dir); }
     void scanAssets();
 
     // Multi-select
@@ -248,10 +266,8 @@ private:
     Vec2 dragStartEntityPos_;
     Vec2 dragStartEntitySize_;
 
-    // Layer visibility
-    bool showGroundLayer_ = true;
-    bool showObstacleLayer_ = true;
-    bool showPlayerLayer_ = true;
+    // Tile layer visibility (ground, detail, fringe, collision)
+    bool showLayer_[4] = {true, true, true, true};
 
     // Asset browser
     std::string assetRoot_ = "assets";
@@ -267,6 +283,7 @@ private:
     int paletteColumns_ = 0;
     int paletteRows_ = 0;
     int selectedTileIndex_ = -1;
+    std::string selectedTileLayer_ = "ground";
     int brushSize_ = 1;
 
     // Rect/line tool drag state
@@ -334,6 +351,7 @@ private:
     void drawViewportHUD(World* world);
     void drawDebugInfoPanel(World* world);
     void loadTileset(const std::string& path, int tileSize = 32);
+    void applyLayerVisibility(World* world);
 
     // Console command execution
     void executeCommand(World* world, const std::string& cmd);

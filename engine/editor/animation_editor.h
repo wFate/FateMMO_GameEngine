@@ -8,6 +8,8 @@ struct ImFont;
 
 namespace fate {
 
+struct PackedSheetMeta;
+
 // Template data (.anim)
 struct AnimState {
     std::string name;
@@ -50,6 +52,8 @@ public:
     void setFonts(ImFont* heading, ImFont* small) { fontHeading_ = heading; fontSmall_ = small; }
 
     void openFile(const std::string& path);
+    void openWithSheet(const std::string& texturePath);
+    void setSourceDir(const std::string& dir) { sourceDir_ = dir; }
 
 private:
     bool open_ = false;
@@ -80,6 +84,20 @@ private:
     char variantBuf_[64] = {};
     char loadFrameSetBuf_[256] = {};
 
+    // Slicer mode state
+    bool slicerMode_ = false;
+    std::string sheetTexturePath_;
+    unsigned int sheetTexture_ = 0;
+    int slicerCellW_ = 32;
+    int slicerCellH_ = 32;
+    float slicerZoom_ = 2.0f;
+    int slicerHoveredFrame_ = -1;
+    std::string sourceDir_;
+
+    // State name -> direction -> assigned frame indices (from the sliced grid)
+    std::unordered_map<std::string,
+        std::unordered_map<std::string, std::vector<int>>> slicerFrameAssignments_;
+
     // Draw sub-panels
     void drawTopBar();
     void drawFrameWorkspace();
@@ -88,6 +106,15 @@ private:
     void drawStateProperties();
     void drawPreview();
     void drawMenuBar();
+    void drawSlicerView();
+    void drawSlicerFrameStrip();
+
+    // Slicer I/O
+    void saveMetaJson(const std::string& sheetPath);
+    void loadMetaJson(const std::string& sheetPath);
+    void reconstructStatesFromMeta(const PackedSheetMeta& meta);
+    void newMobTemplate();
+    void newPlayerTemplate();
 
     // File I/O
     void newTemplate(const std::string& entityType);
@@ -101,6 +128,10 @@ private:
     std::string currentLayerVariantKey() const;
     std::vector<std::string>& currentFrameList();
     const char* directionName(int idx) const;
+
+    // Fallback for currentFrameList() when no valid state is selected
+    // Modifications to this vector are discarded on the next call.
+    std::vector<std::string> fallbackFrames_;
     unsigned int loadFrameTexture(const std::string& path);
 
     ImFont* fontHeading_ = nullptr;
