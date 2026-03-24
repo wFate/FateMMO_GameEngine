@@ -1125,13 +1125,44 @@ void AnimationEditor::drawSlicerFrameStrip() {
 }
 
 // ---------------------------------------------------------------------------
-// Slicer Mode: openWithSheet entry point (stub — full impl in Task 7)
+// Slicer Mode: openWithSheet entry point
 // ---------------------------------------------------------------------------
 void AnimationEditor::openWithSheet(const std::string& texturePath) {
     open_ = true;
     slicerMode_ = true;
     sheetTexturePath_ = texturePath;
+
+    // Load the texture (populates TextureCache for later get() calls)
     sheetTexture_ = loadFrameTexture(texturePath);
+
+    // Try loading existing .meta.json
+    std::string metaPath = texturePath;
+    auto dotPos = metaPath.rfind('.');
+    if (dotPos != std::string::npos) {
+        metaPath = metaPath.substr(0, dotPos) + ".meta.json";
+    }
+
+    PackedSheetMeta meta;
+    if (AnimationLoader::loadPackedMeta(metaPath, meta)) {
+        slicerCellW_ = meta.frameWidth;
+        slicerCellH_ = meta.frameHeight;
+        template_.states.clear();
+        template_.name = fs::path(texturePath).stem().string();
+        reconstructStatesFromMeta(meta);
+    } else {
+        // No metadata — start fresh, default cell = full texture size
+        auto tex = TextureCache::instance().get(texturePath);
+        if (tex && tex->width() > 0) {
+            slicerCellW_ = tex->width();
+            slicerCellH_ = tex->height();
+        }
+        template_ = {};
+        template_.name = fs::path(texturePath).stem().string();
+        slicerFrameAssignments_.clear();
+    }
+
+    selectedStateIdx_ = 0;
+    selectedDirection_ = 0;
 }
 
 // ---------------------------------------------------------------------------

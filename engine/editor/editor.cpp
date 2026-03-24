@@ -2924,6 +2924,35 @@ void Editor::drawInspector() {
                     }
                     ImGui::TreePop();
                 }
+
+                // --- Animation metadata (read-only) ---
+                if (ImGui::TreeNode("Animation")) {
+                    if (s->frameWidth > 0 && s->frameHeight > 0) {
+                        ImGui::Text("Frame Size: %d x %d", s->frameWidth, s->frameHeight);
+                        ImGui::Text("Grid: %d columns, %d total", s->columns, s->totalFrames);
+                    } else {
+                        ImGui::TextDisabled("No animation metadata loaded");
+                    }
+
+                    if (!s->texturePath.empty()) {
+                        std::string metaName = fs::path(s->texturePath).stem().string() + ".meta.json";
+                        std::string metaPath = s->texturePath;
+                        auto dotPos = metaPath.rfind('.');
+                        if (dotPos != std::string::npos)
+                            metaPath = metaPath.substr(0, dotPos) + ".meta.json";
+                        bool metaExists = fs::exists(metaPath);
+                        ImGui::Text("Meta File: %s %s", metaName.c_str(), metaExists ? "" : "(not found)");
+                    }
+
+                    if (ImGui::Button("Open Animation Editor##sprite")) {
+                        if (!s->texturePath.empty()) {
+                            animationEditor_.openWithSheet(s->texturePath);
+                        } else {
+                            animationEditor_.setOpen(true);
+                        }
+                    }
+                    ImGui::TreePop();
+                }
             }
         }
 
@@ -3096,12 +3125,38 @@ void Editor::drawInspector() {
                     ImGui::Text("%s", a->currentAnimation.c_str());
 
                     INSPECTOR_ROW("State");
-                    ImGui::Text("%s | %.2f", a->playing ? "Playing" : "Stopped", a->timer);
+                    ImGui::Text("%s | %.2fs", a->playing ? "Playing" : "Stopped", a->timer);
+
+                    if (!a->animations.empty()) {
+                        INSPECTOR_ROW("States");
+                        std::string stateList;
+                        for (auto& [name, def] : a->animations) {
+                            std::string base = name;
+                            for (auto* suffix : {"_down", "_up", "_left", "_right"}) {
+                                size_t suffLen = strlen(suffix);
+                                if (base.size() > suffLen &&
+                                    base.substr(base.size() - suffLen) == suffix) {
+                                    base = base.substr(0, base.size() - suffLen);
+                                    break;
+                                }
+                            }
+                            if (stateList.find(base) == std::string::npos) {
+                                if (!stateList.empty()) stateList += ", ";
+                                stateList += base;
+                            }
+                        }
+                        ImGui::TextWrapped("%s", stateList.c_str());
+                    }
 
                     ImGui::EndTable();
                 }
-                if (ImGui::Button("Open in Animation Editor")) {
-                    animationEditor_.setOpen(true);
+                if (ImGui::Button("Open in Animation Editor##anim")) {
+                    auto* sprite = selectedEntity_->getComponent<SpriteComponent>();
+                    if (sprite && !sprite->texturePath.empty()) {
+                        animationEditor_.openWithSheet(sprite->texturePath);
+                    } else {
+                        animationEditor_.setOpen(true);
+                    }
                 }
             }
         }
