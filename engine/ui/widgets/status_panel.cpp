@@ -99,7 +99,7 @@ void StatusPanel::renderStatGrid(SpriteBatch& batch, SDFText& sdf,
     float labelFontSize = 9.0f;
     float valueFontSize = 11.0f;
     Color labelColor = {0.50f, 0.40f, 0.30f, 1.0f};
-    Color valueColor = {0.20f, 0.14f, 0.08f, 1.0f};
+    Color valueColor = resolvedStyle_.textColor;
 
     for (int row = 0; row < rows; ++row) {
         for (int col = 0; col < cols; ++col) {
@@ -131,11 +131,17 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
     if (!visible_) return;
 
     const auto& rect = computedRect_;
+    const auto& style = resolvedStyle_;
     float d = static_cast<float>(zOrder_);
 
     // ---- Parchment background ----
-    Color bg  = {0.85f, 0.78f, 0.65f, 0.95f};
-    Color bdr = {0.40f, 0.30f, 0.20f, 1.0f};
+    Color bg  = (style.backgroundColor.a > 0.0f)
+              ? style.backgroundColor
+              : Color{0.85f, 0.78f, 0.65f, 0.95f};
+    bg.a *= style.opacity;
+    Color bdr = (style.borderColor.a > 0.0f)
+              ? style.borderColor
+              : Color{0.40f, 0.30f, 0.20f, 1.0f};
     float bw  = 3.0f;
 
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
@@ -147,7 +153,7 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
     batch.drawRect({rect.x + rect.w - bw * 0.5f, rect.y + rect.h * 0.5f}, {bw, innerH}, bdr, d + 0.1f);
 
     // ---- "STATUS" title ----
-    Color titleColor = {0.28f, 0.18f, 0.08f, 1.0f};
+    Color titleColor = style.textColor;
     sdf.drawScreen(batch, "STATUS",
         {rect.x + 10.0f, rect.y + 6.0f},
         16.0f, titleColor, d + 0.2f);
