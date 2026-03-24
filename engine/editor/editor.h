@@ -176,7 +176,7 @@ public:
     UIEditorPanel& uiEditorPanel() { return uiEditorPanel_; }
 
     void setAssetRoot(const std::string& root) { assetRoot_ = root; }
-    void setSourceDir(const std::string& dir) { sourceDir_ = dir; uiEditorPanel_.setSourceDir(dir); }
+    void setSourceDir(const std::string& dir) { sourceDir_ = dir; uiEditorPanel_.setSourceDir(dir); animationEditor_.setSourceDir(dir); }
     void scanAssets();
 
     // Multi-select

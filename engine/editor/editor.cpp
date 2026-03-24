@@ -41,6 +41,7 @@
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
 #include "engine/ui/ui_serializer.h"
+#include "game/animation_loader.h"
 
 #include "engine/ecs/component_meta.h"
 
@@ -2315,6 +2316,15 @@ void Editor::enterPlayMode(World* world) {
             tag == "ghost" || tag == "dropped_item") return;
         playModeSnapshot_.push_back(PrefabLibrary::entityToJson(e));
     });
+    // Auto-load animation metadata for scene-placed entities (NPCs, objects)
+    world->forEachEntity([](Entity* e) {
+        auto* sprite = e->getComponent<SpriteComponent>();
+        auto* animator = e->getComponent<Animator>();
+        if (sprite && animator && !sprite->texturePath.empty()) {
+            AnimationLoader::tryAutoLoad(*sprite, *animator);
+        }
+    });
+
     paused_ = false;
     inPlayMode_ = true;
 }
