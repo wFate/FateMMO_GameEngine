@@ -19,7 +19,7 @@ void EXPBar::render(SpriteBatch& batch, SDFText& sdf) {
     // Dark background
     Color bg = (style.backgroundColor.a > 0.0f)
              ? style.backgroundColor
-             : Color{0.05f, 0.05f, 0.05f, 0.9f};
+             : Color{0.03f, 0.03f, 0.03f, 0.92f};
     bg.a *= style.opacity;
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
                    {rect.w, rect.h}, bg, d);
@@ -37,14 +37,15 @@ void EXPBar::render(SpriteBatch& batch, SDFText& sdf) {
     char buf[64];
     float pct = ratio * 100.0f;
     snprintf(buf, sizeof(buf), "EXP %.3f %%  %.0f", pct, xp);
-    float fontSize = 11.0f;
+    float fontSize = scaledFont(9.0f);
     Vec2 ts = sdf.measure(buf, fontSize);
     float tx = rect.x + (rect.w - ts.x) * 0.5f;
     float ty = rect.y + (rect.h - ts.y) * 0.5f;
 
     // Shadow for readability
+    float shadowOff = 1.0f * layoutScale_;
     Color shadow = {0.0f, 0.0f, 0.0f, 0.9f};
-    sdf.drawScreen(batch, buf, {tx + 1.0f, ty + 1.0f}, fontSize, shadow, d + 0.15f);
+    sdf.drawScreen(batch, buf, {tx + shadowOff, ty + shadowOff}, fontSize, shadow, d + 0.15f);
 
     Color white = (style.textColor.a > 0.0f)
                ? style.textColor
