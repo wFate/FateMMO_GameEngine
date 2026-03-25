@@ -18,11 +18,11 @@ struct PendingSceneLoad {
     std::vector<nlohmann::json> prefabs;
     std::vector<std::string> texturePaths;
     std::vector<AssetHandle> textureHandles;
-    bool workerFailed = false;
-    std::string errorMessage;
+    std::atomic<bool> workerFailed{false};
+    std::string errorMessage;        // Written BEFORE workerDone store(release); read AFTER workerDone load(acquire)
 
     std::atomic<float> workerProgress{0.0f};
-    std::atomic<bool> workerDone{false};
+    std::atomic<bool> workerDone{false};   // Release/acquire gate for all non-atomic fields above
 
     int totalEntities = 0;
     int createdEntities = 0;

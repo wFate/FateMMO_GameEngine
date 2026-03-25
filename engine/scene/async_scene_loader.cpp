@@ -12,7 +12,7 @@
 namespace fate {
 
 float PendingSceneLoad::progress() const {
-    if (!workerDone.load()) return workerProgress.load();
+    if (!workerDone.load(std::memory_order_acquire)) return workerProgress.load(std::memory_order_relaxed);
     if (totalEntities == 0 && totalTextures == 0) return 1.0f;
     float entityProg = (totalEntities > 0)
         ? static_cast<float>(createdEntities) / totalEntities : 1.0f;
@@ -24,12 +24,12 @@ float PendingSceneLoad::progress() const {
 static void asyncSceneLoadJob(void* param) {
     auto* pending = static_cast<PendingSceneLoad*>(param);
 
-    pending->workerProgress.store(0.0f);
+    pending->workerProgress.store(0.0f, std::memory_order_relaxed);
     std::ifstream file(pending->jsonPath);
     if (!file.is_open()) {
-        pending->workerFailed = true;
         pending->errorMessage = "Cannot open scene: " + pending->jsonPath;
-        pending->workerDone.store(true);
+        pending->workerFailed.store(true, std::memory_order_relaxed);
+        pending->workerDone.store(true, std::memory_order_release);
         return;
     }
 
@@ -37,9 +37,9 @@ static void asyncSceneLoadJob(void* param) {
     try {
         root = nlohmann::json::parse(file);
     } catch (const nlohmann::json::exception& e) {
-        pending->workerFailed = true;
         pending->errorMessage = std::string("JSON parse error: ") + e.what();
-        pending->workerDone.store(true);
+        pending->workerFailed.store(true, std::memory_order_relaxed);
+        pending->workerDone.store(true, std::memory_order_release);
         return;
     }
     file.close();
@@ -47,7 +47,7 @@ static void asyncSceneLoadJob(void* param) {
     if (root.contains("metadata")) {
         pending->sceneMetadata = root["metadata"];
     }
-    pending->workerProgress.store(0.2f);
+    pending->workerProgress.store(0.2f, std::memory_order_relaxed);
 
     std::unordered_set<std::string> uniqueTextures;
     if (root.contains("entities") && root["entities"].is_array()) {
@@ -67,8 +67,8 @@ static void asyncSceneLoadJob(void* param) {
     pending->texturePaths.assign(uniqueTextures.begin(), uniqueTextures.end());
     pending->totalEntities = static_cast<int>(pending->prefabs.size());
     pending->totalTextures = static_cast<int>(pending->texturePaths.size());
-    pending->workerProgress.store(0.4f);
-    pending->workerDone.store(true);
+    pending->workerProgress.store(0.4f, std::memory_order_relaxed);
+    pending->workerDone.store(true, std::memory_order_release);  // Publishes all non-atomic writes above
 
     LOG_INFO("AsyncLoader", "Scene '%s': %d entities, %d unique textures",
              pending->sceneName.c_str(), pending->totalEntities, pending->totalTextures);
@@ -93,8 +93,8 @@ void AsyncSceneLoader::startLoad(const std::string& sceneName, const std::string
 }
 
 bool AsyncSceneLoader::tickFinalization(World& world) {
-    if (!active_ || !pending_ || !pending_->workerDone.load()) return false;
-    if (pending_->workerFailed) return true;
+    if (!active_ || !pending_ || !pending_->workerDone.load(std::memory_order_acquire)) return false;
+    if (pending_->workerFailed.load(std::memory_order_relaxed)) return true;  // Already acquired via workerDone
 
     // First frame: kick off texture async loads on main thread
     if (!pending_->texturesKicked) {
@@ -153,11 +153,13 @@ bool AsyncSceneLoader::tickFinalization(World& world) {
 }
 
 bool AsyncSceneLoader::isWorkerDone() const {
-    return pending_ && pending_->workerDone.load();
+    return pending_ && pending_->workerDone.load(std::memory_order_acquire);
 }
 
 bool AsyncSceneLoader::hasFailed() const {
-    return pending_ && pending_->workerFailed;
+    // Must check workerDone (acquire) first to guarantee visibility of workerFailed
+    return pending_ && pending_->workerDone.load(std::memory_order_acquire)
+                     && pending_->workerFailed.load(std::memory_order_relaxed);
 }
 
 const std::string& AsyncSceneLoader::errorMessage() const {

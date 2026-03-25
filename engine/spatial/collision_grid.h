@@ -22,6 +22,7 @@ namespace fate {
 class CollisionGrid {
 public:
     static constexpr float TILE_SIZE = 32.0f;
+    static constexpr int MAX_GRID_DIM = 10000;  // Cap at 10000x10000 tiles (~12.5 MB max)
 
     CollisionGrid() = default;
 
@@ -62,8 +63,12 @@ public:
 
         minTileX_ = minX;
         minTileY_ = minY;
-        width_    = maxX - minX + 1;
-        height_   = maxY - minY + 1;
+
+        // Use int64_t to avoid signed overflow before clamping
+        int64_t w64 = static_cast<int64_t>(maxX) - static_cast<int64_t>(minX) + 1;
+        int64_t h64 = static_cast<int64_t>(maxY) - static_cast<int64_t>(minY) + 1;
+        width_  = static_cast<int>((std::min)(w64, static_cast<int64_t>(MAX_GRID_DIM)));
+        height_ = static_cast<int>((std::min)(h64, static_cast<int64_t>(MAX_GRID_DIM)));
 
         // Allocate packed bitset: 1 bit per tile, rounded up to bytes
         size_t totalBits = static_cast<size_t>(width_) * static_cast<size_t>(height_);

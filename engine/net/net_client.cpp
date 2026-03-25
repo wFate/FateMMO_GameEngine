@@ -169,8 +169,9 @@ void NetClient::poll(float currentTime) {
         }
     }
 
-    // Drain incoming packets
-    uint8_t buf[MAX_PACKET_SIZE];
+    // Drain incoming packets (4K buffer for large payloads like inventory sync)
+    constexpr size_t RECV_BUF_SIZE = 4096;
+    uint8_t buf[RECV_BUF_SIZE];
     NetAddress from;
     int received;
     while ((received = socket_.recvFrom(buf, sizeof(buf), from)) > 0) {
@@ -253,7 +254,7 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
     }
 
     // Decrypt incoming payload for non-system packets
-    uint8_t decryptedBuf[MAX_PACKET_SIZE];
+    uint8_t decryptedBuf[4096];
     const uint8_t* payloadData = data + r.position();
     size_t payloadLen = hdr.payloadSize;
 

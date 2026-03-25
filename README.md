@@ -2,13 +2,13 @@
 
 [![CI](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
-![Lines of Code](https://img.shields.io/badge/LOC-100%2C000%2B-brightgreen)
-![Tests](https://img.shields.io/badge/tests-934-brightgreen)
+![Lines of Code](https://img.shields.io/badge/LOC-101%2C000%2B-brightgreen)
+![Tests](https://img.shields.io/badge/tests-956-brightgreen)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20iOS%20%7C%20Android%20%7C%20Linux-orange)
 
-Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, zone-based arena memory, spatial grid with zero-hash cell lookup, server-authoritative netcode with AOI replication, X25519 + AEAD-encrypted UDP transport, a graphics RHI (OpenGL + Metal), a retained-mode UI system, and a built-in editor with animation tools, visual node editors, tile painting, and play-in-editor snapshots.
+Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, zone-based arena memory, spatial grid with zero-hash cell lookup, server-authoritative netcode with batched AOI replication, X25519 + AEAD-encrypted UDP transport, a graphics RHI (OpenGL + Metal), a retained-mode UI system (44 widget types), async scene loading with fiber-based pipelines, and a built-in editor with sprite sheet slicing, visual node editors, tile painting, and play-in-editor snapshots.
 
-> **100,000+ lines** across **580+ files** — engine (39K), game (30K), server (16K), tests (16K)
+> **101,000+ lines** across **582+ files** — engine (38K), game (30K), server (16K), tests (16K)
 
 ---
 
@@ -26,7 +26,7 @@ Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, 
 | **VFS** | PhysicsFS (mount/overlay for asset packaging) |
 | **Profiler** | Tracy (on-demand zones, frame marks, arena tracking) |
 | **Logging** | spdlog (per-subsystem, rotating file sink, Android logcat ready) |
-| **Tests** | doctest — 934 unit tests + 10 end-to-end scenario tests |
+| **Tests** | doctest — 956 unit tests + 10 end-to-end scenario tests |
 | **Build** | CMake 3.20+ with FetchContent (zero manual dependency setup) |
 | **CI/CD** | GitHub Actions — MSVC + GCC 13 + Clang 17 matrix, headless OpenGL via Xvfb |
 
@@ -34,7 +34,7 @@ Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, 
 
 ## Game Systems
 
-44 gameplay systems — all server-authoritative with priority-based DB persistence.
+46 gameplay systems — all server-authoritative with priority-based DB persistence.
 
 <details>
 <summary><b>Combat & PvP</b></summary>
@@ -43,7 +43,7 @@ Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, 
 - **PK System** — status transitions (White → Purple → Red → Black), decay timers, cooldowns
 - **Honor System** — PvP honor gain/loss tables, 5-kills/hour tracking per player pair
 - **Arena** — 1v1 / 2v2 / 3v3 queue-based matchmaking, AFK detection, 3-min matches, honor rewards
-- **Battlefield** — 4-faction PvP, per-faction kill tracking, EventScheduler-driven event cycles
+- **Battlefield** — 4-faction PvP, per-faction kill tracking, EventScheduler-driven event cycles, reconnect grace
 - **Two-Tick Death** — Alive → Dying (on-death procs) → Dead (next tick), prevents lost kill credit
 - **Optimistic Combat** — attack animations play immediately, server confirms damage numbers
 - **Elemental Resists** — 6 types (Fire/Water/Poison/Lightning/Void/Magic), 75% cap
@@ -55,7 +55,7 @@ Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, 
 <summary><b>Character Progression</b></summary>
 
 - **Character Stats** — HP/MP/XP/level, stat calc with VIT multiplier, damage formulas, fury/mana
-- **Skill Manager** — 60 skills with learning, cooldowns, 4x5 skill bar, passive bonuses, cast-time system
+- **Skill Manager** — 60 skills with learning, cooldowns, 4x5 skill bar, passive bonuses, cast-time system, Skill VFX pipeline
 - **Enchant System** — +1 to +15 enhancement with success rates, break mechanic, protection scrolls
 - **Socket System** — accessory socketing with weighted probability rolls (+1: 25% ... +10: 0.5%)
 - **Stat Enchant** — accessory enchanting via drag-and-drop stat scrolls, 6-tier roll table
@@ -87,15 +87,16 @@ Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, 
 <details>
 <summary><b>World & AI</b></summary>
 
-- **Mob AI** — cardinal movement, L-shaped chase, threat-based aggro (top damager holds)
+- **Mob AI** — cardinal movement, L-shaped chase, threat-based aggro (top damager holds), combat leash (boss/mini-boss reset after 15s idle)
 - **Spawn System** — region-based with editor controls, death detection, respawn timers, zone containment
 - **Quest System** — 5 objective types (Kill/Collect/Deliver/TalkTo/PvP), prerequisite chains
 - **NPC System** — composable roles (quest/shop/trainer/bank/guild/teleporter/story), branching dialogue
 - **Pet System** — leveling, rarity-tiered stats, XP sharing (50%), equip/unequip with stat bonuses, auto-loot
+- **Aurora Gauntlet** — 6-zone PvP with hourly faction-rotation buff, Aether boss zone, teleport item cost system
 - **Gauntlet** — wave survival PvPvE with 3 divisions, event scheduler, matchmaking
 - **Faction** — 4 factions (Xyros/Fenor/Zethos/Solis), same-faction PvP rules, chat garbling
 - **Loot Pipeline** — server rolls loot → ground entities → replication → pickup → despawn (120s)
-- **Instanced Dungeons** — per-party ECS worlds, 10-min timer, boss rewards, daily tickets, honor
+- **Instanced Dungeons** — per-party ECS worlds, 10-min timer, boss rewards, daily tickets, honor, reconnect grace
 
 </details>
 
@@ -107,19 +108,19 @@ Custom 2D MMORPG engine built in C++23. Features a data-oriented archetype ECS, 
 Engine (fate_engine static library)
 +-- ECS          Archetype SoA storage, generational handles, reflection, prefab variants (JSON Patch)
 +-- Memory       Zone arenas (256 MB, O(1) reset), frame arena, scratch arenas, pool allocator
-+-- Spatial      Power-of-two grid (bitshift lookup) + Mueller hash fallback
++-- Spatial      Power-of-two grid (bitshift lookup) + Mueller hash fallback + collision bitgrid
 +-- Tilemap      7-state chunk lifecycle, ChunkRenderer (pre-built VBOs), GL_TEXTURE_2D_ARRAY
-+-- Rendering    Graphics RHI (GL 3.3 + Metal), SpriteBatch (palette swap, paper-doll),
-|                10-pass render graph, SDF text (MTSDF), compressed textures (ETC2/ASTC), lighting, bloom
-+-- Scene        Zone arena lifecycle, snapshot persistence, loading state
-+-- UI           Retained-mode system (30 widget types), JSON screens, anchor layout, UITheme, 9-slice,
-|                data binding, hot-reload, drag-and-drop
-+-- Editor       ImGui dockspace, hierarchy, inspector, tile tools (fill/rect/line/stamp),
-|                asset browser (thumbnails/search/navigation), animation editor (frame picker, hit frames,
-|                sprite sheet packing), dialogue node editor (imnodes), UI editor (undo/redo, widget drag,
++-- Rendering    Graphics RHI (GL 3.3 + Metal), SpriteBatch (palette swap, paper-doll, scissor clipping),
+|                11-pass render graph + SkillVFX, SDF text (MTSDF), compressed textures (ETC2/ASTC), lighting, bloom
++-- Scene        Zone arena lifecycle, snapshot persistence, async fiber loading, TWOM loading screens
++-- UI           Retained-mode system (44 widget types), 12 JSON screens, anchor layout, UITheme, 9-slice,
+|                data binding, hot-reload, drag-and-drop, viewport-proportional scaling
++-- Editor       ImGui dockspace, hierarchy, inspector, tile tools (fill/rect/line/stamp, 4 layers, brush sizes),
+|                asset browser (thumbnails/search/navigation), animation editor (sprite sheet slicer, hit frames,
+|                auto-load pipeline), dialogue node editor (imnodes), UI editor (44 widget inspectors, undo/redo,
 |                Ctrl+S), play-in-editor (ECS state snapshot/restore)
-+-- Net          Reliable UDP, X25519 + AEAD encryption, IPv6 dual-stack, AOI replication, delta compression
-|                Auto-reconnect (exponential backoff), rate limiting, connection cookies, nonce manager
++-- Net          Reliable UDP, X25519 + AEAD encryption, IPv6 dual-stack, batched AOI replication,
+|                delta compression, auto-reconnect (exponential backoff), rate limiting, connection cookies
 +-- Input        ActionMap (22 actions), 6-frame buffer, touch injection API
 +-- Asset        Hot-reload (file watcher, 300ms debounce), generational handles, LRU texture cache,
 |                fiber-based async loading (decode on worker, GPU upload on main thread)
@@ -131,27 +132,30 @@ Engine (fate_engine static library)
 +-- Profiling    Tracy zones, arena tracking, frame marks
 
 Game (FateEngine executable, EDITOR_BUILD defined)
-+-- Components   52 registered components (Hot/Warm/Cold tier, zero RTTI)
++-- Components   54 registered components (Hot/Warm/Cold tier, zero RTTI)
 +-- Systems      Movement, Combat, MobAI, Spawning, Quests, Zones, NPC interaction
-+-- Shared       44 game systems -- combat, skills, inventory, parties, guilds, trade, market,
-|                arena, battlefield, crafting, pets, bounty, gauntlet, honor, PK, chat
++-- Shared       46 game systems -- combat, skills, inventory, parties, guilds, trade, market,
+|                arena, battlefield, crafting, pets, bounty, gauntlet, aurora, honor, PK, chat
 +-- Prediction   Optimistic combat feedback (immediate attack animations, prediction buffer)
 +-- UI           Retained-mode HUD, inventory, skill bar, shop, quest log, chat, login, death overlay, touch
 
 Server (FateServer headless, 20 Hz)
 +-- Auth         TLS login/registration, bcrypt, session tokens, X25519 key exchange
-+-- Handlers     14 handler files (combat, dungeon, crafting, persistence, GM, gauntlet, pet, bank, ...)
-+-- DB           14 PostgreSQL repositories, fiber-based async dispatch, connection pool,
++-- Handlers     17 handler files (combat, dungeon, crafting, persistence, GM, gauntlet, pet, bank,
+|                shop, teleport, aurora, equipment, consumable, pvp_event, ranking, sync, maintenance)
++-- DB           16 PostgreSQL repositories, fiber-based async dispatch, connection pool,
 |                circuit breaker, write-ahead log, priority-based flush (IMMEDIATE/HIGH/NORMAL/LOW),
 |                dirty-flag gating (95 mutation sites), 1s dedup enqueuePersist, staggered auto-save
-+-- Security     Rate limiting, nonce manager, target validation (AOI + faction + party + PK)
++-- Security     Rate limiting, nonce manager, target validation (AOI + faction + party + PK),
+|                collision grid anti-cheat (server loads tile grids, validates movement)
 +-- Cache        Item (748) + Loot (72) + Mob (73) + Skill (60) + Scene + Recipe + Pet + SpawnZone caches
-+-- Dungeons     Instanced per-party ECS worlds, boss rewards, 10-min timer
-+-- App          Two-tick death, mob spawning, loot pipeline, gauntlet, arena, battlefield
++-- Dungeons     Instanced per-party ECS worlds, boss rewards, 10-min timer, reconnect grace
++-- App          Two-tick death, mob spawning, loot pipeline, gauntlet, arena, battlefield, aurora
 
-Tests (934 unit + 10 scenario)
+Tests (956 unit + 10 scenario)
 +-- Unit         Combat, networking, protocol, inventory, death, PvP, arena, audio, spatial,
-|                tile tools, prefab variants, persistence priority, dirty tracking, UI widgets
+|                tile tools, prefab variants, persistence priority, dirty tracking, UI widgets,
+|                animation loader, collision grid, SkillVFX, async scene loader
 +-- Integration  Replication, server integration, gameplay
 +-- Scenario     End-to-end TestBot (TLS auth + UDP, 10 tests against live server)
 ```
@@ -245,11 +249,14 @@ build/Debug/fate_tests.exe -tc="PersistenceQueue*"
 | **Chunk VBO rendering** | Pre-built per-chunk VAO/VBO, GL_TEXTURE_2D_ARRAY for zero tile bleeding |
 | **Prefab variants** | JSON Patch (RFC 6902) inheritance — variants store only diffs from base prefab |
 | **16-field delta compression** | AOI-scoped entity updates, only dirty fields sent, HP bypasses throttling |
+| **Batched replication** | Multiple entity deltas packed per UDP packet (~90% header overhead reduction) |
 | **Custom reliable UDP** | 3 channels (unreliable / reliable-ordered / reliable-unordered), no TCP overhead |
 | **Fiber job system** | Win32 fibers / minicoro cross-platform, lock-free work stealing |
 | **Fiber async loading** | Asset decode on worker fibers, GPU upload batched on main thread, zero stall |
 | **Optimistic combat** | Attack animations play immediately, server confirms damage numbers |
-| **Retained-mode UI** | Data-driven JSON screens with 30 widget types, anchor layout, hot-reload |
+| **Retained-mode UI** | Data-driven JSON screens with 44 widget types, viewport-proportional scaling |
+| **Collision bitgrid** | 1-bit-per-tile packed grid, server + client check before accepting movement |
+| **Async scene loading** | Fiber pipeline (JSON parse → texture load → batched entity create), zero frame stall |
 | **Write-ahead log** | Binary WAL with CRC32 journals gold/item/XP mutations for crash recovery |
 
 ---
@@ -268,9 +275,9 @@ build/Debug/fate_tests.exe -tc="PersistenceQueue*"
 
 <br><br>
 
-<img src="https://img.shields.io/badge/C%2B%2B-100%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
-<img src="https://img.shields.io/badge/files-580%2B-2ea44f?style=flat-square" alt="Files" />
-<img src="https://img.shields.io/badge/tests-934_passing-2ea44f?style=flat-square" alt="Tests" />
+<img src="https://img.shields.io/badge/C%2B%2B-101%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
+<img src="https://img.shields.io/badge/files-582%2B-2ea44f?style=flat-square" alt="Files" />
+<img src="https://img.shields.io/badge/tests-956_passing-2ea44f?style=flat-square" alt="Tests" />
 <img src="https://img.shields.io/badge/platforms-5-orange?style=flat-square" alt="Platforms" />
 
 <br><br>

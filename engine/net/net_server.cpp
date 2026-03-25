@@ -207,8 +207,13 @@ void NetServer::sendTo(uint16_t clientId, Channel channel, uint8_t packetType,
 
 void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t packetType,
                            const uint8_t* payload, size_t payloadSize) {
-    uint8_t buf[MAX_PACKET_SIZE];
-    ByteWriter w(buf, sizeof(buf));
+    // Use a larger buffer for payloads that exceed the standard MTU-safe size
+    // (e.g. inventory sync with display names and rolled stats).
+    constexpr size_t LARGE_PACKET_SIZE = 4096;
+    size_t bufSize = (payloadSize + PACKET_HEADER_SIZE + PacketCrypto::TAG_SIZE > MAX_PACKET_SIZE)
+                     ? LARGE_PACKET_SIZE : MAX_PACKET_SIZE;
+    uint8_t stackBuf[LARGE_PACKET_SIZE];
+    ByteWriter w(stackBuf, bufSize);
 
     uint16_t ack;
     uint32_t ackBits;
@@ -223,7 +228,7 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
     hdr.packetType = packetType;
 
     // Encrypt payload for non-system packets when keys are available
-    uint8_t encryptedBuf[MAX_PACKET_SIZE];
+    uint8_t encryptedBuf[LARGE_PACKET_SIZE];
     const uint8_t* sendPayload = payload;
     size_t sendPayloadSize = payloadSize;
 
@@ -245,14 +250,14 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
 
     if (w.overflowed()) {
         LOG_ERROR("NetServer", "Packet overflow: type=0x%02X payloadSize=%zu capacity=%zu for client %d",
-                  packetType, payloadSize, MAX_PACKET_SIZE, client.clientId);
+                  packetType, payloadSize, bufSize, client.clientId);
         return;
     }
 
-    socket_.sendTo(buf, w.size(), client.address);
+    socket_.sendTo(stackBuf, w.size(), client.address);
 
     if (channel != Channel::Unreliable) {
-        client.reliability.trackReliable(hdr.sequence, buf, w.size(), lastPollTime_);
+        client.reliability.trackReliable(hdr.sequence, stackBuf, w.size(), lastPollTime_);
     }
 }
 
