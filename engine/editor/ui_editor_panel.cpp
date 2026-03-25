@@ -615,6 +615,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Doll Width Ratio", &inv->dollWidthRatio, 0.01f, 0.1f, 0.9f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Content Padding", &inv->contentPadding, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Currency Height", &inv->currencyHeight, 0.5f, 10.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Plat Offset X", &inv->platOffsetX, 0.5f, -200.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Plat Offset Y", &inv->platOffsetY, 0.5f, -50.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Grid Padding", &inv->gridPadding, 0.5f, 0.0f, 16.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
@@ -634,14 +636,54 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
 
         if (ImGui::TreeNodeEx("Equipment Slots", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Equip Slot Size", &inv->equipSlotSize, 0.5f, 16.0f, 128.0f); checkUndoCapture(uiMgr);
-            for (int i = 0; i < 8; ++i) {
-                if (ImGui::TreeNode(InventoryPanel::equipSlotNames[i])) {
+            for (int i = 0; i < InventoryPanel::NUM_EQUIP_SLOTS; ++i) {
+                // Show equipped item name in the tree label
+                char label[128];
+                if (!inv->equipSlots[i].displayName.empty()) {
+                    snprintf(label, sizeof(label), "%s: %s##eq%d",
+                             InventoryPanel::equipSlotNames[i],
+                             inv->equipSlots[i].displayName.c_str(), i);
+                } else {
+                    snprintf(label, sizeof(label), "%s: (empty)##eq%d",
+                             InventoryPanel::equipSlotNames[i], i);
+                }
+                if (ImGui::TreeNode(label)) {
                     ImGui::DragFloat("Offset X", &inv->equipLayout[i].offsetX, 0.05f, -5.0f, 5.0f); checkUndoCapture(uiMgr);
                     ImGui::DragFloat("Offset Y", &inv->equipLayout[i].offsetY, 0.05f, -5.0f, 5.0f); checkUndoCapture(uiMgr);
                     ImGui::DragFloat("Size Mul", &inv->equipLayout[i].sizeMul, 0.05f, 0.5f, 3.0f); checkUndoCapture(uiMgr);
+                    if (!inv->equipSlots[i].itemId.empty()) {
+                        ImGui::Separator();
+                        ImGui::Text("Item: %s", inv->equipSlots[i].displayName.c_str());
+                        ImGui::Text("Rarity: %s", inv->equipSlots[i].rarity.c_str());
+                        ImGui::Text("Type: %s", inv->equipSlots[i].itemType.c_str());
+                        if (inv->equipSlots[i].enchantLevel > 0)
+                            ImGui::Text("Enchant: +%d", inv->equipSlots[i].enchantLevel);
+                        for (auto& line : inv->equipSlots[i].statLines)
+                            ImGui::Text("  %s", line.c_str());
+                    }
                     ImGui::TreePop();
                 }
             }
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Font Sizes", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Item Letter", &inv->itemFontSize, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Quantity Badge", &inv->quantityFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Currency Value", &inv->currencyFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Currency Label", &inv->currencyLabelFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Equip Label", &inv->equipLabelFontSize, 0.5f, 4.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Colors##inv", 0)) {
+            ImGui::ColorEdit4("Quantity Badge##c", &inv->quantityColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Item Text##c", &inv->itemTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Equip Label##c", &inv->equipLabelColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gold Label##c", &inv->goldLabelColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gold Value##c", &inv->goldValueColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Plat Label##c", &inv->platLabelColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Plat Value##c", &inv->platValueColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -652,6 +694,27 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* sp = dynamic_cast<StatusPanel*>(selectedNode_)) {
         ImGui::SeparatorText("StatusPanel");
+
+        if (ImGui::TreeNodeEx("Font Sizes##sp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title", &sp->titleFontSize, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Name", &sp->nameFontSize, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Level", &sp->levelFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Stat Label", &sp->statLabelFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Stat Value", &sp->statValueFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Faction", &sp->factionFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Colors##sp", 0)) {
+            ImGui::ColorEdit4("Title##spc", &sp->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Name##spc", &sp->nameColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Level##spc", &sp->levelColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Stat Label##spc", &sp->statLabelColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Faction##spc", &sp->factionColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        ImGui::Separator();
         ImGui::Text("Name: %s", sp->playerName.c_str());
         ImGui::Text("Class: %s", sp->className.c_str());
         ImGui::Text("Faction: %s", sp->factionName.c_str());

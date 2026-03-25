@@ -6,6 +6,7 @@
 #include "engine/ui/ui_data_binding.h"
 #include "engine/ui/ui_hot_reload.h"
 #include <nlohmann/json_fwd.hpp>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <memory>
@@ -65,6 +66,12 @@ public:
     // Editor: list loaded screen IDs
     std::vector<std::string> screenIds() const { return screenOrder_; }
 
+    // Called after a screen is reloaded (hot-reload or loadScreen replacing existing).
+    // Multiple listeners can register; all are called in order.
+    void addScreenReloadListener(std::function<void(const std::string& screenId)> fn) {
+        screenReloadListeners_.push_back(std::move(fn));
+    }
+
 private:
     UITheme theme_;
     std::vector<std::string> screenOrder_;
@@ -96,6 +103,8 @@ private:
     UIHotReload hotReload_;
     float hotReloadTimer_ = 0.0f;
     std::unordered_map<std::string, std::string> screenFilePaths_;
+
+    std::vector<std::function<void(const std::string&)>> screenReloadListeners_;
 
     std::unique_ptr<UINode> parseNode(const nlohmann::json& j);
     AnchorPreset parsePreset(const std::string& name);

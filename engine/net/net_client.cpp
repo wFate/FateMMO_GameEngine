@@ -710,6 +710,27 @@ void NetClient::sendDungeonResponse(uint8_t accept) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdDungeonResponse, w.data(), w.size());
 }
 
+void NetClient::sendMoveItem(int32_t sourceSlot, int32_t destSlot) {
+    CmdMoveItemMsg msg;
+    msg.sourceSlot = sourceSlot;
+    msg.destSlot = destSlot;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdMoveItem, buf, w.size());
+}
+
+void NetClient::sendEquip(uint8_t action, int32_t inventorySlot, uint8_t equipSlot) {
+    CmdEquipMsg msg;
+    msg.action = action;
+    msg.inventorySlot = inventorySlot;
+    msg.equipSlot = equipSlot;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdEquip, buf, w.size());
+}
+
 void NetClient::sendMove(const Vec2& position, const Vec2& velocity, float timestamp) {
     CmdMove move;
     move.position = position;

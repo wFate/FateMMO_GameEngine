@@ -431,6 +431,25 @@ struct CmdEquipMsg {
 };
 
 // ============================================================================
+// Client -> Server: CmdMoveItem (swap/stack inventory slots)
+// ============================================================================
+struct CmdMoveItemMsg {
+    int32_t sourceSlot = -1;
+    int32_t destSlot   = -1;
+
+    void write(ByteWriter& w) const {
+        w.writeI32(sourceSlot);
+        w.writeI32(destSlot);
+    }
+    static CmdMoveItemMsg read(ByteReader& r) {
+        CmdMoveItemMsg m;
+        m.sourceSlot = r.readI32();
+        m.destSlot   = r.readI32();
+        return m;
+    }
+};
+
+// ============================================================================
 // Server -> Client: SvLevelUp (explicit level-up event with full stat snapshot)
 // ============================================================================
 struct SvLevelUpMsg {

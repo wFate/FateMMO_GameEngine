@@ -98,6 +98,7 @@ namespace PacketType {
     constexpr uint8_t CmdBankWithdrawItem  = 0x30;
     constexpr uint8_t CmdBankDepositGold   = 0x31;
     constexpr uint8_t CmdBankWithdrawGold  = 0x32;
+    constexpr uint8_t CmdMoveItem          = 0x33;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;

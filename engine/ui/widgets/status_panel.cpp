@@ -55,12 +55,12 @@ void StatusPanel::renderCharacterDisplay(SpriteBatch& batch, SDFText& sdf,
         batch.drawRect({bannerCX, bannerCY}, {bannerW, bannerH}, bannerBg, depth + 0.1f);
         batch.drawRing({bannerCX, bannerCY}, bannerW * 0.5f, 1.0f, bannerBdr, depth + 0.15f, 4);
 
-        float factionFontSize = scaledFont(9.0f);
-        Color factionColor = {1.0f, 0.92f, 0.75f, 1.0f};
-        Vec2 fts = sdf.measure(factionName.c_str(), factionFontSize);
+        float factionFS = scaledFont(factionFontSize);
+        Color factionClr = factionColor;
+        Vec2 fts = sdf.measure(factionName.c_str(), factionFS);
         sdf.drawScreen(batch, factionName.c_str(),
             {bannerCX - fts.x * 0.5f, bannerCY - fts.y * 0.5f},
-            factionFontSize, factionColor, depth + 0.2f);
+            factionFS, factionClr, depth + 0.2f);
     }
 }
 
@@ -98,9 +98,9 @@ void StatusPanel::renderStatGrid(SpriteBatch& batch, SDFText& sdf,
     int rows = 3;
     float cellW = (area.w - insetPad * 2.0f) / static_cast<float>(cols);
     float cellH = (area.h - insetPad * 2.0f) / static_cast<float>(rows);
-    float labelFontSize = scaledFont(9.0f);
-    float valueFontSize = scaledFont(11.0f);
-    Color labelColor = {0.50f, 0.40f, 0.30f, 1.0f};
+    float labelFS = scaledFont(statLabelFontSize);
+    float valueFS = scaledFont(statValueFontSize);
+    Color labelColor = statLabelColor;
     Color valueColor = resolvedStyle_.textColor;
 
     for (int row = 0; row < rows; ++row) {
@@ -110,18 +110,18 @@ void StatusPanel::renderStatGrid(SpriteBatch& batch, SDFText& sdf,
             float cellY = area.y + insetPad + static_cast<float>(row) * cellH;
 
             // Abbreviation label
-            Vec2 lts = sdf.measure(labels[idx], labelFontSize);
+            Vec2 lts = sdf.measure(labels[idx], labelFS);
             sdf.drawScreen(batch, labels[idx],
                 {cellX + cellW * 0.5f - lts.x * 0.5f, cellY + 2.0f * s},
-                labelFontSize, labelColor, depth + 0.1f);
+                labelFS, labelColor, depth + 0.1f);
 
             // Value
             char vbuf[16];
             snprintf(vbuf, sizeof(vbuf), "%d", values[idx]);
-            Vec2 vts = sdf.measure(vbuf, valueFontSize);
+            Vec2 vts = sdf.measure(vbuf, valueFS);
             sdf.drawScreen(batch, vbuf,
-                {cellX + cellW * 0.5f - vts.x * 0.5f, cellY + labelFontSize + 4.0f * s},
-                valueFontSize, valueColor, depth + 0.1f);
+                {cellX + cellW * 0.5f - vts.x * 0.5f, cellY + labelFS + 4.0f * s},
+                valueFS, valueColor, depth + 0.1f);
         }
     }
 }
@@ -156,10 +156,10 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
     batch.drawRect({rect.x + rect.w - bw * 0.5f, rect.y + rect.h * 0.5f}, {bw, innerH}, bdr, d + 0.1f);
 
     // ---- "STATUS" title ----
-    Color titleColor = style.textColor;
+    Color titleClr = (titleColor.a > 0.0f) ? titleColor : style.textColor;
     sdf.drawScreen(batch, "STATUS",
         {rect.x + 10.0f * s, rect.y + 6.0f * s},
-        scaledFont(16.0f), titleColor, d + 0.2f);
+        scaledFont(titleFontSize), titleClr, d + 0.2f);
 
     // ---- Close button (X circle at top-right) ----
     float closeR  = 12.0f * s;
@@ -194,22 +194,20 @@ void StatusPanel::render(SpriteBatch& batch, SDFText& sdf) {
 
     // Player name (large, dark brown)
     if (!playerName.empty()) {
-        float nameFontSize = scaledFont(15.0f);
-        Color nameColor = {0.25f, 0.16f, 0.08f, 1.0f};
+        float nameFS = scaledFont(nameFontSize);
         sdf.drawScreen(batch, playerName.c_str(),
-            {statsArea.x, curY}, nameFontSize, nameColor, d + 0.2f);
-        curY += nameFontSize + 3.0f * s;
+            {statsArea.x, curY}, nameFS, nameColor, d + 0.2f);
+        curY += nameFS + 3.0f * s;
     }
 
     // "Lv N" below name
     {
         char lvBuf[24];
         snprintf(lvBuf, sizeof(lvBuf), "Lv %d  %s", level, className.c_str());
-        float lvFontSize = scaledFont(11.0f);
-        Color lvColor = {0.40f, 0.28f, 0.16f, 1.0f};
+        float lvFS = scaledFont(levelFontSize);
         sdf.drawScreen(batch, lvBuf,
-            {statsArea.x, curY}, lvFontSize, lvColor, d + 0.2f);
-        curY += lvFontSize + 5.0f * s;
+            {statsArea.x, curY}, lvFS, levelColor, d + 0.2f);
+        curY += lvFS + 5.0f * s;
     }
 
     // XP bar

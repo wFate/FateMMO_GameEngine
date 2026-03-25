@@ -172,7 +172,14 @@ public:
     bool inPlayMode() const { return inPlayMode_; }
 
     void setPostProcessConfig(PostProcessConfig* cfg) { postProcessConfig_ = cfg; }
-    void setUIManager(UIManager* mgr) { uiManager_ = mgr; }
+    void setUIManager(UIManager* mgr) {
+        uiManager_ = mgr;
+        if (mgr) {
+            mgr->addScreenReloadListener([this](const std::string&) {
+                if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
+            });
+        }
+    }
     UIManager* uiManager() const { return uiManager_; }
     UIEditorPanel& uiEditorPanel() { return uiEditorPanel_; }
 

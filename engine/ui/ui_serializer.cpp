@@ -337,11 +337,13 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["dollWidthRatio"] = w->dollWidthRatio;
             j["contentPadding"] = w->contentPadding;
             j["currencyHeight"] = w->currencyHeight;
+            j["platOffsetX"]    = w->platOffsetX;
+            j["platOffsetY"]    = w->platOffsetY;
             j["gridPadding"]    = w->gridPadding;
             j["dollCenterY"]    = w->dollCenterY;
             j["characterScale"] = w->characterScale;
             nlohmann::json slots = nlohmann::json::array();
-            for (int i = 0; i < 8; ++i) {
+            for (int i = 0; i < InventoryPanel::NUM_EQUIP_SLOTS; ++i) {
                 slots.push_back({
                     {"offsetX", w->equipLayout[i].offsetX},
                     {"offsetY", w->equipLayout[i].offsetY},
@@ -349,11 +351,38 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
                 });
             }
             j["equipLayout"] = slots;
+
+            // Font sizes
+            j["itemFontSize"]          = w->itemFontSize;
+            j["quantityFontSize"]      = w->quantityFontSize;
+            j["currencyFontSize"]      = w->currencyFontSize;
+            j["currencyLabelFontSize"] = w->currencyLabelFontSize;
+            j["equipLabelFontSize"]    = w->equipLabelFontSize;
+
+            // Colors
+            j["quantityColor"]   = {w->quantityColor.r, w->quantityColor.g, w->quantityColor.b, w->quantityColor.a};
+            j["itemTextColor"]   = {w->itemTextColor.r, w->itemTextColor.g, w->itemTextColor.b, w->itemTextColor.a};
+            j["equipLabelColor"] = {w->equipLabelColor.r, w->equipLabelColor.g, w->equipLabelColor.b, w->equipLabelColor.a};
+            j["goldLabelColor"]  = {w->goldLabelColor.r, w->goldLabelColor.g, w->goldLabelColor.b, w->goldLabelColor.a};
+            j["goldValueColor"]  = {w->goldValueColor.r, w->goldValueColor.g, w->goldValueColor.b, w->goldValueColor.a};
+            j["platLabelColor"]  = {w->platLabelColor.r, w->platLabelColor.g, w->platLabelColor.b, w->platLabelColor.a};
+            j["platValueColor"]  = {w->platValueColor.r, w->platValueColor.g, w->platValueColor.b, w->platValueColor.a};
         }
     }
     else if (type == "status_panel") {
         if (auto* w = dynamic_cast<const StatusPanel*>(node)) {
-            (void)w; // layout-only; runtime stats are game-driven
+            j["titleFontSize"]     = w->titleFontSize;
+            j["nameFontSize"]      = w->nameFontSize;
+            j["levelFontSize"]     = w->levelFontSize;
+            j["statLabelFontSize"] = w->statLabelFontSize;
+            j["statValueFontSize"] = w->statValueFontSize;
+            j["factionFontSize"]   = w->factionFontSize;
+
+            j["titleColor"]     = {w->titleColor.r, w->titleColor.g, w->titleColor.b, w->titleColor.a};
+            j["nameColor"]      = {w->nameColor.r, w->nameColor.g, w->nameColor.b, w->nameColor.a};
+            j["levelColor"]     = {w->levelColor.r, w->levelColor.g, w->levelColor.b, w->levelColor.a};
+            j["statLabelColor"] = {w->statLabelColor.r, w->statLabelColor.g, w->statLabelColor.b, w->statLabelColor.a};
+            j["factionColor"]   = {w->factionColor.r, w->factionColor.g, w->factionColor.b, w->factionColor.a};
         }
     }
     else if (type == "skill_panel") {

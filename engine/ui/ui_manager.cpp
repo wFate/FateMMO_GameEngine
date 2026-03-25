@@ -122,6 +122,10 @@ bool UIManager::loadScreenFromString(const std::string& screenId, const std::str
         screens_[screenId] = std::move(root);
 
         LOG_INFO("UI", "UIManager: loaded screen '%s'", screenId.c_str());
+
+        // Notify listeners (e.g. UI editor, game code) so they can revalidate stale pointers
+        for (auto& fn : screenReloadListeners_) fn(screenId);
+
         return true;
     }
     catch (const nlohmann::json::exception& e) {
@@ -481,6 +485,7 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         pib->portraitSize = j.value("portraitSize", 48.0f);
         pib->barWidth     = j.value("barWidth", 120.0f);
         pib->barHeight    = j.value("barHeight", 16.0f);
+        pib->barSpacing   = j.value("barSpacing", 2.0f);
         node = std::move(pib);
     }
     else if (type == "target_frame") {
@@ -534,21 +539,69 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         ip->dollWidthRatio = j.value("dollWidthRatio", 0.45f);
         ip->contentPadding = j.value("contentPadding", 4.0f);
         ip->currencyHeight = j.value("currencyHeight", 30.0f);
+        ip->platOffsetX    = j.value("platOffsetX", 0.0f);
+        ip->platOffsetY    = j.value("platOffsetY", 14.0f);
         ip->gridPadding    = j.value("gridPadding", 4.0f);
         ip->dollCenterY    = j.value("dollCenterY", 0.45f);
         ip->characterScale = j.value("characterScale", 5.0f);
         if (j.contains("equipLayout") && j["equipLayout"].is_array()) {
             auto& arr = j["equipLayout"];
-            for (int i = 0; i < 8 && i < static_cast<int>(arr.size()); ++i) {
+            for (int i = 0; i < InventoryPanel::NUM_EQUIP_SLOTS && i < static_cast<int>(arr.size()); ++i) {
                 ip->equipLayout[i].offsetX = arr[i].value("offsetX", ip->equipLayout[i].offsetX);
                 ip->equipLayout[i].offsetY = arr[i].value("offsetY", ip->equipLayout[i].offsetY);
                 ip->equipLayout[i].sizeMul = arr[i].value("sizeMul", ip->equipLayout[i].sizeMul);
             }
         }
+        // Font sizes
+        ip->itemFontSize          = j.value("itemFontSize", 14.0f);
+        ip->quantityFontSize      = j.value("quantityFontSize", 9.0f);
+        ip->currencyFontSize      = j.value("currencyFontSize", 11.0f);
+        ip->currencyLabelFontSize = j.value("currencyLabelFontSize", 10.0f);
+        ip->equipLabelFontSize    = j.value("equipLabelFontSize", 7.0f);
+
+        // Colors
+        auto readColor = [&](const char* key, Color def) -> Color {
+            if (j.contains(key) && j[key].is_array() && j[key].size() >= 3) {
+                auto& c = j[key];
+                return {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(),
+                        c.size() >= 4 ? c[3].get<float>() : 1.0f};
+            }
+            return def;
+        };
+        ip->quantityColor   = readColor("quantityColor",   ip->quantityColor);
+        ip->itemTextColor   = readColor("itemTextColor",   ip->itemTextColor);
+        ip->equipLabelColor = readColor("equipLabelColor", ip->equipLabelColor);
+        ip->goldLabelColor  = readColor("goldLabelColor",  ip->goldLabelColor);
+        ip->goldValueColor  = readColor("goldValueColor",  ip->goldValueColor);
+        ip->platLabelColor  = readColor("platLabelColor",  ip->platLabelColor);
+        ip->platValueColor  = readColor("platValueColor",  ip->platValueColor);
+
         node = std::move(ip);
     }
     else if (type == "status_panel") {
         auto sp = std::make_unique<StatusPanel>(id);
+
+        sp->titleFontSize     = j.value("titleFontSize", 16.0f);
+        sp->nameFontSize      = j.value("nameFontSize", 15.0f);
+        sp->levelFontSize     = j.value("levelFontSize", 11.0f);
+        sp->statLabelFontSize = j.value("statLabelFontSize", 9.0f);
+        sp->statValueFontSize = j.value("statValueFontSize", 11.0f);
+        sp->factionFontSize   = j.value("factionFontSize", 9.0f);
+
+        auto readColor = [&](const char* key, Color def) -> Color {
+            if (j.contains(key) && j[key].is_array() && j[key].size() >= 3) {
+                auto& c = j[key];
+                return {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(),
+                        c.size() >= 4 ? c[3].get<float>() : 1.0f};
+            }
+            return def;
+        };
+        sp->titleColor     = readColor("titleColor",     sp->titleColor);
+        sp->nameColor      = readColor("nameColor",      sp->nameColor);
+        sp->levelColor     = readColor("levelColor",     sp->levelColor);
+        sp->statLabelColor = readColor("statLabelColor", sp->statLabelColor);
+        sp->factionColor   = readColor("factionColor",   sp->factionColor);
+
         node = std::move(sp);
     }
     else if (type == "skill_panel") {

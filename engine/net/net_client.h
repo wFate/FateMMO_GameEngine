@@ -36,6 +36,8 @@ public:
     void sendTeleport(uint32_t npcId, uint8_t destinationIndex);
     void sendStartDungeon(const std::string& sceneId);
     void sendDungeonResponse(uint8_t accept);
+    void sendMoveItem(int32_t sourceSlot, int32_t destSlot);
+    void sendEquip(uint8_t action, int32_t inventorySlot, uint8_t equipSlot);
 
     void sendTradeAction(uint8_t action);
     void sendTradeAction(uint8_t action, const std::string& data);

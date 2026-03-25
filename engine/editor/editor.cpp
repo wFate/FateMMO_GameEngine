@@ -4308,8 +4308,13 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
                 UISerializer::saveToFile(relPath, screenId, root);
                 LOG_INFO("Editor", "Saved UI screen: %s", relPath.c_str());
                 // Also save to source directory so changes survive rebuilds
+                // sourceDir_ is FATE_SOURCE_DIR/assets/scenes — go up to project root
                 if (!sourceDir_.empty()) {
-                    std::string srcPath = sourceDir_ + "/" + relPath;
+                    std::string projectRoot = sourceDir_;
+                    auto pos = projectRoot.rfind("/assets/scenes");
+                    if (pos == std::string::npos) pos = projectRoot.rfind("\\assets\\scenes");
+                    if (pos != std::string::npos) projectRoot = projectRoot.substr(0, pos);
+                    std::string srcPath = projectRoot + "/" + relPath;
                     UISerializer::saveToFile(srcPath, screenId, root);
                     LOG_INFO("Editor", "Saved UI screen (source): %s", srcPath.c_str());
                 }
