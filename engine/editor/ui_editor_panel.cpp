@@ -610,10 +610,41 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* inv = dynamic_cast<InventoryPanel*>(selectedNode_)) {
         ImGui::SeparatorText("InventoryPanel");
-        ImGui::DragInt("Grid Columns", &inv->gridColumns, 1.0f, 1, 10); checkUndoCapture(uiMgr);
-        ImGui::DragInt("Grid Rows", &inv->gridRows, 1.0f, 1, 10); checkUndoCapture(uiMgr);
-        ImGui::DragFloat("Slot Size##inv", &inv->slotSize, 1.0f, 16.0f, 128.0f); checkUndoCapture(uiMgr);
-        ImGui::DragFloat("Equip Slot Size", &inv->equipSlotSize, 1.0f, 16.0f, 128.0f); checkUndoCapture(uiMgr);
+
+        if (ImGui::TreeNodeEx("Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Doll Width Ratio", &inv->dollWidthRatio, 0.01f, 0.1f, 0.9f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Content Padding", &inv->contentPadding, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Currency Height", &inv->currencyHeight, 0.5f, 10.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Grid Padding", &inv->gridPadding, 0.5f, 0.0f, 16.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Paper Doll", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Center Y", &inv->dollCenterY, 0.01f, 0.1f, 0.9f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Character Scale", &inv->characterScale, 0.1f, 1.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Grid", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragInt("Columns", &inv->gridColumns, 1.0f, 1, 10); checkUndoCapture(uiMgr);
+            ImGui::DragInt("Rows", &inv->gridRows, 1.0f, 1, 10); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Size##inv", &inv->slotSize, 1.0f, 16.0f, 128.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Equipment Slots", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Equip Slot Size", &inv->equipSlotSize, 0.5f, 16.0f, 128.0f); checkUndoCapture(uiMgr);
+            for (int i = 0; i < 8; ++i) {
+                if (ImGui::TreeNode(InventoryPanel::equipSlotNames[i])) {
+                    ImGui::DragFloat("Offset X", &inv->equipLayout[i].offsetX, 0.05f, -5.0f, 5.0f); checkUndoCapture(uiMgr);
+                    ImGui::DragFloat("Offset Y", &inv->equipLayout[i].offsetY, 0.05f, -5.0f, 5.0f); checkUndoCapture(uiMgr);
+                    ImGui::DragFloat("Size Mul", &inv->equipLayout[i].sizeMul, 0.05f, 0.5f, 3.0f); checkUndoCapture(uiMgr);
+                    ImGui::TreePop();
+                }
+            }
+            ImGui::TreePop();
+        }
+
         ImGui::Separator();
         ImGui::Text("Gold: %d", inv->gold);
         ImGui::Text("Platinum: %d", inv->platinum);

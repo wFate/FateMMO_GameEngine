@@ -527,9 +527,24 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     }
     else if (type == "inventory_panel") {
         auto ip = std::make_unique<InventoryPanel>(id);
-        ip->gridColumns = j.value("gridColumns", 4);
-        ip->gridRows = j.value("gridRows", 4);
-        ip->slotSize = j.value("slotSize", 40.0f);
+        ip->gridColumns    = j.value("gridColumns", 4);
+        ip->gridRows       = j.value("gridRows", 4);
+        ip->slotSize       = j.value("slotSize", 40.0f);
+        ip->equipSlotSize  = j.value("equipSlotSize", 36.0f);
+        ip->dollWidthRatio = j.value("dollWidthRatio", 0.45f);
+        ip->contentPadding = j.value("contentPadding", 4.0f);
+        ip->currencyHeight = j.value("currencyHeight", 30.0f);
+        ip->gridPadding    = j.value("gridPadding", 4.0f);
+        ip->dollCenterY    = j.value("dollCenterY", 0.45f);
+        ip->characterScale = j.value("characterScale", 5.0f);
+        if (j.contains("equipLayout") && j["equipLayout"].is_array()) {
+            auto& arr = j["equipLayout"];
+            for (int i = 0; i < 8 && i < static_cast<int>(arr.size()); ++i) {
+                ip->equipLayout[i].offsetX = arr[i].value("offsetX", ip->equipLayout[i].offsetX);
+                ip->equipLayout[i].offsetY = arr[i].value("offsetY", ip->equipLayout[i].offsetY);
+                ip->equipLayout[i].sizeMul = arr[i].value("sizeMul", ip->equipLayout[i].sizeMul);
+            }
+        }
         node = std::move(ip);
     }
     else if (type == "status_panel") {

@@ -330,10 +330,25 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
     }
     else if (type == "inventory_panel") {
         if (auto* w = dynamic_cast<const InventoryPanel*>(node)) {
-            j["gridColumns"]   = w->gridColumns;
-            j["gridRows"]      = w->gridRows;
-            j["slotSize"]      = w->slotSize;
-            j["equipSlotSize"] = w->equipSlotSize;
+            j["gridColumns"]    = w->gridColumns;
+            j["gridRows"]       = w->gridRows;
+            j["slotSize"]       = w->slotSize;
+            j["equipSlotSize"]  = w->equipSlotSize;
+            j["dollWidthRatio"] = w->dollWidthRatio;
+            j["contentPadding"] = w->contentPadding;
+            j["currencyHeight"] = w->currencyHeight;
+            j["gridPadding"]    = w->gridPadding;
+            j["dollCenterY"]    = w->dollCenterY;
+            j["characterScale"] = w->characterScale;
+            nlohmann::json slots = nlohmann::json::array();
+            for (int i = 0; i < 8; ++i) {
+                slots.push_back({
+                    {"offsetX", w->equipLayout[i].offsetX},
+                    {"offsetY", w->equipLayout[i].offsetY},
+                    {"sizeMul", w->equipLayout[i].sizeMul}
+                });
+            }
+            j["equipLayout"] = slots;
         }
     }
     else if (type == "status_panel") {
