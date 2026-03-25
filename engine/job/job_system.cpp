@@ -230,12 +230,13 @@ void JobSystem::checkWaitList() {
                 --count;
                 --i;
 
-                counterPool_.release(c);
                 waitLock_.clear(std::memory_order_release);
 
-                // Resume the waiting fiber
+                // Resume the waiting fiber — release counter AFTER it returns,
+                // so the fiber can't observe a recycled counter.
                 t_currentFiberIndex = -1;
                 fiber::switchTo(f);
+                counterPool_.release(c);
 
                 // Re-acquire lock to continue
                 while (waitLock_.test_and_set(std::memory_order_acquire)) {}

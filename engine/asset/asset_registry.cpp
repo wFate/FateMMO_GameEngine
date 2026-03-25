@@ -32,10 +32,47 @@ static std::string canonicalizePath(const std::string& path) {
 AssetHandle AssetRegistry::load(const std::string& path) {
     std::string canon = canonicalizePath(path);
 
-    // Check if already loaded
+    // Check if already loaded or in-flight
     auto it = pathToIndex_.find(canon);
     if (it != pathToIndex_.end()) {
         auto& slot = slots_[it->second];
+        // If an async load is in progress, wait for it and finalize so the
+        // caller gets a Ready handle (sync load contract).
+        if (slot.state == AssetState::Loading) {
+            for (auto dit = activeDecodes_.begin(); dit != activeDecodes_.end(); ++dit) {
+                if ((*dit)->slotIndex == it->second) {
+                    while (!(*dit)->complete.load(std::memory_order_acquire))
+                        std::this_thread::yield();
+                    // Finalize on this (main) thread
+                    auto& req = *dit;
+                    bool ok = false;
+                    if (!req->failed) {
+                        if (req->upload) {
+                            slot.data = req->upload(req->result);
+                            ok = (slot.data != nullptr);
+                        } else {
+                            slot.data = req->result;
+                            ok = true;
+                        }
+                    }
+                    if (ok) {
+                        slot.state = AssetState::Ready;
+                    } else {
+                        if (!req->failed && req->upload && req->result && req->destroyDecoded)
+                            req->destroyDecoded(req->result);
+                        pathToIndex_.erase(slot.path);
+                        slot.state = AssetState::Empty;
+                        slot.path.clear();
+                        slot.generation++;
+                        freeList_.push_back(it->second);
+                        activeDecodes_.erase(dit);
+                        return AssetHandle{};
+                    }
+                    activeDecodes_.erase(dit);
+                    break;
+                }
+            }
+        }
         return AssetHandle::make(it->second, slot.generation);
     }
 

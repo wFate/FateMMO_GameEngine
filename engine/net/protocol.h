@@ -543,6 +543,8 @@ struct SvQuestSyncMsg {
 struct InventorySyncSlot {
     int32_t slotIndex = -1;
     std::string itemId;
+    std::string displayName;
+    std::string rarity;
     int32_t quantity = 0;
     int32_t enchantLevel = 0;
     std::string rolledStats; // JSON string
@@ -554,6 +556,8 @@ struct InventorySyncSlot {
 struct InventorySyncEquip {
     uint8_t slot = 0; // EquipmentSlot enum
     std::string itemId;
+    std::string displayName;
+    std::string rarity;
     int32_t quantity = 0;
     int32_t enchantLevel = 0;
     std::string rolledStats;
@@ -571,6 +575,8 @@ struct SvInventorySyncMsg {
         for (const auto& s : slots) {
             w.writeI32(s.slotIndex);
             w.writeString(s.itemId);
+            w.writeString(s.displayName);
+            w.writeString(s.rarity);
             w.writeI32(s.quantity);
             w.writeI32(s.enchantLevel);
             w.writeString(s.rolledStats);
@@ -582,6 +588,8 @@ struct SvInventorySyncMsg {
         for (const auto& e : equipment) {
             w.writeU8(e.slot);
             w.writeString(e.itemId);
+            w.writeString(e.displayName);
+            w.writeString(e.rarity);
             w.writeI32(e.quantity);
             w.writeI32(e.enchantLevel);
             w.writeString(e.rolledStats);
@@ -598,6 +606,8 @@ struct SvInventorySyncMsg {
         for (uint16_t i = 0; i < slotCount; ++i) {
             m.slots[i].slotIndex = r.readI32();
             m.slots[i].itemId = r.readString();
+            m.slots[i].displayName = r.readString();
+            m.slots[i].rarity = r.readString();
             m.slots[i].quantity = r.readI32();
             m.slots[i].enchantLevel = r.readI32();
             m.slots[i].rolledStats = r.readString();
@@ -610,6 +620,8 @@ struct SvInventorySyncMsg {
         for (uint16_t i = 0; i < equipCount; ++i) {
             m.equipment[i].slot = r.readU8();
             m.equipment[i].itemId = r.readString();
+            m.equipment[i].displayName = r.readString();
+            m.equipment[i].rarity = r.readString();
             m.equipment[i].quantity = r.readI32();
             m.equipment[i].enchantLevel = r.readI32();
             m.equipment[i].rolledStats = r.readString();
