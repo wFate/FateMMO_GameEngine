@@ -46,6 +46,13 @@ public:
     bool isActionReleased(ActionId id) const { return actionMap_.isReleased(id); }
     bool consumeBuffered(ActionId id, int window = 6) { return inputBuffer_.consume(id, window); }
 
+    // Programmatic action injection (touch buttons, gamepad) — records in both
+    // the action map (for isPressed/isHeld) and input buffer (for consumeBuffered)
+    void injectAction(ActionId id) {
+        actionMap_.setActionPressed(id);
+        inputBuffer_.record(id);
+    }
+
     // Context switching for chat
     void setChatMode(bool enabled);
     bool isChatMode() const { return actionMap_.context() == InputContext::Chat; }
