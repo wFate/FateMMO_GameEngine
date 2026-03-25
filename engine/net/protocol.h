@@ -545,8 +545,13 @@ struct InventorySyncSlot {
     std::string itemId;
     std::string displayName;
     std::string rarity;
+    std::string itemType;    // Weapon, Armor, Consumable, etc.
     int32_t quantity = 0;
     int32_t enchantLevel = 0;
+    int32_t levelReq = 0;
+    int32_t damageMin = 0;
+    int32_t damageMax = 0;
+    int32_t armor = 0;
     std::string rolledStats; // JSON string
     std::string socketStat;
     int32_t socketValue = 0;
@@ -558,8 +563,13 @@ struct InventorySyncEquip {
     std::string itemId;
     std::string displayName;
     std::string rarity;
+    std::string itemType;
     int32_t quantity = 0;
     int32_t enchantLevel = 0;
+    int32_t levelReq = 0;
+    int32_t damageMin = 0;
+    int32_t damageMax = 0;
+    int32_t armor = 0;
     std::string rolledStats;
     std::string socketStat;
     int32_t socketValue = 0;
@@ -577,8 +587,13 @@ struct SvInventorySyncMsg {
             w.writeString(s.itemId);
             w.writeString(s.displayName);
             w.writeString(s.rarity);
+            w.writeString(s.itemType);
             w.writeI32(s.quantity);
             w.writeI32(s.enchantLevel);
+            w.writeI32(s.levelReq);
+            w.writeI32(s.damageMin);
+            w.writeI32(s.damageMax);
+            w.writeI32(s.armor);
             w.writeString(s.rolledStats);
             w.writeString(s.socketStat);
             w.writeI32(s.socketValue);
@@ -590,8 +605,13 @@ struct SvInventorySyncMsg {
             w.writeString(e.itemId);
             w.writeString(e.displayName);
             w.writeString(e.rarity);
+            w.writeString(e.itemType);
             w.writeI32(e.quantity);
             w.writeI32(e.enchantLevel);
+            w.writeI32(e.levelReq);
+            w.writeI32(e.damageMin);
+            w.writeI32(e.damageMax);
+            w.writeI32(e.armor);
             w.writeString(e.rolledStats);
             w.writeString(e.socketStat);
             w.writeI32(e.socketValue);
@@ -608,8 +628,13 @@ struct SvInventorySyncMsg {
             m.slots[i].itemId = r.readString();
             m.slots[i].displayName = r.readString();
             m.slots[i].rarity = r.readString();
+            m.slots[i].itemType = r.readString();
             m.slots[i].quantity = r.readI32();
             m.slots[i].enchantLevel = r.readI32();
+            m.slots[i].levelReq = r.readI32();
+            m.slots[i].damageMin = r.readI32();
+            m.slots[i].damageMax = r.readI32();
+            m.slots[i].armor = r.readI32();
             m.slots[i].rolledStats = r.readString();
             m.slots[i].socketStat = r.readString();
             m.slots[i].socketValue = r.readI32();
@@ -622,8 +647,13 @@ struct SvInventorySyncMsg {
             m.equipment[i].itemId = r.readString();
             m.equipment[i].displayName = r.readString();
             m.equipment[i].rarity = r.readString();
+            m.equipment[i].itemType = r.readString();
             m.equipment[i].quantity = r.readI32();
             m.equipment[i].enchantLevel = r.readI32();
+            m.equipment[i].levelReq = r.readI32();
+            m.equipment[i].damageMin = r.readI32();
+            m.equipment[i].damageMax = r.readI32();
+            m.equipment[i].armor = r.readI32();
             m.equipment[i].rolledStats = r.readString();
             m.equipment[i].socketStat = r.readString();
             m.equipment[i].socketValue = r.readI32();
