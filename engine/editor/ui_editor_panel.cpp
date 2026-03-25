@@ -387,11 +387,23 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     else if (auto* arc = dynamic_cast<SkillArc*>(selectedNode_)) {
         ImGui::SeparatorText("SkillArc");
         ImGui::DragFloat("Attack Button Size", &arc->attackButtonSize, 1.0f, 40.0f, 200.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("PickUp Button Size", &arc->pickUpButtonSize, 1.0f, 20.0f, 200.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Slot Size", &arc->slotSize, 1.0f, 20.0f, 128.0f); checkUndoCapture(uiMgr);
-        ImGui::DragFloat("Arc Radius", &arc->arcRadius, 1.0f, 30.0f, 200.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Arc Radius", &arc->arcRadius, 1.0f, 30.0f, 400.0f); checkUndoCapture(uiMgr);
         ImGui::DragInt("Slot Count", &arc->slotCount, 1.0f, 1, 8); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Start Angle", &arc->startAngleDeg, 1.0f, 0.0f, 360.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("End Angle", &arc->endAngleDeg, 1.0f, 0.0f, 360.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat2("Skill Arc Offset", &arc->skillArcOffset.x, 1.0f, -300.0f, 300.0f); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Button Positions");
+        ImGui::DragFloat2("Attack Offset", &arc->attackOffset.x, 1.0f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat2("PickUp Offset", &arc->pickUpOffset.x, 1.0f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("SlotArc (Page Selector)");
+        ImGui::DragFloat("SlotArc Radius", &arc->slotArcRadius, 1.0f, 10.0f, 200.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("SlotArc Start Angle", &arc->slotArcStartDeg, 1.0f, 0.0f, 360.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("SlotArc End Angle", &arc->slotArcEndDeg, 1.0f, 0.0f, 360.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat2("SlotArc Offset", &arc->slotArcOffset.x, 1.0f, -300.0f, 300.0f); checkUndoCapture(uiMgr);
     }
     else if (auto* dp = dynamic_cast<DPad*>(selectedNode_)) {
         ImGui::SeparatorText("DPad");

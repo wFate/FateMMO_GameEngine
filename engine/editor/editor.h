@@ -350,7 +350,6 @@ private:
     void drawConsole(World* world);
     void drawDockSpace();
     void drawSceneViewport();
-    void drawViewportHUD(World* world);
     void drawDebugInfoPanel(World* world);
     void loadTileset(const std::string& path, int tileSize = 32);
     void applyLayerVisibility(World* world);

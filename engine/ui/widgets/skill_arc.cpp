@@ -37,39 +37,46 @@ std::vector<Vec2> SkillArc::computeSlotPositions() const {
 }
 
 int SkillArc::hitSlotIndex(const Vec2& localPos) const {
-    // localPos is relative to attack button center (0,0)
+    // localPos is relative to arc origin (widget center)
     float s = layoutScale_;
 
-    // Attack button
+    // Attack button (at attackOffset from arc origin)
+    Vec2 atkCenter{attackOffset.x * s, attackOffset.y * s};
     float attackR = attackButtonSize * s * 0.5f;
-    if (localPos.length() <= attackR) return -1;
+    float adx = localPos.x - atkCenter.x;
+    float ady = localPos.y - atkCenter.y;
+    if (std::sqrt(adx * adx + ady * ady) <= attackR) return -1;
 
-    // Pick Up button (at pickUpOffset relative to attack)
+    // Pick Up button (at pickUpOffset from arc origin)
     Vec2 puCenter{pickUpOffset.x * s, pickUpOffset.y * s};
     float puR = pickUpButtonSize * s * 0.5f;
     float pdx = localPos.x - puCenter.x;
     float pdy = localPos.y - puCenter.y;
     if (std::sqrt(pdx * pdx + pdy * pdy) <= puR) return -2;
 
-    // Page selector circles (4 circles above the skill arc)
-    float pageDotRadius = 12.0f * s;  // 24px diameter
-    float pageDotSpacing = 30.0f * s;
-    float pageDotY = -(arcRadius * s + slotSize * s * 0.5f + 20.0f * s);
-    float pageDotStartX = -1.5f * pageDotSpacing;
+    // SlotArc page selector — 4 dots on their own C-arc
+    float pageDotR = 12.0f * s;
+    float saRad = slotArcRadius * s;
+    float saStartRad = slotArcStartDeg * DEG_TO_RAD;
+    float saEndRad   = slotArcEndDeg   * DEG_TO_RAD;
+    Vec2 saCenter{slotArcOffset.x * s, slotArcOffset.y * s};
     for (int i = 0; i < TOTAL_PAGES; ++i) {
-        float dotX = pageDotStartX + static_cast<float>(i) * pageDotSpacing;
+        float t = (TOTAL_PAGES > 1) ? static_cast<float>(i) / static_cast<float>(TOTAL_PAGES - 1) : 0.5f;
+        float angle = saStartRad + t * (saEndRad - saStartRad);
+        float dotX = saCenter.x + std::cos(angle) * saRad;
+        float dotY = saCenter.y + std::sin(angle) * saRad;
         float ddx = localPos.x - dotX;
-        float ddy = localPos.y - pageDotY;
-        float dotDist = std::sqrt(ddx * ddx + ddy * ddy);
-        if (dotDist <= pageDotRadius) return -(10 + i);  // -10..-13
+        float ddy = localPos.y - dotY;
+        if (std::sqrt(ddx * ddx + ddy * ddy) <= pageDotR) return -(10 + i);
     }
 
-    // Check each slot (positions already scaled via computeSlotPositions)
+    // Check each slot (positions relative to skill arc center)
     auto positions = computeSlotPositions();
     float slotRadius = slotSize * s * 0.5f;
+    Vec2 saOff{skillArcOffset.x * s, skillArcOffset.y * s};
     for (int i = 0; i < static_cast<int>(positions.size()); ++i) {
-        float dx = localPos.x - positions[i].x;
-        float dy = localPos.y - positions[i].y;
+        float dx = localPos.x - (positions[i].x + saOff.x);
+        float dy = localPos.y - (positions[i].y + saOff.y);
         float slotDist = std::sqrt(dx * dx + dy * dy);
         if (slotDist <= slotRadius) return i;
     }
@@ -80,10 +87,10 @@ int SkillArc::hitSlotIndex(const Vec2& localPos) const {
 bool SkillArc::onPress(const Vec2& localPos) {
     if (!enabled_) return false;
     float s = layoutScale_;
-    // Attack button position = bottom-center + attackOffset
-    float atkX = computedRect_.w * 0.5f + attackOffset.x * s;
-    float atkY = computedRect_.h - 50.0f * s + attackOffset.y * s;
-    Vec2 rel{localPos.x - atkX, localPos.y - atkY};
+    // Arc origin = center of widget (matches render)
+    float originX = computedRect_.w * 0.5f;
+    float originY = computedRect_.h * 0.5f;
+    Vec2 rel{localPos.x - originX, localPos.y - originY};
     int hit = hitSlotIndex(rel);
     if (hit == -1) {
         if (onAttack) onAttack(id_);
@@ -107,14 +114,18 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
     const auto& rect = computedRect_;
     float d = static_cast<float>(zOrder_);
     float s = layoutScale_;
-    // Attack button position = bottom-center of widget + attackOffset
-    float cx = rect.x + rect.w * 0.5f + attackOffset.x * s;
-    float cy = rect.y + rect.h - 50.0f * s + attackOffset.y * s;
+    // Widget center (reference point for all offsets)
+    float cx = rect.x + rect.w * 0.5f;
+    float cy = rect.y + rect.h * 0.5f;
 
-    // Draw skill slots (positions already scaled via computeSlotPositions)
+    // Skill arc center (where skill slots radiate from)
+    float saCx = cx + skillArcOffset.x * s;
+    float saCy = cy + skillArcOffset.y * s;
+
+    // Draw skill slots (positioned relative to skill arc center)
     auto positions = computeSlotPositions();
     for (int i = 0; i < static_cast<int>(positions.size()); ++i) {
-        Vec2 slotCenter = {cx + positions[i].x, cy + positions[i].y};
+        Vec2 slotCenter = {saCx + positions[i].x, saCy + positions[i].y};
         float slotR = slotSize * s * 0.5f;
 
         bool hasFill = (i < static_cast<int>(slots.size()) && !slots[i].skillId.empty());
@@ -203,22 +214,23 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
         }
     }
 
-    // Central attack button — gold metallic
+    // Attack button — gold metallic, positioned at arc origin + attackOffset
     float attackR = attackButtonSize * s * 0.5f;
-    Vec2 center{cx, cy};
-    drawMetallicCircle(batch, center, attackR, d + 0.3f);
+    Vec2 atkPos{cx + attackOffset.x * s, cy + attackOffset.y * s};
+    drawMetallicCircle(batch, atkPos, attackR, d + 0.3f);
 
     // Crossed-swords icon: two crossed line-rects in dark brown
     {
+        float atkX = atkPos.x, atkY = atkPos.y;
         Color swordColor = {0.30f, 0.20f, 0.10f, 0.9f};
         float halfLen = attackR * 0.28f;
         float iconW   = 3.0f * s;
         // Sword 1: top-left to bottom-right (diagonal approximated as short H + V)
-        batch.drawRect({cx - halfLen * 0.4f, cy - halfLen * 0.2f}, {halfLen * 1.4f, iconW}, swordColor, d + 0.42f);
-        batch.drawRect({cx + halfLen * 0.1f, cy - halfLen * 0.1f}, {iconW, halfLen * 1.2f}, swordColor, d + 0.42f);
+        batch.drawRect({atkX - halfLen * 0.4f, atkY - halfLen * 0.2f}, {halfLen * 1.4f, iconW}, swordColor, d + 0.42f);
+        batch.drawRect({atkX + halfLen * 0.1f, atkY - halfLen * 0.1f}, {iconW, halfLen * 1.2f}, swordColor, d + 0.42f);
         // Sword 2: top-right to bottom-left (mirrored)
-        batch.drawRect({cx - halfLen * 0.1f, cy - halfLen * 0.2f}, {halfLen * 1.4f, iconW}, swordColor, d + 0.42f);
-        batch.drawRect({cx - halfLen * 0.4f, cy - halfLen * 0.1f}, {iconW, halfLen * 1.2f}, swordColor, d + 0.42f);
+        batch.drawRect({atkX - halfLen * 0.1f, atkY - halfLen * 0.2f}, {halfLen * 1.4f, iconW}, swordColor, d + 0.42f);
+        batch.drawRect({atkX - halfLen * 0.4f, atkY - halfLen * 0.1f}, {iconW, halfLen * 1.2f}, swordColor, d + 0.42f);
     }
 
     // "Action" text below icon
@@ -228,7 +240,7 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
         Vec2 actionTs = sdf.measure(actionText, actionFontSize);
         Color actionTextColor = {0.30f, 0.20f, 0.10f, 0.95f};
         sdf.drawScreen(batch, actionText,
-            {cx - actionTs.x * 0.5f, cy + attackR * 0.25f},
+            {atkPos.x - actionTs.x * 0.5f, atkPos.y + attackR * 0.25f},
             actionFontSize, actionTextColor, d + 0.45f);
     }
 
@@ -248,16 +260,20 @@ void SkillArc::render(SpriteBatch& batch, SDFText& sdf) {
             puFontSize, puTextColor, d + 0.45f);
     }
 
-    // Page selector circles (4 dots above the skill arc)
+    // SlotArc — page selector dots (1,2,3,4) on their own C-arc
     {
         float pageDotR = 12.0f * s;
-        float pageDotSpacing = 30.0f * s;
-        // Position above the highest skill slot (arcRadius + slotSize/2 + gap)
-        float pageDotY = cy - (arcRadius * s + slotSize * s * 0.5f + 20.0f * s);
-        float pageDotStartX = cx - 1.5f * pageDotSpacing;
+        float saRad = slotArcRadius * s;
+        float saStartRad = slotArcStartDeg * DEG_TO_RAD;
+        float saEndRad   = slotArcEndDeg   * DEG_TO_RAD;
+        Vec2 saCenter{cx + slotArcOffset.x * s, cy + slotArcOffset.y * s};
+
         for (int i = 0; i < TOTAL_PAGES; ++i) {
-            float dotX = pageDotStartX + static_cast<float>(i) * pageDotSpacing;
-            Vec2 dotCenter{dotX, pageDotY};
+            float t = (TOTAL_PAGES > 1) ? static_cast<float>(i) / static_cast<float>(TOTAL_PAGES - 1) : 0.5f;
+            float angle = saStartRad + t * (saEndRad - saStartRad);
+            Vec2 dotCenter{saCenter.x + std::cos(angle) * saRad,
+                           saCenter.y + std::sin(angle) * saRad};
+
             if (i == currentPage) {
                 drawMetallicCircle(batch, dotCenter, pageDotR, d + 0.35f);
             } else {

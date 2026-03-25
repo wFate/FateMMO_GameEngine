@@ -451,7 +451,11 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         arc->slotCount        = j.value("slotCount", 5);
         arc->startAngleDeg    = j.value("startAngleDeg", 290.0f);
         arc->endAngleDeg      = j.value("endAngleDeg", 190.0f);
-        // Individual button offsets (relative to widget bottom-center, in unscaled pixels)
+        if (j.contains("skillArcOffset")) {
+            auto& sao = j["skillArcOffset"];
+            arc->skillArcOffset = {sao[0].get<float>(), sao[1].get<float>()};
+        }
+        // Individual button offsets (relative to widget center, in unscaled pixels)
         if (j.contains("attackOffset")) {
             auto& ao = j["attackOffset"];
             arc->attackOffset = {ao[0].get<float>(), ao[1].get<float>()};
@@ -459,6 +463,14 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         if (j.contains("pickUpOffset")) {
             auto& po = j["pickUpOffset"];
             arc->pickUpOffset = {po[0].get<float>(), po[1].get<float>()};
+        }
+        // SlotArc (page selector arc)
+        arc->slotArcRadius   = j.value("slotArcRadius", 50.0f);
+        arc->slotArcStartDeg = j.value("slotArcStartDeg", 290.0f);
+        arc->slotArcEndDeg   = j.value("slotArcEndDeg", 190.0f);
+        if (j.contains("slotArcOffset")) {
+            auto& so = j["slotArcOffset"];
+            arc->slotArcOffset = {so[0].get<float>(), so[1].get<float>()};
         }
         node = std::move(arc);
     }

@@ -21,6 +21,7 @@
 #include "engine/ui/widgets/death_overlay.h"
 #include "engine/ui/widgets/player_info_block.h"
 #include "engine/ui/widgets/skill_arc.h"
+#include "engine/ui/widgets/fate_status_bar.h"
 #include "engine/ui/widgets/dpad.h"
 #include "engine/ui/widgets/menu_button_row.h"
 #include "engine/ui/widgets/chat_ticker.h"
@@ -227,12 +228,23 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
     else if (type == "skill_arc") {
         if (auto* w = dynamic_cast<const SkillArc*>(node)) {
             j["attackButtonSize"] = w->attackButtonSize;
+            j["pickUpButtonSize"] = w->pickUpButtonSize;
             j["slotSize"]         = w->slotSize;
             j["arcRadius"]        = w->arcRadius;
             j["slotCount"]        = w->slotCount;
             j["startAngleDeg"]    = w->startAngleDeg;
             j["endAngleDeg"]      = w->endAngleDeg;
+            j["skillArcOffset"]   = {w->skillArcOffset.x, w->skillArcOffset.y};
+            j["attackOffset"]     = {w->attackOffset.x, w->attackOffset.y};
+            j["pickUpOffset"]     = {w->pickUpOffset.x, w->pickUpOffset.y};
+            j["slotArcRadius"]    = w->slotArcRadius;
+            j["slotArcStartDeg"]  = w->slotArcStartDeg;
+            j["slotArcEndDeg"]    = w->slotArcEndDeg;
+            j["slotArcOffset"]    = {w->slotArcOffset.x, w->slotArcOffset.y};
         }
+    }
+    else if (type == "fate_status_bar") {
+        // No persistent properties — data is bound at runtime
     }
     else if (type == "dpad") {
         if (auto* w = dynamic_cast<const DPad*>(node)) {

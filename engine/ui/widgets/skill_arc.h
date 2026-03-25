@@ -30,21 +30,21 @@ public:
     float attackButtonSize = 80.0f;  // diameter of the attack button
     float pickUpButtonSize = 60.0f;  // diameter of the pick up button
     float slotSize         = 60.0f;  // diameter of each skill slot
-    float arcRadius        = 180.0f; // distance from arc origin to slot centers
+    float arcRadius        = 180.0f; // distance from skill arc center to slot centers
     int   slotCount        = 5;
     float startAngleDeg    = 290.0f; // arc start angle in degrees (0=right, CCW)
     float endAngleDeg      = 190.0f; // arc end angle in degrees
+    Vec2  skillArcOffset   = {0.0f, 0.0f}; // offset of skill arc center from widget center
 
-    // Individual button positions (pixels, relative to widget origin, scaled by layoutScale_)
-    // Widget origin = top-left of the widget rect
-    Vec2 attackOffset = {0.0f, 0.0f};  // offset from bottom-center of widget
-    Vec2 pickUpOffset = {-50.0f, -80.0f}; // offset from attack button center
+    // Individual button positions (pixels, relative to widget center, scaled by layoutScale_)
+    Vec2 attackOffset = {0.0f, 120.0f};  // offset from widget center
+    Vec2 pickUpOffset = {-50.0f, 40.0f}; // offset from arc origin (widget center)
 
     // SlotArc — the page selector (1,2,3,4) follows its own C-arc
     float slotArcRadius    = 50.0f;   // distance from slot arc center to page dots
     float slotArcStartDeg  = 290.0f;  // start angle (0=right, CCW)
     float slotArcEndDeg    = 190.0f;  // end angle
-    Vec2  slotArcOffset    = {0.0f, -160.0f}; // offset from attack button center
+    Vec2  slotArcOffset    = {0.0f, -40.0f}; // offset from arc origin (widget center)
 
     std::vector<SkillSlotData> slots;
 
