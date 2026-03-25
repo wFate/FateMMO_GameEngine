@@ -50,6 +50,8 @@ private:
     void drawAnchorEditor(UINode* node, UIManager& uiMgr);
     void drawStyleEditor(UINode* node, UIManager& uiMgr);
 
+    int hierarchyRowIdx_ = 0;  // for alternating row shading
+
     // Called after every editable ImGui widget to capture undo snapshots
     void checkUndoCapture(UIManager& uiMgr);
 };

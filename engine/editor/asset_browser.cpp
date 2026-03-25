@@ -61,6 +61,48 @@ static void drawCheckerboard(ImDrawList* dl, ImVec2 pos, float w, float h, int c
     }
 }
 
+// Draw a folder icon (simple filled shape with tab)
+static void drawFolderIcon(ImDrawList* dl, ImVec2 pos, float w, float h, ImU32 color, ImU32 tabColor) {
+    float tabW = w * 0.4f;
+    float tabH = h * 0.15f;
+    float rnd = 3.0f;
+    // Tab on top-left
+    dl->AddRectFilled(ImVec2(pos.x, pos.y), ImVec2(pos.x + tabW, pos.y + tabH + 2.0f), tabColor, rnd);
+    // Main body
+    dl->AddRectFilled(ImVec2(pos.x, pos.y + tabH), ImVec2(pos.x + w, pos.y + h), color, rnd);
+    // Subtle highlight line at top of body
+    dl->AddLine(ImVec2(pos.x + 1.0f, pos.y + tabH + 1.0f),
+                ImVec2(pos.x + w - 1.0f, pos.y + tabH + 1.0f),
+                IM_COL32(255, 255, 255, 30));
+}
+
+// Draw type badge centered in a card
+static void drawAssetCard(ImDrawList* dl, ImVec2 pos, float w, float h,
+                          ImVec4 typeColor, const char* icon, bool selected, bool hovered) {
+    float rnd = 4.0f;
+    // Card background
+    ImU32 bg = ImGui::ColorConvertFloat4ToU32(
+        ImVec4(typeColor.x * 0.2f, typeColor.y * 0.2f, typeColor.z * 0.2f, 1.0f));
+    dl->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + h), bg, rnd);
+
+    // Colored accent strip at top
+    ImU32 accent = ImGui::ColorConvertFloat4ToU32(
+        ImVec4(typeColor.x * 0.7f, typeColor.y * 0.7f, typeColor.z * 0.7f, 1.0f));
+    dl->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + 3.0f), accent, rnd, ImDrawFlags_RoundCornersTop);
+
+    // Type icon centered
+    ImVec2 textSz = ImGui::CalcTextSize(icon);
+    ImU32 iconCol = ImGui::ColorConvertFloat4ToU32(typeColor);
+    dl->AddText(ImVec2(pos.x + (w - textSz.x) * 0.5f, pos.y + (h - textSz.y) * 0.5f), iconCol, icon);
+
+    // Selection / hover borders
+    if (selected) {
+        dl->AddRect(pos, ImVec2(pos.x + w, pos.y + h), IM_COL32(74, 138, 219, 255), rnd, 0, 2.0f);
+    } else if (hovered) {
+        dl->AddRect(pos, ImVec2(pos.x + w, pos.y + h), IM_COL32(255, 255, 255, 50), rnd);
+    }
+}
+
 } // anonymous namespace
 
 namespace fate {
@@ -112,7 +154,7 @@ void AssetBrowser::scanDirectory(const std::string& relDir) {
         } else if (dirEntry.is_regular_file()) {
             e.extension = dirEntry.path().extension().string();
             std::transform(e.extension.begin(), e.extension.end(), e.extension.begin(), ::tolower);
-            e.type = classifyExtension(e.extension);
+            e.type = classifyFile(e.name, e.extension);
             e.isDirectory = false;
             currentEntries_.push_back(std::move(e));
         }
@@ -137,13 +179,17 @@ void AssetBrowser::navigateTo(const std::string& relDir) {
 // Type Classification
 // ============================================================================
 
-AssetBrowser::AssetType AssetBrowser::classifyExtension(const std::string& ext) const {
+AssetBrowser::AssetType AssetBrowser::classifyFile(const std::string& name, const std::string& ext) const {
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tga")
         return AssetType::Sprite;
     if (ext == ".lua" || ext == ".cpp" || ext == ".h" || ext == ".hpp" || ext == ".c")
         return AssetType::Script;
-    if (ext == ".json")
+    if (ext == ".json") {
+        // .meta.json files are animation metadata, not scenes
+        if (name.size() > 10 && name.substr(name.size() - 10) == ".meta.json")
+            return AssetType::Animation;
         return AssetType::Scene;
+    }
     if (ext == ".vert" || ext == ".frag" || ext == ".glsl")
         return AssetType::Shader;
     if (ext == ".ogg" || ext == ".wav" || ext == ".mp3" || ext == ".flac")
@@ -274,10 +320,11 @@ void AssetBrowser::drawSearchBar() {
 
 void AssetBrowser::drawGrid(World* world, Camera* camera) {
     float thumbF = (float)thumbnailSize_;
-    float padding = 8.0f;
-    float cellSize = thumbF + padding;
+    float labelH = ImGui::GetTextLineHeightWithSpacing() + 2.0f;
+    float cellW = thumbF + 12.0f;
+    float cellH = thumbF + labelH + 6.0f;
     float panelWidth = ImGui::GetContentRegionAvail().x;
-    int columns = (int)(panelWidth / cellSize);
+    int columns = (int)(panelWidth / cellW);
     if (columns < 1) columns = 1;
 
     // Filter entries by search text
@@ -285,6 +332,7 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
     std::transform(searchStr.begin(), searchStr.end(), searchStr.begin(), ::tolower);
 
     ImGui::BeginChild("AssetGrid", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
 
     int col = 0;
     for (auto& entry : currentEntries_) {
@@ -295,105 +343,90 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
             if (nameLower.find(searchStr) == std::string::npos) continue;
         }
 
+        bool isSel = (selectedPath_ == entry.fullPath);
         ImGui::PushID(entry.fullPath.c_str());
         ImGui::BeginGroup();
 
-        float itemW = thumbF;
-        float itemH = thumbF;
-
+        ImVec2 cardPos = ImGui::GetCursorScreenPos();
         int typeInt = (int)entry.type;
 
-        if (entry.isDirectory) {
-            // Directory: colored folder button
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.25f, 0.25f, 0.35f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.35f, 0.35f, 0.50f, 1.0f));
-
-            char btnLabel[128];
-            snprintf(btnLabel, sizeof(btnLabel), "DIR\n%s##dir", entry.name.c_str());
-            if (ImGui::Button(btnLabel, ImVec2(itemW, itemH))) {
-                // Single click selects
+        // Invisible button for the whole card area (hit-test + interactions)
+        char btnId[128];
+        snprintf(btnId, sizeof(btnId), "##card_%s", entry.name.c_str());
+        if (ImGui::InvisibleButton(btnId, ImVec2(thumbF, thumbF))) {
+            selectedPath_ = entry.fullPath;
+            if (!entry.isDirectory) {
+                isDraggingAsset_ = true;
+                draggedAssetPath_ = entry.relativePath;
             }
-            ImGui::PopStyleColor(2);
+        }
+        bool isHov = ImGui::IsItemHovered();
 
-            // Double-click navigates into directory
-            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+        // Double-click actions
+        if (isHov && ImGui::IsMouseDoubleClicked(0)) {
+            if (entry.isDirectory) {
                 navigateTo(entry.relativePath);
                 ImGui::EndGroup();
                 ImGui::PopID();
                 ImGui::EndChild();
-                return;  // entries changed, bail out
+                return;
+            } else if (entry.type == AssetType::Animation) {
+                if (onOpenAnimation) onOpenAnimation(entry.fullPath);
+            }
+        }
+
+        // Draw the card content over the invisible button
+        if (entry.isDirectory) {
+            // Folder icon
+            float pad = thumbF * 0.15f;
+            float iconW = thumbF - pad * 2;
+            float iconH = thumbF - pad * 2 - 4.0f;
+            ImVec2 iconPos(cardPos.x + pad, cardPos.y + pad + 2.0f);
+            ImU32 folderCol = isSel ? IM_COL32(90, 160, 230, 255) : IM_COL32(200, 180, 80, 255);
+            ImU32 tabCol = isSel ? IM_COL32(70, 130, 200, 255) : IM_COL32(170, 150, 60, 255);
+            drawFolderIcon(dl, iconPos, iconW, iconH, folderCol, tabCol);
+
+            if (isHov) {
+                dl->AddRect(cardPos, ImVec2(cardPos.x + thumbF, cardPos.y + thumbF),
+                            IM_COL32(255, 255, 255, 50), 4.0f);
+            }
+            if (isSel) {
+                dl->AddRect(cardPos, ImVec2(cardPos.x + thumbF, cardPos.y + thumbF),
+                            IM_COL32(74, 138, 219, 255), 4.0f, 0, 2.0f);
             }
         } else if (entry.type == AssetType::Sprite) {
-            // Sprite: thumbnail
+            // Sprite thumbnail
             auto thumb = getThumbnail(entry);
             if (thumb) {
+                drawCheckerboard(dl, cardPos, thumbF, thumbF);
                 ImTextureID texId = (ImTextureID)(intptr_t)thumb->id();
-                bool selected = (draggedAssetPath_ == entry.relativePath);
-                if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.6f, 1.0f, 0.7f));
-
-                ImVec2 thumbPos = ImGui::GetCursorScreenPos();
-                drawCheckerboard(ImGui::GetWindowDrawList(), thumbPos, itemW - 8, itemH - 8);
-
-                char btnId[128];
-                snprintf(btnId, sizeof(btnId), "##thumb_%s", entry.name.c_str());
-                if (ImGui::ImageButton(btnId, texId, ImVec2(itemW - 8, itemH - 8),
-                                       ImVec2(0, 1), ImVec2(1, 0))) {
-                    isDraggingAsset_ = true;
-                    draggedAssetPath_ = entry.relativePath;
-                }
-                if (selected) ImGui::PopStyleColor();
-
-                if (draggedAssetPath_ == entry.relativePath && !entry.isDirectory) {
-                    ImVec2 min = ImGui::GetItemRectMin();
-                    ImVec2 max = ImGui::GetItemRectMax();
-                    ImGui::GetWindowDrawList()->AddRect(min, max, IM_COL32(74, 138, 219, 255), 2.0f, 0, 2.0f);
-                }
+                dl->AddImage(texId, cardPos, ImVec2(cardPos.x + thumbF, cardPos.y + thumbF),
+                             ImVec2(0, 1), ImVec2(1, 0));
             } else {
-                // Fallback if texture failed to load
-                ImVec4 tc = colorForType(typeInt);
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(tc.x * 0.3f, tc.y * 0.3f, tc.z * 0.3f, 1.0f));
-                char btnLabel[128];
-                snprintf(btnLabel, sizeof(btnLabel), "%s##file", iconForType(typeInt));
-                if (ImGui::Button(btnLabel, ImVec2(itemW, itemH))) {
-                    isDraggingAsset_ = true;
-                    draggedAssetPath_ = entry.relativePath;
-                }
-                ImGui::PopStyleColor();
+                drawAssetCard(dl, cardPos, thumbF, thumbF, colorForType(typeInt),
+                              iconForType(typeInt), isSel, isHov);
             }
+            if (isSel) {
+                dl->AddRect(cardPos, ImVec2(cardPos.x + thumbF, cardPos.y + thumbF),
+                            IM_COL32(74, 138, 219, 255), 4.0f, 0, 2.0f);
+            } else if (isHov) {
+                dl->AddRect(cardPos, ImVec2(cardPos.x + thumbF, cardPos.y + thumbF),
+                            IM_COL32(255, 255, 255, 50), 4.0f);
+            }
+        } else {
+            // File type card
+            drawAssetCard(dl, cardPos, thumbF, thumbF, colorForType(typeInt),
+                          iconForType(typeInt), isSel, isHov);
+        }
 
-            // Drag source for sprites
+        // Drag source for sprites
+        if (entry.type == AssetType::Sprite && !entry.isDirectory) {
             if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                 const char* path = entry.fullPath.c_str();
                 ImGui::SetDragDropPayload("ASSET", path, strlen(path) + 1);
                 ImGui::Text("%s", entry.name.c_str());
                 ImGui::EndDragDropSource();
             }
-        } else {
-            // Other file types: colored placeholder button
-            ImVec4 typeColor = colorForType(typeInt);
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(typeColor.x * 0.3f, typeColor.y * 0.3f, typeColor.z * 0.3f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(typeColor.x * 0.5f, typeColor.y * 0.5f, typeColor.z * 0.5f, 1.0f));
-
-            char btnLabel[128];
-            snprintf(btnLabel, sizeof(btnLabel), "%s##file", iconForType(typeInt));
-            if (ImGui::Button(btnLabel, ImVec2(itemW, itemH))) {
-                LOG_INFO("AssetBrowser", "Selected: %s", entry.fullPath.c_str());
-            }
-
-            // Double-click opens animation files in the animation editor
-            if (entry.type == AssetType::Animation && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                if (onOpenAnimation) {
-                    onOpenAnimation(entry.fullPath);
-                }
-            }
-
-            ImGui::PopStyleColor(2);
-        }
-
-        if (ImGui::IsItemHovered() && !entry.isDirectory) {
-            ImVec2 min = ImGui::GetItemRectMin();
-            ImVec2 max = ImGui::GetItemRectMax();
-            ImGui::GetWindowDrawList()->AddRectFilled(min, max, IM_COL32(255, 255, 255, 15));
         }
 
         // Right-click context menu
@@ -436,19 +469,25 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
         }
 
         // Tooltip on hover
-        if (ImGui::IsItemHovered()) {
+        if (isHov) {
             ImGui::SetTooltip("%s\n%s", entry.fullPath.c_str(),
                 entry.isDirectory ? "(directory)" : entry.extension.c_str());
         }
 
-        // Filename label (truncated)
+        // Filename label (truncated, centered)
         std::string displayName = entry.name;
-        float maxLabelWidth = itemW + 4.0f;
+        float maxLabelWidth = thumbF + 4.0f;
         ImVec2 textSize = ImGui::CalcTextSize(displayName.c_str());
-        if (textSize.x > maxLabelWidth && displayName.size() > 8) {
-            displayName = displayName.substr(0, 7) + "..";
+        if (textSize.x > maxLabelWidth && displayName.size() > 10) {
+            displayName = displayName.substr(0, 9) + "..";
+            textSize = ImGui::CalcTextSize(displayName.c_str());
         }
-        ImGui::TextWrapped("%s", displayName.c_str());
+        float labelX = (thumbF - textSize.x) * 0.5f;
+        if (labelX < 0) labelX = 0;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + labelX);
+        if (isSel) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.7f, 1.0f, 1.0f));
+        ImGui::TextUnformatted(displayName.c_str());
+        if (isSel) ImGui::PopStyleColor();
 
         ImGui::EndGroup();
 
@@ -462,7 +501,11 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
         ImGui::PopID();
     }
 
+    // Footer: selected file path
     ImGui::EndChild();
+    if (!selectedPath_.empty()) {
+        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", selectedPath_.c_str());
+    }
 }
 
 } // namespace fate

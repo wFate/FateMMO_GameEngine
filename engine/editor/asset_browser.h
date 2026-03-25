@@ -56,7 +56,8 @@ private:
     // Grid layout
     int thumbnailSize_ = 64;
 
-    // Drag-and-drop placement
+    // Selection & drag-and-drop placement
+    std::string selectedPath_;
     bool isDraggingAsset_ = false;
     std::string draggedAssetPath_;
 
@@ -68,7 +69,7 @@ private:
     void drawBreadcrumb();
     void drawSearchBar();
     void drawGrid(World* world, Camera* camera);
-    AssetType classifyExtension(const std::string& ext) const;
+    AssetType classifyFile(const std::string& name, const std::string& ext) const;
     std::shared_ptr<Texture> getThumbnail(const Entry& entry);
     void navigateTo(const std::string& relDir);
 

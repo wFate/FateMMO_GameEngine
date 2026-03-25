@@ -19,6 +19,7 @@ public:
     SkillArc(const std::string& id);
     void render(SpriteBatch& batch, SDFText& text) override;
     bool onPress(const Vec2& localPos) override;
+    bool hitTest(const Vec2& point) const override;
 
     // Compute slot positions relative to the arc center (0, 0).
     std::vector<Vec2> computeSlotPositions() const;

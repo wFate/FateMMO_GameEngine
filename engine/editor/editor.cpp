@@ -422,8 +422,13 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
             const Rect& r = selNode->computedRect();
             float vpX = viewportPos_.x;
             float vpY = viewportPos_.y;
-            ImVec2 tl(vpX + r.x, vpY + r.y);
-            ImVec2 br(vpX + r.x + r.w, vpY + r.y + r.h);
+            // Scale from FBO resolution to displayed viewport size
+            float fboW = (float)viewportFbo_.width();
+            float fboH = (float)viewportFbo_.height();
+            float sx = (fboW > 0) ? viewportSize_.x / fboW : 1.0f;
+            float sy = (fboH > 0) ? viewportSize_.y / fboH : 1.0f;
+            ImVec2 tl(vpX + r.x * sx, vpY + r.y * sy);
+            ImVec2 br(vpX + (r.x + r.w) * sx, vpY + (r.y + r.h) * sy);
             auto* dl = ImGui::GetForegroundDrawList();
             dl->AddRect(tl, br, IM_COL32(0, 255, 200, 200), 0.0f, 0, 2.0f);
             // Corner handles (small squares at corners)

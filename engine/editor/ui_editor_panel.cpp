@@ -23,6 +23,25 @@
 #include "engine/ui/widgets/inventory_panel.h"
 #include "engine/ui/widgets/status_panel.h"
 #include "engine/ui/widgets/skill_panel.h"
+#include "engine/ui/widgets/image_box.h"
+#include "engine/ui/widgets/buff_bar.h"
+#include "engine/ui/widgets/boss_hp_bar.h"
+#include "engine/ui/widgets/confirm_dialog.h"
+#include "engine/ui/widgets/notification_toast.h"
+#include "engine/ui/widgets/checkbox.h"
+#include "engine/ui/widgets/login_screen.h"
+#include "engine/ui/widgets/party_frame.h"
+#include "engine/ui/widgets/chat_panel.h"
+#include "engine/ui/widgets/death_overlay.h"
+#include "engine/ui/widgets/fate_status_bar.h"
+#include "engine/ui/widgets/character_select_screen.h"
+#include "engine/ui/widgets/character_creation_screen.h"
+#include "engine/ui/widgets/guild_panel.h"
+#include "engine/ui/widgets/npc_dialogue_panel.h"
+#include "engine/ui/widgets/shop_panel.h"
+#include "engine/ui/widgets/bank_panel.h"
+#include "engine/ui/widgets/teleporter_panel.h"
+#include "engine/ui/widgets/trade_window.h"
 #include <imgui.h>
 #include <cstdio>
 
@@ -130,6 +149,97 @@ void UIEditorPanel::draw(UIManager& uiMgr) {
 }
 
 // ============================================================================
+// Hierarchy helpers — type badge colors & icons (Unity-style)
+// ============================================================================
+
+namespace {
+
+struct TypeBadge { ImVec4 color; const char* icon; };
+
+TypeBadge badgeForType(const std::string& type) {
+    if (type == "panel")              return {{0.30f, 0.55f, 0.80f, 1.0f}, "PNL"};
+    if (type == "label")              return {{0.65f, 0.65f, 0.45f, 1.0f}, "LBL"};
+    if (type == "button")             return {{0.45f, 0.70f, 0.45f, 1.0f}, "BTN"};
+    if (type == "text_input")         return {{0.55f, 0.55f, 0.75f, 1.0f}, "TXT"};
+    if (type == "progress_bar")       return {{0.70f, 0.50f, 0.30f, 1.0f}, "BAR"};
+    if (type == "image_box")          return {{0.50f, 0.70f, 0.50f, 1.0f}, "IMG"};
+    if (type == "slot" || type == "slot_grid") return {{0.60f, 0.50f, 0.65f, 1.0f}, "SLT"};
+    if (type == "scroll_view")        return {{0.45f, 0.60f, 0.70f, 1.0f}, "SCR"};
+    if (type == "window")             return {{0.40f, 0.60f, 0.80f, 1.0f}, "WIN"};
+    if (type == "tab_container")      return {{0.55f, 0.55f, 0.70f, 1.0f}, "TAB"};
+    if (type == "checkbox")           return {{0.50f, 0.70f, 0.55f, 1.0f}, "CHK"};
+    if (type == "skill_arc")          return {{0.75f, 0.55f, 0.40f, 1.0f}, "ARC"};
+    if (type == "dpad")               return {{0.65f, 0.55f, 0.35f, 1.0f}, "PAD"};
+    if (type == "player_info_block")  return {{0.40f, 0.65f, 0.65f, 1.0f}, "PLR"};
+    if (type == "target_frame")       return {{0.75f, 0.40f, 0.40f, 1.0f}, "TGT"};
+    if (type == "exp_bar")            return {{0.60f, 0.60f, 0.30f, 1.0f}, "EXP"};
+    if (type == "buff_bar")           return {{0.50f, 0.65f, 0.50f, 1.0f}, "BUF"};
+    if (type == "boss_hp_bar")        return {{0.80f, 0.35f, 0.35f, 1.0f}, "BOS"};
+    if (type == "fate_status_bar")    return {{0.50f, 0.65f, 0.75f, 1.0f}, "STS"};
+    if (type == "chat_panel")         return {{0.55f, 0.60f, 0.45f, 1.0f}, "CHT"};
+    if (type == "chat_ticker")        return {{0.50f, 0.55f, 0.45f, 1.0f}, "TKR"};
+    if (type == "inventory_panel")    return {{0.60f, 0.50f, 0.65f, 1.0f}, "INV"};
+    if (type == "skill_panel")        return {{0.70f, 0.50f, 0.40f, 1.0f}, "SKL"};
+    if (type == "status_panel")       return {{0.40f, 0.65f, 0.65f, 1.0f}, "STA"};
+    if (type == "shop_panel")         return {{0.65f, 0.60f, 0.35f, 1.0f}, "SHP"};
+    if (type == "bank_panel")         return {{0.55f, 0.60f, 0.40f, 1.0f}, "BNK"};
+    if (type == "trade_window")       return {{0.60f, 0.55f, 0.45f, 1.0f}, "TRD"};
+    if (type == "guild_panel")        return {{0.45f, 0.55f, 0.70f, 1.0f}, "GLD"};
+    if (type == "party_frame")        return {{0.45f, 0.65f, 0.55f, 1.0f}, "PTY"};
+    if (type == "npc_dialogue_panel") return {{0.55f, 0.55f, 0.60f, 1.0f}, "NPC"};
+    if (type == "teleporter_panel")   return {{0.50f, 0.60f, 0.70f, 1.0f}, "TEL"};
+    if (type == "confirm_dialog")     return {{0.70f, 0.50f, 0.50f, 1.0f}, "DLG"};
+    if (type == "notification_toast") return {{0.65f, 0.55f, 0.40f, 1.0f}, "TST"};
+    if (type == "login_screen")       return {{0.50f, 0.60f, 0.70f, 1.0f}, "LOG"};
+    if (type == "death_overlay")      return {{0.75f, 0.35f, 0.35f, 1.0f}, "DTH"};
+    if (type == "left_sidebar")       return {{0.45f, 0.55f, 0.65f, 1.0f}, "BAR"};
+    if (type == "menu_button_row")    return {{0.50f, 0.55f, 0.55f, 1.0f}, "MNU"};
+    if (type == "character_select_screen")   return {{0.50f, 0.60f, 0.70f, 1.0f}, "SEL"};
+    if (type == "character_creation_screen") return {{0.50f, 0.60f, 0.70f, 1.0f}, "CRT"};
+    return {{0.50f, 0.50f, 0.50f, 1.0f}, "???"};
+}
+
+// Draw alternating row background across the full window width
+void drawRowBackground(int rowIdx, bool isSelected) {
+    if (isSelected) {
+        ImVec2 min = ImGui::GetCursorScreenPos();
+        min.y -= ImGui::GetStyle().ItemSpacing.y * 0.5f;
+        float h = ImGui::GetTextLineHeightWithSpacing();
+        float w = ImGui::GetWindowWidth();
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            min, ImVec2(min.x + w, min.y + h),
+            IM_COL32(51, 102, 170, 80));
+    } else if (rowIdx % 2 == 1) {
+        ImVec2 min = ImGui::GetCursorScreenPos();
+        min.y -= ImGui::GetStyle().ItemSpacing.y * 0.5f;
+        float h = ImGui::GetTextLineHeightWithSpacing();
+        float w = ImGui::GetWindowWidth();
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            min, ImVec2(min.x + w, min.y + h),
+            IM_COL32(255, 255, 255, 8));
+    }
+}
+
+// Draw the small colored type badge
+void drawTypeBadge(const TypeBadge& badge) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    float sz = ImGui::GetTextLineHeight();
+    float pad = 1.0f;
+    ImU32 bg = ImGui::ColorConvertFloat4ToU32(
+        ImVec4(badge.color.x * 0.4f, badge.color.y * 0.4f, badge.color.z * 0.4f, 1.0f));
+    ImU32 fg = ImGui::ColorConvertFloat4ToU32(badge.color);
+    dl->AddRectFilled(ImVec2(pos.x, pos.y + pad),
+                      ImVec2(pos.x + sz, pos.y + sz - pad), bg, 3.0f);
+    float textW = ImGui::CalcTextSize(badge.icon).x;
+    dl->AddText(ImVec2(pos.x + (sz - textW) * 0.5f, pos.y + pad), fg, badge.icon);
+    ImGui::Dummy(ImVec2(sz + 4.0f, sz));
+    ImGui::SameLine();
+}
+
+} // anonymous namespace
+
+// ============================================================================
 // Hierarchy tree window
 // ============================================================================
 
@@ -140,6 +250,8 @@ void UIEditorPanel::drawHierarchy(UIManager& uiMgr) {
         return;
     }
 
+    hierarchyRowIdx_ = 0;
+
     auto ids = uiMgr.screenIds();
     if (ids.empty()) {
         ImGui::TextDisabled("No UI screens loaded");
@@ -149,25 +261,62 @@ void UIEditorPanel::drawHierarchy(UIManager& uiMgr) {
         auto* root = uiMgr.getScreen(id);
         if (!root) continue;
 
-        if (ImGui::TreeNodeEx(id.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        // Screen header — distinct from child nodes
+        drawRowBackground(hierarchyRowIdx_++, false);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.75f, 0.45f, 1.0f));
+        bool opened = ImGui::TreeNodeEx(id.c_str(), ImGuiTreeNodeFlags_DefaultOpen
+            | ImGuiTreeNodeFlags_SpanAvailWidth);
+        ImGui::PopStyleColor();
+
+        if (opened) {
             drawNodeTree(root, id);
             ImGui::TreePop();
         }
+    }
+
+    // Escape to deselect
+    if (selectedNode_ && ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+        selectedNode_ = nullptr;
+        selectedNodeId_.clear();
+        selectedScreenId_.clear();
     }
 
     ImGui::End();
 }
 
 void UIEditorPanel::drawNodeTree(UINode* node, const std::string& screenId) {
+    bool isSelected = (node == selectedNode_);
+    drawRowBackground(hierarchyRowIdx_++, isSelected);
+
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-    if (node == selectedNode_) flags |= ImGuiTreeNodeFlags_Selected;
+    if (isSelected) flags |= ImGuiTreeNodeFlags_Selected;
     if (node->childCount() == 0) flags |= ImGuiTreeNodeFlags_Leaf;
 
-    char label[256];
-    snprintf(label, sizeof(label), "%s: %s", node->type().c_str(), node->id().c_str());
-
     ImGui::PushID(node);
-    bool opened = ImGui::TreeNodeEx(label, flags);
+
+    // Visibility toggle (eye icon)
+    bool vis = node->visibleSelf();
+    ImGui::PushStyleColor(ImGuiCol_Text, vis
+        ? ImVec4(0.7f, 0.7f, 0.7f, 1.0f) : ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+    char eyeLabel[32];
+    snprintf(eyeLabel, sizeof(eyeLabel), "%s##eye", vis ? "o" : "-");
+    if (ImGui::SmallButton(eyeLabel)) {
+        node->setVisible(!vis);
+    }
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+
+    // Type badge
+    TypeBadge badge = badgeForType(node->type());
+    drawTypeBadge(badge);
+
+    // Dim hidden nodes
+    if (!vis) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.4f, 1.0f));
+
+    // Show just the ID as label — type is conveyed by the badge
+    bool opened = ImGui::TreeNodeEx(node->id().c_str(), flags);
+
+    if (!vis) ImGui::PopStyleColor();
 
     if (ImGui::IsItemClicked()) {
         selectedNode_ = node;
@@ -189,6 +338,7 @@ void UIEditorPanel::drawNodeTree(UINode* node, const std::string& screenId) {
             std::string childId = "new_button_" + std::to_string(nextChildId_++);
             node->addChild(std::make_unique<Button>(childId));
         }
+        ImGui::Separator();
         if (ImGui::MenuItem("Delete") && node->parent()) {
             if (node == selectedNode_) { selectedNode_ = nullptr; selectedNodeId_.clear(); }
             node->parent()->removeChild(node->id());
@@ -481,6 +631,323 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::Text("  [%zu] %s Lv%d/%d %s", i, sk.name.c_str(),
                          sk.currentLevel, sk.maxLevel, sk.unlocked ? "" : "(locked)");
         }
+    }
+    else if (auto* img = dynamic_cast<ImageBox*>(selectedNode_)) {
+        ImGui::SeparatorText("ImageBox");
+        char texBuf[256] = {};
+        snprintf(texBuf, sizeof(texBuf), "%s", img->textureKey.c_str());
+        if (ImGui::InputText("Texture Key", texBuf, sizeof(texBuf))) {
+            img->textureKey = texBuf;
+        }
+        checkUndoCapture(uiMgr);
+        const char* fitNames[] = {"Stretch", "Fit"};
+        int fitIdx = static_cast<int>(img->fitMode);
+        if (ImGui::Combo("Fit Mode", &fitIdx, fitNames, 2)) {
+            img->fitMode = static_cast<ImageFitMode>(fitIdx);
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Tint", &img->tint.r); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Source X (UV)", &img->sourceRect.x, 0.01f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Source Y (UV)", &img->sourceRect.y, 0.01f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Source W (UV)", &img->sourceRect.w, 0.01f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Source H (UV)", &img->sourceRect.h, 0.01f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
+    }
+    else if (auto* bb = dynamic_cast<BuffBar*>(selectedNode_)) {
+        ImGui::SeparatorText("BuffBar");
+        ImGui::DragFloat("Icon Size##bb", &bb->iconSize, 1.0f, 8.0f, 64.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Spacing##bb", &bb->spacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+        ImGui::DragInt("Max Visible", &bb->maxVisible, 1.0f, 1, 30); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Active Buffs: %zu", bb->buffs.size());
+    }
+    else if (auto* bhp = dynamic_cast<BossHPBar*>(selectedNode_)) {
+        ImGui::SeparatorText("BossHPBar");
+        ImGui::DragFloat("Bar Height##bhp", &bhp->barHeight, 1.0f, 8.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Bar Padding##bhp", &bhp->barPadding, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Boss: %s", bhp->bossName.c_str());
+        ImGui::Text("HP: %d / %d", bhp->currentHP, bhp->maxHP);
+    }
+    else if (auto* cd = dynamic_cast<ConfirmDialog*>(selectedNode_)) {
+        ImGui::SeparatorText("ConfirmDialog");
+        char msgBuf[512] = {};
+        snprintf(msgBuf, sizeof(msgBuf), "%s", cd->message.c_str());
+        if (ImGui::InputText("Message##cd", msgBuf, sizeof(msgBuf))) {
+            cd->message = msgBuf;
+        }
+        checkUndoCapture(uiMgr);
+        char confBuf[128] = {};
+        snprintf(confBuf, sizeof(confBuf), "%s", cd->confirmText.c_str());
+        if (ImGui::InputText("Confirm Text", confBuf, sizeof(confBuf))) {
+            cd->confirmText = confBuf;
+        }
+        checkUndoCapture(uiMgr);
+        char canBuf[128] = {};
+        snprintf(canBuf, sizeof(canBuf), "%s", cd->cancelText.c_str());
+        if (ImGui::InputText("Cancel Text", canBuf, sizeof(canBuf))) {
+            cd->cancelText = canBuf;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Button Width##cd", &cd->buttonWidth, 1.0f, 40.0f, 300.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Button Height##cd", &cd->buttonHeight, 1.0f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Button Spacing##cd", &cd->buttonSpacing, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+    }
+    else if (auto* nt = dynamic_cast<NotificationToast*>(selectedNode_)) {
+        ImGui::SeparatorText("NotificationToast");
+        ImGui::DragFloat("Toast Height", &nt->toastHeight, 1.0f, 16.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Toast Spacing", &nt->toastSpacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Fade In Time", &nt->fadeInTime, 0.05f, 0.0f, 2.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Fade Out Time", &nt->fadeOutTime, 0.05f, 0.0f, 2.0f); checkUndoCapture(uiMgr);
+        ImGui::DragInt("Max Toasts", &nt->maxToasts, 1.0f, 1, 20); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Active Toasts: %zu", nt->toasts().size());
+    }
+    else if (auto* cb = dynamic_cast<Checkbox*>(selectedNode_)) {
+        ImGui::SeparatorText("Checkbox");
+        char lblBuf[256] = {};
+        snprintf(lblBuf, sizeof(lblBuf), "%s", cb->label.c_str());
+        if (ImGui::InputText("Label##cb", lblBuf, sizeof(lblBuf))) {
+            cb->label = lblBuf;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Checked##cb", &cb->checked); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Box Size", &cb->boxSize, 1.0f, 8.0f, 40.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Spacing##cb", &cb->spacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+    }
+    else if (auto* ls = dynamic_cast<LoginScreen*>(selectedNode_)) {
+        ImGui::SeparatorText("LoginScreen");
+        char hostBuf[256] = {};
+        snprintf(hostBuf, sizeof(hostBuf), "%s", ls->serverHost.c_str());
+        if (ImGui::InputText("Server Host", hostBuf, sizeof(hostBuf))) {
+            ls->serverHost = hostBuf;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::DragInt("Server Port", &ls->serverPort, 1.0f, 1, 65535); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        const char* modeNames[] = {"Login", "Register"};
+        ImGui::Text("Mode: %s", modeNames[static_cast<int>(ls->mode)]);
+        ImGui::Text("Status: %s", ls->statusMessage.c_str());
+    }
+    else if (auto* pf = dynamic_cast<PartyFrame*>(selectedNode_)) {
+        ImGui::SeparatorText("PartyFrame");
+        ImGui::DragFloat("Card Width", &pf->cardWidth, 1.0f, 60.0f, 400.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Card Height", &pf->cardHeight, 1.0f, 20.0f, 120.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Card Spacing", &pf->cardSpacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Members: %zu", pf->members.size());
+        for (size_t i = 0; i < pf->members.size(); i++) {
+            auto& m = pf->members[i];
+            ImGui::Text("  [%zu] %s Lv%d HP:%.0f/%.0f%s", i, m.name.c_str(),
+                         m.level, m.hp, m.maxHp, m.isLeader ? " (Leader)" : "");
+        }
+    }
+    else if (auto* cp = dynamic_cast<ChatPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("ChatPanel");
+        ImGui::DragInt("Idle Lines", &cp->chatIdleLines, 1.0f, 0, 5); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Active Tab: %d", cp->activeTab);
+        ImGui::Text("Mode: %s", cp->fullPanelMode_ ? "Full Panel" : "Idle Overlay");
+        ImGui::Text("In Party: %s", cp->isInParty ? "Yes" : "No");
+        ImGui::Text("In Guild: %s", cp->isInGuild ? "Yes" : "No");
+    }
+    else if (auto* fsb = dynamic_cast<FateStatusBar*>(selectedNode_)) {
+        ImGui::SeparatorText("FateStatusBar — Layout");
+        ImGui::DragFloat("Top Bar Height", &fsb->topBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Portrait Radius", &fsb->portraitRadius, 1.0f, 5.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("HP/MP Bar Height", &fsb->barHeight, 1.0f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("HP Bar Color", &fsb->hpBarColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("MP Bar Color", &fsb->mpBarColor.r); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("Menu Button");
+        ImGui::Checkbox("Show Menu Button", &fsb->showMenuButton); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Menu Btn Radius", &fsb->menuBtnSize, 1.0f, 5.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Menu Btn Gap", &fsb->menuBtnGap, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("Chat Button");
+        ImGui::Checkbox("Show Chat Button", &fsb->showChatButton); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Chat Btn Radius", &fsb->chatBtnSize, 1.0f, 5.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Chat Btn Offset X", &fsb->chatBtnOffsetX, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("Coordinates");
+        ImGui::Checkbox("Show Coordinates", &fsb->showCoordinates); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Coord Font Size", &fsb->coordFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Coord Offset Y", &fsb->coordOffsetY, 0.5f, -20.0f, 40.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Coord Color", &fsb->coordColor.r); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("Font Sizes");
+        ImGui::DragFloat("Level Font", &fsb->levelFontSize, 0.5f, 6.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Label Font (HP/MP)", &fsb->labelFontSize, 0.5f, 6.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Number Font", &fsb->numberFontSize, 0.5f, 6.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Button Font", &fsb->buttonFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+    }
+    else if (auto* dov = dynamic_cast<DeathOverlay*>(selectedNode_)) {
+        ImGui::SeparatorText("DeathOverlay");
+        ImGui::Checkbox("Active##dov", &dov->active); checkUndoCapture(uiMgr);
+        int xpL = dov->xpLost;
+        if (ImGui::DragInt("XP Lost", &xpL, 1.0f, 0, 999999)) { dov->xpLost = xpL; }
+        checkUndoCapture(uiMgr);
+        int honL = dov->honorLost;
+        if (ImGui::DragInt("Honor Lost", &honL, 1.0f, 0, 999999)) { dov->honorLost = honL; }
+        checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Countdown##dov", &dov->countdown, 0.1f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Respawn Pending", &dov->respawnPending); checkUndoCapture(uiMgr);
+    }
+    else if (auto* css = dynamic_cast<CharacterSelectScreen*>(selectedNode_)) {
+        ImGui::SeparatorText("CharacterSelectScreen");
+        ImGui::DragFloat("Slot Circle Size", &css->slotCircleSize, 1.0f, 20.0f, 120.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Entry Button Width", &css->entryButtonWidth, 1.0f, 60.0f, 300.0f); checkUndoCapture(uiMgr);
+        ImGui::DragInt("Selected Slot##css", &css->selectedSlot, 1.0f, 0, 6); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Slots: %zu", css->slots.size());
+        for (size_t i = 0; i < css->slots.size(); i++) {
+            auto& s = css->slots[i];
+            if (s.empty)
+                ImGui::Text("  [%zu] (empty)", i);
+            else
+                ImGui::Text("  [%zu] %s %s Lv%d", i, s.name.c_str(), s.className.c_str(), s.level);
+        }
+    }
+    else if (auto* ccs = dynamic_cast<CharacterCreationScreen*>(selectedNode_)) {
+        ImGui::SeparatorText("CharacterCreationScreen");
+        const char* classNames[] = {"Warrior", "Magician", "Archer"};
+        if (ImGui::Combo("Class##ccs", &ccs->selectedClass, classNames, 3)) {}
+        checkUndoCapture(uiMgr);
+        const char* factionNames[] = {"Xyros", "Fenor", "Zethos", "Solis"};
+        if (ImGui::Combo("Faction##ccs", &ccs->selectedFaction, factionNames, 4)) {}
+        checkUndoCapture(uiMgr);
+        char nameBuf[32] = {};
+        snprintf(nameBuf, sizeof(nameBuf), "%s", ccs->characterName.c_str());
+        if (ImGui::InputText("Character Name##ccs", nameBuf, sizeof(nameBuf))) {
+            ccs->characterName = nameBuf;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Status: %s", ccs->statusMessage.c_str());
+    }
+    else if (auto* gp = dynamic_cast<GuildPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("GuildPanel");
+        char gnameBuf[128] = {};
+        snprintf(gnameBuf, sizeof(gnameBuf), "%s", gp->guildName.c_str());
+        if (ImGui::InputText("Guild Name", gnameBuf, sizeof(gnameBuf))) {
+            gp->guildName = gnameBuf;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::DragInt("Guild Level", &gp->guildLevel, 1.0f, 1, 50); checkUndoCapture(uiMgr);
+        ImGui::DragInt("Member Count", &gp->memberCount, 1.0f, 0, 100); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Members loaded: %zu", gp->members.size());
+        for (size_t i = 0; i < gp->members.size(); i++) {
+            auto& m = gp->members[i];
+            ImGui::Text("  %s Lv%d %s%s", m.name.c_str(), m.level,
+                         m.rank.c_str(), m.online ? " (on)" : "");
+        }
+    }
+    else if (auto* ndp = dynamic_cast<NpcDialoguePanel*>(selectedNode_)) {
+        ImGui::SeparatorText("NpcDialoguePanel");
+        char npcBuf[128] = {};
+        snprintf(npcBuf, sizeof(npcBuf), "%s", ndp->npcName.c_str());
+        if (ImGui::InputText("NPC Name", npcBuf, sizeof(npcBuf))) {
+            ndp->npcName = npcBuf;
+        }
+        checkUndoCapture(uiMgr);
+        char greetBuf[512] = {};
+        snprintf(greetBuf, sizeof(greetBuf), "%s", ndp->greeting.c_str());
+        if (ImGui::InputText("Greeting", greetBuf, sizeof(greetBuf))) {
+            ndp->greeting = greetBuf;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Has Shop##ndp", &ndp->hasShop); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Has Bank##ndp", &ndp->hasBank); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Has Teleporter##ndp", &ndp->hasTeleporter); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Has Guild##ndp", &ndp->hasGuild); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Has Dungeon##ndp", &ndp->hasDungeon); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Story Mode##ndp", &ndp->isStoryMode); checkUndoCapture(uiMgr);
+        if (ndp->isStoryMode) {
+            char storyBuf[512] = {};
+            snprintf(storyBuf, sizeof(storyBuf), "%s", ndp->storyText.c_str());
+            if (ImGui::InputText("Story Text", storyBuf, sizeof(storyBuf))) {
+                ndp->storyText = storyBuf;
+            }
+            checkUndoCapture(uiMgr);
+        }
+        ImGui::Separator();
+        ImGui::Text("Quests: %zu", ndp->quests.size());
+    }
+    else if (auto* sp2 = dynamic_cast<ShopPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("ShopPanel");
+        char shopBuf[128] = {};
+        snprintf(shopBuf, sizeof(shopBuf), "%s", sp2->shopName.c_str());
+        if (ImGui::InputText("Shop Name", shopBuf, sizeof(shopBuf))) {
+            sp2->shopName = shopBuf;
+        }
+        checkUndoCapture(uiMgr);
+        int64_t pg = sp2->playerGold;
+        int pgInt = static_cast<int>(pg);
+        if (ImGui::DragInt("Player Gold##shop", &pgInt, 1.0f, 0, 999999)) {
+            sp2->playerGold = pgInt;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Shop Items: %zu", sp2->shopItems.size());
+        ImGui::Text("NPC: %u", sp2->npcId);
+    }
+    else if (auto* bp = dynamic_cast<BankPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("BankPanel");
+        int64_t bg = bp->bankGold;
+        int bgInt = static_cast<int>(bg);
+        if (ImGui::DragInt("Bank Gold", &bgInt, 1.0f, 0, 999999)) {
+            bp->bankGold = bgInt;
+        }
+        checkUndoCapture(uiMgr);
+        int64_t pg2 = bp->playerGold;
+        int pgInt2 = static_cast<int>(pg2);
+        if (ImGui::DragInt("Player Gold##bank", &pgInt2, 1.0f, 0, 999999)) {
+            bp->playerGold = pgInt2;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Bank Items: %zu", bp->bankItems.size());
+        ImGui::Text("NPC: %u", bp->npcId);
+    }
+    else if (auto* tp = dynamic_cast<TeleporterPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("TeleporterPanel");
+        char titleBuf[128] = {};
+        snprintf(titleBuf, sizeof(titleBuf), "%s", tp->title.c_str());
+        if (ImGui::InputText("Title##tp", titleBuf, sizeof(titleBuf))) {
+            tp->title = titleBuf;
+        }
+        checkUndoCapture(uiMgr);
+        int64_t pg3 = tp->playerGold;
+        int pgInt3 = static_cast<int>(pg3);
+        if (ImGui::DragInt("Player Gold##tp", &pgInt3, 1.0f, 0, 999999)) {
+            tp->playerGold = pgInt3;
+        }
+        checkUndoCapture(uiMgr);
+        int plvl = tp->playerLevel;
+        if (ImGui::DragInt("Player Level##tp", &plvl, 1.0f, 1, 999)) {
+            tp->playerLevel = static_cast<uint16_t>(plvl);
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Destinations: %zu", tp->destinations.size());
+        for (size_t i = 0; i < tp->destinations.size(); i++) {
+            auto& d = tp->destinations[i];
+            ImGui::Text("  [%zu] %s (%s) %lld gold Lv%d", i, d.name.c_str(),
+                         d.sceneId.c_str(), (long long)d.cost, d.requiredLevel);
+        }
+    }
+    else if (auto* tw = dynamic_cast<TradeWindow*>(selectedNode_)) {
+        ImGui::SeparatorText("TradeWindow");
+        char pnameBuf[128] = {};
+        snprintf(pnameBuf, sizeof(pnameBuf), "%s", tw->partnerName.c_str());
+        if (ImGui::InputText("Partner Name", pnameBuf, sizeof(pnameBuf))) {
+            tw->partnerName = pnameBuf;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::DragInt("My Gold##tw", &tw->myGold, 1.0f, 0, 999999); checkUndoCapture(uiMgr);
+        ImGui::DragInt("Their Gold##tw", &tw->theirGold, 1.0f, 0, 999999); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("My Locked##tw", &tw->myLocked); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Their Locked##tw", &tw->theirLocked); checkUndoCapture(uiMgr);
     }
     else {
         ImGui::TextDisabled("(no widget-specific properties)");

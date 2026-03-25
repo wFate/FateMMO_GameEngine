@@ -360,7 +360,8 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     }
     else if (type == "scroll_view") {
         auto sv = std::make_unique<ScrollView>(id);
-        sv->scrollSpeed = j.value("scrollSpeed", 30.0f);
+        sv->scrollSpeed   = j.value("scrollSpeed", 30.0f);
+        sv->contentHeight = j.value("contentHeight", 0.0f);
         node = std::move(sv);
     }
     else if (type == "image_box") {
@@ -529,7 +530,8 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     }
     else if (type == "character_select_screen") {
         auto css = std::make_unique<CharacterSelectScreen>(id);
-        css->slotCircleSize = j.value("slotCircleSize", 52.0f);
+        css->slotCircleSize   = j.value("slotCircleSize", 52.0f);
+        css->entryButtonWidth = j.value("entryButtonWidth", 120.0f);
         node = std::move(css);
     }
     else if (type == "character_creation_screen") {
@@ -538,6 +540,7 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     }
     else if (type == "chat_panel") {
         auto cp = std::make_unique<ChatPanel>(id);
+        cp->chatIdleLines = j.value("chatIdleLines", 3);
         node = std::move(cp);
     }
     else if (type == "trade_window") {
@@ -546,8 +549,9 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     }
     else if (type == "party_frame") {
         auto pf = std::make_unique<PartyFrame>(id);
-        pf->cardWidth  = j.value("cardWidth",   170.0f);
-        pf->cardHeight = j.value("cardHeight",   48.0f);
+        pf->cardWidth   = j.value("cardWidth",   170.0f);
+        pf->cardHeight  = j.value("cardHeight",   48.0f);
+        pf->cardSpacing = j.value("cardSpacing",   4.0f);
         node = std::move(pf);
     }
     else if (type == "guild_panel") {
@@ -564,7 +568,9 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         node = std::make_unique<BankPanel>(id);
     }
     else if (type == "teleporter_panel") {
-        node = std::make_unique<TeleporterPanel>(id);
+        auto tp = std::make_unique<TeleporterPanel>(id);
+        tp->title = j.value("title", std::string("Teleporter"));
+        node = std::move(tp);
     }
     else if (type == "buff_bar") {
         auto bb = std::make_unique<BuffBar>(id);
@@ -617,7 +623,36 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         node = std::make_unique<DeathOverlay>(id);
     }
     else if (type == "fate_status_bar") {
-        node = std::make_unique<FateStatusBar>(id);
+        auto fsb = std::make_unique<FateStatusBar>(id);
+        fsb->topBarHeight   = j.value("topBarHeight",   40.0f);
+        fsb->portraitRadius = j.value("portraitRadius",  20.0f);
+        fsb->barHeight      = j.value("barHeight",      22.0f);
+        fsb->menuBtnSize    = j.value("menuBtnSize",    21.0f);
+        fsb->chatBtnSize    = j.value("chatBtnSize",    21.0f);
+        fsb->chatBtnOffsetX = j.value("chatBtnOffsetX",  8.0f);
+        fsb->menuBtnGap     = j.value("menuBtnGap",      6.0f);
+        fsb->coordOffsetY   = j.value("coordOffsetY",    3.0f);
+        fsb->levelFontSize  = j.value("levelFontSize",  26.0f);
+        fsb->labelFontSize  = j.value("labelFontSize",  22.0f);
+        fsb->numberFontSize = j.value("numberFontSize", 28.0f);
+        fsb->coordFontSize  = j.value("coordFontSize",  11.0f);
+        fsb->buttonFontSize = j.value("buttonFontSize",  9.0f);
+        if (j.contains("hpBarColor") && j["hpBarColor"].is_array() && j["hpBarColor"].size() == 4) {
+            auto& c = j["hpBarColor"];
+            fsb->hpBarColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
+        }
+        if (j.contains("mpBarColor") && j["mpBarColor"].is_array() && j["mpBarColor"].size() == 4) {
+            auto& c = j["mpBarColor"];
+            fsb->mpBarColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
+        }
+        if (j.contains("coordColor") && j["coordColor"].is_array() && j["coordColor"].size() == 4) {
+            auto& c = j["coordColor"];
+            fsb->coordColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
+        }
+        fsb->showCoordinates = j.value("showCoordinates", true);
+        fsb->showMenuButton  = j.value("showMenuButton",  true);
+        fsb->showChatButton  = j.value("showChatButton",  true);
+        node = std::move(fsb);
     }
     else {
         node = std::make_unique<UINode>(id, type);

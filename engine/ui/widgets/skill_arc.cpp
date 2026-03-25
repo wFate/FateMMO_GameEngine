@@ -4,6 +4,7 @@
 #include "engine/render/sdf_text.h"
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
 
 namespace fate {
 
@@ -82,6 +83,24 @@ int SkillArc::hitSlotIndex(const Vec2& localPos) const {
     }
 
     return -99; // miss
+}
+
+bool SkillArc::hitTest(const Vec2& point) const {
+    if (!visible_) return false;
+    // Expand hit area to cover all rendered elements (arc slots scale with layoutScale_
+    // and can overflow the anchor rect on high-res screens).
+    float s = layoutScale_;
+    float cx = computedRect_.x + computedRect_.w * 0.5f;
+    float cy = computedRect_.y + computedRect_.h * 0.5f;
+    // Use the largest reach: arc radius + half a slot size
+    float reach = (arcRadius + slotSize * 0.5f) * s;
+    // Also account for attack/pickup button offsets
+    float atkReach = std::sqrt(attackOffset.x * attackOffset.x + attackOffset.y * attackOffset.y) * s + attackButtonSize * s * 0.5f;
+    float puReach = std::sqrt(pickUpOffset.x * pickUpOffset.x + pickUpOffset.y * pickUpOffset.y) * s + pickUpButtonSize * s * 0.5f;
+    float maxReach = std::max({reach, atkReach, puReach});
+    float dx = point.x - cx;
+    float dy = point.y - cy;
+    return (dx * dx + dy * dy) <= maxReach * maxReach;
 }
 
 bool SkillArc::onPress(const Vec2& localPos) {

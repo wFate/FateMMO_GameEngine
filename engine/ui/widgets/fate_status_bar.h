@@ -12,6 +12,7 @@ public:
     FateStatusBar(const std::string& id);
     void render(SpriteBatch& batch, SDFText& sdf) override;
     bool onPress(const Vec2& localPos) override;
+    bool hitTest(const Vec2& point) const override;
 
     // Player stats (bound from game_app)
     float hp = 0.0f, maxHp = 1.0f;
@@ -20,6 +21,33 @@ public:
     int level = 1;
     std::string playerName;
     int playerTileX = 0, playerTileY = 0;
+
+    // Layout (reference pixels, scaled by layoutScale_)
+    float topBarHeight   = 40.0f;
+    float portraitRadius = 20.0f;
+    float barHeight      = 22.0f;  // HP/MP bar height
+    float menuBtnSize    = 21.0f;  // Menu button radius
+    float chatBtnSize    = 21.0f;  // Chat button radius
+    float chatBtnOffsetX = 8.0f;   // from right edge
+    float menuBtnGap     = 6.0f;   // gap below EXP circle
+    float coordOffsetY   = 3.0f;   // below bar strip
+
+    // Font sizes (base, before layoutScale_)
+    float levelFontSize  = 26.0f;
+    float labelFontSize  = 22.0f;  // "HP"/"MP" labels
+    float numberFontSize = 28.0f;  // HP/MP values
+    float coordFontSize  = 11.0f;
+    float buttonFontSize = 9.0f;   // Menu/Chat button text
+
+    // Colors
+    Color hpBarColor = {0.9f, 0.55f, 0.1f, 1.0f};
+    Color mpBarColor = {0.2f, 0.5f, 0.9f, 1.0f};
+    Color coordColor = {1.0f, 1.0f, 1.0f, 0.8f};
+
+    // Visibility toggles
+    bool showCoordinates = true;
+    bool showMenuButton  = true;
+    bool showChatButton  = true;
 
     // Menu state
     bool menuOpen = false;

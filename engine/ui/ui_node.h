@@ -70,8 +70,8 @@ public:
     int zOrder() const { return zOrder_; }
     void setZOrder(int z) { zOrder_ = z; }
 
-    // Hit-testing
-    bool hitTest(const Vec2& point) const;
+    // Hit-testing (virtual so widgets can expand their hit area beyond computedRect)
+    virtual bool hitTest(const Vec2& point) const;
 
     // Interaction hooks (widgets override these)
     virtual bool onPress(const Vec2& localPos);

@@ -31,6 +31,16 @@
 #include "engine/ui/widgets/inventory_panel.h"
 #include "engine/ui/widgets/status_panel.h"
 #include "engine/ui/widgets/skill_panel.h"
+#include "engine/ui/widgets/party_frame.h"
+#include "engine/ui/widgets/chat_panel.h"
+#include "engine/ui/widgets/character_select_screen.h"
+#include "engine/ui/widgets/character_creation_screen.h"
+#include "engine/ui/widgets/guild_panel.h"
+#include "engine/ui/widgets/npc_dialogue_panel.h"
+#include "engine/ui/widgets/shop_panel.h"
+#include "engine/ui/widgets/bank_panel.h"
+#include "engine/ui/widgets/teleporter_panel.h"
+#include "engine/ui/widgets/trade_window.h"
 #include "engine/core/logger.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -244,7 +254,27 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
         }
     }
     else if (type == "fate_status_bar") {
-        // No persistent properties — data is bound at runtime
+        if (auto* w = dynamic_cast<const FateStatusBar*>(node)) {
+            j["topBarHeight"]   = w->topBarHeight;
+            j["portraitRadius"] = w->portraitRadius;
+            j["barHeight"]      = w->barHeight;
+            j["menuBtnSize"]    = w->menuBtnSize;
+            j["chatBtnSize"]    = w->chatBtnSize;
+            j["chatBtnOffsetX"] = w->chatBtnOffsetX;
+            j["menuBtnGap"]     = w->menuBtnGap;
+            j["coordOffsetY"]   = w->coordOffsetY;
+            j["levelFontSize"]  = w->levelFontSize;
+            j["labelFontSize"]  = w->labelFontSize;
+            j["numberFontSize"] = w->numberFontSize;
+            j["coordFontSize"]  = w->coordFontSize;
+            j["buttonFontSize"] = w->buttonFontSize;
+            j["hpBarColor"] = {w->hpBarColor.r, w->hpBarColor.g, w->hpBarColor.b, w->hpBarColor.a};
+            j["mpBarColor"] = {w->mpBarColor.r, w->mpBarColor.g, w->mpBarColor.b, w->mpBarColor.a};
+            j["coordColor"] = {w->coordColor.r, w->coordColor.g, w->coordColor.b, w->coordColor.a};
+            if (!w->showCoordinates) j["showCoordinates"] = false;
+            if (!w->showMenuButton)  j["showMenuButton"]  = false;
+            if (!w->showChatButton)  j["showChatButton"]  = false;
+        }
     }
     else if (type == "dpad") {
         if (auto* w = dynamic_cast<const DPad*>(node)) {
@@ -283,7 +313,7 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["buttonSize"] = w->buttonSize;
             j["spacing"]    = w->spacing;
             if (!w->panelLabels.empty())
-                j["panelLabels"] = nlohmann::json(w->panelLabels);
+                j["labels"] = nlohmann::json(w->panelLabels);
             if (!w->activePanel.empty())
                 j["activePanel"] = w->activePanel;
         }
@@ -355,6 +385,54 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
     }
     else if (type == "death_overlay") {
         // Runtime state only -- no persistent properties to serialize
+    }
+    else if (type == "party_frame") {
+        if (auto* w = dynamic_cast<const PartyFrame*>(node)) {
+            j["cardWidth"]   = w->cardWidth;
+            j["cardHeight"]  = w->cardHeight;
+            j["cardSpacing"] = w->cardSpacing;
+        }
+    }
+    else if (type == "chat_panel") {
+        if (auto* w = dynamic_cast<const ChatPanel*>(node)) {
+            j["chatIdleLines"] = w->chatIdleLines;
+        }
+    }
+    else if (type == "scroll_view") {
+        if (auto* w = dynamic_cast<const ScrollView*>(node)) {
+            j["scrollSpeed"]   = w->scrollSpeed;
+            j["contentHeight"] = w->contentHeight;
+        }
+    }
+    else if (type == "character_select_screen") {
+        if (auto* w = dynamic_cast<const CharacterSelectScreen*>(node)) {
+            j["slotCircleSize"]  = w->slotCircleSize;
+            j["entryButtonWidth"] = w->entryButtonWidth;
+        }
+    }
+    else if (type == "character_creation_screen") {
+        // Runtime state only (selected class/faction, name input)
+    }
+    else if (type == "guild_panel") {
+        // Runtime state only (guild data bound from server)
+    }
+    else if (type == "npc_dialogue_panel") {
+        // Runtime state only (NPC data bound from GameApp)
+    }
+    else if (type == "shop_panel") {
+        // Runtime state only (shop items bound from server)
+    }
+    else if (type == "bank_panel") {
+        // Runtime state only (bank data bound from server)
+    }
+    else if (type == "teleporter_panel") {
+        if (auto* w = dynamic_cast<const TeleporterPanel*>(node)) {
+            if (!w->title.empty() && w->title != "Teleporter")
+                j["title"] = w->title;
+        }
+    }
+    else if (type == "trade_window") {
+        // Runtime state only (trade data bound from server)
     }
 
     // --- Event bindings ---

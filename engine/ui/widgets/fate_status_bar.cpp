@@ -9,12 +9,7 @@
 
 namespace fate {
 
-// ---- Constants (all in reference pixels, scaled by layoutScale_) -----------
-static constexpr float kTopBarHeight   = 40.0f;  // dark strip height (TWOM-sized, text overflows slightly)
-static constexpr float kPortraitRadius = 20.0f;  // portrait circle
-static constexpr float kBarHeight      = 18.0f;  // HP / MP bar height (TWOM bold)
-static constexpr float kMenuBtnR       = 21.0f;  // Menu button radius
-static constexpr float kChatBtnR       = 21.0f;  // Chat button radius
+// ---- Constants for menu overlay (not yet exposed as fields) ----------------
 static constexpr float kMenuItemH      = 36.0f;  // menu overlay row height
 static constexpr float kMenuOverlayW   = 140.0f; // menu overlay width
 
@@ -26,6 +21,32 @@ FateStatusBar::FateStatusBar(const std::string& id)
     : UINode(id, "fate_status_bar")
 {
     menuItems = {"Event", "Inventory", "Skill", "Guild", "Party", "Status", "Settings"};
+}
+
+// --------------------------------------------------------------------------
+// hitTest: expand hit area to include the menu button below the top bar
+// --------------------------------------------------------------------------
+bool FateStatusBar::hitTest(const Vec2& point) const {
+    if (!visible_) return false;
+    // Base rect (top bar)
+    if (computedRect_.contains(point)) return true;
+    // Expanded area below for menu button (circle below portrait)
+    if (menuBtnRadius_ > 0.0f) {
+        // menuBtnCenter_ is in LOCAL coords (set during render)
+        float gx = computedRect_.x + menuBtnCenter_.x;
+        float gy = computedRect_.y + menuBtnCenter_.y;
+        float dx = point.x - gx;
+        float dy = point.y - gy;
+        if (dx * dx + dy * dy <= menuBtnRadius_ * menuBtnRadius_) return true;
+    }
+    // Menu overlay below the button
+    if (menuOpen && menuOverlayRect_.w > 0.0f) {
+        float ox = computedRect_.x + menuOverlayRect_.x;
+        float oy = computedRect_.y + menuOverlayRect_.y;
+        if (point.x >= ox && point.x <= ox + menuOverlayRect_.w &&
+            point.y >= oy && point.y <= oy + menuOverlayRect_.h) return true;
+    }
+    return false;
 }
 
 // --------------------------------------------------------------------------
@@ -55,7 +76,7 @@ void FateStatusBar::renderTopBar(SpriteBatch& batch, SDFText& sdf,
     const auto& rect = computedRect_;
 
     // Semi-transparent dark strip across top
-    float barH = kTopBarHeight * s;
+    float barH = topBarHeight * s;
     Color stripBg{0.0f, 0.0f, 0.0f, 0.45f};
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + barH * 0.5f},
                    {rect.w, barH}, stripBg, d - 0.2f);
@@ -64,44 +85,39 @@ void FateStatusBar::renderTopBar(SpriteBatch& batch, SDFText& sdf,
     Color shadow{0.0f, 0.0f, 0.0f, 0.85f};
     Color yellow{1.0f, 0.9f, 0.2f, 1.0f};
 
-    // Portrait circle (40px diameter)
-    float pr = kPortraitRadius * s;
+    // Portrait circle
+    float pr = portraitRadius * s;
     Vec2 pc = {rect.x + 4.0f * s + pr, rect.y + 4.0f * s + pr};
     batch.drawCircle(pc, pr, {0.15f, 0.15f, 0.2f, 0.9f}, d, 24);
     batch.drawRing(pc, pr, 2.0f * s, {0.55f, 0.55f, 0.75f, 1.0f}, d + 0.05f, 24);
 
-    // --- TWOM horizontal row: [LV 20] [HP] [████] [149/149] [MP] [████] [419/505] ---
-    // Bars stretch to fill available space (like TWOM — fills portrait-to-edge)
     float rowCenterY = rect.y + barH * 0.5f;
-    float bh = 22.0f * s;
-    float gap = 4.0f * s;  // small gaps between elements
+    float bh = barHeight * s;
+    float gap = 4.0f * s;
 
-    // Pre-measure all fixed-width text elements
     char lvBuf[16];
     snprintf(lvBuf, sizeof(lvBuf), "LV %d", level);
-    float lvFont = scaledFont(26.0f);
+    float lvFont = scaledFont(levelFontSize);
     Vec2 lvSz = sdf.measure(std::string(lvBuf), lvFont);
 
-    float labelFont = scaledFont(22.0f);
-    Vec2 hpLabelSz = sdf.measure("HP", labelFont);
-    Vec2 mpLabelSz = sdf.measure("MP", labelFont);
+    float lFont = scaledFont(labelFontSize);
+    Vec2 hpLabelSz = sdf.measure("HP", lFont);
+    Vec2 mpLabelSz = sdf.measure("MP", lFont);
 
     char hpBuf[32], mpBuf[32];
     snprintf(hpBuf, sizeof(hpBuf), "%.0f/%.0f", hp, maxHp);
     snprintf(mpBuf, sizeof(mpBuf), "%.0f/%.0f", mp, maxMp);
-    float numFont = scaledFont(28.0f);
-    Vec2 hpNumSz = sdf.measure(std::string(hpBuf), numFont);
-    Vec2 mpNumSz = sdf.measure(std::string(mpBuf), numFont);
+    float nFont = scaledFont(numberFontSize);
+    Vec2 hpNumSz = sdf.measure(std::string(hpBuf), nFont);
+    Vec2 mpNumSz = sdf.measure(std::string(mpBuf), nFont);
 
-    // Calculate bar width: fill remaining space equally between HP and MP bars
-    float leftEdge = pc.x + pr + 8.0f * s;     // right of portrait
-    float rightEdge = rect.x + rect.w - 60.0f * s; // leave room for Chat button
+    float leftEdge = pc.x + pr + 8.0f * s;
+    float rightEdge = rect.x + rect.w - 60.0f * s;
     float fixedWidth = lvSz.x + gap*2 + hpLabelSz.x + gap + hpNumSz.x + gap*2
                      + mpLabelSz.x + gap + mpNumSz.x;
     float availForBars = rightEdge - leftEdge - fixedWidth;
-    float bw = std::max(availForBars * 0.5f, 80.0f * s); // each bar gets half, min 80px
+    float bw = std::max(availForBars * 0.5f, 80.0f * s);
 
-    // Now draw left-to-right
     float curX = leftEdge;
 
     // LV text
@@ -112,51 +128,55 @@ void FateStatusBar::renderTopBar(SpriteBatch& batch, SDFText& sdf,
 
     // HP label
     float labelY = rowCenterY - hpLabelSz.y * 0.5f;
-    sdf.drawScreen(batch, "HP", Vec2{curX + 1.0f, labelY + 1.0f}, labelFont, shadow, d + 0.15f);
-    sdf.drawScreen(batch, "HP", Vec2{curX, labelY}, labelFont, white, d + 0.2f);
+    sdf.drawScreen(batch, "HP", Vec2{curX + 1.0f, labelY + 1.0f}, lFont, shadow, d + 0.15f);
+    sdf.drawScreen(batch, "HP", Vec2{curX, labelY}, lFont, white, d + 0.2f);
     curX += hpLabelSz.x + gap;
 
-    // HP bar (stretches to fill)
+    // HP bar
     batch.drawRect({curX + bw * 0.5f, rowCenterY}, {bw, bh}, {0.1f, 0.1f, 0.1f, 0.85f}, d);
     float hpRatio = (maxHp > 0.0f) ? std::clamp(hp / maxHp, 0.0f, 1.0f) : 0.0f;
     if (hpRatio > 0.0f) {
         float fw = bw * hpRatio;
-        batch.drawRect({curX + fw * 0.5f, rowCenterY}, {fw, bh}, {0.9f, 0.55f, 0.1f, 1.0f}, d + 0.01f);
+        batch.drawRect({curX + fw * 0.5f, rowCenterY}, {fw, bh}, hpBarColor, d + 0.01f);
     }
     curX += bw + gap;
 
     // HP numbers
     float numY = rowCenterY - hpNumSz.y * 0.5f;
-    sdf.drawScreen(batch, std::string(hpBuf), Vec2{curX + 1.5f, numY + 1.5f}, numFont, shadow, d + 0.15f);
-    sdf.drawScreen(batch, std::string(hpBuf), Vec2{curX, numY}, numFont, yellow, d + 0.2f);
+    sdf.drawScreen(batch, std::string(hpBuf), Vec2{curX + 1.5f, numY + 1.5f}, nFont, shadow, d + 0.15f);
+    sdf.drawScreen(batch, std::string(hpBuf), Vec2{curX, numY}, nFont, yellow, d + 0.2f);
     curX += hpNumSz.x + gap * 2;
 
     // MP label
-    sdf.drawScreen(batch, "MP", Vec2{curX + 1.0f, labelY + 1.0f}, labelFont, shadow, d + 0.15f);
-    sdf.drawScreen(batch, "MP", Vec2{curX, labelY}, labelFont, white, d + 0.2f);
+    sdf.drawScreen(batch, "MP", Vec2{curX + 1.0f, labelY + 1.0f}, lFont, shadow, d + 0.15f);
+    sdf.drawScreen(batch, "MP", Vec2{curX, labelY}, lFont, white, d + 0.2f);
     curX += mpLabelSz.x + gap;
 
-    // MP bar (stretches to fill, same width as HP)
+    // MP bar
     batch.drawRect({curX + bw * 0.5f, rowCenterY}, {bw, bh}, {0.1f, 0.1f, 0.1f, 0.85f}, d);
     float mpRatio = (maxMp > 0.0f) ? std::clamp(mp / maxMp, 0.0f, 1.0f) : 0.0f;
     if (mpRatio > 0.0f) {
         float fw = bw * mpRatio;
-        batch.drawRect({curX + fw * 0.5f, rowCenterY}, {fw, bh}, {0.2f, 0.5f, 0.9f, 1.0f}, d + 0.01f);
+        batch.drawRect({curX + fw * 0.5f, rowCenterY}, {fw, bh}, mpBarColor, d + 0.01f);
     }
     curX += bw + gap;
 
     // MP numbers
-    sdf.drawScreen(batch, std::string(mpBuf), Vec2{curX + 1.5f, numY + 1.5f}, numFont, shadow, d + 0.15f);
-    sdf.drawScreen(batch, std::string(mpBuf), Vec2{curX, numY}, numFont, yellow, d + 0.2f);
+    sdf.drawScreen(batch, std::string(mpBuf), Vec2{curX + 1.5f, numY + 1.5f}, nFont, shadow, d + 0.15f);
+    sdf.drawScreen(batch, std::string(mpBuf), Vec2{curX, numY}, nFont, yellow, d + 0.2f);
     curX += mpNumSz.x;
 
-    // Coordinates centered below the bar strip (like TWOM's "777,2331")
-    char coordBuf[32];
-    snprintf(coordBuf, sizeof(coordBuf), "%d,%d", playerTileX, playerTileY);
-    float coordFont = scaledFont(11.0f);
-    Vec2 coordSz = sdf.measure(std::string(coordBuf), coordFont);
-    float rowCenterX = (leftEdge + curX) * 0.5f;
-    sdf.drawScreen(batch, std::string(coordBuf), Vec2{rowCenterX - coordSz.x * 0.5f, rect.y + barH + 3.0f * s}, coordFont, {1.0f, 1.0f, 1.0f, 0.8f}, d + 0.2f);
+    // Coordinates below the bar strip
+    if (showCoordinates) {
+        char coordBuf[32];
+        snprintf(coordBuf, sizeof(coordBuf), "%d,%d", playerTileX, playerTileY);
+        float cFont = scaledFont(coordFontSize);
+        Vec2 coordSz = sdf.measure(std::string(coordBuf), cFont);
+        float rowCenterX = (leftEdge + curX) * 0.5f;
+        sdf.drawScreen(batch, std::string(coordBuf),
+            Vec2{rowCenterX - coordSz.x * 0.5f, rect.y + barH + coordOffsetY * s},
+            cFont, coordColor, d + 0.2f);
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -164,41 +184,40 @@ void FateStatusBar::renderTopBar(SpriteBatch& batch, SDFText& sdf,
 // --------------------------------------------------------------------------
 void FateStatusBar::renderMenuButton(SpriteBatch& batch, SDFText& sdf,
                                       float d, float s) {
+    if (!showMenuButton) { menuBtnRadius_ = 0.0f; return; }
+
     const auto& rect = computedRect_;
-    float barH = kTopBarHeight * s;
-    float pr = kPortraitRadius * s;
+    float barH = topBarHeight * s;
+    float pr = portraitRadius * s;
     Vec2 pc = {rect.x + 6.0f * s + pr, rect.y + barH * 0.5f};
 
     // EXP progress arc around portrait
-    float expR = (kPortraitRadius + 4.0f) * s;
+    float expR = (portraitRadius + 4.0f) * s;
     float xpRatio = (xpToLevel > 0.0f) ? std::clamp(xp / xpToLevel, 0.0f, 1.0f) : 0.0f;
     if (xpRatio > 0.0f) {
         Color expColor{0.8f, 0.65f, 0.1f, 0.9f};
-        // Arc from top (-90 deg) clockwise by xpRatio * 360
         float startAngle = -kPi * 0.5f;
         float endAngle   = startAngle + xpRatio * 2.0f * kPi;
         batch.drawArc(pc, expR, startAngle, endAngle, expColor, d + 0.25f, 32);
     }
-    // EXP arc background ring (thin, dark)
     Color expBgRing{0.3f, 0.3f, 0.3f, 0.5f};
     batch.drawRing(pc, expR, 2.0f * s, expBgRing, d + 0.05f, 32);
 
     // Gold metallic "Menu" button below EXP circle
-    float mbR = kMenuBtnR * s;
-    Vec2 mbCenter = {pc.x, pc.y + expR + mbR + 6.0f * s};
+    float mbR = menuBtnSize * s;
+    Vec2 mbCenter = {pc.x, pc.y + expR + mbR + menuBtnGap * s};
     drawMetallicCircle(batch, mbCenter, mbR, d + 0.3f, resolvedStyle_.opacity);
 
-    // "Menu" label centered on button
-    float menuFont = scaledFont(9.0f);
+    float mFont = scaledFont(buttonFontSize);
     std::string menuLabel("Menu");
-    Vec2 menuSize = sdf.measure(menuLabel, menuFont);
+    Vec2 menuSize = sdf.measure(menuLabel, mFont);
     Color darkText{0.15f, 0.10f, 0.0f, 1.0f};
     sdf.drawScreen(batch, menuLabel,
         Vec2{mbCenter.x - menuSize.x * 0.5f, mbCenter.y - menuSize.y * 0.5f},
-        menuFont, darkText, d + 0.35f);
+        mFont, darkText, d + 0.35f);
 
-    // Cache hit-test region
-    menuBtnCenter_ = mbCenter;
+    // Store in LOCAL coords (relative to computedRect_) for onPress
+    menuBtnCenter_ = {mbCenter.x - computedRect_.x, mbCenter.y - computedRect_.y};
     menuBtnRadius_ = mbR;
 }
 
@@ -207,24 +226,25 @@ void FateStatusBar::renderMenuButton(SpriteBatch& batch, SDFText& sdf,
 // --------------------------------------------------------------------------
 void FateStatusBar::renderChatButton(SpriteBatch& batch, SDFText& sdf,
                                       float d, float s) {
+    if (!showChatButton) { chatBtnRadius_ = 0.0f; return; }
+
     const auto& rect = computedRect_;
-    float barH = kTopBarHeight * s;
-    float cbR = kChatBtnR * s;
-    Vec2 cbCenter = {rect.x + rect.w - 8.0f * s - cbR, rect.y + barH * 0.5f};
+    float barH = topBarHeight * s;
+    float cbR = chatBtnSize * s;
+    Vec2 cbCenter = {rect.x + rect.w - chatBtnOffsetX * s - cbR, rect.y + barH * 0.5f};
 
     drawMetallicCircle(batch, cbCenter, cbR, d + 0.3f, resolvedStyle_.opacity);
 
-    // "Chat" label
-    float chatFont = scaledFont(9.0f);
+    float cFont = scaledFont(buttonFontSize);
     std::string chatLabel("Chat");
-    Vec2 chatSize = sdf.measure(chatLabel, chatFont);
+    Vec2 chatSize = sdf.measure(chatLabel, cFont);
     Color darkText{0.15f, 0.10f, 0.0f, 1.0f};
     sdf.drawScreen(batch, chatLabel,
         Vec2{cbCenter.x - chatSize.x * 0.5f, cbCenter.y - chatSize.y * 0.5f},
-        chatFont, darkText, d + 0.35f);
+        cFont, darkText, d + 0.35f);
 
-    // Cache hit-test region
-    chatBtnCenter_ = cbCenter;
+    // Store in LOCAL coords (relative to computedRect_) for onPress
+    chatBtnCenter_ = {cbCenter.x - computedRect_.x, cbCenter.y - computedRect_.y};
     chatBtnRadius_ = cbR;
 }
 
@@ -272,8 +292,8 @@ void FateStatusBar::renderMenuOverlay(SpriteBatch& batch, SDFText& sdf,
             Vec2{tx, ty}, fontSize, itemText, d + 0.55f);
     }
 
-    // Cache hit-test region for onPress
-    menuOverlayRect_ = {mx, my, mw, mh};
+    // Cache hit-test region for onPress (LOCAL coords)
+    menuOverlayRect_ = {mx - computedRect_.x, my - computedRect_.y, mw, mh};
     menuItemHeight_ = mih;
 }
 
