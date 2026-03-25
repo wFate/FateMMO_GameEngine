@@ -528,7 +528,7 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     else if (type == "inventory_panel") {
         auto ip = std::make_unique<InventoryPanel>(id);
         ip->gridColumns = j.value("gridColumns", 4);
-        ip->gridRows = j.value("gridRows", 5);
+        ip->gridRows = j.value("gridRows", 4);
         ip->slotSize = j.value("slotSize", 40.0f);
         node = std::move(ip);
     }
