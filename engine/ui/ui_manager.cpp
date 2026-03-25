@@ -40,6 +40,7 @@
 #include "engine/ui/widgets/login_screen.h"
 #include "engine/ui/widgets/death_overlay.h"
 #include "engine/ui/widgets/fate_status_bar.h"
+#include "engine/ui/widgets/menu_tab_bar.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -498,6 +499,17 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
             for (auto& l : j["labels"]) mbr->labels.push_back(l.get<std::string>());
         }
         node = std::move(mbr);
+    }
+    else if (type == "menu_tab_bar") {
+        auto mtb = std::make_unique<MenuTabBar>(id);
+        mtb->activeTab = j.value("activeTab", 0);
+        mtb->tabSize   = j.value("tabSize", 50.0f);
+        mtb->arrowSize = j.value("arrowSize", 28.0f);
+        if (j.contains("tabLabels") && j["tabLabels"].is_array()) {
+            mtb->tabLabels.clear();
+            for (auto& l : j["tabLabels"]) mtb->tabLabels.push_back(l.get<std::string>());
+        }
+        node = std::move(mtb);
     }
     else if (type == "chat_ticker") {
         auto ct = std::make_unique<ChatTicker>(id);

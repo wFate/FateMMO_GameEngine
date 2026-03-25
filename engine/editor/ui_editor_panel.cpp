@@ -16,6 +16,7 @@
 #include "engine/ui/widgets/skill_arc.h"
 #include "engine/ui/widgets/dpad.h"
 #include "engine/ui/widgets/menu_button_row.h"
+#include "engine/ui/widgets/menu_tab_bar.h"
 #include "engine/ui/widgets/chat_ticker.h"
 #include "engine/ui/widgets/exp_bar.h"
 #include "engine/ui/widgets/target_frame.h"
@@ -568,6 +569,16 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::Separator();
         for (size_t i = 0; i < mbr->labels.size(); i++) {
             ImGui::Text("  Label %zu: %s", i, mbr->labels[i].c_str());
+        }
+    }
+    else if (auto* mtb = dynamic_cast<MenuTabBar*>(selectedNode_)) {
+        ImGui::SeparatorText("MenuTabBar");
+        ImGui::DragInt("Active Tab", &mtb->activeTab, 1.0f, 0, static_cast<int>(mtb->tabLabels.size()) - 1); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Tab Size", &mtb->tabSize, 1.0f, 20.0f, 120.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Arrow Size", &mtb->arrowSize, 1.0f, 16.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        for (size_t i = 0; i < mtb->tabLabels.size(); i++) {
+            ImGui::Text("  Tab %zu: %s", i, mtb->tabLabels[i].c_str());
         }
     }
     else if (auto* ticker = dynamic_cast<ChatTicker*>(selectedNode_)) {

@@ -24,6 +24,7 @@
 #include "engine/ui/widgets/fate_status_bar.h"
 #include "engine/ui/widgets/dpad.h"
 #include "engine/ui/widgets/menu_button_row.h"
+#include "engine/ui/widgets/menu_tab_bar.h"
 #include "engine/ui/widgets/chat_ticker.h"
 #include "engine/ui/widgets/exp_bar.h"
 #include "engine/ui/widgets/target_frame.h"
@@ -289,6 +290,15 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["spacing"]    = w->spacing;
             if (!w->labels.empty())
                 j["labels"] = nlohmann::json(w->labels);
+        }
+    }
+    else if (type == "menu_tab_bar") {
+        if (auto* w = dynamic_cast<const MenuTabBar*>(node)) {
+            j["activeTab"] = w->activeTab;
+            j["tabSize"]   = w->tabSize;
+            j["arrowSize"] = w->arrowSize;
+            if (!w->tabLabels.empty())
+                j["tabLabels"] = nlohmann::json(w->tabLabels);
         }
     }
     else if (type == "chat_ticker") {
