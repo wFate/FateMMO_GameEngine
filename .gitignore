@@ -54,27 +54,8 @@ cmake_install.cmake
 # Proprietary game logic & content (kept local, not pushed to public repo)
 # =============================================================================
 
-# Core game systems — combat formulas, loot tables, economy, balance numbers
-game/shared/
-
-# Game system implementations — AI behavior, spawn logic, combat actions
-game/systems/
-
-# Entity factory — defines how game entities are composed with specific stats
-game/entity_factory.h
-
-# Game app — ties all proprietary systems together
-game/game_app.cpp
-game/game_app.h
-
-# Game components — stat/entity design, player logic, animation states
-game/components/game_components.h
-
-# Game UI — HUD, inventory, skill bar implementations
-game/ui/
-
-# Game entry point — wires all proprietary systems together
-game/main.cpp
+# Game — all proprietary (shared, systems, components, sprites, oldscripts, etc.)
+game/
 
 # Game content data — prefabs, scenes, level layouts
 assets/prefabs/
