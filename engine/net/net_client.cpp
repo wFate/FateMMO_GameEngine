@@ -720,6 +720,16 @@ void NetClient::sendMoveItem(int32_t sourceSlot, int32_t destSlot) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdMoveItem, buf, w.size());
 }
 
+void NetClient::sendDestroyItem(int32_t slot, const std::string& expectedItemId) {
+    CmdDestroyItemMsg msg;
+    msg.slot = slot;
+    msg.expectedItemId = expectedItemId;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdDestroyItem, buf, w.size());
+}
+
 void NetClient::sendEquip(uint8_t action, int32_t inventorySlot, uint8_t equipSlot) {
     CmdEquipMsg msg;
     msg.action = action;
@@ -794,6 +804,7 @@ void NetClient::startReconnect() {
     reconnectStartTime_ = 0.0f;
     reconnectLastTick_ = 0.0f;
     LOG_INFO("NetClient", "Starting auto-reconnect to %s:%d", lastHost_.c_str(), lastPort_);
+    if (onReconnectStart) onReconnectStart();
 }
 
 bool NetClient::isReconnecting() const {

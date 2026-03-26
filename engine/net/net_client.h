@@ -37,6 +37,7 @@ public:
     void sendStartDungeon(const std::string& sceneId);
     void sendDungeonResponse(uint8_t accept);
     void sendMoveItem(int32_t sourceSlot, int32_t destSlot);
+    void sendDestroyItem(int32_t slot, const std::string& expectedItemId);
     void sendEquip(uint8_t action, int32_t inventorySlot, uint8_t equipSlot);
 
     void sendTradeAction(uint8_t action);
@@ -62,6 +63,7 @@ public:
     // Callbacks
     std::function<void()> onConnected;
     std::function<void()> onDisconnected;
+    std::function<void()> onReconnectStart;  // fired when auto-reconnect begins (clean up stale state)
     std::function<void(const SvEntityEnterMsg&)> onEntityEnter;
     std::function<void(const SvEntityLeaveMsg&)> onEntityLeave;
     std::function<void(const SvEntityUpdateMsg&)> onEntityUpdate;

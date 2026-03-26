@@ -51,6 +51,9 @@ public:
         }
     }
 
+    // WARNING: Returns Vec2{0,0} when entity has no interpolation state.
+    // Callers MUST check the `valid` out-param before writing the result to a
+    // Transform — blindly writing (0,0) causes entities to flash to world origin.
     Vec2 getInterpolatedPosition(uint64_t persistentId, float dt, bool* valid = nullptr) {
         auto it = states_.find(persistentId);
         if (it == states_.end()) {

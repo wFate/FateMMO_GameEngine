@@ -849,6 +849,15 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     else if (auto* cp = dynamic_cast<ChatPanel*>(selectedNode_)) {
         ImGui::SeparatorText("ChatPanel");
         ImGui::DragInt("Idle Lines", &cp->chatIdleLines, 1.0f, 0, 5); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Full Panel Width", &cp->fullPanelWidth, 1.0f, 100.0f, 2000.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Full Panel Height", &cp->fullPanelHeight, 1.0f, 100.0f, 900.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Input Bar Height", &cp->inputBarHeight, 0.5f, 16.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Input Bar Width", &cp->inputBarWidth, 1.0f, 0.0f, 2000.0f, "%.0f (0=full)"); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Channel Btn Width", &cp->channelBtnWidth, 1.0f, 24.0f, 120.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Channel Btn Height", &cp->channelBtnHeight, 0.5f, 0.0f, 60.0f, "%.1f (0=bar)"); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Close Btn Size", &cp->closeBtnSize, 0.5f, 10.0f, 40.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Message Font", &cp->messageFontSize, 0.5f, 7.0f, 24.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Input Font", &cp->inputFontSize, 0.5f, 7.0f, 24.0f); checkUndoCapture(uiMgr);
         ImGui::Separator();
         ImGui::Text("Active Tab: %d", cp->activeTab);
         ImGui::Text("Mode: %s", cp->fullPanelMode_ ? "Full Panel" : "Idle Overlay");

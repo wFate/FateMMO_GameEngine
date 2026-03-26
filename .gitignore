@@ -77,16 +77,8 @@ assets/
 # Server — all proprietary (auth, DB repos, caches, WAL, handlers)
 server/
 
-# Game-specific HUD widgets (engine/ui/widgets/ base types are public, these are game-specific)
-engine/ui/widgets/dpad.*
-engine/ui/widgets/skill_arc.*
-engine/ui/widgets/player_info_block.*
-engine/ui/widgets/target_frame.*
-engine/ui/widgets/exp_bar.*
-engine/ui/widgets/menu_button_row.*
-engine/ui/widgets/chat_ticker.*
-engine/ui/widgets/chat_panel.*
-engine/ui/widgets/inventory_panel.*
+# UI system — all proprietary (core + widgets)
+engine/ui/
 
 # Server WAL binary
 server_wal.bin

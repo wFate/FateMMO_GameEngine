@@ -450,6 +450,25 @@ struct CmdMoveItemMsg {
 };
 
 // ============================================================================
+// Client -> Server: CmdDestroyItem (discard an inventory item)
+// ============================================================================
+struct CmdDestroyItemMsg {
+    int32_t slot = -1;
+    std::string expectedItemId;  // instance ID for race-condition safety
+
+    void write(ByteWriter& w) const {
+        w.writeI32(slot);
+        w.writeString(expectedItemId);
+    }
+    static CmdDestroyItemMsg read(ByteReader& r) {
+        CmdDestroyItemMsg m;
+        m.slot = r.readI32();
+        m.expectedItemId = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
 // Server -> Client: SvLevelUp (explicit level-up event with full stat snapshot)
 // ============================================================================
 struct SvLevelUpMsg {

@@ -110,9 +110,10 @@ bool Scene::saveToFile(const std::string& path) const {
     // non-const access, but the save itself is logically const.
     World& w = const_cast<World&>(world_);
     w.forEachEntity([&](Entity* entity) {
-        // Skip transient entities (runtime-spawned mobs/bosses)
+        // Skip transient runtime entities — same filter as Editor::saveScene
         std::string tag = entity->tag();
-        if (tag == "mob" || tag == "boss" || tag == "player") return;
+        if (tag == "mob" || tag == "boss" || tag == "player" ||
+            tag == "ghost" || tag == "dropped_item") return;
 
         entitiesJson.push_back(PrefabLibrary::entityToJson(entity));
     });

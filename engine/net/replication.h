@@ -51,6 +51,9 @@ private:
     // Per-entity monotonic sequence counter for unreliable update ordering
     std::unordered_map<uint32_t, uint8_t> entitySeqCounters_; // key = EntityHandle packed value
 
+    // PIDs of entities unregistered this tick — allows sendDiffs to still send SvEntityLeave
+    std::unordered_map<uint32_t, PersistentId> recentlyUnregistered_;
+
     // Monotonic tick counter incremented each update(); drives tiered update frequency
     uint32_t tickCounter_ = 0;
 

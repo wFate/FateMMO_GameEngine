@@ -23,6 +23,9 @@ void ReplicationManager::update(World& world, NetServer& server) {
         buildVisibility(world, client);
         sendDiffs(world, server, client);
     });
+
+    // Clear after all diffs are sent — unregisterEntity() populates this during the tick
+    recentlyUnregistered_.clear();
 }
 
 void ReplicationManager::rebuildSpatialIndex(World& world) {
@@ -49,9 +52,14 @@ void ReplicationManager::registerEntity(EntityHandle handle, PersistentId pid) {
     entitySeqCounters_[handle.value] = 0;
 }
 
+// IMPORTANT: Do NOT erase handleToPid_ without saving the PID first.
+// sendDiffs() needs the PID to send SvEntityLeave for entities that left the AOI.
+// If the PID is erased before sendDiffs runs, the leave message is silently skipped
+// and the client keeps a zombie ghost entity forever.
 void ReplicationManager::unregisterEntity(EntityHandle handle) {
     auto it = handleToPid_.find(handle.value);
     if (it != handleToPid_.end()) {
+        recentlyUnregistered_[handle.value] = it->second;
         pidToHandle_.erase(it->second.value());
         handleToPid_.erase(it);
     }
@@ -151,6 +159,11 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
     // Process left entities
     for (const auto& handle : client.aoi.left) {
         PersistentId pid = getPersistentId(handle);
+        // Fallback: entity was unregistered this tick (pickup/despawn) — PID already erased
+        if (pid.isNull()) {
+            auto uit = recentlyUnregistered_.find(handle.value);
+            if (uit != recentlyUnregistered_.end()) pid = uit->second;
+        }
         if (pid.isNull()) continue;
 
         SvEntityLeaveMsg leaveMsg;
