@@ -104,6 +104,14 @@ engine/ui/widgets/target_frame.*
 engine/ui/widgets/exp_bar.*
 engine/ui/widgets/menu_button_row.*
 engine/ui/widgets/chat_ticker.*
+engine/ui/widgets/chat_panel.*
+engine/ui/widgets/inventory_panel.*
+
+# Server WAL binary
+server_wal.bin
+
+# Tests — proprietary game logic tests
+tests/
 
 # Internal docs — all proprietary
 Docs/
