@@ -56,6 +56,7 @@
 #include "engine/ui/widgets/battlefield_panel.h"
 #include "engine/ui/widgets/pet_panel.h"
 #include "engine/ui/widgets/crafting_panel.h"
+#include "engine/ui/widgets/collection_panel.h"
 #include "engine/ui/widgets/leaderboard_panel.h"
 #include "engine/ui/widgets/player_context_menu.h"
 #include "engine/ui/widgets/confirm_dialog.h"
@@ -212,7 +213,8 @@ void GameApp::onInit() {
                  msg.entityType, msg.persistentId, msg.name.c_str(),
                  msg.position.x, msg.position.y);
         if (msg.entityType == 0) { // player
-            ghost = EntityFactory::createGhostPlayer(world, msg.name, msg.position);
+            ghost = EntityFactory::createGhostPlayer(world, msg.name, msg.position,
+                msg.gender, msg.hairstyle);
         } else if (msg.entityType == 3) { // dropped item
             ghost = EntityFactory::createGhostDroppedItem(world, msg.name, msg.position,
                 msg.isGold != 0, msg.rarity);
@@ -367,6 +369,11 @@ void GameApp::onInit() {
             if (ev) {
                 unpackEquipVisuals(msg.equipVisuals,
                     ev->weaponVisualIdx, ev->armorVisualIdx, ev->hatVisualIdx);
+            }
+            // Re-resolve paper doll textures when equipment changes
+            auto* appearance = ghost->getComponent<AppearanceComponent>();
+            if (appearance) {
+                appearance->dirty = true;
             }
         }
     };
@@ -1324,6 +1331,45 @@ void GameApp::onInit() {
         }
     };
 
+    netClient_.onCollectionDefs = [this](const SvCollectionDefsMsg& msg) {
+        if (collectionPanel_) {
+            collectionPanel_->entries.clear();
+            collectionPanel_->totalCount = static_cast<int>(msg.defs.size());
+            for (const auto& def : msg.defs) {
+                CollectionPanel::CollectionEntry entry;
+                entry.collectionId = def.collectionId;
+                entry.name = def.name;
+                entry.description = def.description;
+                entry.category = def.category;
+                entry.rewardType = def.rewardType;
+                entry.rewardValue = def.rewardValue;
+                entry.completed = false;
+                collectionPanel_->entries.push_back(std::move(entry));
+            }
+        }
+    };
+
+    netClient_.onCollectionSync = [this](const SvCollectionSyncMsg& msg) {
+        if (collectionPanel_) {
+            std::unordered_set<uint32_t> completed(msg.completedIds.begin(), msg.completedIds.end());
+            for (auto& entry : collectionPanel_->entries) {
+                entry.completed = completed.count(entry.collectionId) > 0;
+            }
+            collectionPanel_->completedCount = static_cast<int>(msg.completedIds.size());
+            collectionPanel_->bonusSTR = msg.bonusSTR;
+            collectionPanel_->bonusINT = msg.bonusINT;
+            collectionPanel_->bonusDEX = msg.bonusDEX;
+            collectionPanel_->bonusCON = msg.bonusCON;
+            collectionPanel_->bonusWIS = msg.bonusWIS;
+            collectionPanel_->bonusHP = msg.bonusHP;
+            collectionPanel_->bonusMP = msg.bonusMP;
+            collectionPanel_->bonusDamage = msg.bonusDamage;
+            collectionPanel_->bonusArmor = msg.bonusArmor;
+            collectionPanel_->bonusCritRate = msg.bonusCritRate;
+            collectionPanel_->bonusMoveSpeed = msg.bonusMoveSpeed;
+        }
+    };
+
     // Initialize audio
     audioManager_.init();
     {
@@ -1472,6 +1518,7 @@ void GameApp::onInit() {
             inventoryPanel_ = nullptr;
             petPanel_ = nullptr;
             craftingPanel_ = nullptr;
+            collectionPanel_ = nullptr;
             retainedUILoaded_ = false;
         } else if (screenId == "fate_hud") {
             skillArc_ = nullptr;
@@ -2243,9 +2290,9 @@ void GameApp::onUpdate(float deltaTime) {
                         static const char* panelIds[] = {
                             "status_panel", "inventory_panel", "skill_panel",
                             "guild_panel", "social_panel", "settings_panel", "shop_panel",
-                            "pet_panel", "crafting_panel"
+                            "pet_panel", "crafting_panel", "collection_panel"
                         };
-                        static constexpr int panelCount = 9;
+                        static constexpr int panelCount = 10;
 
                         // Wire tab bar — shows/hides panels by index
                         auto* tabBar = dynamic_cast<MenuTabBar*>(menuScreen->findById("tab_bar"));
@@ -2326,6 +2373,13 @@ void GameApp::onUpdate(float deltaTime) {
                                 netClient_.sendCraft(recipeId);
                             };
                             craftingPanel_->onClose = closeMenu;
+                        }
+
+                        collectionPanel_ = dynamic_cast<CollectionPanel*>(menuScreen->findById("collection_panel"));
+                        if (collectionPanel_) {
+                            collectionPanel_->onClose = [this](const std::string&) {
+                                if (collectionPanel_) collectionPanel_->close();
+                            };
                         }
 
                         // Wire inventory drag-and-drop callbacks
@@ -3434,6 +3488,7 @@ void GameApp::onUpdate(float deltaTime) {
                 (inventoryPanel_ && inventoryPanel_->visible()) ||
                 (petPanel_ && petPanel_->isOpen()) ||
                 (craftingPanel_ && craftingPanel_->isOpen()) ||
+                (collectionPanel_ && collectionPanel_->isOpen()) ||
                 (shopPanel_ && shopPanel_->isOpen()) ||
                 (bankPanel_ && bankPanel_->isOpen()) ||
                 (teleporterPanel_ && teleporterPanel_->isOpen()) ||

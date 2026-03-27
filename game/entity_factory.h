@@ -44,7 +44,8 @@ public:
     /// Create a ghost (remote) player entity — minimal visual representation.
     /// Includes CharacterStatsComponent, FactionComponent, and DamageableComponent
     /// so the entity is targetable for PvP. Server syncs actual values via replication.
-    static Entity* createGhostPlayer(World& world, const std::string& name, Vec2 position);
+    static Entity* createGhostPlayer(World& world, const std::string& name, Vec2 position,
+        uint8_t gender = 0, uint8_t hairstyle = 0);
 
     /// Create a ghost (remote) mob entity — full visual representation from server data.
     // Ensures a mob sprite PNG exists — if not, creates a temporary local-only

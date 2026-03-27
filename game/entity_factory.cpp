@@ -1042,7 +1042,8 @@ Entity* EntityFactory::createNPC(World& world, const NPCTemplate& tmpl) {
 /// Create a ghost (remote) player entity — minimal visual representation.
 /// Includes CharacterStatsComponent, FactionComponent, and DamageableComponent
 /// so the entity is targetable for PvP. Server syncs actual values via replication.
-Entity* EntityFactory::createGhostPlayer(World& world, const std::string& name, Vec2 position) {
+Entity* EntityFactory::createGhostPlayer(World& world, const std::string& name, Vec2 position,
+    uint8_t gender, uint8_t hairstyle) {
     Entity* entity = world.createEntity(name);
     entity->setTag("ghost");
     auto* t = entity->addComponent<Transform>(position);
@@ -1073,6 +1074,11 @@ Entity* EntityFactory::createGhostPlayer(World& world, const std::string& name, 
     entity->addComponent<Animator>();
     entity->addComponent<TargetingComponent>();
     entity->addComponent<EquipVisualsComponent>();
+
+    auto* appearance = entity->addComponent<AppearanceComponent>();
+    appearance->gender = gender;
+    appearance->hairstyle = hairstyle;
+    appearance->dirty = true;
 
     return entity;
 }
