@@ -100,6 +100,8 @@ namespace PacketType {
     constexpr uint8_t CmdBankWithdrawGold  = 0x32;
     constexpr uint8_t CmdMoveItem          = 0x33;
     constexpr uint8_t CmdDestroyItem       = 0x34;
+    constexpr uint8_t CmdActivateSkillRank = 0x35;
+    constexpr uint8_t CmdAssignSkillSlot   = 0x36;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
@@ -121,6 +123,7 @@ namespace PacketType {
     constexpr uint8_t SvTeleportResult   = 0xB8;
     constexpr uint8_t SvAuroraStatus    = 0xB9;
     constexpr uint8_t SvEntityUpdateBatch = 0xBA; // Multiple delta updates in one packet
+    constexpr uint8_t SvSkillDefs       = 0xBB; // Skill definitions for client's class
 } // namespace PacketType
 
 // ============================================================================

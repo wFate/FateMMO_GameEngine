@@ -39,6 +39,8 @@ public:
     void sendMoveItem(int32_t sourceSlot, int32_t destSlot);
     void sendDestroyItem(int32_t slot, const std::string& expectedItemId);
     void sendEquip(uint8_t action, int32_t inventorySlot, uint8_t equipSlot);
+    void sendActivateSkillRank(const std::string& skillId);
+    void sendAssignSkillSlot(uint8_t action, const std::string& skillId, uint8_t slotA, uint8_t slotB = 0);
 
     void sendTradeAction(uint8_t action);
     void sendTradeAction(uint8_t action, const std::string& data);
@@ -106,6 +108,7 @@ public:
     std::function<void(const SvDungeonInviteMsg&)> onDungeonInvite;
     std::function<void(const SvDungeonStartMsg&)> onDungeonStart;
     std::function<void(const SvDungeonEndMsg&)> onDungeonEnd;
+    std::function<void(const SvSkillDefsMsg&)> onSkillDefs;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:

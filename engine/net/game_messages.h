@@ -1224,4 +1224,155 @@ struct SvDungeonEndMsg {
     }
 };
 
+// ============================================================================
+// Server -> Client: SvSkillDefs (all skill definitions for client's class)
+// ============================================================================
+struct SkillDefEntry {
+    std::string skillId;
+    std::string skillName;
+    std::string description;
+    uint8_t skillType = 0;     // 0=Active, 1=Passive
+    uint8_t resourceType = 0;  // 0=None, 1=Fury, 2=Mana
+    uint8_t targetType = 0;    // SkillTargetType enum
+    uint8_t levelRequired = 1;
+    uint8_t maxRank = 3;
+    uint8_t isUltimate = 0;
+    uint8_t consumesAllResource = 0;
+    float range = 0.0f;
+    float aoeRadius = 0.0f;
+    std::string vfxId;
+
+    struct RankData {
+        uint16_t resourceCost = 0;
+        uint16_t cooldownMs = 0;
+        uint16_t damagePercent = 100;
+        uint8_t maxTargets = 1;
+        uint16_t effectDurationMs = 0;
+        uint16_t effectValue = 0;
+        uint16_t stunDurationMs = 0;
+        int16_t passiveDamageReduction = 0;
+        int16_t passiveCritBonus = 0;
+        int16_t passiveSpeedBonus = 0;
+        int16_t passiveHPBonus = 0;
+        int16_t passiveStatBonus = 0;
+    };
+    RankData ranks[3];
+
+    void write(ByteWriter& w) const {
+        w.writeString(skillId);
+        w.writeString(skillName);
+        w.writeString(description);
+        w.writeU8(skillType);
+        w.writeU8(resourceType);
+        w.writeU8(targetType);
+        w.writeU8(levelRequired);
+        w.writeU8(maxRank);
+        w.writeU8(isUltimate);
+        w.writeU8(consumesAllResource);
+        w.writeFloat(range);
+        w.writeFloat(aoeRadius);
+        w.writeString(vfxId);
+        for (int i = 0; i < 3; ++i) {
+            w.writeU16(ranks[i].resourceCost);
+            w.writeU16(ranks[i].cooldownMs);
+            w.writeU16(ranks[i].damagePercent);
+            w.writeU8(ranks[i].maxTargets);
+            w.writeU16(ranks[i].effectDurationMs);
+            w.writeU16(ranks[i].effectValue);
+            w.writeU16(ranks[i].stunDurationMs);
+            w.writeU16(static_cast<uint16_t>(ranks[i].passiveDamageReduction));
+            w.writeU16(static_cast<uint16_t>(ranks[i].passiveCritBonus));
+            w.writeU16(static_cast<uint16_t>(ranks[i].passiveSpeedBonus));
+            w.writeU16(static_cast<uint16_t>(ranks[i].passiveHPBonus));
+            w.writeU16(static_cast<uint16_t>(ranks[i].passiveStatBonus));
+        }
+    }
+    static SkillDefEntry read(ByteReader& r) {
+        SkillDefEntry e;
+        e.skillId = r.readString();
+        e.skillName = r.readString();
+        e.description = r.readString();
+        e.skillType = r.readU8();
+        e.resourceType = r.readU8();
+        e.targetType = r.readU8();
+        e.levelRequired = r.readU8();
+        e.maxRank = r.readU8();
+        e.isUltimate = r.readU8();
+        e.consumesAllResource = r.readU8();
+        e.range = r.readFloat();
+        e.aoeRadius = r.readFloat();
+        e.vfxId = r.readString();
+        for (int i = 0; i < 3; ++i) {
+            e.ranks[i].resourceCost = r.readU16();
+            e.ranks[i].cooldownMs = r.readU16();
+            e.ranks[i].damagePercent = r.readU16();
+            e.ranks[i].maxTargets = r.readU8();
+            e.ranks[i].effectDurationMs = r.readU16();
+            e.ranks[i].effectValue = r.readU16();
+            e.ranks[i].stunDurationMs = r.readU16();
+            e.ranks[i].passiveDamageReduction = static_cast<int16_t>(r.readU16());
+            e.ranks[i].passiveCritBonus = static_cast<int16_t>(r.readU16());
+            e.ranks[i].passiveSpeedBonus = static_cast<int16_t>(r.readU16());
+            e.ranks[i].passiveHPBonus = static_cast<int16_t>(r.readU16());
+            e.ranks[i].passiveStatBonus = static_cast<int16_t>(r.readU16());
+        }
+        return e;
+    }
+};
+
+struct SvSkillDefsMsg {
+    std::vector<SkillDefEntry> defs;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(defs.size()));
+        for (const auto& d : defs) d.write(w);
+    }
+    static SvSkillDefsMsg read(ByteReader& r) {
+        SvSkillDefsMsg m;
+        uint16_t count = r.readU16();
+        m.defs.resize(count);
+        for (uint16_t i = 0; i < count; ++i) m.defs[i] = SkillDefEntry::read(r);
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdActivateSkillRank (spend a skill point)
+// ============================================================================
+struct CmdActivateSkillRankMsg {
+    std::string skillId;
+
+    void write(ByteWriter& w) const { w.writeString(skillId); }
+    static CmdActivateSkillRankMsg read(ByteReader& r) {
+        CmdActivateSkillRankMsg m;
+        m.skillId = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdAssignSkillSlot (rearrange skill bar)
+// ============================================================================
+struct CmdAssignSkillSlotMsg {
+    uint8_t action = 0;   // 0=assign, 1=clear, 2=swap
+    std::string skillId;  // used for action=0 (assign)
+    uint8_t slotA = 0;    // target slot (0-19) for assign/clear, first slot for swap
+    uint8_t slotB = 0;    // second slot for swap
+
+    void write(ByteWriter& w) const {
+        w.writeU8(action);
+        w.writeString(skillId);
+        w.writeU8(slotA);
+        w.writeU8(slotB);
+    }
+    static CmdAssignSkillSlotMsg read(ByteReader& r) {
+        CmdAssignSkillSlotMsg m;
+        m.action  = r.readU8();
+        m.skillId = r.readString();
+        m.slotA   = r.readU8();
+        m.slotB   = r.readU8();
+        return m;
+    }
+};
+
 } // namespace fate

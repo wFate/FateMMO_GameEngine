@@ -14,6 +14,7 @@
 #include "game/components/player_controller.h"
 #include "game/components/animator.h"
 #include <unordered_map>
+#include <functional>
 
 namespace fate {
 
@@ -37,6 +38,9 @@ public:
     EntityHandle getEntityHandle(PersistentId pid) const;
 
     void setItemDefCache(const ItemDefinitionCache* cache) { itemDefCache_ = cache; }
+
+    // Optional per-entity visibility filter. Return true to SKIP (hide) the entity.
+    std::function<bool(uint64_t entityPid, const ClientConnection& observer)> visibilityFilter;
 
 private:
     AOIConfig aoiConfig_;

@@ -182,6 +182,9 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
         }
     }
 
+    // God mode check for skill targets (player targets only)
+    if (targetIsPlayer && godModeEntities_.count(msg.targetId)) return;
+
     // Execute the skill
     int damage = skillComp->skills.executeSkill(msg.skillId, msg.rank, ctx);
 
@@ -434,6 +437,9 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
 
             // Apply armor reduction on target
             damage = CombatSystem::applyArmorReduction(damage, targetCharStats->stats.getArmor());
+
+            // God mode check: skip damage if target is invulnerable
+            if (godModeEntities_.count(targetPid.value())) return;
 
             // Apply damage
             targetCharStats->stats.takeDamage(damage);

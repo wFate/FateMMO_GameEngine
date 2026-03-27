@@ -512,8 +512,10 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     # =============================================================================
     file(GLOB_RECURSE SERVER_SOURCES server/*.cpp server/*.h)
     file(GLOB_RECURSE SERVER_SHARED_SOURCES game/shared/*.cpp)
+    # entity_factory.cpp is used by both game and server targets
+    set(SERVER_GAME_SOURCES game/entity_factory.cpp)
     if(SERVER_SOURCES)
-        add_executable(FateServer ${SERVER_SOURCES} ${SERVER_SHARED_SOURCES})
+        add_executable(FateServer ${SERVER_SOURCES} ${SERVER_SHARED_SOURCES} ${SERVER_GAME_SOURCES})
         target_link_libraries(FateServer PRIVATE fate_engine pqxx PostgreSQL::PostgreSQL bcrypt_lib OpenSSL::SSL OpenSSL::Crypto spdlog::spdlog)
         target_include_directories(FateServer PRIVATE ${CMAKE_SOURCE_DIR})
         if(WIN32)

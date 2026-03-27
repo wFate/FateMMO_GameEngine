@@ -124,6 +124,9 @@ void ReplicationManager::buildVisibility(World& world, ClientConnection& client)
             if (drop && !drop->sceneId.empty() && drop->sceneId != clientScene) continue;
         }
 
+        // Custom visibility filter (e.g. GM invisibility)
+        if (visibilityFilter && visibilityFilter(pid.value(), client)) continue;
+
         client.aoi.current.push_back(EntityHandle(handleValue));
     }
 

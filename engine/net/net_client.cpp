@@ -594,6 +594,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onDungeonEnd) onDungeonEnd(msg);
             break;
         }
+        case PacketType::SvSkillDefs: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvSkillDefsMsg::read(payload);
+            if (onSkillDefs) onSkillDefs(msg);
+            break;
+        }
         default:
             break;
     }
@@ -945,6 +951,27 @@ void NetClient::sendMarketGetMyListings() {
     ByteWriter w(buf, sizeof(buf));
     w.writeU8(MarketAction::GetMyListings);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdMarket, w.data(), w.size());
+}
+
+void NetClient::sendActivateSkillRank(const std::string& skillId) {
+    CmdActivateSkillRankMsg msg;
+    msg.skillId = skillId;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdActivateSkillRank, w.data(), w.size());
+}
+
+void NetClient::sendAssignSkillSlot(uint8_t action, const std::string& skillId, uint8_t slotA, uint8_t slotB) {
+    CmdAssignSkillSlotMsg msg;
+    msg.action = action;
+    msg.skillId = skillId;
+    msg.slotA = slotA;
+    msg.slotB = slotB;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdAssignSkillSlot, w.data(), w.size());
 }
 
 } // namespace fate

@@ -468,6 +468,9 @@ struct SkillSyncEntry {
 struct SvSkillSyncMsg {
     std::vector<SkillSyncEntry> skills;
     std::vector<std::string> skillBar; // 20 slots, empty string = unbound
+    int16_t availablePoints = 0;
+    int16_t earnedPoints = 0;
+    int16_t spentPoints = 0;
 
     void write(ByteWriter& w) const {
         w.writeU16(static_cast<uint16_t>(skills.size()));
@@ -480,6 +483,9 @@ struct SvSkillSyncMsg {
         for (const auto& slot : skillBar) {
             w.writeString(slot);
         }
+        w.writeU16(static_cast<uint16_t>(availablePoints));
+        w.writeU16(static_cast<uint16_t>(earnedPoints));
+        w.writeU16(static_cast<uint16_t>(spentPoints));
     }
 
     static SvSkillSyncMsg read(ByteReader& r) {
@@ -496,6 +502,9 @@ struct SvSkillSyncMsg {
         for (uint8_t i = 0; i < barCount; ++i) {
             m.skillBar[i] = r.readString();
         }
+        m.availablePoints = static_cast<int16_t>(r.readU16());
+        m.earnedPoints = static_cast<int16_t>(r.readU16());
+        m.spentPoints = static_cast<int16_t>(r.readU16());
         return m;
     }
 };
