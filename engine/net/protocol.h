@@ -126,6 +126,10 @@ struct SvEntityEnterMsg {
     uint8_t pkStatus  = 0; // PKStatus enum (only for entityType == 0, player)
     uint8_t honorRank = 0; // HonorRank enum (only for entityType == 0, player)
 
+    // Player appearance (only serialized when entityType == 0)
+    uint8_t gender    = 0; // 0=male, 1=female
+    uint8_t hairstyle = 0; // 0-2 per gender
+
     void write(ByteWriter& w) const {
         detail::writeU64(w, persistentId);
         w.writeU8(entityType);
@@ -138,6 +142,8 @@ struct SvEntityEnterMsg {
         if (entityType == 0) { // player-specific fields
             w.writeU8(pkStatus);
             w.writeU8(honorRank);
+            w.writeU8(gender);
+            w.writeU8(hairstyle);
         }
         if (entityType == 3) {
             w.writeString(itemId);
@@ -166,6 +172,8 @@ struct SvEntityEnterMsg {
         if (m.entityType == 0) {
             m.pkStatus  = r.readU8();
             m.honorRank = r.readU8();
+            m.gender    = r.readU8();
+            m.hairstyle = r.readU8();
         }
         if (m.entityType == 3) {
             m.itemId       = r.readString();
