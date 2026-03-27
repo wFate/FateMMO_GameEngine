@@ -4318,6 +4318,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
                     UISerializer::saveToFile(srcPath, screenId, root);
                     LOG_INFO("Editor", "Saved UI screen (source): %s", srcPath.c_str());
                 }
+                uiManager_->suppressHotReload();
             }
         }
     }

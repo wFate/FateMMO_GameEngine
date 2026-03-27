@@ -288,6 +288,9 @@ void App::processEvents() {
                 Input::instance().processEvent(event);
             }
         } else if (isKeyboard) {
+            // If actively typing in an ImGui input field, don't route to game
+            if (ImGui::GetIO().WantTextInput) continue;
+
             // Playing — UI text fields get first crack at keyboard/text
             bool uiConsumed = false;
             if (uiManager_.focusedNode() && uiManager_.focusedNode()->visible()) {

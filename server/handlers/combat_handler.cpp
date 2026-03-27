@@ -499,6 +499,11 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         float dist = playerT->position.distance(itemT->position);
         if (dist > 48.0f) return;
 
+        // Validate scene match
+        auto* attackerStats = attacker->getComponent<CharacterStatsComponent>();
+        if (attackerStats && !dropComp->sceneId.empty()
+            && dropComp->sceneId != attackerStats->stats.currentScene) return;
+
         // Validate loot rights — allow owner always; allow party members only in FreeForAll mode
         if (dropComp->ownerEntityId != 0 && dropComp->ownerEntityId != attackerHandle.value) {
             bool sameParty = false;

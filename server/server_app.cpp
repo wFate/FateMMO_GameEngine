@@ -2231,9 +2231,15 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                 }
             }
 
+            // Validate channel: players can only send on Map, Global, Trade, Party, Guild, Private
+            uint8_t ch = chat.channel;
+            if (ch > static_cast<uint8_t>(ChatChannel::Private)) {
+                ch = static_cast<uint8_t>(ChatChannel::Map); // clamp invalid/reserved channels
+            }
+
             // Build and broadcast chat message
             SvChatMessageMsg msg;
-            msg.channel    = chat.channel;
+            msg.channel    = ch;
             msg.senderName = senderName;
             msg.message    = chat.message;
             msg.faction    = senderFaction;

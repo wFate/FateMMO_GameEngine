@@ -1078,6 +1078,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             UISerializer::saveToFile(srcPath, selectedScreenId_, uiMgr.getScreen(selectedScreenId_));
             LOG_INFO("UI", "Saved screen (source): %s", srcPath.c_str());
         }
+        uiMgr.suppressHotReload();
     }
 
     ImGui::End();
