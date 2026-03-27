@@ -115,6 +115,23 @@ void ServerApp::processMobDeath(
         }
     }
 
+    // Purge threat entries for players who disconnected or left the scene
+    {
+        std::vector<uint32_t> toRemove;
+        for (const auto& [entityId, dmg] : es.damageByAttacker) {
+            EntityHandle h(entityId);
+            auto* entity = world.getEntity(h);
+            if (!entity) { toRemove.push_back(entityId); continue; }
+            auto* cs = entity->getComponent<CharacterStatsComponent>();
+            if (!cs || cs->stats.currentScene != es.sceneId) {
+                toRemove.push_back(entityId);
+            }
+        }
+        for (uint32_t id : toRemove) {
+            es.damageByAttacker.erase(id);
+        }
+    }
+
     // Determine top damager for loot ownership (party-aware)
     // Uses current party state — disbanded parties lose their grouped advantage
     auto partyLookup = [&world](uint32_t entityId) -> int {
