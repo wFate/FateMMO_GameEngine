@@ -44,13 +44,11 @@ void EnemyStats::takeDamage(int amount) {
 // ---------------------------------------------------------------------------
 // takeDamageFrom
 // ---------------------------------------------------------------------------
-void EnemyStats::takeDamageFrom(uint32_t attackerEntityId, int amount, int partyId) {
+void EnemyStats::takeDamageFrom(uint32_t attackerEntityId, int amount) {
     if (!isAlive || amount <= 0) return;
 
     // Track in threat table
     damageByAttacker[attackerEntityId] += amount;
-    // Store partyId at damage time (updates if party changes mid-fight, latest wins)
-    attackerPartyId[attackerEntityId] = partyId;
 
     // If passive mob is provoked, notify
     if (!isAggressive && onProvokedByPlayer) {
@@ -133,13 +131,6 @@ uint32_t EnemyStats::getTopThreatTarget() const {
 // ---------------------------------------------------------------------------
 // getTopDamagerPartyAware
 // ---------------------------------------------------------------------------
-EnemyStats::LootOwnerResult EnemyStats::getTopDamagerPartyAware() const {
-    return getTopDamagerPartyAware([this](uint32_t entityId) -> int {
-        auto it = attackerPartyId.find(entityId);
-        return (it != attackerPartyId.end()) ? it->second : -1;
-    });
-}
-
 EnemyStats::LootOwnerResult EnemyStats::getTopDamagerPartyAware(
     std::function<int(uint32_t)> partyLookup) const {
     if (damageByAttacker.empty()) return {};
@@ -226,7 +217,6 @@ int EnemyStats::getThreatAmount(uint32_t entityId) const {
 // ---------------------------------------------------------------------------
 void EnemyStats::clearThreatTable() {
     damageByAttacker.clear();
-    attackerPartyId.clear();
 }
 
 // ---------------------------------------------------------------------------

@@ -116,8 +116,16 @@ void ServerApp::processMobDeath(
     }
 
     // Determine top damager for loot ownership (party-aware)
-    // Uses partyIds stored at damage time — no live entity lookup needed
-    auto lootResult = es.getTopDamagerPartyAware();
+    // Uses current party state — disbanded parties lose their grouped advantage
+    auto partyLookup = [&world](uint32_t entityId) -> int {
+        EntityHandle h(entityId);
+        auto* entity = world.getEntity(h);
+        if (!entity) return -1;
+        auto* pc = entity->getComponent<PartyComponent>();
+        if (!pc || !pc->party.isInParty()) return -1;
+        return pc->party.partyId;
+    };
+    auto lootResult = es.getTopDamagerPartyAware(partyLookup);
     uint32_t baseOwner = lootResult.topDamagerId;
     if (baseOwner == 0) baseOwner = killerHandle.value;
 

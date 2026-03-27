@@ -712,7 +712,7 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
     // 11. Apply damage to target
     int actualDamage = damage;
     if (ctx.targetMobStats && damage > 0) {
-        ctx.targetMobStats->takeDamageFrom(ctx.casterEntityId, damage, ctx.casterPartyId);
+        ctx.targetMobStats->takeDamageFrom(ctx.casterEntityId, damage);
         actualDamage = damage;  // takeDamageFrom doesn't return actual
     } else if (ctx.targetPlayerStats && damage > 0) {
         actualDamage = ctx.targetPlayerStats->takeDamage(damage);
@@ -1030,7 +1030,7 @@ int SkillManager::executeSkillAOE(const std::string& skillId, int rank,
         // Apply damage
         int actualDamage = damage;
         if (tctx.targetMobStats) {
-            tctx.targetMobStats->takeDamageFrom(primaryCtx.casterEntityId, damage, primaryCtx.casterPartyId);
+            tctx.targetMobStats->takeDamageFrom(primaryCtx.casterEntityId, damage);
         } else if (tctx.targetPlayerStats) {
             actualDamage = tctx.targetPlayerStats->takeDamage(damage);
         }

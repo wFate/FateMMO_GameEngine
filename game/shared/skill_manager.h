@@ -107,7 +107,6 @@ struct SkillDefinition {
 struct SkillExecutionContext {
     uint32_t casterEntityId = 0;
     uint32_t targetEntityId = 0;
-    int casterPartyId = -1;    // partyId at execution time (-1 = solo), for threat tracking
     CharacterStats* casterStats = nullptr;
 
     // Target can be either a player or mob

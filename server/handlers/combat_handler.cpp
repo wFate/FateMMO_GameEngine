@@ -60,9 +60,6 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     // Build execution context
     SkillExecutionContext ctx;
     ctx.casterEntityId = casterHandle.value;
-    auto* casterPartyComp = caster->getComponent<PartyComponent>();
-    ctx.casterPartyId = (casterPartyComp && casterPartyComp->party.isInParty())
-                        ? casterPartyComp->party.partyId : -1;
     ctx.casterStats = &casterStatsComp->stats;
     ctx.casterSEM = casterSEComp ? &casterSEComp->effects : nullptr;
     ctx.casterCC = casterCCComp ? &casterCCComp->cc : nullptr;
@@ -166,7 +163,7 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     if (cooldownIt != clientCooldowns.end()) {
         const CachedSkillRank* rank = skillDefCache_.getRank(msg.skillId, msg.rank);
         float cooldown = rank ? rank->cooldownSeconds : 1.0f;
-        if (gameTime_ - cooldownIt->second < cooldown) {
+        if (gameTime_ - cooldownIt->second < cooldown - TICK_INTERVAL) {
             LOG_DEBUG("Server", "Client %d skill '%s' rejected: cooldown (%.1f < %.1f)",
                       clientId, msg.skillId.c_str(), gameTime_ - cooldownIt->second, cooldown);
             return; // reject — too fast
@@ -343,7 +340,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         float weaponSpeed = charStats ? charStats->stats.weaponAttackSpeed : 1.0f;
         float cooldown = (weaponSpeed > 0.0f) ? (1.0f / weaponSpeed) : 1.5f;
         auto lastIt = lastAutoAttackTime_.find(clientId);
-        if (lastIt != lastAutoAttackTime_.end() && gameTime_ - lastIt->second < cooldown) return;
+        if (lastIt != lastAutoAttackTime_.end() && gameTime_ - lastIt->second < cooldown - TICK_INTERVAL) return;
         lastAutoAttackTime_[clientId] = gameTime_;
 
         if (enemyStats) {
@@ -360,12 +357,8 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             damage = charStats->stats.calculateDamage(false, isCrit);
         }
 
-        // Apply damage (capture partyId at damage time for reliable loot ownership)
-        int attackerPartyId = -1;
-        auto* attackerPartyComp = attacker->getComponent<PartyComponent>();
-        if (attackerPartyComp && attackerPartyComp->party.isInParty())
-            attackerPartyId = attackerPartyComp->party.partyId;
-        enemyStats->stats.takeDamageFrom(attackerHandle.value, damage, attackerPartyId);
+        // Apply damage
+        enemyStats->stats.takeDamageFrom(attackerHandle.value, damage);
         enemyStats->stats.lastDamageTime = gameTime_;
         bool killed = !enemyStats->stats.isAlive;
 

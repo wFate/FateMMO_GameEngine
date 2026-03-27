@@ -59,7 +59,6 @@ public:
 
     // ---- Threat Table (server-only) ----
     std::unordered_map<uint32_t, int> damageByAttacker;   // entityId -> total damage
-    std::unordered_map<uint32_t, int> attackerPartyId;    // entityId -> partyId at damage time (-1 = solo)
 
     // ---- Callbacks ----
     std::function<void()>       onDied;
@@ -75,8 +74,8 @@ public:
     // Subtract HP, check death.
     void takeDamage(int amount);
 
-    // Track damage in threat table + apply damage. partyId = -1 if solo.
-    void takeDamageFrom(uint32_t attackerEntityId, int amount, int partyId = -1);
+    // Track damage in threat table + apply damage.
+    void takeDamageFrom(uint32_t attackerEntityId, int amount);
 
     // Set isAlive=false, fire onDied callback.
     void die();
@@ -103,9 +102,7 @@ public:
 
     // Returns info about the group (party or solo) that dealt the most total damage,
     // plus the top individual within that group. Tie-breaking favors lower entity/group ID.
-    // Uses stored attackerPartyId (captured at damage time) instead of live entity lookup.
-    // Legacy overload with partyLookup lambda still supported.
-    [[nodiscard]] LootOwnerResult getTopDamagerPartyAware() const;
+    // partyLookup(entityId) must return current partyId >= 0 if in a party, or -1 if solo.
     [[nodiscard]] LootOwnerResult getTopDamagerPartyAware(
         std::function<int(uint32_t)> partyLookup) const;
 
