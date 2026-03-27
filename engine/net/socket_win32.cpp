@@ -234,6 +234,20 @@ bool NetAddress::resolve(const char* host, uint16_t port, NetAddress& out) {
     return true;
 }
 
+std::string NetAddress::ipString() const {
+    char ipbuf[INET6_ADDRSTRLEN];
+    if (family() == AF_INET6) {
+        auto* a = reinterpret_cast<const sockaddr_in6*>(&storage);
+        inet_ntop(AF_INET6, &a->sin6_addr, ipbuf, sizeof(ipbuf));
+    } else if (family() == AF_INET) {
+        auto* a = reinterpret_cast<const sockaddr_in*>(&storage);
+        inet_ntop(AF_INET, &a->sin_addr, ipbuf, sizeof(ipbuf));
+    } else {
+        return "unknown";
+    }
+    return ipbuf;
+}
+
 std::string NetAddress::toString() const {
     char buf[64];
     if (family() == AF_INET6) {

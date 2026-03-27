@@ -51,6 +51,9 @@ struct NetAddress {
         return addr;
     }
 
+    /// IP-only string (no port) for per-IP tracking (e.g. "127.0.0.1" or "::1")
+    std::string ipString() const;
+
     /// Human-readable address string for logging (e.g. "127.0.0.1:7777" or "[::1]:7777")
     std::string toString() const;
 };

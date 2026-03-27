@@ -10,6 +10,14 @@ uint16_t ConnectionManager::addClient(const NetAddress& address, float currentTi
         return 0;
     }
 
+    // Per-IP limit check
+    std::string ip = address.ipString();
+    size_t currentCount = connectionsPerIP_[ip];
+    if (currentCount >= maxPerIP_) {
+        LOG_WARN("Connection", "Per-IP limit reached (%zu) for %s, rejecting", maxPerIP_, ip.c_str());
+        return 0;
+    }
+
     // Find unused ID (skip 0, skip in-use IDs)
     while (nextClientId_ == 0 || clients_.count(nextClientId_)) {
         ++nextClientId_;
@@ -27,12 +35,20 @@ uint16_t ConnectionManager::addClient(const NetAddress& address, float currentTi
 
     clients_.emplace(id, std::move(conn));
     addressToClient_[address] = id;
+    connectionsPerIP_[ip]++;
     return id;
 }
 
 void ConnectionManager::removeClient(uint16_t clientId) {
     auto it = clients_.find(clientId);
     if (it != clients_.end()) {
+        // Decrement per-IP counter
+        std::string ip = it->second.address.ipString();
+        auto ipIt = connectionsPerIP_.find(ip);
+        if (ipIt != connectionsPerIP_.end()) {
+            if (ipIt->second <= 1) connectionsPerIP_.erase(ipIt);
+            else ipIt->second--;
+        }
         addressToClient_.erase(it->second.address);
         if (it->second.playerEntityId != 0) {
             entityToClient_.erase(it->second.playerEntityId);
@@ -40,6 +56,11 @@ void ConnectionManager::removeClient(uint16_t clientId) {
         }
         clients_.erase(it);
     }
+}
+
+size_t ConnectionManager::getConnectionsForIP(const std::string& ip) const {
+    auto it = connectionsPerIP_.find(ip);
+    return (it != connectionsPerIP_.end()) ? it->second : 0;
 }
 
 ClientConnection* ConnectionManager::findById(uint16_t clientId) {

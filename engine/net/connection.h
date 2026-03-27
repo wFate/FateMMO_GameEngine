@@ -65,6 +65,8 @@ public:
 
     void setMaxClients(size_t max) { maxClients_ = max; }
     size_t getMaxClients() const { return maxClients_; }
+    void setMaxConnectionsPerIP(size_t max) { maxPerIP_ = max; }
+    size_t getConnectionsForIP(const std::string& ip) const;
 
     template<typename F>
     void forEach(F&& fn) {
@@ -73,8 +75,10 @@ public:
 
 private:
     uint16_t nextClientId_ = 1;
-    size_t maxClients_ = 2000; // default cap to prevent DoS
+    size_t maxClients_ = 2000;  // default cap to prevent DoS
+    size_t maxPerIP_ = 5;       // max concurrent connections from same IP (family play)
     std::unordered_map<uint16_t, ClientConnection> clients_;
+    std::unordered_map<std::string, size_t> connectionsPerIP_; // IP string -> active count
     std::unordered_map<NetAddress, uint16_t, NetAddressHash> addressToClient_;
     std::unordered_map<uint64_t, uint16_t> entityToClient_;      // playerEntityId → clientId
     std::unordered_map<uint32_t, uint16_t> entityToClientLow32_; // lower-32 → clientId (arena interop)
