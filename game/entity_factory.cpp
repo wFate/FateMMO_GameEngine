@@ -959,6 +959,11 @@ Entity* EntityFactory::createNPC(World& world, const NPCTemplate& tmpl) {
     else if (tmpl.isBanker)         nameplate->roleSubtitle = "[Banker]";
     else if (tmpl.isGuildNPC)       nameplate->roleSubtitle = "[Guild]";
     else if (tmpl.isTeleporter)     nameplate->roleSubtitle = "[Teleporter]";
+    else if (tmpl.isArenaNPC)       nameplate->roleSubtitle = "[Arena]";
+    else if (tmpl.isBattlefieldNPC) nameplate->roleSubtitle = "[Battlefield]";
+    else if (tmpl.isMarketplaceNPC)  nameplate->roleSubtitle = "[Market]";
+    else if (tmpl.isLeaderboardNPC)  nameplate->roleSubtitle = "[Records]";
+    else if (tmpl.isDungeonNPC)     nameplate->roleSubtitle = "[Dungeon]";
 
     // --- Conditional role components ---
     if (tmpl.isQuestGiver) {
@@ -994,6 +999,28 @@ Entity* EntityFactory::createNPC(World& world, const NPCTemplate& tmpl) {
         auto* story = npc->addComponent<StoryNPCComponent>();
         story->dialogueTree = tmpl.dialogueTree;
         story->rootNodeId = tmpl.dialogueRootNodeId;
+    }
+
+    if (tmpl.isDungeonNPC) {
+        auto* dungeon = npc->addComponent<DungeonNPCComponent>();
+        dungeon->dungeonSceneId = tmpl.dungeonSceneId;
+    }
+
+    if (tmpl.isArenaNPC) {
+        npc->addComponent<ArenaNPCComponent>();
+    }
+
+    if (tmpl.isBattlefieldNPC) {
+        npc->addComponent<BattlefieldNPCComponent>();
+    }
+
+    if (tmpl.isMarketplaceNPC) {
+        npc->addComponent<MarketplaceNPCComponent>();
+    }
+
+    if (tmpl.isLeaderboardNPC) {
+        auto* lb = npc->addComponent<LeaderboardNPCComponent>();
+        lb->loreSnippet = tmpl.leaderboardLoreSnippet;
     }
 
     return npc;
