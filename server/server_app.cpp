@@ -2197,7 +2197,7 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         break;
                     }
                     int role = clientAdminRoles_.count(clientId) ? clientAdminRoles_[clientId] : 0;
-                    if (!GMCommandRegistry::hasPermission(role, cmd->minRole)) {
+                    if (!GMCommandRegistry::hasPermission(role, static_cast<int>(cmd->minRole))) {
                         sendSystemMsg(clientId, "Insufficient permission.");
                         break;
                     }
