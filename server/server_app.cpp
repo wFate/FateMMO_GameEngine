@@ -1953,6 +1953,14 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
         arenaManager_.onPlayerDisconnect(eid);
         playerEventLocks_.erase(eid);
 
+        // Purge this player's damage from all mob threat tables in their scene
+        {
+            World& w = getWorldForClient(clientId);
+            w.forEach<EnemyStatsComponent>([eid](Entity*, EnemyStatsComponent* esc) {
+                esc->stats.damageByAttacker.erase(eid);
+            });
+        }
+
         // Clean up party membership on disconnect
         {
             World& w = getWorldForClient(clientId);
@@ -3384,6 +3392,15 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                             sc2->stats.combatTimer = 0.0f; // H20-FIX
                         }
                     }
+                    // Purge this player's damage from all mob threat tables in the old scene
+                    {
+                        uint32_t eid = static_cast<uint32_t>(client->playerEntityId);
+                        World& w = getWorldForClient(clientId);
+                        w.forEach<EnemyStatsComponent>([eid](Entity*, EnemyStatsComponent* esc) {
+                            esc->stats.damageByAttacker.erase(eid);
+                        });
+                    }
+
                     lastAutoAttackTime_.erase(clientId);
                     playerDirty_[clientId].position = true;
 
