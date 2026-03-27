@@ -266,6 +266,13 @@ void Editor::processEvent(const SDL_Event& event) {
 void Editor::beginFrame() {
     frameStarted_ = false;
 
+    // Capture previous frame's IO state BEFORE NewFrame() resets it.
+    // ImGui's WantCaptureKeyboard/Mouse reflect which widgets had focus
+    // last frame — reading after NewFrame() always returns false.
+    ImGuiIO& io = ImGui::GetIO();
+    wantsKeyboard_ = io.WantCaptureKeyboard;
+    wantsMouse_ = io.WantCaptureMouse;
+
 #ifdef FATEMMO_METAL
     ImGui_ImplMetal_NewFrame(nil);
 #else
@@ -274,10 +281,6 @@ void Editor::beginFrame() {
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
     frameStarted_ = true;
-
-    ImGuiIO& io = ImGui::GetIO();
-    wantsKeyboard_ = io.WantCaptureKeyboard;
-    wantsMouse_ = io.WantCaptureMouse;
 }
 
 // ============================================================================

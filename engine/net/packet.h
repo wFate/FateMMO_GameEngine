@@ -102,6 +102,7 @@ namespace PacketType {
     constexpr uint8_t CmdDestroyItem       = 0x34;
     constexpr uint8_t CmdActivateSkillRank = 0x35;
     constexpr uint8_t CmdAssignSkillSlot   = 0x36;
+    constexpr uint8_t CmdAllocateStat      = 0x37;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;

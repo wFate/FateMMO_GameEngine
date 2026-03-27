@@ -52,6 +52,12 @@
 #include "engine/ui/widgets/shop_panel.h"
 #include "engine/ui/widgets/bank_panel.h"
 #include "engine/ui/widgets/teleporter_panel.h"
+#include "engine/ui/widgets/arena_panel.h"
+#include "engine/ui/widgets/battlefield_panel.h"
+#include "engine/ui/widgets/pet_panel.h"
+#include "engine/ui/widgets/crafting_panel.h"
+#include "engine/ui/widgets/leaderboard_panel.h"
+#include "engine/ui/widgets/player_context_menu.h"
 #include "engine/ui/widgets/confirm_dialog.h"
 #include "game/shared/npc_types.h"
 #include "game/shared/item_stat_roller.h"
@@ -63,11 +69,11 @@
 #ifndef FATE_SHIPPING
 #include "imgui.h"
 #endif
+#include <nlohmann/json.hpp>
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
 #include <filesystem>
-#include "stb_image_write.h"
 namespace fs = std::filesystem;  // std::min, std::max (used with parenthesized calls to avoid Windows macro conflict)
 
 namespace fate {
@@ -109,17 +115,11 @@ void GameApp::onInit() {
     PrefabLibrary::instance().setDirectory("assets/prefabs");
     PrefabLibrary::instance().loadAll();
 
-    // Register fallback scene factory (used if no saved scene exists)
-    SceneManager::instance().registerScene("TestScene", [this](Scene& scene) {
-        if (!fs::exists("assets/scenes/WhisperingWoods.json")) {
-            createPlayer(scene.world());
-            createTestEntities(scene.world());
-            spawnTestMobs(scene.world());
-            spawnTestNPCs(scene.world());
-        }
-    });
-
-    SceneManager::instance().switchScene("TestScene");
+    // Register a default scene so systems have a world to attach to.
+    // The editor auto-loads WhisperingWoods.json into it below;
+    // on server connect the async loader replaces the contents.
+    SceneManager::instance().registerScene("Default", [](Scene&) {});
+    SceneManager::instance().switchScene("Default");
 
     // Add systems (these operate on whatever entities are in the scene)
     auto* scene = SceneManager::instance().currentScene();
@@ -233,11 +233,15 @@ void GameApp::onInit() {
                 AnimationLoader::tryAutoLoad(*ghostSprite, *ghostAnimator);
             }
 
-            // Apply PK status name color for remote players on enter
+            // Apply PK status name color and faction for remote players on enter
             if (msg.entityType == 0) {
                 auto* nameplate = ghost->getComponent<NameplateComponent>();
                 if (nameplate) {
                     nameplate->nameColor = pkStatusColor(static_cast<PKStatus>(msg.pkStatus));
+                }
+                auto* fc = ghost->getComponent<FactionComponent>();
+                if (fc) {
+                    fc->faction = static_cast<Faction>(msg.faction);
                 }
             }
             // Seed interpolation buffer with initial position so ghosts don't
@@ -517,6 +521,14 @@ void GameApp::onInit() {
                 stats->stats.pvpKills = msg.pvpKills;
                 stats->stats.pvpDeaths = msg.pvpDeaths;
 
+                // Stat allocation — server-authoritative
+                stats->stats.freeStatPoints = msg.freeStatPoints;
+                stats->stats.allocatedSTR   = msg.allocatedSTR;
+                stats->stats.allocatedINT   = msg.allocatedINT;
+                stats->stats.allocatedDEX   = msg.allocatedDEX;
+                stats->stats.allocatedCON   = msg.allocatedCON;
+                stats->stats.allocatedWIS   = msg.allocatedWIS;
+
                 // Derived stats — server-authoritative snapshot
                 stats->stats.applyServerSnapshot(
                     msg.armor, msg.magicResist, msg.critRate,
@@ -631,6 +643,11 @@ void GameApp::onInit() {
     netClient_.onSocialUpdate = [this](const SvSocialUpdateMsg& msg) {
         if (chatPanel_) chatPanel_->addMessage(6, "[Social]", msg.message, static_cast<uint8_t>(0));
         else pendingChatMessages_.push_back({6, "[Social]", msg.message, 0});
+    };
+
+    netClient_.onConsumeResult = [this](const SvConsumeResultMsg& msg) {
+        if (chatPanel_) chatPanel_->addMessage(6, "[Item]", msg.message, static_cast<uint8_t>(0));
+        else pendingChatMessages_.push_back({6, "[Item]", msg.message, 0});
     };
 
     netClient_.onQuestUpdate = [this](const SvQuestUpdateMsg& msg) {
@@ -1082,6 +1099,8 @@ void GameApp::onInit() {
             shopPanel_ = nullptr;
             bankPanel_ = nullptr;
             teleporterPanel_ = nullptr;
+            arenaPanel_ = nullptr;
+            battlefieldPanel_ = nullptr;
             inDungeon_ = false;
             dungeonInviteDialog_ = nullptr;
             if (loginScreenWidget_) {
@@ -1185,12 +1204,124 @@ void GameApp::onInit() {
         audioManager_.playMusic("assets/audio/music/" + msg.sceneId + ".ogg");
     };
 
+    netClient_.onRankingResult = [this](const SvRankingResultMsg& msg) {
+        if (!leaderboardPanel_ || !leaderboardPanel_->isOpen()) return;
+        auto j = nlohmann::json::parse(msg.entriesJson, nullptr, false);
+        if (j.is_discarded()) return;
+
+        std::vector<LeaderboardPanel::Entry> entries;
+        auto category = static_cast<RankingCategory>(msg.category);
+
+        for (const auto& item : j) {
+            LeaderboardPanel::Entry entry;
+            entry.rank = item.value("rank", 0);
+            entry.name = item.value("characterName", "");
+            entry.classType = item.value("classType", "");
+            entry.level = item.value("level", 0);
+
+            if (category == RankingCategory::Honor) {
+                entry.valueDisplay = "Honor: " + std::to_string(item.value("honor", 0));
+            } else if (category == RankingCategory::MobsKilled) {
+                entry.valueDisplay = "Kills: " + std::to_string(item.value("totalMobKills", 0));
+            } else if (category == RankingCategory::CollectionProgress) {
+                float pct = item.value("percentage", 0.0f);
+                char buf[16];
+                snprintf(buf, sizeof(buf), "%.1f%%", pct);
+                entry.valueDisplay = buf;
+            } else if (category == RankingCategory::Guilds) {
+                entry.name = item.value("guildName", "");
+                entry.classType = item.value("ownerName", "");
+                entry.valueDisplay = "Lv." + std::to_string(item.value("guildLevel", 0)) +
+                                     " (" + std::to_string(item.value("memberCount", 0)) + " members)";
+            } else {
+                entry.valueDisplay = "Lv." + std::to_string(entry.level);
+            }
+
+            entries.push_back(entry);
+        }
+        leaderboardPanel_->populateEntries(entries, msg.totalEntries, msg.page);
+    };
+
     netClient_.onAuroraStatus = [this](const SvAuroraStatusMsg& msg) {
         Faction favored = static_cast<Faction>(msg.favoredFaction);
         auto* def = FactionRegistry::get(favored);
         std::string name = def ? def->displayName : "Unknown";
         LOG_INFO("Game", "Aurora status: %s favored, %u seconds remaining",
                  name.c_str(), msg.secondsRemaining);
+    };
+
+    // --- System result handlers (enchant, repair, extract, craft, socket, pet, arena, battlefield) ---
+    netClient_.onEnchantResult = [this](const SvEnchantResultMsg& msg) {
+        if (chatPanel_) chatPanel_->addMessage(6, "[Enchant]", msg.message, 0);
+    };
+
+    netClient_.onRepairResult = [this](const SvRepairResultMsg& msg) {
+        if (chatPanel_) chatPanel_->addMessage(6, "[Repair]", msg.message, 0);
+    };
+
+    netClient_.onExtractResult = [this](const SvExtractResultMsg& msg) {
+        if (chatPanel_) chatPanel_->addMessage(6, "[Extract]", msg.message, 0);
+    };
+
+    netClient_.onCraftResult = [this](const SvCraftResultMsg& msg) {
+        if (chatPanel_) chatPanel_->addMessage(6, "[Craft]", msg.message, 0);
+        if (craftingPanel_) craftingPanel_->resultMessage = msg.message;
+    };
+
+    netClient_.onSocketResult = [this](const SvSocketResultMsg& msg) {
+        if (chatPanel_) chatPanel_->addMessage(6, "[Socket]", msg.message, 0);
+    };
+
+    netClient_.onPetUpdate = [this](const SvPetUpdateMsg& msg) {
+        if (petPanel_) {
+            petPanel_->petEquipped = msg.equipped;
+            petPanel_->petName = msg.petName;
+            petPanel_->petDefId = msg.petDefId;
+            petPanel_->petLevel = msg.level;
+            petPanel_->petXP = msg.currentXP;
+            petPanel_->hasPet = msg.equipped;
+        }
+        if (chatPanel_) {
+            std::string text = msg.equipped ? "Pet " + msg.petName + " equipped!" : "Pet unequipped.";
+            chatPanel_->addMessage(6, "[Pet]", text, 0);
+        }
+    };
+
+    netClient_.onArenaUpdate = [this](const SvArenaUpdateMsg& msg) {
+        if (arenaPanel_ && arenaPanel_->isOpen()) {
+            if (msg.state == 1) {  // queued
+                arenaPanel_->isRegistered = true;
+                arenaPanel_->statusMessage = "Searching for opponents...";
+            } else if (msg.state == 0) {  // cancelled/unregistered
+                arenaPanel_->isRegistered = false;
+                arenaPanel_->statusMessage = "";
+            }
+        }
+        if (chatPanel_) {
+            std::string text = "Arena status updated.";
+            if (msg.result == 1) text = "Victory! +" + std::to_string(msg.honorReward) + " honor";
+            else if (msg.result == 2) text = "Defeat. Better luck next time.";
+            chatPanel_->addMessage(6, "[Arena]", text, 0);
+        }
+    };
+
+    netClient_.onBattlefieldUpdate = [this](const SvBattlefieldUpdateMsg& msg) {
+        if (battlefieldPanel_ && battlefieldPanel_->isOpen()) {
+            if (msg.state == 1) {
+                battlefieldPanel_->isRegistered = true;
+                battlefieldPanel_->timeUntilStart = msg.timeRemaining;
+                battlefieldPanel_->statusMessage = "Registered. Waiting for battle...";
+            } else if (msg.state == 0) {
+                battlefieldPanel_->isRegistered = false;
+                battlefieldPanel_->statusMessage = "";
+            }
+        }
+        if (chatPanel_) {
+            std::string text = "Battlefield status updated.";
+            if (msg.result == 1) text = "Victory! Your faction prevails!";
+            else if (msg.result == 2) text = "Defeat. Your faction has fallen.";
+            chatPanel_->addMessage(6, "[Battlefield]", text, 0);
+        }
     };
 
     // Initialize audio
@@ -1216,24 +1347,6 @@ void GameApp::onInit() {
         };
     } else {
         tilemap_.reset();
-    }
-
-    // Auto-load WhisperingWoods as the default scene
-    if (fs::exists("assets/scenes/WhisperingWoods.json")) {
-        auto* s = SceneManager::instance().currentScene();
-        if (s) {
-            Editor::instance().loadScene(&s->world(), "assets/scenes/WhisperingWoods.json");
-
-            // Remove stale player entities baked into the scene JSON —
-            // the real player is created on server connect.
-            std::vector<EntityHandle> stale;
-            s->world().forEach<PlayerController>([&](Entity* e, PlayerController*) {
-                stale.push_back(e->handle());
-            });
-            for (auto h : stale) s->world().destroyEntity(h);
-
-            LOG_INFO("Game", "Auto-loaded WhisperingWoods scene");
-        }
     }
 
     // ========================================================================
@@ -1357,6 +1470,8 @@ void GameApp::onInit() {
     uiManager().addScreenReloadListener([this](const std::string& screenId) {
         if (screenId == "fate_menu_panels") {
             inventoryPanel_ = nullptr;
+            petPanel_ = nullptr;
+            craftingPanel_ = nullptr;
             retainedUILoaded_ = false;
         } else if (screenId == "fate_hud") {
             skillArc_ = nullptr;
@@ -1373,6 +1488,8 @@ void GameApp::onInit() {
             shopPanel_ = nullptr;
             bankPanel_ = nullptr;
             teleporterPanel_ = nullptr;
+            arenaPanel_ = nullptr;
+            battlefieldPanel_ = nullptr;
             retainedUILoaded_ = false;
         } else if (screenId == "login") {
             loginScreenWidget_ = nullptr;
@@ -1438,508 +1555,6 @@ void GameApp::onInit() {
     LOG_INFO("Game", "Initialized");
 }
 
-void GameApp::createPlayer(World& world) {
-    Entity* player = EntityFactory::createPlayer(world, "Player", ClassType::Warrior, true, pendingFaction_);
-
-    // Spawn player at origin so they start near the mobs
-    auto* transform = player->getComponent<Transform>();
-    if (transform) {
-        transform->position = {0.0f, 0.0f};
-    }
-
-    // Create proper pixel-art player sprite if no texture was loaded by the factory
-    auto* sprite = player->getComponent<SpriteComponent>();
-    if (sprite && !sprite->texture) {
-        std::string playerPath = "assets/sprites/player.png";
-        if (!fs::exists(playerPath)) {
-            // 20x33 character sprite — chibi warrior
-            const int W = 20, H = 33;
-            std::vector<unsigned char> pixels(W * H * 4, 0);
-            auto sp = [&](int x, int y, unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
-                setPixelW(pixels, x, y, W, H, r, g, b, a);
-            };
-            auto outline = [&](int x, int y) { sp(x, y, 20, 20, 25); };
-
-            // -- Hair (rows 0-4) --
-            for (int y = 1; y <= 4; y++)
-                for (int x = 6; x <= 13; x++) {
-                    int n = pixelHash(x, y, 600) % 7 - 3;
-                    sp(x, y, clampByte(60+n), clampByte(35+n), clampByte(20+n)); // brown hair
-                }
-            // Hair outline
-            for (int x = 6; x <= 13; x++) outline(x, 0);
-            outline(5, 1); outline(5, 2); outline(5, 3);
-            outline(14, 1); outline(14, 2); outline(14, 3);
-
-            // -- Head / face (rows 4-10) --
-            for (int y = 4; y <= 10; y++)
-                for (int x = 7; x <= 12; x++) {
-                    int n = pixelHash(x, y, 601) % 5 - 2;
-                    sp(x, y, clampByte(230+n), clampByte(190+n), clampByte(150+n)); // skin
-                }
-            // Eyes
-            sp(8, 7, 40, 40, 50); sp(9, 7, 40, 40, 50);
-            sp(11, 7, 40, 40, 50); sp(12, 7, 40, 40, 50);
-            // Mouth
-            sp(9, 9, 180, 120, 100); sp(10, 9, 180, 120, 100); sp(11, 9, 180, 120, 100);
-            // Face outline
-            for (int y = 4; y <= 10; y++) { outline(6, y); outline(13, y); }
-            for (int x = 7; x <= 12; x++) outline(x, 11);
-
-            // -- Body / tunic (rows 11-22) --
-            for (int y = 11; y <= 22; y++)
-                for (int x = 5; x <= 14; x++) {
-                    int n = pixelHash(x, y, 602) % 7 - 3;
-                    // Blue tunic with lighter chest highlight
-                    int highlight = (x >= 8 && x <= 11 && y >= 13 && y <= 17) ? 20 : 0;
-                    sp(x, y, clampByte(50+n+highlight/2), clampByte(80+n+highlight), clampByte(170+n+highlight));
-                }
-            // Belt
-            for (int x = 5; x <= 14; x++) {
-                int n = pixelHash(x, 20, 603) % 5 - 2;
-                sp(x, 20, clampByte(120+n), clampByte(85+n), clampByte(40+n)); // brown belt
-            }
-            sp(10, 20, 200, 180, 60); // belt buckle
-            // Body outline
-            for (int y = 11; y <= 22; y++) { outline(4, y); outline(15, y); }
-            for (int x = 5; x <= 14; x++) outline(x, 22);
-
-            // -- Arms (rows 12-20, sides of body) --
-            for (int y = 12; y <= 19; y++) {
-                int n = pixelHash(3, y, 604) % 5 - 2;
-                sp(3, y, clampByte(230+n), clampByte(190+n), clampByte(150+n)); // skin left arm
-                sp(4, y, clampByte(50+n), clampByte(80+n), clampByte(170+n)); // sleeve left
-                sp(16, y, clampByte(230+n), clampByte(190+n), clampByte(150+n)); // skin right arm
-                sp(15, y, clampByte(50+n), clampByte(80+n), clampByte(170+n)); // sleeve right
-            }
-            for (int y = 12; y <= 19; y++) { outline(2, y); outline(17, y); }
-            outline(3, 20); outline(16, 20);
-
-            // -- Sword (right side, rows 8-24) --
-            for (int y = 8; y <= 22; y++) {
-                sp(18, y, 180, 185, 195); // blade
-                if (y >= 8 && y <= 10) sp(19, y, 160, 165, 175); // blade width
-            }
-            sp(18, 23, 120, 85, 40); sp(18, 24, 120, 85, 40); // hilt
-            sp(17, 23, 180, 160, 50); sp(19, 23, 180, 160, 50); // crossguard
-
-            // -- Legs / pants (rows 23-30) --
-            for (int y = 23; y <= 30; y++) {
-                for (int x = 6; x <= 9; x++) {
-                    int n = pixelHash(x, y, 605) % 5 - 2;
-                    sp(x, y, clampByte(65+n), clampByte(55+n), clampByte(45+n)); // dark pants left
-                }
-                for (int x = 11; x <= 14; x++) {
-                    int n = pixelHash(x, y, 606) % 5 - 2;
-                    sp(x, y, clampByte(65+n), clampByte(55+n), clampByte(45+n)); // dark pants right
-                }
-            }
-            // Leg outline
-            for (int y = 23; y <= 30; y++) {
-                outline(5, y); outline(10, y);
-                outline(10, y); outline(15, y);
-            }
-
-            // -- Boots (rows 30-32) --
-            for (int y = 31; y <= 32; y++) {
-                for (int x = 5; x <= 9; x++) sp(x, y, 80, 55, 30);
-                for (int x = 11; x <= 15; x++) sp(x, y, 80, 55, 30);
-            }
-            for (int x = 5; x <= 9; x++) outline(x, (std::min)(32, H-1));
-            for (int x = 11; x <= 15; x++) outline(x, (std::min)(32, H-1));
-
-            fs::create_directories("assets/sprites");
-            stbi_write_png(playerPath.c_str(), W, H, 4, pixels.data(), W * 4);
-        }
-        sprite->texture = TextureCache::instance().load(playerPath);
-        sprite->texturePath = playerPath;
-        if (sprite->texture) {
-            sprite->size = {(float)sprite->texture->width(), (float)sprite->texture->height()};
-        }
-    }
-
-    // Auto-load animation metadata from .meta.json
-    auto* playerAnimator = player->getComponent<Animator>();
-    if (sprite && playerAnimator) {
-        AnimationLoader::tryAutoLoad(*sprite, *playerAnimator);
-    }
-
-    LOG_INFO("Game", "Player entity created at (0, 0)");
-}
-
-void GameApp::createTestEntities(World& world) {
-    // ---- Generate improved grass tile variants ----
-    std::string grassPath = "assets/sprites/grass_tile.png";
-    std::string grassDarkPath = "assets/sprites/grass_dark_tile.png";
-    std::string dirtPatchPath = "assets/sprites/dirt_patch_tile.png";
-
-    auto grassTex = TextureCache::instance().load(grassPath);
-    if (!grassTex) {
-        const int SIZE = 32;
-        std::vector<unsigned char> pixels(SIZE * SIZE * 4);
-        for (int y = 0; y < SIZE; y++) {
-            for (int x = 0; x < SIZE; x++) {
-                int i = (y * SIZE + x) * 4;
-                int h = pixelHash(x, y, 700);
-                int n = (h % 21) - 10;
-                // Warm green base
-                int r = 55 + n/2, g = 115 + n, b = 38 + n/3;
-                // Grass blade highlights
-                if ((h & 7) == 0) { g += 15; r -= 3; }
-                // Subtle darker tufts
-                if ((h % 23) == 0) { r -= 8; g -= 12; b -= 5; }
-                pixels[i+0] = clampByte(r);
-                pixels[i+1] = clampByte(g);
-                pixels[i+2] = clampByte(b);
-                pixels[i+3] = 255;
-            }
-        }
-        fs::create_directories("assets/sprites");
-        stbi_write_png(grassPath.c_str(), SIZE, SIZE, 4, pixels.data(), SIZE * 4);
-        grassTex = TextureCache::instance().load(grassPath);
-    }
-
-    auto grassDarkTex = TextureCache::instance().load(grassDarkPath);
-    if (!grassDarkTex) {
-        const int SIZE = 32;
-        std::vector<unsigned char> pixels(SIZE * SIZE * 4);
-        for (int y = 0; y < SIZE; y++) {
-            for (int x = 0; x < SIZE; x++) {
-                int i = (y * SIZE + x) * 4;
-                int h = pixelHash(x, y, 701);
-                int n = (h % 17) - 8;
-                int r = 38 + n/2, g = 82 + n, b = 30 + n/3;
-                if ((h & 11) == 0) { g += 10; }
-                if ((h % 19) == 0) { r += 12; g -= 8; b -= 4; } // leaf litter
-                pixels[i+0] = clampByte(r); pixels[i+1] = clampByte(g);
-                pixels[i+2] = clampByte(b); pixels[i+3] = 255;
-            }
-        }
-        stbi_write_png(grassDarkPath.c_str(), SIZE, SIZE, 4, pixels.data(), SIZE * 4);
-        grassDarkTex = TextureCache::instance().load(grassDarkPath);
-    }
-
-    auto dirtTex = TextureCache::instance().load(dirtPatchPath);
-    if (!dirtTex) {
-        const int SIZE = 32;
-        std::vector<unsigned char> pixels(SIZE * SIZE * 4);
-        for (int y = 0; y < SIZE; y++) {
-            for (int x = 0; x < SIZE; x++) {
-                int i = (y * SIZE + x) * 4;
-                int h = pixelHash(x, y, 702);
-                int n = (h % 21) - 10;
-                int r = 140 + n, g = 100 + n*3/4, b = 62 + n/2;
-                if ((h % 29) == 0) { r += 18; g += 15; b += 12; } // pebble
-                pixels[i+0] = clampByte(r); pixels[i+1] = clampByte(g);
-                pixels[i+2] = clampByte(b); pixels[i+3] = 255;
-            }
-        }
-        stbi_write_png(dirtPatchPath.c_str(), SIZE, SIZE, 4, pixels.data(), SIZE * 4);
-        dirtTex = TextureCache::instance().load(dirtPatchPath);
-    }
-
-    // ---- Lay ground tiles: 48x32 grid centered on origin ----
-    int tilesX = 48;
-    int tilesY = 32;
-    float tileSize = 32.0f;
-    float half = tileSize * 0.5f;
-    int halfX = tilesX / 2;
-    int halfY = tilesY / 2;
-
-    for (int ty = 0; ty < tilesY; ty++) {
-        for (int tx = 0; tx < tilesX; tx++) {
-            Entity* tile = world.createEntity("Tile");
-            tile->setTag("ground");
-
-            auto* transform = tile->addComponent<Transform>(
-                (float)(tx - halfX) * tileSize + half,
-                (float)(ty - halfY) * tileSize + half
-            );
-            transform->depth = 0.0f;
-
-            auto* sprite = tile->addComponent<SpriteComponent>();
-            sprite->size = {tileSize, tileSize};
-
-            // Choose tile type: mostly grass, occasional dirt patches and dark grass
-            int tileH = pixelHash(tx, ty, 800);
-            if ((tileH % 17) == 0) {
-                // Dirt patch
-                sprite->texture = dirtTex;
-                sprite->texturePath = dirtPatchPath;
-            } else if ((tileH % 7) == 0) {
-                // Dark grass (near trees / edges)
-                sprite->texture = grassDarkTex;
-                sprite->texturePath = grassDarkPath;
-            } else {
-                sprite->texture = grassTex;
-                sprite->texturePath = grassPath;
-            }
-        }
-    }
-
-    // ---- Generate improved tree sprite (32x48) ----
-    std::string treePath = "assets/sprites/tree.png";
-    auto treeTex = TextureCache::instance().load(treePath);
-    if (!treeTex) {
-        const int W = 32, H = 48;
-        std::vector<unsigned char> pixels(W * H * 4, 0);
-        auto sp = [&](int x, int y, unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255) {
-            setPixelW(pixels, x, y, W, H, r, g, b, a);
-        };
-
-        // Trunk (centered, rows 30-47)
-        for (int y = 30; y < H; y++) {
-            for (int x = 12; x <= 19; x++) {
-                int n = pixelHash(x, y, 710) % 11 - 5;
-                // Bark texture: lighter on left (light source from left-top)
-                int highlight = (x <= 14) ? 12 : ((x >= 18) ? -10 : 0);
-                sp(x, y, clampByte(95 + n + highlight), clampByte(65 + n + highlight), clampByte(30 + n));
-                // Vertical bark lines
-                if ((pixelHash(x, 0, 711) % 4) == 0) {
-                    int bn = pixelHash(x, y, 712) % 7 - 3;
-                    sp(x, y, clampByte(80 + bn + highlight), clampByte(55 + bn + highlight), clampByte(25 + bn));
-                }
-            }
-        }
-        // Trunk outline
-        for (int y = 30; y < H; y++) {
-            sp(11, y, 30, 22, 12); sp(20, y, 30, 22, 12);
-        }
-
-        // Canopy (organic round shape with multiple layers)
-        // Main canopy ellipse centered at (16, 16), radii ~14x14
-        float cx = 16.0f, cy = 16.0f;
-        float rx = 14.5f, ry = 14.0f;
-        for (int y = 0; y < 32; y++) {
-            for (int x = 0; x < W; x++) {
-                float dx = x - cx, dy = y - cy;
-                float d = (dx*dx)/(rx*rx) + (dy*dy)/(ry*ry);
-                if (d < 1.0f) {
-                    int n = pixelHash(x, y, 713) % 15 - 7;
-                    // Multiple green shades: lighter toward top-left, darker at bottom-right
-                    float lightFactor = 1.0f - d * 0.3f;
-                    float topBias = (cy - (float)y) / ry; // positive = upper part
-                    int baseG = (int)(95.0f + topBias * 25.0f);
-                    int baseR = (int)(25.0f + topBias * 10.0f);
-                    int baseB = (int)(18.0f + topBias * 5.0f);
-
-                    // Shadow on lower-right
-                    if (dx > 3 && dy > 3) { baseG -= 15; baseR -= 5; }
-                    // Highlight on upper-left (dappled)
-                    if (dx < -2 && dy < -2 && (pixelHash(x, y, 714) % 5) == 0) { baseG += 25; baseR += 8; }
-                    // Leaf cluster variation
-                    int cluster = pixelHash(x / 3, y / 3, 715) % 20 - 10;
-
-                    sp(x, y, clampByte(baseR + n + cluster/2),
-                             clampByte(baseG + n + cluster),
-                             clampByte(baseB + n + cluster/3));
-                }
-            }
-        }
-
-        // Canopy dark outline
-        for (int y = 0; y < 32; y++) {
-            for (int x = 0; x < W; x++) {
-                float dx = x - cx, dy = y - cy;
-                float d = (dx*dx)/(rx*rx) + (dy*dy)/(ry*ry);
-                if (d >= 0.85f && d < 1.15f) {
-                    // Check if neighbor is transparent
-                    bool hasEmpty = false;
-                    for (int dy2 = -1; dy2 <= 1; dy2++)
-                        for (int dx2 = -1; dx2 <= 1; dx2++) {
-                            int nx = x+dx2, ny = y+dy2;
-                            if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
-                                if (pixels[(ny*W+nx)*4+3] == 0) hasEmpty = true;
-                            }
-                        }
-                    if (hasEmpty && pixels[(y*W+x)*4+3] != 0) {
-                        sp(x, y, 15, 40, 10);
-                    }
-                }
-            }
-        }
-
-        stbi_write_png(treePath.c_str(), W, H, 4, pixels.data(), W * 4);
-        treeTex = TextureCache::instance().load(treePath);
-    }
-
-    // ---- Place trees: clustered + scattered for natural feel ----
-    // Clusters near edges, some random
-    Vec2 treePositions[] = {
-        // Cluster NW
-        {-320, -200}, {-290, -180}, {-350, -160}, {-310, -140},
-        // Cluster NE
-        {280, -210}, {310, -190}, {260, -170}, {300, -150},
-        // Cluster SW
-        {-280, 200}, {-310, 180}, {-260, 220},
-        // Cluster SE
-        {300, 190}, {330, 210}, {280, 230},
-        // Scattered singles
-        {-100, 80}, {120, -60}, {-50, -150}, {200, 100},
-        {-180, 30}, {180, -120}, {-20, 250}, {60, -240},
-        // Near center but offset
-        {-140, -50}, {160, 60}, {50, 140}, {-80, -110},
-    };
-
-    for (auto& pos : treePositions) {
-        Entity* tree = world.createEntity("Tree");
-        tree->setTag("obstacle");
-
-        auto* transform = tree->addComponent<Transform>(pos);
-        transform->depth = 5.0f;
-
-        auto* sprite = tree->addComponent<SpriteComponent>();
-        sprite->texture = treeTex;
-        sprite->texturePath = treePath;
-        sprite->size = {32.0f, 48.0f};
-
-        auto* collider = tree->addComponent<BoxCollider>();
-        collider->size = {12.0f, 18.0f};
-        collider->offset = {0.0f, 8.0f};
-        collider->isStatic = true;
-    }
-
-    // ---- Generate and place rock decorations ----
-    std::string rockPath = "assets/sprites/rock_small.png";
-    auto rockTex = TextureCache::instance().load(rockPath);
-    if (!rockTex) {
-        const int SIZE = 16;
-        std::vector<unsigned char> pixels(SIZE * SIZE * 4, 0);
-        for (int y = 0; y < SIZE; y++) {
-            for (int x = 0; x < SIZE; x++) {
-                float dx = x - 8.0f, dy = y - 9.0f;
-                // Slightly flat ellipse
-                if (dx*dx/(6.5f*6.5f) + dy*dy/(5.5f*5.5f) < 1.0f) {
-                    int n = pixelHash(x, y, 720) % 15 - 7;
-                    int shade = (int)(25.0f * (1.0f - (float)y / SIZE));
-                    unsigned char base = clampByte(130 + n + shade);
-                    setPixel(pixels, x, y, SIZE, base, clampByte(base - 3), clampByte(base - 8));
-                    // Highlight speck
-                    if (y < 6 && (pixelHash(x, y, 721) % 7) == 0) {
-                        setPixel(pixels, x, y, SIZE, clampByte(base + 30), clampByte(base + 25), clampByte(base + 20));
-                    }
-                }
-            }
-        }
-        // Outline
-        for (int y = 0; y < SIZE; y++)
-            for (int x = 0; x < SIZE; x++) {
-                if (pixels[(y*SIZE+x)*4+3] == 0) continue;
-                bool edge = false;
-                for (int d = -1; d <= 1 && !edge; d++)
-                    for (int e = -1; e <= 1 && !edge; e++) {
-                        int nx = x+e, ny = y+d;
-                        if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE || pixels[(ny*SIZE+nx)*4+3] == 0) edge = true;
-                    }
-                if (edge) setPixel(pixels, x, y, SIZE, 60, 55, 50);
-            }
-        stbi_write_png(rockPath.c_str(), SIZE, SIZE, 4, pixels.data(), SIZE * 4);
-        rockTex = TextureCache::instance().load(rockPath);
-    }
-
-    Vec2 rockPositions[] = {
-        {-60, 40}, {80, -30}, {-150, 100}, {200, -80},
-        {30, 170}, {-100, -130}, {250, 50}, {-220, -40},
-    };
-    for (auto& pos : rockPositions) {
-        Entity* rock = world.createEntity("Rock");
-        rock->setTag("decoration");
-        auto* transform = rock->addComponent<Transform>(pos);
-        transform->depth = 2.0f;
-        auto* sprite = rock->addComponent<SpriteComponent>();
-        sprite->texture = rockTex;
-        sprite->texturePath = rockPath;
-        sprite->size = {16.0f, 16.0f};
-    }
-
-    LOG_INFO("Game", "Test scene created: %zu entities total (%dx%d tiles + trees + rocks)", world.entityCount(), tilesX, tilesY);
-}
-
-void GameApp::spawnTestMobs(World& world) {
-    // Create a spawn zone entity
-    Entity* zone = world.createEntity("WhisperingWoods_SpawnZone");
-    zone->setTag("spawnzone");
-    auto* zoneTransform = zone->addComponent<Transform>(0.0f, 0.0f);
-    zoneTransform->depth = -5.0f; // Behind everything (invisible zone marker)
-    auto* szComp = zone->addComponent<SpawnZoneComponent>();
-    szComp->config.zoneName = "Whispering Woods";
-    szComp->config.size = {200.0f, 150.0f};
-
-    // Add spawn rules
-    MobSpawnRule slimeRule;
-    slimeRule.enemyId = "Slime";
-    slimeRule.targetCount = 3;
-    slimeRule.minLevel = 1; slimeRule.maxLevel = 2;
-    slimeRule.baseHP = 30; slimeRule.baseDamage = 5;
-    slimeRule.respawnSeconds = 10.0f;
-    szComp->config.rules.push_back(slimeRule);
-
-    MobSpawnRule goblinRule;
-    goblinRule.enemyId = "Goblin";
-    goblinRule.targetCount = 2;
-    goblinRule.minLevel = 2; goblinRule.maxLevel = 3;
-    goblinRule.baseHP = 50; goblinRule.baseDamage = 8;
-    goblinRule.respawnSeconds = 15.0f;
-    szComp->config.rules.push_back(goblinRule);
-
-    MobSpawnRule wolfRule;
-    wolfRule.enemyId = "Wolf";
-    wolfRule.targetCount = 2;
-    wolfRule.minLevel = 3; wolfRule.maxLevel = 4;
-    wolfRule.baseHP = 70; wolfRule.baseDamage = 12;
-    wolfRule.respawnSeconds = 20.0f;
-    szComp->config.rules.push_back(wolfRule);
-
-    MobSpawnRule mushroomRule;
-    mushroomRule.enemyId = "Mushroom";
-    mushroomRule.targetCount = 2;
-    mushroomRule.minLevel = 1; mushroomRule.maxLevel = 1;
-    mushroomRule.baseHP = 20; mushroomRule.baseDamage = 3;
-    mushroomRule.isAggressive = false;
-    mushroomRule.respawnSeconds = 10.0f;
-    szComp->config.rules.push_back(mushroomRule);
-
-    MobSpawnRule golemRule;
-    golemRule.enemyId = "Forest_Golem";
-    golemRule.targetCount = 1;
-    golemRule.minLevel = 5; golemRule.maxLevel = 5;
-    golemRule.baseHP = 200; golemRule.baseDamage = 25;
-    golemRule.isBoss = true;
-    golemRule.isAggressive = true;
-    golemRule.respawnSeconds = 60.0f;
-    szComp->config.rules.push_back(golemRule);
-
-    LOG_INFO("Game", "Created spawn zone '%s' with %zu rules",
-             szComp->config.zoneName.c_str(), szComp->config.rules.size());
-}
-
-void GameApp::spawnTestNPCs(World& world) {
-    NPCTemplate testNPC;
-    testNPC.name = "Village Elder";
-    testNPC.npcId = 1;
-    testNPC.position = {256.0f, 256.0f};
-    testNPC.isQuestGiver = true;
-    testNPC.questIds = {1, 2, 3};
-    testNPC.dialogueGreeting = "Welcome, adventurer! I have tasks for you.";
-    EntityFactory::createNPC(world, testNPC);
-
-    NPCTemplate merchantNPC;
-    merchantNPC.name = "Potion Merchant";
-    merchantNPC.npcId = 2;
-    merchantNPC.position = {320.0f, 256.0f};
-    merchantNPC.isMerchant = true;
-    merchantNPC.shopName = "Potion Shop";
-    merchantNPC.shopItems = {
-        {"potion_hp_small", "Small HP Potion", 50, 12, 0},
-        {"potion_mp_small", "Small MP Potion", 50, 12, 0},
-        {"potion_hp_medium", "Medium HP Potion", 200, 50, 0}
-    };
-    merchantNPC.dialogueGreeting = "Welcome to my shop! Take a look around.";
-    EntityFactory::createNPC(world, merchantNPC);
-
-    LOG_INFO("Game", "Test NPCs created (Village Elder, Potion Merchant)");
-}
-
 void GameApp::onUpdate(float deltaTime) {
     switch (connState_) {
         case ConnectionState::LoginScreen:
@@ -1997,6 +1612,8 @@ void GameApp::onUpdate(float deltaTime) {
                 shopPanel_ = nullptr;
                 bankPanel_ = nullptr;
                 teleporterPanel_ = nullptr;
+                arenaPanel_ = nullptr;
+                battlefieldPanel_ = nullptr;
                 dungeonInviteDialog_ = nullptr;
                 inDungeon_ = false;
 
@@ -2077,6 +1694,8 @@ void GameApp::onUpdate(float deltaTime) {
                 shopPanel_ = nullptr;
                 bankPanel_ = nullptr;
                 teleporterPanel_ = nullptr;
+                arenaPanel_ = nullptr;
+                battlefieldPanel_ = nullptr;
                 dungeonInviteDialog_ = nullptr;
                 inDungeon_ = false;
 
@@ -2384,11 +2003,37 @@ void GameApp::onUpdate(float deltaTime) {
                                     destroyItemId_.clear();
                                 }
                                 destroyItemDialog_->setVisible(false);
+                                if (inventoryPanel_) inventoryPanel_->setEnabled(true);
                             };
                             destroyItemDialog_->onCancel = [this](const std::string&) {
                                 destroyItemSlot_ = -1;
                                 destroyItemId_.clear();
                                 destroyItemDialog_->setVisible(false);
+                                if (inventoryPanel_) inventoryPanel_->setEnabled(true);
+                            };
+                        }
+                        // Wire PlayerContextMenu
+                        playerContextMenu_ = dynamic_cast<PlayerContextMenu*>(hudScreen->findById("player_context_menu"));
+                        if (playerContextMenu_) {
+                            playerContextMenu_->onTrade = [this](const std::string& charId) {
+                                playerContextMenu_->hide();
+                                netClient_.sendTradeAction(TradeAction::Initiate, charId);
+                            };
+                            playerContextMenu_->onPartyInvite = [this](const std::string& charId) {
+                                playerContextMenu_->hide();
+                                // Party invite not yet implemented on server — log intent
+                                if (chatPanel_) {
+                                    chatPanel_->addMessage(6, "[System]", "Party invite sent to " + charId, 0);
+                                }
+                            };
+                            playerContextMenu_->onWhisper = [this](const std::string& charId) {
+                                playerContextMenu_->hide();
+                                if (chatPanel_) {
+                                    chatPanel_->addMessage(6, "[System]", "Whisper target set to " + charId, 0);
+                                    // Switch chat to whisper channel with target pre-filled
+                                    chatPanel_->setFullPanelMode(true);
+                                    Input::instance().setChatMode(true);
+                                }
                             };
                         }
                     }
@@ -2501,6 +2146,7 @@ void GameApp::onUpdate(float deltaTime) {
                                 // Map arc slot index to global skill bar slot using current page
                                 int page = skillArc_ ? skillArc_->currentPage : 0;
                                 int globalSlot = page * SkillArc::SLOTS_PER_PAGE + slotIndex;
+                                LOG_INFO("GameApp", "SkillArc slot %d pressed (page %d, global %d)", slotIndex, page, globalSlot);
                                 // Look up skill in the player's SkillManager
                                 auto* sc = SceneManager::instance().currentScene();
                                 if (!sc) return;
@@ -2508,9 +2154,11 @@ void GameApp::onUpdate(float deltaTime) {
                                     [&](Entity*, SkillManagerComponent* smc, PlayerController* ctrl) {
                                         if (!ctrl->isLocalPlayer) return;
                                         std::string skillId = smc->skills.getSkillInSlot(globalSlot);
+                                        LOG_INFO("GameApp", "  slot %d -> skillId='%s'", globalSlot, skillId.c_str());
                                         if (skillId.empty()) return;
                                         const LearnedSkill* ls = smc->skills.getLearnedSkill(skillId);
                                         int rank = ls ? ls->effectiveRank() : 1;
+                                        LOG_INFO("GameApp", "  rank=%d (learned=%s)", rank, ls ? "yes" : "no");
                                         if (rank > 0 && skillArc_ && skillArc_->onSkillActivated) {
                                             skillArc_->onSkillActivated(skillId, rank);
                                         }
@@ -2594,9 +2242,10 @@ void GameApp::onUpdate(float deltaTime) {
                         // Panel IDs indexed by tab (must match tabLabels order)
                         static const char* panelIds[] = {
                             "status_panel", "inventory_panel", "skill_panel",
-                            "guild_panel", "social_panel", "settings_panel", "shop_panel"
+                            "guild_panel", "social_panel", "settings_panel", "shop_panel",
+                            "pet_panel", "crafting_panel"
                         };
-                        static constexpr int panelCount = 7;
+                        static constexpr int panelCount = 9;
 
                         // Wire tab bar — shows/hides panels by index
                         auto* tabBar = dynamic_cast<MenuTabBar*>(menuScreen->findById("tab_bar"));
@@ -2628,7 +2277,12 @@ void GameApp::onUpdate(float deltaTime) {
                         auto* invPanel = dynamic_cast<InventoryPanel*>(menuScreen->findById("inventory_panel"));
                         if (invPanel) invPanel->onClose = closeMenu;
                         auto* statusPanel = dynamic_cast<StatusPanel*>(menuScreen->findById("status_panel"));
-                        if (statusPanel) statusPanel->onClose = closeMenu;
+                        if (statusPanel) {
+                            statusPanel->onClose = closeMenu;
+                            statusPanel->onAllocateStat = [this](uint8_t statType) {
+                                netClient_.sendAllocateStat(statType, 1);
+                            };
+                        }
                         auto* skillPanel = dynamic_cast<SkillPanel*>(menuScreen->findById("skill_panel"));
                         if (skillPanel) {
                             skillPanel->onClose = closeMenu;
@@ -2641,6 +2295,37 @@ void GameApp::onUpdate(float deltaTime) {
                                 if (info.currentLevel >= info.unlockedLevel) return;
                                 netClient_.sendActivateSkillRank(info.skillId);
                             };
+                            skillPanel->onAssignSkill = [this](const std::string& skillId, int globalSlot) {
+                                if (globalSlot < 0 || globalSlot >= 20) return;
+                                if (skillId.empty()) {
+                                    // action=1 = clear slot
+                                    netClient_.sendAssignSkillSlot(1, "",
+                                        static_cast<uint8_t>(globalSlot));
+                                } else {
+                                    // action=0 = assign skill to slot
+                                    netClient_.sendAssignSkillSlot(0, skillId,
+                                        static_cast<uint8_t>(globalSlot));
+                                }
+                            };
+                        }
+
+                        petPanel_ = dynamic_cast<PetPanel*>(menuScreen->findById("pet_panel"));
+                        if (petPanel_) {
+                            petPanel_->onEquipPet = [this](int32_t petDbId) {
+                                netClient_.sendPetCommand(0, petDbId);  // 0 = Equip
+                            };
+                            petPanel_->onUnequipPet = [this]() {
+                                netClient_.sendPetCommand(1, 0);  // 1 = Unequip
+                            };
+                            petPanel_->onClose = closeMenu;
+                        }
+
+                        craftingPanel_ = dynamic_cast<CraftingPanel*>(menuScreen->findById("crafting_panel"));
+                        if (craftingPanel_) {
+                            craftingPanel_->onCraft = [this](const std::string& recipeId) {
+                                netClient_.sendCraft(recipeId);
+                            };
+                            craftingPanel_->onClose = closeMenu;
                         }
 
                         // Wire inventory drag-and-drop callbacks
@@ -2663,7 +2348,24 @@ void GameApp::onUpdate(float deltaTime) {
                                     destroyItemId_ = itemId;
                                     destroyItemDialog_->message = "Destroy " + displayName + "?";
                                     destroyItemDialog_->setVisible(true);
+                                    if (inventoryPanel_) inventoryPanel_->setEnabled(false);
                                 }
+                            };
+                            invPanel->onUseItemRequest = [this](int32_t slot) {
+                                if (slot >= 0 && slot < 256)
+                                    netClient_.sendUseConsumable(static_cast<uint8_t>(slot));
+                            };
+                            invPanel->onEnchantRequest = [this](uint8_t slot, bool useProt) {
+                                netClient_.sendEnchant(slot, useProt ? 1 : 0);
+                            };
+                            invPanel->onRepairRequest = [this](uint8_t slot) {
+                                netClient_.sendRepair(slot);
+                            };
+                            invPanel->onExtractCoreRequest = [this](uint8_t itemSlot, uint8_t scrollSlot) {
+                                netClient_.sendExtractCore(itemSlot, scrollSlot);
+                            };
+                            invPanel->onSocketRequest = [this](uint8_t equipSlot, const std::string& scrollId) {
+                                netClient_.sendSocketItem(equipSlot, scrollId);
                             };
                         }
                     }
@@ -2760,6 +2462,9 @@ void GameApp::onUpdate(float deltaTime) {
                         shopPanel_ = dynamic_cast<ShopPanel*>(npcScreen->findById("shop_panel"));
                         bankPanel_ = dynamic_cast<BankPanel*>(npcScreen->findById("bank_panel"));
                         teleporterPanel_ = dynamic_cast<TeleporterPanel*>(npcScreen->findById("teleporter_panel"));
+                        arenaPanel_ = dynamic_cast<ArenaPanel*>(npcScreen->findById("arena_panel"));
+                        battlefieldPanel_ = dynamic_cast<BattlefieldPanel*>(npcScreen->findById("battlefield_panel"));
+                        leaderboardPanel_ = dynamic_cast<LeaderboardPanel*>(npcScreen->findById("leaderboard_panel"));
                     }
 
                     // Wire NpcDialoguePanel callbacks
@@ -2840,6 +2545,22 @@ void GameApp::onUpdate(float deltaTime) {
                                 }
                             }
                         };
+                        npcDialoguePanel_->onOpenArena = [this](uint32_t nId) {
+                            npcDialoguePanel_->setVisible(false);
+                            if (arenaPanel_) arenaPanel_->open(nId);
+                        };
+                        npcDialoguePanel_->onOpenBattlefield = [this](uint32_t nId) {
+                            npcDialoguePanel_->setVisible(false);
+                            if (battlefieldPanel_) battlefieldPanel_->open(nId);
+                        };
+                        npcDialoguePanel_->onOpenMarketplace = [this](uint32_t npcId) {
+                            // Marketplace panel opening will be wired when marketplace UI is built
+                            LOG_INFO("Game", "Marketplace NPC interaction - marketplace UI not yet implemented");
+                        };
+                        npcDialoguePanel_->onOpenLeaderboard = [this](uint32_t npcId) {
+                            npcDialoguePanel_->setVisible(false);
+                            if (leaderboardPanel_) leaderboardPanel_->open();
+                        };
                         npcDialoguePanel_->onClose = [this](const std::string&) {
                             closeAllNpcPanels();
                         };
@@ -2879,6 +2600,37 @@ void GameApp::onUpdate(float deltaTime) {
                             netClient_.sendTeleport(nId, idx);
                         };
                         teleporterPanel_->onClose = closeAll;
+                    }
+
+                    if (arenaPanel_) {
+                        arenaPanel_->onRegister = [this](uint32_t nId, uint8_t mode) {
+                            netClient_.sendArena(0, mode);
+                        };
+                        arenaPanel_->onUnregister = [this](uint32_t nId) {
+                            netClient_.sendArena(1, 0);
+                        };
+                        arenaPanel_->onClose = [this](const std::string&) { closeAllNpcPanels(); };
+                    }
+
+                    if (battlefieldPanel_) {
+                        battlefieldPanel_->onRegister = [this](uint32_t nId) {
+                            netClient_.sendBattlefield(0);  // 0 = Register
+                        };
+                        battlefieldPanel_->onUnregister = [this](uint32_t nId) {
+                            netClient_.sendBattlefield(1);  // 1 = Unregister
+                        };
+                        battlefieldPanel_->onClose = [this](const std::string&) { closeAllNpcPanels(); };
+                    }
+
+                    if (leaderboardPanel_) {
+                        leaderboardPanel_->onQueryRankings = [this](uint8_t cat, uint8_t page, uint8_t faction) {
+                            CmdRankingQueryMsg msg;
+                            msg.category = cat;
+                            msg.page = page;
+                            msg.factionFilter = faction;
+                            netClient_.sendRankingQuery(msg);
+                        };
+                        leaderboardPanel_->onClose = [this](const std::string&) { closeAllNpcPanels(); };
                     }
 
                     LOG_INFO("GameApp", "Retained-mode UI screens loaded and wired");
@@ -2935,6 +2687,8 @@ void GameApp::onUpdate(float deltaTime) {
                     SkillVFXPlayer::instance().clear();
                     if (npcInteractionSystem_) npcInteractionSystem_->resetCachedPointers();
                     if (combatSystem_) combatSystem_->serverClearTarget();
+                    lastContextMenuTargetId_ = INVALID_ENTITY;
+                    if (playerContextMenu_) playerContextMenu_->hide();
 
                     // Start async load for new zone
                     std::string jsonPath = "assets/scenes/" + pendingZoneScene_ + ".json";
@@ -3077,6 +2831,63 @@ void GameApp::onUpdate(float deltaTime) {
                             }
                         }
 
+                        // PlayerContextMenu — show when a new player target is selected
+                        if (playerContextMenu_ && combatSystem_) {
+                            EntityId targetEid = combatSystem_->getTargetEntityId();
+                            if (targetEid != INVALID_ENTITY && targetEid != lastContextMenuTargetId_) {
+                                // New target selected — check if it's a player (not a mob)
+                                Entity* targetEnt = scene->world().getEntity(targetEid);
+                                if (targetEnt
+                                    && targetEnt->getComponent<CharacterStatsComponent>()
+                                    && !targetEnt->getComponent<EnemyStatsComponent>()) {
+                                    // It's a player ghost — show context menu
+                                    auto* tgtCs = targetEnt->getComponent<CharacterStatsComponent>();
+                                    auto* tgtFc = targetEnt->getComponent<FactionComponent>();
+                                    auto* localFc = localPlayer->getComponent<FactionComponent>();
+
+                                    bool sameFaction = false;
+                                    if (tgtFc && localFc) {
+                                        sameFaction = FactionRegistry::isSameFaction(localFc->faction, tgtFc->faction);
+                                    }
+                                    bool safeZone = !scene->metadata().pvpEnabled;
+
+                                    // Convert target world position to screen for menu placement
+                                    auto* tgtTransform = targetEnt->getComponent<Transform>();
+                                    Vec2 screenPos = {0, 0};
+                                    if (tgtTransform) {
+                                        ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+                                        screenPos = camera().worldToScreen(
+                                            tgtTransform->position,
+                                            static_cast<int>(displaySize.x),
+                                            static_cast<int>(displaySize.y));
+                                        // Offset slightly so menu doesn't cover the target
+                                        screenPos.y -= 20.0f;
+                                    }
+
+                                    // Find persistent ID for this ghost (needed for trade target)
+                                    uint64_t pid = 0;
+                                    EntityHandle tgtHandle = targetEnt->handle();
+                                    for (const auto& [ghostPid, handle] : ghostEntities_) {
+                                        if (handle == tgtHandle) {
+                                            pid = ghostPid;
+                                            break;
+                                        }
+                                    }
+
+                                    playerContextMenu_->show(
+                                        screenPos,
+                                        tgtCs->stats.characterName,
+                                        tgtCs->stats.characterName, // charId = name for now
+                                        pid,
+                                        sameFaction,
+                                        safeZone);
+                                }
+                                lastContextMenuTargetId_ = targetEid;
+                            } else if (targetEid == INVALID_ENTITY) {
+                                lastContextMenuTargetId_ = INVALID_ENTITY;
+                            }
+                        }
+
                         // SkillArc — push skill slot data from SkillManager
                         auto* smc = localPlayer->getComponent<SkillManagerComponent>();
                         if (skillArc_ && smc) {
@@ -3141,6 +2952,12 @@ void GameApp::onUpdate(float deltaTime) {
                             sp->hit = static_cast<int>(cs->stats.getHitRate() * 100.0f);
                             sp->cri = static_cast<int>(cs->stats.getCritRate() * 100.0f);
                             sp->spd = static_cast<int>(cs->stats.getSpeed() * 100.0f);
+                            sp->freeStatPoints = cs->stats.freeStatPoints;
+                            sp->allocatedSTR   = cs->stats.allocatedSTR;
+                            sp->allocatedINT   = cs->stats.allocatedINT;
+                            sp->allocatedDEX   = cs->stats.allocatedDEX;
+                            sp->allocatedCON   = cs->stats.allocatedCON;
+                            sp->allocatedWIS   = cs->stats.allocatedWIS;
 
                             // Gap #3: factionName from FactionComponent
                             auto* fc = localPlayer->getComponent<FactionComponent>();
@@ -3320,6 +3137,20 @@ void GameApp::onUpdate(float deltaTime) {
                                     info.unlocked      = false;
                                 }
                             }
+
+                            // Populate skill bar slot assignments for the wheel display
+                            sklPanel->skillBarSlots.resize(20);
+                            sklPanel->skillBarNames.resize(20);
+                            for (int si = 0; si < 20; ++si) {
+                                std::string slotSkillId = smcMenu->skills.getSkillInSlot(si);
+                                sklPanel->skillBarSlots[si] = slotSkillId;
+                                if (!slotSkillId.empty()) {
+                                    const auto* sDef = ClientSkillDefinitionCache::getSkill(slotSkillId);
+                                    sklPanel->skillBarNames[si] = sDef ? sDef->skillName : slotSkillId;
+                                } else {
+                                    sklPanel->skillBarNames[si].clear();
+                                }
+                            }
                         }
                     }
                 }
@@ -3434,6 +3265,10 @@ void GameApp::onUpdate(float deltaTime) {
                             npcDialoguePanel_->hasTeleporter = npc->getComponent<TeleporterComponent>() != nullptr;
                             npcDialoguePanel_->hasGuild = npc->getComponent<GuildNPCComponent>() != nullptr;
                             npcDialoguePanel_->hasDungeon = npc->getComponent<DungeonNPCComponent>() != nullptr;
+                            npcDialoguePanel_->hasArena = npc->getComponent<ArenaNPCComponent>() != nullptr;
+                            npcDialoguePanel_->hasBattlefield = npc->getComponent<BattlefieldNPCComponent>() != nullptr;
+                            npcDialoguePanel_->hasMarketplace = npc->getComponent<MarketplaceNPCComponent>() != nullptr;
+                            npcDialoguePanel_->hasLeaderboard = npc->getComponent<LeaderboardNPCComponent>() != nullptr;
 
                             // Populate quests from QuestGiverComponent
                             npcDialoguePanel_->quests.clear();
@@ -3597,9 +3432,13 @@ void GameApp::onUpdate(float deltaTime) {
             // Set UI blocking flag — movement + nameplates suppressed while panels are open
             input.setUIBlocking(
                 (inventoryPanel_ && inventoryPanel_->visible()) ||
+                (petPanel_ && petPanel_->isOpen()) ||
+                (craftingPanel_ && craftingPanel_->isOpen()) ||
                 (shopPanel_ && shopPanel_->isOpen()) ||
                 (bankPanel_ && bankPanel_->isOpen()) ||
                 (teleporterPanel_ && teleporterPanel_->isOpen()) ||
+                (arenaPanel_ && arenaPanel_->isOpen()) ||
+                (battlefieldPanel_ && battlefieldPanel_->isOpen()) ||
                 (npcDialoguePanel_ && npcDialoguePanel_->isOpen()) ||
                 (npcInteractionSystem_ && npcInteractionSystem_->dialogueOpen)
             );
@@ -3702,6 +3541,8 @@ void GameApp::drawNetworkPanel() {
             shopPanel_ = nullptr;
             bankPanel_ = nullptr;
             teleporterPanel_ = nullptr;
+            arenaPanel_ = nullptr;
+            battlefieldPanel_ = nullptr;
             dungeonInviteDialog_ = nullptr;
             inDungeon_ = false;
             connState_ = ConnectionState::LoginScreen;
@@ -3957,6 +3798,8 @@ void GameApp::onShutdown() {
     shopPanel_ = nullptr;
     bankPanel_ = nullptr;
     teleporterPanel_ = nullptr;
+    arenaPanel_ = nullptr;
+    battlefieldPanel_ = nullptr;
     dungeonInviteDialog_ = nullptr;
     inDungeon_ = false;
 
@@ -4004,6 +3847,9 @@ void GameApp::closeAllNpcPanels() {
     if (shopPanel_) shopPanel_->close();
     if (bankPanel_) bankPanel_->close();
     if (teleporterPanel_) teleporterPanel_->close();
+    if (arenaPanel_) arenaPanel_->close();
+    if (battlefieldPanel_) battlefieldPanel_->close();
+    if (leaderboardPanel_) leaderboardPanel_->close();
     if (npcInteractionSystem_) npcInteractionSystem_->closeDialogue();
 }
 

@@ -288,8 +288,21 @@ void App::processEvents() {
                 Input::instance().processEvent(event);
             }
         } else if (isKeyboard) {
-            // If actively typing in an ImGui input field, don't route to game
-            if (ImGui::GetIO().WantTextInput) continue;
+            // If an ImGui editor widget wants keyboard (InputText, DragFloat,
+            // DragInt, Checkbox, etc.), don't route to game UI at all.
+            // WantTextInput alone is too narrow — it misses drag/slider widgets.
+            // But WantCaptureKeyboard alone is too broad — the game viewport
+            // is itself an ImGui window, so it's true whenever the viewport is
+            // focused.  Exclude the viewport so keyboard reaches game UI
+            // (login fields, chat, etc.) during play.
+            if (ImGui::GetIO().WantCaptureKeyboard &&
+                !Editor::instance().isViewportHovered()) {
+                // Always forward key-UP to clear held state (prevents stuck keys
+                // when cursor leaves viewport while a key is held)
+                if (event.type == SDL_KEYUP)
+                    Input::instance().processEvent(event);
+                continue;
+            }
 
             // Playing — UI text fields get first crack at keyboard/text
             bool uiConsumed = false;
@@ -509,8 +522,20 @@ void App::update() {
         float sy = (vs.y > 0.0f) ? fboH / vs.y : 1.0f;
         uiManager_.setInputTransform(vp.x, vp.y, sx, sy);
     }
-#endif
+    // Skip game-UI input when the user is interacting with an ImGui panel
+    // (e.g. the UI Inspector).  Otherwise the retained-mode chat panel
+    // captures focus/clicks that should go to editor widgets.
+    // Also clear stale game-UI focus so it doesn't steal keyboard later.
+    // But when the viewport is hovered the user is interacting with the
+    // game, not an editor panel — let handleInput() run normally.
+    if (Editor::instance().wantsMouse() && !Editor::instance().isViewportHovered()) {
+        uiManager_.clearFocus();
+    } else {
+        uiManager_.handleInput();
+    }
+#else
     uiManager_.handleInput();
+#endif
 
     // Only consume the mouse press when a UI node actually accepted it
     // (onPress returned true).  Don't use wantCaptureMouse() — that checks

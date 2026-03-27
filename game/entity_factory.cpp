@@ -101,9 +101,8 @@ Entity* EntityFactory::createPlayer(World& world, const std::string& name, Class
     auto* invComp = player->addComponent<InventoryComponent>();
     invComp->inventory.initialize(name, 0);
 
-    // Skill Manager
-    auto* skillComp = player->addComponent<SkillManagerComponent>();
-    skillComp->skills.initialize(&statsComp->stats);
+    // Skill Manager (stats pointer re-linked below after all addComponent calls)
+    player->addComponent<SkillManagerComponent>();
 
     // Status Effects
     player->addComponent<StatusEffectComponent>();
@@ -147,6 +146,14 @@ Entity* EntityFactory::createPlayer(World& world, const std::string& name, Class
     auto* nameplate = player->addComponent<NameplateComponent>();
     nameplate->displayName = name;
     nameplate->displayLevel = 1;
+
+    // Re-link cross-component pointers now that all addComponent calls are done.
+    // Archetype migrations invalidate raw pointers captured earlier.
+    auto* finalStats = player->getComponent<CharacterStatsComponent>();
+    auto* finalSkill = player->getComponent<SkillManagerComponent>();
+    if (finalSkill && finalStats) {
+        finalSkill->skills.initialize(&finalStats->stats);
+    }
 
     return player;
 }

@@ -1469,6 +1469,14 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         s.currentScene = (rec.current_scene == "Scene2" || rec.current_scene.empty())
             ? "WhisperingWoods" : rec.current_scene;
 
+        // Stat allocation (free points + allocated stats from DB)
+        s.freeStatPoints = static_cast<int16_t>(rec.free_stat_points);
+        s.allocatedSTR   = static_cast<int16_t>(rec.allocated_str);
+        s.allocatedINT   = static_cast<int16_t>(rec.allocated_int);
+        s.allocatedDEX   = static_cast<int16_t>(rec.allocated_dex);
+        s.allocatedCON   = static_cast<int16_t>(rec.allocated_con);
+        s.allocatedWIS   = static_cast<int16_t>(rec.allocated_wis);
+
         // Initial stat calc (without equipment — equipment loaded below)
         s.recalculateStats();
         s.recalculateXPRequirement();
@@ -1605,7 +1613,12 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     clientAdminRoles_[clientId] = session.admin_role;
 
     // Load skills from DB
+    // Re-link SkillManager's stats pointer — EntityFactory stores it during
+    // addComponent, but archetype migrations invalidate component pointers.
     auto* skillComp = player->getComponent<SkillManagerComponent>();
+    if (skillComp && charStatsComp) {
+        skillComp->skills.initialize(&charStatsComp->stats);
+    }
     if (skillComp) {
         auto skills = skillRepo_->loadCharacterSkills(rec.character_id);
         for (const auto& s : skills) {
@@ -1834,6 +1847,19 @@ void ServerApp::onClientConnected(uint16_t clientId) {
             uint8_t buf[64]; ByteWriter w(buf, sizeof(buf));
             lvl.write(w);
             server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvLevelUp, buf, w.size());
+
+            // Grant a skill point on level-up
+            auto* sk = ent->getComponent<SkillManagerComponent>();
+            if (sk) {
+                sk->skills.grantSkillPoint();
+                playerDirty_[clientId].skills = true;
+                enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Skills);
+                sendSkillSync(clientId);
+            }
+
+            // freeStatPoints granted in addXP() — mark stats dirty for persistence
+            playerDirty_[clientId].stats = true;
+            enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
 
             // Also send full player state
             sendPlayerState(clientId);
@@ -2264,6 +2290,11 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
         case PacketType::CmdAssignSkillSlot: {
             auto msg = CmdAssignSkillSlotMsg::read(payload);
             processAssignSkillSlot(clientId, msg);
+            break;
+        }
+        case PacketType::CmdAllocateStat: {
+            auto msg = CmdAllocateStatMsg::read(payload);
+            processAllocateStat(clientId, msg);
             break;
         }
         default:

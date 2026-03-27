@@ -293,6 +293,9 @@ private:
     void processDestroyItem(uint16_t clientId, const CmdDestroyItemMsg& msg);
     void processActivateSkillRank(uint16_t clientId, const CmdActivateSkillRankMsg& msg);
     void processAssignSkillSlot(uint16_t clientId, const CmdAssignSkillSlotMsg& msg);
+
+    // handlers/stat_allocation_handler.cpp
+    void processAllocateStat(uint16_t clientId, const CmdAllocateStatMsg& msg);
     void processEnchant(uint16_t clientId, const CmdEnchantMsg& msg);
     void processRepair(uint16_t clientId, const CmdRepairMsg& msg);
     void processExtractCore(uint16_t clientId, const CmdExtractCoreMsg& msg);

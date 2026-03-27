@@ -13,6 +13,7 @@
 #include "game/components/game_components.h"
 #include "game/components/faction_component.h"
 #include "game/components/pet_component.h"
+#include "game/shared/faction_npc_data.h"
 #include "game/components/spawn_point_component.h"
 #include "game/systems/spawn_system.h"
 #include "engine/scene/scene.h"
@@ -1260,6 +1261,35 @@ void Editor::drawInspector() {
             }
         }
 
+        // MarketplaceNPC
+        if (auto* mktNpc = selectedEntity_->getComponent<MarketplaceNPCComponent>()) {
+            bool open = ImGui::CollapsingHeader("Marketplace NPC");
+            if (ImGui::BeginPopupContextItem("##rmMarketplaceNPC")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<MarketplaceNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open) {
+                ImGui::TextDisabled("Neutral marketplace NPC (Veylan)");
+            }
+        }
+
+        // LeaderboardNPC
+        if (auto* lbNpc = selectedEntity_->getComponent<LeaderboardNPCComponent>()) {
+            bool open = ImGui::CollapsingHeader("Leaderboard NPC");
+            if (ImGui::BeginPopupContextItem("##rmLeaderboardNPC")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<LeaderboardNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<LeaderboardNPCComponent>()) {
+                char loreBuf[512];
+                strncpy(loreBuf, lbNpc->loreSnippet.c_str(), sizeof(loreBuf) - 1);
+                loreBuf[sizeof(loreBuf) - 1] = '\0';
+                if (ImGui::InputTextMultiline("Lore Snippet##lb", loreBuf, sizeof(loreBuf))) {
+                    lbNpc->loreSnippet = loreBuf;
+                }
+            }
+        }
+
         // Generic fallback: render any reflected components not handled above
         {
             static const std::unordered_set<CompId> manuallyInspected = {
@@ -1417,6 +1447,16 @@ void Editor::drawInspector() {
                 selectedEntity_->addComponent<TeleporterComponent>();
             if (!selectedEntity_->hasComponent<StoryNPCComponent>() && ImGui::MenuItem("Story NPC"))
                 selectedEntity_->addComponent<StoryNPCComponent>();
+            if (!selectedEntity_->hasComponent<DungeonNPCComponent>() && ImGui::MenuItem("Dungeon NPC"))
+                selectedEntity_->addComponent<DungeonNPCComponent>();
+            if (!selectedEntity_->hasComponent<ArenaNPCComponent>() && ImGui::MenuItem("Arena NPC"))
+                selectedEntity_->addComponent<ArenaNPCComponent>();
+            if (!selectedEntity_->hasComponent<BattlefieldNPCComponent>() && ImGui::MenuItem("Battlefield NPC"))
+                selectedEntity_->addComponent<BattlefieldNPCComponent>();
+            if (!selectedEntity_->hasComponent<MarketplaceNPCComponent>() && ImGui::MenuItem("Marketplace NPC"))
+                selectedEntity_->addComponent<MarketplaceNPCComponent>();
+            if (!selectedEntity_->hasComponent<LeaderboardNPCComponent>() && ImGui::MenuItem("Leaderboard NPC"))
+                selectedEntity_->addComponent<LeaderboardNPCComponent>();
 
             ImGui::Separator();
             ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "-- Player Quest/Bank --");

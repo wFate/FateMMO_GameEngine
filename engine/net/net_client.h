@@ -41,6 +41,16 @@ public:
     void sendEquip(uint8_t action, int32_t inventorySlot, uint8_t equipSlot);
     void sendActivateSkillRank(const std::string& skillId);
     void sendAssignSkillSlot(uint8_t action, const std::string& skillId, uint8_t slotA, uint8_t slotB = 0);
+    void sendAllocateStat(uint8_t statType, int16_t amount);
+    void sendEnchant(uint8_t inventorySlot, uint8_t useProtectionStone);
+    void sendRepair(uint8_t inventorySlot);
+    void sendExtractCore(uint8_t itemSlot, uint8_t scrollSlot);
+    void sendCraft(const std::string& recipeId);
+    void sendSocketItem(uint8_t equipSlot, const std::string& scrollItemId);
+    void sendArena(uint8_t action, uint8_t mode);
+    void sendBattlefield(uint8_t action);
+    void sendPetCommand(uint8_t action, int32_t petDbId);
+    void sendRankingQuery(const CmdRankingQueryMsg& msg);
 
     void sendTradeAction(uint8_t action);
     void sendTradeAction(uint8_t action, const std::string& data);

@@ -1381,4 +1381,23 @@ struct CmdAssignSkillSlotMsg {
     }
 };
 
+// ============================================================================
+// Client -> Server: CmdAllocateStat (allocate free stat points)
+// ============================================================================
+struct CmdAllocateStatMsg {
+    uint8_t statType = 0;  // 0=STR, 1=INT, 2=DEX, 3=CON, 4=WIS
+    int16_t amount = 1;    // how many points to allocate (usually 1)
+
+    void write(ByteWriter& w) const {
+        w.writeU8(statType);
+        w.writeU16(static_cast<uint16_t>(amount));
+    }
+    static CmdAllocateStatMsg read(ByteReader& r) {
+        CmdAllocateStatMsg m;
+        m.statType = r.readU8();
+        m.amount   = static_cast<int16_t>(r.readU16());
+        return m;
+    }
+};
+
 } // namespace fate

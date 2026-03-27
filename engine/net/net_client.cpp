@@ -974,4 +974,98 @@ void NetClient::sendAssignSkillSlot(uint8_t action, const std::string& skillId, 
     sendPacket(Channel::ReliableOrdered, PacketType::CmdAssignSkillSlot, w.data(), w.size());
 }
 
+void NetClient::sendAllocateStat(uint8_t statType, int16_t amount) {
+    CmdAllocateStatMsg msg;
+    msg.statType = statType;
+    msg.amount = amount;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdAllocateStat, w.data(), w.size());
+}
+
+void NetClient::sendEnchant(uint8_t inventorySlot, uint8_t useProtectionStone) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdEnchantMsg msg;
+    msg.inventorySlot = inventorySlot;
+    msg.useProtectionStone = useProtectionStone;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdEnchant, w.data(), w.size());
+}
+
+void NetClient::sendRepair(uint8_t inventorySlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdRepairMsg msg;
+    msg.inventorySlot = inventorySlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdRepair, w.data(), w.size());
+}
+
+void NetClient::sendExtractCore(uint8_t itemSlot, uint8_t scrollSlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdExtractCoreMsg msg;
+    msg.itemSlot = itemSlot;
+    msg.scrollSlot = scrollSlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdExtractCore, w.data(), w.size());
+}
+
+void NetClient::sendCraft(const std::string& recipeId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdCraftMsg msg;
+    msg.recipeId = recipeId;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdCraft, w.data(), w.size());
+}
+
+void NetClient::sendSocketItem(uint8_t equipSlot, const std::string& scrollItemId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdSocketItemMsg msg;
+    msg.equipSlot = equipSlot;
+    msg.scrollItemId = scrollItemId;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdSocketItem, w.data(), w.size());
+}
+
+void NetClient::sendArena(uint8_t action, uint8_t mode) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdArenaMsg msg;
+    msg.action = action;
+    msg.mode = mode;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdArena, w.data(), w.size());
+}
+
+void NetClient::sendBattlefield(uint8_t action) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdBattlefieldMsg msg;
+    msg.action = action;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBattlefield, w.data(), w.size());
+}
+
+void NetClient::sendPetCommand(uint8_t action, int32_t petDbId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdPetMsg msg;
+    msg.action = action;
+    msg.petDbId = petDbId;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdPet, w.data(), w.size());
+}
+
+void NetClient::sendRankingQuery(const CmdRankingQueryMsg& msg) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdRankingQuery, w.data(), w.size());
+}
+
 } // namespace fate

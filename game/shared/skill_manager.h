@@ -160,6 +160,7 @@ public:
 
     // ---- Skill Points ----
     void grantSkillPoint();  // Called on level up
+    void resetAllSkillRanks();  // Oblivion Potion: reset all activated ranks, refund spent points
 
     // ---- Skill Bar (4 pages x 5 slots = 20) ----
     bool        assignSkillToSlot(const std::string& skillId, int globalSlotIndex);  // 0-19

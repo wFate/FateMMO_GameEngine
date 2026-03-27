@@ -360,6 +360,14 @@ struct SvPlayerStateMsg {
     uint8_t pkStatus     = 0; // PKStatus enum
     uint8_t honorRank    = 0; // HonorRank enum
 
+    // Stat allocation
+    int16_t freeStatPoints = 0;
+    int16_t allocatedSTR = 0;
+    int16_t allocatedINT = 0;
+    int16_t allocatedDEX = 0;
+    int16_t allocatedCON = 0;
+    int16_t allocatedWIS = 0;
+
     void write(ByteWriter& w) const {
         w.writeI32(currentHP);
         w.writeI32(maxHP);
@@ -381,6 +389,12 @@ struct SvPlayerStateMsg {
         w.writeFloat(damageMult);
         w.writeU8(pkStatus);
         w.writeU8(honorRank);
+        w.writeU16(static_cast<uint16_t>(freeStatPoints));
+        w.writeU16(static_cast<uint16_t>(allocatedSTR));
+        w.writeU16(static_cast<uint16_t>(allocatedINT));
+        w.writeU16(static_cast<uint16_t>(allocatedDEX));
+        w.writeU16(static_cast<uint16_t>(allocatedCON));
+        w.writeU16(static_cast<uint16_t>(allocatedWIS));
     }
 
     static SvPlayerStateMsg read(ByteReader& r) {
@@ -405,6 +419,12 @@ struct SvPlayerStateMsg {
         m.damageMult  = r.readFloat();
         m.pkStatus    = r.readU8();
         m.honorRank   = r.readU8();
+        m.freeStatPoints = static_cast<int16_t>(r.readU16());
+        m.allocatedSTR   = static_cast<int16_t>(r.readU16());
+        m.allocatedINT   = static_cast<int16_t>(r.readU16());
+        m.allocatedDEX   = static_cast<int16_t>(r.readU16());
+        m.allocatedCON   = static_cast<int16_t>(r.readU16());
+        m.allocatedWIS   = static_cast<int16_t>(r.readU16());
         return m;
     }
 };

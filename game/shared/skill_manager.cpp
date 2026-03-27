@@ -33,6 +33,7 @@
 // ============================================================================
 
 #include "game/shared/skill_manager.h"
+#include "engine/core/logger.h"
 
 #include <algorithm>
 #include <cmath>
@@ -71,18 +72,23 @@ const LearnedSkill* SkillManager::getLearnedSkill(const std::string& skillId) co
 
 bool SkillManager::learnSkill(const std::string& skillId, int rank) {
     if (rank < 1 || rank > 3) {
+        LOG_WARN("SkillManager", "learnSkill('%s', %d) REJECTED: rank out of range", skillId.c_str(), rank);
         return false;
     }
 
     // If a definition is registered, validate class and level requirements
     const SkillDefinition* def = getSkillDefinition(skillId);
     if (def) {
-        // Class restriction: must match player class name or be "Any"
-        if (def->className != "Any" && stats && def->className != stats->className) {
+        // Class restriction: must match player class name, or be "Any"/empty (classless)
+        if (!def->className.empty() && def->className != "Any" && stats && def->className != stats->className) {
+            LOG_WARN("SkillManager", "learnSkill('%s', %d) REJECTED: class mismatch (def='%s', player='%s')",
+                     skillId.c_str(), rank, def->className.c_str(), stats->className.c_str());
             return false;
         }
         // Level requirement
         if (stats && stats->level < def->levelRequirement) {
+            LOG_WARN("SkillManager", "learnSkill('%s', %d) REJECTED: level too low (need %d, have %d)",
+                     skillId.c_str(), rank, def->levelRequirement, stats->level);
             return false;
         }
     }
@@ -92,10 +98,14 @@ bool SkillManager::learnSkill(const std::string& skillId, int rank) {
         if (skill.skillId == skillId) {
             // Already known — only upgrade if the new rank is higher
             if (rank <= skill.unlockedRank) {
+                LOG_WARN("SkillManager", "learnSkill('%s', %d) REJECTED: already at rank %d",
+                         skillId.c_str(), rank, skill.unlockedRank);
                 return false;
             }
             // Sequential unlock: rank N requires rank N-1 already unlocked
             if (rank > skill.unlockedRank + 1) {
+                LOG_WARN("SkillManager", "learnSkill('%s', %d) REJECTED: rank skip (current %d)",
+                         skillId.c_str(), rank, skill.unlockedRank);
                 return false;
             }
             skill.unlockedRank = rank;
@@ -109,6 +119,8 @@ bool SkillManager::learnSkill(const std::string& skillId, int rank) {
 
     // New skill — must start at rank 1
     if (rank != 1) {
+        LOG_WARN("SkillManager", "learnSkill('%s', %d) REJECTED: new skill must start at rank 1",
+                 skillId.c_str(), rank);
         return false;
     }
 
@@ -117,9 +129,6 @@ bool SkillManager::learnSkill(const std::string& skillId, int rank) {
     newSkill.unlockedRank = rank;
     newSkill.activatedRank = 0;
     learnedSkills.push_back(std::move(newSkill));
-
-    // Auto-assign to skill bar on first learn
-    autoAssignToSkillBar(skillId);
 
     if (onSkillLearned) {
         onSkillLearned(skillId, rank);
@@ -156,6 +165,11 @@ bool SkillManager::activateSkillRank(const std::string& skillId) {
             }
 
             skill.activatedRank = nextRank;
+
+            // Auto-assign to skill bar on first activation
+            if (nextRank == 1) {
+                autoAssignToSkillBar(skillId);
+            }
 
             const SkillDefinition* def = getSkillDefinition(skillId);
             if (def && def->skillType == SkillType::Passive) {
@@ -218,6 +232,24 @@ void SkillManager::startCooldown(const std::string& skillId, float duration) {
 void SkillManager::grantSkillPoint() {
     availableSkillPoints++;
     totalEarnedPoints++;
+
+    if (onSkillPointsChanged) {
+        onSkillPointsChanged(availableSkillPoints);
+    }
+}
+
+void SkillManager::resetAllSkillRanks() {
+    // Refund all spent points back to available
+    availableSkillPoints += totalSpentPoints;
+    totalSpentPoints = 0;
+
+    // Reset every skill's activated rank to 0 (keep unlocked ranks from skillbooks)
+    for (auto& skill : learnedSkills) {
+        skill.activatedRank = 0;
+    }
+
+    // Recompute passive bonuses (will zero them out since all activatedRanks are 0)
+    recomputePassiveBonuses();
 
     if (onSkillPointsChanged) {
         onSkillPointsChanged(availableSkillPoints);
@@ -538,8 +570,8 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                 stats->level, stats->getIntelligence(),
                 ctx.targetLevel, targetMR);
             if (resisted) {
-                if (onSkillUsed) onSkillUsed(skillId, rank);
-                return 0;  // miss/resist
+                if (onSkillFailed) onSkillFailed(skillId, "Spell resisted");
+                return 0;
             }
         } else {
             // Physical uses hit rate
@@ -548,8 +580,8 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                 stats->level, static_cast<int>(stats->getHitRate()),
                 ctx.targetLevel, targetEvasion);
             if (!hit) {
-                if (onSkillUsed) onSkillUsed(skillId, rank);
-                return 0;  // miss
+                if (onSkillFailed) onSkillFailed(skillId, "Attack missed");
+                return 0;
             }
         }
     }
