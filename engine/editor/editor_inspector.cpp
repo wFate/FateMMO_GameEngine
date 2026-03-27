@@ -1290,6 +1290,51 @@ void Editor::drawInspector() {
             }
         }
 
+        // AppearanceComponent
+        if (auto* a = selectedEntity_->getComponent<AppearanceComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Appearance", ImGuiTreeNodeFlags_DefaultOpen);
+            if (fontHeading_) ImGui::PopFont();
+            if (open) {
+                if (ImGui::BeginTable("##AppearanceProps", 2, ImGuiTableFlags_SizingStretchProp)) {
+                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+                    INSPECTOR_ROW("Gender");
+                    const char* genderNames[] = {"Male", "Female"};
+                    int genderInt = a->gender;
+                    if (ImGui::Combo("##gender", &genderInt, genderNames, 2)) {
+                        a->gender = static_cast<uint8_t>(genderInt);
+                        a->dirty = true;
+                    }
+
+                    INSPECTOR_ROW("Hairstyle");
+                    int hairInt = a->hairstyle;
+                    if (ImGui::SliderInt("##hairstyle", &hairInt, 0, 2)) {
+                        a->hairstyle = static_cast<uint8_t>(hairInt);
+                        a->dirty = true;
+                    }
+
+                    INSPECTOR_ROW("Body");
+                    ImGui::Text("%s", a->bodyTexture ? "Loaded" : "Missing");
+
+                    INSPECTOR_ROW("Hair");
+                    ImGui::Text("%s", a->hairTexture ? "Loaded" : "Missing");
+
+                    INSPECTOR_ROW("Armor");
+                    ImGui::Text("%s", a->armorTexture ? "Loaded" : "Missing");
+
+                    INSPECTOR_ROW("Hat");
+                    ImGui::Text("%s", a->hatTexture ? "Loaded" : "Missing");
+
+                    INSPECTOR_ROW("Weapon");
+                    ImGui::Text("%s", a->weaponTexture ? "Loaded" : "Missing");
+
+                    ImGui::EndTable();
+                }
+            }
+        }
+
         // Generic fallback: render any reflected components not handled above
         {
             static const std::unordered_set<CompId> manuallyInspected = {
@@ -1322,6 +1367,7 @@ void Editor::drawInspector() {
                 componentId<SpawnZoneComponent>(),
                 componentId<FactionComponent>(),
                 componentId<PetComponent>(),
+                componentId<AppearanceComponent>(),
             };
 
             selectedEntity_->forEachComponent([&](void* data, CompId id) {
