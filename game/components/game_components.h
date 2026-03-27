@@ -21,6 +21,8 @@
 #include "game/shared/bank_storage.h"
 #include "game/shared/faction.h"
 #include "game/shared/pet_system.h"
+#include "game/shared/collection_system.h"
+#include "engine/render/texture.h"
 #include "game/components/dropped_item_component.h"
 #include "game/components/boss_spawn_point_component.h"
 
@@ -88,6 +90,20 @@ struct EquipVisualsComponent {
     uint16_t weaponVisualIdx = 0;
     uint16_t armorVisualIdx  = 0;
     uint16_t hatVisualIdx    = 0;
+};
+
+struct AppearanceComponent {
+    FATE_COMPONENT(AppearanceComponent)
+    uint8_t gender    = 0;  // 0=male, 1=female
+    uint8_t hairstyle = 0;  // 0-2 per gender, expandable
+
+    // Resolved textures (runtime only, rebuilt when dirty)
+    std::shared_ptr<Texture> bodyTexture;
+    std::shared_ptr<Texture> hairTexture;
+    std::shared_ptr<Texture> armorTexture;
+    std::shared_ptr<Texture> hatTexture;
+    std::shared_ptr<Texture> weaponTexture;
+    bool dirty = true;
 };
 
 struct ChatComponent {
@@ -260,6 +276,11 @@ struct BankStorageComponent {
     BankStorage storage;
 };
 
+struct CollectionComponent {
+    FATE_COMPONENT_COLD(CollectionComponent)
+    CollectionState collections;
+};
+
 } // namespace fate
 
 // ============================================================================
@@ -296,6 +317,11 @@ FATE_REFLECT(fate::EquipVisualsComponent,
     FATE_FIELD(weaponVisualIdx, UInt),
     FATE_FIELD(armorVisualIdx, UInt),
     FATE_FIELD(hatVisualIdx, UInt)
+)
+
+FATE_REFLECT(fate::AppearanceComponent,
+    FATE_FIELD(gender, UInt),
+    FATE_FIELD(hairstyle, UInt)
 )
 
 FATE_REFLECT_EMPTY(fate::ChatComponent)
@@ -371,3 +397,4 @@ FATE_REFLECT_EMPTY(fate::BattlefieldNPCComponent)
 
 FATE_REFLECT_EMPTY(fate::QuestComponent)
 FATE_REFLECT_EMPTY(fate::BankStorageComponent)
+FATE_REFLECT_EMPTY(fate::CollectionComponent)
