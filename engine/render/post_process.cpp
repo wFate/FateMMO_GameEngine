@@ -2,12 +2,14 @@
 #include "engine/render/gfx/device.h"
 #include "engine/render/gfx/command_list.h"
 #include "engine/core/logger.h"
+#include <mutex>
 
 namespace fate {
 
 static Shader s_bloomExtractShader;
 static Shader s_blurShader;
 static Shader s_postProcessShader;
+static std::once_flag s_shadersFlag;
 static bool s_shadersLoaded = false;
 
 // Pipeline handles — one per shader+blend variant
@@ -16,32 +18,32 @@ static gfx::PipelineHandle s_blurPipeline;           // no blend
 static gfx::PipelineHandle s_postProcessPipeline;    // no blend
 
 static void ensureShaders() {
-    if (s_shadersLoaded) return;
-    const char* vert = "assets/shaders/fullscreen_quad.vert";
-    bool ok = true;
-    ok &= s_bloomExtractShader.loadFromFile(vert, "assets/shaders/bloom_extract.frag");
-    ok &= s_blurShader.loadFromFile(vert, "assets/shaders/blur.frag");
-    ok &= s_postProcessShader.loadFromFile(vert, "assets/shaders/postprocess.frag");
-    s_shadersLoaded = ok;
-    if (!ok) {
-        LOG_ERROR("PostProcess", "Failed to load one or more post-process shaders");
-        return;
-    }
+    std::call_once(s_shadersFlag, []() {
+        const char* vert = "assets/shaders/fullscreen_quad.vert";
+        bool ok = true;
+        ok &= s_bloomExtractShader.loadFromFile(vert, "assets/shaders/bloom_extract.frag");
+        ok &= s_blurShader.loadFromFile(vert, "assets/shaders/blur.frag");
+        ok &= s_postProcessShader.loadFromFile(vert, "assets/shaders/postprocess.frag");
+        if (!ok) {
+            LOG_ERROR("PostProcess", "Failed to load one or more post-process shaders");
+            return;
+        }
 
-    // Create pipelines with appropriate blend modes
-    auto& device = gfx::Device::instance();
+        auto& device = gfx::Device::instance();
+        gfx::PipelineDesc desc{};
+        desc.blendMode = gfx::BlendMode::None;
 
-    gfx::PipelineDesc desc{};
-    desc.blendMode = gfx::BlendMode::None;
+        desc.shader = s_bloomExtractShader.gfxHandle();
+        s_bloomExtractPipeline = device.createPipeline(desc);
 
-    desc.shader = s_bloomExtractShader.gfxHandle();
-    s_bloomExtractPipeline = device.createPipeline(desc);
+        desc.shader = s_blurShader.gfxHandle();
+        s_blurPipeline = device.createPipeline(desc);
 
-    desc.shader = s_blurShader.gfxHandle();
-    s_blurPipeline = device.createPipeline(desc);
+        desc.shader = s_postProcessShader.gfxHandle();
+        s_postProcessPipeline = device.createPipeline(desc);
 
-    desc.shader = s_postProcessShader.gfxHandle();
-    s_postProcessPipeline = device.createPipeline(desc);
+        s_shadersLoaded = true;
+    });
 }
 
 void registerPostProcessPasses(RenderGraph& graph, PostProcessConfig& config) {

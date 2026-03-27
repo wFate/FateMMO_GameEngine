@@ -6,11 +6,14 @@
 #include "engine/render/camera.h"
 #include "game/components/transform.h"
 #include "engine/core/logger.h"
+#include <mutex>
 
 namespace fate {
 
 static Shader s_lightShader;
 static Shader s_blitShader;
+static std::once_flag s_lightShaderFlag;
+static std::once_flag s_blitShaderFlag;
 static bool s_lightShaderLoaded = false;
 static bool s_blitShaderLoaded = false;
 
@@ -20,41 +23,37 @@ static gfx::PipelineHandle s_blitMultiplicativePipeline;
 static gfx::PipelineHandle s_blitAlphaPipeline;  // for restoring standard alpha state
 
 static void ensureLightShader() {
-    if (s_lightShaderLoaded) return;
-    s_lightShaderLoaded = s_lightShader.loadFromFile(
-        "assets/shaders/fullscreen_quad.vert",
-        "assets/shaders/light.frag"
-    );
-    if (!s_lightShaderLoaded) {
-        LOG_ERROR("Lighting", "Failed to load light shader");
-        return;
-    }
-
-    // Create additive pipeline for point light accumulation
-    auto& device = gfx::Device::instance();
-    gfx::PipelineDesc desc{};
-    desc.shader = s_lightShader.gfxHandle();
-    desc.blendMode = gfx::BlendMode::Additive;
-    s_lightAdditivePipeline = device.createPipeline(desc);
+    std::call_once(s_lightShaderFlag, []() {
+        if (!s_lightShader.loadFromFile(
+                "assets/shaders/fullscreen_quad.vert",
+                "assets/shaders/light.frag")) {
+            LOG_ERROR("Lighting", "Failed to load light shader");
+            return;
+        }
+        auto& device = gfx::Device::instance();
+        gfx::PipelineDesc desc{};
+        desc.shader = s_lightShader.gfxHandle();
+        desc.blendMode = gfx::BlendMode::Additive;
+        s_lightAdditivePipeline = device.createPipeline(desc);
+        s_lightShaderLoaded = true;
+    });
 }
 
 static void ensureBlitShader() {
-    if (s_blitShaderLoaded) return;
-    s_blitShaderLoaded = s_blitShader.loadFromFile(
-        "assets/shaders/fullscreen_quad.vert",
-        "assets/shaders/blit.frag"
-    );
-    if (!s_blitShaderLoaded) {
-        LOG_ERROR("Lighting", "Failed to load blit shader");
-        return;
-    }
-
-    // Create multiplicative pipeline for light map composite
-    auto& device = gfx::Device::instance();
-    gfx::PipelineDesc desc{};
-    desc.shader = s_blitShader.gfxHandle();
-    desc.blendMode = gfx::BlendMode::Multiplicative;
-    s_blitMultiplicativePipeline = device.createPipeline(desc);
+    std::call_once(s_blitShaderFlag, []() {
+        if (!s_blitShader.loadFromFile(
+                "assets/shaders/fullscreen_quad.vert",
+                "assets/shaders/blit.frag")) {
+            LOG_ERROR("Lighting", "Failed to load blit shader");
+            return;
+        }
+        auto& device = gfx::Device::instance();
+        gfx::PipelineDesc desc{};
+        desc.shader = s_blitShader.gfxHandle();
+        desc.blendMode = gfx::BlendMode::Multiplicative;
+        s_blitMultiplicativePipeline = device.createPipeline(desc);
+        s_blitShaderLoaded = true;
+    });
 }
 
 void registerLightingPass(RenderGraph& graph, LightingConfig& config) {

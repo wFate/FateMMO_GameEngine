@@ -780,11 +780,9 @@ void NetClient::sendChat(uint8_t channel, const std::string& message, const std:
     sendPacket(Channel::ReliableOrdered, PacketType::CmdChat, w.data(), w.size());
 }
 
-void NetClient::sendZoneTransition(const std::string& targetScene, float spawnX, float spawnY) {
+void NetClient::sendZoneTransition(const std::string& targetScene) {
     CmdZoneTransition cmd;
     cmd.targetScene = targetScene;
-    cmd.spawnX = spawnX;
-    cmd.spawnY = spawnY;
 
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));

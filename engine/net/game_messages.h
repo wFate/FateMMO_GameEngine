@@ -92,19 +92,13 @@ namespace QuestAction {
 // ============================================================================
 struct CmdZoneTransition {
     std::string targetScene;  // scene name the client wants to enter
-    float spawnX = 0.0f;     // portal's target spawn position
-    float spawnY = 0.0f;
 
     void write(ByteWriter& w) const {
         w.writeString(targetScene);
-        w.writeFloat(spawnX);
-        w.writeFloat(spawnY);
     }
     static CmdZoneTransition read(ByteReader& r) {
         CmdZoneTransition m;
         m.targetScene = r.readString();
-        m.spawnX = r.readFloat();
-        m.spawnY = r.readFloat();
         return m;
     }
 };
