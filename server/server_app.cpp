@@ -2196,8 +2196,8 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
                         sendSystemMsg(clientId, "Unknown command: /" + parsed.commandName);
                         break;
                     }
-                    int role = clientAdminRoles_.count(clientId) ? clientAdminRoles_[clientId] : 0;
-                    if (!GMCommandRegistry::hasPermission(role, static_cast<int>(cmd->minRole))) {
+                    AdminRole role = clientAdminRoles_.count(clientId) ? clientAdminRoles_[clientId] : AdminRole::Player;
+                    if (!GMCommandRegistry::hasPermission(role, cmd->minRole)) {
                         sendSystemMsg(clientId, "Insufficient permission.");
                         break;
                     }
