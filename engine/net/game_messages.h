@@ -1119,15 +1119,18 @@ struct SvConsumeResultMsg {
 struct CmdRankingQueryMsg {
     uint8_t category = 0;
     uint8_t page = 0;
+    uint8_t factionFilter = 0;  // 0 = all factions, 1-4 = specific faction
 
     void write(ByteWriter& w) const {
         w.writeU8(category);
         w.writeU8(page);
+        w.writeU8(factionFilter);
     }
     static CmdRankingQueryMsg read(ByteReader& r) {
         CmdRankingQueryMsg m;
-        m.category = r.readU8();
-        m.page     = r.readU8();
+        m.category      = r.readU8();
+        m.page          = r.readU8();
+        m.factionFilter = r.readU8();
         return m;
     }
 };
@@ -1135,21 +1138,24 @@ struct CmdRankingQueryMsg {
 struct SvRankingResultMsg {
     uint8_t category = 0;
     uint8_t page = 0;
+    uint8_t factionFilter = 0;
     uint16_t totalEntries = 0;
     std::string entriesJson;
 
     void write(ByteWriter& w) const {
         w.writeU8(category);
         w.writeU8(page);
+        w.writeU8(factionFilter);
         w.writeU16(totalEntries);
         w.writeString(entriesJson);
     }
     static SvRankingResultMsg read(ByteReader& r) {
         SvRankingResultMsg m;
-        m.category     = r.readU8();
-        m.page         = r.readU8();
-        m.totalEntries = r.readU16();
-        m.entriesJson  = r.readString();
+        m.category      = r.readU8();
+        m.page          = r.readU8();
+        m.factionFilter = r.readU8();
+        m.totalEntries  = r.readU16();
+        m.entriesJson   = r.readString();
         return m;
     }
 };
