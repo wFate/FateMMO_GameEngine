@@ -1,6 +1,7 @@
 #include "engine/net/replication.h"
 #include "engine/net/packet.h"
 #include "game/components/dropped_item_component.h"
+#include "game/components/game_components.h"
 #include "game/shared/honor_system.h"
 #include "server/cache/item_definition_cache.h"
 #include <cmath>
@@ -352,6 +353,12 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
         msg.maxHP = charStats->stats.maxHP;
         msg.pkStatus  = static_cast<uint8_t>(charStats->stats.pkStatus);
         msg.honorRank = static_cast<uint8_t>(HonorSystem::getHonorRank(charStats->stats.honor));
+
+        auto* appearance = entity->getComponent<AppearanceComponent>();
+        if (appearance) {
+            msg.gender    = appearance->gender;
+            msg.hairstyle = appearance->hairstyle;
+        }
 
         auto* nameplate = entity->getComponent<NameplateComponent>();
         if (nameplate) {

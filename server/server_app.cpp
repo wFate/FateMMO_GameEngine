@@ -168,6 +168,7 @@ bool ServerApp::init(uint16_t port) {
     petRepo_       = std::make_unique<PetRepository>(dbPool_);
     mobStateRepo_  = std::make_unique<ZoneMobStateRepository>(dbPool_);
     pvpKillLogRepo_ = std::make_unique<PvPKillLogRepository>(dbPool_);
+    collectionRepo_ = std::make_unique<CollectionRepository>(dbPool_);
 
     // Initialize definition caches
     itemDefCache_.initialize(gameDbConn_.connection());
@@ -213,6 +214,13 @@ bool ServerApp::init(uint16_t port) {
     // Load pet definitions from database
     petDefCache_.initialize(gameDbConn_.connection());
     LOG_INFO("Server", "Loaded %zu pet definitions from DB", petDefCache_.size());
+
+    // Load collection definitions from database
+    if (collectionCache_.loadFromDatabase(gameDbConn_.connection())) {
+        LOG_INFO("Server", "Loaded %zu collection definitions", collectionCache_.size());
+    } else {
+        LOG_WARN("Server", "Failed to load collection definitions (table may not exist yet)");
+    }
 
     // Initialize Gauntlet system
     initGauntlet();
@@ -378,6 +386,11 @@ bool ServerApp::init(uint16_t port) {
             conn.aoi.stayed.clear();
             conn.lastSentState.clear();
 
+            // Collection hook: battlefield win
+            if (isWinner) {
+                checkPlayerCollections(conn.clientId, "WinBattlefield");
+            }
+
             playerEventLocks_.erase(eid);
         });
 
@@ -457,6 +470,11 @@ bool ServerApp::init(uint16_t port) {
                 arenaMsg.write(arW);
                 server_.sendTo(targetClientId, Channel::ReliableOrdered,
                                PacketType::SvArenaUpdate, arBuf, arW.size());
+
+                // Collection hook: arena win
+                if (won) {
+                    checkPlayerCollections(targetClientId, "WinArena");
+                }
             }
 
             playerEventLocks_.erase(eid);
@@ -1449,7 +1467,8 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     }
 
     // Create player entity
-    Entity* player = EntityFactory::createPlayer(world_, rec.character_name, classType, false, Faction::None);
+    Entity* player = EntityFactory::createPlayer(world_, rec.character_name, classType, false, Faction::None,
+        static_cast<uint8_t>(rec.gender), static_cast<uint8_t>(rec.hairstyle));
 
     // Override stats with DB values
     auto* charStatsComp = player->getComponent<CharacterStatsComponent>();
@@ -1732,6 +1751,31 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         }
     }
 
+    // Load completed collections
+    {
+        auto completedColIds = collectionRepo_->loadCompletedCollections(rec.character_id);
+        auto* collComp = player->addComponent<CollectionComponent>();
+        for (uint32_t cid : completedColIds) {
+            collComp->collections.markCompleted(cid);
+        }
+        collComp->collections.recalculateBonuses(collectionCache_.all());
+        // Apply bonuses to stats
+        if (charStatsComp) {
+            charStatsComp->stats.collectionBonusSTR = collComp->collections.bonuses.bonusSTR;
+            charStatsComp->stats.collectionBonusINT = collComp->collections.bonuses.bonusINT;
+            charStatsComp->stats.collectionBonusDEX = collComp->collections.bonuses.bonusDEX;
+            charStatsComp->stats.collectionBonusCON = collComp->collections.bonuses.bonusCON;
+            charStatsComp->stats.collectionBonusWIS = collComp->collections.bonuses.bonusWIS;
+            charStatsComp->stats.collectionBonusHP  = collComp->collections.bonuses.bonusMaxHP;
+            charStatsComp->stats.collectionBonusMP  = collComp->collections.bonuses.bonusMaxMP;
+            charStatsComp->stats.collectionBonusDamage = collComp->collections.bonuses.bonusDamage;
+            charStatsComp->stats.collectionBonusArmor  = collComp->collections.bonuses.bonusArmor;
+            charStatsComp->stats.collectionBonusCritRate = collComp->collections.bonuses.bonusCritRate;
+            charStatsComp->stats.collectionBonusMoveSpeed = collComp->collections.bonuses.bonusMoveSpeed;
+            charStatsComp->stats.recalculateStats();
+        }
+    }
+
     // Update last_online timestamp
     socialRepo_->updateLastOnline(rec.character_id);
 
@@ -1863,6 +1907,9 @@ void ServerApp::onClientConnected(uint16_t clientId) {
 
             // Also send full player state
             sendPlayerState(clientId);
+
+            // Collection hook: level reached
+            checkPlayerCollections(clientId, "ReachLevel");
         };
     }
 
@@ -1872,6 +1919,8 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     sendSkillDefs(clientId, rec.class_name);
     sendQuestSync(clientId);
     sendInventorySync(clientId);
+    sendCollectionSync(clientId);
+    sendCollectionDefs(clientId);
 
     // If player reconnects while dead, notify client so death overlay shows
     if (rec.is_dead) {

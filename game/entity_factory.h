@@ -23,7 +23,9 @@ public:
 
     /// Create a fully-assembled player entity with all game components.
     /// Mirrors the Unity PlayerScene2 prefab (24 MonoBehaviours).
-    static Entity* createPlayer(World& world, const std::string& name, ClassType classType, bool isLocal = false, Faction faction = Faction::None);
+    static Entity* createPlayer(World& world, const std::string& name,
+        ClassType classType, bool isLocal = false, Faction faction = Faction::None,
+        uint8_t gender = 0, uint8_t hairstyle = 0);
 
     /// Create a mob from a database-backed CachedMobDef (73 mob definitions).
     /// Uses all stats from the definition (HP/damage/armor scaled by level, AI ranges, loot, etc).

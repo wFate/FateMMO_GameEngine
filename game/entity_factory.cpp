@@ -11,7 +11,8 @@ namespace fate {
 
 /// Create a fully-assembled player entity with all game components.
 /// Mirrors the Unity PlayerScene2 prefab (24 MonoBehaviours).
-Entity* EntityFactory::createPlayer(World& world, const std::string& name, ClassType classType, bool isLocal, Faction faction) {
+Entity* EntityFactory::createPlayer(World& world, const std::string& name, ClassType classType, bool isLocal, Faction faction,
+    uint8_t gender, uint8_t hairstyle) {
     Entity* player = world.createEntity(name);
     player->setTag("player");
 
@@ -138,6 +139,11 @@ Entity* EntityFactory::createPlayer(World& world, const std::string& name, Class
 
     // Equipment Visuals (for replicating appearance to other players)
     player->addComponent<EquipVisualsComponent>();
+
+    auto* appearance = player->addComponent<AppearanceComponent>();
+    appearance->gender = gender;
+    appearance->hairstyle = hairstyle;
+    appearance->dirty = true;
 
     // Pet (empty by default — no pet equipped)
     player->addComponent<PetComponent>();
