@@ -79,6 +79,12 @@ void ServerApp::processUnequipCostume(uint16_t clientId, const CmdUnequipCostume
     auto* costumeComp = player->getComponent<CostumeComponent>();
     if (!costumeComp) return;
 
+    // Validate slot type
+    if (!isValidEquipmentSlot(msg.slotType)) {
+        LOG_WARN("Server", "Client %d sent invalid costume slot type %d", clientId, msg.slotType);
+        return;
+    }
+
     // Check if there's actually something equipped in this slot
     auto it = costumeComp->equippedBySlot.find(msg.slotType);
     if (it == costumeComp->equippedBySlot.end()) {

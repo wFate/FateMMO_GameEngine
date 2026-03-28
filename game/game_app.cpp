@@ -1360,8 +1360,6 @@ void GameApp::onInit() {
         }
     };
 
-    // TODO: Wire collection callbacks when NetClient has onCollectionDefs/onCollectionSync
-    /*
     netClient_.onCollectionDefs = [this](const SvCollectionDefsMsg& msg) {
         if (collectionPanel_) {
             collectionPanel_->entries.clear();
@@ -1400,7 +1398,6 @@ void GameApp::onInit() {
             collectionPanel_->bonusMoveSpeed = msg.bonusMoveSpeed;
         }
     };
-    */
 
     netClient_.onCostumeSync = [this](const SvCostumeSyncMsg& msg) {
         if (!costumePanel_) return;
