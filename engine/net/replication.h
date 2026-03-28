@@ -19,6 +19,7 @@
 namespace fate {
 
 class ItemDefinitionCache;
+class CostumeCache;
 
 class ReplicationManager {
 public:
@@ -38,6 +39,7 @@ public:
     EntityHandle getEntityHandle(PersistentId pid) const;
 
     void setItemDefCache(const ItemDefinitionCache* cache) { itemDefCache_ = cache; }
+    void setCostumeCache(const CostumeCache* cache) { costumeCache_ = cache; }
 
     // Optional per-entity visibility filter. Return true to SKIP (hide) the entity.
     std::function<bool(uint64_t entityPid, const ClientConnection& observer)> visibilityFilter;
@@ -77,6 +79,7 @@ private:
     SvEntityUpdateMsg buildCurrentState(World& world, Entity* entity, PersistentId pid);
 
     const ItemDefinitionCache* itemDefCache_ = nullptr;
+    const CostumeCache* costumeCache_ = nullptr;
 };
 
 } // namespace fate

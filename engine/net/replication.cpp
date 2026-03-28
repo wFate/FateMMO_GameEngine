@@ -4,6 +4,7 @@
 #include "game/components/game_components.h"
 #include "game/shared/honor_system.h"
 #include "server/cache/item_definition_cache.h"
+#include "server/cache/costume_cache.h"
 #include <cmath>
 
 namespace fate {
@@ -245,7 +246,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
                 continue;
             }
         }
-        uint16_t dirtyMask = 0;
+        uint32_t dirtyMask = 0;
 
         if (current.position.x != last.position.x || current.position.y != last.position.y)
             dirtyMask |= (1 << 0);
@@ -279,6 +280,8 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
             dirtyMask |= (1 << 14);
         if (current.honorRank != last.honorRank)
             dirtyMask |= (1 << 15);
+        if (current.costumeVisuals != last.costumeVisuals)
+            dirtyMask |= (1 << 16);
 
         if (dirtyMask == 0) continue; // Nothing changed
 
@@ -305,6 +308,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         deltaMsg.equipVisuals    = current.equipVisuals;
         deltaMsg.pkStatus        = current.pkStatus;
         deltaMsg.honorRank       = current.honorRank;
+        deltaMsg.costumeVisuals  = current.costumeVisuals;
         deltaMsg.updateSeq       = seq;
 
         // Serialize delta into a temp buffer to check size
@@ -364,6 +368,25 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
         if (nameplate) {
             msg.name = nameplate->displayName;
         }
+
+        auto* costumeComp = entity->getComponent<CostumeComponent>();
+        if (costumeComp && costumeComp->showCostumes && costumeCache_) {
+            uint16_t cW = 0, cA = 0, cH = 0, cS = 0, cG = 0, cB = 0;
+            for (const auto& [slot, defId] : costumeComp->equippedBySlot) {
+                const auto* def = costumeCache_->get(defId);
+                if (!def) continue;
+                switch (static_cast<EquipmentSlot>(slot)) {
+                    case EquipmentSlot::Weapon:    cW = def->visualIndex; break;
+                    case EquipmentSlot::Armor:     cA = def->visualIndex; break;
+                    case EquipmentSlot::Hat:       cH = def->visualIndex; break;
+                    case EquipmentSlot::SubWeapon: cS = def->visualIndex; break;
+                    case EquipmentSlot::Gloves:    cG = def->visualIndex; break;
+                    case EquipmentSlot::Shoes:     cB = def->visualIndex; break;
+                    default: break;
+                }
+            }
+            msg.costumeVisuals = packCostumeVisuals(cW, cA, cH, cS, cG, cB);
+        }
     } else if (enemyStats) {
         msg.entityType = 1; // mob
         msg.level = enemyStats->stats.level;
@@ -402,7 +425,7 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
 SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* entity, PersistentId pid) {
     SvEntityUpdateMsg msg;
     msg.persistentId = pid.value();
-    msg.fieldMask = 0xFFFF; // all 16 bits set
+    msg.fieldMask = 0x1FFFF; // bits 0-16 all set
 
     // Position
     auto* transform = entity->getComponent<Transform>();
@@ -508,6 +531,28 @@ SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* en
         msg.equipVisuals = packEquipVisuals(weaponIdx, armorIdx, hatIdx);
     } else {
         msg.equipVisuals = 0;
+    }
+
+    // costumeVisuals: packed costume visual indices (6 slots)
+    auto* costumeComp = entity->getComponent<CostumeComponent>();
+    if (costumeComp && costumeComp->showCostumes && costumeCache_) {
+        uint16_t cWeapon = 0, cArmor = 0, cHat = 0, cShield = 0, cGloves = 0, cBoots = 0;
+        for (const auto& [slot, defId] : costumeComp->equippedBySlot) {
+            const auto* def = costumeCache_->get(defId);
+            if (!def) continue;
+            switch (static_cast<EquipmentSlot>(slot)) {
+                case EquipmentSlot::Weapon:    cWeapon = def->visualIndex; break;
+                case EquipmentSlot::Armor:     cArmor  = def->visualIndex; break;
+                case EquipmentSlot::Hat:       cHat    = def->visualIndex; break;
+                case EquipmentSlot::SubWeapon: cShield = def->visualIndex; break;
+                case EquipmentSlot::Gloves:    cGloves = def->visualIndex; break;
+                case EquipmentSlot::Shoes:     cBoots  = def->visualIndex; break;
+                default: break;
+            }
+        }
+        msg.costumeVisuals = packCostumeVisuals(cWeapon, cArmor, cHat, cShield, cGloves, cBoots);
+    } else {
+        msg.costumeVisuals = 0;
     }
 
     return msg;
