@@ -42,16 +42,74 @@ static void closeSocket(uintptr_t fd) {
 #endif
 
 // ---------------------------------------------------------------------------
+// SSL I/O helpers — length-prefixed (4-byte LE length + body)
+// ---------------------------------------------------------------------------
+static bool sslWriteAll(SSL* ssl, const void* data, int len) {
+    const uint8_t* p = static_cast<const uint8_t*>(data);
+    int remaining = len;
+    while (remaining > 0) {
+        int written = SSL_write(ssl, p, remaining);
+        if (written <= 0) return false;
+        p += written;
+        remaining -= written;
+    }
+    return true;
+}
+
+static bool sslReadAll(SSL* ssl, void* data, int len) {
+    uint8_t* p = static_cast<uint8_t*>(data);
+    int remaining = len;
+    while (remaining > 0) {
+        int r = SSL_read(ssl, p, remaining);
+        if (r <= 0) return false;
+        p += r;
+        remaining -= r;
+    }
+    return true;
+}
+
+static bool sslSendMessage(SSL* ssl, const uint8_t* data, uint32_t len) {
+    if (!sslWriteAll(ssl, &len, 4)) return false;
+    if (!sslWriteAll(ssl, data, static_cast<int>(len))) return false;
+    return true;
+}
+
+static constexpr uint32_t MAX_RESP_SIZE = 8192;
+
+static bool sslRecvMessage(SSL* ssl, std::vector<uint8_t>& out) {
+    uint8_t lenBuf[4];
+    if (!sslReadAll(ssl, lenBuf, 4)) return false;
+
+    uint32_t respLen = 0;
+    std::memcpy(&respLen, lenBuf, 4);
+
+    if (respLen == 0 || respLen > MAX_RESP_SIZE) return false;
+
+    out.resize(respLen);
+    if (!sslReadAll(ssl, out.data(), static_cast<int>(respLen))) return false;
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Lifetime
 // ---------------------------------------------------------------------------
 AuthClient::~AuthClient() {
-    cleanup();
+    disconnectAuth();
 }
 
 void AuthClient::cleanup() {
+    shouldStop_.store(true);
+    cmdCv_.notify_all();
     if (worker_.joinable()) {
         worker_.join();
     }
+    shouldStop_.store(false);
+    connected_.store(false);
+}
+
+void AuthClient::pushResult(AuthClientResult result) {
+    std::lock_guard<std::mutex> lock(resultMutex_);
+    result_ = std::move(result);
 }
 
 // ---------------------------------------------------------------------------
@@ -84,10 +142,10 @@ void AuthClient::loginAsync(const std::string& host, uint16_t port,
     }
     busy_.store(true);
 
-    // Join any previous worker before spawning a new one
+    // Tear down any previous connection
     cleanup();
 
-    worker_ = std::thread(&AuthClient::doAuth, this, host, port, requestData);
+    worker_ = std::thread(&AuthClient::workerLoop, this, host, port, requestData);
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +154,8 @@ void AuthClient::loginAsync(const std::string& host, uint16_t port,
 void AuthClient::registerAsync(const std::string& host, uint16_t port,
                                const std::string& username, const std::string& password,
                                const std::string& email,
-                               const std::string& characterName, const std::string& className) {
+                               const std::string& characterName, const std::string& className,
+                               uint8_t faction, uint8_t gender, uint8_t hairstyle) {
     if (busy_.load()) return;
 
     // Serialize RegisterRequest (including the type byte from write())
@@ -106,6 +165,9 @@ void AuthClient::registerAsync(const std::string& host, uint16_t port,
     req.email = email;
     req.characterName = characterName;
     req.className = className;
+    req.faction = faction;
+    req.gender = gender;
+    req.hairstyle = hairstyle;
 
     uint8_t buf[2048];
     ByteWriter w(buf, sizeof(buf));
@@ -125,25 +187,102 @@ void AuthClient::registerAsync(const std::string& host, uint16_t port,
     }
     busy_.store(true);
 
-    // Join any previous worker before spawning a new one
+    // Tear down any previous connection
     cleanup();
 
-    worker_ = std::thread(&AuthClient::doAuth, this, host, port, requestData);
+    worker_ = std::thread(&AuthClient::workerLoop, this, host, port, requestData);
 }
 
 // ---------------------------------------------------------------------------
-// doAuth — runs on background thread
+// Command queue methods (post-login operations on persistent connection)
 // ---------------------------------------------------------------------------
-void AuthClient::doAuth(const std::string& host, uint16_t port,
-                        const std::vector<uint8_t>& requestData) {
+void AuthClient::createCharacterAsync(const std::string& name, const std::string& className,
+                                      uint8_t faction, uint8_t gender, uint8_t hairstyle) {
+    if (!connected_.load()) {
+        LOG_WARN("AuthClient", "createCharacterAsync called but not connected");
+        return;
+    }
+
+    AuthCommand cmd;
+    cmd.type = AuthCommandType::Create;
+    cmd.characterName = name;
+    cmd.className = className;
+    cmd.faction = faction;
+    cmd.gender = gender;
+    cmd.hairstyle = hairstyle;
+
+    {
+        std::lock_guard<std::mutex> lock(cmdMutex_);
+        cmdQueue_.push(std::move(cmd));
+    }
+    cmdCv_.notify_one();
+}
+
+void AuthClient::deleteCharacterAsync(const std::string& characterId) {
+    if (!connected_.load()) {
+        LOG_WARN("AuthClient", "deleteCharacterAsync called but not connected");
+        return;
+    }
+
+    AuthCommand cmd;
+    cmd.type = AuthCommandType::Delete;
+    cmd.characterId = characterId;
+
+    {
+        std::lock_guard<std::mutex> lock(cmdMutex_);
+        cmdQueue_.push(std::move(cmd));
+    }
+    cmdCv_.notify_one();
+}
+
+void AuthClient::selectCharacterAsync(const std::string& characterId) {
+    if (!connected_.load()) {
+        LOG_WARN("AuthClient", "selectCharacterAsync called but not connected");
+        return;
+    }
+
+    AuthCommand cmd;
+    cmd.type = AuthCommandType::Select;
+    cmd.characterId = characterId;
+
+    {
+        std::lock_guard<std::mutex> lock(cmdMutex_);
+        cmdQueue_.push(std::move(cmd));
+    }
+    cmdCv_.notify_one();
+}
+
+void AuthClient::disconnectAuth() {
+    if (!worker_.joinable()) return;
+
+    {
+        std::lock_guard<std::mutex> lock(cmdMutex_);
+        AuthCommand cmd;
+        cmd.type = AuthCommandType::Disconnect;
+        cmdQueue_.push(std::move(cmd));
+    }
+    shouldStop_.store(true);
+    cmdCv_.notify_all();
+
+    if (worker_.joinable()) {
+        worker_.join();
+    }
+    shouldStop_.store(false);
+    connected_.store(false);
+    busy_.store(false);
+}
+
+// ---------------------------------------------------------------------------
+// workerLoop — runs on background thread, maintains persistent TLS connection
+// ---------------------------------------------------------------------------
+void AuthClient::workerLoop(const std::string& host, uint16_t port,
+                            const std::vector<uint8_t>& initialData) {
     auto fail = [this](const std::string& reason) {
-        AuthResponse resp;
-        resp.success = false;
-        resp.errorReason = reason;
-        {
-            std::lock_guard<std::mutex> lock(resultMutex_);
-            result_ = resp;
-        }
+        AuthClientResult res;
+        res.type = AuthResultType::Login;
+        res.success = false;
+        res.errorMessage = reason;
+        pushResult(std::move(res));
         busy_.store(false);
     };
 
@@ -240,75 +379,32 @@ void AuthClient::doAuth(const std::string& host, uint16_t port,
         return;
     }
 
-    // --- Write length-prefixed request ---
-    uint32_t sendLen = static_cast<uint32_t>(requestData.size());
-    if (SSL_write(ssl, &sendLen, 4) != 4) {
+    // --- Send initial login/register message ---
+    if (!sslSendMessage(ssl, initialData.data(), static_cast<uint32_t>(initialData.size()))) {
         SSL_shutdown(ssl);
         SSL_free(ssl);
         closeSocket(sockFd);
         SSL_CTX_free(ctx);
-        fail("Failed to write message length");
+        fail("Failed to send initial auth message");
         return;
     }
 
-    if (SSL_write(ssl, requestData.data(), static_cast<int>(sendLen)) != static_cast<int>(sendLen)) {
+    // --- Read initial AuthResponse ---
+    std::vector<uint8_t> respBuf;
+    if (!sslRecvMessage(ssl, respBuf)) {
         SSL_shutdown(ssl);
         SSL_free(ssl);
         closeSocket(sockFd);
         SSL_CTX_free(ctx);
-        fail("Failed to write message body");
+        fail("Failed to read auth response");
         return;
     }
 
-    // --- Read length-prefixed response ---
-    uint8_t lenBuf[4];
-    int bytesRead = 0;
-    while (bytesRead < 4) {
-        int r = SSL_read(ssl, lenBuf + bytesRead, 4 - bytesRead);
-        if (r <= 0) {
-            SSL_shutdown(ssl);
-            SSL_free(ssl);
-            closeSocket(sockFd);
-            SSL_CTX_free(ctx);
-            fail("Failed to read response length");
-            return;
-        }
-        bytesRead += r;
-    }
-
-    uint32_t respLen = 0;
-    std::memcpy(&respLen, lenBuf, 4);
-
-    static constexpr uint32_t MAX_RESP_SIZE = 4096;
-    if (respLen == 0 || respLen > MAX_RESP_SIZE) {
-        SSL_shutdown(ssl);
-        SSL_free(ssl);
-        closeSocket(sockFd);
-        SSL_CTX_free(ctx);
-        fail("Invalid response length: " + std::to_string(respLen));
-        return;
-    }
-
-    std::vector<uint8_t> respBuf(respLen);
-    int totalRead = 0;
-    while (static_cast<uint32_t>(totalRead) < respLen) {
-        int r = SSL_read(ssl, respBuf.data() + totalRead,
-                         static_cast<int>(respLen) - totalRead);
-        if (r <= 0) {
-            SSL_shutdown(ssl);
-            SSL_free(ssl);
-            closeSocket(sockFd);
-            SSL_CTX_free(ctx);
-            fail("Failed to read response body");
-            return;
-        }
-        totalRead += r;
-    }
-
-    // --- Parse AuthResponse ---
     ByteReader reader(respBuf.data(), respBuf.size());
-    AuthResponse response = AuthResponse::read(reader);
+    uint8_t typeByte = reader.readU8(); // consume the type byte
+    (void)typeByte; // AuthResponse type
 
+    AuthResponse authResp = AuthResponse::read(reader);
     if (reader.overflowed()) {
         SSL_shutdown(ssl);
         SSL_free(ssl);
@@ -318,25 +414,166 @@ void AuthClient::doAuth(const std::string& host, uint16_t port,
         return;
     }
 
-    // --- Cleanup TLS/socket ---
+    // Push the login result
+    {
+        AuthClientResult res;
+        res.type = AuthResultType::Login;
+        res.success = authResp.success;
+        res.errorMessage = authResp.errorReason;
+        res.characters = std::move(authResp.characters);
+        pushResult(std::move(res));
+    }
+
+    if (!authResp.success) {
+        LOG_WARN("AuthClient", "Auth failed: %s", authResp.errorReason.c_str());
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+        closeSocket(sockFd);
+        SSL_CTX_free(ctx);
+        busy_.store(false);
+        return;
+    }
+
+    LOG_INFO("AuthClient", "Auth succeeded, persistent connection established");
+    connected_.store(true);
+    busy_.store(false);
+
+    // -----------------------------------------------------------------------
+    // Command processing loop — waits for commands, sends/receives on the
+    // persistent TLS connection
+    // -----------------------------------------------------------------------
+    while (!shouldStop_.load()) {
+        AuthCommand cmd;
+        {
+            std::unique_lock<std::mutex> lock(cmdMutex_);
+            cmdCv_.wait(lock, [this]() {
+                return !cmdQueue_.empty() || shouldStop_.load();
+            });
+
+            if (shouldStop_.load()) break;
+            if (cmdQueue_.empty()) continue;
+
+            cmd = std::move(cmdQueue_.front());
+            cmdQueue_.pop();
+        }
+
+        if (cmd.type == AuthCommandType::Disconnect) {
+            break;
+        }
+
+        // Serialize and send the command
+        uint8_t sendBuf[2048];
+        ByteWriter w(sendBuf, sizeof(sendBuf));
+
+        switch (cmd.type) {
+            case AuthCommandType::Create: {
+                CharCreateRequest req;
+                req.characterName = cmd.characterName;
+                req.className = cmd.className;
+                req.faction = cmd.faction;
+                req.gender = cmd.gender;
+                req.hairstyle = cmd.hairstyle;
+                req.write(w);
+                break;
+            }
+            case AuthCommandType::Delete: {
+                CharDeleteRequest req;
+                req.characterId = cmd.characterId;
+                req.write(w);
+                break;
+            }
+            case AuthCommandType::Select: {
+                SelectCharRequest req;
+                req.characterId = cmd.characterId;
+                req.write(w);
+                break;
+            }
+            default:
+                continue;
+        }
+
+        if (w.overflowed()) {
+            LOG_ERROR("AuthClient", "Command serialization overflow");
+            continue;
+        }
+
+        // Send the message
+        if (!sslSendMessage(ssl, w.data(), static_cast<uint32_t>(w.size()))) {
+            LOG_ERROR("AuthClient", "Failed to send command — connection lost");
+            break;
+        }
+
+        // Read the response
+        respBuf.clear();
+        if (!sslRecvMessage(ssl, respBuf)) {
+            LOG_ERROR("AuthClient", "Failed to read response — connection lost");
+            break;
+        }
+
+        // Parse based on command type
+        ByteReader rdr(respBuf.data(), respBuf.size());
+        uint8_t respType = rdr.readU8(); // type byte
+        (void)respType;
+
+        switch (cmd.type) {
+            case AuthCommandType::Create: {
+                CharCreateResponse resp = CharCreateResponse::read(rdr);
+                if (!rdr.overflowed()) {
+                    AuthClientResult res;
+                    res.type = AuthResultType::Create;
+                    res.success = resp.success;
+                    res.errorMessage = resp.errorMessage;
+                    res.characters = std::move(resp.characters);
+                    pushResult(std::move(res));
+                } else {
+                    LOG_ERROR("AuthClient", "Malformed CharCreateResponse");
+                }
+                break;
+            }
+            case AuthCommandType::Delete: {
+                CharDeleteResponse resp = CharDeleteResponse::read(rdr);
+                if (!rdr.overflowed()) {
+                    AuthClientResult res;
+                    res.type = AuthResultType::Delete;
+                    res.success = resp.success;
+                    res.errorMessage = resp.errorMessage;
+                    res.characters = std::move(resp.characters);
+                    pushResult(std::move(res));
+                } else {
+                    LOG_ERROR("AuthClient", "Malformed CharDeleteResponse");
+                }
+                break;
+            }
+            case AuthCommandType::Select: {
+                SelectCharResponse resp = SelectCharResponse::read(rdr);
+                if (!rdr.overflowed()) {
+                    AuthClientResult res;
+                    res.type = AuthResultType::Select;
+                    res.success = resp.success;
+                    res.errorMessage = resp.errorMessage;
+                    res.selectData = std::move(resp);
+                    pushResult(std::move(res));
+                } else {
+                    LOG_ERROR("AuthClient", "Malformed SelectCharResponse");
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Cleanup — tear down TLS and socket
+    // -----------------------------------------------------------------------
     SSL_shutdown(ssl);
     SSL_free(ssl);
     closeSocket(sockFd);
     SSL_CTX_free(ctx);
-
-    // --- Store result ---
-    {
-        std::lock_guard<std::mutex> lock(resultMutex_);
-        result_ = response;
-    }
+    connected_.store(false);
     busy_.store(false);
 
-    if (response.success) {
-        LOG_INFO("AuthClient", "Auth succeeded — character '%s' (%s) level %d",
-                 response.characterName.c_str(), response.className.c_str(), response.level);
-    } else {
-        LOG_WARN("AuthClient", "Auth failed: %s", response.errorReason.c_str());
-    }
+    LOG_INFO("AuthClient", "Persistent auth connection closed");
 }
 
 // ---------------------------------------------------------------------------
@@ -347,11 +584,11 @@ bool AuthClient::hasResult() const {
     return result_.has_value();
 }
 
-AuthResponse AuthClient::consumeResult() {
+AuthClientResult AuthClient::consumeResult() {
     std::lock_guard<std::mutex> lock(resultMutex_);
-    AuthResponse resp = result_.value();
+    AuthClientResult res = std::move(result_.value());
     result_.reset();
-    return resp;
+    return res;
 }
 
 } // namespace fate

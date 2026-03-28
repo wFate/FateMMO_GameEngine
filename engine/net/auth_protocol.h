@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <random>
+#include <vector>
 #include "engine/net/byte_stream.h"
 #include "engine/net/protocol.h"
 #include "game/shared/game_types.h"
@@ -77,9 +78,15 @@ struct AuthValidation {
 // Auth Message Types (TCP only — not part of UDP PacketType namespace)
 // ============================================================================
 enum class AuthMessageType : uint8_t {
-    RegisterRequest = 1,
-    LoginRequest    = 2,
-    AuthResponse    = 3,
+    RegisterRequest       = 1,
+    LoginRequest          = 2,
+    AuthResponse          = 3,
+    CharCreateRequest     = 4,
+    CharCreateResponse    = 5,
+    CharDeleteRequest     = 6,
+    CharDeleteResponse    = 7,
+    SelectCharRequest     = 8,
+    SelectCharResponse    = 9,
 };
 
 // RegisterRequest and LoginRequest write a type byte first.
@@ -92,6 +99,9 @@ struct RegisterRequest {
     std::string email;
     std::string characterName;
     std::string className;
+    uint8_t faction = 0;
+    uint8_t gender = 0;
+    uint8_t hairstyle = 0;
 
     void write(ByteWriter& w) const {
         w.writeU8(static_cast<uint8_t>(AuthMessageType::RegisterRequest));
@@ -100,6 +110,9 @@ struct RegisterRequest {
         w.writeString(email);
         w.writeString(characterName);
         w.writeString(className);
+        w.writeU8(faction);
+        w.writeU8(gender);
+        w.writeU8(hairstyle);
     }
 
     static RegisterRequest read(ByteReader& r) {
@@ -109,6 +122,9 @@ struct RegisterRequest {
         m.email         = r.readString();
         m.characterName = r.readString();
         m.className     = r.readString();
+        m.faction       = r.readU8();
+        m.gender        = r.readU8();
+        m.hairstyle     = r.readU8();
         return m;
     }
 };
@@ -131,14 +147,201 @@ struct LoginRequest {
     }
 };
 
-// AuthResponse does NOT write a type byte — the client always knows
-// the response follows a request. Preview data only meaningful on success.
+// ============================================================================
+// Character Preview — lightweight summary for character select screen
+// ============================================================================
+struct CharacterPreview {
+    std::string characterId;
+    std::string characterName;
+    std::string className;
+    int32_t level = 1;
+    uint8_t faction = 0;
+    uint8_t gender = 0;
+    uint8_t hairstyle = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeString(characterId);
+        w.writeString(characterName);
+        w.writeString(className);
+        w.writeI32(level);
+        w.writeU8(faction);
+        w.writeU8(gender);
+        w.writeU8(hairstyle);
+    }
+    static CharacterPreview read(ByteReader& r) {
+        CharacterPreview p;
+        p.characterId   = r.readString();
+        p.characterName = r.readString();
+        p.className     = r.readString();
+        p.level         = r.readI32();
+        p.faction       = r.readU8();
+        p.gender        = r.readU8();
+        p.hairstyle     = r.readU8();
+        return p;
+    }
+    static void writeList(ByteWriter& w, const std::vector<CharacterPreview>& list) {
+        w.writeU8(static_cast<uint8_t>(list.size()));
+        for (const auto& p : list) p.write(w);
+    }
+    static std::vector<CharacterPreview> readList(ByteReader& r) {
+        uint8_t count = r.readU8();
+        std::vector<CharacterPreview> list;
+        list.reserve(count);
+        for (uint8_t i = 0; i < count; ++i)
+            list.push_back(CharacterPreview::read(r));
+        return list;
+    }
+};
+
+// AuthResponse writes the type byte; client reads type byte separately.
+// On success, carries a list of character previews (multi-char login).
 struct AuthResponse {
     bool success = false;
-    AuthToken authToken = {};
     std::string errorReason;
+    std::vector<CharacterPreview> characters;
 
-    // Full character snapshot — client uses this to initialize without waiting for SvPlayerState
+    void write(ByteWriter& w) const {
+        w.writeU8(static_cast<uint8_t>(AuthMessageType::AuthResponse));
+        w.writeU8(success ? 1 : 0);
+        if (!success) {
+            w.writeString(errorReason);
+        } else {
+            CharacterPreview::writeList(w, characters);
+        }
+    }
+
+    static AuthResponse read(ByteReader& r) {
+        AuthResponse resp;
+        resp.success = r.readU8() != 0;
+        if (!resp.success) {
+            resp.errorReason = r.readString();
+        } else {
+            resp.characters = CharacterPreview::readList(r);
+        }
+        return resp;
+    }
+};
+
+// ============================================================================
+// Character Create / Delete / Select Messages
+// ============================================================================
+struct CharCreateRequest {
+    std::string characterName;
+    std::string className;
+    uint8_t faction = 0;
+    uint8_t gender = 0;
+    uint8_t hairstyle = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(static_cast<uint8_t>(AuthMessageType::CharCreateRequest));
+        w.writeString(characterName);
+        w.writeString(className);
+        w.writeU8(faction);
+        w.writeU8(gender);
+        w.writeU8(hairstyle);
+    }
+
+    static CharCreateRequest read(ByteReader& r) {
+        CharCreateRequest m;
+        m.characterName = r.readString();
+        m.className     = r.readString();
+        m.faction       = r.readU8();
+        m.gender        = r.readU8();
+        m.hairstyle     = r.readU8();
+        return m;
+    }
+};
+
+struct CharCreateResponse {
+    bool success = false;
+    std::string errorMessage;
+    std::vector<CharacterPreview> characters;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(static_cast<uint8_t>(AuthMessageType::CharCreateResponse));
+        w.writeU8(success ? 1 : 0);
+        if (!success) {
+            w.writeString(errorMessage);
+        } else {
+            CharacterPreview::writeList(w, characters);
+        }
+    }
+
+    static CharCreateResponse read(ByteReader& r) {
+        CharCreateResponse m;
+        m.success = r.readU8() != 0;
+        if (!m.success) {
+            m.errorMessage = r.readString();
+        } else {
+            m.characters = CharacterPreview::readList(r);
+        }
+        return m;
+    }
+};
+
+struct CharDeleteRequest {
+    std::string characterId;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(static_cast<uint8_t>(AuthMessageType::CharDeleteRequest));
+        w.writeString(characterId);
+    }
+
+    static CharDeleteRequest read(ByteReader& r) {
+        CharDeleteRequest m;
+        m.characterId = r.readString();
+        return m;
+    }
+};
+
+struct CharDeleteResponse {
+    bool success = false;
+    std::string errorMessage;
+    std::vector<CharacterPreview> characters;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(static_cast<uint8_t>(AuthMessageType::CharDeleteResponse));
+        w.writeU8(success ? 1 : 0);
+        if (!success) {
+            w.writeString(errorMessage);
+        } else {
+            CharacterPreview::writeList(w, characters);
+        }
+    }
+
+    static CharDeleteResponse read(ByteReader& r) {
+        CharDeleteResponse m;
+        m.success = r.readU8() != 0;
+        if (!m.success) {
+            m.errorMessage = r.readString();
+        } else {
+            m.characters = CharacterPreview::readList(r);
+        }
+        return m;
+    }
+};
+
+struct SelectCharRequest {
+    std::string characterId;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(static_cast<uint8_t>(AuthMessageType::SelectCharRequest));
+        w.writeString(characterId);
+    }
+
+    static SelectCharRequest read(ByteReader& r) {
+        SelectCharRequest m;
+        m.characterId = r.readString();
+        return m;
+    }
+};
+
+struct SelectCharResponse {
+    bool success = false;
+    std::string errorMessage;
+
+    // Full character snapshot — only meaningful on success
+    AuthToken authToken = {};
     std::string characterName;
     std::string className;
     std::string sceneName;
@@ -167,10 +370,12 @@ struct AuthResponse {
     uint8_t faction = 0;
 
     void write(ByteWriter& w) const {
+        w.writeU8(static_cast<uint8_t>(AuthMessageType::SelectCharResponse));
         w.writeU8(success ? 1 : 0);
-        w.writeBytes(authToken.data(), 16);
-        w.writeString(errorReason);
-        if (success) {
+        if (!success) {
+            w.writeString(errorMessage);
+        } else {
+            w.writeBytes(authToken.data(), 16);
             w.writeString(characterName);
             w.writeString(className);
             w.writeString(sceneName);
@@ -192,12 +397,13 @@ struct AuthResponse {
         }
     }
 
-    static AuthResponse read(ByteReader& r) {
-        AuthResponse m;
+    static SelectCharResponse read(ByteReader& r) {
+        SelectCharResponse m;
         m.success = r.readU8() != 0;
-        r.readBytes(m.authToken.data(), 16);
-        m.errorReason = r.readString();
-        if (m.success) {
+        if (!m.success) {
+            m.errorMessage = r.readString();
+        } else {
+            r.readBytes(m.authToken.data(), 16);
             m.characterName = r.readString();
             m.className     = r.readString();
             m.sceneName     = r.readString();

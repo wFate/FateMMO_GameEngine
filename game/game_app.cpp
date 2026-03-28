@@ -1615,23 +1615,27 @@ void GameApp::onUpdate(float deltaTime) {
         case ConnectionState::Authenticating: {
             // Poll for auth result
             if (authClient_.hasResult()) {
-                AuthResponse resp = authClient_.consumeResult();
+                AuthClientResult resp = authClient_.consumeResult();
                 if (resp.success) {
-                    pendingAuthToken_ = resp.authToken;
-                    pendingCharName_ = resp.characterName;
-                    pendingClassName_ = resp.className;
-                    pendingLevel_ = resp.level;
-                    pendingSpawnPos_ = {resp.spawnX, resp.spawnY};
-                    pendingSceneName_ = resp.sceneName;
-                    // Store full character state from auth for immediate player init
+                    // TODO (Task 5): transition to CharacterSelect state with resp.characters
+                    // For now, auto-select the first character for backward compatibility
+                    if (!resp.characters.empty()) {
+                        pendingCharName_ = resp.characters[0].characterName;
+                        pendingClassName_ = resp.characters[0].className;
+                        pendingLevel_ = resp.characters[0].level;
+                    }
+                    // Store character list from auth
                     pendingAuthResponse_ = resp;
                     // Connect to game server via UDP with auth token
+                    // NOTE: authToken now comes from SelectCharResponse (Task 4/5)
+                    // For now, generate a local token for backward compat
+                    pendingAuthToken_ = generateAuthToken();
                     std::string host = loginScreenWidget_ ? loginScreenWidget_->serverHost : "127.0.0.1";
                     netClient_.connectWithToken(host, static_cast<uint16_t>(serverPort_), pendingAuthToken_);
                     connState_ = ConnectionState::UDPConnecting;
                     if (loginScreenWidget_) loginScreenWidget_->setStatus("Connecting to game server...", false);
                 } else {
-                    if (loginScreenWidget_) loginScreenWidget_->setStatus(resp.errorReason, true);
+                    if (loginScreenWidget_) loginScreenWidget_->setStatus(resp.errorMessage, true);
                     connState_ = ConnectionState::LoginScreen;
                 }
             }
@@ -1817,29 +1821,14 @@ void GameApp::onUpdate(float deltaTime) {
                         auto* inv = player->getComponent<InventoryComponent>();
                         if (inv) inv->inventory.setGold(pendingPlayerState_.gold);
                     } else {
-                        // Apply full character state from auth response (initial login)
-                        // (avoids blank/default stats until SvPlayerState arrives)
-                        const auto& ar = pendingAuthResponse_;
+                        // Apply basic character state from auth character list
+                        // TODO (Task 5): Full snapshot comes from SelectCharResponse
+                        // For now, apply level from the character preview
                         auto* cs = player->getComponent<CharacterStatsComponent>();
-                        if (cs) {
-                            cs->stats.level = ar.level;
+                        if (cs && !pendingAuthResponse_.characters.empty()) {
+                            cs->stats.level = pendingAuthResponse_.characters[0].level;
                             cs->stats.recalculateStats();
                             cs->stats.recalculateXPRequirement();
-                            cs->stats.currentHP = ar.currentHP;
-                            cs->stats.maxHP = ar.maxHP;
-                            cs->stats.currentMP = ar.currentMP;
-                            cs->stats.maxMP = ar.maxMP;
-                            cs->stats.currentFury = ar.currentFury;
-                            cs->stats.currentXP = ar.currentXP;
-                            cs->stats.honor = ar.honor;
-                            cs->stats.pvpKills = ar.pvpKills;
-                            cs->stats.pvpDeaths = ar.pvpDeaths;
-                            cs->stats.isDead = ar.isDead != 0;
-                            cs->stats.lifeState = cs->stats.isDead ? LifeState::Dead : LifeState::Alive;
-                        }
-                        auto* inv = player->getComponent<InventoryComponent>();
-                        if (inv) {
-                            inv->inventory.setGold(ar.gold); // set, not add — avoid doubling
                         }
                     }
 
