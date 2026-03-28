@@ -40,7 +40,12 @@
 #include "server/cache/loot_table_cache.h"
 #include "server/cache/recipe_cache.h"
 #include "server/cache/pet_definition_cache.h"
+#include "server/cache/collection_cache.h"
+#include "server/cache/costume_cache.h"
+#include "server/db/collection_repository.h"
+#include "server/db/costume_repository.h"
 #include "server/db/spawn_zone_cache.h"
+#include "game/shared/collection_system.h"
 #include "server/server_spawn_manager.h"
 #include "server/dungeon_manager.h"
 #include "engine/spatial/collision_grid.h"
@@ -120,6 +125,8 @@ private:
     std::unique_ptr<PetRepository> petRepo_;
     std::unique_ptr<ZoneMobStateRepository> mobStateRepo_;
     std::unique_ptr<PvPKillLogRepository> pvpKillLogRepo_;
+    std::unique_ptr<CollectionRepository> collectionRepo_;
+    std::unique_ptr<CostumeRepository> costumeRepo_;
 
     // Definition caches (read-only, loaded at startup)
     ItemDefinitionCache itemDefCache_;
@@ -129,6 +136,8 @@ private:
     SceneCache sceneCache_;
     RecipeCache recipeCache_;
     PetDefinitionCache petDefCache_;
+    CollectionCache collectionCache_;
+    CostumeCache costumeCache_;
 
     // Gauntlet event system
     GauntletManager gauntletManager_;
@@ -345,6 +354,18 @@ private:
     void endDungeonInstance(uint32_t instanceId, uint8_t reason);
     void initGMCommands();
     uint16_t findClientByCharacterName(const std::string& name);
+
+    // handlers/collection_handler.cpp
+    void checkPlayerCollections(uint16_t clientId, const std::string& triggerType);
+    void sendCollectionSync(uint16_t clientId);
+    void sendCollectionDefs(uint16_t clientId);
+
+    // handlers/costume_handler.cpp
+    void processEquipCostume(uint16_t clientId, const CmdEquipCostumeMsg& msg);
+    void processUnequipCostume(uint16_t clientId, const CmdUnequipCostumeMsg& msg);
+    void processToggleCostumes(uint16_t clientId, const CmdToggleCostumesMsg& msg);
+    void sendCostumeSync(uint16_t clientId);
+    void loadPlayerCostumes(uint16_t clientId, const std::string& characterId);
 
     // Dungeon instance routing: returns the correct World/ReplicationManager
     // for a client (dungeon instance world if in dungeon, otherwise main world_).

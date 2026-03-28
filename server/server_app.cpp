@@ -169,10 +169,12 @@ bool ServerApp::init(uint16_t port) {
     mobStateRepo_  = std::make_unique<ZoneMobStateRepository>(dbPool_);
     pvpKillLogRepo_ = std::make_unique<PvPKillLogRepository>(dbPool_);
     collectionRepo_ = std::make_unique<CollectionRepository>(dbPool_);
+    costumeRepo_ = std::make_unique<CostumeRepository>(dbPool_);
 
     // Initialize definition caches
     itemDefCache_.initialize(gameDbConn_.connection());
     replication_.setItemDefCache(&itemDefCache_);
+    replication_.setCostumeCache(&costumeCache_);
 
     // Invisibility filter: hide invisible entities from non-staff clients
     replication_.visibilityFilter = [this](uint64_t entityPid, const ClientConnection& observer) -> bool {
@@ -220,6 +222,13 @@ bool ServerApp::init(uint16_t port) {
         LOG_INFO("Server", "Loaded %zu collection definitions", collectionCache_.size());
     } else {
         LOG_WARN("Server", "Failed to load collection definitions (table may not exist yet)");
+    }
+
+    // Load costume definitions from database
+    if (!costumeCache_.loadFromDatabase(gameDbConn_.connection())) {
+        LOG_ERROR("Server", "Failed to load costume definitions");
+    } else {
+        LOG_INFO("Server", "Loaded %zu costume definitions", costumeCache_.size());
     }
 
     // Initialize Gauntlet system
@@ -1921,6 +1930,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     sendInventorySync(clientId);
     sendCollectionSync(clientId);
     sendCollectionDefs(clientId);
+    loadPlayerCostumes(clientId, rec.character_id);
 
     // If player reconnects while dead, notify client so death overlay shows
     if (rec.is_dead) {
@@ -2344,6 +2354,21 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
         case PacketType::CmdAllocateStat: {
             auto msg = CmdAllocateStatMsg::read(payload);
             processAllocateStat(clientId, msg);
+            break;
+        }
+        case PacketType::CmdEquipCostume: {
+            auto msg = CmdEquipCostumeMsg::read(payload);
+            processEquipCostume(clientId, msg);
+            break;
+        }
+        case PacketType::CmdUnequipCostume: {
+            auto msg = CmdUnequipCostumeMsg::read(payload);
+            processUnequipCostume(clientId, msg);
+            break;
+        }
+        case PacketType::CmdToggleCostumes: {
+            auto msg = CmdToggleCostumesMsg::read(payload);
+            processToggleCostumes(clientId, msg);
             break;
         }
         default:
