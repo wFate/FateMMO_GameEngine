@@ -1508,6 +1508,8 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         // s.allocatedCON   = static_cast<int16_t>(rec.allocated_con);
         // s.allocatedWIS   = static_cast<int16_t>(rec.allocated_wis);
 
+        s.recallScene = rec.recall_scene.empty() ? "Town" : rec.recall_scene;
+
         // Initial stat calc (without equipment — equipment loaded below)
         s.recalculateStats();
         s.recalculateXPRequirement();
