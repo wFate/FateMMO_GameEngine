@@ -17,6 +17,7 @@
 #include "engine/editor/undo.h"
 #include "engine/editor/node_editor.h"
 #include "engine/editor/animation_editor.h"
+#include "engine/editor/combat_text_editor.h"
 #include "engine/editor/asset_browser.h"
 #include "engine/editor/ui_editor_panel.h"
 #include <ImGuizmo.h>
@@ -334,6 +335,9 @@ private:
 
     // Animation editor panel
     AnimationEditor animationEditor_;
+
+    // Combat text editor
+    bool showCombatTextEditor_ = false;
 
     // Enhanced asset browser
     AssetBrowser assetBrowser_;

@@ -1,4 +1,5 @@
 #include "engine/editor/editor.h"
+#include "engine/editor/combat_text_editor.h"
 #include "engine/core/logger.h"
 #ifndef FATEMMO_METAL
 // Editor uses direct GL for ImGui integration — intentionally outside RHI
@@ -395,6 +396,9 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     drawHierarchy(world);
     drawInspector();
     drawConsole(world);
+    if (showCombatTextEditor_) {
+        drawCombatTextEditorWindow(&showCombatTextEditor_);
+    }
     LogViewer::instance().draw();
     drawTilePalette(world, camera);
     drawAssetBrowser(world, camera);
@@ -620,6 +624,7 @@ void Editor::drawDockSpace() {
             if (ImGui::MenuItem("Animation Editor", nullptr, &animOpen)) {
                 animationEditor_.setOpen(animOpen);
             }
+            ImGui::MenuItem("Combat Text Editor", nullptr, &showCombatTextEditor_);
             ImGui::EndMenu();
         }
 

@@ -24,6 +24,7 @@
 #include "game/systems/zone_system.h"
 #include "game/systems/spawn_system.h"
 #include "game/systems/npc_interaction_system.h"
+#include "game/systems/combat_text_config.h"
 #include "game/systems/quest_system.h"
 #include "engine/job/job_system.h"
 #include <thread>
@@ -1492,6 +1493,8 @@ void GameApp::onInit() {
 
     // Load skill VFX definitions
     SkillVFXPlayer::instance().loadDefinitions("assets/vfx/");
+
+    CombatTextConfig::instance().load(CombatTextConfig::kDefaultPath);
 
     // Try to load a tilemap (if present, replaces procedural ground)
     tilemap_ = std::make_unique<Tilemap>();
