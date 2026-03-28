@@ -600,6 +600,18 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onSkillDefs) onSkillDefs(msg);
             break;
         }
+        case PacketType::SvCollectionSync: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCollectionSyncMsg::read(payload);
+            if (onCollectionSync) onCollectionSync(msg);
+            break;
+        }
+        case PacketType::SvCollectionDefs: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCollectionDefsMsg::read(payload);
+            if (onCollectionDefs) onCollectionDefs(msg);
+            break;
+        }
         case PacketType::SvCostumeSync: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvCostumeSyncMsg::read(payload);

@@ -1343,6 +1343,92 @@ struct SvSkillDefsMsg {
 };
 
 // ============================================================================
+// Collection System Messages
+// ============================================================================
+
+struct CollectionDefEntry {
+    uint32_t collectionId = 0;
+    std::string name;
+    std::string description;
+    std::string category;
+    std::string conditionType;
+    std::string conditionTarget;
+    int32_t conditionValue = 0;
+    std::string rewardType;
+    float rewardValue = 0.0f;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(collectionId);
+        w.writeString(name);
+        w.writeString(description);
+        w.writeString(category);
+        w.writeString(conditionType);
+        w.writeString(conditionTarget);
+        w.writeI32(conditionValue);
+        w.writeString(rewardType);
+        w.writeFloat(rewardValue);
+    }
+    static CollectionDefEntry read(ByteReader& r) {
+        CollectionDefEntry e;
+        e.collectionId = r.readU32();
+        e.name = r.readString();
+        e.description = r.readString();
+        e.category = r.readString();
+        e.conditionType = r.readString();
+        e.conditionTarget = r.readString();
+        e.conditionValue = r.readI32();
+        e.rewardType = r.readString();
+        e.rewardValue = r.readFloat();
+        return e;
+    }
+};
+
+struct SvCollectionDefsMsg {
+    std::vector<CollectionDefEntry> defs;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(defs.size()));
+        for (const auto& d : defs) d.write(w);
+    }
+    static SvCollectionDefsMsg read(ByteReader& r) {
+        SvCollectionDefsMsg m;
+        uint16_t count = r.readU16();
+        m.defs.resize(count);
+        for (uint16_t i = 0; i < count; ++i) m.defs[i] = CollectionDefEntry::read(r);
+        return m;
+    }
+};
+
+struct SvCollectionSyncMsg {
+    std::vector<uint32_t> completedIds;
+    int32_t bonusSTR = 0, bonusINT = 0, bonusDEX = 0, bonusCON = 0, bonusWIS = 0;
+    int32_t bonusHP = 0, bonusMP = 0, bonusDamage = 0, bonusArmor = 0;
+    float bonusCritRate = 0.0f, bonusMoveSpeed = 0.0f;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(completedIds.size()));
+        for (uint32_t id : completedIds) w.writeU32(id);
+        w.writeI32(bonusSTR); w.writeI32(bonusINT); w.writeI32(bonusDEX);
+        w.writeI32(bonusCON); w.writeI32(bonusWIS);
+        w.writeI32(bonusHP); w.writeI32(bonusMP);
+        w.writeI32(bonusDamage); w.writeI32(bonusArmor);
+        w.writeFloat(bonusCritRate); w.writeFloat(bonusMoveSpeed);
+    }
+    static SvCollectionSyncMsg read(ByteReader& r) {
+        SvCollectionSyncMsg m;
+        uint16_t count = r.readU16();
+        m.completedIds.resize(count);
+        for (uint16_t i = 0; i < count; ++i) m.completedIds[i] = r.readU32();
+        m.bonusSTR = r.readI32(); m.bonusINT = r.readI32(); m.bonusDEX = r.readI32();
+        m.bonusCON = r.readI32(); m.bonusWIS = r.readI32();
+        m.bonusHP = r.readI32(); m.bonusMP = r.readI32();
+        m.bonusDamage = r.readI32(); m.bonusArmor = r.readI32();
+        m.bonusCritRate = r.readFloat(); m.bonusMoveSpeed = r.readFloat();
+        return m;
+    }
+};
+
+// ============================================================================
 // Client -> Server: CmdActivateSkillRank (spend a skill point)
 // ============================================================================
 struct CmdActivateSkillRankMsg {

@@ -83,4 +83,16 @@ private:
 
 } // namespace fate
 
+#else
+
+namespace fate {
+
+class CostumeCache {
+public:
+    const CachedCostumeDef* get(const std::string&) const { return nullptr; }
+    size_t size() const { return 0; }
+};
+
+} // namespace fate
+
 #endif // __has_include(<pqxx/pqxx>)

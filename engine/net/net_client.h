@@ -122,6 +122,8 @@ public:
     std::function<void(const SvDungeonStartMsg&)> onDungeonStart;
     std::function<void(const SvDungeonEndMsg&)> onDungeonEnd;
     std::function<void(const SvSkillDefsMsg&)> onSkillDefs;
+    std::function<void(const SvCollectionSyncMsg&)> onCollectionSync;
+    std::function<void(const SvCollectionDefsMsg&)> onCollectionDefs;
     std::function<void(const SvCostumeSyncMsg&)> onCostumeSync;
     std::function<void(const SvCostumeUpdateMsg&)> onCostumeUpdate;
     std::function<void(const std::string& reason)> onConnectRejected;
