@@ -148,6 +148,9 @@ Entity* EntityFactory::createPlayer(World& world, const std::string& name, Class
     // Pet (empty by default — no pet equipped)
     player->addComponent<PetComponent>();
 
+    // Costume (empty by default — loaded from DB on login)
+    player->addComponent<CostumeComponent>();
+
     // Nameplate
     auto* nameplate = player->addComponent<NameplateComponent>();
     nameplate->displayName = name;

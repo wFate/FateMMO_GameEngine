@@ -129,6 +129,7 @@ struct SvEntityEnterMsg {
     // Player appearance (only serialized when entityType == 0)
     uint8_t gender    = 0; // 0=male, 1=female
     uint8_t hairstyle = 0; // 0-2 per gender
+    uint64_t costumeVisuals = 0; // packed costume visual indices (only for entityType == 0)
 
     void write(ByteWriter& w) const {
         detail::writeU64(w, persistentId);
@@ -144,6 +145,7 @@ struct SvEntityEnterMsg {
             w.writeU8(honorRank);
             w.writeU8(gender);
             w.writeU8(hairstyle);
+            detail::writeU64(w, costumeVisuals);
         }
         if (entityType == 3) {
             w.writeString(itemId);
@@ -174,6 +176,7 @@ struct SvEntityEnterMsg {
             m.honorRank = r.readU8();
             m.gender    = r.readU8();
             m.hairstyle = r.readU8();
+            m.costumeVisuals = detail::readU64(r);
         }
         if (m.entityType == 3) {
             m.itemId       = r.readString();
@@ -207,7 +210,7 @@ struct SvEntityLeaveMsg {
 
 struct SvEntityUpdateMsg {
     uint64_t persistentId = 0;
-    uint16_t fieldMask    = 0;
+    uint32_t fieldMask    = 0;
 
     // Bit 0: position (Vec2, 8B)
     Vec2    position;
@@ -242,13 +245,15 @@ struct SvEntityUpdateMsg {
     uint8_t pkStatus = 0;
     // Bit 15: honorRank (uint8, 1B) — HonorRank enum
     uint8_t honorRank = 0;
+    // Bit 16: costumeVisuals (uint64, 8B) — packed costume sprite indices (6 slots × 10 bits)
+    uint64_t costumeVisuals = 0;
 
     uint8_t updateSeq = 0;
 
     void write(ByteWriter& w) const {
         w.writeU8(updateSeq);
         detail::writeU64(w, persistentId);
-        w.writeU16(fieldMask);
+        w.writeU32(fieldMask);
         if (fieldMask & (1 << 0))  w.writeVec2(position);
         if (fieldMask & (1 << 1))  w.writeU8(animFrame);
         if (fieldMask & (1 << 2))  w.writeU8(flipX);
@@ -265,13 +270,14 @@ struct SvEntityUpdateMsg {
         if (fieldMask & (1 << 13)) w.writeU32(equipVisuals);
         if (fieldMask & (1 << 14)) w.writeU8(pkStatus);
         if (fieldMask & (1 << 15)) w.writeU8(honorRank);
+        if (fieldMask & (1 << 16)) detail::writeU64(w, costumeVisuals);
     }
 
     static SvEntityUpdateMsg read(ByteReader& r) {
         SvEntityUpdateMsg m;
         m.updateSeq    = r.readU8();
         m.persistentId = detail::readU64(r);
-        m.fieldMask    = r.readU16();
+        m.fieldMask    = r.readU32();
         if (m.fieldMask & (1 << 0))  m.position  = r.readVec2();
         if (m.fieldMask & (1 << 1))  m.animFrame = r.readU8();
         if (m.fieldMask & (1 << 2))  m.flipX     = r.readU8();
@@ -288,6 +294,7 @@ struct SvEntityUpdateMsg {
         if (m.fieldMask & (1 << 13)) m.equipVisuals = r.readU32();
         if (m.fieldMask & (1 << 14)) m.pkStatus  = r.readU8();
         if (m.fieldMask & (1 << 15)) m.honorRank = r.readU8();
+        if (m.fieldMask & (1 << 16)) m.costumeVisuals = detail::readU64(r);
         return m;
     }
 };

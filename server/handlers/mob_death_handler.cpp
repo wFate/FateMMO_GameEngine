@@ -232,6 +232,53 @@ void ServerApp::processMobDeath(
         }
     }
 
+    // Costume drops: check mob_costume_drops for this mob
+    {
+        const auto& mobDrops = costumeCache_.getMobDrops(es.enemyId);
+        if (!mobDrops.empty()) {
+            thread_local std::mt19937 costumeRng{std::random_device{}()};
+            std::uniform_real_distribution<float> chanceDist(0.0f, 1.0f);
+
+            auto* costumeComp = killer->getComponent<CostumeComponent>();
+
+            for (const auto& drop : mobDrops) {
+                if (chanceDist(costumeRng) > drop.dropChance) continue;
+                if (costumeComp && costumeComp->ownedCostumes.count(drop.costumeDefId)) continue;
+
+                if (costumeRepo_->grantCostume(client->character_id, drop.costumeDefId)) {
+                    if (costumeComp) costumeComp->ownedCostumes.insert(drop.costumeDefId);
+
+                    SvCostumeUpdateMsg update;
+                    update.updateType   = 0; // obtained
+                    update.costumeDefId = drop.costumeDefId;
+                    update.slotType     = 0;
+                    update.show         = (costumeComp && costumeComp->showCostumes) ? 1 : 0;
+
+                    uint8_t cbuf[256];
+                    ByteWriter cw(cbuf, sizeof(cbuf));
+                    update.write(cw);
+                    server_.sendTo(killerClientId, Channel::ReliableOrdered,
+                                   PacketType::SvCostumeUpdate, cbuf, cw.size());
+
+                    const auto* costumeDef = costumeCache_.get(drop.costumeDefId);
+                    std::string costumeName = costumeDef ? costumeDef->displayName : drop.costumeDefId;
+                    SvChatMessageMsg chatMsg;
+                    chatMsg.channel    = static_cast<uint8_t>(ChatChannel::System);
+                    chatMsg.senderName = "[System]";
+                    chatMsg.message    = "You obtained costume: " + costumeName;
+                    chatMsg.faction    = 0;
+                    uint8_t chatBuf[512]; ByteWriter chatW(chatBuf, sizeof(chatBuf));
+                    chatMsg.write(chatW);
+                    server_.sendTo(killerClientId, Channel::ReliableOrdered,
+                                   PacketType::SvChatMessage, chatBuf, chatW.size());
+
+                    LOG_INFO("Server", "Client %d obtained costume '%s' from mob '%s'",
+                             killerClientId, drop.costumeDefId.c_str(), es.enemyId.c_str());
+                }
+            }
+        }
+    }
+
     // Hide mob sprite (SpawnSystem handles respawn)
     if (target) {
         auto* mobSprite = target->getComponent<SpriteComponent>();

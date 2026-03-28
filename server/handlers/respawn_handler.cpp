@@ -103,6 +103,14 @@ void ServerApp::processRespawn(uint16_t clientId, const CmdRespawnMsg& msg) {
         float spY = townScene ? townScene->defaultSpawnY : 0.0f;
 
         if (sc->stats.isDead) sc->stats.respawn();
+        // Purge this player from all mob threat tables so mobs re-acquire normally
+        {
+            uint32_t eid = client->playerEntityId;
+            World& w = getWorldForClient(clientId);
+            w.forEach<EnemyStatsComponent>([eid](Entity*, EnemyStatsComponent* esc) {
+                esc->stats.damageByAttacker.erase(eid);
+            });
+        }
         // Remove Aurora buffs when leaving Aurora via death
         if (isAuroraScene(sceneName)) {
             removeAuroraBuffs(e);
@@ -152,6 +160,14 @@ void ServerApp::processRespawn(uint16_t clientId, const CmdRespawnMsg& msg) {
 
     // Execute respawn
     if (sc->stats.isDead) sc->stats.respawn();
+    // Purge this player from all mob threat tables so mobs re-acquire normally
+    {
+        uint32_t eid = client->playerEntityId;
+        World& w = getWorldForClient(clientId);
+        w.forEach<EnemyStatsComponent>([eid](Entity*, EnemyStatsComponent* esc) {
+            esc->stats.damageByAttacker.erase(eid);
+        });
+    }
     if (t) t->position = respawnPos;
     // Update movement tracking so server doesn't rubber-band after teleport
     lastValidPositions_[clientId] = respawnPos;

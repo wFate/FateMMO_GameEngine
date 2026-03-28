@@ -3,6 +3,7 @@
 #include "server/db/db_connection.h"
 #include "server/db/account_repository.h"
 #include "server/db/character_repository.h"
+#include "server/cache/item_definition_cache.h"
 #include <thread>
 #include <mutex>
 #include <queue>
@@ -50,6 +51,7 @@ private:
     std::mutex dbMutex_;
     std::unique_ptr<AccountRepository> accountRepo_;
     std::unique_ptr<CharacterRepository> characterRepo_;
+    ItemDefinitionCache itemDefCache_;
 
     // Thread-safe queue: auth thread pushes, game thread pops
     std::mutex queueMutex_;

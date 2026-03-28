@@ -26,6 +26,7 @@ public:
     void sendRespawn(uint8_t respawnType);
     void sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId);
     void sendUseConsumable(uint8_t inventorySlot);
+    void sendUseConsumableWithTarget(uint8_t slot, uint32_t targetEntityId);
     void sendStatEnchant(uint8_t targetSlot, const std::string& scrollItemId);
     void sendShopBuy(uint32_t npcId, const std::string& itemId, uint16_t quantity);
     void sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t quantity);
@@ -51,6 +52,10 @@ public:
     void sendBattlefield(uint8_t action);
     void sendPetCommand(uint8_t action, int32_t petDbId);
     void sendRankingQuery(const CmdRankingQueryMsg& msg);
+    void sendEquipCostume(const std::string& costumeDefId);
+    void sendUnequipCostume(uint8_t slotType);
+    void sendToggleCostumes(bool show);
+    void sendEditorPause(bool paused);
 
     void sendTradeAction(uint8_t action);
     void sendTradeAction(uint8_t action, const std::string& data);
@@ -119,6 +124,11 @@ public:
     std::function<void(const SvDungeonStartMsg&)> onDungeonStart;
     std::function<void(const SvDungeonEndMsg&)> onDungeonEnd;
     std::function<void(const SvSkillDefsMsg&)> onSkillDefs;
+    std::function<void(const SvCollectionSyncMsg&)> onCollectionSync;
+    std::function<void(const SvCollectionDefsMsg&)> onCollectionDefs;
+    std::function<void(const SvCostumeSyncMsg&)> onCostumeSync;
+    std::function<void(const SvCostumeUpdateMsg&)> onCostumeUpdate;
+    std::function<void(const SvCostumeDefsMsg&)> onCostumeDefs;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:

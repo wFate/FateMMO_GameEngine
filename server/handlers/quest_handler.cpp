@@ -11,6 +11,7 @@ namespace fate {
 void ServerApp::processQuestAction(uint16_t clientId, ByteReader& payload) {
     uint8_t subAction = payload.readU8();
     std::string questIdStr = payload.readString();
+    if (!validatePayload(payload, clientId, PacketType::CmdQuestAction)) return;
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
 

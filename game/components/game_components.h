@@ -23,6 +23,8 @@
 #include "game/shared/pet_system.h"
 #include "game/shared/collection_system.h"
 #include "engine/render/texture.h"
+#include <unordered_set>
+#include <unordered_map>
 #include "game/components/dropped_item_component.h"
 #include "game/components/boss_spawn_point_component.h"
 
@@ -42,7 +44,8 @@ struct CombatControllerComponent {
 
     float baseAttackCooldown = 1.5f;  // Seconds between attacks
     float attackCooldownRemaining = 0.0f;
-    bool showAttackRange = false;     // Editor toggle: draw attack range circle in viewport
+    float disengageRange = 5.0f;      // Tiles — walk beyond this and auto-attack turns off
+    bool showDisengageRange = false;  // Editor toggle: draw disengage ring in viewport
     // Note: targeting and auto-attack state are managed by CombatActionSystem,
     // not stored here. This component holds per-entity combat config only.
 };
@@ -281,6 +284,13 @@ struct CollectionComponent {
     CollectionState collections;
 };
 
+struct CostumeComponent {
+    FATE_COMPONENT(CostumeComponent)
+    std::unordered_set<std::string> ownedCostumes;           // costume_def_ids
+    std::unordered_map<uint8_t, std::string> equippedBySlot; // slot_type -> costume_def_id
+    bool showCostumes = true;                                 // master toggle
+};
+
 } // namespace fate
 
 // ============================================================================
@@ -295,7 +305,8 @@ FATE_REFLECT_EMPTY(fate::CharacterStatsComponent)
 FATE_REFLECT(fate::CombatControllerComponent,
     FATE_FIELD(baseAttackCooldown, Float),
     FATE_FIELD(attackCooldownRemaining, Float),
-    FATE_FIELD(showAttackRange, Bool)
+    FATE_FIELD(disengageRange, Float),
+    FATE_FIELD(showDisengageRange, Bool)
 )
 
 // Marker component — no data fields
@@ -392,9 +403,15 @@ FATE_REFLECT_EMPTY(fate::StoryNPCComponent)
 FATE_REFLECT_EMPTY(fate::DungeonNPCComponent)
 FATE_REFLECT_EMPTY(fate::ArenaNPCComponent)
 FATE_REFLECT_EMPTY(fate::BattlefieldNPCComponent)
+FATE_REFLECT_EMPTY(fate::MarketplaceNPCComponent)
+
+FATE_REFLECT(fate::LeaderboardNPCComponent,
+    FATE_FIELD(loreSnippet, String)
+)
 
 // --- Player Quest & Bank Components ---
 
 FATE_REFLECT_EMPTY(fate::QuestComponent)
 FATE_REFLECT_EMPTY(fate::BankStorageComponent)
 FATE_REFLECT_EMPTY(fate::CollectionComponent)
+FATE_REFLECT_EMPTY(fate::CostumeComponent)

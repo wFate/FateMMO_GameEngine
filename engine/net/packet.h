@@ -103,6 +103,10 @@ namespace PacketType {
     constexpr uint8_t CmdActivateSkillRank = 0x35;
     constexpr uint8_t CmdAssignSkillSlot   = 0x36;
     constexpr uint8_t CmdAllocateStat      = 0x37;
+    constexpr uint8_t CmdEquipCostume      = 0x38;
+    constexpr uint8_t CmdUnequipCostume    = 0x39;
+    constexpr uint8_t CmdToggleCostumes    = 0x3A;
+    constexpr uint8_t CmdEditorPause       = 0x3B;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
@@ -125,6 +129,11 @@ namespace PacketType {
     constexpr uint8_t SvAuroraStatus    = 0xB9;
     constexpr uint8_t SvEntityUpdateBatch = 0xBA; // Multiple delta updates in one packet
     constexpr uint8_t SvSkillDefs       = 0xBB; // Skill definitions for client's class
+    constexpr uint8_t SvCollectionSync  = 0xBC;
+    constexpr uint8_t SvCollectionDefs  = 0xBD;
+    constexpr uint8_t SvCostumeSync     = 0xBE;
+    constexpr uint8_t SvCostumeUpdate   = 0xBF;
+    constexpr uint8_t SvCostumeDefs     = 0xC0;
 } // namespace PacketType
 
 // ============================================================================

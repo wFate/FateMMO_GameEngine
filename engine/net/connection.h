@@ -45,6 +45,10 @@ struct ClientConnection {
     PacketCrypto crypto;       // AEAD encrypt/decrypt for this session
     PacketCrypto::PublicKey clientPublicKey = {};  // DH public key from Connect payload
     bool hasClientPublicKey = false;
+
+    // In-memory trade state (avoids DB round-trip for guard checks)
+    int activeTradeSessionId = 0;       // 0 = not in trade
+    std::string tradePartnerCharId;     // partner's character_id
 };
 
 class ConnectionManager {

@@ -169,10 +169,12 @@ bool ServerApp::init(uint16_t port) {
     mobStateRepo_  = std::make_unique<ZoneMobStateRepository>(dbPool_);
     pvpKillLogRepo_ = std::make_unique<PvPKillLogRepository>(dbPool_);
     collectionRepo_ = std::make_unique<CollectionRepository>(dbPool_);
+    costumeRepo_ = std::make_unique<CostumeRepository>(dbPool_);
 
     // Initialize definition caches
     itemDefCache_.initialize(gameDbConn_.connection());
     replication_.setItemDefCache(&itemDefCache_);
+    replication_.setCostumeCache(&costumeCache_);
 
     // Invisibility filter: hide invisible entities from non-staff clients
     replication_.visibilityFilter = [this](uint64_t entityPid, const ClientConnection& observer) -> bool {
@@ -220,6 +222,16 @@ bool ServerApp::init(uint16_t port) {
         LOG_INFO("Server", "Loaded %zu collection definitions", collectionCache_.size());
     } else {
         LOG_WARN("Server", "Failed to load collection definitions (table may not exist yet)");
+    }
+
+    // Load costume definitions from database
+    if (!costumeCache_.loadFromDatabase(gameDbConn_.connection())) {
+        LOG_ERROR("Server", "Failed to load costume definitions");
+    } else {
+        LOG_INFO("Server", "Loaded %zu costume definitions", costumeCache_.size());
+    }
+    if (!costumeCache_.loadMobDrops(gameDbConn_.connection())) {
+        LOG_WARN("Server", "Failed to load mob costume drops (table may not exist yet)");
     }
 
     // Initialize Gauntlet system
@@ -1235,11 +1247,16 @@ void ServerApp::tick(float dt) {
 
     // 5g. Auto-save and periodic maintenance
     tickAutoSave(dt);
+    auto tpSaveA = Clock::now();
     tickPersistQueue();
+    auto tpSaveB = Clock::now();
     tickMaintenance(dt);
+    auto tpSaveC = Clock::now();
     tickDungeonInstances(dt);
     battlefieldManager_.tickGracePeriod(gameTime_);
+    auto tpSaveD = Clock::now();
     wal_.flush();
+    auto tpSaveE = Clock::now();
 
     // If WAL writes failed, crash recovery is compromised — force sync DB save
     if (wal_.hasWriteError()) {
@@ -1273,9 +1290,12 @@ void ServerApp::tick(float dt) {
     float totalMs = ms(tp0, tp7);
     if (totalMs > TICK_INTERVAL * 1000.0f) {
         LOG_WARN("Server", "Slow tick: %.1fms | net=%.1f world=%.1f ecs=%.1f "
-                 "despawn=%.1f repl=%.1f events=%.1f save=%.1f",
+                 "despawn=%.1f repl=%.1f events=%.1f save=%.1f"
+                 " [autosave=%.1f persist=%.1f maint=%.1f dung=%.1f wal=%.1f rest=%.1f]",
                  totalMs, ms(tp0, tp1), ms(tp1, tp2), ms(tp2, tp3),
-                 ms(tp3, tp4), ms(tp4, tp5), ms(tp5, tp6), ms(tp6, tp7));
+                 ms(tp3, tp4), ms(tp4, tp5), ms(tp5, tp6), ms(tp6, tp7),
+                 ms(tp6, tpSaveA), ms(tpSaveA, tpSaveB), ms(tpSaveB, tpSaveC),
+                 ms(tpSaveC, tpSaveD), ms(tpSaveD, tpSaveE), ms(tpSaveE, tp7));
     }
 }
 
@@ -1488,13 +1508,47 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         s.currentScene = (rec.current_scene == "Scene2" || rec.current_scene.empty())
             ? "WhisperingWoods" : rec.current_scene;
 
-        // Stat allocation (free points + allocated stats from DB)
-        s.freeStatPoints = static_cast<int16_t>(rec.free_stat_points);
-        s.allocatedSTR   = static_cast<int16_t>(rec.allocated_str);
-        s.allocatedINT   = static_cast<int16_t>(rec.allocated_int);
-        s.allocatedDEX   = static_cast<int16_t>(rec.allocated_dex);
-        s.allocatedCON   = static_cast<int16_t>(rec.allocated_con);
-        s.allocatedWIS   = static_cast<int16_t>(rec.allocated_wis);
+        // DISABLED: stat allocation removed — stats are fixed per class
+        // s.freeStatPoints = static_cast<int16_t>(rec.free_stat_points);
+        // s.allocatedSTR   = static_cast<int16_t>(rec.allocated_str);
+        // s.allocatedINT   = static_cast<int16_t>(rec.allocated_int);
+        // s.allocatedDEX   = static_cast<int16_t>(rec.allocated_dex);
+        // s.allocatedCON   = static_cast<int16_t>(rec.allocated_con);
+        // s.allocatedWIS   = static_cast<int16_t>(rec.allocated_wis);
+
+        s.recallScene = rec.recall_scene.empty() ? "Town" : rec.recall_scene;
+
+        // Soul Anchor: prevent XP loss on PvE death if player has one in inventory
+        s.shouldPreventXPLoss = [this, clientId]() -> bool {
+            auto* conn = server_.connections().findById(clientId);
+            if (!conn || conn->playerEntityId == 0) return false;
+
+            PersistentId pid(conn->playerEntityId);
+            EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+            Entity* player = getWorldForClient(clientId).getEntity(h);
+            if (!player) return false;
+
+            auto* invComp = player->getComponent<InventoryComponent>();
+            if (!invComp) return false;
+
+            // Search for any soul_anchor item
+            for (int slot = 0; slot < invComp->inventory.totalSlots(); ++slot) {
+                const ItemInstance& slotItem = invComp->inventory.getSlot(slot);
+                if (!slotItem.isValid()) continue;
+                const CachedItemDefinition* slotDef = itemDefCache_.getDefinition(slotItem.itemId);
+                if (slotDef && slotDef->subtype == "soul_anchor") {
+                    // Consume one Soul Anchor
+                    invComp->inventory.removeItemQuantity(slot, 1);
+                    wal_.appendItemRemove(conn->character_id, slot);
+                    playerDirty_[clientId].inventory = true;
+                    enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
+
+                    LOG_INFO("Server", "Client %d: Soul Anchor consumed — XP loss prevented", clientId);
+                    return true;
+                }
+            }
+            return false;
+        };
 
         // Initial stat calc (without equipment — equipment loaded below)
         s.recalculateStats();
@@ -1901,9 +1955,9 @@ void ServerApp::onClientConnected(uint16_t clientId) {
                 sendSkillSync(clientId);
             }
 
-            // freeStatPoints granted in addXP() — mark stats dirty for persistence
-            playerDirty_[clientId].stats = true;
-            enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
+            // DISABLED: stat allocation removed — no free stat points to persist
+            // playerDirty_[clientId].stats = true;
+            // enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
 
             // Also send full player state
             sendPlayerState(clientId);
@@ -1921,6 +1975,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     sendInventorySync(clientId);
     sendCollectionSync(clientId);
     sendCollectionDefs(clientId);
+    loadPlayerCostumes(clientId, rec.character_id);
 
     // If player reconnects while dead, notify client so death overlay shows
     if (rec.is_dead) {
@@ -2085,28 +2140,29 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     }
 
     // Cancel any active trade session for the disconnecting player
-    if (client && !client->character_id.empty()) {
-        auto tradeSession = tradeRepo_->getActiveSession(client->character_id);
-        if (tradeSession) {
-            tradeRepo_->cancelSession(tradeSession->sessionId);
-            // Notify the other player that the trade was cancelled
-            std::string otherCharId = (client->character_id == tradeSession->playerACharacterId)
-                ? tradeSession->playerBCharacterId : tradeSession->playerACharacterId;
-            server_.connections().forEach([&](ClientConnection& c) {
-                if (c.character_id == otherCharId) {
-                    SvTradeUpdateMsg cancelMsg;
-                    cancelMsg.updateType = 6; // cancelled
-                    cancelMsg.resultCode = 9; // partner disconnected
-                    cancelMsg.otherPlayerName = "Trade cancelled — other player disconnected";
-                    uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
-                    cancelMsg.write(w);
-                    server_.sendTo(c.clientId, Channel::ReliableOrdered,
-                                   PacketType::SvTradeUpdate, buf, w.size());
-                }
-            });
-            LOG_INFO("Server", "Cancelled trade session %d due to client %d disconnect",
-                     tradeSession->sessionId, clientId);
-        }
+    if (client && client->activeTradeSessionId != 0) {
+        int cancelSid = client->activeTradeSessionId;
+        tradeRepo_->cancelSession(cancelSid);
+        // Notify the other player that the trade was cancelled
+        std::string otherCharId = client->tradePartnerCharId;
+        server_.connections().forEach([&](ClientConnection& c) {
+            if (c.character_id == otherCharId) {
+                c.activeTradeSessionId = 0;
+                c.tradePartnerCharId.clear();
+                SvTradeUpdateMsg cancelMsg;
+                cancelMsg.updateType = 6; // cancelled
+                cancelMsg.resultCode = 9; // partner disconnected
+                cancelMsg.otherPlayerName = "Trade cancelled — other player disconnected";
+                uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                cancelMsg.write(w);
+                server_.sendTo(c.clientId, Channel::ReliableOrdered,
+                               PacketType::SvTradeUpdate, buf, w.size());
+            }
+        });
+        LOG_INFO("Server", "Cancelled trade session %d due to client %d disconnect",
+                 cancelSid, clientId);
+        client->activeTradeSessionId = 0;
+        client->tradePartnerCharId.clear();
     }
 
     // Release per-player mutex entry (after all synchronous saves complete)
@@ -2140,6 +2196,13 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     clientAdminRoles_.erase(clientId);
 }
 
+bool ServerApp::validatePayload(ByteReader& payload, uint16_t clientId, uint8_t type) {
+    if (payload.ok()) return true;
+    LOG_WARN("Server", "Malformed packet 0x%02X from client %d (payload overflow)", type, clientId);
+    rateLimiters_[clientId].addViolation(static_cast<double>(gameTime_), 5);
+    return false;
+}
+
 void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload) {
     // Token bucket rate limiting — checked before any packet processing
     {
@@ -2160,16 +2223,19 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
     switch (type) {
         case PacketType::CmdMove: {
             auto move = CmdMove::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processMove(clientId, move);
             break;
         }
         case PacketType::CmdAction: {
             auto action = CmdAction::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processAction(clientId, action);
             break;
         }
         case PacketType::CmdChat: {
             auto chat = CmdChat::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processChat(clientId, chat);
             break;
         }
@@ -2203,147 +2269,217 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
         }
         case PacketType::CmdZoneTransition: {
             auto cmd = CmdZoneTransition::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processZoneTransition(clientId, cmd);
             break;
         }
         case PacketType::CmdRespawn: {
             auto msg = CmdRespawnMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processRespawn(clientId, msg);
             break;
         }
         case PacketType::CmdUseSkill: {
             auto msg = CmdUseSkillMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processUseSkill(clientId, msg);
             break;
         }
         case PacketType::CmdEquip: {
             auto msg = CmdEquipMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processEquip(clientId, msg);
             break;
         }
         case PacketType::CmdMoveItem: {
             auto msg = CmdMoveItemMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processMoveItem(clientId, msg);
             break;
         }
         case PacketType::CmdDestroyItem: {
             auto msg = CmdDestroyItemMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processDestroyItem(clientId, msg);
             break;
         }
         case PacketType::CmdEnchant: {
             auto msg = CmdEnchantMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processEnchant(clientId, msg);
             break;
         }
         case PacketType::CmdRepair: {
             auto msg = CmdRepairMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processRepair(clientId, msg);
             break;
         }
         case PacketType::CmdExtractCore: {
             auto msg = CmdExtractCoreMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processExtractCore(clientId, msg);
             break;
         }
         case PacketType::CmdCraft: {
             auto msg = CmdCraftMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processCraft(clientId, msg);
             break;
         }
         case PacketType::CmdBattlefield: {
             auto msg = CmdBattlefieldMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processBattlefield(clientId, msg);
             break;
         }
         case PacketType::CmdArena: {
             auto msg = CmdArenaMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processArena(clientId, msg);
             break;
         }
         case PacketType::CmdPet: {
             auto msg = CmdPetMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processPetCommand(clientId, msg);
             break;
         }
         case PacketType::CmdShopBuy: {
             auto msg = CmdShopBuyMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processShopBuy(clientId, msg);
             break;
         }
         case PacketType::CmdShopSell: {
             auto msg = CmdShopSellMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processShopSell(clientId, msg);
             break;
         }
         case PacketType::CmdTeleport: {
             auto msg = CmdTeleportMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processTeleport(clientId, msg);
             break;
         }
         case PacketType::CmdBankDepositItem: {
             auto msg = CmdBankDepositItemMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processBankDepositItem(clientId, msg);
             break;
         }
         case PacketType::CmdBankWithdrawItem: {
             auto msg = CmdBankWithdrawItemMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processBankWithdrawItem(clientId, msg);
             break;
         }
         case PacketType::CmdBankDepositGold: {
             auto msg = CmdBankDepositGoldMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processBankDepositGold(clientId, msg);
             break;
         }
         case PacketType::CmdBankWithdrawGold: {
             auto msg = CmdBankWithdrawGoldMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processBankWithdrawGold(clientId, msg);
             break;
         }
         case PacketType::CmdSocketItem: {
             auto msg = CmdSocketItemMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processSocketItem(clientId, msg);
             break;
         }
         case PacketType::CmdStatEnchant: {
             auto msg = CmdStatEnchantMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processStatEnchant(clientId, msg);
             break;
         }
         case PacketType::CmdUseConsumable: {
             auto msg = CmdUseConsumableMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processUseConsumable(clientId, msg);
             break;
         }
         case PacketType::CmdRankingQuery: {
             auto msg = CmdRankingQueryMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processRankingQuery(clientId, msg);
             break;
         }
         case PacketType::CmdStartDungeon: {
             auto msg = CmdStartDungeonMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processStartDungeon(clientId, msg);
             break;
         }
         case PacketType::CmdDungeonResponse: {
             auto msg = CmdDungeonResponseMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processDungeonResponse(clientId, msg);
             break;
         }
         case PacketType::CmdActivateSkillRank: {
             auto msg = CmdActivateSkillRankMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processActivateSkillRank(clientId, msg);
             break;
         }
         case PacketType::CmdAssignSkillSlot: {
             auto msg = CmdAssignSkillSlotMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processAssignSkillSlot(clientId, msg);
             break;
         }
         case PacketType::CmdAllocateStat: {
             auto msg = CmdAllocateStatMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processAllocateStat(clientId, msg);
+            break;
+        }
+        case PacketType::CmdEquipCostume: {
+            auto msg = CmdEquipCostumeMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
+            processEquipCostume(clientId, msg);
+            break;
+        }
+        case PacketType::CmdUnequipCostume: {
+            auto msg = CmdUnequipCostumeMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
+            processUnequipCostume(clientId, msg);
+            break;
+        }
+        case PacketType::CmdToggleCostumes: {
+            auto msg = CmdToggleCostumesMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
+            processToggleCostumes(clientId, msg);
+            break;
+        }
+        case PacketType::CmdEditorPause: {
+            auto msg = CmdEditorPauseMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
+            auto* client = server_.connections().findById(clientId);
+            if (!client || client->playerEntityId == 0) break;
+            PersistentId pid(client->playerEntityId);
+            EntityHandle h = replication_.getEntityHandle(pid);
+            Entity* player = world_.getEntity(h);
+            if (player) {
+                auto* charStats = player->getComponent<CharacterStatsComponent>();
+                if (charStats) {
+                    bool paused = msg.paused != 0;
+                    charStats->stats.editorPaused = paused;
+                    if (paused) {
+                        godModeEntities_.insert(client->playerEntityId);
+                    } else {
+                        godModeEntities_.erase(client->playerEntityId);
+                    }
+                    LOG_INFO("Server", "Client %d editor %s", clientId, paused ? "paused" : "resumed");
+                }
+            }
             break;
         }
         default:

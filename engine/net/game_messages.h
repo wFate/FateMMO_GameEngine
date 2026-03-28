@@ -1088,11 +1088,16 @@ struct SvStatEnchantResultMsg {
 // ============================================================================
 struct CmdUseConsumableMsg {
     uint8_t inventorySlot = 0;
+    uint32_t targetEntityId = 0;  // 0 = no target (normal consumable)
 
-    void write(ByteWriter& w) const { w.writeU8(inventorySlot); }
+    void write(ByteWriter& w) const {
+        w.writeU8(inventorySlot);
+        w.writeU32(targetEntityId);
+    }
     static CmdUseConsumableMsg read(ByteReader& r) {
         CmdUseConsumableMsg m;
         m.inventorySlot = r.readU8();
+        m.targetEntityId = r.readU32();
         return m;
     }
 };
@@ -1343,6 +1348,92 @@ struct SvSkillDefsMsg {
 };
 
 // ============================================================================
+// Collection System Messages
+// ============================================================================
+
+struct CollectionDefEntry {
+    uint32_t collectionId = 0;
+    std::string name;
+    std::string description;
+    std::string category;
+    std::string conditionType;
+    std::string conditionTarget;
+    int32_t conditionValue = 0;
+    std::string rewardType;
+    float rewardValue = 0.0f;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(collectionId);
+        w.writeString(name);
+        w.writeString(description);
+        w.writeString(category);
+        w.writeString(conditionType);
+        w.writeString(conditionTarget);
+        w.writeI32(conditionValue);
+        w.writeString(rewardType);
+        w.writeFloat(rewardValue);
+    }
+    static CollectionDefEntry read(ByteReader& r) {
+        CollectionDefEntry e;
+        e.collectionId = r.readU32();
+        e.name = r.readString();
+        e.description = r.readString();
+        e.category = r.readString();
+        e.conditionType = r.readString();
+        e.conditionTarget = r.readString();
+        e.conditionValue = r.readI32();
+        e.rewardType = r.readString();
+        e.rewardValue = r.readFloat();
+        return e;
+    }
+};
+
+struct SvCollectionDefsMsg {
+    std::vector<CollectionDefEntry> defs;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(defs.size()));
+        for (const auto& d : defs) d.write(w);
+    }
+    static SvCollectionDefsMsg read(ByteReader& r) {
+        SvCollectionDefsMsg m;
+        uint16_t count = r.readU16();
+        m.defs.resize(count);
+        for (uint16_t i = 0; i < count; ++i) m.defs[i] = CollectionDefEntry::read(r);
+        return m;
+    }
+};
+
+struct SvCollectionSyncMsg {
+    std::vector<uint32_t> completedIds;
+    int32_t bonusSTR = 0, bonusINT = 0, bonusDEX = 0, bonusCON = 0, bonusWIS = 0;
+    int32_t bonusHP = 0, bonusMP = 0, bonusDamage = 0, bonusArmor = 0;
+    float bonusCritRate = 0.0f, bonusMoveSpeed = 0.0f;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(completedIds.size()));
+        for (uint32_t id : completedIds) w.writeU32(id);
+        w.writeI32(bonusSTR); w.writeI32(bonusINT); w.writeI32(bonusDEX);
+        w.writeI32(bonusCON); w.writeI32(bonusWIS);
+        w.writeI32(bonusHP); w.writeI32(bonusMP);
+        w.writeI32(bonusDamage); w.writeI32(bonusArmor);
+        w.writeFloat(bonusCritRate); w.writeFloat(bonusMoveSpeed);
+    }
+    static SvCollectionSyncMsg read(ByteReader& r) {
+        SvCollectionSyncMsg m;
+        uint16_t count = r.readU16();
+        m.completedIds.resize(count);
+        for (uint16_t i = 0; i < count; ++i) m.completedIds[i] = r.readU32();
+        m.bonusSTR = r.readI32(); m.bonusINT = r.readI32(); m.bonusDEX = r.readI32();
+        m.bonusCON = r.readI32(); m.bonusWIS = r.readI32();
+        m.bonusHP = r.readI32(); m.bonusMP = r.readI32();
+        m.bonusDamage = r.readI32(); m.bonusArmor = r.readI32();
+        m.bonusCritRate = r.readFloat(); m.bonusMoveSpeed = r.readFloat();
+        return m;
+    }
+};
+
+// ============================================================================
 // Client -> Server: CmdActivateSkillRank (spend a skill point)
 // ============================================================================
 struct CmdActivateSkillRankMsg {
@@ -1396,6 +1487,169 @@ struct CmdAllocateStatMsg {
         CmdAllocateStatMsg m;
         m.statType = r.readU8();
         m.amount   = static_cast<int16_t>(r.readU16());
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdEquipCostume
+// ============================================================================
+struct CmdEquipCostumeMsg {
+    std::string costumeDefId;
+
+    void write(ByteWriter& w) const { w.writeString(costumeDefId); }
+    static CmdEquipCostumeMsg read(ByteReader& r) {
+        CmdEquipCostumeMsg m;
+        m.costumeDefId = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdUnequipCostume
+// ============================================================================
+struct CmdUnequipCostumeMsg {
+    uint8_t slotType = 0;
+
+    void write(ByteWriter& w) const { w.writeU8(slotType); }
+    static CmdUnequipCostumeMsg read(ByteReader& r) {
+        CmdUnequipCostumeMsg m;
+        m.slotType = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdToggleCostumes
+// ============================================================================
+struct CmdToggleCostumesMsg {
+    uint8_t show = 1;
+
+    void write(ByteWriter& w) const { w.writeU8(show); }
+    static CmdToggleCostumesMsg read(ByteReader& r) {
+        CmdToggleCostumesMsg m;
+        m.show = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdEditorPause
+// ============================================================================
+struct CmdEditorPauseMsg {
+    uint8_t paused = 0;
+
+    void write(ByteWriter& w) const { w.writeU8(paused); }
+    static CmdEditorPauseMsg read(ByteReader& r) {
+        CmdEditorPauseMsg m;
+        m.paused = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvCostumeDefs (all costume definitions)
+// ============================================================================
+struct CostumeDefEntry {
+    std::string costumeDefId;
+    std::string displayName;
+    uint8_t     slotType    = 0;
+    uint16_t    visualIndex = 0;
+    uint8_t     rarity      = 0;
+    std::string source;
+
+    void write(ByteWriter& w) const {
+        w.writeString(costumeDefId);
+        w.writeString(displayName);
+        w.writeU8(slotType);
+        w.writeU16(visualIndex);
+        w.writeU8(rarity);
+        w.writeString(source);
+    }
+    static CostumeDefEntry read(ByteReader& r) {
+        CostumeDefEntry e;
+        e.costumeDefId = r.readString();
+        e.displayName  = r.readString();
+        e.slotType     = r.readU8();
+        e.visualIndex  = r.readU16();
+        e.rarity       = r.readU8();
+        e.source       = r.readString();
+        return e;
+    }
+};
+
+struct SvCostumeDefsMsg {
+    std::vector<CostumeDefEntry> defs;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(defs.size()));
+        for (const auto& d : defs) d.write(w);
+    }
+    static SvCostumeDefsMsg read(ByteReader& r) {
+        SvCostumeDefsMsg m;
+        uint16_t count = r.readU16();
+        m.defs.resize(count);
+        for (uint16_t i = 0; i < count; ++i) m.defs[i] = CostumeDefEntry::read(r);
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvCostumeSync (full state on login)
+// ============================================================================
+struct SvCostumeSyncMsg {
+    uint8_t showCostumes = 1;
+    std::vector<std::string> ownedCostumeIds;
+    std::vector<std::pair<uint8_t, std::string>> equipped; // {slotType, costumeDefId}
+
+    void write(ByteWriter& w) const {
+        w.writeU8(showCostumes);
+        w.writeU16(static_cast<uint16_t>(ownedCostumeIds.size()));
+        for (const auto& id : ownedCostumeIds) w.writeString(id);
+        w.writeU8(static_cast<uint8_t>(equipped.size()));
+        for (const auto& [slot, id] : equipped) {
+            w.writeU8(slot);
+            w.writeString(id);
+        }
+    }
+    static SvCostumeSyncMsg read(ByteReader& r) {
+        SvCostumeSyncMsg m;
+        m.showCostumes = r.readU8();
+        uint16_t ownedCount = r.readU16();
+        m.ownedCostumeIds.reserve(ownedCount);
+        for (uint16_t i = 0; i < ownedCount; ++i) m.ownedCostumeIds.push_back(r.readString());
+        uint8_t equipCount = r.readU8();
+        m.equipped.reserve(equipCount);
+        for (uint8_t i = 0; i < equipCount; ++i) {
+            uint8_t slot = r.readU8();
+            std::string id = r.readString();
+            m.equipped.emplace_back(slot, std::move(id));
+        }
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvCostumeUpdate (incremental)
+// ============================================================================
+struct SvCostumeUpdateMsg {
+    uint8_t updateType = 0; // 0=obtained, 1=equipped, 2=unequipped, 3=toggleChanged
+    std::string costumeDefId;
+    uint8_t slotType = 0;
+    uint8_t show = 1;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(updateType);
+        w.writeString(costumeDefId);
+        w.writeU8(slotType);
+        w.writeU8(show);
+    }
+    static SvCostumeUpdateMsg read(ByteReader& r) {
+        SvCostumeUpdateMsg m;
+        m.updateType   = r.readU8();
+        m.costumeDefId = r.readString();
+        m.slotType     = r.readU8();
+        m.show         = r.readU8();
         return m;
     }
 };

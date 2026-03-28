@@ -600,6 +600,36 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onSkillDefs) onSkillDefs(msg);
             break;
         }
+        case PacketType::SvCollectionSync: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCollectionSyncMsg::read(payload);
+            if (onCollectionSync) onCollectionSync(msg);
+            break;
+        }
+        case PacketType::SvCollectionDefs: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCollectionDefsMsg::read(payload);
+            if (onCollectionDefs) onCollectionDefs(msg);
+            break;
+        }
+        case PacketType::SvCostumeSync: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCostumeSyncMsg::read(payload);
+            if (onCostumeSync) onCostumeSync(msg);
+            break;
+        }
+        case PacketType::SvCostumeUpdate: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCostumeUpdateMsg::read(payload);
+            if (onCostumeUpdate) onCostumeUpdate(msg);
+            break;
+        }
+        case PacketType::SvCostumeDefs: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCostumeDefsMsg::read(payload);
+            if (onCostumeDefs) onCostumeDefs(msg);
+            break;
+        }
         default:
             break;
     }
@@ -610,6 +640,16 @@ void NetClient::sendUseConsumable(uint8_t inventorySlot) {
     ByteWriter w(buf, sizeof(buf));
     CmdUseConsumableMsg msg;
     msg.inventorySlot = inventorySlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdUseConsumable, w.data(), w.size());
+}
+
+void NetClient::sendUseConsumableWithTarget(uint8_t slot, uint32_t targetEntityId) {
+    CmdUseConsumableMsg msg;
+    msg.inventorySlot = slot;
+    msg.targetEntityId = targetEntityId;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdUseConsumable, w.data(), w.size());
 }
@@ -1066,6 +1106,42 @@ void NetClient::sendRankingQuery(const CmdRankingQueryMsg& msg) {
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdRankingQuery, w.data(), w.size());
+}
+
+void NetClient::sendEquipCostume(const std::string& costumeDefId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdEquipCostumeMsg msg;
+    msg.costumeDefId = costumeDefId;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdEquipCostume, w.data(), w.size());
+}
+
+void NetClient::sendUnequipCostume(uint8_t slotType) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdUnequipCostumeMsg msg;
+    msg.slotType = slotType;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdUnequipCostume, w.data(), w.size());
+}
+
+void NetClient::sendToggleCostumes(bool show) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdToggleCostumesMsg msg;
+    msg.show = show ? 1 : 0;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdToggleCostumes, w.data(), w.size());
+}
+
+void NetClient::sendEditorPause(bool paused) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdEditorPauseMsg msg;
+    msg.paused = paused ? 1 : 0;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdEditorPause, w.data(), w.size());
 }
 
 } // namespace fate

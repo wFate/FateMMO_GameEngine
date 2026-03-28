@@ -179,6 +179,11 @@ template<> struct component_traits<SpawnPointComponent> {
     static constexpr ComponentFlags flags = ComponentFlags::Serializable;
 };
 
+// --- CostumeComponent: runtime only, loaded from DB on login ---
+template<> struct component_traits<CostumeComponent> {
+    static constexpr ComponentFlags flags = ComponentFlags::None;
+};
+
 // All other components keep the default (Serializable).
 
 // ============================================================================
@@ -776,6 +781,12 @@ inline void registerAllComponents() {
     // BattlefieldNPCComponent: marker only, auto-serialized
     reg.registerComponent<BattlefieldNPCComponent>();
 
+    // MarketplaceNPCComponent: marker only, auto-serialized
+    reg.registerComponent<MarketplaceNPCComponent>();
+
+    // LeaderboardNPCComponent: has loreSnippet field, auto-serialized
+    reg.registerComponent<LeaderboardNPCComponent>();
+
     // ----- Player quest / bank -----
 
     // QuestComponent: QuestManager quests (active quests + completed IDs)
@@ -1035,6 +1046,9 @@ inline void registerAllComponents() {
 
     // ----- Collection component -----
     reg.registerComponent<CollectionComponent>();
+
+    // ----- Costume component -----
+    reg.registerComponent<CostumeComponent>();
 
     // ----- Backward-compat aliases -----
     reg.registerAlias("Sprite", "SpriteComponent");

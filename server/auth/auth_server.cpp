@@ -117,6 +117,7 @@ bool AuthServer::start(uint16_t port, const std::string& certPath, const std::st
     }
     accountRepo_ = std::make_unique<AccountRepository>(dbConn_.connection());
     characterRepo_ = std::make_unique<CharacterRepository>(dbConn_.connection());
+    itemDefCache_.initialize(dbConn_.connection());
 
     // --- TCP listen socket ---
 #ifdef _WIN32
@@ -586,6 +587,29 @@ std::vector<CharacterPreview> AuthServer::buildCharacterList(int accountId) {
         p.faction = static_cast<uint8_t>(rec.faction);
         p.gender = static_cast<uint8_t>(rec.gender);
         p.hairstyle = static_cast<uint8_t>(rec.hairstyle);
+
+        // Query equipped weapon/armor/hat visual indices
+        try {
+            pqxx::work txn(dbConn_.connection());
+            auto rows = txn.exec_params(
+                "SELECT item_id, equipped_slot FROM character_inventory "
+                "WHERE character_id = $1 AND is_equipped = true "
+                "AND equipped_slot IN ('Weapon', 'Armor', 'Hat')",
+                rec.character_id);
+            txn.commit();
+            for (const auto& row : rows) {
+                std::string itemId = row["item_id"].as<std::string>();
+                std::string slot   = row["equipped_slot"].as<std::string>();
+                uint16_t vi = itemDefCache_.getVisualIndex(itemId);
+                if (slot == "Weapon")    p.weaponVisualIdx = vi;
+                else if (slot == "Armor") p.armorVisualIdx = vi;
+                else if (slot == "Hat")   p.hatVisualIdx = vi;
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR("AuthServer", "Failed to query equip visuals for %s: %s",
+                      rec.character_id.c_str(), e.what());
+        }
+
         list.push_back(p);
     }
     return list;
@@ -811,8 +835,9 @@ CharCreateResponse AuthServer::processCharacterCreate(const CharCreateRequest& r
     resp.success = true;
     resp.characters = buildCharacterList(accountId);
 
-    LOG_INFO("AuthServer", "Created character '%s' (%s) for account %d",
-             req.characterName.c_str(), req.className.c_str(), accountId);
+    LOG_INFO("AuthServer", "Created character '%s' (%s) for account %d — gender=%d hairstyle=%d faction=%d",
+             req.characterName.c_str(), req.className.c_str(), accountId,
+             req.gender, req.hairstyle, req.faction);
     return resp;
 }
 
@@ -899,8 +924,9 @@ SelectCharResponse AuthServer::processSelectCharacter(const SelectCharRequest& r
     resp.isDead = rec.is_dead ? 1 : 0;
     resp.faction = static_cast<uint8_t>(rec.faction);
 
-    LOG_INFO("AuthServer", "Character selected: '%s' (id=%s) for account %d",
-             rec.character_name.c_str(), rec.character_id.c_str(), accountId);
+    LOG_INFO("AuthServer", "Character selected: '%s' (id=%s) for account %d — gender=%d hairstyle=%d class=%s scene=%s",
+             rec.character_name.c_str(), rec.character_id.c_str(), accountId,
+             rec.gender, rec.hairstyle, rec.class_name.c_str(), rec.current_scene.c_str());
     return resp;
 }
 
