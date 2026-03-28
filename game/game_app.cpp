@@ -59,6 +59,7 @@
 #include "engine/ui/widgets/crafting_panel.h"
 #include "engine/ui/widgets/collection_panel.h"
 #include "engine/ui/widgets/costume_panel.h"
+#include "engine/ui/widgets/settings_panel.h"
 #include "engine/ui/widgets/leaderboard_panel.h"
 #include "engine/ui/widgets/player_context_menu.h"
 #include "engine/ui/widgets/confirm_dialog.h"
@@ -1659,6 +1660,33 @@ void GameApp::onInit() {
 
     // Load retained-mode login screen (visible immediately at startup)
     uiManager().loadScreen("assets/ui/screens/login.json");
+
+#ifdef EDITOR_BUILD
+    // Pre-load all UI screens so the editor hierarchy always shows everything.
+    // All start hidden — game state still controls visibility as normal.
+    {
+        auto& ui = uiManager();
+        const char* screens[] = {
+            "assets/ui/screens/character_creation.json",
+            "assets/ui/screens/character_select.json",
+            "assets/ui/screens/death_overlay.json",
+            "assets/ui/screens/fate_hud.json",
+            "assets/ui/screens/fate_menu_panels.json",
+            "assets/ui/screens/fate_social.json",
+            "assets/ui/screens/npc_panels.json",
+        };
+        for (auto* path : screens) {
+            ui.loadScreen(path);
+        }
+        // Force all roots hidden — game state enables them as needed
+        for (auto& id : ui.screenIds()) {
+            if (id == "login") continue;
+            if (auto* root = ui.getScreen(id))
+                root->setVisible(false);
+        }
+    }
+#endif
+
     loginScreenWidget_ = dynamic_cast<LoginScreen*>(uiManager().getScreen("login"));
     if (loginScreenWidget_) {
         loginScreenWidget_->loadPreferences();
@@ -2177,6 +2205,10 @@ void GameApp::onUpdate(float deltaTime) {
                     if (!ui.getScreen("character_creation"))  ui.loadScreen("assets/ui/screens/character_creation.json");
                     if (!ui.getScreen("fate_social"))         ui.loadScreen("assets/ui/screens/fate_social.json");
 
+                    // Screens pre-loaded by editor start hidden — make InGame roots visible
+                    if (auto* hud = ui.getScreen("fate_hud")) hud->setVisible(true);
+                    if (auto* social = ui.getScreen("fate_social")) social->setVisible(true);
+
                     // Data binding provider — resolves {player.*} and {death.*} paths
                     ui.dataBinding().setProvider([this](const std::string& path) -> std::string {
                         auto* scene = SceneManager::instance().currentScene();
@@ -2344,6 +2376,7 @@ void GameApp::onUpdate(float deltaTime) {
                                 if (item == "Status")                       tab = 0;
                                 else if (item == "Inventory")               tab = 1;
                                 else if (item == "Skills" || item == "Skill") tab = 2;
+                                else if (item == "Settings")                tab = 5;
                                 if (tab >= 0) {
                                     bool wasVisible = menuPanels->visible();
                                     menuPanels->setVisible(true);
@@ -2581,6 +2614,15 @@ void GameApp::onUpdate(float deltaTime) {
                             };
                             costumePanel_->onClose = [this](const std::string&) {
                                 // no-op — panel hides itself
+                            };
+                        }
+
+                        // SettingsPanel — wire logout
+                        auto* settingsPanel = dynamic_cast<SettingsPanel*>(menuScreen->findById("settings_panel"));
+                        if (settingsPanel) {
+                            settingsPanel->onLogout = [this]() {
+                                LOG_INFO("GameApp", "Logout requested via Settings panel");
+                                netClient_.disconnect();
                             };
                         }
 
