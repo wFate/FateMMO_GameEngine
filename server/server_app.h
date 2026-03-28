@@ -67,6 +67,7 @@ public:
     bool init(uint16_t port = 7777);
     void run();
     void shutdown();
+    void requestShutdown() { running_ = false; }
 
 private:
     static constexpr float TICK_RATE = 20.0f;

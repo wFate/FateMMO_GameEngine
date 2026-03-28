@@ -821,6 +821,8 @@ void ServerApp::shutdown() {
         savePlayerToDB(c.clientId);
     });
 
+    // All players saved synchronously — safe to truncate WAL
+    wal_.truncate();
     wal_.close();
     authServer_.stop();
     dbPool_.shutdown();
@@ -2066,6 +2068,14 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
 
     // Save player data first
     savePlayerToDB(clientId);
+
+    // Truncate WAL if no async auto-saves are in flight.
+    // savePlayerToDB is synchronous, so this player's data is now safely in DB.
+    // If async saves ARE in flight for other players, WAL truncation will happen
+    // when those complete (in tickAutoSave).
+    if (autoSavesInFlight_ <= 0) {
+        wal_.truncate();
+    }
 
     // Clean persistence dedup entries for this client
     for (uint8_t t = 0; t < 9; ++t) {
