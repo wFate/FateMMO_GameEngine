@@ -303,6 +303,34 @@ void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMs
             LOG_INFO("Server", "Client %d used Recall Scroll from '%s'",
                      clientId, previousScene.c_str());
             return;
+        } else if (subtype == "fate_coin") {
+            // ---- Fate Coin: 3 coins = level * 50 XP ----
+            int quantity = item.quantity;
+            if (quantity < 3) {
+                sendResult(false, "Need at least 3 Fate Coins (have " + std::to_string(quantity) + ")");
+                return;
+            }
+
+            inv->inventory.removeItemQuantity(slotIndex, 3);
+            wal_.appendItemRemove(client->character_id, slotIndex);
+
+            int64_t xpGain = static_cast<int64_t>(charStats->stats.level) * 50;
+            if (client) wal_.appendXPGain(client->character_id, xpGain);
+            charStats->stats.addXP(xpGain);
+
+            playerDirty_[clientId].stats = true;
+            playerDirty_[clientId].inventory = true;
+            enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
+            enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
+
+            char xpBuf[64];
+            snprintf(xpBuf, sizeof(xpBuf), "Used 3 Fate Coins — gained %lld EXP", (long long)xpGain);
+            sendResult(true, xpBuf);
+            sendPlayerState(clientId);
+            sendInventorySync(clientId);
+
+            LOG_INFO("Server", "Client %d used 3 Fate Coins, gained %lld XP", clientId, (long long)xpGain);
+            return;
         } else {
             // Generic consumable — try attributes for any heal/mana values
             healAmount = def->getIntAttribute("heal_amount", 0);
