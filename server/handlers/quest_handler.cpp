@@ -75,6 +75,7 @@ void ServerApp::processQuestAction(uint16_t clientId, ByteReader& payload) {
                 resp.write(w);
                 server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvQuestUpdate, buf, w.size());
                 sendPlayerState(clientId);
+                checkPlayerCollections(clientId, "OwnItem");
             }
             break;
         }
