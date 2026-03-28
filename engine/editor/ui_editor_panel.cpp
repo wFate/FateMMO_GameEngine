@@ -48,6 +48,7 @@
 #include "engine/ui/widgets/crafting_panel.h"
 #include "engine/ui/widgets/player_context_menu.h"
 #include "engine/ui/widgets/trade_window.h"
+#include "engine/ui/widgets/costume_panel.h"
 #include <imgui.h>
 #include <cstdio>
 
@@ -206,6 +207,7 @@ TypeBadge badgeForType(const std::string& type) {
     if (type == "menu_button_row")    return {{0.50f, 0.55f, 0.55f, 1.0f}, "MNU"};
     if (type == "character_select_screen")   return {{0.50f, 0.60f, 0.70f, 1.0f}, "SEL"};
     if (type == "character_creation_screen") return {{0.50f, 0.60f, 0.70f, 1.0f}, "CRT"};
+    if (type == "costume_panel")       return {{0.55f, 0.35f, 0.60f, 1.0f}, "COS"};
     return {{0.50f, 0.50f, 0.50f, 1.0f}, "???"};
 }
 
@@ -1308,6 +1310,30 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragInt("Their Gold##tw", &tw->theirGold, 1.0f, 0, 999999); checkUndoCapture(uiMgr);
         ImGui::Checkbox("My Locked##tw", &tw->myLocked); checkUndoCapture(uiMgr);
         ImGui::Checkbox("Their Locked##tw", &tw->theirLocked); checkUndoCapture(uiMgr);
+    }
+    else if (auto* cos = dynamic_cast<CostumePanel*>(selectedNode_)) {
+        ImGui::SeparatorText("CostumePanel");
+        if (ImGui::TreeNodeEx("Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title Font Size", &cos->titleFontSize, 0.5f, 8.0f, 36.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Body Font Size", &cos->bodyFontSize, 0.5f, 8.0f, 36.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Info Font Size", &cos->infoFontSize, 0.5f, 6.0f, 24.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragInt("Grid Columns", &cos->gridCols, 0.1f, 2, 8);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Size", &cos->slotSize, 0.5f, 24.0f, 96.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Spacing", &cos->slotSpacing, 0.5f, 0.0f, 16.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Height", &cos->buttonHeight, 0.5f, 20.0f, 60.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Spacing", &cos->buttonSpacing, 0.5f, 0.0f, 16.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Filter Tab Height", &cos->filterTabHeight, 0.5f, 16.0f, 40.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else {
         ImGui::TextDisabled("(no widget-specific properties)");
