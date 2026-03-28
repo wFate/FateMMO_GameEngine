@@ -50,6 +50,8 @@
 #include "engine/ui/widgets/trade_window.h"
 #include "engine/ui/widgets/collection_panel.h"
 #include "engine/ui/widgets/costume_panel.h"
+#include "engine/ui/widgets/settings_panel.h"
+#include "engine/ui/widgets/leaderboard_panel.h"
 #include <imgui.h>
 #include <cstdio>
 
@@ -209,6 +211,7 @@ TypeBadge badgeForType(const std::string& type) {
     if (type == "character_select_screen")   return {{0.50f, 0.60f, 0.70f, 1.0f}, "SEL"};
     if (type == "character_creation_screen") return {{0.50f, 0.60f, 0.70f, 1.0f}, "CRT"};
     if (type == "costume_panel")       return {{0.55f, 0.35f, 0.60f, 1.0f}, "COS"};
+    if (type == "settings_panel")      return {{0.55f, 0.45f, 0.25f, 1.0f}, "SET"};
     return {{0.50f, 0.50f, 0.50f, 1.0f}, "???"};
 }
 
@@ -470,6 +473,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
         checkUndoCapture(uiMgr);
         ImGui::DragInt("Max Length", &textInput->maxLength, 1.0f, 0, 1000); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Masked (Password)", &textInput->masked); checkUndoCapture(uiMgr);
     }
     else if (auto* bar = dynamic_cast<ProgressBar*>(selectedNode_)) {
         ImGui::DragFloat("Value", &bar->value, 0.5f, 0.0f, bar->maxValue); checkUndoCapture(uiMgr);
@@ -522,12 +526,30 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             slot->slotType = slotTypeBuf;
         }
         checkUndoCapture(uiMgr);
+        char iconBuf[256] = {};
+        snprintf(iconBuf, sizeof(iconBuf), "%s", slot->icon.c_str());
+        if (ImGui::InputText("Icon", iconBuf, sizeof(iconBuf))) {
+            slot->icon = iconBuf;
+        }
+        checkUndoCapture(uiMgr);
+        char dragBuf[128] = {};
+        snprintf(dragBuf, sizeof(dragBuf), "%s", slot->acceptsDragType.c_str());
+        if (ImGui::InputText("Accepts Drag", dragBuf, sizeof(dragBuf))) {
+            slot->acceptsDragType = dragBuf;
+        }
+        checkUndoCapture(uiMgr);
     }
     else if (auto* grid = dynamic_cast<SlotGrid*>(selectedNode_)) {
         ImGui::DragInt("Columns", &grid->columns, 1.0f, 1, 20); checkUndoCapture(uiMgr);
         ImGui::DragInt("Rows", &grid->rows, 1.0f, 1, 20); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Slot Size", &grid->slotSize, 1.0f, 16.0f, 128.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Slot Padding", &grid->slotPadding, 0.5f, 0.0f, 16.0f); checkUndoCapture(uiMgr);
+        char dragBuf[128] = {};
+        snprintf(dragBuf, sizeof(dragBuf), "%s", grid->acceptsDragType.c_str());
+        if (ImGui::InputText("Accepts Drag##grid", dragBuf, sizeof(dragBuf))) {
+            grid->acceptsDragType = dragBuf;
+        }
+        checkUndoCapture(uiMgr);
     }
     else if (auto* scroll = dynamic_cast<ScrollView*>(selectedNode_)) {
         ImGui::DragFloat("Scroll Offset", &scroll->scrollOffset, 1.0f); checkUndoCapture(uiMgr);
@@ -536,6 +558,29 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* pib = dynamic_cast<PlayerInfoBlock*>(selectedNode_)) {
         ImGui::SeparatorText("PlayerInfoBlock");
+        if (ImGui::TreeNodeEx("Position Offsets##pib", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Portrait##pibo", &pib->portraitOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Bars##pibo", &pib->barOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Level##pibo", &pib->levelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Gold##pibo", &pib->goldOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##pib", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Overlay##pibf", &pib->overlayFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Gold##pibf", &pib->goldFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##pib", 0)) {
+            ImGui::ColorEdit4("Portrait Fill##pibc", &pib->portraitFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Portrait Border##pibc", &pib->portraitBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bar BG##pibc", &pib->barBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bar Border##pibc", &pib->barBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("HP Fill##pibc", &pib->hpFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("MP Fill##pibc", &pib->mpFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Shadow##pibc", &pib->textShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gold Text##pibc", &pib->goldTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::DragFloat("Portrait Size", &pib->portraitSize, 1.0f, 16.0f, 128.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Bar Width", &pib->barWidth, 1.0f, 40.0f, 400.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Bar Height", &pib->barHeight, 1.0f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
@@ -599,6 +644,19 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* expBar = dynamic_cast<EXPBar*>(selectedNode_)) {
         ImGui::SeparatorText("EXPBar");
+        if (ImGui::TreeNodeEx("Position Offsets##eb", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Text##ebo", &expBar->textOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##eb", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Text##ebf", &expBar->fontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##eb", 0)) {
+            ImGui::ColorEdit4("Fill##ebc", &expBar->fillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##ebc", &expBar->shadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::Text("XP: %.0f / %.0f", expBar->xp, expBar->xpToLevel);
         if (expBar->xpToLevel > 0.0f) {
             float pct = (expBar->xp / expBar->xpToLevel) * 100.0f;
@@ -607,6 +665,28 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* tf = dynamic_cast<TargetFrame*>(selectedNode_)) {
         ImGui::SeparatorText("TargetFrame");
+        if (ImGui::TreeNodeEx("Position Offsets##tf", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Name##tfo", &tf->nameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("HP Bar##tfo", &tf->hpBarOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("HP Text##tfo", &tf->hpTextOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##tf", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Name##tff", &tf->nameFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("HP##tff", &tf->hpFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Layout##tf", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Bar Padding##tfl", &tf->barPadding, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Bar Height##tfl", &tf->barHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Name Pad##tfl", &tf->nameTopPad, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##tf", 0)) {
+            ImGui::ColorEdit4("HP Bar BG##tfc", &tf->hpBarBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("HP Fill##tfc", &tf->hpFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::Text("Target: %s", tf->targetName.c_str());
         ImGui::Text("HP: %.0f / %.0f", tf->hp, tf->maxHp);
     }
@@ -752,6 +832,15 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     else if (auto* sp = dynamic_cast<StatusPanel*>(selectedNode_)) {
         ImGui::SeparatorText("StatusPanel");
 
+        if (ImGui::TreeNodeEx("Position Offsets##sp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##spo",    &sp->titleOffset.x,    0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Name##spo",     &sp->nameOffset.x,     0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Level##spo",    &sp->levelOffset.x,    0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Stat Grid##spo", &sp->statGridOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Faction##spo",  &sp->factionOffset.x,  0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
         if (ImGui::TreeNodeEx("Font Sizes##sp", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Title", &sp->titleFontSize, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Name", &sp->nameFontSize, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
@@ -784,6 +873,14 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* skp = dynamic_cast<SkillPanel*>(selectedNode_)) {
         ImGui::SeparatorText("SkillPanel");
+
+        if (ImGui::TreeNodeEx("Position Offsets##skp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##skpo", &skp->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Tabs##skpo", &skp->tabOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Points Badge##skpo", &skp->pointsBadgeOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Skills Header##skpo", &skp->skillsHeaderOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
 
         if (ImGui::TreeNodeEx("Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Split Ratio", &skp->splitRatio, 0.01f, 0.1f, 0.9f); checkUndoCapture(uiMgr);
@@ -876,6 +973,20 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* bb = dynamic_cast<BuffBar*>(selectedNode_)) {
         ImGui::SeparatorText("BuffBar");
+        if (ImGui::TreeNodeEx("Position Offsets##bb", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Stack Badge##bbo", &bb->stackBadgeOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##bb", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Stack##bbf", &bb->stackFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##bb", 0)) {
+            ImGui::ColorEdit4("Stack Text##bbc", &bb->stackTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Stack Badge BG##bbc", &bb->stackBadgeBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Cooldown Overlay##bbc", &bb->cooldownOverlayColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::DragFloat("Icon Size##bb", &bb->iconSize, 1.0f, 8.0f, 64.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Spacing##bb", &bb->spacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
         ImGui::DragInt("Max Visible", &bb->maxVisible, 1.0f, 1, 30); checkUndoCapture(uiMgr);
@@ -884,6 +995,26 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* bhp = dynamic_cast<BossHPBar*>(selectedNode_)) {
         ImGui::SeparatorText("BossHPBar");
+        if (ImGui::TreeNodeEx("Position Offsets##bh", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Name##bho", &bhp->nameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Percent##bho", &bhp->percentOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##bh", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Name##bhf", &bhp->nameFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Percent##bhf", &bhp->percentFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Layout##bh", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Name Padding##bhl", &bhp->nameBlockPadding, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##bh", 0)) {
+            ImGui::ColorEdit4("Name Text##bhc", &bhp->nameTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bar Track##bhc", &bhp->barTrackColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("HP Fill##bhc", &bhp->hpFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::DragFloat("Bar Height##bhp", &bhp->barHeight, 1.0f, 8.0f, 60.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Bar Padding##bhp", &bhp->barPadding, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
         ImGui::Separator();
@@ -892,6 +1023,21 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* cd = dynamic_cast<ConfirmDialog*>(selectedNode_)) {
         ImGui::SeparatorText("ConfirmDialog");
+        if (ImGui::TreeNodeEx("Position Offsets##cd", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Message##cdo", &cd->messageOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Buttons##cdo", &cd->buttonOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##cd", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Message##cdf", &cd->messageFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button##cdf", &cd->buttonFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##cd", 0)) {
+            ImGui::ColorEdit4("Button##cdc", &cd->buttonColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button Hover##cdc", &cd->buttonHoverColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         char msgBuf[512] = {};
         snprintf(msgBuf, sizeof(msgBuf), "%s", cd->message.c_str());
         if (ImGui::InputText("Message##cd", msgBuf, sizeof(msgBuf))) {
@@ -916,6 +1062,23 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* nt = dynamic_cast<NotificationToast*>(selectedNode_)) {
         ImGui::SeparatorText("NotificationToast");
+        if (ImGui::TreeNodeEx("Position Offsets##nt", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Text##nto", &nt->textOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##nt", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Text##ntf", &nt->textFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Layout##nt", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Accent Width##ntl", &nt->accentWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Text Margin##ntl", &nt->textMargin, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##nt", 0)) {
+            ImGui::ColorEdit4("Toast BG##ntc", &nt->toastBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::DragFloat("Toast Height", &nt->toastHeight, 1.0f, 16.0f, 60.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Toast Spacing", &nt->toastSpacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Fade In Time", &nt->fadeInTime, 0.05f, 0.0f, 2.0f); checkUndoCapture(uiMgr);
@@ -945,6 +1108,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
         checkUndoCapture(uiMgr);
         ImGui::DragInt("Server Port", &ls->serverPort, 1.0f, 1, 65535); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Remember Me (Default)", &ls->rememberMe); checkUndoCapture(uiMgr);
         ImGui::Separator();
         const char* modeNames[] = {"Login", "Register"};
         ImGui::Text("Mode: %s", modeNames[static_cast<int>(ls->mode)]);
@@ -952,6 +1116,39 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* pf = dynamic_cast<PartyFrame*>(selectedNode_)) {
         ImGui::SeparatorText("PartyFrame");
+        if (ImGui::TreeNodeEx("Position Offsets##pf", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Name##pfo", &pf->nameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Level##pfo", &pf->levelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Portrait##pfo", &pf->portraitOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Bars##pfo", &pf->barOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##pf", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Name##pff", &pf->nameFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Level##pff", &pf->levelFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Layout##pf", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Portrait Radius##pfl", &pf->portraitRadius, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("HP Bar Height##pfl", &pf->hpBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("MP Bar Height##pfl", &pf->mpBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##pfl", &pf->borderWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##pf", 0)) {
+            ImGui::ColorEdit4("Card BG##pfc", &pf->cardBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Card Border##pfc", &pf->cardBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Portrait Fill##pfc", &pf->portraitFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Portrait Rim##pfc", &pf->portraitRimColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Crown##pfc", &pf->crownColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Name##pfc", &pf->nameColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Level##pfc", &pf->levelColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("HP Bar BG##pfc", &pf->hpBarBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("HP Fill##pfc", &pf->hpFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("MP Bar BG##pfc", &pf->mpBarBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("MP Fill##pfc", &pf->mpFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::DragFloat("Card Width", &pf->cardWidth, 1.0f, 60.0f, 400.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Card Height", &pf->cardHeight, 1.0f, 20.0f, 120.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Card Spacing", &pf->cardSpacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
@@ -965,6 +1162,13 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* cp = dynamic_cast<ChatPanel*>(selectedNode_)) {
         ImGui::SeparatorText("ChatPanel");
+
+        if (ImGui::TreeNodeEx("Position Offsets##chp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Messages##chpo", &cp->messageOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Input##chpo", &cp->inputOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Channel##chpo", &cp->channelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
 
         if (ImGui::TreeNodeEx("Layout##cp", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragInt("Idle Lines", &cp->chatIdleLines, 1.0f, 0, 5); checkUndoCapture(uiMgr);
@@ -1038,6 +1242,13 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* fsb = dynamic_cast<FateStatusBar*>(selectedNode_)) {
         ImGui::SeparatorText("FateStatusBar — Layout");
+        if (ImGui::TreeNodeEx("Position Offsets##fsb", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Portrait##fsbo", &fsb->portraitOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Level##fsbo", &fsb->levelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("HP Label##fsbo", &fsb->hpLabelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("MP Label##fsbo", &fsb->mpLabelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::DragFloat("Top Bar Height", &fsb->topBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Portrait Radius", &fsb->portraitRadius, 1.0f, 5.0f, 60.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("HP/MP Bar Height", &fsb->barHeight, 1.0f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
@@ -1068,6 +1279,42 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* dov = dynamic_cast<DeathOverlay*>(selectedNode_)) {
         ImGui::SeparatorText("DeathOverlay");
+
+        if (ImGui::TreeNodeEx("Position Offsets##do", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##doo", &dov->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Loss Text##doo", &dov->lossTextOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Countdown##doo", &dov->countdownOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Buttons##doo", &dov->buttonOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Font Sizes##do", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##dof", &dov->titleFontSize, 0.5f, 6.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Body##dof", &dov->bodyFontSize, 0.5f, 6.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Countdown##dof", &dov->countdownFontSize, 0.5f, 6.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button##dof", &dov->buttonFontSize, 0.5f, 6.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Layout##do", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Start Y Ratio", &dov->startYRatio, 0.01f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Width", &dov->buttonWidth, 1.0f, 50.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Height", &dov->buttonHeight, 1.0f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Spacing", &dov->buttonSpacing, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Colors##do", 0)) {
+            ImGui::ColorEdit4("Overlay BG##doc", &dov->overlayColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##doc", &dov->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Countdown##doc", &dov->countdownColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button BG##doc", &dov->buttonBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button Border##doc", &dov->buttonBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button Text##doc", &dov->buttonTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        ImGui::Separator();
         ImGui::Checkbox("Active##dov", &dov->active); checkUndoCapture(uiMgr);
         int xpL = dov->xpLost;
         if (ImGui::DragInt("XP Lost", &xpL, 1.0f, 0, 999999)) { dov->xpLost = xpL; }
@@ -1299,6 +1546,46 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* gp = dynamic_cast<GuildPanel*>(selectedNode_)) {
         ImGui::SeparatorText("GuildPanel");
+        if (ImGui::TreeNodeEx("Position Offsets##gp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##gpo", &gp->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Emblem##gpo", &gp->emblemOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Guild Info##gpo", &gp->guildInfoOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Roster##gpo", &gp->rosterOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##gp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##gpf", &gp->titleFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Guild Name##gpf", &gp->guildNameFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Info##gpf", &gp->infoFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Roster Header##gpf", &gp->rosterHeaderFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Roster Row##gpf", &gp->rosterRowFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Layout##gp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Header Height##gpl", &gp->headerHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Emblem Size##gpl", &gp->emblemSize, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Close Radius##gpl", &gp->closeRadius, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Roster Header Height##gpl", &gp->rosterHeaderHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Roster Row Height##gpl", &gp->rosterRowHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##gpl", &gp->borderWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##gp", 0)) {
+            ImGui::ColorEdit4("Background##gpc", &gp->bgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##gpc", &gp->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##gpc", &gp->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close BG##gpc", &gp->closeBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Border##gpc", &gp->closeBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Divider##gpc", &gp->dividerColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Guild Name##gpc", &gp->guildNameColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Info##gpc", &gp->infoColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Roster Header BG##gpc", &gp->rosterHeaderBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Roster Header Text##gpc", &gp->rosterHeaderTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Roster Row Text##gpc", &gp->rosterRowTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Online##gpc", &gp->onlineColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Offline##gpc", &gp->offlineColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         char gnameBuf[128] = {};
         snprintf(gnameBuf, sizeof(gnameBuf), "%s", gp->guildName.c_str());
         if (ImGui::InputText("Guild Name", gnameBuf, sizeof(gnameBuf))) {
@@ -1317,6 +1604,42 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* ndp = dynamic_cast<NpcDialoguePanel*>(selectedNode_)) {
         ImGui::SeparatorText("NpcDialoguePanel");
+        if (ImGui::TreeNodeEx("Position Offsets##ndp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##ndpo", &ndp->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Text##ndpo", &ndp->textOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Buttons##ndpo", &ndp->buttonOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##ndp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##ndpf", &ndp->titleFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Body##ndpf", &ndp->bodyFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button##ndpf", &ndp->buttonFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Close##ndpf", &ndp->closeFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Quest Name##ndpf", &ndp->questNameFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Quest Status##ndpf", &ndp->questStatusFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Layout##ndp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title Bar Height##ndpl", &ndp->titleBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Height##ndpl", &ndp->buttonHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Margin##ndpl", &ndp->buttonMargin, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Gap##ndpl", &ndp->buttonGap, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Quest Row Height##ndpl", &ndp->questRowHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Close Circle Radius##ndpl", &ndp->closeCircleRadius, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##ndpl", &ndp->borderWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##ndp", 0)) {
+            ImGui::ColorEdit4("Background##ndpc", &ndp->bgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##ndpc", &ndp->textColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##ndpc", &ndp->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gold##ndpc", &ndp->goldColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button BG##ndpc", &ndp->buttonBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button Border##ndpc", &ndp->buttonBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close BG##ndpc", &ndp->closeBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Divider##ndpc", &ndp->dividerColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         char npcBuf[128] = {};
         snprintf(npcBuf, sizeof(npcBuf), "%s", ndp->npcName.c_str());
         if (ImGui::InputText("NPC Name", npcBuf, sizeof(npcBuf))) {
@@ -1350,6 +1673,44 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* sp2 = dynamic_cast<ShopPanel*>(selectedNode_)) {
         ImGui::SeparatorText("ShopPanel");
+        if (ImGui::TreeNodeEx("Position Offsets##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##shpo", &sp2->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shop List##shpo", &sp2->shopListOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Inventory##shpo", &sp2->inventoryOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Gold##shpo", &sp2->goldOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##shpf", &sp2->titleFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header##shpf", &sp2->headerFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Item##shpf", &sp2->itemFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Price##shpf", &sp2->priceFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Gold##shpf", &sp2->goldFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Layout##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Header Height##shpl", &sp2->headerHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Row Height##shpl", &sp2->rowHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Size##shpl", &sp2->slotSize, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Gold Bar Height##shpl", &sp2->goldBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Buy Btn Width##shpl", &sp2->buyBtnWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Buy Btn Height##shpl", &sp2->buyBtnHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##shp", 0)) {
+            ImGui::ColorEdit4("Background##shpc", &sp2->bgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##shpc", &sp2->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##shpc", &sp2->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Header BG##shpc", &sp2->headerBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##shpc", &sp2->textColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gold##shpc", &sp2->goldColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Buy Btn##shpc", &sp2->buyBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Buy Disabled##shpc", &sp2->buyBtnDisabledColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Slot BG##shpc", &sp2->slotBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Divider##shpc", &sp2->dividerColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Error##shpc", &sp2->errorColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         char shopBuf[128] = {};
         snprintf(shopBuf, sizeof(shopBuf), "%s", sp2->shopName.c_str());
         if (ImGui::InputText("Shop Name", shopBuf, sizeof(shopBuf))) {
@@ -1368,6 +1729,41 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* bp = dynamic_cast<BankPanel*>(selectedNode_)) {
         ImGui::SeparatorText("BankPanel");
+        if (ImGui::TreeNodeEx("Position Offsets##bnk", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##bnko", &bp->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Bank List##bnko", &bp->bankListOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Inventory##bnko", &bp->inventoryOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Gold##bnko", &bp->goldOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##bnk", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##bnkf", &bp->titleFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header##bnkf", &bp->headerFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Body##bnkf", &bp->bodyFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Small##bnkf", &bp->smallFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Layout##bnk", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Header Height##bnkl", &bp->headerHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Bottom Bar Height##bnkl", &bp->bottomBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Row Height##bnkl", &bp->rowHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Size##bnkl", &bp->slotSize, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##bnkl", &bp->borderWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##bnk", 0)) {
+            ImGui::ColorEdit4("Background##bnkc", &bp->bgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##bnkc", &bp->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##bnkc", &bp->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##bnkc", &bp->textColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gold##bnkc", &bp->goldColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button##bnkc", &bp->buttonColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Withdraw##bnkc", &bp->withdrawBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Deposit##bnkc", &bp->depositBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Slot BG##bnkc", &bp->slotBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Divider##bnkc", &bp->dividerColorVal.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         int64_t bg = bp->bankGold;
         int bgInt = static_cast<int>(bg);
         if (ImGui::DragInt("Bank Gold", &bgInt, 1.0f, 0, 999999)) {
@@ -1386,6 +1782,13 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* tp = dynamic_cast<TeleporterPanel*>(selectedNode_)) {
         ImGui::SeparatorText("TeleporterPanel");
+        if (ImGui::TreeNodeEx("Position Offsets##tp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##tpo", &tp->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Label##tpo", &tp->labelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Rows##tpo", &tp->rowOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Gold##tpo", &tp->goldOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         char titleBuf[128] = {};
         snprintf(titleBuf, sizeof(titleBuf), "%s", tp->title.c_str());
         if (ImGui::InputText("Title##tp", titleBuf, sizeof(titleBuf))) {
@@ -1424,6 +1827,13 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* ap = dynamic_cast<ArenaPanel*>(selectedNode_)) {
         ImGui::SeparatorText("ArenaPanel");
+        if (ImGui::TreeNodeEx("Position Offsets##ap", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##apo", &ap->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Description##apo", &ap->descOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Buttons##apo", &ap->buttonOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Status##apo", &ap->statusOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Layout##arena", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Title Font Size##arena", &ap->titleFontSize, 0.5f, 8.0f, 32.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Body Font Size##arena", &ap->bodyFontSize, 0.5f, 8.0f, 24.0f); checkUndoCapture(uiMgr);
@@ -1451,6 +1861,13 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* bp = dynamic_cast<BattlefieldPanel*>(selectedNode_)) {
         ImGui::SeparatorText("BattlefieldPanel");
+        if (ImGui::TreeNodeEx("Position Offsets##bfp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##bfpo", &bp->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Description##bfpo", &bp->descOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Buttons##bfpo", &bp->buttonOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Status##bfpo", &bp->statusOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Layout##bf", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Title Font Size##bf", &bp->titleFontSize, 0.5f, 8.0f, 32.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Body Font Size##bf", &bp->bodyFontSize, 0.5f, 8.0f, 24.0f); checkUndoCapture(uiMgr);
@@ -1479,6 +1896,13 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* pp = dynamic_cast<PetPanel*>(selectedNode_)) {
         ImGui::SeparatorText("PetPanel");
+        if (ImGui::TreeNodeEx("Position Offsets##pp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##ppo", &pp->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Active Label##ppo", &pp->activeLabelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Pet Info##ppo", &pp->petInfoOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("List Label##ppo", &pp->listLabelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Layout##pet", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Title Font Size##pet", &pp->titleFontSize, 0.5f, 8.0f, 32.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Name Font Size##pet", &pp->nameFontSize, 0.5f, 8.0f, 24.0f); checkUndoCapture(uiMgr);
@@ -1514,6 +1938,13 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* cp = dynamic_cast<CraftingPanel*>(selectedNode_)) {
         ImGui::SeparatorText("CraftingPanel");
+        if (ImGui::TreeNodeEx("Position Offsets##crp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##crpo", &cp->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Recipe List##crpo", &cp->recipeListOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Detail##crpo", &cp->detailOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Status##crpo", &cp->statusOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Layout##craft", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Title Font Size##craft", &cp->titleFontSize, 0.5f, 8.0f, 32.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Recipe Font Size##craft", &cp->recipeFontSize, 0.5f, 8.0f, 20.0f); checkUndoCapture(uiMgr);
@@ -1547,6 +1978,21 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* pcm = dynamic_cast<PlayerContextMenu*>(selectedNode_)) {
         ImGui::SeparatorText("PlayerContextMenu");
+        if (ImGui::TreeNodeEx("Position Offsets##pcm", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Name##pcmo", &pcm->nameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Items##pcmo", &pcm->itemOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##pcm", 0)) {
+            ImGui::ColorEdit4("Background##pcmc", &pcm->bgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##pcmc", &pcm->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Name Header##pcmc", &pcm->nameHeaderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Separator##pcmc", &pcm->separatorColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Pressed##pcmc", &pcm->pressedColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Enabled Text##pcmc", &pcm->enabledTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Disabled Text##pcmc", &pcm->disabledTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::DragFloat("Font Size##pcm", &pcm->menuFontSize, 0.5f, 8.0f, 24.0f);
         checkUndoCapture(uiMgr);
         ImGui::DragFloat("Item Height##pcm", &pcm->itemHeight, 1.0f, 16.0f, 48.0f);
@@ -1559,6 +2005,38 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* tw = dynamic_cast<TradeWindow*>(selectedNode_)) {
         ImGui::SeparatorText("TradeWindow");
+        if (ImGui::TreeNodeEx("Position Offsets##tw", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##two", &tw->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("My Offer##two", &tw->myOfferOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Their Offer##two", &tw->theirOfferOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Buttons##two", &tw->buttonOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##tw", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##twf", &tw->titleFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Label##twf", &tw->labelFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Body##twf", &tw->bodyFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Small##twf", &tw->smallFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Layout##tw", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Header Height##twl", &tw->headerHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Row Height##twl", &tw->buttonRowHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##twl", &tw->padding, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##twl", &tw->borderWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##tw", 0)) {
+            ImGui::ColorEdit4("Background##twc", &tw->bgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##twc", &tw->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##twc", &tw->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Label##twc", &tw->labelColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gold##twc", &tw->goldColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Accept Btn##twc", &tw->acceptBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Cancel Btn##twc", &tw->cancelBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Divider##twc", &tw->dividerColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         char pnameBuf[128] = {};
         snprintf(pnameBuf, sizeof(pnameBuf), "%s", tw->partnerName.c_str());
         if (ImGui::InputText("Partner Name", pnameBuf, sizeof(pnameBuf))) {
@@ -1572,6 +2050,12 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* col = dynamic_cast<CollectionPanel*>(selectedNode_)) {
         ImGui::SeparatorText("CollectionPanel");
+        if (ImGui::TreeNodeEx("Position Offsets##col", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##colo", &col->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Tabs##colo", &col->tabOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Entries##colo", &col->entryOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Title Font Size", &col->titleFontSize, 0.5f, 8.0f, 36.0f);
             checkUndoCapture(uiMgr);
@@ -1608,6 +2092,13 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* cos = dynamic_cast<CostumePanel*>(selectedNode_)) {
         ImGui::SeparatorText("CostumePanel");
+        if (ImGui::TreeNodeEx("Position Offsets##cos", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##coso", &cos->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Toggle##coso", &cos->toggleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Grid##coso", &cos->gridOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Info##coso", &cos->infoOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Title Font Size", &cos->titleFontSize, 0.5f, 8.0f, 36.0f);
             checkUndoCapture(uiMgr);
@@ -1655,6 +2146,105 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Hint", &cos->hintColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+    }
+    else if (auto* sp = dynamic_cast<SettingsPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("SettingsPanel");
+
+        if (ImGui::TreeNodeEx("Position Offsets##setp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##setpo",  &sp->titleOffset.x,  0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Logout##setpo", &sp->logoutOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Font Sizes##setp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##setfs",   &sp->titleFontSize,   0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Section##setfs", &sp->sectionFontSize, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Label##setfs",   &sp->labelFontSize,   0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button##setfs",  &sp->buttonFontSize,  0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Button Dimensions##setp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Logout Width",   &sp->logoutButtonWidth,  1.0f, 40.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Logout Height",  &sp->logoutButtonHeight, 1.0f, 16.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius",  &sp->buttonCornerRadius, 0.5f, 0.0f, 20.0f);  checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Spacing##setp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Section Spacing", &sp->sectionSpacing, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Item Spacing",    &sp->itemSpacing,    0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width",    &sp->borderWidth,    0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Colors##setp", 0)) {
+            ImGui::ColorEdit4("Title##setpc",        &sp->titleColor.r);          checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Section##setpc",      &sp->sectionColor.r);        checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Label##setpc",        &sp->labelColor.r);          checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Logout Btn##setpc",   &sp->logoutBtnColor.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Logout Hover##setpc", &sp->logoutBtnHoverColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Logout Text##setpc",  &sp->logoutTextColor.r);     checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Divider##setpc",      &sp->dividerColor.r);        checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+    }
+    else if (auto* lbp = dynamic_cast<LeaderboardPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("LeaderboardPanel");
+        if (ImGui::TreeNodeEx("Position Offsets##lbp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##lbpo", &lbp->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Columns##lbpo", &lbp->columnOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("List##lbpo", &lbp->listOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Page Info##lbpo", &lbp->pageInfoOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##lbp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##lbpf", &lbp->titleFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Tab##lbpf", &lbp->tabFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Filter##lbpf", &lbp->filterFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header##lbpf", &lbp->headerFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Row##lbpf", &lbp->rowFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Page##lbpf", &lbp->pageFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Close##lbpf", &lbp->closeFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Layout##lbp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title Bar Height##lbpl", &lbp->titleBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Cat Tab Height##lbpl", &lbp->catTabHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Faction Btn Height##lbpl", &lbp->facBtnHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Row Height##lbpl", &lbp->rowHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header Row Height##lbpl", &lbp->headerRowHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Pag Btn Height##lbpl", &lbp->pagBtnHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Pag Btn Width##lbpl", &lbp->pagBtnWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Close Circle Radius##lbpl", &lbp->closeCircleRadius, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##lbpl", &lbp->borderWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Content Padding##lbpl", &lbp->contentPadding, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##lbp", 0)) {
+            ImGui::ColorEdit4("Background##lbpc", &lbp->bgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##lbpc", &lbp->textColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##lbpc", &lbp->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##lbpc", &lbp->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Divider##lbpc", &lbp->dividerColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Header BG##lbpc", &lbp->headerBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Row Even##lbpc", &lbp->rowEvenColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Row Odd##lbpc", &lbp->rowOddColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Active BG##lbpc", &lbp->activeBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close BG##lbpc", &lbp->closeBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Rank Gold##lbpc", &lbp->rankGoldColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Rank Silver##lbpc", &lbp->rankSilverColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Rank Bronze##lbpc", &lbp->rankBronzeColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Btn BG##lbpc", &lbp->btnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Btn Border##lbpc", &lbp->btnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gold Accent##lbpc", &lbp->goldAccentColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close X##lbpc", &lbp->closeXColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
+        ImGui::Text("Category: %u", lbp->currentCategory);
+        ImGui::Text("Page: %u", lbp->currentPage);
+        ImGui::Text("Entries: %zu / %u", lbp->entries.size(), lbp->totalEntries);
     }
     else {
         ImGui::TextDisabled("(no widget-specific properties)");
