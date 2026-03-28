@@ -59,17 +59,17 @@ void SettingsPanel::render(SpriteBatch& batch, SDFText& sdf) {
 
     // Logout button (centered)
     {
-        float bw = logoutButtonWidth * s;
+        float btnW = logoutButtonWidth * s;
         float bh = logoutButtonHeight * s;
         Vec2 off = {logoutOffset.x * s, logoutOffset.y * s};
-        float bx = rect.x + (rect.w - bw) * 0.5f + off.x;
+        float bx = rect.x + (rect.w - btnW) * 0.5f + off.x;
         float by = curY + off.y;
 
-        logoutBtnRect_ = {bx, by, bw, bh};
+        logoutBtnRect_ = {bx, by, btnW, bh};
 
         Color btnCol = {logoutBtnColor.r, logoutBtnColor.g, logoutBtnColor.b,
                         logoutBtnColor.a * resolvedStyle_.opacity};
-        batch.drawRect({bx + bw * 0.5f, by + bh * 0.5f}, {bw, bh}, btnCol, d + 0.1f);
+        batch.drawRect({bx + btnW * 0.5f, by + bh * 0.5f}, {btnW, bh}, btnCol, d + 0.1f);
 
         // Button text
         float fs = scaledFont(buttonFontSize);
@@ -78,7 +78,7 @@ void SettingsPanel::render(SpriteBatch& batch, SDFText& sdf) {
         std::string label("Logout");
         Vec2 sz = sdf.measure(label, fs);
         sdf.drawScreen(batch, label,
-            Vec2{bx + (bw - sz.x) * 0.5f, by + (bh - sz.y) * 0.5f},
+            Vec2{bx + (btnW - sz.x) * 0.5f, by + (bh - sz.y) * 0.5f},
             fs, tc, d + 0.15f);
     }
 
