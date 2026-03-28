@@ -331,6 +331,40 @@ void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMs
 
             LOG_INFO("Server", "Client %d used 3 Fate Coins, gained %lld XP", clientId, (long long)xpGain);
             return;
+        } else if (subtype == "exp_boost") {
+            int boostPercent = def->getIntAttribute("exp_boost_percent", 10);
+            int boostDuration = def->getIntAttribute("exp_boost_duration", 3600);
+            float boostValue = static_cast<float>(boostPercent) / 100.0f;
+
+            auto* seComp = player->getComponent<StatusEffectComponent>();
+            if (!seComp) {
+                sendResult(false, "Cannot apply buffs");
+                return;
+            }
+
+            if (seComp->effects.hasEffect(EffectType::ExpGainUp)) {
+                float existing = seComp->effects.getEffectValue(EffectType::ExpGainUp);
+                if (std::abs(existing - boostValue) < 0.001f) {
+                    sendResult(false, "Already have this boost active");
+                    return;
+                }
+            }
+
+            seComp->effects.applyEffect(EffectType::ExpGainUp, static_cast<float>(boostDuration), boostValue);
+
+            inv->inventory.removeItemQuantity(slotIndex, 1);
+            wal_.appendItemRemove(client->character_id, slotIndex);
+
+            playerDirty_[clientId].inventory = true;
+            enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
+
+            char boostMsg[64];
+            snprintf(boostMsg, sizeof(boostMsg), "EXP +%d%% for %d minutes", boostPercent, boostDuration / 60);
+            sendResult(true, boostMsg);
+            sendInventorySync(clientId);
+
+            LOG_INFO("Server", "Client %d used EXP boost scroll (%d%% for %ds)", clientId, boostPercent, boostDuration);
+            return;
         } else {
             // Generic consumable — try attributes for any heal/mana values
             healAmount = def->getIntAttribute("heal_amount", 0);
