@@ -192,6 +192,10 @@ public:
     std::function<void()>    onLevelUp;
     std::function<void(int)> onDamaged;
 
+    // Soul Anchor callback: if set, called before XP loss on PvE death.
+    // Returns true if XP loss should be prevented (item consumed externally).
+    std::function<bool()> shouldPreventXPLoss;
+
     // ---- Core Methods ----
     void recalculateStats();
     void clearEquipmentBonuses();

@@ -1510,6 +1510,38 @@ void ServerApp::onClientConnected(uint16_t clientId) {
 
         s.recallScene = rec.recall_scene.empty() ? "Town" : rec.recall_scene;
 
+        // Soul Anchor: prevent XP loss on PvE death if player has one in inventory
+        s.shouldPreventXPLoss = [this, clientId]() -> bool {
+            auto* conn = server_.connections().findById(clientId);
+            if (!conn || conn->playerEntityId == 0) return false;
+
+            PersistentId pid(conn->playerEntityId);
+            EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+            Entity* player = getWorldForClient(clientId).getEntity(h);
+            if (!player) return false;
+
+            auto* invComp = player->getComponent<InventoryComponent>();
+            if (!invComp) return false;
+
+            // Search for any soul_anchor item
+            for (int slot = 0; slot < invComp->inventory.totalSlots(); ++slot) {
+                const ItemInstance& slotItem = invComp->inventory.getSlot(slot);
+                if (!slotItem.isValid()) continue;
+                const CachedItemDefinition* slotDef = itemDefCache_.getDefinition(slotItem.itemId);
+                if (slotDef && slotDef->subtype == "soul_anchor") {
+                    // Consume one Soul Anchor
+                    invComp->inventory.removeItemQuantity(slot, 1);
+                    wal_.appendItemRemove(conn->character_id, slot);
+                    playerDirty_[clientId].inventory = true;
+                    enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
+
+                    LOG_INFO("Server", "Client %d: Soul Anchor consumed — XP loss prevented", clientId);
+                    return true;
+                }
+            }
+            return false;
+        };
+
         // Initial stat calc (without equipment — equipment loaded below)
         s.recalculateStats();
         s.recalculateXPRequirement();
