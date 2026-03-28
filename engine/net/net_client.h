@@ -26,6 +26,7 @@ public:
     void sendRespawn(uint8_t respawnType);
     void sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId);
     void sendUseConsumable(uint8_t inventorySlot);
+    void sendUseConsumableWithTarget(uint8_t slot, uint32_t targetEntityId);
     void sendStatEnchant(uint8_t targetSlot, const std::string& scrollItemId);
     void sendShopBuy(uint32_t npcId, const std::string& itemId, uint16_t quantity);
     void sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t quantity);

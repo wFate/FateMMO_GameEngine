@@ -644,6 +644,16 @@ void NetClient::sendUseConsumable(uint8_t inventorySlot) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdUseConsumable, w.data(), w.size());
 }
 
+void NetClient::sendUseConsumableWithTarget(uint8_t slot, uint32_t targetEntityId) {
+    CmdUseConsumableMsg msg;
+    msg.inventorySlot = slot;
+    msg.targetEntityId = targetEntityId;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdUseConsumable, w.data(), w.size());
+}
+
 void NetClient::sendStatEnchant(uint8_t targetSlot, const std::string& scrollItemId) {
     CmdStatEnchantMsg msg;
     msg.targetSlot    = targetSlot;

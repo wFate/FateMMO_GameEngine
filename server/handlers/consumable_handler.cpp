@@ -365,6 +365,140 @@ void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMs
 
             LOG_INFO("Server", "Client %d used EXP boost scroll (%d%% for %ds)", clientId, boostPercent, boostDuration);
             return;
+        } else if (subtype == "beacon_of_calling") {
+            if (msg.targetEntityId == 0) {
+                sendResult(false, "Select a party member to summon");
+                return;
+            }
+
+            auto* partyComp = player->getComponent<PartyComponent>();
+            if (!partyComp || !partyComp->party.isInParty()) {
+                sendResult(false, "You must be in a party");
+                return;
+            }
+
+            uint32_t entityId = static_cast<uint32_t>(client->playerEntityId);
+            if (arenaManager_.isPlayerInMatch(entityId)) {
+                sendResult(false, "Cannot use during an arena match");
+                return;
+            }
+            if (battlefieldManager_.isPlayerRegistered(entityId)) {
+                sendResult(false, "Cannot use during a battlefield");
+                return;
+            }
+            if (dungeonManager_.getInstanceForClient(clientId) != 0) {
+                sendResult(false, "Cannot use inside a dungeon");
+                return;
+            }
+
+            uint16_t targetClientId = 0;
+            server_.connections().forEach([&](const ClientConnection& c) {
+                if (c.playerEntityId == msg.targetEntityId) targetClientId = c.clientId;
+            });
+            if (targetClientId == 0) {
+                sendResult(false, "Target player not found");
+                return;
+            }
+
+            PersistentId targetPid(msg.targetEntityId);
+            EntityHandle targetHandle = getReplicationForClient(targetClientId).getEntityHandle(targetPid);
+            Entity* targetPlayer = getWorldForClient(targetClientId).getEntity(targetHandle);
+            if (!targetPlayer) {
+                sendResult(false, "Target player not found");
+                return;
+            }
+
+            auto* targetPartyComp = targetPlayer->getComponent<PartyComponent>();
+            if (!targetPartyComp || !targetPartyComp->party.isInParty()
+                || targetPartyComp->party.partyId != partyComp->party.partyId) {
+                sendResult(false, "Target is not in your party");
+                return;
+            }
+
+            auto* targetStats = targetPlayer->getComponent<CharacterStatsComponent>();
+            if (!targetStats || targetStats->stats.isDead) {
+                sendResult(false, "Target is dead");
+                return;
+            }
+
+            if (arenaManager_.isPlayerInMatch(msg.targetEntityId)) {
+                sendResult(false, "Target is in an arena match");
+                return;
+            }
+            if (battlefieldManager_.isPlayerRegistered(msg.targetEntityId)) {
+                sendResult(false, "Target is in a battlefield");
+                return;
+            }
+            if (dungeonManager_.getInstanceForClient(targetClientId) != 0) {
+                sendResult(false, "Target is in a dungeon");
+                return;
+            }
+
+            auto* userTransform = player->getComponent<Transform>();
+            if (!userTransform) {
+                sendResult(false, "Cannot determine your position");
+                return;
+            }
+            Vec2 summonPos = userTransform->position;
+            std::string summonScene = charStats->stats.currentScene;
+
+            inv->inventory.removeItemQuantity(slotIndex, 1);
+            wal_.appendItemRemove(client->character_id, slotIndex);
+            playerDirty_[clientId].inventory = true;
+            enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
+
+            std::string targetPrevScene = targetStats->stats.currentScene;
+            if (targetPrevScene != summonScene) {
+                targetStats->stats.currentScene = summonScene;
+                auto* targetConn = server_.connections().findById(targetClientId);
+                if (targetConn) {
+                    targetConn->aoi.previous.clear();
+                    targetConn->aoi.current.clear();
+                    targetConn->aoi.entered.clear();
+                    targetConn->aoi.left.clear();
+                    targetConn->aoi.stayed.clear();
+                    targetConn->lastSentState.clear();
+                }
+
+                World& tw = getWorldForClient(targetClientId);
+                tw.forEach<EnemyStatsComponent>([&](Entity*, EnemyStatsComponent* esc) {
+                    esc->stats.damageByAttacker.erase(msg.targetEntityId);
+                });
+
+                if (isAuroraScene(targetPrevScene) && !isAuroraScene(summonScene)) {
+                    removeAuroraBuffs(targetPlayer);
+                }
+
+                SvZoneTransitionMsg ztMsg;
+                ztMsg.targetScene = summonScene;
+                ztMsg.spawnX = summonPos.x;
+                ztMsg.spawnY = summonPos.y;
+                uint8_t zbuf[256]; ByteWriter zw(zbuf, sizeof(zbuf));
+                ztMsg.write(zw);
+                server_.sendTo(targetClientId, Channel::ReliableOrdered, PacketType::SvZoneTransition, zbuf, zw.size());
+            } else {
+                auto* targetTransform = targetPlayer->getComponent<Transform>();
+                if (targetTransform) targetTransform->position = summonPos;
+            }
+
+            lastValidPositions_[targetClientId] = summonPos;
+            lastMoveTime_[targetClientId] = gameTime_;
+            needsFirstMoveSync_.insert(targetClientId);
+            playerDirty_[targetClientId].position = true;
+
+            sendResult(true, "Summoned " + targetStats->stats.characterName);
+            sendInventorySync(clientId);
+
+            SvConsumeResultMsg targetNotify;
+            targetNotify.success = 1;
+            targetNotify.message = "You have been summoned by " + charStats->stats.characterName;
+            uint8_t nbuf[256]; ByteWriter nw(nbuf, sizeof(nbuf));
+            targetNotify.write(nw);
+            server_.sendTo(targetClientId, Channel::ReliableOrdered, PacketType::SvConsumeResult, nbuf, nw.size());
+
+            LOG_INFO("Server", "Client %d used Beacon of Calling to summon client %d from '%s' to '%s'",
+                     clientId, targetClientId, targetPrevScene.c_str(), summonScene.c_str());
+            return;
         } else {
             // Generic consumable — try attributes for any heal/mana values
             healAmount = def->getIntAttribute("heal_amount", 0);

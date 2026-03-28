@@ -1088,11 +1088,16 @@ struct SvStatEnchantResultMsg {
 // ============================================================================
 struct CmdUseConsumableMsg {
     uint8_t inventorySlot = 0;
+    uint32_t targetEntityId = 0;  // 0 = no target (normal consumable)
 
-    void write(ByteWriter& w) const { w.writeU8(inventorySlot); }
+    void write(ByteWriter& w) const {
+        w.writeU8(inventorySlot);
+        w.writeU32(targetEntityId);
+    }
     static CmdUseConsumableMsg read(ByteReader& r) {
         CmdUseConsumableMsg m;
         m.inventorySlot = r.readU8();
+        m.targetEntityId = r.readU32();
         return m;
     }
 };
