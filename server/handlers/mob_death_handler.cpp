@@ -232,6 +232,11 @@ void ServerApp::processMobDeath(
         }
     }
 
+    // Costume drops: check mob_costume_drops for this mob
+    // NOTE: This requires a mob_costume_drops table and loading drops into a cache.
+    // Full mob costume drop integration deferred until mob_costume_drops table is populated.
+    // The grant path (costumeRepo_->grantCostume() + SvCostumeUpdate) is functional from costume_handler.cpp.
+
     // Hide mob sprite (SpawnSystem handles respawn)
     if (target) {
         auto* mobSprite = target->getComponent<SpriteComponent>();
