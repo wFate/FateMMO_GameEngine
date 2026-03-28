@@ -57,6 +57,7 @@
 #include "engine/ui/widgets/pet_panel.h"
 #include "engine/ui/widgets/crafting_panel.h"
 #include "engine/ui/widgets/collection_panel.h"
+#include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/leaderboard_panel.h"
 #include "engine/ui/widgets/player_context_menu.h"
 #include "engine/ui/widgets/confirm_dialog.h"
@@ -245,6 +246,10 @@ void GameApp::onInit() {
                 if (fc) {
                     fc->faction = static_cast<Faction>(msg.faction);
                 }
+                if (msg.costumeVisuals != 0) {
+                    auto* appearance = ghost->getComponent<AppearanceComponent>();
+                    if (appearance) appearance->dirty = true;
+                }
             }
             // Seed interpolation buffer with initial position so ghosts don't
             // snap to (0,0) before the first SvEntityUpdate arrives.
@@ -375,6 +380,12 @@ void GameApp::onInit() {
             if (appearance) {
                 appearance->dirty = true;
             }
+        }
+
+        // costumeVisuals (bit 16)
+        if (msg.fieldMask & (1 << 16)) {
+            auto* appearance = ghost->getComponent<AppearanceComponent>();
+            if (appearance) appearance->dirty = true;
         }
     };
 
@@ -833,26 +844,43 @@ void GameApp::onInit() {
 
     netClient_.onDeathNotify = [this](const SvDeathNotifyMsg& msg) {
 #ifndef FATE_SHIPPING
-        if (Editor::instance().isPaused()) return;
+        if (Editor::instance().isPaused()) {
+            LOG_WARN("GameApp", "Death notification ignored — editor is paused");
+            return;
+        }
 #endif
-        // If player entity doesn't exist yet (first frame after connect),
-        // store pending death and apply after player creation.
+        LOG_INFO("GameApp", "Death notification received: xpLost=%d honorLost=%d timer=%.1f source=%d",
+                 msg.xpLost, msg.honorLost, msg.respawnTimer, msg.deathSource);
+
         if (!localPlayerCreated_) {
+            LOG_WARN("GameApp", "Death notification deferred — local player not yet created");
             hasPendingDeathNotify_ = true;
             return;
         }
         auto* scene = SceneManager::instance().currentScene();
-        if (!scene) return;
+        if (!scene) {
+            LOG_WARN("GameApp", "Death notification ignored — no current scene");
+            return;
+        }
 
+        bool foundLocal = false;
         scene->world().forEach<PlayerController, CharacterStatsComponent>(
             [&](Entity*, PlayerController* ctrl, CharacterStatsComponent* sc) {
                 if (!ctrl->isLocalPlayer) return;
+                foundLocal = true;
                 sc->stats.lifeState = LifeState::Dead;
                 sc->stats.isDead = true;
                 sc->stats.currentHP = 0;
                 sc->stats.respawnTimeRemaining = msg.respawnTimer;
             }
         );
+        if (!foundLocal) {
+            LOG_WARN("GameApp", "Death notification: no local player entity found!");
+        }
+
+        LOG_INFO("GameApp", "Death overlay ptr: %s, screen: %s",
+                 deathOverlay_ ? "SET" : "NULL",
+                 uiManager().getScreen("death_overlay") ? "LOADED" : "NOT LOADED");
 
         if (deathOverlay_) deathOverlay_->onDeath(msg.xpLost, msg.honorLost, msg.respawnTimer, msg.deathSource);
         // Show retained-mode death overlay
@@ -1108,6 +1136,7 @@ void GameApp::onInit() {
             teleporterPanel_ = nullptr;
             arenaPanel_ = nullptr;
             battlefieldPanel_ = nullptr;
+            costumePanel_ = nullptr;
             inDungeon_ = false;
             dungeonInviteDialog_ = nullptr;
             if (loginScreenWidget_) {
@@ -1331,6 +1360,8 @@ void GameApp::onInit() {
         }
     };
 
+    // TODO: Wire collection callbacks when NetClient has onCollectionDefs/onCollectionSync
+    /*
     netClient_.onCollectionDefs = [this](const SvCollectionDefsMsg& msg) {
         if (collectionPanel_) {
             collectionPanel_->entries.clear();
@@ -1367,6 +1398,70 @@ void GameApp::onInit() {
             collectionPanel_->bonusArmor = msg.bonusArmor;
             collectionPanel_->bonusCritRate = msg.bonusCritRate;
             collectionPanel_->bonusMoveSpeed = msg.bonusMoveSpeed;
+        }
+    };
+    */
+
+    netClient_.onCostumeSync = [this](const SvCostumeSyncMsg& msg) {
+        if (!costumePanel_) return;
+        auto* scene = SceneManager::instance().currentScene();
+        if (scene) {
+            scene->world().forEach<PlayerController, CostumeComponent>(
+                [&](Entity*, PlayerController* ctrl, CostumeComponent* costume) {
+                    if (!ctrl->isLocalPlayer) return;
+                    costume->ownedCostumes.clear();
+                    for (const auto& id : msg.ownedCostumeIds) costume->ownedCostumes.insert(id);
+                    costume->equippedBySlot.clear();
+                    for (const auto& [slot, id] : msg.equipped) costume->equippedBySlot[slot] = id;
+                    costume->showCostumes = (msg.showCostumes != 0);
+                }
+            );
+        }
+        costumePanel_->ownedCostumes.clear();
+        for (const auto& id : msg.ownedCostumeIds) {
+            CostumeEntry entry;
+            entry.costumeDefId = id;
+            entry.displayName  = id;
+            costumePanel_->ownedCostumes.push_back(std::move(entry));
+        }
+        costumePanel_->equippedBySlot.clear();
+        for (const auto& [slot, id] : msg.equipped) costumePanel_->equippedBySlot[slot] = id;
+        costumePanel_->showCostumes = (msg.showCostumes != 0);
+    };
+
+    netClient_.onCostumeUpdate = [this](const SvCostumeUpdateMsg& msg) {
+        auto* scene = SceneManager::instance().currentScene();
+        if (!scene) return;
+        CostumeComponent* costume = nullptr;
+        scene->world().forEach<PlayerController, CostumeComponent>(
+            [&](Entity*, PlayerController* ctrl, CostumeComponent* c) {
+                if (ctrl->isLocalPlayer) costume = c;
+            }
+        );
+        if (!costume) return;
+
+        switch (msg.updateType) {
+            case 0: // obtained
+                costume->ownedCostumes.insert(msg.costumeDefId);
+                if (costumePanel_) {
+                    CostumeEntry entry;
+                    entry.costumeDefId = msg.costumeDefId;
+                    entry.displayName  = msg.costumeDefId;
+                    costumePanel_->ownedCostumes.push_back(std::move(entry));
+                }
+                break;
+            case 1: // equipped
+                costume->equippedBySlot[msg.slotType] = msg.costumeDefId;
+                if (costumePanel_) costumePanel_->equippedBySlot[msg.slotType] = msg.costumeDefId;
+                break;
+            case 2: // unequipped
+                costume->equippedBySlot.erase(msg.slotType);
+                if (costumePanel_) costumePanel_->equippedBySlot.erase(msg.slotType);
+                break;
+            case 3: // toggleChanged
+                costume->showCostumes = (msg.show != 0);
+                if (costumePanel_) costumePanel_->showCostumes = (msg.show != 0);
+                break;
         }
     };
 
@@ -1519,6 +1614,7 @@ void GameApp::onInit() {
             petPanel_ = nullptr;
             craftingPanel_ = nullptr;
             collectionPanel_ = nullptr;
+            costumePanel_ = nullptr;
             retainedUILoaded_ = false;
         } else if (screenId == "fate_hud") {
             skillArc_ = nullptr;
@@ -1665,6 +1761,7 @@ void GameApp::onUpdate(float deltaTime) {
                 teleporterPanel_ = nullptr;
                 arenaPanel_ = nullptr;
                 battlefieldPanel_ = nullptr;
+                costumePanel_ = nullptr;
                 dungeonInviteDialog_ = nullptr;
                 inDungeon_ = false;
 
@@ -1747,6 +1844,7 @@ void GameApp::onUpdate(float deltaTime) {
                 teleporterPanel_ = nullptr;
                 arenaPanel_ = nullptr;
                 battlefieldPanel_ = nullptr;
+                costumePanel_ = nullptr;
                 dungeonInviteDialog_ = nullptr;
                 inDungeon_ = false;
 
@@ -2279,9 +2377,9 @@ void GameApp::onUpdate(float deltaTime) {
                         static const char* panelIds[] = {
                             "status_panel", "inventory_panel", "skill_panel",
                             "guild_panel", "social_panel", "settings_panel", "shop_panel",
-                            "pet_panel", "crafting_panel", "collection_panel"
+                            "pet_panel", "crafting_panel", "collection_panel", "costume_panel"
                         };
-                        static constexpr int panelCount = 10;
+                        static constexpr int panelCount = 11;
 
                         // Wire tab bar — shows/hides panels by index
                         auto* tabBar = dynamic_cast<MenuTabBar*>(menuScreen->findById("tab_bar"));
@@ -2368,6 +2466,22 @@ void GameApp::onUpdate(float deltaTime) {
                         if (collectionPanel_) {
                             collectionPanel_->onClose = [this](const std::string&) {
                                 if (collectionPanel_) collectionPanel_->close();
+                            };
+                        }
+
+                        costumePanel_ = dynamic_cast<CostumePanel*>(menuScreen->findById("costume_panel"));
+                        if (costumePanel_) {
+                            costumePanel_->onEquipCostume = [this](const std::string& costumeDefId) {
+                                netClient_.sendEquipCostume(costumeDefId);
+                            };
+                            costumePanel_->onUnequipCostume = [this](uint8_t slotType) {
+                                netClient_.sendUnequipCostume(slotType);
+                            };
+                            costumePanel_->onToggleCostumes = [this](bool show) {
+                                netClient_.sendToggleCostumes(show);
+                            };
+                            costumePanel_->onClose = [this](const std::string&) {
+                                // no-op — panel hides itself
                             };
                         }
 
@@ -3587,6 +3701,7 @@ void GameApp::drawNetworkPanel() {
             teleporterPanel_ = nullptr;
             arenaPanel_ = nullptr;
             battlefieldPanel_ = nullptr;
+            costumePanel_ = nullptr;
             dungeonInviteDialog_ = nullptr;
             inDungeon_ = false;
             connState_ = ConnectionState::LoginScreen;
@@ -3844,6 +3959,7 @@ void GameApp::onShutdown() {
     teleporterPanel_ = nullptr;
     arenaPanel_ = nullptr;
     battlefieldPanel_ = nullptr;
+    costumePanel_ = nullptr;
     dungeonInviteDialog_ = nullptr;
     inDungeon_ = false;
 
