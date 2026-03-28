@@ -600,6 +600,18 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onSkillDefs) onSkillDefs(msg);
             break;
         }
+        case PacketType::SvCostumeSync: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCostumeSyncMsg::read(payload);
+            if (onCostumeSync) onCostumeSync(msg);
+            break;
+        }
+        case PacketType::SvCostumeUpdate: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCostumeUpdateMsg::read(payload);
+            if (onCostumeUpdate) onCostumeUpdate(msg);
+            break;
+        }
         default:
             break;
     }
@@ -1066,6 +1078,33 @@ void NetClient::sendRankingQuery(const CmdRankingQueryMsg& msg) {
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdRankingQuery, w.data(), w.size());
+}
+
+void NetClient::sendEquipCostume(const std::string& costumeDefId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdEquipCostumeMsg msg;
+    msg.costumeDefId = costumeDefId;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdEquipCostume, w.data(), w.size());
+}
+
+void NetClient::sendUnequipCostume(uint8_t slotType) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdUnequipCostumeMsg msg;
+    msg.slotType = slotType;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdUnequipCostume, w.data(), w.size());
+}
+
+void NetClient::sendToggleCostumes(bool show) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdToggleCostumesMsg msg;
+    msg.show = show ? 1 : 0;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdToggleCostumes, w.data(), w.size());
 }
 
 } // namespace fate

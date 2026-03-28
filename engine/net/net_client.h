@@ -51,6 +51,9 @@ public:
     void sendBattlefield(uint8_t action);
     void sendPetCommand(uint8_t action, int32_t petDbId);
     void sendRankingQuery(const CmdRankingQueryMsg& msg);
+    void sendEquipCostume(const std::string& costumeDefId);
+    void sendUnequipCostume(uint8_t slotType);
+    void sendToggleCostumes(bool show);
 
     void sendTradeAction(uint8_t action);
     void sendTradeAction(uint8_t action, const std::string& data);
@@ -119,6 +122,8 @@ public:
     std::function<void(const SvDungeonStartMsg&)> onDungeonStart;
     std::function<void(const SvDungeonEndMsg&)> onDungeonEnd;
     std::function<void(const SvSkillDefsMsg&)> onSkillDefs;
+    std::function<void(const SvCostumeSyncMsg&)> onCostumeSync;
+    std::function<void(const SvCostumeUpdateMsg&)> onCostumeUpdate;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:
