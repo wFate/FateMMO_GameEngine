@@ -93,6 +93,7 @@ private:
     // Write-Ahead Log for crash recovery
     WriteAheadLog wal_;
     int autoSavesInFlight_ = 0; // tracks async auto-saves; WAL truncates only when 0
+    bool walNeedsTruncate_ = false; // set true when saves complete; cleared after truncate
 
     // Priority-based DB flush queue
     PersistenceQueue persistQueue_;

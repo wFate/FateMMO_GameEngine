@@ -1247,11 +1247,16 @@ void ServerApp::tick(float dt) {
 
     // 5g. Auto-save and periodic maintenance
     tickAutoSave(dt);
+    auto tpSaveA = Clock::now();
     tickPersistQueue();
+    auto tpSaveB = Clock::now();
     tickMaintenance(dt);
+    auto tpSaveC = Clock::now();
     tickDungeonInstances(dt);
     battlefieldManager_.tickGracePeriod(gameTime_);
+    auto tpSaveD = Clock::now();
     wal_.flush();
+    auto tpSaveE = Clock::now();
 
     // If WAL writes failed, crash recovery is compromised — force sync DB save
     if (wal_.hasWriteError()) {
@@ -1285,9 +1290,12 @@ void ServerApp::tick(float dt) {
     float totalMs = ms(tp0, tp7);
     if (totalMs > TICK_INTERVAL * 1000.0f) {
         LOG_WARN("Server", "Slow tick: %.1fms | net=%.1f world=%.1f ecs=%.1f "
-                 "despawn=%.1f repl=%.1f events=%.1f save=%.1f",
+                 "despawn=%.1f repl=%.1f events=%.1f save=%.1f"
+                 " [autosave=%.1f persist=%.1f maint=%.1f dung=%.1f wal=%.1f rest=%.1f]",
                  totalMs, ms(tp0, tp1), ms(tp1, tp2), ms(tp2, tp3),
-                 ms(tp3, tp4), ms(tp4, tp5), ms(tp5, tp6), ms(tp6, tp7));
+                 ms(tp3, tp4), ms(tp4, tp5), ms(tp5, tp6), ms(tp6, tp7),
+                 ms(tp6, tpSaveA), ms(tpSaveA, tpSaveB), ms(tpSaveB, tpSaveC),
+                 ms(tpSaveC, tpSaveD), ms(tpSaveD, tpSaveE), ms(tpSaveE, tp7));
     }
 }
 
@@ -2132,28 +2140,29 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     }
 
     // Cancel any active trade session for the disconnecting player
-    if (client && !client->character_id.empty()) {
-        auto tradeSession = tradeRepo_->getActiveSession(client->character_id);
-        if (tradeSession) {
-            tradeRepo_->cancelSession(tradeSession->sessionId);
-            // Notify the other player that the trade was cancelled
-            std::string otherCharId = (client->character_id == tradeSession->playerACharacterId)
-                ? tradeSession->playerBCharacterId : tradeSession->playerACharacterId;
-            server_.connections().forEach([&](ClientConnection& c) {
-                if (c.character_id == otherCharId) {
-                    SvTradeUpdateMsg cancelMsg;
-                    cancelMsg.updateType = 6; // cancelled
-                    cancelMsg.resultCode = 9; // partner disconnected
-                    cancelMsg.otherPlayerName = "Trade cancelled — other player disconnected";
-                    uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
-                    cancelMsg.write(w);
-                    server_.sendTo(c.clientId, Channel::ReliableOrdered,
-                                   PacketType::SvTradeUpdate, buf, w.size());
-                }
-            });
-            LOG_INFO("Server", "Cancelled trade session %d due to client %d disconnect",
-                     tradeSession->sessionId, clientId);
-        }
+    if (client && client->activeTradeSessionId != 0) {
+        int cancelSid = client->activeTradeSessionId;
+        tradeRepo_->cancelSession(cancelSid);
+        // Notify the other player that the trade was cancelled
+        std::string otherCharId = client->tradePartnerCharId;
+        server_.connections().forEach([&](ClientConnection& c) {
+            if (c.character_id == otherCharId) {
+                c.activeTradeSessionId = 0;
+                c.tradePartnerCharId.clear();
+                SvTradeUpdateMsg cancelMsg;
+                cancelMsg.updateType = 6; // cancelled
+                cancelMsg.resultCode = 9; // partner disconnected
+                cancelMsg.otherPlayerName = "Trade cancelled — other player disconnected";
+                uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                cancelMsg.write(w);
+                server_.sendTo(c.clientId, Channel::ReliableOrdered,
+                               PacketType::SvTradeUpdate, buf, w.size());
+            }
+        });
+        LOG_INFO("Server", "Cancelled trade session %d due to client %d disconnect",
+                 cancelSid, clientId);
+        client->activeTradeSessionId = 0;
+        client->tradePartnerCharId.clear();
     }
 
     // Release per-player mutex entry (after all synchronous saves complete)

@@ -471,12 +471,14 @@ void GameApp::onInit() {
 
         if (!foundTarget) return;
 
-        // Show floating damage text from server-authoritative damage.
-        // For local attacks: prediction miss/resist text already spawned;
-        // only show server damage (skip 0-damage to avoid double miss text).
+        // Show floating damage/miss text from server-authoritative result.
+        // All text (hit, miss, resist) is driven by the server event —
+        // client prediction text was removed to prevent false "Miss" overlaps.
         if (isLocalAttack) {
             if (msg.damage > 0) {
                 combatSystem_->showDamageText(targetPos, msg.damage, msg.isCrit != 0);
+            } else {
+                combatSystem_->showMissText(targetPos);
             }
         } else {
             if (msg.damage == 0) {
@@ -4136,6 +4138,9 @@ void GameApp::populateCharacterSlots(CharacterSelectScreen* screen,
         slot.gender = c.gender;
         slot.hairstyle = c.hairstyle;
         slot.faction = c.faction;
+        slot.weaponVisualIdx = c.weaponVisualIdx;
+        slot.armorVisualIdx  = c.armorVisualIdx;
+        slot.hatVisualIdx    = c.hatVisualIdx;
         screen->slots.push_back(slot);
     }
     while (screen->slots.size() < 3) {

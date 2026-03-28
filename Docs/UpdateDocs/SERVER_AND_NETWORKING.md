@@ -162,7 +162,7 @@ Fiber-based async dispatch via `DbDispatcher` (header-only) for non-blocking DB 
 
 | Cache | Source Tables | Key Lookup |
 |-------|-------------|------------|
-| `ItemDefinitionCache` | `item_definitions` | `getDefinition(itemId)`, `getStatTypeForScroll(itemId)` |
+| `ItemDefinitionCache` | `item_definitions` | `getDefinition(itemId)`, `getStatTypeForScroll(itemId)`, `getVisualIndex(itemId)`. **Used by both ServerApp and AuthServer** (auth server resolves equipped weapon/armor/hat visual indices for character preview) |
 | `LootTableCache` | `loot_drops` + `loot_tables` | `rollLoot(lootTableId)` |
 | `MobDefCache` | `mob_definitions` | by `mob_def_id` |
 | `SkillDefCache` | `skill_definitions` + `skill_ranks` | by skill ID, by class |
@@ -235,7 +235,7 @@ server/
 ├── target_validator.h             # Server-side target validation
 │
 ├── auth/
-│   └── auth_server.h/.cpp         # TLS auth (bcrypt, register + login, starter equipment)
+│   └── auth_server.h/.cpp         # TLS auth (bcrypt, register + login, starter equipment, ItemDefinitionCache for equip preview)
 │
 ├── handlers/                      # Message handlers (split from server_app)
 │   ├── aurora_handler.cpp         # Aurora rotation tick, source-tagged buff apply/remove, death/recall override
@@ -323,7 +323,7 @@ engine/net/
 ├── socket_posix.cpp          # POSIX socket implementation
 ├── net_client.h/.cpp         # Client networking (connect, send, receive)
 ├── net_server.h/.cpp         # Server networking (accept, broadcast, kick)
-├── auth_protocol.h           # Auth handshake protocol definitions
+├── auth_protocol.h           # Auth handshake protocol definitions (CharacterPreview with equip visual indices)
 └── auth_client.h/.cpp        # Client-side auth connection (TLS over TCP)
 ```
 

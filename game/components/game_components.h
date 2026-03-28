@@ -44,7 +44,7 @@ struct CombatControllerComponent {
 
     float baseAttackCooldown = 1.5f;  // Seconds between attacks
     float attackCooldownRemaining = 0.0f;
-    float disengageRange = 1.0f;      // Tiles — walk beyond this and auto-attack turns off
+    float disengageRange = 5.0f;      // Tiles — walk beyond this and auto-attack turns off
     bool showDisengageRange = false;  // Editor toggle: draw disengage ring in viewport
     // Note: targeting and auto-attack state are managed by CombatActionSystem,
     // not stored here. This component holds per-entity combat config only.
@@ -403,6 +403,11 @@ FATE_REFLECT_EMPTY(fate::StoryNPCComponent)
 FATE_REFLECT_EMPTY(fate::DungeonNPCComponent)
 FATE_REFLECT_EMPTY(fate::ArenaNPCComponent)
 FATE_REFLECT_EMPTY(fate::BattlefieldNPCComponent)
+FATE_REFLECT_EMPTY(fate::MarketplaceNPCComponent)
+
+FATE_REFLECT(fate::LeaderboardNPCComponent,
+    FATE_FIELD(loreSnippet, String)
+)
 
 // --- Player Quest & Bank Components ---
 

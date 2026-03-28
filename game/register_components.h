@@ -781,6 +781,12 @@ inline void registerAllComponents() {
     // BattlefieldNPCComponent: marker only, auto-serialized
     reg.registerComponent<BattlefieldNPCComponent>();
 
+    // MarketplaceNPCComponent: marker only, auto-serialized
+    reg.registerComponent<MarketplaceNPCComponent>();
+
+    // LeaderboardNPCComponent: has loreSnippet field, auto-serialized
+    reg.registerComponent<LeaderboardNPCComponent>();
+
     // ----- Player quest / bank -----
 
     // QuestComponent: QuestManager quests (active quests + completed IDs)

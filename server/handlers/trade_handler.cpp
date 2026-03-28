@@ -20,6 +20,11 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
     if (!e) return;
     auto* charStats = e->getComponent<CharacterStatsComponent>();
 
+    auto clearTradeState = [&](ClientConnection& c) {
+        c.activeTradeSessionId = 0;
+        c.tradePartnerCharId.clear();
+    };
+
     auto sendTradeResult = [&](uint8_t type, uint8_t code, const std::string& msg) {
         SvTradeUpdateMsg resp;
         resp.updateType = type;
@@ -35,12 +40,19 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
             std::string targetCharId = payload.readString();
             if (!validatePayload(payload, clientId, PacketType::CmdTrade)) return;
 
-            // Check if already in trade
-            if (tradeRepo_->isPlayerInTrade(client->character_id)) {
+            // Check if already in trade (in-memory)
+            if (client->activeTradeSessionId != 0) {
                 sendTradeResult(6, 1, "Already in a trade"); break;
             }
-            if (tradeRepo_->isPlayerInTrade(targetCharId)) {
-                sendTradeResult(6, 2, "Target is already trading"); break;
+            {
+                bool targetInTrade = false;
+                server_.connections().forEach([&](ClientConnection& c) {
+                    if (c.character_id == targetCharId)
+                        targetInTrade = c.activeTradeSessionId != 0;
+                });
+                if (targetInTrade) {
+                    sendTradeResult(6, 2, "Target is already trading"); break;
+                }
             }
 
             // Get current scene from player's CharacterStatsComponent (server-side)
@@ -49,6 +61,15 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
 
             int sessionId = tradeRepo_->createSession(client->character_id, targetCharId, scene);
             if (sessionId > 0) {
+                // Cache trade state in-memory
+                client->activeTradeSessionId = sessionId;
+                client->tradePartnerCharId = targetCharId;
+                server_.connections().forEach([&](ClientConnection& c) {
+                    if (c.character_id == targetCharId) {
+                        c.activeTradeSessionId = sessionId;
+                        c.tradePartnerCharId = client->character_id;
+                    }
+                });
                 sendTradeResult(1, 0, "Trade session started");
                 // Notify target player via system chat + trade invite
                 std::string senderName = charStats ? charStats->stats.characterName : "Someone";
@@ -89,8 +110,8 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
             int32_t quantity = payload.readI32();
             if (!validatePayload(payload, clientId, PacketType::CmdTrade)) return;
 
-            auto session = tradeRepo_->getActiveSession(client->character_id);
-            if (!session) { sendTradeResult(6, 1, "Not in a trade"); break; }
+            if (client->activeTradeSessionId == 0) { sendTradeResult(6, 1, "Not in a trade"); break; }
+            int sid = client->activeTradeSessionId;
 
             // Validate item exists and is tradeable
             auto* inv = e->getComponent<InventoryComponent>();
@@ -101,21 +122,21 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
             ItemInstance item = inv->inventory.getSlot(invSlot);
             if (item.isBound()) { sendTradeResult(6, 5, "Item is soulbound"); break; }
 
-            tradeRepo_->addItemToTrade(session->sessionId, client->character_id,
+            tradeRepo_->addItemToTrade(sid, client->character_id,
                                         slotIdx, sourceSlot, instanceId, quantity);
             inv->inventory.lockSlotForTrade(invSlot);
             // Unlock both sides when items change
-            tradeRepo_->unlockBothPlayers(session->sessionId);
+            tradeRepo_->unlockBothPlayers(sid);
             sendTradeResult(2, 0, "Item added");
             break;
         }
         case TradeAction::RemoveItem: {
             uint8_t slotIdx = payload.readU8();
             if (!validatePayload(payload, clientId, PacketType::CmdTrade)) return;
-            auto session = tradeRepo_->getActiveSession(client->character_id);
-            if (!session) break;
-            tradeRepo_->removeItemFromTrade(session->sessionId, client->character_id, slotIdx);
-            tradeRepo_->unlockBothPlayers(session->sessionId);
+            if (client->activeTradeSessionId == 0) break;
+            int sid = client->activeTradeSessionId;
+            tradeRepo_->removeItemFromTrade(sid, client->character_id, slotIdx);
+            tradeRepo_->unlockBothPlayers(sid);
             sendTradeResult(2, 0, "Item removed");
             break;
         }
@@ -123,23 +144,23 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
             int64_t gold = detail::readI64(payload);
             if (!validatePayload(payload, clientId, PacketType::CmdTrade)) return;
             if (gold < 0) { sendTradeResult(6, 6, "Invalid gold amount"); break; }
-            auto session = tradeRepo_->getActiveSession(client->character_id);
-            if (!session) break;
+            if (client->activeTradeSessionId == 0) break;
+            int sid = client->activeTradeSessionId;
 
             auto* inv = e->getComponent<InventoryComponent>();
             if (!inv || inv->inventory.getGold() < gold) {
                 sendTradeResult(6, 6, "Not enough gold"); break;
             }
 
-            tradeRepo_->setPlayerGold(session->sessionId, client->character_id, gold);
-            tradeRepo_->unlockBothPlayers(session->sessionId);
+            tradeRepo_->setPlayerGold(sid, client->character_id, gold);
+            tradeRepo_->unlockBothPlayers(sid);
             sendTradeResult(2, 0, "Gold set");
             break;
         }
         case TradeAction::Lock: {
-            auto session = tradeRepo_->getActiveSession(client->character_id);
-            if (!session) break;
-            tradeRepo_->setPlayerLocked(session->sessionId, client->character_id, true);
+            if (client->activeTradeSessionId == 0) break;
+            int sid = client->activeTradeSessionId;
+            tradeRepo_->setPlayerLocked(sid, client->character_id, true);
             // Issue nonce for the Confirm step
             uint64_t nonce = nonceManager_.issue(clientId, gameTime_);
             SvTradeUpdateMsg lockResp;
@@ -153,9 +174,8 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
             break;
         }
         case TradeAction::Unlock: {
-            auto session = tradeRepo_->getActiveSession(client->character_id);
-            if (!session) break;
-            tradeRepo_->unlockBothPlayers(session->sessionId);
+            if (client->activeTradeSessionId == 0) break;
+            tradeRepo_->unlockBothPlayers(client->activeTradeSessionId);
             sendTradeResult(3, 0, "Unlocked");
             break;
         }
@@ -166,15 +186,19 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
                 sendTradeResult(6, 9, "Invalid or expired trade nonce");
                 break;
             }
-            auto session = tradeRepo_->getActiveSession(client->character_id);
+            if (client->activeTradeSessionId == 0) {
+                sendTradeResult(6, 7, "Not in a trade"); break;
+            }
+            int sid = client->activeTradeSessionId;
+            auto session = tradeRepo_->loadSession(sid);
             if (!session || !session->bothLocked()) {
                 sendTradeResult(6, 7, "Both players must lock first"); break;
             }
 
-            tradeRepo_->setPlayerConfirmed(session->sessionId, client->character_id, true);
+            tradeRepo_->setPlayerConfirmed(sid, client->character_id, true);
 
             // Reload session to check if both confirmed
-            session = tradeRepo_->loadSession(session->sessionId);
+            session = tradeRepo_->loadSession(sid);
             if (session && session->bothConfirmed()) {
                 // Acquire both player locks in consistent address order to
                 // prevent deadlocks, then execute the trade atomically.
@@ -361,6 +385,12 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
                     if (invA) invA->inventory.unlockAllTradeSlots();
                     if (invB) invB->inventory.unlockAllTradeSlots();
 
+                    // Clear in-memory trade state for both players
+                    clearTradeState(*client);
+                    server_.connections().forEach([&](ClientConnection& c) {
+                        if (c.activeTradeSessionId == sid) clearTradeState(c);
+                    });
+
                     sendTradeResult(5, 0, "Trade completed!");
                     playerDirty_[clientId].inventory = true;
                     enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
@@ -389,9 +419,14 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
             break;
         }
         case TradeAction::Cancel: {
-            auto session = tradeRepo_->getActiveSession(client->character_id);
-            if (session) {
-                tradeRepo_->cancelSession(session->sessionId);
+            if (client->activeTradeSessionId != 0) {
+                int cancelSid = client->activeTradeSessionId;
+                tradeRepo_->cancelSession(cancelSid);
+                // Clear in-memory trade state for both players
+                server_.connections().forEach([&](ClientConnection& c) {
+                    if (c.activeTradeSessionId == cancelSid) clearTradeState(c);
+                });
+                clearTradeState(*client);
             }
             auto* inv = e->getComponent<InventoryComponent>();
             if (inv) inv->inventory.unlockAllTradeSlots();

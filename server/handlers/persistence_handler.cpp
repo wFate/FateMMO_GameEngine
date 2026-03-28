@@ -458,14 +458,16 @@ void ServerApp::tickAutoSave(float /*dt*/) {
         // Dispatch save to worker fiber (non-blocking)
         uint16_t clientId = c.clientId;
         ++autoSavesInFlight_;
+        walNeedsTruncate_ = true;
         savePlayerToDBAsync(clientId);
     });
 
-    // Truncate WAL only after all in-flight auto-saves have committed —
+    // Truncate WAL only once after all in-flight auto-saves have committed —
     // truncating early would discard the only crash-recovery data.
-    if (autoSavesInFlight_ <= 0) {
+    if (autoSavesInFlight_ <= 0 && walNeedsTruncate_) {
         autoSavesInFlight_ = 0;
         wal_.truncate();
+        walNeedsTruncate_ = false;
     }
 }
 

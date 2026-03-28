@@ -263,7 +263,7 @@ Unity-style ImGui editor: hierarchy with colored type badges + visibility toggle
 
 | Widget | Notes |
 |--------|-------|
-| CharacterSelectScreen | Dark atmospheric bg, character display, horizontal slot bar (7 circles, gold selected ring, "+" empty), Entry/Swap/Delete |
+| CharacterSelectScreen | Dark atmospheric bg, paper doll sprite preview (body+armor+hat+weapon layers with `previewScale`), character info (name/class/level at absolute Y positions), horizontal slot bar (7 circles, class-colored/gold selected ring, "+" empty), Entry/Swap/Delete buttons, delete confirmation dialog with typed-name validation. **70+ editor properties** across 6 inspector groups. Equipment visual indices sent from server in `CharacterPreview` |
 | CharacterCreationScreen | Split layout, diamond class selectors (3 classes), faction badges (4 colors), inline name input, Next/Back |
 
 ### ImGui Legacy HUD (Fully Retired)

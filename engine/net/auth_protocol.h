@@ -158,6 +158,9 @@ struct CharacterPreview {
     uint8_t faction = 0;
     uint8_t gender = 0;
     uint8_t hairstyle = 0;
+    uint16_t weaponVisualIdx = 0;
+    uint16_t armorVisualIdx  = 0;
+    uint16_t hatVisualIdx    = 0;
 
     void write(ByteWriter& w) const {
         w.writeString(characterId);
@@ -167,6 +170,9 @@ struct CharacterPreview {
         w.writeU8(faction);
         w.writeU8(gender);
         w.writeU8(hairstyle);
+        w.writeU16(weaponVisualIdx);
+        w.writeU16(armorVisualIdx);
+        w.writeU16(hatVisualIdx);
     }
     static CharacterPreview read(ByteReader& r) {
         CharacterPreview p;
@@ -177,6 +183,9 @@ struct CharacterPreview {
         p.faction       = r.readU8();
         p.gender        = r.readU8();
         p.hairstyle     = r.readU8();
+        p.weaponVisualIdx = r.readU16();
+        p.armorVisualIdx  = r.readU16();
+        p.hatVisualIdx    = r.readU16();
         return p;
     }
     static void writeList(ByteWriter& w, const std::vector<CharacterPreview>& list) {

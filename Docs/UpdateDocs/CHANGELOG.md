@@ -1,5 +1,37 @@
 # FateEngine — Development Changelog
 
+### March 28, 2026 — Character Select Screen Overhaul
+
+**CharacterSelectScreen — Full Editor Serialization (70+ properties):**
+- Extracted all hardcoded values from `CharacterSelectScreen` render/input code into public serializable properties
+- **Layout** (22 props): `slotCircleSize`, `entryButtonWidth`, `slotSpacing`, `slotBottomMargin`, `selectedRingWidth`, `normalRingWidth`, `displayWidthRatio`, `displayHeightRatio`, `displayTopRatio`, `displayBorderWidth`, `nameBgHeight`, `nameBgWidthRatio`, `nameTextY`, `classTextY`, `levelTextY`, `entryBtnBorderWidth`, `swapDeleteScale`, `swapDeleteMargin`, `swapBtnRingWidth`, `deleteBtnRingWidth`, `previewScale`, `previewCenterYRatio`
+- **Dialog layout** (9 props): `dialogWidth`, `dialogHeight`, `dialogBorderWidth`, `dialogInputHeight`, `dialogInputPadding`, `dialogInputBorderWidth`, `dialogBtnWidth`, `dialogBtnHeight`, `dialogBtnMargin`
+- **Font sizes** (14 props): `nameFontSize`, `classFontSize`, `levelFontSize`, `emptyPromptFontSize`, `plusFontSize`, `slotLevelFontSize`, `entryFontSize`, `swapFontSize`, `deleteFontSize`, `dialogTitleFontSize`, `dialogPromptFontSize`, `dialogRefNameFontSize`, `dialogInputFontSize`, `dialogBtnFontSize`
+- **Colors** (32 props): background, display area (bg/border), name (bg/text), class, level, empty prompt, slot colors (empty/filled/selected ring/empty ring/plus/level), entry button (bg/border), swap button (bg/ring), delete button (bg/ring), dialog colors (overlay/bg/border/title/prompt/refName/inputBg/inputBorder/confirmActive/confirmDisabled/confirmDisabledText/cancel)
+- Full JSON serialization/deserialization in `ui_serializer.cpp` / `ui_manager.cpp`
+- Editor inspector with 6 collapsible TreeNode sections: Layout, Dialog Layout, Fonts, Colors, Dialog Colors — all with undo/redo support
+
+**Absolute Text Positioning:**
+- Replaced stacked relative padding (`nameBgTopPad`, `classTopPad`, `levelTopPad`) with absolute Y offsets from display area top (`nameTextY=8`, `classTextY=42`, `levelTextY=60`)
+- Each text element (name, class, level) can now be positioned independently in the editor
+
+**Paper Doll Sprite Preview in Character Select:**
+- Character select display area now renders the selected character's body + equipment sprites
+- 4-layer composition: body (gender/hairstyle combined sprite) → armor → hat → weapon
+- `resolvePreviewTextures()` loads textures from `TextureCache` using `equip_visual_table.h` paths, cached per selected slot
+- Editor-adjustable `previewScale` (default 3.0) and `previewCenterYRatio` (default 0.55)
+- `CharacterSlot` struct extended with `weaponVisualIdx`, `armorVisualIdx`, `hatVisualIdx`
+
+**Equipment Visual Indices in Character Preview Protocol:**
+- `CharacterPreview` (auth_protocol.h) extended with 3 `uint16_t` fields: `weaponVisualIdx`, `armorVisualIdx`, `hatVisualIdx` — wire format adds 6 bytes per character
+- `AuthServer::buildCharacterList()` now queries `character_inventory` for equipped weapon/armor/hat items and resolves visual indices via `ItemDefinitionCache`
+- `ItemDefinitionCache` added to `AuthServer` (initialized on start alongside repos)
+- `GameApp::populateCharacterSlots()` passes visual indices from `CharacterPreview` to `CharacterSlot`
+
+**Breaking protocol change:** Client and server must both be updated (CharacterPreview wire format changed).
+
+**Files changed:** `engine/ui/widgets/character_select_screen.h` (70+ properties, equip indices on CharacterSlot, preview texture cache), `engine/ui/widgets/character_select_screen.cpp` (all hardcoded values → properties, resolvePreviewTextures(), paper doll layer rendering), `engine/ui/ui_serializer.cpp` (full property serialization), `engine/ui/ui_manager.cpp` (full property deserialization), `engine/editor/ui_editor_panel.cpp` (6 inspector sections), `engine/net/auth_protocol.h` (CharacterPreview equip indices + wire format), `server/auth/auth_server.h` (ItemDefinitionCache member), `server/auth/auth_server.cpp` (cache init, equip visual query in buildCharacterList), `game/game_app.cpp` (pass equip indices to CharacterSlot)
+
 ### March 28, 2026 — Missing Items, Currencies & Consumables
 
 **Stat Allocation Disabled:**

@@ -225,25 +225,25 @@ void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMs
             enqueuePersist(clientId, PersistPriority::IMMEDIATE, PersistType::Inventory);
 
             // Cancel any active trade before transitioning
-            if (!client->character_id.empty()) {
-                auto tradeSession = tradeRepo_->getActiveSession(client->character_id);
-                if (tradeSession) {
-                    tradeRepo_->cancelSession(tradeSession->sessionId);
-                    std::string otherCharId = (client->character_id == tradeSession->playerACharacterId)
-                        ? tradeSession->playerBCharacterId : tradeSession->playerACharacterId;
-                    server_.connections().forEach([&](ClientConnection& c) {
-                        if (c.character_id == otherCharId) {
-                            SvTradeUpdateMsg cancelMsg;
-                            cancelMsg.updateType = 6; // cancelled
-                            cancelMsg.resultCode = 10; // partner zoned
-                            cancelMsg.otherPlayerName = "Trade cancelled — other player recalled to town";
-                            uint8_t tbuf[256]; ByteWriter tw(tbuf, sizeof(tbuf));
-                            cancelMsg.write(tw);
-                            server_.sendTo(c.clientId, Channel::ReliableOrdered,
-                                           PacketType::SvTradeUpdate, tbuf, tw.size());
-                        }
-                    });
-                }
+            if (client->activeTradeSessionId != 0) {
+                tradeRepo_->cancelSession(client->activeTradeSessionId);
+                std::string otherCharId = client->tradePartnerCharId;
+                server_.connections().forEach([&](ClientConnection& c) {
+                    if (c.character_id == otherCharId) {
+                        c.activeTradeSessionId = 0;
+                        c.tradePartnerCharId.clear();
+                        SvTradeUpdateMsg cancelMsg;
+                        cancelMsg.updateType = 6; // cancelled
+                        cancelMsg.resultCode = 10; // partner zoned
+                        cancelMsg.otherPlayerName = "Trade cancelled — other player recalled to town";
+                        uint8_t tbuf[256]; ByteWriter tw(tbuf, sizeof(tbuf));
+                        cancelMsg.write(tw);
+                        server_.sendTo(c.clientId, Channel::ReliableOrdered,
+                                       PacketType::SvTradeUpdate, tbuf, tw.size());
+                    }
+                });
+                client->activeTradeSessionId = 0;
+                client->tradePartnerCharId.clear();
             }
 
             // Resolve Town spawn position from scene defaults (no portal needed)

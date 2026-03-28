@@ -69,27 +69,28 @@ void ServerApp::processZoneTransition(uint16_t clientId, const CmdZoneTransition
     }
 
     // Cancel any active trade before transitioning
-    if (!client->character_id.empty()) {
-        auto tradeSession = tradeRepo_->getActiveSession(client->character_id);
-        if (tradeSession) {
-            tradeRepo_->cancelSession(tradeSession->sessionId);
-            std::string otherCharId = (client->character_id == tradeSession->playerACharacterId)
-                ? tradeSession->playerBCharacterId : tradeSession->playerACharacterId;
-            server_.connections().forEach([&](ClientConnection& c) {
-                if (c.character_id == otherCharId) {
-                    SvTradeUpdateMsg cancelMsg;
-                    cancelMsg.updateType = 6; // cancelled
-                    cancelMsg.resultCode = 10; // partner zoned
-                    cancelMsg.otherPlayerName = "Trade cancelled — other player left the area";
-                    uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
-                    cancelMsg.write(w);
-                    server_.sendTo(c.clientId, Channel::ReliableOrdered,
-                                   PacketType::SvTradeUpdate, buf, w.size());
-                }
-            });
-            LOG_INFO("Server", "Cancelled trade session %d — client %d zone transition",
-                     tradeSession->sessionId, clientId);
-        }
+    if (client->activeTradeSessionId != 0) {
+        int cancelSid = client->activeTradeSessionId;
+        tradeRepo_->cancelSession(cancelSid);
+        std::string otherCharId = client->tradePartnerCharId;
+        server_.connections().forEach([&](ClientConnection& c) {
+            if (c.character_id == otherCharId) {
+                c.activeTradeSessionId = 0;
+                c.tradePartnerCharId.clear();
+                SvTradeUpdateMsg cancelMsg;
+                cancelMsg.updateType = 6; // cancelled
+                cancelMsg.resultCode = 10; // partner zoned
+                cancelMsg.otherPlayerName = "Trade cancelled — other player left the area";
+                uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                cancelMsg.write(w);
+                server_.sendTo(c.clientId, Channel::ReliableOrdered,
+                               PacketType::SvTradeUpdate, buf, w.size());
+            }
+        });
+        LOG_INFO("Server", "Cancelled trade session %d — client %d zone transition",
+                 cancelSid, clientId);
+        client->activeTradeSessionId = 0;
+        client->tradePartnerCharId.clear();
     }
 
     // Transition allowed — send SvZoneTransition back to client

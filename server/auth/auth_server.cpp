@@ -117,6 +117,7 @@ bool AuthServer::start(uint16_t port, const std::string& certPath, const std::st
     }
     accountRepo_ = std::make_unique<AccountRepository>(dbConn_.connection());
     characterRepo_ = std::make_unique<CharacterRepository>(dbConn_.connection());
+    itemDefCache_.initialize(dbConn_.connection());
 
     // --- TCP listen socket ---
 #ifdef _WIN32
@@ -586,6 +587,29 @@ std::vector<CharacterPreview> AuthServer::buildCharacterList(int accountId) {
         p.faction = static_cast<uint8_t>(rec.faction);
         p.gender = static_cast<uint8_t>(rec.gender);
         p.hairstyle = static_cast<uint8_t>(rec.hairstyle);
+
+        // Query equipped weapon/armor/hat visual indices
+        try {
+            pqxx::work txn(dbConn_.connection());
+            auto rows = txn.exec_params(
+                "SELECT item_id, equipped_slot FROM character_inventory "
+                "WHERE character_id = $1 AND is_equipped = true "
+                "AND equipped_slot IN ('Weapon', 'Armor', 'Hat')",
+                rec.character_id);
+            txn.commit();
+            for (const auto& row : rows) {
+                std::string itemId = row["item_id"].as<std::string>();
+                std::string slot   = row["equipped_slot"].as<std::string>();
+                uint16_t vi = itemDefCache_.getVisualIndex(itemId);
+                if (slot == "Weapon")    p.weaponVisualIdx = vi;
+                else if (slot == "Armor") p.armorVisualIdx = vi;
+                else if (slot == "Hat")   p.hatVisualIdx = vi;
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR("AuthServer", "Failed to query equip visuals for %s: %s",
+                      rec.character_id.c_str(), e.what());
+        }
+
         list.push_back(p);
     }
     return list;
