@@ -230,6 +230,9 @@ bool ServerApp::init(uint16_t port) {
     } else {
         LOG_INFO("Server", "Loaded %zu costume definitions", costumeCache_.size());
     }
+    if (!costumeCache_.loadMobDrops(gameDbConn_.connection())) {
+        LOG_WARN("Server", "Failed to load mob costume drops (table may not exist yet)");
+    }
 
     // Initialize Gauntlet system
     initGauntlet();
@@ -1497,13 +1500,13 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         s.currentScene = (rec.current_scene == "Scene2" || rec.current_scene.empty())
             ? "WhisperingWoods" : rec.current_scene;
 
-        // Stat allocation (free points + allocated stats from DB)
-        s.freeStatPoints = static_cast<int16_t>(rec.free_stat_points);
-        s.allocatedSTR   = static_cast<int16_t>(rec.allocated_str);
-        s.allocatedINT   = static_cast<int16_t>(rec.allocated_int);
-        s.allocatedDEX   = static_cast<int16_t>(rec.allocated_dex);
-        s.allocatedCON   = static_cast<int16_t>(rec.allocated_con);
-        s.allocatedWIS   = static_cast<int16_t>(rec.allocated_wis);
+        // DISABLED: stat allocation removed — stats are fixed per class
+        // s.freeStatPoints = static_cast<int16_t>(rec.free_stat_points);
+        // s.allocatedSTR   = static_cast<int16_t>(rec.allocated_str);
+        // s.allocatedINT   = static_cast<int16_t>(rec.allocated_int);
+        // s.allocatedDEX   = static_cast<int16_t>(rec.allocated_dex);
+        // s.allocatedCON   = static_cast<int16_t>(rec.allocated_con);
+        // s.allocatedWIS   = static_cast<int16_t>(rec.allocated_wis);
 
         // Initial stat calc (without equipment — equipment loaded below)
         s.recalculateStats();
@@ -1910,9 +1913,9 @@ void ServerApp::onClientConnected(uint16_t clientId) {
                 sendSkillSync(clientId);
             }
 
-            // freeStatPoints granted in addXP() — mark stats dirty for persistence
-            playerDirty_[clientId].stats = true;
-            enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
+            // DISABLED: stat allocation removed — no free stat points to persist
+            // playerDirty_[clientId].stats = true;
+            // enqueuePersist(clientId, PersistPriority::HIGH, PersistType::Character);
 
             // Also send full player state
             sendPlayerState(clientId);
@@ -2150,6 +2153,13 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     clientAdminRoles_.erase(clientId);
 }
 
+bool ServerApp::validatePayload(ByteReader& payload, uint16_t clientId, uint8_t type) {
+    if (payload.ok()) return true;
+    LOG_WARN("Server", "Malformed packet 0x%02X from client %d (payload overflow)", type, clientId);
+    rateLimiters_[clientId].addViolation(static_cast<double>(gameTime_), 5);
+    return false;
+}
+
 void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload) {
     // Token bucket rate limiting — checked before any packet processing
     {
@@ -2170,16 +2180,19 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
     switch (type) {
         case PacketType::CmdMove: {
             auto move = CmdMove::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processMove(clientId, move);
             break;
         }
         case PacketType::CmdAction: {
             auto action = CmdAction::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processAction(clientId, action);
             break;
         }
         case PacketType::CmdChat: {
             auto chat = CmdChat::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processChat(clientId, chat);
             break;
         }
@@ -2213,161 +2226,193 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
         }
         case PacketType::CmdZoneTransition: {
             auto cmd = CmdZoneTransition::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processZoneTransition(clientId, cmd);
             break;
         }
         case PacketType::CmdRespawn: {
             auto msg = CmdRespawnMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processRespawn(clientId, msg);
             break;
         }
         case PacketType::CmdUseSkill: {
             auto msg = CmdUseSkillMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processUseSkill(clientId, msg);
             break;
         }
         case PacketType::CmdEquip: {
             auto msg = CmdEquipMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processEquip(clientId, msg);
             break;
         }
         case PacketType::CmdMoveItem: {
             auto msg = CmdMoveItemMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processMoveItem(clientId, msg);
             break;
         }
         case PacketType::CmdDestroyItem: {
             auto msg = CmdDestroyItemMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processDestroyItem(clientId, msg);
             break;
         }
         case PacketType::CmdEnchant: {
             auto msg = CmdEnchantMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processEnchant(clientId, msg);
             break;
         }
         case PacketType::CmdRepair: {
             auto msg = CmdRepairMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processRepair(clientId, msg);
             break;
         }
         case PacketType::CmdExtractCore: {
             auto msg = CmdExtractCoreMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processExtractCore(clientId, msg);
             break;
         }
         case PacketType::CmdCraft: {
             auto msg = CmdCraftMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processCraft(clientId, msg);
             break;
         }
         case PacketType::CmdBattlefield: {
             auto msg = CmdBattlefieldMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processBattlefield(clientId, msg);
             break;
         }
         case PacketType::CmdArena: {
             auto msg = CmdArenaMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processArena(clientId, msg);
             break;
         }
         case PacketType::CmdPet: {
             auto msg = CmdPetMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processPetCommand(clientId, msg);
             break;
         }
         case PacketType::CmdShopBuy: {
             auto msg = CmdShopBuyMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processShopBuy(clientId, msg);
             break;
         }
         case PacketType::CmdShopSell: {
             auto msg = CmdShopSellMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processShopSell(clientId, msg);
             break;
         }
         case PacketType::CmdTeleport: {
             auto msg = CmdTeleportMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processTeleport(clientId, msg);
             break;
         }
         case PacketType::CmdBankDepositItem: {
             auto msg = CmdBankDepositItemMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processBankDepositItem(clientId, msg);
             break;
         }
         case PacketType::CmdBankWithdrawItem: {
             auto msg = CmdBankWithdrawItemMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processBankWithdrawItem(clientId, msg);
             break;
         }
         case PacketType::CmdBankDepositGold: {
             auto msg = CmdBankDepositGoldMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processBankDepositGold(clientId, msg);
             break;
         }
         case PacketType::CmdBankWithdrawGold: {
             auto msg = CmdBankWithdrawGoldMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processBankWithdrawGold(clientId, msg);
             break;
         }
         case PacketType::CmdSocketItem: {
             auto msg = CmdSocketItemMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processSocketItem(clientId, msg);
             break;
         }
         case PacketType::CmdStatEnchant: {
             auto msg = CmdStatEnchantMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processStatEnchant(clientId, msg);
             break;
         }
         case PacketType::CmdUseConsumable: {
             auto msg = CmdUseConsumableMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processUseConsumable(clientId, msg);
             break;
         }
         case PacketType::CmdRankingQuery: {
             auto msg = CmdRankingQueryMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processRankingQuery(clientId, msg);
             break;
         }
         case PacketType::CmdStartDungeon: {
             auto msg = CmdStartDungeonMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processStartDungeon(clientId, msg);
             break;
         }
         case PacketType::CmdDungeonResponse: {
             auto msg = CmdDungeonResponseMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processDungeonResponse(clientId, msg);
             break;
         }
         case PacketType::CmdActivateSkillRank: {
             auto msg = CmdActivateSkillRankMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processActivateSkillRank(clientId, msg);
             break;
         }
         case PacketType::CmdAssignSkillSlot: {
             auto msg = CmdAssignSkillSlotMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processAssignSkillSlot(clientId, msg);
             break;
         }
         case PacketType::CmdAllocateStat: {
             auto msg = CmdAllocateStatMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processAllocateStat(clientId, msg);
             break;
         }
         case PacketType::CmdEquipCostume: {
             auto msg = CmdEquipCostumeMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processEquipCostume(clientId, msg);
             break;
         }
         case PacketType::CmdUnequipCostume: {
             auto msg = CmdUnequipCostumeMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processUnequipCostume(clientId, msg);
             break;
         }
         case PacketType::CmdToggleCostumes: {
             auto msg = CmdToggleCostumesMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
             processToggleCostumes(clientId, msg);
             break;
         }

@@ -254,6 +254,7 @@ private:
     void onClientConnected(uint16_t clientId);
     void onClientDisconnected(uint16_t clientId);
     void onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& payload);
+    bool validatePayload(ByteReader& payload, uint16_t clientId, uint8_t type);
 
     void processAction(uint16_t clientId, const CmdAction& action);
     void processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg);
@@ -364,6 +365,7 @@ private:
     void processEquipCostume(uint16_t clientId, const CmdEquipCostumeMsg& msg);
     void processUnequipCostume(uint16_t clientId, const CmdUnequipCostumeMsg& msg);
     void processToggleCostumes(uint16_t clientId, const CmdToggleCostumesMsg& msg);
+    void sendCostumeDefs(uint16_t clientId);
     void sendCostumeSync(uint16_t clientId);
     void loadPlayerCostumes(uint16_t clientId, const std::string& characterId);
 
