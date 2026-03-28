@@ -23,6 +23,8 @@
 #include "game/shared/pet_system.h"
 #include "game/shared/collection_system.h"
 #include "engine/render/texture.h"
+#include <unordered_set>
+#include <unordered_map>
 #include "game/components/dropped_item_component.h"
 #include "game/components/boss_spawn_point_component.h"
 
@@ -281,6 +283,13 @@ struct CollectionComponent {
     CollectionState collections;
 };
 
+struct CostumeComponent {
+    FATE_COMPONENT(CostumeComponent)
+    std::unordered_set<std::string> ownedCostumes;           // costume_def_ids
+    std::unordered_map<uint8_t, std::string> equippedBySlot; // slot_type -> costume_def_id
+    bool showCostumes = true;                                 // master toggle
+};
+
 } // namespace fate
 
 // ============================================================================
@@ -398,3 +407,4 @@ FATE_REFLECT_EMPTY(fate::BattlefieldNPCComponent)
 FATE_REFLECT_EMPTY(fate::QuestComponent)
 FATE_REFLECT_EMPTY(fate::BankStorageComponent)
 FATE_REFLECT_EMPTY(fate::CollectionComponent)
+FATE_REFLECT_EMPTY(fate::CostumeComponent)

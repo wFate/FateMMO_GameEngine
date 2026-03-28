@@ -179,6 +179,11 @@ template<> struct component_traits<SpawnPointComponent> {
     static constexpr ComponentFlags flags = ComponentFlags::Serializable;
 };
 
+// --- CostumeComponent: runtime only, loaded from DB on login ---
+template<> struct component_traits<CostumeComponent> {
+    static constexpr ComponentFlags flags = ComponentFlags::None;
+};
+
 // All other components keep the default (Serializable).
 
 // ============================================================================
@@ -1035,6 +1040,9 @@ inline void registerAllComponents() {
 
     // ----- Collection component -----
     reg.registerComponent<CollectionComponent>();
+
+    // ----- Costume component -----
+    reg.registerComponent<CostumeComponent>();
 
     // ----- Backward-compat aliases -----
     reg.registerAlias("Sprite", "SpriteComponent");
