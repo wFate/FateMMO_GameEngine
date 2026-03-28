@@ -2416,6 +2416,29 @@ void ServerApp::onPacketReceived(uint16_t clientId, uint8_t type, ByteReader& pa
             processToggleCostumes(clientId, msg);
             break;
         }
+        case PacketType::CmdEditorPause: {
+            auto msg = CmdEditorPauseMsg::read(payload);
+            if (!validatePayload(payload, clientId, type)) return;
+            auto* client = server_.connections().findById(clientId);
+            if (!client || client->playerEntityId == 0) break;
+            PersistentId pid(client->playerEntityId);
+            EntityHandle h = replication_.getEntityHandle(pid);
+            Entity* player = world_.getEntity(h);
+            if (player) {
+                auto* charStats = player->getComponent<CharacterStatsComponent>();
+                if (charStats) {
+                    bool paused = msg.paused != 0;
+                    charStats->stats.editorPaused = paused;
+                    if (paused) {
+                        godModeEntities_.insert(client->playerEntityId);
+                    } else {
+                        godModeEntities_.erase(client->playerEntityId);
+                    }
+                    LOG_INFO("Server", "Client %d editor %s", clientId, paused ? "paused" : "resumed");
+                }
+            }
+            break;
+        }
         default:
             LOG_WARN("Server", "Unknown packet type 0x%02X from client %d", type, clientId);
             break;

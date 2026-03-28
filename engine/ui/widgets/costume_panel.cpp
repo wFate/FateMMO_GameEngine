@@ -80,104 +80,101 @@ void CostumePanel::render(SpriteBatch& batch, SDFText& sdf) {
     filterTabRects_.clear();
     gridSlotRects_.clear();
 
-    // ---- Background (dark panel) ----
-    Color bg  = {0.08f, 0.08f, 0.12f, 0.95f};
-    Color bdr = {0.25f, 0.25f, 0.35f, 1.0f};
-    float bw  = 2.0f;
+    // ---- Scaled dimensions ----
+    float bw      = borderWidth * layoutScale_;
+    float headerH = headerHeight * layoutScale_;
+    float titleFS = scaledFont(titleFontSize);
+    float bodyFS  = scaledFont(bodyFontSize);
+    float infoFS  = scaledFont(infoFontSize);
+    float ss      = slotSize * layoutScale_;
+    float ssp     = slotSpacing * layoutScale_;
+    float btnH    = buttonHeight * layoutScale_;
+    float ftH     = filterTabHeight * layoutScale_;
+    float botRes  = bottomReserveHeight * layoutScale_;
 
+    // ---- Background (dark panel) ----
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
-                   {rect.w, rect.h}, bg, d);
+                   {rect.w, rect.h}, backgroundColor, d);
     // Border edges
     float innerH = rect.h - bw * 2.0f;
-    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + bw * 0.5f},           {rect.w, bw}, bdr, d + 0.1f);
-    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h - bw * 0.5f},  {rect.w, bw}, bdr, d + 0.1f);
-    batch.drawRect({rect.x + bw * 0.5f,     rect.y + rect.h * 0.5f},       {bw, innerH}, bdr, d + 0.1f);
-    batch.drawRect({rect.x + rect.w - bw * 0.5f, rect.y + rect.h * 0.5f},  {bw, innerH}, bdr, d + 0.1f);
+    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + bw * 0.5f},           {rect.w, bw}, borderColor, d + 0.1f);
+    batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h - bw * 0.5f},  {rect.w, bw}, borderColor, d + 0.1f);
+    batch.drawRect({rect.x + bw * 0.5f,     rect.y + rect.h * 0.5f},       {bw, innerH}, borderColor, d + 0.1f);
+    batch.drawRect({rect.x + rect.w - bw * 0.5f, rect.y + rect.h * 0.5f},  {bw, innerH}, borderColor, d + 0.1f);
 
     // ---- Title bar ----
-    float headerH = 28.0f;
-    Color titleBarBg = {0.12f, 0.12f, 0.18f, 1.0f};
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + headerH * 0.5f},
-                   {rect.w - bw * 2.0f, headerH}, titleBarBg, d + 0.05f);
+                   {rect.w - bw * 2.0f, headerH}, titleBarColor, d + 0.05f);
 
-    Color titleColor = {0.9f, 0.9f, 0.85f, 1.0f};
-    Vec2 titleSize = sdf.measure("Costumes", titleFontSize);
+    Vec2 titleSize = sdf.measure("Costumes", titleFS);
     float titleX = rect.x + (rect.w - titleSize.x) * 0.5f;
     sdf.drawScreen(batch, "Costumes",
         {titleX, rect.y + (headerH - titleSize.y) * 0.5f},
-        titleFontSize, titleColor, d + 0.2f);
+        titleFS, titleColor, d + 0.2f);
 
-    // ---- Close button (X at top-right, 20x20) ----
-    float closeSize = 20.0f;
-    float closeCX = rect.x + rect.w - closeSize * 0.5f - 6.0f;
+    // ---- Close button (X at top-right) ----
+    float closeSize = 20.0f * layoutScale_;
+    float closeCX = rect.x + rect.w - closeSize * 0.5f - 6.0f * layoutScale_;
     float closeCY = rect.y + headerH * 0.5f;
-    Color closeBg  = {0.3f, 0.15f, 0.15f, 0.9f};
-    Color closeXC  = {0.9f, 0.9f, 0.85f, 1.0f};
-    batch.drawRect({closeCX, closeCY}, {closeSize, closeSize}, closeBg, d + 0.2f);
-    Vec2 xts = sdf.measure("X", 12.0f);
+    batch.drawRect({closeCX, closeCY}, {closeSize, closeSize}, closeBtnColor, d + 0.2f);
+    float closeFS = scaledFont(12.0f);
+    Vec2 xts = sdf.measure("X", closeFS);
     sdf.drawScreen(batch, "X",
         {closeCX - xts.x * 0.5f, closeCY - xts.y * 0.5f},
-        12.0f, closeXC, d + 0.3f);
+        closeFS, titleColor, d + 0.3f);
     closeBtnRect_ = {closeCX - closeSize * 0.5f, closeCY - closeSize * 0.5f, closeSize, closeSize};
 
     // ---- ON/OFF toggle button (left of close) ----
     const char* toggleLabel = showCostumes ? "ON" : "OFF";
     Color toggleBg = showCostumes ? Color{0.15f, 0.35f, 0.15f, 0.9f} : Color{0.35f, 0.15f, 0.15f, 0.9f};
-    float toggleW = 36.0f;
-    float toggleH = 18.0f;
-    float toggleCX = closeCX - closeSize * 0.5f - 8.0f - toggleW * 0.5f;
+    float toggleW = 36.0f * layoutScale_;
+    float toggleH = 18.0f * layoutScale_;
+    float toggleCX = closeCX - closeSize * 0.5f - 8.0f * layoutScale_ - toggleW * 0.5f;
     float toggleCY = rect.y + headerH * 0.5f;
     batch.drawRect({toggleCX, toggleCY}, {toggleW, toggleH}, toggleBg, d + 0.2f);
-    Vec2 tls = sdf.measure(toggleLabel, 10.0f);
+    float toggleFS = scaledFont(10.0f);
+    Vec2 tls = sdf.measure(toggleLabel, toggleFS);
     sdf.drawScreen(batch, toggleLabel,
         {toggleCX - tls.x * 0.5f, toggleCY - tls.y * 0.5f},
-        10.0f, closeXC, d + 0.3f);
+        toggleFS, titleColor, d + 0.3f);
     toggleBtnRect_ = {toggleCX - toggleW * 0.5f, toggleCY - toggleH * 0.5f, toggleW, toggleH};
 
     // ---- Divider below title ----
-    Color divColor = {0.25f, 0.25f, 0.35f, 0.6f};
+    Color divColor = {borderColor.r, borderColor.g, borderColor.b, 0.6f};
     batch.drawRect({rect.x + rect.w * 0.5f, rect.y + headerH},
-                   {rect.w - bw * 2.0f, 1.0f}, divColor, d + 0.1f);
+                   {rect.w - bw * 2.0f, 1.0f * layoutScale_}, divColor, d + 0.1f);
 
     // ---- Filter tabs ----
-    float curY = rect.y + headerH + 4.0f;
-    float tabPad = 4.0f;
+    float curY = rect.y + headerH + 4.0f * layoutScale_;
+    float tabPad = 4.0f * layoutScale_;
     float availW = rect.w - bw * 2.0f - tabPad * 2.0f;
     float tabW = availW / static_cast<float>(kFilterCount);
-    Color tabBg       = {0.14f, 0.14f, 0.20f, 0.9f};
-    Color tabActiveBg = {0.22f, 0.28f, 0.45f, 0.9f};
-    Color tabText     = {0.7f, 0.7f, 0.65f, 1.0f};
-    Color tabActiveText = {0.95f, 0.95f, 0.9f, 1.0f};
 
     for (int i = 0; i < kFilterCount; ++i) {
         float tx = rect.x + bw + tabPad + tabW * static_cast<float>(i);
         float tcx = tx + tabW * 0.5f;
-        float tcy = curY + filterTabHeight * 0.5f;
+        float tcy = curY + ftH * 0.5f;
         bool active = (filterSlot == kFilterSlots[i]);
-        batch.drawRect({tcx, tcy}, {tabW - 2.0f, filterTabHeight}, active ? tabActiveBg : tabBg, d + 0.15f);
+        batch.drawRect({tcx, tcy}, {tabW - 2.0f * layoutScale_, ftH}, active ? tabActiveColor : tabColor, d + 0.15f);
 
-        Vec2 ls = sdf.measure(kFilterLabels[i], infoFontSize);
+        Vec2 ls = sdf.measure(kFilterLabels[i], infoFS);
         sdf.drawScreen(batch, kFilterLabels[i],
             {tcx - ls.x * 0.5f, tcy - ls.y * 0.5f},
-            infoFontSize, active ? tabActiveText : tabText, d + 0.25f);
+            infoFS, active ? tabActiveTextColor : tabTextColor, d + 0.25f);
 
-        filterTabRects_.push_back({tx, curY, tabW, filterTabHeight});
+        filterTabRects_.push_back({tx, curY, tabW, ftH});
     }
-    curY += filterTabHeight + 6.0f;
+    curY += ftH + 6.0f * layoutScale_;
 
     // ---- Grid of costume slots ----
-    float gridLeft = rect.x + bw + 8.0f;
-    float gridAvailW = rect.w - bw * 2.0f - 16.0f;
-    float cellSize = slotSize + slotSpacing;
-
-    Color slotBg      = {0.12f, 0.12f, 0.18f, 0.9f};
-    Color slotSelBg   = {0.20f, 0.24f, 0.38f, 0.9f};
-    Color equippedInd = {0.3f, 0.8f, 0.3f, 1.0f};
-    Color nameColor   = {0.85f, 0.85f, 0.8f, 1.0f};
+    float gridLeft = rect.x + bw + 8.0f * layoutScale_;
+    float cellSize = ss + ssp;
 
     // Reserve space at bottom for info + equip button
-    float bottomReserve = 60.0f;
-    float gridMaxY = rect.y + rect.h - bw - bottomReserve;
+    float gridMaxY = rect.y + rect.h - bw - botRes;
+
+    float rarityBw = 2.0f * layoutScale_;
+    float eqFS = scaledFont(9.0f);
 
     for (int fi = 0; fi < static_cast<int>(filteredIndices_.size()); ++fi) {
         int col = fi % gridCols;
@@ -186,51 +183,50 @@ void CostumePanel::render(SpriteBatch& batch, SDFText& sdf) {
         float sy = curY + static_cast<float>(row) * cellSize;
 
         // Stop rendering if below grid area
-        if (sy + slotSize > gridMaxY) break;
+        if (sy + ss > gridMaxY) break;
 
-        float scx = sx + slotSize * 0.5f;
-        float scy = sy + slotSize * 0.5f;
+        float scx = sx + ss * 0.5f;
+        float scy = sy + ss * 0.5f;
 
         const auto& costume = ownedCostumes[filteredIndices_[fi]];
         bool isSelected = (fi == selectedIndex);
 
         // Slot background
-        batch.drawRect({scx, scy}, {slotSize, slotSize}, isSelected ? slotSelBg : slotBg, d + 0.12f);
+        batch.drawRect({scx, scy}, {ss, ss}, isSelected ? slotSelectedColor : slotColor, d + 0.12f);
 
-        // Rarity border (2px)
+        // Rarity border
         Color rc = rarityColor(costume.rarity);
-        float sb = 2.0f;
-        batch.drawRect({scx, sy + sb * 0.5f},                {slotSize, sb}, rc, d + 0.18f); // top
-        batch.drawRect({scx, sy + slotSize - sb * 0.5f},     {slotSize, sb}, rc, d + 0.18f); // bottom
-        batch.drawRect({sx + sb * 0.5f, scy},                {sb, slotSize - sb * 2.0f}, rc, d + 0.18f); // left
-        batch.drawRect({sx + slotSize - sb * 0.5f, scy},     {sb, slotSize - sb * 2.0f}, rc, d + 0.18f); // right
+        batch.drawRect({scx, sy + rarityBw * 0.5f},            {ss, rarityBw}, rc, d + 0.18f);
+        batch.drawRect({scx, sy + ss - rarityBw * 0.5f},       {ss, rarityBw}, rc, d + 0.18f);
+        batch.drawRect({sx + rarityBw * 0.5f, scy},            {rarityBw, ss - rarityBw * 2.0f}, rc, d + 0.18f);
+        batch.drawRect({sx + ss - rarityBw * 0.5f, scy},       {rarityBw, ss - rarityBw * 2.0f}, rc, d + 0.18f);
 
         // Costume name abbreviated (first 4 chars) in center
         std::string abbr = costume.displayName.substr(0, 4);
-        Vec2 aSize = sdf.measure(abbr, infoFontSize);
+        Vec2 aSize = sdf.measure(abbr, infoFS);
         sdf.drawScreen(batch, abbr,
             {scx - aSize.x * 0.5f, scy - aSize.y * 0.5f},
-            infoFontSize, nameColor, d + 0.22f);
+            infoFS, nameColor, d + 0.22f);
 
         // "E" indicator if equipped
         auto it = equippedBySlot.find(costume.slotType);
         if (it != equippedBySlot.end() && it->second == costume.costumeDefId) {
-            Vec2 eSize = sdf.measure("E", 9.0f);
+            Vec2 eSize = sdf.measure("E", eqFS);
             sdf.drawScreen(batch, "E",
-                {sx + slotSize - eSize.x - 2.0f, sy + 2.0f},
-                9.0f, equippedInd, d + 0.25f);
+                {sx + ss - eSize.x - 2.0f * layoutScale_, sy + 2.0f * layoutScale_},
+                eqFS, equippedIndicatorColor, d + 0.25f);
         }
 
-        gridSlotRects_.push_back({sx, sy, slotSize, slotSize});
+        gridSlotRects_.push_back({sx, sy, ss, ss});
     }
 
     // ---- Bottom info area + Equip/Unequip button ----
-    float infoY = rect.y + rect.h - bw - bottomReserve + 4.0f;
+    float infoY = rect.y + rect.h - bw - botRes + 4.0f * layoutScale_;
 
     // Divider above info
     batch.drawRect({rect.x + rect.w * 0.5f, infoY},
-                   {rect.w - bw * 2.0f, 1.0f}, divColor, d + 0.1f);
-    infoY += 4.0f;
+                   {rect.w - bw * 2.0f, 1.0f * layoutScale_}, divColor, d + 0.1f);
+    infoY += 4.0f * layoutScale_;
 
     equipBtnRect_ = {};
 
@@ -239,46 +235,44 @@ void CostumePanel::render(SpriteBatch& batch, SDFText& sdf) {
 
         // Selected costume name
         sdf.drawScreen(batch, sel.displayName,
-            {rect.x + 12.0f, infoY},
-            bodyFontSize, nameColor, d + 0.2f);
+            {rect.x + 12.0f * layoutScale_, infoY},
+            bodyFS, nameColor, d + 0.2f);
 
         // Rarity label
         const char* rarityNames[] = {"Common", "Uncommon", "Rare", "Epic", "Legendary"};
         const char* rn = (sel.rarity <= 4) ? rarityNames[sel.rarity] : "Unknown";
         Color rnColor = rarityColor(sel.rarity);
-        Vec2 rnSize = sdf.measure(rn, infoFontSize);
+        Vec2 rnSize = sdf.measure(rn, infoFS);
         sdf.drawScreen(batch, rn,
-            {rect.x + rect.w - 12.0f - rnSize.x, infoY + 2.0f},
-            infoFontSize, rnColor, d + 0.2f);
+            {rect.x + rect.w - 12.0f * layoutScale_ - rnSize.x, infoY + 2.0f * layoutScale_},
+            infoFS, rnColor, d + 0.2f);
 
-        infoY += 20.0f;
+        infoY += 20.0f * layoutScale_;
 
         // Equip / Unequip button
         auto eqIt = equippedBySlot.find(sel.slotType);
         bool isEquipped = (eqIt != equippedBySlot.end() && eqIt->second == sel.costumeDefId);
         const char* btnLabel = isEquipped ? "Unequip" : "Equip";
 
-        float btnW = rect.w - 24.0f;
+        float btnW = rect.w - 24.0f * layoutScale_;
         float btnCX = rect.x + rect.w * 0.5f;
-        float btnCY = infoY + buttonHeight * 0.5f;
-        Color btnBg   = isEquipped ? Color{0.35f, 0.15f, 0.15f, 0.9f} : Color{0.18f, 0.22f, 0.35f, 0.9f};
-        Color btnText = {0.9f, 0.9f, 0.85f, 1.0f};
+        float btnCY = infoY + btnH * 0.5f;
+        Color btnBg = isEquipped ? unequipBtnColor : equipBtnColor;
 
-        batch.drawRect({btnCX, btnCY}, {btnW, buttonHeight}, btnBg, d + 0.15f);
-        Vec2 blSize = sdf.measure(btnLabel, bodyFontSize);
+        batch.drawRect({btnCX, btnCY}, {btnW, btnH}, btnBg, d + 0.15f);
+        Vec2 blSize = sdf.measure(btnLabel, bodyFS);
         sdf.drawScreen(batch, btnLabel,
             {btnCX - blSize.x * 0.5f, btnCY - blSize.y * 0.5f},
-            bodyFontSize, btnText, d + 0.25f);
+            bodyFS, buttonTextColor, d + 0.25f);
 
-        equipBtnRect_ = {rect.x + 12.0f, infoY, btnW, buttonHeight};
+        equipBtnRect_ = {rect.x + 12.0f * layoutScale_, infoY, btnW, btnH};
     } else {
         // No selection hint
-        Color hintColor = {0.5f, 0.5f, 0.45f, 0.8f};
         const char* hint = "Select a costume";
-        Vec2 hSize = sdf.measure(hint, bodyFontSize);
+        Vec2 hSize = sdf.measure(hint, bodyFS);
         sdf.drawScreen(batch, hint,
-            {rect.x + (rect.w - hSize.x) * 0.5f, infoY + 10.0f},
-            bodyFontSize, hintColor, d + 0.2f);
+            {rect.x + (rect.w - hSize.x) * 0.5f, infoY + 10.0f * layoutScale_},
+            bodyFS, hintColor, d + 0.2f);
     }
 
     renderChildren(batch, sdf);

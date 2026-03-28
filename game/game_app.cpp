@@ -539,13 +539,13 @@ void GameApp::onInit() {
                 stats->stats.pvpKills = msg.pvpKills;
                 stats->stats.pvpDeaths = msg.pvpDeaths;
 
-                // Stat allocation — server-authoritative
-                stats->stats.freeStatPoints = msg.freeStatPoints;
-                stats->stats.allocatedSTR   = msg.allocatedSTR;
-                stats->stats.allocatedINT   = msg.allocatedINT;
-                stats->stats.allocatedDEX   = msg.allocatedDEX;
-                stats->stats.allocatedCON   = msg.allocatedCON;
-                stats->stats.allocatedWIS   = msg.allocatedWIS;
+                // DISABLED: stat allocation removed — stats are fixed per class
+                // stats->stats.freeStatPoints = msg.freeStatPoints;
+                // stats->stats.allocatedSTR   = msg.allocatedSTR;
+                // stats->stats.allocatedINT   = msg.allocatedINT;
+                // stats->stats.allocatedDEX   = msg.allocatedDEX;
+                // stats->stats.allocatedCON   = msg.allocatedCON;
+                // stats->stats.allocatedWIS   = msg.allocatedWIS;
 
                 // Derived stats — server-authoritative snapshot
                 stats->stats.applyServerSnapshot(
@@ -1399,6 +1399,19 @@ void GameApp::onInit() {
         }
     };
 
+    netClient_.onCostumeDefs = [this](const SvCostumeDefsMsg& msg) {
+        costumeDefCache_.clear();
+        for (const auto& d : msg.defs) {
+            costumeDefCache_[d.costumeDefId] = d;
+        }
+        // Re-enrich existing panel entries (handles defs arriving after sync)
+        if (costumePanel_) {
+            for (auto& entry : costumePanel_->ownedCostumes) {
+                enrichCostumeEntry(entry);
+            }
+        }
+    };
+
     netClient_.onCostumeSync = [this](const SvCostumeSyncMsg& msg) {
         if (!costumePanel_) return;
         auto* scene = SceneManager::instance().currentScene();
@@ -1419,6 +1432,7 @@ void GameApp::onInit() {
             CostumeEntry entry;
             entry.costumeDefId = id;
             entry.displayName  = id;
+            enrichCostumeEntry(entry);
             costumePanel_->ownedCostumes.push_back(std::move(entry));
         }
         costumePanel_->equippedBySlot.clear();
@@ -1444,6 +1458,7 @@ void GameApp::onInit() {
                     CostumeEntry entry;
                     entry.costumeDefId = msg.costumeDefId;
                     entry.displayName  = msg.costumeDefId;
+                    enrichCostumeEntry(entry);
                     costumePanel_->ownedCostumes.push_back(std::move(entry));
                 }
                 break;
@@ -1598,6 +1613,7 @@ void GameApp::onInit() {
             renderCollisionDebug(*ctx.spriteBatch, *ctx.camera);
         }
         renderAggroRadius(*ctx.spriteBatch, *ctx.camera);
+        renderAttackRange(*ctx.spriteBatch, *ctx.camera);
 
         // SpawnSystem debug rendering removed — mobs are server-only
 
@@ -1701,35 +1717,111 @@ void GameApp::onUpdate(float deltaTime) {
             // Callbacks on loginScreenWidget_ drive login/register — nothing to poll
             break;
 
-        case ConnectionState::CharacterCreation:
-            // Callbacks on CharacterCreationScreen drive next/back — nothing to poll
+        case ConnectionState::CharacterCreation: {
+            // Poll for create result while on creation screen
+            if (authClient_.hasResult()) {
+                auto result = authClient_.consumeResult();
+                if (result.type == AuthResultType::Create) {
+                    auto* ccw = dynamic_cast<CharacterCreationScreen*>(
+                        uiManager().getScreen("character_creation"));
+                    if (result.success) {
+                        pendingCharacterList_ = result.characters;
+                        auto* charSelect = dynamic_cast<CharacterSelectScreen*>(
+                            uiManager().getScreen("character_select"));
+                        if (charSelect) {
+                            populateCharacterSlots(charSelect, pendingCharacterList_);
+                            charSelect->setVisible(true);
+                        }
+                        if (ccw) ccw->setVisible(false);
+                        connState_ = ConnectionState::CharacterSelect;
+                    } else {
+                        if (ccw) {
+                            ccw->statusMessage = result.errorMessage;
+                            ccw->isError = true;
+                        }
+                    }
+                }
+            }
             break;
+        }
+
+        case ConnectionState::CharacterSelect: {
+            // Poll for create/delete results while on character select screen
+            if (authClient_.hasResult()) {
+                auto result = authClient_.consumeResult();
+                if (result.type == AuthResultType::Create || result.type == AuthResultType::Delete) {
+                    auto* charSelect = dynamic_cast<CharacterSelectScreen*>(
+                        uiManager().getScreen("character_select"));
+                    if (result.success && charSelect) {
+                        pendingCharacterList_ = result.characters;
+                        populateCharacterSlots(charSelect, pendingCharacterList_);
+                    }
+                    if (result.type == AuthResultType::Delete && !result.success) {
+                        LOG_WARN("GameApp", "Character delete failed: %s", result.errorMessage.c_str());
+                    }
+                }
+            }
+            break;
+        }
 
         case ConnectionState::Authenticating: {
-            // Poll for auth result
+            // Poll for auth result — handles Login and Select result types
             if (authClient_.hasResult()) {
-                AuthClientResult resp = authClient_.consumeResult();
-                if (resp.success) {
-                    // TODO (Task 5): transition to CharacterSelect state with resp.characters
-                    // For now, auto-select the first character for backward compatibility
-                    if (!resp.characters.empty()) {
-                        pendingCharName_ = resp.characters[0].characterName;
-                        pendingClassName_ = resp.characters[0].className;
-                        pendingLevel_ = resp.characters[0].level;
+                AuthClientResult result = authClient_.consumeResult();
+                if (result.type == AuthResultType::Login) {
+                    if (result.success) {
+                        pendingCharacterList_ = result.characters;
+                        // Store server host for later UDP connect
+                        if (loginScreenWidget_)
+                            pendingRegServer_ = loginScreenWidget_->serverHost;
+                        // Load and show character select screen
+                        if (!uiManager().getScreen("character_select"))
+                            uiManager().loadScreen("assets/ui/screens/character_select.json");
+                        if (!uiManager().getScreen("character_creation"))
+                            uiManager().loadScreen("assets/ui/screens/character_creation.json");
+                        auto* charSelect = dynamic_cast<CharacterSelectScreen*>(
+                            uiManager().getScreen("character_select"));
+                        if (charSelect) {
+                            wireCharacterSelectCallbacks(charSelect);
+                            populateCharacterSlots(charSelect, pendingCharacterList_);
+                            charSelect->setVisible(true);
+                        }
+                        if (loginScreenWidget_) loginScreenWidget_->setVisible(false);
+                        connState_ = ConnectionState::CharacterSelect;
+                        LOG_INFO("GameApp", "Login success, showing character select (%zu characters)",
+                                 pendingCharacterList_.size());
+                    } else {
+                        if (loginScreenWidget_)
+                            loginScreenWidget_->setStatus(result.errorMessage, true);
+                        connState_ = ConnectionState::LoginScreen;
                     }
-                    // Store character list from auth
-                    pendingAuthResponse_ = resp;
-                    // Connect to game server via UDP with auth token
-                    // NOTE: authToken now comes from SelectCharResponse (Task 4/5)
-                    // For now, generate a local token for backward compat
-                    pendingAuthToken_ = generateAuthToken();
-                    std::string host = loginScreenWidget_ ? loginScreenWidget_->serverHost : "127.0.0.1";
-                    netClient_.connectWithToken(host, static_cast<uint16_t>(serverPort_), pendingAuthToken_);
-                    connState_ = ConnectionState::UDPConnecting;
-                    if (loginScreenWidget_) loginScreenWidget_->setStatus("Connecting to game server...", false);
-                } else {
-                    if (loginScreenWidget_) loginScreenWidget_->setStatus(resp.errorMessage, true);
-                    connState_ = ConnectionState::LoginScreen;
+                }
+                if (result.type == AuthResultType::Select) {
+                    if (result.success) {
+                        const auto& sel = result.selectData;
+                        pendingAuthToken_ = sel.authToken;
+                        pendingCharName_ = sel.characterName;
+                        pendingClassName_ = sel.className;
+                        pendingSceneName_ = sel.sceneName;
+                        pendingSpawnPos_ = {sel.spawnX, sel.spawnY};
+                        pendingLevel_ = sel.level;
+                        pendingFaction_ = static_cast<Faction>(sel.faction);
+                        pendingAuthResponse_ = result;
+                        // Connect UDP with the real token from SelectCharResponse
+                        std::string host = pendingRegServer_.empty()
+                            ? (loginScreenWidget_ ? loginScreenWidget_->serverHost : "127.0.0.1")
+                            : pendingRegServer_;
+                        netClient_.connectWithToken(host, static_cast<uint16_t>(serverPort_), pendingAuthToken_);
+                        connState_ = ConnectionState::UDPConnecting;
+                        if (loginScreenWidget_) loginScreenWidget_->setStatus("Connecting to game server...", false);
+                        LOG_INFO("GameApp", "Character selected, connecting to game server");
+                    } else {
+                        // Show error, go back to select
+                        auto* cs = dynamic_cast<CharacterSelectScreen*>(uiManager().getScreen("character_select"));
+                        if (cs) cs->setVisible(true);
+                        connState_ = ConnectionState::CharacterSelect;
+                        LOG_WARN("GameApp", "Character select failed: %s", result.errorMessage.c_str());
+                    }
                 }
             }
             break;
@@ -1888,7 +1980,8 @@ void GameApp::onUpdate(float deltaTime) {
 
                     // Create full player with all 24 game components
                     Entity* player = EntityFactory::createPlayer(
-                        sc->world(), pendingCharName_, ct, true, pendingFaction_);
+                        sc->world(), pendingCharName_, ct, true, pendingFaction_,
+                        pendingGender_, pendingHairstyle_);
 
                     // Set spawn position: zone transition uses pendingZoneSpawn_,
                     // initial login uses pendingSpawnPos_ from auth response
@@ -1961,10 +2054,13 @@ void GameApp::onUpdate(float deltaTime) {
                     Vec2 spawnPos = isZoneTransition ? pendingZoneSpawn_ : pendingSpawnPos_;
                     std::string sceneName = isZoneTransition ? pendingZoneScene_ : pendingSceneName_;
                     auto* finalStats = player->getComponent<CharacterStatsComponent>();
-                    LOG_INFO("GameApp", "Local player created for '%s' (%s Lv%d) at (%.0f, %.0f) in %s",
+                    auto* appearance = player->getComponent<AppearanceComponent>();
+                    LOG_INFO("GameApp", "Local player created for '%s' (%s Lv%d) at (%.0f, %.0f) in %s — gender=%d hairstyle=%d",
                              pendingCharName_.c_str(), pendingClassName_.c_str(),
                              finalStats ? finalStats->stats.level : 0,
-                             spawnPos.x, spawnPos.y, sceneName.c_str());
+                             spawnPos.x, spawnPos.y, sceneName.c_str(),
+                             appearance ? appearance->gender : -1,
+                             appearance ? appearance->hairstyle : -1);
 
                     // Clear zone scene name after use so subsequent frames don't
                     // re-detect as zone transition
@@ -2410,9 +2506,10 @@ void GameApp::onUpdate(float deltaTime) {
                         auto* statusPanel = dynamic_cast<StatusPanel*>(menuScreen->findById("status_panel"));
                         if (statusPanel) {
                             statusPanel->onClose = closeMenu;
-                            statusPanel->onAllocateStat = [this](uint8_t statType) {
-                                netClient_.sendAllocateStat(statType, 1);
-                            };
+                            // DISABLED: stat allocation removed — stats are fixed per class
+                            // statusPanel->onAllocateStat = [this](uint8_t statType) {
+                            //     netClient_.sendAllocateStat(statType, 1);
+                            // };
                         }
                         auto* skillPanel = dynamic_cast<SkillPanel*>(menuScreen->findById("skill_panel"));
                         if (skillPanel) {
@@ -2796,6 +2893,12 @@ void GameApp::onUpdate(float deltaTime) {
             // Check editor pause state early so all InGame subsystems respect it
             bool editorPaused = Editor::instance().isPaused();
 
+            // Notify server when editor pause state changes (makes player untargetable by mobs)
+            if (editorPaused != lastEditorPaused_ && netClient_.isConnected()) {
+                netClient_.sendEditorPause(editorPaused);
+                lastEditorPaused_ = editorPaused;
+            }
+
             // Update death overlay countdown timer
             if (deathOverlay_ && !editorPaused) deathOverlay_->update(deltaTime);
 
@@ -3106,12 +3209,13 @@ void GameApp::onUpdate(float deltaTime) {
                             sp->hit = static_cast<int>(cs->stats.getHitRate() * 100.0f);
                             sp->cri = static_cast<int>(cs->stats.getCritRate() * 100.0f);
                             sp->spd = static_cast<int>(cs->stats.getSpeed() * 100.0f);
-                            sp->freeStatPoints = cs->stats.freeStatPoints;
-                            sp->allocatedSTR   = cs->stats.allocatedSTR;
-                            sp->allocatedINT   = cs->stats.allocatedINT;
-                            sp->allocatedDEX   = cs->stats.allocatedDEX;
-                            sp->allocatedCON   = cs->stats.allocatedCON;
-                            sp->allocatedWIS   = cs->stats.allocatedWIS;
+                            // DISABLED: stat allocation removed — stats are fixed per class
+                            // sp->freeStatPoints = cs->stats.freeStatPoints;
+                            // sp->allocatedSTR   = cs->stats.allocatedSTR;
+                            // sp->allocatedINT   = cs->stats.allocatedINT;
+                            // sp->allocatedDEX   = cs->stats.allocatedDEX;
+                            // sp->allocatedCON   = cs->stats.allocatedCON;
+                            // sp->allocatedWIS   = cs->stats.allocatedWIS;
 
                             // Gap #3: factionName from FactionComponent
                             auto* fc = localPlayer->getComponent<FactionComponent>();
@@ -3923,6 +4027,26 @@ void GameApp::renderAggroRadius(SpriteBatch& batch, Camera& camera) {
     batch.end();
 }
 
+void GameApp::renderAttackRange(SpriteBatch& batch, Camera& camera) {
+    auto* scene = SceneManager::instance().currentScene();
+    if (!scene) return;
+
+    batch.begin(camera.getViewProjection());
+
+    scene->world().forEach<Transform, CombatControllerComponent>(
+        [&](Entity* entity, Transform* transform, CombatControllerComponent* combat) {
+            if (!combat->showDisengageRange) return;
+            if (combat->disengageRange <= 0.0f) return;
+
+            float radiusPixels = combat->disengageRange * 32.0f; // tiles → pixels
+            batch.drawRing(transform->position, radiusPixels, 1.5f,
+                           Color(0.2f, 0.6f, 1.0f, 0.7f), 97.0f, 48);
+        }
+    );
+
+    batch.end();
+}
+
 void GameApp::onShutdown() {
     // Disconnect from server before shutdown so the server saves the correct
     // player state immediately (alive, current position, XP). Without this,
@@ -3999,6 +4123,138 @@ void GameApp::captureLocalPlayerState() {
     );
 }
 
+void GameApp::populateCharacterSlots(CharacterSelectScreen* screen,
+                                     const std::vector<CharacterPreview>& chars) {
+    screen->slots.clear();
+    for (const auto& c : chars) {
+        CharacterSlot slot;
+        slot.name = c.characterName;
+        slot.className = c.className;
+        slot.level = c.level;
+        slot.empty = false;
+        slot.characterId = c.characterId;
+        slot.gender = c.gender;
+        slot.hairstyle = c.hairstyle;
+        slot.faction = c.faction;
+        screen->slots.push_back(slot);
+    }
+    while (screen->slots.size() < 3) {
+        CharacterSlot empty;
+        empty.empty = true;
+        screen->slots.push_back(empty);
+    }
+    screen->selectedSlot = -1;
+    for (int i = 0; i < (int)screen->slots.size(); ++i) {
+        if (!screen->slots[i].empty) {
+            screen->selectedSlot = i;
+            selectedCharacterId_ = screen->slots[i].characterId;
+            pendingGender_ = screen->slots[i].gender;
+            pendingHairstyle_ = screen->slots[i].hairstyle;
+            break;
+        }
+    }
+}
+
+void GameApp::wireCharacterSelectCallbacks(CharacterSelectScreen* charSelect) {
+    if (!charSelect) return;
+
+    charSelect->onEntry = [this](const std::string&) {
+        if (selectedCharacterId_.empty()) {
+            LOG_WARN("GameApp", "Entry pressed but no character selected");
+            return;
+        }
+        LOG_INFO("GameApp", "Selecting character '%s' for entry", selectedCharacterId_.c_str());
+        authClient_.selectCharacterAsync(selectedCharacterId_);
+        connState_ = ConnectionState::Authenticating;
+        auto* cs = dynamic_cast<CharacterSelectScreen*>(uiManager().getScreen("character_select"));
+        if (cs) cs->setVisible(false);
+        if (loginScreenWidget_) {
+            loginScreenWidget_->setVisible(true);
+            loginScreenWidget_->setStatus("Entering world...", false);
+        }
+    };
+
+    charSelect->onSlotSelected = [this](int index, const std::string& charId) {
+        selectedCharacterId_ = charId;
+        // Store appearance from the preview data for createPlayer
+        for (const auto& c : pendingCharacterList_) {
+            if (c.characterId == charId) {
+                pendingGender_ = c.gender;
+                pendingHairstyle_ = c.hairstyle;
+                break;
+            }
+        }
+        LOG_INFO("GameApp", "Selected slot %d, character '%s' (gender=%d hairstyle=%d)",
+                 index, charId.c_str(), pendingGender_, pendingHairstyle_);
+    };
+
+    charSelect->onCreateNew = [this](const std::string&) {
+        auto* cs = dynamic_cast<CharacterSelectScreen*>(uiManager().getScreen("character_select"));
+        if (cs) cs->setVisible(false);
+        if (!uiManager().getScreen("character_creation"))
+            uiManager().loadScreen("assets/ui/screens/character_creation.json");
+        auto* ccw = dynamic_cast<CharacterCreationScreen*>(uiManager().getScreen("character_creation"));
+        if (ccw) {
+            ccw->setVisible(true);
+            ccw->characterName.clear();
+            ccw->cursorPos = 0;
+            ccw->selectedClass = 0;
+            ccw->selectedFaction = 0;
+            ccw->statusMessage.clear();
+        }
+        connState_ = ConnectionState::CharacterCreation;
+    };
+
+    charSelect->onDelete = [this](const std::string&) {
+        auto* cs = dynamic_cast<CharacterSelectScreen*>(uiManager().getScreen("character_select"));
+        if (!cs) return;
+        LOG_INFO("GameApp", "Deleting character '%s'", cs->deleteTargetId.c_str());
+        authClient_.deleteCharacterAsync(cs->deleteTargetId);
+        cs->showDeleteConfirm = false;
+    };
+
+    // Also wire creation screen callbacks
+    auto* charCreate = dynamic_cast<CharacterCreationScreen*>(
+        uiManager().getScreen("character_creation"));
+    if (charCreate) {
+        charCreate->onNext = [this](const std::string&) {
+            auto* cc = dynamic_cast<CharacterCreationScreen*>(
+                uiManager().getScreen("character_creation"));
+            if (!cc) return;
+            if (cc->characterName.empty()) {
+                cc->statusMessage = "Enter a character name";
+                cc->isError = true;
+                return;
+            }
+            if (!AuthValidation::isValidCharacterName(cc->characterName)) {
+                cc->statusMessage = "Name must be 1-10 alphanumeric characters";
+                cc->isError = true;
+                return;
+            }
+            const char* classNames[] = {"Warrior", "Mage", "Archer"};
+            LOG_INFO("GameApp", "Creating character '%s' class=%s",
+                     cc->characterName.c_str(), classNames[cc->selectedClass]);
+            authClient_.createCharacterAsync(
+                cc->characterName,
+                classNames[cc->selectedClass],
+                static_cast<uint8_t>(cc->selectedFaction),
+                cc->selectedGender,
+                cc->selectedHairstyle
+            );
+            cc->statusMessage = "Creating character...";
+            cc->isError = false;
+        };
+
+        charCreate->onBack = [this](const std::string&) {
+            auto* cc = dynamic_cast<CharacterCreationScreen*>(uiManager().getScreen("character_creation"));
+            if (cc) cc->setVisible(false);
+            auto* cs = dynamic_cast<CharacterSelectScreen*>(uiManager().getScreen("character_select"));
+            if (cs) cs->setVisible(true);
+            connState_ = ConnectionState::CharacterSelect;
+        };
+    }
+}
+
 void GameApp::closeAllNpcPanels() {
     if (npcDialoguePanel_) npcDialoguePanel_->close();
     if (shopPanel_) shopPanel_->close();
@@ -4008,6 +4264,16 @@ void GameApp::closeAllNpcPanels() {
     if (battlefieldPanel_) battlefieldPanel_->close();
     if (leaderboardPanel_) leaderboardPanel_->close();
     if (npcInteractionSystem_) npcInteractionSystem_->closeDialogue();
+}
+
+void GameApp::enrichCostumeEntry(CostumeEntry& entry) {
+    auto it = costumeDefCache_.find(entry.costumeDefId);
+    if (it != costumeDefCache_.end()) {
+        entry.displayName  = it->second.displayName;
+        entry.slotType     = it->second.slotType;
+        entry.visualIndex  = it->second.visualIndex;
+        entry.rarity       = it->second.rarity;
+    }
 }
 
 void GameApp::applySkillDefs(const SvSkillDefsMsg& msg) {

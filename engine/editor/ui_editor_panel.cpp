@@ -48,6 +48,7 @@
 #include "engine/ui/widgets/crafting_panel.h"
 #include "engine/ui/widgets/player_context_menu.h"
 #include "engine/ui/widgets/trade_window.h"
+#include "engine/ui/widgets/collection_panel.h"
 #include "engine/ui/widgets/costume_panel.h"
 #include <imgui.h>
 #include <cstdio>
@@ -1311,6 +1312,42 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::Checkbox("My Locked##tw", &tw->myLocked); checkUndoCapture(uiMgr);
         ImGui::Checkbox("Their Locked##tw", &tw->theirLocked); checkUndoCapture(uiMgr);
     }
+    else if (auto* col = dynamic_cast<CollectionPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("CollectionPanel");
+        if (ImGui::TreeNodeEx("Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title Font Size", &col->titleFontSize, 0.5f, 8.0f, 36.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Entry Font Size", &col->entryFontSize, 0.5f, 8.0f, 36.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Reward Font Size", &col->rewardFontSize, 0.5f, 6.0f, 24.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Category Tab Height", &col->categoryTabHeight, 0.5f, 16.0f, 48.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Entry Height", &col->entryHeight, 0.5f, 24.0f, 80.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width", &col->borderWidth, 0.1f, 0.0f, 8.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header Height", &col->headerHeight, 0.5f, 16.0f, 48.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::ColorEdit4("Background", &col->backgroundColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border", &col->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar", &col->titleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Text", &col->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn", &col->closeBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Active", &col->tabActiveColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Inactive", &col->tabInactiveColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Active Text", &col->tabActiveTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Inactive Text", &col->tabInactiveTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Completed", &col->completedColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Incomplete", &col->incompleteColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Reward", &col->rewardColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Progress", &col->progressColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+    }
     else if (auto* cos = dynamic_cast<CostumePanel*>(selectedNode_)) {
         ImGui::SeparatorText("CostumePanel");
         if (ImGui::TreeNodeEx("Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1332,6 +1369,32 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             checkUndoCapture(uiMgr);
             ImGui::DragFloat("Filter Tab Height", &cos->filterTabHeight, 0.5f, 16.0f, 40.0f);
             checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width", &cos->borderWidth, 0.1f, 0.0f, 8.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header Height", &cos->headerHeight, 0.5f, 16.0f, 48.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Bottom Reserve", &cos->bottomReserveHeight, 0.5f, 30.0f, 120.0f);
+            checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::ColorEdit4("Background", &cos->backgroundColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border", &cos->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar", &cos->titleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Text", &cos->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn", &cos->closeBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab", &cos->tabColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Active", &cos->tabActiveColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Text", &cos->tabTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Active Text", &cos->tabActiveTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Slot", &cos->slotColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Slot Selected", &cos->slotSelectedColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Equipped Indicator", &cos->equippedIndicatorColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Name", &cos->nameColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Equip Btn", &cos->equipBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Unequip Btn", &cos->unequipBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button Text", &cos->buttonTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Hint", &cos->hintColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
     }

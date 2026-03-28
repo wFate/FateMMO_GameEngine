@@ -811,8 +811,9 @@ CharCreateResponse AuthServer::processCharacterCreate(const CharCreateRequest& r
     resp.success = true;
     resp.characters = buildCharacterList(accountId);
 
-    LOG_INFO("AuthServer", "Created character '%s' (%s) for account %d",
-             req.characterName.c_str(), req.className.c_str(), accountId);
+    LOG_INFO("AuthServer", "Created character '%s' (%s) for account %d — gender=%d hairstyle=%d faction=%d",
+             req.characterName.c_str(), req.className.c_str(), accountId,
+             req.gender, req.hairstyle, req.faction);
     return resp;
 }
 
@@ -899,8 +900,9 @@ SelectCharResponse AuthServer::processSelectCharacter(const SelectCharRequest& r
     resp.isDead = rec.is_dead ? 1 : 0;
     resp.faction = static_cast<uint8_t>(rec.faction);
 
-    LOG_INFO("AuthServer", "Character selected: '%s' (id=%s) for account %d",
-             rec.character_name.c_str(), rec.character_id.c_str(), accountId);
+    LOG_INFO("AuthServer", "Character selected: '%s' (id=%s) for account %d — gender=%d hairstyle=%d class=%s scene=%s",
+             rec.character_name.c_str(), rec.character_id.c_str(), accountId,
+             rec.gender, rec.hairstyle, rec.class_name.c_str(), rec.current_scene.c_str());
     return resp;
 }
 

@@ -9,6 +9,7 @@ namespace fate {
 
 void ServerApp::processBounty(uint16_t clientId, ByteReader& payload) {
     uint8_t subAction = payload.readU8();
+    if (!validatePayload(payload, clientId, PacketType::CmdBounty)) return;
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
 
@@ -16,6 +17,7 @@ void ServerApp::processBounty(uint16_t clientId, ByteReader& payload) {
         case BountyAction::PlaceBounty: {
             std::string targetCharId = payload.readString();
             int64_t amount = detail::readI64(payload);
+            if (!validatePayload(payload, clientId, PacketType::CmdBounty)) return;
 
             // Validate via BountyManager logic
             int placerGuildId = guildRepo_->getPlayerGuildId(client->character_id);
@@ -67,6 +69,7 @@ void ServerApp::processBounty(uint16_t clientId, ByteReader& payload) {
         }
         case BountyAction::CancelBounty: {
             std::string targetCharId = payload.readString();
+            if (!validatePayload(payload, clientId, PacketType::CmdBounty)) return;
             int64_t taxAmount = 0;
             BountyResult dbResult;
             int64_t refund = bountyRepo_->cancelContribution(

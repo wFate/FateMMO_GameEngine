@@ -131,11 +131,14 @@ private:
     std::string pendingSceneName_;
     Faction pendingFaction_ = Faction::Xyros;
     int32_t pendingLevel_ = 1;
+    uint8_t pendingGender_ = 0;
+    uint8_t pendingHairstyle_ = 0;
     AuthClientResult pendingAuthResponse_;
     std::vector<CharacterPreview> pendingCharacterList_;
     std::string selectedCharacterId_;
     uint64_t localPlayerPid_ = 0; // Our PersistentId, learned from first SvCombatEvent we send
     bool localPlayerCreated_ = false;
+    bool lastEditorPaused_ = false; // track pause transitions for server notification
     bool retainedUILoaded_ = false; // retained-mode UI screens loaded after first InGame frame
     bool hasPendingPlayerState_ = false;
     SvPlayerStateMsg pendingPlayerState_;
@@ -149,6 +152,7 @@ private:
     bool hasPendingQuestSync_ = false;
     SvQuestSyncMsg pendingQuestSync_;
     std::vector<SvQuestUpdateMsg> pendingQuestUpdates_;
+    std::unordered_map<std::string, CostumeDefEntry> costumeDefCache_;
     struct PendingChat { uint8_t channel; std::string sender; std::string text; uint8_t faction; };
     std::vector<PendingChat> pendingChatMessages_;
 
@@ -178,9 +182,11 @@ private:
     void wireCharacterSelectCallbacks(CharacterSelectScreen* charSelect);
     void renderCollisionDebug(SpriteBatch& batch, Camera& camera);
     void renderAggroRadius(SpriteBatch& batch, Camera& camera);
+    void renderAttackRange(SpriteBatch& batch, Camera& camera);
     void closeAllNpcPanels();
     Entity* findNpcById(uint32_t npcId);
     void applySkillDefs(const SvSkillDefsMsg& msg);
+    void enrichCostumeEntry(CostumeEntry& entry);
     void captureLocalPlayerState();
 };
 

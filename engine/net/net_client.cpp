@@ -624,6 +624,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onCostumeUpdate) onCostumeUpdate(msg);
             break;
         }
+        case PacketType::SvCostumeDefs: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCostumeDefsMsg::read(payload);
+            if (onCostumeDefs) onCostumeDefs(msg);
+            break;
+        }
         default:
             break;
     }
@@ -1117,6 +1123,15 @@ void NetClient::sendToggleCostumes(bool show) {
     msg.show = show ? 1 : 0;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdToggleCostumes, w.data(), w.size());
+}
+
+void NetClient::sendEditorPause(bool paused) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdEditorPauseMsg msg;
+    msg.paused = paused ? 1 : 0;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdEditorPause, w.data(), w.size());
 }
 
 } // namespace fate

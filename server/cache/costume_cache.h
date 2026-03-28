@@ -16,6 +16,11 @@ struct CachedCostumeDef {
     std::string source;           // "drop","shop","collection","craft","event"
 };
 
+struct MobCostumeDrop {
+    std::string costumeDefId;
+    float dropChance = 0.01f;
+};
+
 } // namespace fate
 
 // CostumeCache requires pqxx (server-only dependency)
@@ -73,12 +78,39 @@ public:
         return result;
     }
 
+    bool loadMobDrops(pqxx::connection& conn) {
+        try {
+            pqxx::work txn(conn);
+            auto result = txn.exec(
+                "SELECT mob_def_id, costume_def_id, drop_chance "
+                "FROM mob_costume_drops"
+            );
+            for (const auto& row : result) {
+                MobCostumeDrop drop;
+                drop.costumeDefId = row["costume_def_id"].as<std::string>();
+                drop.dropChance   = row["drop_chance"].as<float>();
+                mobDrops_[row["mob_def_id"].as<std::string>()].push_back(drop);
+            }
+            txn.commit();
+            return true;
+        } catch (const std::exception&) {
+            return false;
+        }
+    }
+
+    const std::vector<MobCostumeDrop>& getMobDrops(const std::string& mobDefId) const {
+        static const std::vector<MobCostumeDrop> empty;
+        auto it = mobDrops_.find(mobDefId);
+        return it != mobDrops_.end() ? it->second : empty;
+    }
+
     const std::unordered_map<std::string, CachedCostumeDef>& all() const { return costumes_; }
     size_t size() const { return costumes_.size(); }
-    void clear() { costumes_.clear(); }
+    void clear() { costumes_.clear(); mobDrops_.clear(); }
 
 private:
     std::unordered_map<std::string, CachedCostumeDef> costumes_;
+    std::unordered_map<std::string, std::vector<MobCostumeDrop>> mobDrops_;
 };
 
 } // namespace fate

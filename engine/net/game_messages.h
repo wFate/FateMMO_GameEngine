@@ -1529,6 +1529,67 @@ struct CmdToggleCostumesMsg {
 };
 
 // ============================================================================
+// Client -> Server: CmdEditorPause
+// ============================================================================
+struct CmdEditorPauseMsg {
+    uint8_t paused = 0;
+
+    void write(ByteWriter& w) const { w.writeU8(paused); }
+    static CmdEditorPauseMsg read(ByteReader& r) {
+        CmdEditorPauseMsg m;
+        m.paused = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvCostumeDefs (all costume definitions)
+// ============================================================================
+struct CostumeDefEntry {
+    std::string costumeDefId;
+    std::string displayName;
+    uint8_t     slotType    = 0;
+    uint16_t    visualIndex = 0;
+    uint8_t     rarity      = 0;
+    std::string source;
+
+    void write(ByteWriter& w) const {
+        w.writeString(costumeDefId);
+        w.writeString(displayName);
+        w.writeU8(slotType);
+        w.writeU16(visualIndex);
+        w.writeU8(rarity);
+        w.writeString(source);
+    }
+    static CostumeDefEntry read(ByteReader& r) {
+        CostumeDefEntry e;
+        e.costumeDefId = r.readString();
+        e.displayName  = r.readString();
+        e.slotType     = r.readU8();
+        e.visualIndex  = r.readU16();
+        e.rarity       = r.readU8();
+        e.source       = r.readString();
+        return e;
+    }
+};
+
+struct SvCostumeDefsMsg {
+    std::vector<CostumeDefEntry> defs;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(defs.size()));
+        for (const auto& d : defs) d.write(w);
+    }
+    static SvCostumeDefsMsg read(ByteReader& r) {
+        SvCostumeDefsMsg m;
+        uint16_t count = r.readU16();
+        m.defs.resize(count);
+        for (uint16_t i = 0; i < count; ++i) m.defs[i] = CostumeDefEntry::read(r);
+        return m;
+    }
+};
+
+// ============================================================================
 // Server -> Client: SvCostumeSync (full state on login)
 // ============================================================================
 struct SvCostumeSyncMsg {

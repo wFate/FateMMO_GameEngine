@@ -923,14 +923,10 @@ void Editor::drawInspector() {
                 ImGui::DragFloat("Base Cooldown##cc", &cc->baseAttackCooldown, 0.05f, 0.1f, 5.0f, "%.2fs");
                 captureInspectorUndo();
                 ImGui::Text("CD Remaining: %.2f", cc->attackCooldownRemaining);
-                ImGui::Checkbox("Show Attack Range##cc", &cc->showAttackRange);
+                ImGui::DragFloat("Disengage Range##cc", &cc->disengageRange, 0.1f, 0.5f, 20.0f, "%.1f tiles");
                 captureInspectorUndo();
-                auto* statsComp = selectedEntity_->getComponent<CharacterStatsComponent>();
-                if (statsComp) {
-                    bool isMage = (statsComp->stats.classDef.classType == ClassType::Mage);
-                    float range = isMage ? 7.0f : statsComp->stats.classDef.attackRange;
-                    ImGui::Text("Range: %.0f tiles (%.0f px)", range, range * Coords::TILE_SIZE);
-                }
+                ImGui::Checkbox("Show Disengage Range##cc", &cc->showDisengageRange);
+                captureInspectorUndo();
             }
         }
 

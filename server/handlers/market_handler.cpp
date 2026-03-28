@@ -11,6 +11,7 @@ namespace fate {
 
 void ServerApp::processMarket(uint16_t clientId, ByteReader& payload) {
     uint8_t subAction = payload.readU8();
+    if (!validatePayload(payload, clientId, PacketType::CmdMarket)) return;
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
 
@@ -19,6 +20,7 @@ void ServerApp::processMarket(uint16_t clientId, ByteReader& payload) {
             std::string instanceId = payload.readString();
             int64_t priceGold = detail::readI64(payload);
             uint64_t nonce = detail::readU64(payload);
+            if (!validatePayload(payload, clientId, PacketType::CmdMarket)) return;
 
             PersistentId pid(client->playerEntityId);
             EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
@@ -120,6 +122,7 @@ void ServerApp::processMarket(uint16_t clientId, ByteReader& payload) {
         case MarketAction::BuyItem: {
             int32_t listingId = payload.readI32();
             uint64_t nonce = detail::readU64(payload);
+            if (!validatePayload(payload, clientId, PacketType::CmdMarket)) return;
 
             PersistentId pid(client->playerEntityId);
             EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
@@ -244,6 +247,7 @@ void ServerApp::processMarket(uint16_t clientId, ByteReader& payload) {
         }
         case MarketAction::CancelListing: {
             int32_t listingId = payload.readI32();
+            if (!validatePayload(payload, clientId, PacketType::CmdMarket)) return;
 
             PersistentId cancelPid(client->playerEntityId);
             EntityHandle cancelH = getReplicationForClient(clientId).getEntityHandle(cancelPid);

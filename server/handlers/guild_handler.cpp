@@ -9,6 +9,7 @@ namespace fate {
 
 void ServerApp::processGuild(uint16_t clientId, ByteReader& payload) {
     uint8_t subAction = payload.readU8();
+    if (!validatePayload(payload, clientId, PacketType::CmdGuild)) return;
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
 
@@ -20,6 +21,7 @@ void ServerApp::processGuild(uint16_t clientId, ByteReader& payload) {
     switch (subAction) {
         case GuildAction::Create: {
             std::string guildName = payload.readString();
+            if (!validatePayload(payload, clientId, PacketType::CmdGuild)) return;
             auto* inv = e->getComponent<InventoryComponent>();
             if (!inv || inv->inventory.getGold() < GuildConstants::CREATION_COST) {
                 SvGuildUpdateMsg resp;

@@ -10,6 +10,7 @@ namespace fate {
 
 void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
     uint8_t subAction = payload.readU8();
+    if (!validatePayload(payload, clientId, PacketType::CmdTrade)) return;
     auto* client = server_.connections().findById(clientId);
     if (!client || client->playerEntityId == 0) return;
 
@@ -32,6 +33,7 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
     switch (subAction) {
         case TradeAction::Initiate: {
             std::string targetCharId = payload.readString();
+            if (!validatePayload(payload, clientId, PacketType::CmdTrade)) return;
 
             // Check if already in trade
             if (tradeRepo_->isPlayerInTrade(client->character_id)) {
@@ -85,6 +87,7 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
             int32_t sourceSlot = payload.readI32();
             std::string instanceId = payload.readString();
             int32_t quantity = payload.readI32();
+            if (!validatePayload(payload, clientId, PacketType::CmdTrade)) return;
 
             auto session = tradeRepo_->getActiveSession(client->character_id);
             if (!session) { sendTradeResult(6, 1, "Not in a trade"); break; }
@@ -108,6 +111,7 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
         }
         case TradeAction::RemoveItem: {
             uint8_t slotIdx = payload.readU8();
+            if (!validatePayload(payload, clientId, PacketType::CmdTrade)) return;
             auto session = tradeRepo_->getActiveSession(client->character_id);
             if (!session) break;
             tradeRepo_->removeItemFromTrade(session->sessionId, client->character_id, slotIdx);
@@ -117,6 +121,7 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
         }
         case TradeAction::SetGold: {
             int64_t gold = detail::readI64(payload);
+            if (!validatePayload(payload, clientId, PacketType::CmdTrade)) return;
             if (gold < 0) { sendTradeResult(6, 6, "Invalid gold amount"); break; }
             auto session = tradeRepo_->getActiveSession(client->character_id);
             if (!session) break;
@@ -156,6 +161,7 @@ void ServerApp::processTrade(uint16_t clientId, ByteReader& payload) {
         }
         case TradeAction::Confirm: {
             uint64_t nonce = detail::readU64(payload);
+            if (!validatePayload(payload, clientId, PacketType::CmdTrade)) return;
             if (!nonceManager_.consume(clientId, nonce, gameTime_)) {
                 sendTradeResult(6, 9, "Invalid or expired trade nonce");
                 break;

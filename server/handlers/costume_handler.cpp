@@ -199,6 +199,29 @@ void ServerApp::sendCostumeSync(uint16_t clientId) {
 }
 
 // ---------------------------------------------------------------------------
+// sendCostumeDefs — send all costume definitions to client
+// ---------------------------------------------------------------------------
+void ServerApp::sendCostumeDefs(uint16_t clientId) {
+    SvCostumeDefsMsg msg;
+    for (const auto& [id, def] : costumeCache_.all()) {
+        CostumeDefEntry entry;
+        entry.costumeDefId = def.costumeDefId;
+        entry.displayName  = def.displayName;
+        entry.slotType     = def.slotType;
+        entry.visualIndex  = def.visualIndex;
+        entry.rarity       = def.rarity;
+        entry.source       = def.source;
+        msg.defs.push_back(std::move(entry));
+    }
+
+    uint8_t buf[4096];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvCostumeDefs, buf, w.size());
+    LOG_INFO("Server", "Sent %zu costume defs to client %d", msg.defs.size(), clientId);
+}
+
+// ---------------------------------------------------------------------------
 // loadPlayerCostumes — load all costume data from DB into CostumeComponent
 // ---------------------------------------------------------------------------
 void ServerApp::loadPlayerCostumes(uint16_t clientId, const std::string& characterId) {
@@ -230,7 +253,8 @@ void ServerApp::loadPlayerCostumes(uint16_t clientId, const std::string& charact
     // Load toggle state
     costumeComp->showCostumes = costumeRepo_->loadToggleState(characterId);
 
-    // Send full sync to client
+    // Send definitions first so the client can enrich entries, then full sync
+    sendCostumeDefs(clientId);
     sendCostumeSync(clientId);
 
     LOG_INFO("Server", "Loaded costumes for client %d (char %s): %zu owned, %zu equipped",

@@ -54,6 +54,7 @@ public:
     void sendEquipCostume(const std::string& costumeDefId);
     void sendUnequipCostume(uint8_t slotType);
     void sendToggleCostumes(bool show);
+    void sendEditorPause(bool paused);
 
     void sendTradeAction(uint8_t action);
     void sendTradeAction(uint8_t action, const std::string& data);
@@ -126,6 +127,7 @@ public:
     std::function<void(const SvCollectionDefsMsg&)> onCollectionDefs;
     std::function<void(const SvCostumeSyncMsg&)> onCostumeSync;
     std::function<void(const SvCostumeUpdateMsg&)> onCostumeUpdate;
+    std::function<void(const SvCostumeDefsMsg&)> onCostumeDefs;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:
