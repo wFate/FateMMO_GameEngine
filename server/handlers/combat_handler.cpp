@@ -182,6 +182,68 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
         }
     }
 
+    // ---- Life Tap: HP → MP conversion (self-cast, no target needed) ----
+    if (msg.skillId == "mage_life_tap") {
+        if (casterStatsComp->stats.classDef.classType != ClassType::Mage) {
+            return;
+        }
+
+        const LearnedSkill* ls = skillComp->skills.getLearnedSkill("mage_life_tap");
+        if (!ls || ls->activatedRank <= 0) {
+            return;
+        }
+
+        if (casterCCComp && !casterCCComp->cc.canAct()) return;
+
+        int rank = ls->activatedRank;
+
+        // HP sacrifice: 20% of current HP (constant across ranks)
+        int hpSacrifice = static_cast<int>(casterStatsComp->stats.currentHP * 0.20f);
+        if (casterStatsComp->stats.currentHP - hpSacrifice < 1) {
+            hpSacrifice = casterStatsComp->stats.currentHP - 1;
+        }
+        if (hpSacrifice <= 0) return;
+
+        // MP restore: scales by rank (20% / 28% / 36% of max MP)
+        float mpRestorePercent = 0.0f;
+        switch (rank) {
+            case 1: mpRestorePercent = 0.20f; break;
+            case 2: mpRestorePercent = 0.28f; break;
+            case 3: default: mpRestorePercent = 0.36f; break;
+        }
+        int mpRestore = static_cast<int>(casterStatsComp->stats.maxMP * mpRestorePercent);
+
+        casterStatsComp->stats.currentHP -= hpSacrifice;
+        casterStatsComp->stats.currentMP = (std::min)(
+            casterStatsComp->stats.currentMP + mpRestore,
+            casterStatsComp->stats.maxMP);
+
+        clientCooldowns[msg.skillId] = gameTime_;
+
+        SvSkillResultMsg result;
+        result.casterId = casterPid.value();
+        result.targetId = casterPid.value();
+        result.skillId  = msg.skillId;
+        result.damage   = hpSacrifice;
+        result.hitFlags = HitFlags::HIT;
+        result.casterNewMP = static_cast<uint16_t>(casterStatsComp->stats.currentMP);
+
+        const CachedSkillRank* rankInfo2 = skillDefCache_.getRank(msg.skillId, rank);
+        result.cooldownMs = rankInfo2 ? static_cast<uint16_t>(rankInfo2->cooldownSeconds * 1000.0f) : 0;
+
+        uint8_t buf[256];
+        ByteWriter w(buf, sizeof(buf));
+        result.write(w);
+        server_.broadcast(Channel::ReliableOrdered, PacketType::SvSkillResult, buf, w.size());
+
+        playerDirty_[clientId].vitals = true;
+        sendPlayerState(clientId);
+
+        LOG_INFO("Server", "Client %d used Life Tap rank %d: -%d HP, +%d MP",
+                 clientId, rank, hpSacrifice, mpRestore);
+        return;
+    }
+
     // God mode check for skill targets (player targets only)
     if (targetIsPlayer && godModeEntities_.count(msg.targetId)) return;
 
