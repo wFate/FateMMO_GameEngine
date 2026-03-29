@@ -126,7 +126,7 @@ cmake --build build --config Debug
 
 | Platform | Status |
 |----------|--------|
-| **Windows** | Primary development target. |
+| **Windows** | Developer Build. |
 | **macOS**   | Supported (CMake, Metal rendering, minicoro fibers). |
 | **iOS**     | Build pipeline ready (CMake Xcode generator, Metal/GLES 3.0, TestFlight script). |
 | **Android** | Build pipeline ready (Gradle + NDK r27, SDLActivity, `./gradlew installDebug`). |
