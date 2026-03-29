@@ -2314,6 +2314,27 @@ void UIEditorPanel::drawAnchorEditor(UINode* node, UIManager& uiMgr) {
         ImGui::DragFloat("Left##padding", &anchor.padding.w, 0.5f); checkUndoCapture(uiMgr);
         ImGui::TreePop();
     }
+
+    ImGui::Separator();
+    ImGui::Text("Responsive");
+
+    float minVals[2] = {anchor.minSize.x, anchor.minSize.y};
+    if (ImGui::DragFloat2("Min Size", minVals, 1.0f, 0.0f, 4000.0f)) {
+        anchor.minSize.x = minVals[0]; anchor.minSize.y = minVals[1];
+    }
+    checkUndoCapture(uiMgr);
+
+    float maxVals[2] = {anchor.maxSize.x, anchor.maxSize.y};
+    if (ImGui::DragFloat2("Max Size", maxVals, 1.0f, 0.0f, 4000.0f)) {
+        anchor.maxSize.x = maxVals[0]; anchor.maxSize.y = maxVals[1];
+    }
+    checkUndoCapture(uiMgr);
+
+    ImGui::Checkbox("Use Safe Area", &anchor.useSafeArea);
+    checkUndoCapture(uiMgr);
+
+    ImGui::DragFloat("Max Aspect Ratio", &anchor.maxAspectRatio, 0.01f, 0.0f, 4.0f);
+    checkUndoCapture(uiMgr);
 }
 
 // ============================================================================
