@@ -1,5 +1,6 @@
 #include "engine/editor/ui_editor_panel.h"
 #include "engine/editor/undo.h"
+#include "engine/editor/property_inspector.h"
 #include "engine/ui/ui_serializer.h"
 #include "engine/core/logger.h"
 #include "engine/ui/widgets/panel.h"
@@ -426,6 +427,13 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     // --- Widget-specific properties ---
     ImGui::SeparatorText("Widget Properties");
 
+    // Reflected properties (new system) — auto-generates inspector from metadata
+    auto reflectedFields = selectedNode_->reflectedProperties();
+    if (!reflectedFields.empty()) {
+        drawPropertyInspector(selectedNode_, reflectedFields,
+                              [&]() { checkUndoCapture(uiMgr); });
+    } else
+    // Legacy widget-specific properties (dynamic_cast chain)
     if (auto* panel = dynamic_cast<Panel*>(selectedNode_)) {
         char titleBuf[256] = {};
         snprintf(titleBuf, sizeof(titleBuf), "%s", panel->title.c_str());
