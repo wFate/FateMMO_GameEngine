@@ -71,10 +71,10 @@ struct Reflection {
 
 #define FATE_PROPERTY(fieldName, fieldType, ...) \
     fate::PropertyInfo{ \
-        #fieldName, \
-        offsetof(_ReflType, fieldName), \
-        sizeof(decltype(std::declval<_ReflType>().fieldName)), \
-        fate::FieldType::fieldType, \
+        .name = #fieldName, \
+        .offset = offsetof(_ReflType, fieldName), \
+        .size = sizeof(decltype(std::declval<_ReflType>().fieldName)), \
+        .type = fate::FieldType::fieldType, \
         __VA_ARGS__ \
     }
 
@@ -85,7 +85,7 @@ struct Reflection {
             static const fate::PropertyInfo _fields[] = { \
                 __VA_ARGS__ \
             }; \
-            return std::span<const fate::PropertyInfo>(_fields); \
+            return {_fields, sizeof(_fields) / sizeof(_fields[0])}; \
         } \
     };
 
