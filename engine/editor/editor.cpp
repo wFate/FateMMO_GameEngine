@@ -1,5 +1,6 @@
 #include "engine/editor/editor.h"
 #include "engine/editor/combat_text_editor.h"
+#include "engine/ui/ui_safe_area.h"
 #include "engine/core/logger.h"
 #ifndef FATEMMO_METAL
 // Editor uses direct GL for ImGui integration — intentionally outside RHI
@@ -808,30 +809,51 @@ void Editor::drawSceneViewport() {
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
             ImGui::SameLine();
 
-            // Display resolution dropdown
+            // Device resolution dropdown (categorized)
             {
-                const auto& preset = kDeviceProfiles[displayPresetIdx_];
-                char label[64];
-                if (preset.width == 0)
-                    snprintf(label, sizeof(label), "%s", preset.name);
+                const auto& dev = kDeviceProfiles[displayPresetIdx_];
+                char label[96];
+                if (dev.width == 0)
+                    snprintf(label, sizeof(label), "%s", dev.name);
                 else
-                    snprintf(label, sizeof(label), "%s (%dx%d)", preset.name, preset.width, preset.height);
+                    snprintf(label, sizeof(label), "%s (%dx%d)", dev.name, dev.width, dev.height);
 
-                ImGui::SetNextItemWidth(160.0f);
-                if (ImGui::BeginCombo("##Display", label, ImGuiComboFlags_HeightLarge)) {
+                ImGui::SetNextItemWidth(220.0f);
+                if (ImGui::BeginCombo("##Device", label, ImGuiComboFlags_HeightLarge)) {
+                    const char* lastCategory = nullptr;
                     for (int i = 0; i < kDeviceProfileCount; i++) {
-                        char itemLabel[64];
-                        if (kDeviceProfiles[i].width == 0)
-                            snprintf(itemLabel, sizeof(itemLabel), "%s", kDeviceProfiles[i].name);
+                        const auto& d = kDeviceProfiles[i];
+                        // Category separator
+                        if (lastCategory == nullptr || std::strcmp(lastCategory, d.category) != 0) {
+                            if (lastCategory != nullptr) ImGui::Separator();
+                            ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%s", d.category);
+                            lastCategory = d.category;
+                        }
+                        char itemLabel[96];
+                        if (d.width == 0)
+                            snprintf(itemLabel, sizeof(itemLabel), "  %s", d.name);
                         else
-                            snprintf(itemLabel, sizeof(itemLabel), "%s  %dx%d", kDeviceProfiles[i].name,
-                                     kDeviceProfiles[i].width, kDeviceProfiles[i].height);
+                            snprintf(itemLabel, sizeof(itemLabel), "  %s  %dx%d", d.name, d.width, d.height);
 
                         if (ImGui::Selectable(itemLabel, i == displayPresetIdx_))
                             displayPresetIdx_ = i;
                     }
                     ImGui::EndCombo();
                 }
+
+                // Update simulated safe area when device changes
+                {
+                    const auto& selected = kDeviceProfiles[displayPresetIdx_];
+                    fate::SafeAreaInsets insets;
+                    insets.top    = selected.safeTop;
+                    insets.bottom = selected.safeBottom;
+                    insets.left   = selected.safeLeft;
+                    insets.right  = selected.safeRight;
+                    fate::setSimulatedSafeArea(insets);
+                }
+
+                ImGui::SameLine();
+                ImGui::Checkbox("Safe Area", &showSafeAreaOverlay_);
             }
 
             ImGui::SameLine();
@@ -934,6 +956,31 @@ void Editor::drawSceneViewport() {
                         avail,
                         ImVec2(0, 1), ImVec2(1, 0)
                     );
+                }
+
+                // Safe area overlay (red translucent bars)
+                if (!paused_ && showSafeAreaOverlay_) {
+                    const auto& selDev = kDeviceProfiles[displayPresetIdx_];
+                    if (selDev.safeTop > 0 || selDev.safeBottom > 0 ||
+                        selDev.safeLeft > 0 || selDev.safeRight > 0) {
+                        float sf = selDev.scaleFactor;
+                        float imgX = viewportPos_.x;
+                        float imgY = viewportPos_.y;
+                        float imgW = viewportSize_.x;
+                        float imgH = viewportSize_.y;
+                        // Scale insets from logical points to display pixels
+                        float scaleToDisp = (selDev.width > 0) ? imgW / static_cast<float>(selDev.width) * sf : 0.0f;
+                        float topH    = selDev.safeTop * scaleToDisp;
+                        float bottomH = selDev.safeBottom * scaleToDisp;
+                        float leftW   = selDev.safeLeft * scaleToDisp;
+                        float rightW  = selDev.safeRight * scaleToDisp;
+                        auto* dl = ImGui::GetWindowDrawList();
+                        ImU32 col = IM_COL32(255, 40, 40, 60);
+                        if (topH > 0)    dl->AddRectFilled({imgX, imgY}, {imgX + imgW, imgY + topH}, col);
+                        if (bottomH > 0) dl->AddRectFilled({imgX, imgY + imgH - bottomH}, {imgX + imgW, imgY + imgH}, col);
+                        if (leftW > 0)   dl->AddRectFilled({imgX, imgY}, {imgX + leftW, imgY + imgH}, col);
+                        if (rightW > 0)  dl->AddRectFilled({imgX + imgW - rightW, imgY}, {imgX + imgW, imgY + imgH}, col);
+                    }
                 }
 
                 // ImGuizmo: draw transform gizmo over the selected entity
