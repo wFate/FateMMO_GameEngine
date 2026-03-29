@@ -357,7 +357,7 @@ Apple iPhone:
   iPhone 16 Plus          2796x1290   3x   safe: 59/34/0/0    dynamic island
   iPhone 16 Pro           2622x1206   3x   safe: 59/34/0/0    dynamic island
   iPhone 16 Pro Max       2868x1320   3x   safe: 59/34/0/0    dynamic island
-  iPhone 17 Pro           2740x1264   3x   safe: 59/34/0/0    dynamic island  [DEFAULT]
+  iPhone 17 Pro           2622x1206   3x   safe: 59/34/0/0    dynamic island  [DEFAULT]
 
 Apple iPad:
   iPad (10th gen)         2360x1640   2x   safe: 20/0/0/0
