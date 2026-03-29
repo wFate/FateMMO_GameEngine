@@ -1,4 +1,5 @@
 #include "engine/ui/ui_manager.h"
+#include "engine/ui/ui_safe_area.h"
 #include "engine/ui/widgets/panel.h"
 #include "engine/ui/widgets/label.h"
 #include "engine/ui/widgets/button.h"
@@ -268,7 +269,30 @@ void UIManager::computeLayout(float screenWidth, float screenHeight) {
     for (const auto& id : screenOrder_) {
         auto it = screens_.find(id);
         if (it != screens_.end() && it->second->visible()) {
-            it->second->computeLayout(screenRect, scale);
+            Rect rootRect = screenRect;
+
+            // Safe area: shrink root rect by platform insets
+            if (it->second->anchor().useSafeArea) {
+                auto insets = getPlatformSafeArea();
+                rootRect.x += insets.left;
+                rootRect.y += insets.top;
+                rootRect.w -= (insets.left + insets.right);
+                rootRect.h -= (insets.top + insets.bottom);
+            }
+
+            // Aspect ratio cap: letterbox ultrawide displays
+            float maxAR = it->second->anchor().maxAspectRatio;
+            if (maxAR > 0.0f && rootRect.h > 0.0f) {
+                float currentAR = rootRect.w / rootRect.h;
+                if (currentAR > maxAR) {
+                    float targetW = rootRect.h * maxAR;
+                    float excess = rootRect.w - targetW;
+                    rootRect.x += excess * 0.5f;
+                    rootRect.w = targetW;
+                }
+            }
+
+            it->second->computeLayout(rootRect, scale);
         }
     }
 }
