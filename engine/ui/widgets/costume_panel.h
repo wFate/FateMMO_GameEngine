@@ -58,6 +58,12 @@ public:
     Color buttonTextColor       = {0.9f, 0.9f, 0.85f, 1.0f};
     Color hintColor             = {0.5f, 0.5f, 0.45f, 0.8f};
 
+    // --- Position offsets (unscaled, multiplied by layoutScale_ at render) ---
+    Vec2 titleOffset = {0.0f, 0.0f};   // "Costumes" title
+    Vec2 toggleOffset = {0.0f, 0.0f};  // ON/OFF toggle
+    Vec2 gridOffset = {0.0f, 0.0f};    // costume grid area
+    Vec2 infoOffset = {0.0f, 0.0f};    // selected costume info
+
     // --- Runtime state (set by GameApp, NOT serialized) ---
     std::vector<CostumeEntry> ownedCostumes;
     std::unordered_map<uint8_t, std::string> equippedBySlot; // slotType -> costumeDefId

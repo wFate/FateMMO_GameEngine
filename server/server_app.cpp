@@ -1847,6 +1847,10 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     float saveOffset = static_cast<float>(clientId % 60);
     nextAutoSaveTime_[clientId] = gameTime_ + saveOffset + AUTO_SAVE_INTERVAL;
 
+    // Track session start for total_playtime_seconds accumulation
+    sessionStartTime_[clientId] = gameTime_;
+    loadedPlaytimeSeconds_[clientId] = rec.total_playtime_seconds;
+
     // Wire onEquipmentChanged callback: recalculate stats when equipment changes
     if (inv) {
         inv->inventory.onEquipmentChanged = [this, clientId](EquipmentSlot) {
@@ -2186,6 +2190,8 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     moveCountThisTick_.erase(clientId);
     skillCommandsThisTick_.erase(clientId);
     nextAutoSaveTime_.erase(clientId);
+    sessionStartTime_.erase(clientId);
+    loadedPlaytimeSeconds_.erase(clientId);
     needsFirstMoveSync_.erase(clientId);
     lastAutoAttackTime_.erase(clientId);
     skillCooldowns_.erase(clientId);

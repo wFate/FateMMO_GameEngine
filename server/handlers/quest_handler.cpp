@@ -4,6 +4,7 @@
 #include "game/components/game_components.h"
 #include "engine/net/game_messages.h"
 #include "game/shared/game_types.h"
+#include "game/shared/quest_data.h"
 #include <string>
 
 namespace fate {
@@ -76,6 +77,25 @@ void ServerApp::processQuestAction(uint16_t clientId, ByteReader& payload) {
                 server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvQuestUpdate, buf, w.size());
                 sendPlayerState(clientId);
                 checkPlayerCollections(clientId, "OwnItem");
+
+                // Auto-accept chained quest if configured
+                const auto* completedDef = QuestData::getQuest(questId);
+                if (completedDef && completedDef->autoAcceptNextQuestId != 0) {
+                    uint32_t nextId = completedDef->autoAcceptNextQuestId;
+                    bool autoAccepted = questComp->quests.acceptQuest(nextId, charStats->stats.level);
+                    if (autoAccepted) {
+                        playerDirty_[clientId].quests = true;
+                        std::string nextIdStr = std::to_string(nextId);
+                        questRepo_->saveQuestProgress(client->character_id, nextIdStr, "active", 0, 1);
+                        SvQuestUpdateMsg autoResp;
+                        autoResp.updateType = 0;
+                        autoResp.questId = nextIdStr;
+                        autoResp.message = "Quest accepted";
+                        uint8_t autoBuf[256]; ByteWriter aw(autoBuf, sizeof(autoBuf));
+                        autoResp.write(aw);
+                        server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvQuestUpdate, autoBuf, aw.size());
+                    }
+                }
             }
             break;
         }

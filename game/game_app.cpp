@@ -1143,6 +1143,16 @@ void GameApp::onInit() {
             costumePanel_ = nullptr;
             inDungeon_ = false;
             dungeonInviteDialog_ = nullptr;
+            // Hide all in-game screens before showing login
+            auto& ui = uiManager();
+            if (auto* s = ui.getScreen("fate_hud"))         s->setVisible(false);
+            if (auto* s = ui.getScreen("fate_menu_panels")) s->setVisible(false);
+            if (auto* s = ui.getScreen("fate_social"))      s->setVisible(false);
+            if (auto* s = ui.getScreen("npc_panels"))       s->setVisible(false);
+            if (auto* s = ui.getScreen("death_overlay"))    s->setVisible(false);
+            if (auto* s = ui.getScreen("character_select")) s->setVisible(false);
+            if (auto* s = ui.getScreen("character_creation")) s->setVisible(false);
+
             if (loginScreenWidget_) {
                 loginScreenWidget_->reset();
                 loginScreenWidget_->setVisible(true);
@@ -2042,15 +2052,22 @@ void GameApp::onUpdate(float deltaTime) {
                         auto* inv = player->getComponent<InventoryComponent>();
                         if (inv) inv->inventory.setGold(pendingPlayerState_.gold);
                     } else {
-                        // Apply basic character state from auth character list
-                        // TODO (Task 5): Full snapshot comes from SelectCharResponse
-                        // For now, apply level from the character preview
+                        // Apply character snapshot from SelectCharResponse
                         auto* cs = player->getComponent<CharacterStatsComponent>();
-                        if (cs && !pendingAuthResponse_.characters.empty()) {
-                            cs->stats.level = pendingAuthResponse_.characters[0].level;
+                        if (cs) {
+                            const auto& sel = pendingAuthResponse_.selectData;
+                            cs->stats.level = sel.level;
                             cs->stats.recalculateStats();
                             cs->stats.recalculateXPRequirement();
+                            cs->stats.currentXP = sel.currentXP;
+                            cs->stats.currentHP = sel.currentHP;
+                            cs->stats.maxHP = sel.maxHP;
+                            cs->stats.currentMP = sel.currentMP;
+                            cs->stats.maxMP = sel.maxMP;
+                            cs->stats.currentFury = sel.currentFury;
                         }
+                        auto* inv = player->getComponent<InventoryComponent>();
+                        if (inv) inv->inventory.setGold(pendingAuthResponse_.selectData.gold);
                     }
 
                     // SpawnSystem removed from client — mobs come from server replication only

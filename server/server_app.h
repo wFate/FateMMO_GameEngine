@@ -213,6 +213,10 @@ private:
     // Per-client auto-save tracking (staggered)
     std::unordered_map<uint16_t, float> nextAutoSaveTime_;
 
+    // Per-client playtime tracking (for total_playtime_seconds persistence)
+    std::unordered_map<uint16_t, float> sessionStartTime_;      // gameTime_ at login
+    std::unordered_map<uint16_t, int64_t> loadedPlaytimeSeconds_; // value from DB at login
+
     // Per-client auto-attack cooldown tracking
     std::unordered_map<uint16_t, float> lastAutoAttackTime_;
 

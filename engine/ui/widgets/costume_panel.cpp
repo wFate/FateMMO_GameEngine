@@ -109,7 +109,7 @@ void CostumePanel::render(SpriteBatch& batch, SDFText& sdf) {
     Vec2 titleSize = sdf.measure("Costumes", titleFS);
     float titleX = rect.x + (rect.w - titleSize.x) * 0.5f;
     sdf.drawScreen(batch, "Costumes",
-        {titleX, rect.y + (headerH - titleSize.y) * 0.5f},
+        {titleX + titleOffset.x * layoutScale_, rect.y + (headerH - titleSize.y) * 0.5f + titleOffset.y * layoutScale_},
         titleFS, titleColor, d + 0.2f);
 
     // ---- Close button (X at top-right) ----
@@ -129,8 +129,9 @@ void CostumePanel::render(SpriteBatch& batch, SDFText& sdf) {
     Color toggleBg = showCostumes ? Color{0.15f, 0.35f, 0.15f, 0.9f} : Color{0.35f, 0.15f, 0.15f, 0.9f};
     float toggleW = 36.0f * layoutScale_;
     float toggleH = 18.0f * layoutScale_;
-    float toggleCX = closeCX - closeSize * 0.5f - 8.0f * layoutScale_ - toggleW * 0.5f;
-    float toggleCY = rect.y + headerH * 0.5f;
+    float tgOx = toggleOffset.x * layoutScale_, tgOy = toggleOffset.y * layoutScale_;
+    float toggleCX = closeCX - closeSize * 0.5f - 8.0f * layoutScale_ - toggleW * 0.5f + tgOx;
+    float toggleCY = rect.y + headerH * 0.5f + tgOy;
     batch.drawRect({toggleCX, toggleCY}, {toggleW, toggleH}, toggleBg, d + 0.2f);
     float toggleFS = scaledFont(10.0f);
     Vec2 tls = sdf.measure(toggleLabel, toggleFS);
@@ -167,7 +168,9 @@ void CostumePanel::render(SpriteBatch& batch, SDFText& sdf) {
     curY += ftH + 6.0f * layoutScale_;
 
     // ---- Grid of costume slots ----
-    float gridLeft = rect.x + bw + 8.0f * layoutScale_;
+    float grOx = gridOffset.x * layoutScale_, grOy = gridOffset.y * layoutScale_;
+    float gridLeft = rect.x + bw + 8.0f * layoutScale_ + grOx;
+    curY += grOy;
     float cellSize = ss + ssp;
 
     // Reserve space at bottom for info + equip button
@@ -221,7 +224,8 @@ void CostumePanel::render(SpriteBatch& batch, SDFText& sdf) {
     }
 
     // ---- Bottom info area + Equip/Unequip button ----
-    float infoY = rect.y + rect.h - bw - botRes + 4.0f * layoutScale_;
+    float infOx = infoOffset.x * layoutScale_, infOy = infoOffset.y * layoutScale_;
+    float infoY = rect.y + rect.h - bw - botRes + 4.0f * layoutScale_ + infOy;
 
     // Divider above info
     batch.drawRect({rect.x + rect.w * 0.5f, infoY},
@@ -235,7 +239,7 @@ void CostumePanel::render(SpriteBatch& batch, SDFText& sdf) {
 
         // Selected costume name
         sdf.drawScreen(batch, sel.displayName,
-            {rect.x + 12.0f * layoutScale_, infoY},
+            {rect.x + 12.0f * layoutScale_ + infOx, infoY},
             bodyFS, nameColor, d + 0.2f);
 
         // Rarity label
@@ -244,7 +248,7 @@ void CostumePanel::render(SpriteBatch& batch, SDFText& sdf) {
         Color rnColor = rarityColor(sel.rarity);
         Vec2 rnSize = sdf.measure(rn, infoFS);
         sdf.drawScreen(batch, rn,
-            {rect.x + rect.w - 12.0f * layoutScale_ - rnSize.x, infoY + 2.0f * layoutScale_},
+            {rect.x + rect.w - 12.0f * layoutScale_ - rnSize.x + infOx, infoY + 2.0f * layoutScale_},
             infoFS, rnColor, d + 0.2f);
 
         infoY += 20.0f * layoutScale_;
@@ -255,7 +259,7 @@ void CostumePanel::render(SpriteBatch& batch, SDFText& sdf) {
         const char* btnLabel = isEquipped ? "Unequip" : "Equip";
 
         float btnW = rect.w - 24.0f * layoutScale_;
-        float btnCX = rect.x + rect.w * 0.5f;
+        float btnCX = rect.x + rect.w * 0.5f + infOx;
         float btnCY = infoY + btnH * 0.5f;
         Color btnBg = isEquipped ? unequipBtnColor : equipBtnColor;
 
@@ -271,7 +275,7 @@ void CostumePanel::render(SpriteBatch& batch, SDFText& sdf) {
         const char* hint = "Select a costume";
         Vec2 hSize = sdf.measure(hint, bodyFS);
         sdf.drawScreen(batch, hint,
-            {rect.x + (rect.w - hSize.x) * 0.5f, infoY + 10.0f * layoutScale_},
+            {rect.x + (rect.w - hSize.x) * 0.5f + infOx, infoY + 10.0f * layoutScale_},
             bodyFS, hintColor, d + 0.2f);
     }
 

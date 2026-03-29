@@ -83,6 +83,16 @@ void ServerApp::savePlayerToDB(uint16_t clientId, bool forceSaveAll) {
         saveInventoryForClient(clientId);
     }
 
+    // Compute accumulated playtime
+    {
+        auto startIt = sessionStartTime_.find(clientId);
+        auto loadedIt = loadedPlaytimeSeconds_.find(clientId);
+        if (startIt != sessionStartTime_.end() && loadedIt != loadedPlaytimeSeconds_.end()) {
+            int64_t elapsed = static_cast<int64_t>(gameTime_ - startIt->second);
+            rec.total_playtime_seconds = loadedIt->second + elapsed;
+        }
+    }
+
     if (!characterRepo_->saveCharacter(rec)) {
         // Retry once
         if (!characterRepo_->saveCharacter(rec)) {
@@ -211,56 +221,60 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll) {
     rec.character_id = client->character_id;
     rec.account_id   = client->account_id;
 
+    // Always populate ALL CharacterRecord fields from entity components.
+    // The UPDATE writes every column, so leaving struct defaults would
+    // overwrite real DB values with zeros.
     auto* charStatsComp = e->getComponent<CharacterStatsComponent>();
     if (charStatsComp) {
         const CharacterStats& s = charStatsComp->stats;
         rec.character_name   = s.characterName;
         rec.class_name       = s.className;
-        if (forceSaveAll || dirty.stats) {
-            rec.level            = s.level;
-            rec.current_xp       = s.currentXP;
-            rec.xp_to_next_level = static_cast<int>(s.xpToNextLevel);
-            rec.honor            = s.honor;
-            rec.pvp_kills        = s.pvpKills;
-            rec.pvp_deaths       = s.pvpDeaths;
-            rec.pk_status        = static_cast<int>(s.pkStatus);
-            rec.faction          = static_cast<int>(s.faction);
-            // DISABLED: stat allocation removed — always write 0
-            rec.free_stat_points = 0;
-            rec.allocated_str    = 0;
-            rec.allocated_int    = 0;
-            rec.allocated_dex    = 0;
-            rec.allocated_con    = 0;
-            rec.allocated_wis    = 0;
-            rec.recall_scene     = s.recallScene;
-        }
-        if (forceSaveAll || dirty.vitals) {
-            rec.current_hp       = s.currentHP;
-            rec.max_hp           = s.maxHP;
-            rec.current_mp       = s.currentMP;
-            rec.max_mp           = s.maxMP;
-            rec.current_fury     = s.currentFury;
-            rec.is_dead          = s.isDead;
-        }
+        rec.level            = s.level;
+        rec.current_xp       = s.currentXP;
+        rec.xp_to_next_level = static_cast<int>(s.xpToNextLevel);
+        rec.honor            = s.honor;
+        rec.pvp_kills        = s.pvpKills;
+        rec.pvp_deaths       = s.pvpDeaths;
+        rec.pk_status        = static_cast<int>(s.pkStatus);
+        rec.faction          = static_cast<int>(s.faction);
+        // DISABLED: stat allocation removed — always write 0
+        rec.free_stat_points = 0;
+        rec.allocated_str    = 0;
+        rec.allocated_int    = 0;
+        rec.allocated_dex    = 0;
+        rec.allocated_con    = 0;
+        rec.allocated_wis    = 0;
+        rec.recall_scene     = s.recallScene;
+        rec.current_hp       = s.currentHP;
+        rec.max_hp           = s.maxHP;
+        rec.current_mp       = s.currentMP;
+        rec.max_mp           = s.maxMP;
+        rec.current_fury     = s.currentFury;
+        rec.is_dead          = s.isDead;
     }
 
-    if (forceSaveAll || dirty.position) {
-        auto* t = e->getComponent<Transform>();
-        if (t) {
-            Vec2 tilePos = Coords::toTile(t->position);
-            rec.position_x = tilePos.x;
-            rec.position_y = tilePos.y;
-        }
-
-        auto* statsForScene2 = e->getComponent<CharacterStatsComponent>();
-        rec.current_scene = (statsForScene2 && !statsForScene2->stats.currentScene.empty())
-            ? statsForScene2->stats.currentScene
-            : "WhisperingWoods";
+    auto* t = e->getComponent<Transform>();
+    if (t) {
+        Vec2 tilePos = Coords::toTile(t->position);
+        rec.position_x = tilePos.x;
+        rec.position_y = tilePos.y;
     }
 
-    if (forceSaveAll || dirty.inventory) {
-        auto* inv = e->getComponent<InventoryComponent>();
-        if (inv) rec.gold = inv->inventory.getGold();
+    rec.current_scene = (charStatsComp && !charStatsComp->stats.currentScene.empty())
+        ? charStatsComp->stats.currentScene
+        : "WhisperingWoods";
+
+    auto* inv = e->getComponent<InventoryComponent>();
+    if (inv) rec.gold = inv->inventory.getGold();
+
+    // Compute accumulated playtime
+    {
+        auto startIt = sessionStartTime_.find(clientId);
+        auto loadedIt = loadedPlaytimeSeconds_.find(clientId);
+        if (startIt != sessionStartTime_.end() && loadedIt != loadedPlaytimeSeconds_.end()) {
+            int64_t elapsed = static_cast<int64_t>(gameTime_ - startIt->second);
+            rec.total_playtime_seconds = loadedIt->second + elapsed;
+        }
     }
 
     // Snapshot skills
@@ -285,6 +299,67 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll) {
         }
     }
 
+    // Snapshot inventory items on game thread (same logic as saveInventoryForClient)
+    bool saveInventory = forceSaveAll || dirty.inventory;
+    std::vector<InventorySlotRecord> invSlots;
+    if (saveInventory && inv) {
+        auto buildSlotRecord = [&](const ItemInstance& item, int slotIdx, int bagSlotIdx, int bagItemSlot) {
+            InventorySlotRecord s;
+            s.instance_id    = item.instanceId;
+            s.character_id   = client->character_id;
+            s.item_id        = item.itemId;
+            s.slot_index     = slotIdx;
+            s.bag_slot_index = bagSlotIdx;
+            s.bag_item_slot  = bagItemSlot;
+            s.rolled_stats   = ItemStatRoller::rolledStatsToJson(item.rolledStats);
+            s.enchant_level  = item.enchantLevel;
+            s.is_protected   = item.isProtected;
+            s.is_soulbound   = item.isSoulbound;
+            s.is_broken      = item.isBroken;
+            s.quantity        = item.quantity;
+            if (item.hasSocket()) {
+                switch (item.socket.statType) {
+                    case StatType::Strength:     s.socket_stat = "STR"; break;
+                    case StatType::Dexterity:    s.socket_stat = "DEX"; break;
+                    case StatType::Intelligence: s.socket_stat = "INT"; break;
+                    default: break;
+                }
+                s.socket_value = item.socket.value;
+            }
+            return s;
+        };
+
+        const auto& items = inv->inventory.getSlots();
+        for (int i = 0; i < static_cast<int>(items.size()); ++i) {
+            if (!items[i].isValid()) continue;
+            invSlots.push_back(buildSlotRecord(items[i], i, -1, -1));
+            const auto& bagItems = inv->inventory.getBagContents(i);
+            for (int j = 0; j < static_cast<int>(bagItems.size()); ++j) {
+                if (!bagItems[j].isValid()) continue;
+                invSlots.push_back(buildSlotRecord(bagItems[j], -1, i, j));
+            }
+        }
+        for (const auto& [eqSlot, item] : inv->inventory.getEquipmentMap()) {
+            if (!item.isValid()) continue;
+            InventorySlotRecord s = buildSlotRecord(item, -1, -1, -1);
+            s.is_equipped = true;
+            switch (eqSlot) {
+                case EquipmentSlot::Weapon:    s.equipped_slot = "Weapon"; break;
+                case EquipmentSlot::SubWeapon: s.equipped_slot = "SubWeapon"; break;
+                case EquipmentSlot::Hat:       s.equipped_slot = "Hat"; break;
+                case EquipmentSlot::Armor:     s.equipped_slot = "Armor"; break;
+                case EquipmentSlot::Gloves:    s.equipped_slot = "Gloves"; break;
+                case EquipmentSlot::Shoes:     s.equipped_slot = "Shoes"; break;
+                case EquipmentSlot::Belt:      s.equipped_slot = "Belt"; break;
+                case EquipmentSlot::Cloak:     s.equipped_slot = "Cloak"; break;
+                case EquipmentSlot::Ring:      s.equipped_slot = "Ring"; break;
+                case EquipmentSlot::Necklace:  s.equipped_slot = "Necklace"; break;
+                default: break;
+            }
+            invSlots.push_back(std::move(s));
+        }
+    }
+
     if (!forceSaveAll) {
         dirty.clearAll();
     }
@@ -296,7 +371,8 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll) {
     // game-thread mutations (trade execution, loot, market) that may modify
     // inventory/gold while the async save is writing state.
     auto playerMtx = playerLocks_.get(charId);
-    dbDispatcher_.dispatchVoid([this, rec, charId, skillRecords, skillEarned, skillSpent, skillBar, saveSkills, playerMtx]
+    dbDispatcher_.dispatchVoid([this, rec, charId, skillRecords, skillEarned, skillSpent, skillBar,
+                                saveSkills, saveInventory, invSlots, playerMtx]
                                (pqxx::connection& conn) {
         std::lock_guard<std::mutex> lock(*playerMtx);
         try {
@@ -328,6 +404,28 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll) {
                 rec.free_stat_points, rec.allocated_str, rec.allocated_int,
                 rec.allocated_dex, rec.allocated_con, rec.allocated_wis,
                 rec.recall_scene);
+            if (saveInventory) {
+                txn.exec_params("DELETE FROM character_inventory WHERE character_id = $1", charId);
+                for (const auto& s : invSlots) {
+                    std::optional<int> slotIdx     = s.slot_index     >= 0 ? std::optional<int>(s.slot_index)     : std::nullopt;
+                    std::optional<int> bagSlotIdx  = s.bag_slot_index >= 0 ? std::optional<int>(s.bag_slot_index) : std::nullopt;
+                    std::optional<int> bagItemSlot = s.bag_item_slot  >= 0 ? std::optional<int>(s.bag_item_slot)  : std::nullopt;
+                    std::optional<int> sockVal     = s.socket_value   != 0 ? std::optional<int>(s.socket_value)   : std::nullopt;
+                    std::optional<std::string> sockStat = s.socket_stat.empty()   ? std::nullopt : std::optional<std::string>(s.socket_stat);
+                    std::optional<std::string> eqSlot   = s.equipped_slot.empty() ? std::nullopt : std::optional<std::string>(s.equipped_slot);
+                    txn.exec_params(
+                        "INSERT INTO character_inventory "
+                        "(character_id, item_id, slot_index, bag_slot_index, bag_item_slot, "
+                        "rolled_stats, socket_stat, socket_value, enchant_level, "
+                        "is_protected, is_soulbound, is_broken, is_equipped, equipped_slot, quantity) "
+                        "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
+                        charId, s.item_id,
+                        slotIdx, bagSlotIdx, bagItemSlot,
+                        s.rolled_stats.empty() ? "{}" : s.rolled_stats,
+                        sockStat, sockVal, s.enchant_level,
+                        s.is_protected, s.is_soulbound, s.is_broken, s.is_equipped, eqSlot, s.quantity);
+                }
+            }
             if (saveSkills) {
                 for (const auto& s : skillRecords)
                     txn.exec_params(

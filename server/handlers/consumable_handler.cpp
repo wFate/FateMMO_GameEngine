@@ -62,14 +62,15 @@ void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMs
         isConsumable = true;
         subtype = def->subtype;
 
-        // Try to get amounts from attributes JSON, fall back to defaults
-        if (subtype == "hp_potion" || subtype == "HpPotion") {
-            healAmount = def->getIntAttribute("heal_amount", 50);
-        } else if (subtype == "mp_potion" || subtype == "MpPotion") {
-            manaAmount = def->getIntAttribute("mana_amount", 30);
-        } else if (subtype == "hp_mp_potion" || subtype == "HpMpPotion") {
-            healAmount = def->getIntAttribute("heal_amount", 50);
-            manaAmount = def->getIntAttribute("mana_amount", 30);
+        // Try to get amounts from attributes JSON (accept both key conventions)
+        if (subtype == "Potion" || subtype == "Food" ||
+            subtype == "hp_potion" || subtype == "HpPotion" ||
+            subtype == "mp_potion" || subtype == "MpPotion" ||
+            subtype == "hp_mp_potion" || subtype == "HpMpPotion") {
+            healAmount = def->getIntAttribute("restore_hp",
+                         def->getIntAttribute("heal_amount", 0));
+            manaAmount = def->getIntAttribute("restore_mp",
+                         def->getIntAttribute("mana_amount", 0));
         } else if (subtype == "SkillBook" || subtype == "skillbook") {
             // ---- SkillBook: teach the player a new skill/rank ----
             std::string bookSkillId = def->getStringAttribute("skill_id", "");
@@ -500,9 +501,11 @@ void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMs
                      clientId, targetClientId, targetPrevScene.c_str(), summonScene.c_str());
             return;
         } else {
-            // Generic consumable — try attributes for any heal/mana values
-            healAmount = def->getIntAttribute("heal_amount", 0);
-            manaAmount = def->getIntAttribute("mana_amount", 0);
+            // Generic consumable — try both attribute key conventions
+            healAmount = def->getIntAttribute("restore_hp",
+                         def->getIntAttribute("heal_amount", 0));
+            manaAmount = def->getIntAttribute("restore_mp",
+                         def->getIntAttribute("mana_amount", 0));
         }
     } else {
         // No cache entry — fallback: check item ID for common patterns
