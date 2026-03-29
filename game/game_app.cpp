@@ -1972,6 +1972,10 @@ void GameApp::onUpdate(float deltaTime) {
                 if (!pendingSceneName_.empty()) {
                     std::string jsonPath = "assets/scenes/" + pendingSceneName_ + ".json";
                     asyncLoader_.startLoad(pendingSceneName_, jsonPath);
+#ifndef FATE_SHIPPING
+                    // Tell the editor which scene file is loaded so Ctrl+S works
+                    Editor::instance().setCurrentScenePath(jsonPath);
+#endif
                     loadingScreen_.begin(pendingSceneName_, windowWidth(), windowHeight());
                     setLoadingScreen(&loadingScreen_);
                     setIsLoading(true);
@@ -3085,6 +3089,9 @@ void GameApp::onUpdate(float deltaTime) {
                     // Start async load for new zone
                     std::string jsonPath = "assets/scenes/" + pendingZoneScene_ + ".json";
                     asyncLoader_.startLoad(pendingZoneScene_, jsonPath);
+#ifndef FATE_SHIPPING
+                    Editor::instance().setCurrentScenePath(jsonPath);
+#endif
                     loadingScreen_.begin(pendingZoneScene_, windowWidth(), windowHeight());
                     setLoadingScreen(&loadingScreen_);
                     setIsLoading(true);

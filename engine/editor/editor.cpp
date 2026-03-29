@@ -533,8 +533,8 @@ void Editor::drawDockSpace() {
                 ImGui::EndMenu();
             }
             ImGui::Separator();
-            // Save — overwrites current scene file (grayed out if no scene loaded)
-            if (ImGui::MenuItem("Save", "Ctrl+S", false, !currentScenePath_.empty() && !inPlayMode_)) {
+            // Save — enabled when a scene path is set (from Open Scene or async load)
+            if (ImGui::MenuItem("Save", "Ctrl+S", false, !inPlayMode_ && !currentScenePath_.empty())) {
                 saveScene(dockWorld_, currentScenePath_);
             }
             // Save As — always prompts for a new name
@@ -2943,8 +2943,13 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
         if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
     }
     // Ctrl+S = Save current scene
-    if (ctrl && scancode == SDL_SCANCODE_S && !currentScenePath_.empty() && !inPlayMode_) {
-        saveScene(world, currentScenePath_);
+    if (ctrl && scancode == SDL_SCANCODE_S && !inPlayMode_) {
+        if (!currentScenePath_.empty()) {
+            saveScene(world, currentScenePath_);
+            LOG_INFO("Editor", "Ctrl+S: saved scene to %s", currentScenePath_.c_str());
+        } else {
+            LOG_WARN("Editor", "Ctrl+S: no scene path set (currentScenePath_ is empty)");
+        }
     }
     // Also save the focused UI screen if a UI widget is selected
     if (ctrl && scancode == SDL_SCANCODE_S) {
