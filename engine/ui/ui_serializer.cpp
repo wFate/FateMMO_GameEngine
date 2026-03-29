@@ -115,6 +115,16 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
                              anchor.padding.z, anchor.padding.w };
         }
 
+        // Responsive layout fields (only serialize non-default values)
+        if (anchor.minSize.x > 0.0f || anchor.minSize.y > 0.0f)
+            a["minSize"] = {anchor.minSize.x, anchor.minSize.y};
+        if (anchor.maxSize.x > 0.0f || anchor.maxSize.y > 0.0f)
+            a["maxSize"] = {anchor.maxSize.x, anchor.maxSize.y};
+        if (anchor.useSafeArea)
+            a["useSafeArea"] = true;
+        if (anchor.maxAspectRatio > 0.0f)
+            a["maxAspectRatio"] = anchor.maxAspectRatio;
+
         j["anchor"] = std::move(a);
     }
 

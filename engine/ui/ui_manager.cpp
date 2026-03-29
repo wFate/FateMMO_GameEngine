@@ -1942,6 +1942,18 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
             anchor.padding.w = a["padding"][3].get<float>();
         }
 
+        // Responsive layout fields
+        if (a.contains("minSize") && a["minSize"].is_array() && a["minSize"].size() >= 2) {
+            anchor.minSize.x = a["minSize"][0].get<float>();
+            anchor.minSize.y = a["minSize"][1].get<float>();
+        }
+        if (a.contains("maxSize") && a["maxSize"].is_array() && a["maxSize"].size() >= 2) {
+            anchor.maxSize.x = a["maxSize"][0].get<float>();
+            anchor.maxSize.y = a["maxSize"][1].get<float>();
+        }
+        anchor.useSafeArea = a.value("useSafeArea", false);
+        anchor.maxAspectRatio = a.value("maxAspectRatio", 0.0f);
+
         node->setAnchor(anchor);
     }
 
