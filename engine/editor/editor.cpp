@@ -810,7 +810,7 @@ void Editor::drawSceneViewport() {
 
             // Display resolution dropdown
             {
-                const auto& preset = kDisplayPresets[displayPresetIdx_];
+                const auto& preset = kDeviceProfiles[displayPresetIdx_];
                 char label[64];
                 if (preset.width == 0)
                     snprintf(label, sizeof(label), "%s", preset.name);
@@ -819,13 +819,13 @@ void Editor::drawSceneViewport() {
 
                 ImGui::SetNextItemWidth(160.0f);
                 if (ImGui::BeginCombo("##Display", label, ImGuiComboFlags_HeightLarge)) {
-                    for (int i = 0; i < kDisplayPresetCount; i++) {
+                    for (int i = 0; i < kDeviceProfileCount; i++) {
                         char itemLabel[64];
-                        if (kDisplayPresets[i].width == 0)
-                            snprintf(itemLabel, sizeof(itemLabel), "%s", kDisplayPresets[i].name);
+                        if (kDeviceProfiles[i].width == 0)
+                            snprintf(itemLabel, sizeof(itemLabel), "%s", kDeviceProfiles[i].name);
                         else
-                            snprintf(itemLabel, sizeof(itemLabel), "%s  %dx%d", kDisplayPresets[i].name,
-                                     kDisplayPresets[i].width, kDisplayPresets[i].height);
+                            snprintf(itemLabel, sizeof(itemLabel), "%s  %dx%d", kDeviceProfiles[i].name,
+                                     kDeviceProfiles[i].width, kDeviceProfiles[i].height);
 
                         if (ImGui::Selectable(itemLabel, i == displayPresetIdx_))
                             displayPresetIdx_ = i;
@@ -874,7 +874,7 @@ void Editor::drawSceneViewport() {
         int panelW = (int)avail.x;
         int panelH = (int)avail.y;
 
-        const auto& preset = kDisplayPresets[displayPresetIdx_];
+        const auto& preset = kDeviceProfiles[displayPresetIdx_];
         bool useDeviceRes = !paused_ && preset.width > 0 && preset.height > 0;
 
         int fbW, fbH;
