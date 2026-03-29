@@ -426,6 +426,14 @@ void App::processEvents() {
                         // Check if click lands on a selected UI widget first
                         if (Editor::instance().uiEditorPanel().handleViewportClick(screenPos)) {
                             // UI widget drag started — skip entity/tile handling
+                        } else {
+                            // Click missed the UI widget — clear UI selection so it
+                            // doesn't keep intercepting viewport clicks for scene work.
+                            if (Editor::instance().uiEditorPanel().hasSelection())
+                                Editor::instance().uiEditorPanel().clearSelection();
+                        }
+                        if (Editor::instance().uiEditorPanel().isDraggingWidget()) {
+                            // already handled above
                         } else if (Editor::instance().isTilePaintMode()) {
                             Editor::instance().paintTileAt(
                                 &scene->world(), &camera_, screenPos, vpW, vpH);

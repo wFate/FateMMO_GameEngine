@@ -150,6 +150,19 @@ struct UIPropertyCommand : UndoCommand {
     std::string description() const override { return desc; }
 };
 
+// Lightweight UI widget move — patches offset in-place instead of replacing
+// the entire screen tree (avoids pointer invalidation and use-after-free).
+struct UIWidgetMoveCommand : UndoCommand {
+    std::string screenId;
+    std::string nodeId;
+    Vec2 oldOffset, newOffset;
+    UIManager* uiMgr = nullptr;
+
+    void undo(World*) override;
+    void redo(World*) override;
+    std::string description() const override { return "Move UI Widget"; }
+};
+
 // Undo/Redo stack
 class UndoSystem {
 public:

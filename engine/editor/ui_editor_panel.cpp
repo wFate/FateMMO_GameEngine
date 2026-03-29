@@ -125,22 +125,14 @@ void UIEditorPanel::handleViewportRelease(UIManager* uiMgr) {
         isDraggingWidget_ = false;
         return;
     }
-    // Push undo command if offset changed
+    // Push lightweight move undo (patches offset in-place, no screen replacement)
     Vec2 newOffset = selectedNode_->anchor().offset;
     if (newOffset.x != dragStartOffset_.x || newOffset.y != dragStartOffset_.y) {
-        // Take a snapshot with old offset, then current
-        selectedNode_->anchor().offset = dragStartOffset_;
-        std::string oldJson = UISerializer::serializeScreen(selectedScreenId_,
-            uiMgr->getScreen(selectedScreenId_));
-        selectedNode_->anchor().offset = newOffset;
-        std::string newJson = UISerializer::serializeScreen(selectedScreenId_,
-            uiMgr->getScreen(selectedScreenId_));
-        auto cmd = std::make_unique<UIPropertyCommand>();
+        auto cmd = std::make_unique<UIWidgetMoveCommand>();
         cmd->screenId = selectedScreenId_;
-        cmd->oldJson = std::move(oldJson);
-        cmd->newJson = std::move(newJson);
         cmd->nodeId = selectedNodeId_;
-        cmd->desc = "Move UI Widget";
+        cmd->oldOffset = dragStartOffset_;
+        cmd->newOffset = newOffset;
         cmd->uiMgr = uiMgr;
         UndoSystem::instance().push(std::move(cmd));
     }

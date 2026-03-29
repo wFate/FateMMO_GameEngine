@@ -1751,6 +1751,77 @@ void GameApp::onInit() {
         };
     }
 
+    // When the editor undo/redo replaces a UI screen tree via loadScreenFromString(),
+    // all cached widget pointers into that screen become dangling.  Re-resolve them
+    // immediately and re-wire essential callbacks.  (The retainedUILoaded_ block can't
+    // help here because it sits inside the localPlayerCreated_ guard which is already
+    // true during normal gameplay.)
+    uiManager().addScreenReloadListener([this](const std::string& screenId) {
+        if (connState_ != ConnectionState::InGame) return;
+        auto& ui = uiManager();
+
+        if (screenId == "fate_social") {
+            chatPanel_ = nullptr;
+            if (auto* s = ui.getScreen("fate_social"))
+                chatPanel_ = dynamic_cast<ChatPanel*>(s->findById("chat_panel"));
+            if (chatPanel_) {
+                chatPanel_->onSendMessage = [this](uint8_t channel, const std::string& message, const std::string& targetName) {
+                    auto filtered = ProfanityFilter::filterChatMessage(message, FilterMode::Censor);
+                    netClient_.sendChat(channel, filtered.filteredText, targetName);
+                    audioManager_.playSFX("chat_send");
+                };
+                chatPanel_->onClose = [this](const std::string&) {
+                    if (chatPanel_) chatPanel_->setFullPanelMode(false);
+                    Input::instance().setChatMode(false);
+                };
+            }
+        } else if (screenId == "fate_hud") {
+            skillArc_ = nullptr;
+            dungeonInviteDialog_ = nullptr;
+            destroyItemDialog_ = nullptr;
+            playerContextMenu_ = nullptr;
+            if (auto* h = ui.getScreen("fate_hud")) {
+                skillArc_ = dynamic_cast<SkillArc*>(h->findById("skill_arc"));
+                dungeonInviteDialog_ = dynamic_cast<ConfirmDialog*>(h->findById("dungeon_invite_dialog"));
+                destroyItemDialog_ = dynamic_cast<ConfirmDialog*>(h->findById("destroy_item_dialog"));
+                playerContextMenu_ = dynamic_cast<PlayerContextMenu*>(h->findById("player_context_menu"));
+            }
+        } else if (screenId == "fate_menu_panels") {
+            inventoryPanel_ = nullptr;
+            petPanel_ = nullptr;
+            craftingPanel_ = nullptr;
+            collectionPanel_ = nullptr;
+            costumePanel_ = nullptr;
+            if (auto* m = ui.getScreen("fate_menu_panels")) {
+                inventoryPanel_ = dynamic_cast<InventoryPanel*>(m->findById("inventory_panel"));
+                petPanel_ = dynamic_cast<PetPanel*>(m->findById("pet_panel"));
+                craftingPanel_ = dynamic_cast<CraftingPanel*>(m->findById("crafting_panel"));
+                collectionPanel_ = dynamic_cast<CollectionPanel*>(m->findById("collection_panel"));
+                costumePanel_ = dynamic_cast<CostumePanel*>(m->findById("costume_panel"));
+            }
+        } else if (screenId == "npc_panels") {
+            npcDialoguePanel_ = nullptr;
+            shopPanel_ = nullptr;
+            bankPanel_ = nullptr;
+            teleporterPanel_ = nullptr;
+            arenaPanel_ = nullptr;
+            battlefieldPanel_ = nullptr;
+            leaderboardPanel_ = nullptr;
+            if (auto* n = ui.getScreen("npc_panels")) {
+                npcDialoguePanel_ = dynamic_cast<NpcDialoguePanel*>(n->findById("npc_dialogue_panel"));
+                shopPanel_ = dynamic_cast<ShopPanel*>(n->findById("shop_panel"));
+                bankPanel_ = dynamic_cast<BankPanel*>(n->findById("bank_panel"));
+                teleporterPanel_ = dynamic_cast<TeleporterPanel*>(n->findById("teleporter_panel"));
+                arenaPanel_ = dynamic_cast<ArenaPanel*>(n->findById("arena_panel"));
+                battlefieldPanel_ = dynamic_cast<BattlefieldPanel*>(n->findById("battlefield_panel"));
+                leaderboardPanel_ = dynamic_cast<LeaderboardPanel*>(n->findById("leaderboard_panel"));
+            }
+        } else if (screenId == "death_overlay") {
+            deathOverlay_ = nullptr;
+            deathOverlay_ = dynamic_cast<DeathOverlay*>(ui.getScreen("death_overlay"));
+        }
+    });
+
     LOG_INFO("Game", "Initialized");
 }
 

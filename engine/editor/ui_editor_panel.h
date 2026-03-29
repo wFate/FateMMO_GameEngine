@@ -21,6 +21,8 @@ public:
     void handleViewportDrag(const Vec2& viewportLocalPos);
     void handleViewportRelease(UIManager* uiMgr);
     bool isDraggingWidget() const { return isDraggingWidget_; }
+    bool hasSelection() const { return selectedNode_ != nullptr; }
+    void clearSelection() { selectedNode_ = nullptr; selectedNodeId_.clear(); selectedScreenId_.clear(); }
 
     bool showHierarchy = true;
     bool showInspector = true;

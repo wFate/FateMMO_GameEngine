@@ -80,9 +80,8 @@ Counter* JobSystem::submit(Job* jobs, int count) {
     for (int i = 0; i < count; ++i) {
         Job j = jobs[i];
         j.counter = counter;
-        bool ok = jobQueue_.push(j);
-        assert(ok && "Job queue full");
-        (void)ok;
+        while (!jobQueue_.push(j))
+            std::this_thread::yield();
     }
     return counter;
 }
@@ -91,9 +90,8 @@ void JobSystem::submitFireAndForget(Job* jobs, int count) {
     for (int i = 0; i < count; ++i) {
         Job j = jobs[i];
         j.counter = nullptr;
-        bool ok = jobQueue_.push(j);
-        assert(ok && "Job queue full");
-        (void)ok;
+        while (!jobQueue_.push(j))
+            std::this_thread::yield();
     }
 }
 

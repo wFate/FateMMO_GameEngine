@@ -50,4 +50,20 @@ void UIPropertyCommand::redo(World*) {
     }
 }
 
+void UIWidgetMoveCommand::undo(World*) {
+    if (!uiMgr) return;
+    auto* root = uiMgr->getScreen(screenId);
+    if (!root) return;
+    auto* node = root->findById(nodeId);
+    if (node) node->anchor().offset = oldOffset;
+}
+
+void UIWidgetMoveCommand::redo(World*) {
+    if (!uiMgr) return;
+    auto* root = uiMgr->getScreen(screenId);
+    if (!root) return;
+    auto* node = root->findById(nodeId);
+    if (node) node->anchor().offset = newOffset;
+}
+
 } // namespace fate
