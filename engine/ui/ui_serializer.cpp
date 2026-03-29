@@ -150,6 +150,12 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
     }
 
     // --- Widget-specific properties ---
+    // Reflected properties (new system) — auto-serializes from metadata
+    auto reflectedFields = node->reflectedProperties();
+    if (!reflectedFields.empty()) {
+        node->serializeProperties(j);
+    } else {
+    // Legacy widget-specific serialization (dynamic_cast chain)
     const std::string& type = node->type();
 
     if (type == "panel") {
@@ -1301,6 +1307,7 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["dividerColor"]        = {w->dividerColor.r, w->dividerColor.g, w->dividerColor.b, w->dividerColor.a};
         }
     }
+    } // end legacy serialization fallback
 
     // --- Event bindings ---
     if (!node->eventBindings.empty()) {

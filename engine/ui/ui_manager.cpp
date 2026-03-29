@@ -1866,6 +1866,14 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         node = std::make_unique<UINode>(id, type);
     }
 
+    // Reflected properties (new system) — auto-deserializes from metadata
+    if (node) {
+        auto reflectedFields = node->reflectedProperties();
+        if (!reflectedFields.empty()) {
+            node->deserializeProperties(j);
+        }
+    }
+
     // --- Anchor ---
     if (j.contains("anchor") && j["anchor"].is_object()) {
         const auto& a = j["anchor"];
