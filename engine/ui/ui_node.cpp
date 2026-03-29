@@ -137,6 +137,12 @@ void UINode::computeLayout(const Rect& parentRect, float scale) {
             break;
     }
 
+    // Responsive: clamp to min/max size (in reference pixels, scaled)
+    if (anchor_.minSize.x > 0) w = (std::max)(w, anchor_.minSize.x * scale);
+    if (anchor_.minSize.y > 0) h = (std::max)(h, anchor_.minSize.y * scale);
+    if (anchor_.maxSize.x > 0) w = (std::min)(w, anchor_.maxSize.x * scale);
+    if (anchor_.maxSize.y > 0) h = (std::min)(h, anchor_.maxSize.y * scale);
+
     computedRect_ = {cx, cy, w, h};
 
     // Children layout in content area (minus scaled padding)
