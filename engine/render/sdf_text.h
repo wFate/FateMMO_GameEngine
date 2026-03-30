@@ -16,6 +16,15 @@ enum class TextStyle : uint8_t {
     Shadow   = 4
 };
 
+struct TextEffects {
+    Color outlineColor = Color::clear();
+    float outlineWidth = 0.0f;
+    Color glowColor    = Color::clear();
+    float glowRadius   = 0.0f;
+    Vec2  shadowOffset = {0.0f, 0.0f};
+    Color shadowColor  = Color::clear();
+};
+
 struct GlyphMetrics {
     float advance;
     float bearingX, bearingY;

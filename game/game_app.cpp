@@ -13,6 +13,7 @@
 #include "game/components/game_components.h"
 #include "game/components/tile_layer_component.h"
 #include "engine/render/sdf_text.h"
+#include "engine/render/font_registry.h"
 #include "engine/ecs/prefab.h"
 #include "game/entity_factory.h"
 #include "game/animation_loader.h"
@@ -59,6 +60,7 @@
 #include "engine/ui/widgets/crafting_panel.h"
 #include "engine/ui/widgets/collection_panel.h"
 #include "engine/ui/widgets/costume_panel.h"
+#include "engine/ui/widgets/buff_bar.h"
 #include "engine/ui/widgets/settings_panel.h"
 #include "engine/ui/widgets/leaderboard_panel.h"
 #include "engine/ui/widgets/player_context_menu.h"
@@ -317,6 +319,10 @@ void GameApp::onInit() {
                 }
             }
         }
+        if (msg.fieldMask & (1 << 7)) {
+            // statusEffectMask received for ghost entity
+            // TODO: display buff icons on ghost nameplates
+        }
         if (msg.fieldMask & (1 << 14)) { // bit 14 = pkStatus
             auto* nameplate = ghost->getComponent<NameplateComponent>();
             if (nameplate) {
@@ -561,6 +567,24 @@ void GameApp::onInit() {
                 if (inv) inv->inventory.setGold(msg.gold);
             }
         );
+    };
+
+    netClient_.onBuffSync = [this](const SvBuffSyncMsg& msg) {
+        auto* hud = uiManager().getScreen("fate_hud");
+        if (!hud) return;
+        auto* bar = dynamic_cast<BuffBar*>(hud->findById("buff_bar"));
+        if (!bar) return;
+
+        bar->buffs.clear();
+        bar->buffs.reserve(msg.buffs.size());
+        for (const auto& b : msg.buffs) {
+            BuffDisplayData data;
+            data.effectType = b.effectType;
+            data.remainingTime = b.remainingTime;
+            data.totalDuration = b.totalDuration;
+            data.stacks = b.stacks;
+            bar->buffs.push_back(data);
+        }
     };
 
     netClient_.onMovementCorrection = [this](const SvMovementCorrectionMsg& msg) {
@@ -953,7 +977,9 @@ void GameApp::onInit() {
         }
 
         // Spawn appropriate floating text using hitFlags bitmask
-        if (msg.hitFlags & HitFlags::MISS) {
+        if (msg.hitFlags & HitFlags::RESIST) {
+            combatSystem_->showResistText(targetPos);
+        } else if (msg.hitFlags & HitFlags::MISS) {
             combatSystem_->showMissText(targetPos);
         } else if (msg.hitFlags & HitFlags::DODGE) {
             combatSystem_->showMissText(targetPos); // TODO: show "Dodge" text
@@ -965,7 +991,9 @@ void GameApp::onInit() {
         }
 
         // Audio feedback
-        if (msg.hitFlags & HitFlags::MISS || msg.hitFlags & HitFlags::DODGE) {
+        if (msg.hitFlags & HitFlags::RESIST) {
+            audioManager_.playSFX("resist");
+        } else if (msg.hitFlags & HitFlags::MISS || msg.hitFlags & HitFlags::DODGE) {
             audioManager_.playSFX("miss");
         } else if (msg.hitFlags & HitFlags::CRIT) {
             audioManager_.playSFX("hit_crit");
@@ -974,6 +1002,16 @@ void GameApp::onInit() {
         }
         if (msg.hitFlags & HitFlags::KILLED) {
             audioManager_.playSFX("kill");
+        }
+
+        // Start client-side cooldown from server-authoritative duration
+        if (msg.cooldownMs > 0) {
+            scene->world().forEach<SkillManagerComponent, PlayerController>(
+                [&](Entity*, SkillManagerComponent* smc, PlayerController* ctrl) {
+                    if (!ctrl->isLocalPlayer) return;
+                    smc->skills.startCooldown(msg.skillId, msg.cooldownMs / 1000.0f);
+                }
+            );
         }
     };
 
@@ -1502,6 +1540,17 @@ void GameApp::onInit() {
     // Initialize SDF text rendering
     SDFText::instance().init("assets/fonts/default.png", "assets/fonts/default.json");
 
+    // Load font registry
+    {
+        static fate::FontRegistry fontRegistry;
+        if (fontRegistry.parseManifest("assets/fonts/fonts.json")) {
+            fontRegistry.loadAtlases();
+            fate::SDFText::instance().setFontRegistry(&fontRegistry);
+            LOG_INFO("GameApp", "Font registry loaded with %zu fonts",
+                     fontRegistry.fontNames().size());
+        }
+    }
+
     // Load skill VFX definitions
     SkillVFXPlayer::instance().loadDefinitions("assets/vfx/");
 
@@ -1704,6 +1753,10 @@ void GameApp::onInit() {
         loginScreenWidget_->onLogin = [this](const std::string& user, const std::string& pass,
                                               const std::string& server, int port) {
             authClient_.loginAsync(server, static_cast<uint16_t>(port), user, pass);
+            if (!authClient_.isBusy()) {
+                loginScreenWidget_->setStatus("Login failed — try again", true);
+                return;
+            }
             connState_ = ConnectionState::Authenticating;
             loginScreenWidget_->setStatus("Authenticating...", false);
         };
@@ -2714,6 +2767,7 @@ void GameApp::onUpdate(float deltaTime) {
                         if (settingsPanel) {
                             settingsPanel->onLogout = [this]() {
                                 LOG_INFO("GameApp", "Logout requested via Settings panel");
+                                authClient_.disconnectAuth();
                                 netClient_.disconnect();
                             };
                         }
@@ -3215,6 +3269,12 @@ void GameApp::onUpdate(float deltaTime) {
                         if (expBar && cs) {
                             expBar->xp        = static_cast<float>(cs->stats.currentXP);
                             expBar->xpToLevel = static_cast<float>(cs->stats.xpToNextLevel);
+                        }
+
+                        // BuffBar — tick down timers between server syncs
+                        auto* buffBar = dynamic_cast<BuffBar*>(hudScreen->findById("buff_bar"));
+                        if (buffBar) {
+                            buffBar->tickTimers(deltaTime);
                         }
 
                         // TargetFrame — show/hide based on combat target

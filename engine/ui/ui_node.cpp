@@ -176,8 +176,36 @@ void UINode::drawBackground(SpriteBatch& batch, float depth) {
         }
     }
 
-    // Fallback: solid color rect
-    if (style.backgroundColor.a > 0.0f) {
+    // Check if rounded rect features are requested
+    bool useRoundedRect = (style.cornerRadius > 0.0f)
+        || (style.gradientTop.a > 0.0f && style.gradientBottom.a > 0.0f)
+        || (style.shadowColor.a > 0.0f && style.shadowBlur > 0.0f);
+
+    if (useRoundedRect) {
+        RoundedRectParams rr;
+        rr.position = {rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f};
+        rr.size = {rect.w, rect.h};
+        rr.cornerRadius = style.cornerRadius;
+        rr.depth = depth;
+
+        Color bg = style.backgroundColor;
+        bg.a *= style.opacity;
+        rr.fillTop    = (style.gradientTop.a > 0.0f) ? style.gradientTop : bg;
+        rr.fillBottom = (style.gradientBottom.a > 0.0f) ? style.gradientBottom : bg;
+        rr.fillTop.a  *= style.opacity;
+        rr.fillBottom.a *= style.opacity;
+
+        rr.borderWidth = style.borderWidth;
+        rr.borderColor = style.borderColor;
+        rr.borderColor.a *= style.opacity;
+
+        rr.shadowOffset = style.shadowOffset;
+        rr.shadowBlur   = style.shadowBlur;
+        rr.shadowColor  = style.shadowColor;
+
+        batch.drawRoundedRect(rr);
+    } else if (style.backgroundColor.a > 0.0f) {
+        // Existing flat rect path (unchanged)
         Color bg = style.backgroundColor;
         bg.a *= style.opacity;
         batch.drawRect({rect.x + rect.w * 0.5f, rect.y + rect.h * 0.5f},
