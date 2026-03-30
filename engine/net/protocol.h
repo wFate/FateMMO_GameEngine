@@ -239,8 +239,10 @@ struct SvEntityUpdateMsg {
     uint8_t level = 0;
     // Bit 12: faction (uint8, 1B)
     uint8_t faction = 0;
-    // Bit 13: equipVisuals (uint32, 4B) — packed sprite/palette IDs
-    uint32_t equipVisuals = 0;
+    // Bit 13: equipment visual style names (3 strings)
+    std::string armorStyle;
+    std::string hatStyle;
+    std::string weaponStyle;
     // Bit 14: pkStatus (uint8, 1B) — PK name color (0=White, 1=Purple, 2=Red, 3=Black)
     uint8_t pkStatus = 0;
     // Bit 15: honorRank (uint8, 1B) — HonorRank enum
@@ -267,7 +269,7 @@ struct SvEntityUpdateMsg {
         if (fieldMask & (1 << 10)) w.writeU16(targetEntityId);
         if (fieldMask & (1 << 11)) w.writeU8(level);
         if (fieldMask & (1 << 12)) w.writeU8(faction);
-        if (fieldMask & (1 << 13)) w.writeU32(equipVisuals);
+        if (fieldMask & (1 << 13)) { w.writeString(armorStyle); w.writeString(hatStyle); w.writeString(weaponStyle); }
         if (fieldMask & (1 << 14)) w.writeU8(pkStatus);
         if (fieldMask & (1 << 15)) w.writeU8(honorRank);
         if (fieldMask & (1 << 16)) detail::writeU64(w, costumeVisuals);
@@ -291,7 +293,7 @@ struct SvEntityUpdateMsg {
         if (m.fieldMask & (1 << 10)) m.targetEntityId = r.readU16();
         if (m.fieldMask & (1 << 11)) m.level = r.readU8();
         if (m.fieldMask & (1 << 12)) m.faction = r.readU8();
-        if (m.fieldMask & (1 << 13)) m.equipVisuals = r.readU32();
+        if (m.fieldMask & (1 << 13)) { m.armorStyle = r.readString(); m.hatStyle = r.readString(); m.weaponStyle = r.readString(); }
         if (m.fieldMask & (1 << 14)) m.pkStatus  = r.readU8();
         if (m.fieldMask & (1 << 15)) m.honorRank = r.readU8();
         if (m.fieldMask & (1 << 16)) m.costumeVisuals = detail::readU64(r);
@@ -621,7 +623,7 @@ struct InventorySyncEquip {
     std::string socketStat;
     int32_t socketValue = 0;
     uint8_t isBroken = 0;
-    uint16_t visualIndex = 0; // paper-doll sprite index for this equipment
+    std::string visualStyle; // paper-doll sprite style name for this equipment
 };
 
 struct SvInventorySyncMsg {
@@ -664,7 +666,7 @@ struct SvInventorySyncMsg {
             w.writeString(e.socketStat);
             w.writeI32(e.socketValue);
             w.writeU8(e.isBroken);
-            w.writeU16(e.visualIndex);
+            w.writeString(e.visualStyle);
         }
     }
 
@@ -707,7 +709,7 @@ struct SvInventorySyncMsg {
             m.equipment[i].socketStat = r.readString();
             m.equipment[i].socketValue = r.readI32();
             m.equipment[i].isBroken = r.readU8();
-            m.equipment[i].visualIndex = r.readU16();
+            m.equipment[i].visualStyle = r.readString();
         }
         return m;
     }
