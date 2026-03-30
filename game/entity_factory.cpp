@@ -165,9 +165,6 @@ Entity* EntityFactory::createPlayer(World& world, const std::string& name, Class
     auto* factionComp = player->addComponent<FactionComponent>();
     factionComp->faction = faction;
 
-    // Equipment Visuals
-    player->addComponent<EquipVisualsComponent>();
-
     // Pet + Costume (empty defaults)
     player->addComponent<PetComponent>();
     player->addComponent<CostumeComponent>();
@@ -1091,7 +1088,6 @@ Entity* EntityFactory::createGhostPlayer(World& world, const std::string& name, 
     // Replication visual components — updated by onEntityUpdate handlers
     entity->addComponent<Animator>();
     entity->addComponent<TargetingComponent>();
-    entity->addComponent<EquipVisualsComponent>();
 
     auto* appearance = entity->addComponent<AppearanceComponent>();
     appearance->gender = gender;
@@ -1155,7 +1151,6 @@ Entity* EntityFactory::createGhostMob(World& world, const std::string& name, Vec
     // Replication visual components — updated by onEntityUpdate handlers
     entity->addComponent<Animator>();
     entity->addComponent<TargetingComponent>();
-    entity->addComponent<EquipVisualsComponent>();
 
     return entity;
 }

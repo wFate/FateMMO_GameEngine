@@ -88,13 +88,6 @@ struct TargetingComponent {
     void clearTarget() { selectedTargetId = 0; targetType = TargetType::None; }
 };
 
-struct EquipVisualsComponent {
-    FATE_COMPONENT(EquipVisualsComponent)
-    uint16_t weaponVisualIdx = 0;
-    uint16_t armorVisualIdx  = 0;
-    uint16_t hatVisualIdx    = 0;
-};
-
 struct AppearanceComponent {
     FATE_COMPONENT(AppearanceComponent)
     uint8_t gender    = 0;   // 0=male, 1=female
@@ -333,12 +326,6 @@ FATE_REFLECT(fate::TargetingComponent,
     FATE_FIELD(selectedTargetId, UInt),
     FATE_FIELD(maxTargetRange, Float),
     FATE_FIELD(clickConsumed, Bool)
-)
-
-FATE_REFLECT(fate::EquipVisualsComponent,
-    FATE_FIELD(weaponVisualIdx, UInt),
-    FATE_FIELD(armorVisualIdx, UInt),
-    FATE_FIELD(hatVisualIdx, UInt)
 )
 
 FATE_REFLECT(fate::AppearanceComponent,

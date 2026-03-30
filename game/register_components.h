@@ -515,7 +515,6 @@ inline void registerAllComponents() {
     reg.registerComponent<StatusEffectComponent>();
     reg.registerComponent<CrowdControlComponent>();
     reg.registerComponent<TargetingComponent>();
-    reg.registerComponent<EquipVisualsComponent>();
     reg.registerComponent<AppearanceComponent>(
         [](const void* data, nlohmann::json& j) {
             const auto* c = static_cast<const AppearanceComponent*>(data);

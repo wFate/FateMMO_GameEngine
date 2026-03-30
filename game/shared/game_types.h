@@ -513,20 +513,6 @@ inline void decodeAnimId(uint16_t animId, uint8_t& animDir, uint8_t& animType) {
     animType = static_cast<uint8_t>(animId % 4);
 }
 
-// Pack 3 equipment visual indices (10 bits each) into uint32
-inline uint32_t packEquipVisuals(uint16_t weaponIdx, uint16_t armorIdx, uint16_t hatIdx) {
-    return (static_cast<uint32_t>(weaponIdx) & 0x3FF)
-         | ((static_cast<uint32_t>(armorIdx)  & 0x3FF) << 10)
-         | ((static_cast<uint32_t>(hatIdx)    & 0x3FF) << 20);
-}
-
-// Unpack uint32 → 3 visual indices
-inline void unpackEquipVisuals(uint32_t packed, uint16_t& weaponIdx, uint16_t& armorIdx, uint16_t& hatIdx) {
-    weaponIdx = static_cast<uint16_t>(packed & 0x3FF);
-    armorIdx  = static_cast<uint16_t>((packed >> 10) & 0x3FF);
-    hatIdx    = static_cast<uint16_t>((packed >> 20) & 0x3FF);
-}
-
 // Pack 6 costume visual indices (10 bits each) into uint64
 inline uint64_t packCostumeVisuals(uint16_t weapon, uint16_t armor, uint16_t hat,
                                     uint16_t shield, uint16_t gloves, uint16_t boots) {
