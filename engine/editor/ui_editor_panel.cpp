@@ -979,17 +979,41 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
         if (ImGui::TreeNodeEx("Font Sizes##bb", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Stack##bbf", &bb->stackFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Abbreviation##bbf", &bb->abbrevFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Tooltip##bbf", &bb->tooltipFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Colors##bb", 0)) {
             ImGui::ColorEdit4("Stack Text##bbc", &bb->stackTextColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Stack Badge BG##bbc", &bb->stackBadgeBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Cooldown Overlay##bbc", &bb->cooldownOverlayColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Abbrev Text##bbc", &bb->abbrevTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Tooltip##bb", 0)) {
+            ImGui::ColorEdit4("BG##bbt", &bb->tooltipBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##bbt", &bb->tooltipBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##bbt", &bb->tooltipTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##bbt", &bb->tooltipPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Width##bbt", &bb->tooltipWidth, 1.0f, 50.0f, 400.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         ImGui::DragFloat("Icon Size##bb", &bb->iconSize, 1.0f, 8.0f, 64.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Spacing##bb", &bb->spacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
         ImGui::DragInt("Max Visible", &bb->maxVisible, 1.0f, 1, 30); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Text("Icon Atlas");
+        // Show current atlas path and allow editing
+        static char atlasPathBuf[256] = {};
+        if (atlasPathBuf[0] == '\0' && !bb->iconAtlasKey.empty()) {
+            strncpy(atlasPathBuf, bb->iconAtlasKey.c_str(), sizeof(atlasPathBuf) - 1);
+        }
+        if (ImGui::InputText("Atlas Path##bb", atlasPathBuf, sizeof(atlasPathBuf))) {
+            bb->iconAtlasKey = atlasPathBuf;
+            checkUndoCapture(uiMgr);
+        }
+        ImGui::DragInt("Atlas Cols##bb", &bb->iconAtlasCols, 1.0f, 1, 16); checkUndoCapture(uiMgr);
+        ImGui::DragInt("Atlas Rows##bb", &bb->iconAtlasRows, 1.0f, 1, 16); checkUndoCapture(uiMgr);
         ImGui::Separator();
         ImGui::Text("Active Buffs: %zu", bb->buffs.size());
     }
@@ -2257,7 +2281,12 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         UISerializer::saveToFile(relPath, selectedScreenId_, uiMgr.getScreen(selectedScreenId_));
         LOG_INFO("UI", "Saved screen: %s", relPath.c_str());
         if (!sourceDir_.empty()) {
-            std::string srcPath = sourceDir_ + "/" + relPath;
+            // sourceDir_ is FATE_SOURCE_DIR/assets/scenes — go up to project root
+            std::string projectRoot = sourceDir_;
+            auto pos = projectRoot.rfind("/assets/scenes");
+            if (pos == std::string::npos) pos = projectRoot.rfind("\\assets\\scenes");
+            if (pos != std::string::npos) projectRoot = projectRoot.substr(0, pos);
+            std::string srcPath = projectRoot + "/" + relPath;
             UISerializer::saveToFile(srcPath, selectedScreenId_, uiMgr.getScreen(selectedScreenId_));
             LOG_INFO("UI", "Saved screen (source): %s", srcPath.c_str());
         }
@@ -2369,6 +2398,47 @@ void UIEditorPanel::drawStyleEditor(UINode* node, UIManager& uiMgr) {
     ImGui::ColorEdit4("Text Color", &style.textColor.r); checkUndoCapture(uiMgr);
     ImGui::DragFloat("Font Size", &style.fontSize, 0.5f, 6.0f, 72.0f); checkUndoCapture(uiMgr);
     ImGui::DragFloat("Opacity", &style.opacity, 0.01f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
+
+    // --- Font Name ---
+    {
+        char fontBuf[64] = {};
+        if (!style.fontName.empty())
+            snprintf(fontBuf, sizeof(fontBuf), "%s", style.fontName.c_str());
+        if (ImGui::InputText("Font Name", fontBuf, sizeof(fontBuf))) {
+            style.fontName = fontBuf;
+        }
+    }
+
+    // --- Rounded Rect ---
+    if (ImGui::TreeNode("Rounded Rect")) {
+        ImGui::DragFloat("Corner Radius", &style.cornerRadius, 0.5f, 0.0f, 50.0f);
+        ImGui::ColorEdit4("Gradient Top", &style.gradientTop.r);
+        ImGui::ColorEdit4("Gradient Bottom", &style.gradientBottom.r);
+        ImGui::DragFloat2("Shadow Offset", &style.shadowOffset.x, 0.5f, -20.0f, 20.0f);
+        ImGui::DragFloat("Shadow Blur", &style.shadowBlur, 0.5f, 0.0f, 30.0f);
+        ImGui::ColorEdit4("Shadow Color", &style.shadowColor.r);
+        ImGui::TreePop();
+    }
+
+    // --- Text Effects ---
+    if (ImGui::TreeNode("Text Effects")) {
+        int ts = static_cast<int>(style.textStyle) - 1; // TextStyle enum starts at 1
+        const char* styleNames[] = {"Normal", "Outlined", "Glow", "Shadow"};
+        if (ImGui::Combo("Text Style", &ts, styleNames, 4)) {
+            style.textStyle = static_cast<fate::TextStyle>(ts + 1);
+        }
+        if (style.textStyle != fate::TextStyle::Normal) {
+            auto& te = style.textEffects;
+            ImGui::ColorEdit4("Outline Color", &te.outlineColor.r);
+            ImGui::DragFloat("Outline Thickness", &te.outlineThickness, 0.01f, 0.0f, 0.5f);
+            ImGui::DragFloat2("Text Shadow Offset", &te.shadowOffset.x, 0.001f, -0.01f, 0.01f);
+            ImGui::ColorEdit4("Text Shadow Color", &te.shadowColor.r);
+            ImGui::ColorEdit4("Glow Color", &te.glowColor.r);
+            ImGui::DragFloat("Glow Intensity", &te.glowIntensity, 0.05f, 0.0f, 1.0f);
+        }
+        ImGui::TreePop();
+    }
+
     ImGui::ColorEdit4("Hover Color", &style.hoverColor.r); checkUndoCapture(uiMgr);
     ImGui::ColorEdit4("Pressed Color", &style.pressedColor.r); checkUndoCapture(uiMgr);
     ImGui::ColorEdit4("Disabled Color", &style.disabledColor.r); checkUndoCapture(uiMgr);
