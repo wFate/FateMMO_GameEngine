@@ -378,16 +378,13 @@ void GameApp::onInit() {
             }
         }
 
-        // equipVisuals (bit 13) — unpack and store on ghost
+        // equipVisuals (bit 13) — style name strings
         if (msg.fieldMask & (1 << 13)) {
-            auto* ev = ghost->getComponent<EquipVisualsComponent>();
-            if (ev) {
-                unpackEquipVisuals(msg.equipVisuals,
-                    ev->weaponVisualIdx, ev->armorVisualIdx, ev->hatVisualIdx);
-            }
-            // Re-resolve paper doll textures when equipment changes
             auto* appearance = ghost->getComponent<AppearanceComponent>();
             if (appearance) {
+                appearance->armorStyle  = msg.armorStyle;
+                appearance->hatStyle    = msg.hatStyle;
+                appearance->weaponStyle = msg.weaponStyle;
                 appearance->dirty = true;
             }
         }
@@ -860,21 +857,20 @@ void GameApp::onInit() {
                 invComp->inventory.setSerializedState(
                     invComp->inventory.getGold(), std::move(slots), std::move(equipment));
 
-                // Update paper-doll visual indices from equipped items
-                auto* ev = entity->getComponent<EquipVisualsComponent>();
-                if (ev) {
-                    ev->weaponVisualIdx = 0;
-                    ev->armorVisualIdx  = 0;
-                    ev->hatVisualIdx    = 0;
+                // Update paper-doll style names from equipped items
+                auto* appearance = entity->getComponent<AppearanceComponent>();
+                if (appearance) {
+                    appearance->armorStyle.clear();
+                    appearance->hatStyle.clear();
+                    appearance->weaponStyle.clear();
                     for (const auto& e : msg.equipment) {
                         auto eqSlot = static_cast<EquipmentSlot>(e.slot);
-                        if (eqSlot == EquipmentSlot::Weapon)    ev->weaponVisualIdx = e.visualIndex;
-                        else if (eqSlot == EquipmentSlot::Armor) ev->armorVisualIdx = e.visualIndex;
-                        else if (eqSlot == EquipmentSlot::Hat)   ev->hatVisualIdx   = e.visualIndex;
+                        if (eqSlot == EquipmentSlot::Weapon)      appearance->weaponStyle = e.visualStyle;
+                        else if (eqSlot == EquipmentSlot::Armor)   appearance->armorStyle  = e.visualStyle;
+                        else if (eqSlot == EquipmentSlot::Hat)     appearance->hatStyle    = e.visualStyle;
                     }
+                    appearance->dirty = true;
                 }
-                auto* appearance = entity->getComponent<AppearanceComponent>();
-                if (appearance) appearance->dirty = true;
             }
         );
     };
@@ -4427,9 +4423,9 @@ void GameApp::populateCharacterSlots(CharacterSelectScreen* screen,
         slot.gender = c.gender;
         slot.hairstyle = c.hairstyle;
         slot.faction = c.faction;
-        slot.weaponVisualIdx = c.weaponVisualIdx;
-        slot.armorVisualIdx  = c.armorVisualIdx;
-        slot.hatVisualIdx    = c.hatVisualIdx;
+        slot.weaponStyle = c.weaponStyle;
+        slot.armorStyle  = c.armorStyle;
+        slot.hatStyle    = c.hatStyle;
         screen->slots.push_back(slot);
     }
     while (screen->slots.size() < 3) {
