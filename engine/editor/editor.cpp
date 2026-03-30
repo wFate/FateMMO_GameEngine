@@ -958,28 +958,70 @@ void Editor::drawSceneViewport() {
                     );
                 }
 
-                // Safe area overlay (red translucent bars)
+                // Safe area overlay: draw hardware cutout shapes + safe area boundary lines
                 if (!paused_ && showSafeAreaOverlay_) {
                     const auto& selDev = kDeviceProfiles[displayPresetIdx_];
-                    if (selDev.safeTop > 0 || selDev.safeBottom > 0 ||
-                        selDev.safeLeft > 0 || selDev.safeRight > 0) {
+                    if (selDev.safeLeft > 0 || selDev.safeBottom > 0 ||
+                        selDev.hasNotch || selDev.hasDynamicIsland) {
                         float sf = selDev.scaleFactor;
                         float imgX = viewportPos_.x;
                         float imgY = viewportPos_.y;
                         float imgW = viewportSize_.x;
                         float imgH = viewportSize_.y;
-                        // Scale insets from logical points to display pixels
-                        float scaleToDisp = (selDev.width > 0) ? imgW / static_cast<float>(selDev.width) * sf : 0.0f;
-                        float topH    = selDev.safeTop * scaleToDisp;
-                        float bottomH = selDev.safeBottom * scaleToDisp;
-                        float leftW   = selDev.safeLeft * scaleToDisp;
-                        float rightW  = selDev.safeRight * scaleToDisp;
+                        // Scale: logical points -> display pixels in viewport
+                        float scX = (selDev.width > 0) ? imgW / static_cast<float>(selDev.width) * sf : 0.0f;
+                        float scY = (selDev.height > 0) ? imgH / static_cast<float>(selDev.height) * sf : 0.0f;
                         auto* dl = ImGui::GetWindowDrawList();
-                        ImU32 col = IM_COL32(255, 40, 40, 60);
-                        if (topH > 0)    dl->AddRectFilled({imgX, imgY}, {imgX + imgW, imgY + topH}, col);
-                        if (bottomH > 0) dl->AddRectFilled({imgX, imgY + imgH - bottomH}, {imgX + imgW, imgY + imgH}, col);
-                        if (leftW > 0)   dl->AddRectFilled({imgX, imgY}, {imgX + leftW, imgY + imgH}, col);
-                        if (rightW > 0)  dl->AddRectFilled({imgX + imgW - rightW, imgY}, {imgX + imgW, imgY + imgH}, col);
+                        ImU32 fillCol = IM_COL32(20, 20, 20, 200);
+                        ImU32 lineCol = IM_COL32(255, 80, 80, 120);
+
+                        // Dynamic Island (landscape: pill on left side, centered vertically)
+                        // Physical: ~126pt wide x 36pt tall in portrait -> 36pt wide x 126pt tall in landscape
+                        if (selDev.hasDynamicIsland) {
+                            float pillW = 36.0f * scX;   // width in landscape (was height in portrait)
+                            float pillH = 126.0f * scY;  // height in landscape (was width in portrait)
+                            float pillX = imgX;           // flush to left edge
+                            float pillY = imgY + imgH * 0.5f - pillH * 0.5f; // centered vertically
+                            float rounding = pillH * 0.15f;
+                            dl->AddRectFilled({pillX, pillY}, {pillX + pillW, pillY + pillH},
+                                              fillCol, rounding);
+                        }
+
+                        // Notch (landscape: wider cutout on left side, centered vertically)
+                        // Physical notch: ~209pt wide x ~30pt deep in portrait -> 30pt wide x 209pt tall in landscape
+                        if (selDev.hasNotch && !selDev.hasDynamicIsland) {
+                            float notchW = 30.0f * scX;
+                            float notchH = 209.0f * scY;
+                            float notchX = imgX;
+                            float notchY = imgY + imgH * 0.5f - notchH * 0.5f;
+                            float rounding = notchW * 0.3f;
+                            dl->AddRectFilled({notchX, notchY}, {notchX + notchW, notchY + notchH},
+                                              fillCol, rounding);
+                        }
+
+                        // Home indicator (landscape: thin bar at bottom center)
+                        // Physical: ~134pt wide x 5pt tall
+                        if (selDev.safeBottom > 0) {
+                            float barW = 134.0f * scX;
+                            float barH = 5.0f * scY;
+                            float barX = imgX + imgW * 0.5f - barW * 0.5f;
+                            float barY = imgY + imgH - barH - 8.0f * scY; // 8pt from bottom edge
+                            float rounding = barH * 0.5f;
+                            dl->AddRectFilled({barX, barY}, {barX + barW, barY + barH},
+                                              IM_COL32(200, 200, 200, 180), rounding);
+                        }
+
+                        // Safe area boundary lines (dashed feel via thin colored lines)
+                        float safeLeft   = selDev.safeLeft * scX;
+                        float safeBottom = selDev.safeBottom * scY;
+                        if (safeLeft > 0) {
+                            float lx = imgX + safeLeft;
+                            dl->AddLine({lx, imgY}, {lx, imgY + imgH}, lineCol, 1.0f);
+                        }
+                        if (safeBottom > 0) {
+                            float ly = imgY + imgH - safeBottom;
+                            dl->AddLine({imgX, ly}, {imgX + imgW, ly}, lineCol, 1.0f);
+                        }
                     }
                 }
 
