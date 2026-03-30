@@ -1,0 +1,10 @@
+{
+    "fonts": [
+        {
+            "name": "default",
+            "type": "msdf",
+            "atlas": "assets/fonts/default.png",
+            "metrics": "assets/fonts/default.json"
+        }
+    ]
+}
