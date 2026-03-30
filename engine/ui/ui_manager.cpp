@@ -1568,7 +1568,8 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         bb->iconSize   = j.value("iconSize", 24.0f);
         bb->spacing    = j.value("spacing", 3.0f);
         bb->maxVisible = j.value("maxVisible", 12);
-        bb->stackFontSize = j.value("stackFontSize", 8.0f);
+        bb->stackFontSize  = j.value("stackFontSize", 8.0f);
+        bb->abbrevFontSize = j.value("abbrevFontSize", 7.0f);
         auto readColor = [&](const char* key, Color def) -> Color {
             if (j.contains(key) && j[key].is_array() && j[key].size() >= 3) {
                 auto& c = j[key];
@@ -1580,6 +1581,16 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         bb->stackTextColor      = readColor("stackTextColor",      bb->stackTextColor);
         bb->stackBadgeBgColor   = readColor("stackBadgeBgColor",   bb->stackBadgeBgColor);
         bb->cooldownOverlayColor = readColor("cooldownOverlayColor", bb->cooldownOverlayColor);
+        bb->abbrevTextColor     = readColor("abbrevTextColor",     bb->abbrevTextColor);
+        bb->tooltipBgColor      = readColor("tooltipBgColor",      bb->tooltipBgColor);
+        bb->tooltipBorderColor  = readColor("tooltipBorderColor",  bb->tooltipBorderColor);
+        bb->tooltipTextColor    = readColor("tooltipTextColor",    bb->tooltipTextColor);
+        bb->tooltipFontSize  = j.value("tooltipFontSize", 9.0f);
+        bb->tooltipPadding   = j.value("tooltipPadding", 6.0f);
+        bb->tooltipWidth     = j.value("tooltipWidth", 140.0f);
+        bb->iconAtlasKey  = j.value("iconAtlasKey", std::string{});
+        bb->iconAtlasCols = j.value("iconAtlasCols", 8);
+        bb->iconAtlasRows = j.value("iconAtlasRows", 4);
         node = std::move(bb);
     }
     else if (type == "boss_hp_bar") {
@@ -1981,6 +1992,31 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         if (j.contains("borderWidth"))  s.borderWidth = j["borderWidth"].get<float>();
         if (j.contains("fontSize"))     s.fontSize    = j["fontSize"].get<float>();
         if (j.contains("opacity"))      s.opacity     = j["opacity"].get<float>();
+        // Rounded rect / gradient / shadow
+        if (j.contains("cornerRadius"))    s.cornerRadius  = j["cornerRadius"].get<float>();
+        if (j.contains("gradientTop"))     { auto c = readColor("gradientTop");   if (c.a > 0.0f) s.gradientTop   = c; }
+        if (j.contains("gradientBottom"))  { auto c = readColor("gradientBottom"); if (c.a > 0.0f) s.gradientBottom = c; }
+        if (j.contains("uiShadowOffset")) {
+            auto& so = j["uiShadowOffset"];
+            s.shadowOffset = {so[0].get<float>(), so[1].get<float>()};
+        }
+        if (j.contains("shadowBlur"))      s.shadowBlur    = j["shadowBlur"].get<float>();
+        if (j.contains("uiShadowColor"))   { auto c = readColor("uiShadowColor"); if (c.a > 0.0f) s.shadowColor = c; }
+        // Text effects
+        if (j.contains("textStyle"))       s.textStyle     = static_cast<TextStyle>(j["textStyle"].get<int>());
+        if (j.contains("textEffects")) {
+            auto& te = j["textEffects"];
+            if (te.contains("outlineColor"))  { Color c(te["outlineColor"][0].get<int>()/255.0f, te["outlineColor"][1].get<int>()/255.0f, te["outlineColor"][2].get<int>()/255.0f, te["outlineColor"][3].get<int>()/255.0f); s.textEffects.outlineColor = c; }
+            if (te.contains("outlineWidth"))  s.textEffects.outlineWidth = te["outlineWidth"].get<float>();
+            if (te.contains("shadowOffset")) {
+                auto& so = te["shadowOffset"];
+                s.textEffects.shadowOffset = {so[0].get<float>(), so[1].get<float>()};
+            }
+            if (te.contains("shadowColor"))  { Color c(te["shadowColor"][0].get<int>()/255.0f, te["shadowColor"][1].get<int>()/255.0f, te["shadowColor"][2].get<int>()/255.0f, te["shadowColor"][3].get<int>()/255.0f); s.textEffects.shadowColor = c; }
+            if (te.contains("glowColor"))    { Color c(te["glowColor"][0].get<int>()/255.0f, te["glowColor"][1].get<int>()/255.0f, te["glowColor"][2].get<int>()/255.0f, te["glowColor"][3].get<int>()/255.0f); s.textEffects.glowColor = c; }
+            if (te.contains("glowRadius"))   s.textEffects.glowRadius = te["glowRadius"].get<float>();
+        }
+        if (j.contains("fontName"))        s.fontName = j["fontName"].get<std::string>();
     }
 
     // --- Z-order ---
@@ -2175,6 +2211,18 @@ void UIManager::applyThemeStyles(UINode* node) {
             s.textColor = inlineOverrides.textColor;
         if (inlineOverrides.borderWidth > 0.0f)        s.borderWidth    = inlineOverrides.borderWidth;
         if (inlineOverrides.opacity != 1.0f)           s.opacity        = inlineOverrides.opacity;
+        // Rounded rect / gradient / shadow inline overrides
+        if (inlineOverrides.cornerRadius > 0.0f)       s.cornerRadius   = inlineOverrides.cornerRadius;
+        if (inlineOverrides.gradientTop.a > 0.0f)      s.gradientTop    = inlineOverrides.gradientTop;
+        if (inlineOverrides.gradientBottom.a > 0.0f)   s.gradientBottom = inlineOverrides.gradientBottom;
+        if (inlineOverrides.shadowOffset.x != 0.0f || inlineOverrides.shadowOffset.y != 0.0f)
+            s.shadowOffset = inlineOverrides.shadowOffset;
+        if (inlineOverrides.shadowBlur > 0.0f)         s.shadowBlur     = inlineOverrides.shadowBlur;
+        if (inlineOverrides.shadowColor.a > 0.0f)      s.shadowColor    = inlineOverrides.shadowColor;
+        // Text effects inline overrides
+        if (inlineOverrides.textStyle != TextStyle::Normal) s.textStyle  = inlineOverrides.textStyle;
+        if (inlineOverrides.textStyle != TextStyle::Normal) s.textEffects = inlineOverrides.textEffects;
+        if (!inlineOverrides.fontName.empty())          s.fontName       = inlineOverrides.fontName;
     }
 
     for (size_t i = 0; i < node->childCount(); ++i) {

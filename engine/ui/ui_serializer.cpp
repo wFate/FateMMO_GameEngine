@@ -147,6 +147,29 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["textColor"] = colorArr(s.textColor);
         if (s.fontSize != 14.0f)          j["fontSize"]         = s.fontSize;
         if (s.opacity != 1.0f)            j["opacity"]          = s.opacity;
+        // Rounded rect
+        if (s.cornerRadius > 0.0f)        j["cornerRadius"]  = s.cornerRadius;
+        if (s.gradientTop.a > 0.0f)       j["gradientTop"]   = colorArr(s.gradientTop);
+        if (s.gradientBottom.a > 0.0f)    j["gradientBottom"] = colorArr(s.gradientBottom);
+        if (s.shadowOffset.x != 0.0f || s.shadowOffset.y != 0.0f)
+                                           j["uiShadowOffset"]  = nlohmann::json::array({s.shadowOffset.x, s.shadowOffset.y});
+        if (s.shadowBlur > 0.0f)          j["shadowBlur"]    = s.shadowBlur;
+        if (s.shadowColor.a > 0.0f)       j["uiShadowColor"]   = colorArr(s.shadowColor);
+        // Text effects
+        if (s.textStyle != TextStyle::Normal) j["textStyle"] = static_cast<int>(s.textStyle);
+        if (s.textStyle != TextStyle::Normal) {
+            auto& te = s.textEffects;
+            nlohmann::json tej;
+            tej["outlineColor"]     = colorArr(te.outlineColor);
+            tej["outlineWidth"]     = te.outlineWidth;
+            tej["shadowOffset"]     = nlohmann::json::array({te.shadowOffset.x, te.shadowOffset.y});
+            tej["shadowColor"]      = colorArr(te.shadowColor);
+            tej["glowColor"]        = colorArr(te.glowColor);
+            tej["glowRadius"]       = te.glowRadius;
+            j["textEffects"]        = tej;
+        }
+        // fontName (was missing from inline serialization)
+        if (!s.fontName.empty())          j["fontName"] = s.fontName;
     }
 
     // --- zOrder ---
@@ -536,9 +559,20 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["spacing"]    = w->spacing;
             j["maxVisible"] = w->maxVisible;
             j["stackFontSize"] = w->stackFontSize;
+            j["abbrevFontSize"] = w->abbrevFontSize;
             j["stackTextColor"]      = {w->stackTextColor.r, w->stackTextColor.g, w->stackTextColor.b, w->stackTextColor.a};
             j["stackBadgeBgColor"]   = {w->stackBadgeBgColor.r, w->stackBadgeBgColor.g, w->stackBadgeBgColor.b, w->stackBadgeBgColor.a};
             j["cooldownOverlayColor"] = {w->cooldownOverlayColor.r, w->cooldownOverlayColor.g, w->cooldownOverlayColor.b, w->cooldownOverlayColor.a};
+            j["abbrevTextColor"]     = {w->abbrevTextColor.r, w->abbrevTextColor.g, w->abbrevTextColor.b, w->abbrevTextColor.a};
+            j["tooltipBgColor"]      = {w->tooltipBgColor.r, w->tooltipBgColor.g, w->tooltipBgColor.b, w->tooltipBgColor.a};
+            j["tooltipBorderColor"]  = {w->tooltipBorderColor.r, w->tooltipBorderColor.g, w->tooltipBorderColor.b, w->tooltipBorderColor.a};
+            j["tooltipTextColor"]    = {w->tooltipTextColor.r, w->tooltipTextColor.g, w->tooltipTextColor.b, w->tooltipTextColor.a};
+            j["tooltipFontSize"]  = w->tooltipFontSize;
+            j["tooltipPadding"]   = w->tooltipPadding;
+            j["tooltipWidth"]     = w->tooltipWidth;
+            if (!w->iconAtlasKey.empty()) j["iconAtlasKey"] = w->iconAtlasKey;
+            j["iconAtlasCols"] = w->iconAtlasCols;
+            j["iconAtlasRows"] = w->iconAtlasRows;
         }
     }
     else if (type == "boss_hp_bar") {
