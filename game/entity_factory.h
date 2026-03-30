@@ -29,7 +29,8 @@ public:
 
     /// Create a mob from a database-backed CachedMobDef (73 mob definitions).
     /// Uses all stats from the definition (HP/damage/armor scaled by level, AI ranges, loot, etc).
-    static Entity* createMobFromDef(World& world, const CachedMobDef& def, int level, Vec2 spawnPos);
+    static Entity* createMobFromDef(World& world, const CachedMobDef& def, int level,
+                                    Vec2 spawnPos, const std::string& sceneId = "");
 
     /// Create a mob entity with AI and stats (hardcoded fallback).
     /// Used when no MobDefCache is available (client, tests, legacy).

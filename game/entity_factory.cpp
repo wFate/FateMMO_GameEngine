@@ -181,7 +181,7 @@ Entity* EntityFactory::createPlayer(World& world, const std::string& name, Class
 /// Create a mob from a database-backed CachedMobDef (73 mob definitions).
 /// Uses all stats from the definition (HP/damage/armor scaled by level, AI ranges, loot, etc).
 Entity* EntityFactory::createMobFromDef(World& world, const CachedMobDef& def, int level,
-                                Vec2 spawnPos) {
+                                Vec2 spawnPos, const std::string& sceneId) {
     Entity* mob = world.createEntity(def.displayName);
     mob->setTag(def.isBoss ? "boss" : "mob");
 
@@ -278,6 +278,7 @@ Entity* EntityFactory::createMobFromDef(World& world, const CachedMobDef& def, i
     es.monsterType    = def.monsterType;
     // Don't call initialize() — we already computed scaled values from the def
     es.isAlive        = true;
+    es.sceneId        = sceneId;
 
     // Status Effects (mobs can have DoTs, debuffs)
     mob->addComponent<StatusEffectComponent>();
@@ -301,7 +302,7 @@ Entity* EntityFactory::createMobFromDef(World& world, const CachedMobDef& def, i
     aiComp->ai.roamRadius      = 3.0f * Coords::TILE_SIZE;
     aiComp->ai.stuckThreshold  = 0.05f * Coords::TILE_SIZE;
     aiComp->ai.wiggleDistance   = 1.5f * Coords::TILE_SIZE;
-    aiComp->ai.attackCooldown  = (def.attackSpeed > 0.0f) ? (1.5f / def.attackSpeed) : 1.5f;
+    aiComp->ai.attackCooldown  = def.attackSpeed;  // direct seconds (matches server)
 
     // Mob nameplate
     auto* nameplate = mob->addComponent<MobNameplateComponent>();
