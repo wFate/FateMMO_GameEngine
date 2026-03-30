@@ -1,3 +1,5 @@
+*FULL RELEASE SOON*
+
 <div align="center">
 
 # ⚔️ FateMMO Game Engine
