@@ -1783,10 +1783,15 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         skillComp->skills.initialize(&charStatsComp->stats);
     }
     if (skillComp) {
+        // Load skill points FIRST so activateSkillRank has points to spend
+        auto sp = skillRepo_->loadSkillPoints(rec.character_id);
+        for (int i = 0; i < sp.totalEarned; ++i)
+            skillComp->skills.grantSkillPoint();
+
         auto skills = skillRepo_->loadCharacterSkills(rec.character_id);
         for (const auto& s : skills) {
             skillComp->skills.learnSkill(s.skillId, s.unlockedRank);
-            // activateSkillRank activates the NEXT rank each call
+            // activateSkillRank activates the NEXT rank each call, consuming a point each time
             for (int r = 0; r < s.activatedRank; ++r)
                 skillComp->skills.activateSkillRank(s.skillId);
         }
@@ -1795,10 +1800,6 @@ void ServerApp::onClientConnected(uint16_t clientId) {
             if (!skillBar[i].empty())
                 skillComp->skills.assignSkillToSlot(skillBar[i], i);
         }
-        auto sp = skillRepo_->loadSkillPoints(rec.character_id);
-        // Restore earned skill points; activateSkillRank above already consumed spent ones
-        for (int i = 0; i < sp.totalEarned; ++i)
-            skillComp->skills.grantSkillPoint();
 
         // Register all skill definitions so executeSkill can look them up.
         // getSkillsForClass returns class-specific + classless skills.
