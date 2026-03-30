@@ -14,7 +14,11 @@ int main(int argc, char* argv[]) {
     fate::GameApp game;
 
     fate::AppConfig config;
+#ifdef FATE_SHIPPING
+    config.title = "FateMMO";
+#else
     config.title = "FateMMO Engine";
+#endif
     config.windowWidth = 1280;
     config.windowHeight = 720;
     config.vsync = true;
