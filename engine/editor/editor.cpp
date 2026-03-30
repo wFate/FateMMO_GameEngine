@@ -417,6 +417,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
 
     dialogueEditor_.draw();
     animationEditor_.draw();
+    paperDollPanel_.draw();
 
     // UI editor panels (hierarchy tree + inspector)
     if (uiManager_) {
@@ -626,6 +627,10 @@ void Editor::drawDockSpace() {
                 animationEditor_.setOpen(animOpen);
             }
             ImGui::MenuItem("Combat Text Editor", nullptr, &showCombatTextEditor_);
+            bool pdOpen = paperDollPanel_.isOpen();
+            if (ImGui::MenuItem("Paper Doll Manager", nullptr, &pdOpen)) {
+                paperDollPanel_.setOpen(pdOpen);
+            }
             ImGui::EndMenu();
         }
 

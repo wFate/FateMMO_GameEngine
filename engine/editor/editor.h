@@ -20,6 +20,7 @@
 #include "engine/editor/combat_text_editor.h"
 #include "engine/editor/asset_browser.h"
 #include "engine/editor/ui_editor_panel.h"
+#include "engine/editor/paper_doll_panel.h"
 #include <ImGuizmo.h>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
@@ -371,6 +372,9 @@ private:
 
     // Animation editor panel
     AnimationEditor animationEditor_;
+
+    // Paper doll editor panel
+    PaperDollPanel paperDollPanel_;
 
     // Combat text editor
     bool showCombatTextEditor_ = false;
