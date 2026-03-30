@@ -411,6 +411,14 @@ void SpriteBatch::flush() {
         cmdList_->setUniform("u_atlasSize", Vec2{512.0f, 512.0f});
         cmdList_->setUniform("u_shadowOffset", Vec2{0.002f, 0.002f});
 
+        // Text effect defaults (match previous hardcoded values)
+        cmdList_->setUniform("u_outlineColor", Vec4{0.0f, 0.0f, 0.0f, 1.0f});
+        cmdList_->setUniform("u_outlineThickness", 0.35f);
+        cmdList_->setUniform("u_textShadowOffset", Vec2{0.002f, 0.002f});
+        cmdList_->setUniform("u_textShadowColor", Vec4{0.0f, 0.0f, 0.0f, 0.5f});
+        cmdList_->setUniform("u_textGlowColor", Vec4{1.0f, 1.0f, 1.0f, 0.6f});
+        cmdList_->setUniform("u_textGlowIntensity", 0.6f);
+
         cmdList_->bindVertexBuffer(vboHandle_);
         cmdList_->bindIndexBuffer(eboHandle_);
 
@@ -570,6 +578,14 @@ void SpriteBatch::flush() {
     shader_.setFloat("u_pxRange", 4.0f);
     shader_.setVec2("u_atlasSize", {512.0f, 512.0f});
     shader_.setVec2("u_shadowOffset", {0.002f, 0.002f});
+
+    // Text effect defaults (match previous hardcoded values)
+    shader_.setVec4("u_outlineColor", {0.0f, 0.0f, 0.0f, 1.0f});
+    shader_.setFloat("u_outlineThickness", 0.35f);
+    shader_.setVec2("u_textShadowOffset", {0.002f, 0.002f});
+    shader_.setVec4("u_textShadowColor", {0.0f, 0.0f, 0.0f, 0.5f});
+    shader_.setVec4("u_textGlowColor", {1.0f, 1.0f, 1.0f, 0.6f});
+    shader_.setFloat("u_textGlowIntensity", 0.6f);
 
     glBindVertexArray(vao_);
 
