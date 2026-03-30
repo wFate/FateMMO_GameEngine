@@ -1542,7 +1542,7 @@ void GameApp::onInit() {
 
     // Load font registry
     {
-        static fate::FontRegistry fontRegistry;
+        auto& fontRegistry = fate::FontRegistry::instance();
         if (fontRegistry.parseManifest("assets/fonts/fonts.json")) {
             fontRegistry.loadAtlases();
             fate::SDFText::instance().setFontRegistry(&fontRegistry);
