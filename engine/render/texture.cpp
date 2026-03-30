@@ -300,6 +300,17 @@ void Texture::unbind() const {
 #endif
 }
 
+void Texture::setFilter(bool linear) {
+#ifndef FATEMMO_METAL
+    if (!textureId_) return;
+    GLenum filter = linear ? GL_LINEAR : GL_NEAREST;
+    glBindTexture(GL_TEXTURE_2D, textureId_);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+    glBindTexture(GL_TEXTURE_2D, 0);
+#endif
+}
+
 // TextureCache
 std::shared_ptr<Texture> TextureCache::load(const std::string& path) {
     auto it = cache_.find(path);

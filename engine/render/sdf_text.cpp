@@ -10,6 +10,8 @@
 #include "stb_image.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <cmath>
+#include <algorithm>
 
 using json = nlohmann::json;
 
@@ -267,6 +269,178 @@ Vec2 SDFText::measure(const std::string& text, float fontSize) const {
 
     if (totalWidth > maxWidth) maxWidth = totalWidth;
     return {maxWidth, lineHeight_ * fontSize * lines};
+}
+
+void SDFText::setFontRegistry(FontRegistry* registry) {
+    fontRegistry_ = registry;
+}
+
+void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 position,
+                           float fontSize, Color color, float depth, TextStyle style,
+                           const std::string& fontName) {
+    if (fontRegistry_) {
+        SDFFont* font = fontRegistry_->getFont(fontName);
+        if (font) {
+            if (font->type == SDFFont::Type::Bitmap) {
+                drawBitmap(batch, *font, text, position, fontSize, color, depth, true);
+                return;
+            }
+            // MSDF font from registry: temporarily swap in the font's data
+            auto savedGlyphs      = std::move(glyphs_);
+#ifndef FATEMMO_METAL
+            auto savedAtlasTexId  = atlasTexId_;
+#endif
+            auto savedAtlasGfx    = atlasGfxHandle_;
+            auto savedAtlasWidth  = atlasWidth_;
+            auto savedAtlasHeight = atlasHeight_;
+            auto savedPxRange     = pxRange_;
+            auto savedLineHeight  = lineHeight_;
+            auto savedAscender    = ascender_;
+            auto savedEmSize      = emSize_;
+
+            glyphs_      = font->glyphs;
+#ifndef FATEMMO_METAL
+            atlasTexId_  = font->atlas ? font->atlas->id() : 0;
+#endif
+            atlasGfxHandle_ = font->atlas ? font->atlas->gfxHandle() : gfx::TextureHandle{};
+            atlasWidth_  = font->atlasWidth;
+            atlasHeight_ = font->atlasHeight;
+            pxRange_     = font->pxRange;
+            lineHeight_  = font->lineHeight;
+            ascender_    = font->ascender;
+            emSize_      = font->emSize;
+
+            drawInternal(batch, text, position, fontSize, color, depth, style, true);
+
+            glyphs_         = std::move(savedGlyphs);
+#ifndef FATEMMO_METAL
+            atlasTexId_     = savedAtlasTexId;
+#endif
+            atlasGfxHandle_ = savedAtlasGfx;
+            atlasWidth_     = savedAtlasWidth;
+            atlasHeight_    = savedAtlasHeight;
+            pxRange_        = savedPxRange;
+            lineHeight_     = savedLineHeight;
+            ascender_       = savedAscender;
+            emSize_         = savedEmSize;
+            return;
+        }
+    }
+    // Fallback: use default font
+    drawInternal(batch, text, position, fontSize, color, depth, style, true);
+}
+
+Vec2 SDFText::measureEx(const std::string& text, float fontSize,
+                        const std::string& fontName) const {
+    if (fontRegistry_) {
+        SDFFont* font = fontRegistry_->getFont(fontName);
+        if (font) {
+            if (font->type == SDFFont::Type::Bitmap) {
+                return measureBitmap(*font, text, fontSize);
+            }
+            // MSDF font from registry: compute using font's glyphs/metrics
+            const float scale = fontSize;
+            float totalWidth = 0.0f;
+            float maxWidth   = 0.0f;
+            int lines = 1;
+
+            size_t i = 0;
+            while (i < text.size()) {
+                uint32_t cp = decodeUTF8(text, i);
+                if (cp == '\n') {
+                    if (totalWidth > maxWidth) maxWidth = totalWidth;
+                    totalWidth = 0.0f;
+                    lines++;
+                    continue;
+                }
+                auto it = font->glyphs.find(cp);
+                if (it != font->glyphs.end()) {
+                    totalWidth += it->second.advance * scale;
+                }
+            }
+            if (totalWidth > maxWidth) maxWidth = totalWidth;
+            return {maxWidth, font->lineHeight * fontSize * lines};
+        }
+    }
+    return measure(text, fontSize);
+}
+
+void SDFText::drawBitmap(SpriteBatch& batch, const SDFFont& font, const std::string& text,
+                         Vec2 position, float fontSize, Color color, float depth, bool yDown) {
+    if (!font.atlas || font.glyphHeight <= 0 || font.columns <= 0) return;
+
+    int scale = std::max(1, static_cast<int>(std::round(fontSize / font.glyphHeight)));
+    float scaledW = static_cast<float>(font.glyphWidth * scale);
+    float scaledH = static_cast<float>(font.glyphHeight * scale);
+    float atlasW  = static_cast<float>(font.atlas->width());
+    float atlasH  = static_cast<float>(font.atlas->height());
+    float cellU   = static_cast<float>(font.glyphWidth) / atlasW;
+    float cellV   = static_cast<float>(font.glyphHeight) / atlasH;
+
+    float penX = position.x;
+    float penY = position.y;
+    float startX = position.x;
+
+    size_t i = 0;
+    while (i < text.size()) {
+        uint32_t cp = decodeUTF8(text, i);
+
+        if (cp == '\n') {
+            penX = startX;
+            penY += yDown ? scaledH : -scaledH;
+            continue;
+        }
+
+        int ch = static_cast<int>(cp);
+        if (ch < font.firstChar || ch > font.lastChar) {
+            penX += scaledW;
+            continue;
+        }
+
+        int idx = ch - font.firstChar;
+        int col = idx % font.columns;
+        int row = idx / font.columns;
+
+        float u = col * cellU;
+        float v = row * cellV;
+
+        SpriteDrawParams params;
+        params.position  = {penX + scaledW * 0.5f, penY + scaledH * 0.5f};
+        params.size      = {scaledW, scaledH};
+        params.sourceRect = {u, v, cellU, cellV};
+        params.color     = color;
+        params.depth     = depth;
+
+        batch.drawTexturedQuad(font.atlas->gfxHandle(), font.atlas->id(), params, 0.0f);
+
+        penX += scaledW;
+    }
+}
+
+Vec2 SDFText::measureBitmap(const SDFFont& font, const std::string& text, float fontSize) const {
+    if (font.glyphHeight <= 0) return {0.0f, 0.0f};
+
+    int scale = std::max(1, static_cast<int>(std::round(fontSize / font.glyphHeight)));
+    float scaledW = static_cast<float>(font.glyphWidth * scale);
+    float scaledH = static_cast<float>(font.glyphHeight * scale);
+
+    float totalWidth = 0.0f;
+    float maxWidth   = 0.0f;
+    int lines = 1;
+
+    size_t i = 0;
+    while (i < text.size()) {
+        uint32_t cp = decodeUTF8(text, i);
+        if (cp == '\n') {
+            if (totalWidth > maxWidth) maxWidth = totalWidth;
+            totalWidth = 0.0f;
+            lines++;
+            continue;
+        }
+        totalWidth += scaledW;
+    }
+    if (totalWidth > maxWidth) maxWidth = totalWidth;
+    return {maxWidth, scaledH * lines};
 }
 
 unsigned int SDFText::atlasTextureId() const {

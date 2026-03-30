@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/core/types.h"
 #include "engine/render/sprite_batch.h"
+#include "engine/render/font_registry.h"
 #include "engine/render/gfx/types.h"
 #include <string>
 #include <unordered_map>
@@ -39,6 +40,16 @@ public:
 
     Vec2 measure(const std::string& text, float fontSize) const;
 
+    void setFontRegistry(FontRegistry* registry);
+
+    void drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 position,
+                      float fontSize, Color color = Color::white(), float depth = 50.0f,
+                      TextStyle style = TextStyle::Normal,
+                      const std::string& fontName = "default");
+
+    Vec2 measureEx(const std::string& text, float fontSize,
+                   const std::string& fontName = "default") const;
+
     unsigned int atlasTextureId() const;
     gfx::TextureHandle atlasGfxHandle() const { return atlasGfxHandle_; }
     static Mat4 screenProjection(int windowWidth, int windowHeight);
@@ -58,9 +69,14 @@ private:
     float emSize_ = 48.0f;
     std::unordered_map<uint32_t, GlyphMetrics> glyphs_;
 
+    FontRegistry* fontRegistry_ = nullptr;
+
     void loadMetrics(const std::string& jsonPath);
     void drawInternal(SpriteBatch& batch, const std::string& text, Vec2 position,
                       float fontSize, Color color, float depth, TextStyle style, bool yDown);
+    void drawBitmap(SpriteBatch& batch, const SDFFont& font, const std::string& text,
+                    Vec2 position, float fontSize, Color color, float depth, bool yDown);
+    Vec2 measureBitmap(const SDFFont& font, const std::string& text, float fontSize) const;
 };
 
 } // namespace fate

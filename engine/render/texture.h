@@ -33,6 +33,7 @@ public:
 
     void bind(unsigned int slot = 0) const;
     void unbind() const;
+    void setFilter(bool linear);
 
     unsigned int id() const {
 #ifdef FATEMMO_METAL
