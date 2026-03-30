@@ -21,6 +21,7 @@
 #include "engine/particle/particle_emitter_component.h"
 #include "engine/render/point_light_component.h"
 #include "game/components/spawn_point_component.h"
+#include "game/components/boss_spawn_point_component.h"
 #include "game/components/tile_layer_component.h"
 
 #include <nlohmann/json.hpp>
