@@ -1239,6 +1239,16 @@ void ServerApp::tick(float dt) {
     // 4. Replicate entity state to connected clients
     replication_.update(world_, server_);
 
+    // 4b. Send server heartbeats to all clients every 5 seconds
+    // (keeps client lastPacketReceived_ fresh even when no game data is flowing)
+    serverHeartbeatTimer_ += dt;
+    if (serverHeartbeatTimer_ >= 5.0f) {
+        serverHeartbeatTimer_ = 0.0f;
+        server_.connections().forEach([this](ClientConnection& c) {
+            server_.sendTo(c.clientId, Channel::Unreliable, PacketType::Heartbeat, nullptr, 0);
+        });
+    }
+
     auto tp5 = Clock::now(); // after replication
 
     // 5. Retransmit unacked reliable packets
@@ -1532,18 +1542,29 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     // Drain any pending auth results that arrived between ticks
     consumePendingSessions();
 
-    // Look up auth token in pending sessions
+    // Look up auth token in pending sessions (fresh login) or active tokens (reconnect)
+    PendingSession session;
     auto it = pendingSessions_.find(client->authToken);
-    if (it == pendingSessions_.end()) {
-        LOG_WARN("Server", "Client %d has invalid or expired auth token; rejecting", clientId);
-        server_.sendConnectReject(client->address, "Invalid or expired auth token");
-        server_.connections().removeClient(clientId);
-        return;
+    if (it != pendingSessions_.end()) {
+        session = it->second;
+        pendingSessions_.erase(it);
+    } else {
+        // Check if this is a reconnecting client with a previously consumed token
+        auto ait = activeAuthTokens_.find(client->authToken);
+        if (ait != activeAuthTokens_.end()) {
+            session = ait->second;
+            LOG_INFO("Server", "Client %d reconnecting with active auth token (account %d)",
+                     clientId, session.account_id);
+        } else {
+            LOG_WARN("Server", "Client %d has invalid or expired auth token; rejecting", clientId);
+            server_.sendConnectReject(client->address, "Invalid or expired auth token");
+            server_.connections().removeClient(clientId);
+            return;
+        }
     }
 
-    // Consume the pending session
-    PendingSession session = it->second;
-    pendingSessions_.erase(it);
+    // Store token for future reconnections
+    activeAuthTokens_[client->authToken] = session;
 
     client->account_id = session.account_id;
     client->character_id = session.character_id;
@@ -1968,6 +1989,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
     auto* seComp = player->getComponent<StatusEffectComponent>();
     if (seComp && charStatsComp) {
         seComp->effects.onDoTTick = [this, clientId](EffectType type, int damage) {
+            if (damage <= 0) return; // Skip 0-damage ticks (GM test mode)
             auto* cl = server_.connections().findById(clientId);
             if (!cl || cl->playerEntityId == 0) return;
             PersistentId p(cl->playerEntityId);
@@ -2009,6 +2031,24 @@ void ServerApp::onClientConnected(uint16_t clientId) {
                 uint8_t dbuf[32]; ByteWriter dw(dbuf, sizeof(dbuf));
                 deathMsg.write(dw);
                 server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvDeathNotify, dbuf, dw.size());
+            }
+        };
+
+        // Wire HoT tick callback: heal this player entity
+        seComp->effects.onHoTTick = [this, clientId](EffectType /*type*/, int heal) {
+            auto* cl = server_.connections().findById(clientId);
+            if (!cl || cl->playerEntityId == 0) return;
+            PersistentId p(cl->playerEntityId);
+            EntityHandle eh = getReplicationForClient(clientId).getEntityHandle(p);
+            Entity* ent = getWorldForClient(clientId).getEntity(eh);
+            if (!ent) return;
+            auto* cs = ent->getComponent<CharacterStatsComponent>();
+            if (!cs || !cs->stats.isAlive()) return;
+
+            int before = cs->stats.currentHP;
+            cs->stats.currentHP = (std::min)(cs->stats.maxHP, cs->stats.currentHP + heal);
+            if (cs->stats.currentHP != before) {
+                playerDirty_[clientId].vitals = true;
             }
         };
     }
@@ -2177,10 +2217,13 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     }
     playerDirty_.erase(clientId);
 
-    // Remove from active account sessions
+    // Remove from active account sessions and active auth tokens
     auto* client = server_.connections().findById(clientId);
     if (client && client->account_id != 0) {
         activeAccountSessions_.erase(client->account_id);
+    }
+    if (client) {
+        activeAuthTokens_.erase(client->authToken);
     }
 
     if (client && client->playerEntityId != 0) {

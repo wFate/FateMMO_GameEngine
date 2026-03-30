@@ -129,6 +129,7 @@ public:
     std::function<void(const SvCostumeSyncMsg&)> onCostumeSync;
     std::function<void(const SvCostumeUpdateMsg&)> onCostumeUpdate;
     std::function<void(const SvCostumeDefsMsg&)> onCostumeDefs;
+    std::function<void(const SvBuffSyncMsg&)> onBuffSync;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:
@@ -157,9 +158,9 @@ private:
     float reconnectDelay_ = 1.0f;
     float reconnectStartTime_ = 0.0f;  // when reconnect began (for total timeout)
     float reconnectLastTick_ = 0.0f;   // last poll time (for delta-based timer)
-    static constexpr float RECONNECT_TIMEOUT = 60.0f;
-    static constexpr float MAX_RECONNECT_DELAY = 30.0f;
-    static constexpr float HEARTBEAT_TIMEOUT = 8.0f;
+    static constexpr float RECONNECT_TIMEOUT = 5.0f;
+    static constexpr float MAX_RECONNECT_DELAY = 2.0f;
+    static constexpr float HEARTBEAT_TIMEOUT = 15.0f;
     int heartbeatCounter_ = 0;
     std::string lastHost_;
     uint16_t lastPort_ = 0;

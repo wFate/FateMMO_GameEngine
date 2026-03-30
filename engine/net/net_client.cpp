@@ -630,6 +630,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onCostumeDefs) onCostumeDefs(msg);
             break;
         }
+        case PacketType::SvBuffSync: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvBuffSyncMsg::read(payload);
+            if (onBuffSync) onBuffSync(msg);
+            break;
+        }
         default:
             break;
     }

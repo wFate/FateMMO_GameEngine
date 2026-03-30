@@ -51,6 +51,7 @@ public:
     // Override these in your game
     virtual void onInit() {}
     virtual void onUpdate(float deltaTime) {}
+    virtual void onLoadingUpdate(float deltaTime) {}   // called even while isLoading_
     virtual void onFixedUpdate(float fixedDeltaTime) {}
     virtual void onRender(SpriteBatch& batch, Camera& camera) {}
     virtual void onShutdown() {}

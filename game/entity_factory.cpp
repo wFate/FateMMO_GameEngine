@@ -21,13 +21,9 @@ Entity* EntityFactory::createPlayer(World& world, const std::string& name, Class
     transform->depth = 10.0f;
 
     auto* sprite = player->addComponent<SpriteComponent>();
-    sprite->texturePath = "assets/sprites/player.png";
-    sprite->texture = TextureCache::instance().load(sprite->texturePath);
-    if (sprite->texture) {
-        sprite->size = {(float)sprite->texture->width(), (float)sprite->texture->height()};
-    } else {
-        sprite->size = {20.0f, 33.0f};  // Trimmed player sprite default
-    }
+    // Rendering is handled by the paper doll system (AppearanceComponent);
+    // SpriteComponent only provides size for the collider and flipX for facing.
+    sprite->size = {48.0f, 96.0f};
 
     auto* collider = player->addComponent<BoxCollider>();
     collider->size = {sprite->size.x - 4.0f, sprite->size.y * 0.5f};

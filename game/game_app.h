@@ -21,7 +21,7 @@
 #include "engine/audio/audio_manager.h"
 #include "engine/spatial/collision_grid.h"
 #include "engine/scene/async_scene_loader.h"
-#include "engine/render/loading_screen.h"
+#include "engine/ui/widgets/loading_panel.h"
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -63,6 +63,7 @@ class GameApp : public App {
 public:
     void onInit() override;
     void onUpdate(float deltaTime) override;
+    void onLoadingUpdate(float deltaTime) override;
     void onRender(SpriteBatch& batch, Camera& camera) override;
     void onShutdown() override;
 
@@ -104,7 +105,7 @@ private:
     std::string destroyItemId_;                     // instance ID for race-condition safety
     bool inDungeon_ = false;                         // true while inside a dungeon instance
     AsyncSceneLoader asyncLoader_;
-    LoadingScreen loadingScreen_;
+    LoadingPanel* loadingPanel_ = nullptr;
     AudioManager audioManager_;
     CollisionGrid collisionGrid_;
     InterpolationManager ghostInterpolation_;

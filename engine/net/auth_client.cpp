@@ -105,6 +105,12 @@ void AuthClient::cleanup() {
     }
     shouldStop_.store(false);
     connected_.store(false);
+    // Drain any stale commands (e.g. Disconnect left over from disconnectAuth)
+    {
+        std::lock_guard<std::mutex> lock(cmdMutex_);
+        std::queue<AuthCommand> empty;
+        cmdQueue_.swap(empty);
+    }
 }
 
 void AuthClient::pushResult(AuthClientResult result) {

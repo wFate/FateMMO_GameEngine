@@ -51,6 +51,7 @@
 #include "engine/ui/widgets/menu_tab_bar.h"
 #include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/settings_panel.h"
+#include "engine/ui/widgets/loading_panel.h"
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -1048,6 +1049,30 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         cp->placeholderColor      = readColor("placeholderColor",      cp->placeholderColor);
 
         node = std::move(cp);
+    }
+    else if (type == "loading_panel") {
+        auto lp = std::make_unique<LoadingPanel>(id);
+        auto readColor = [&](const char* key, Color def) -> Color {
+            if (j.contains(key) && j[key].is_array() && j[key].size() >= 3) {
+                auto& c = j[key];
+                return {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(),
+                        c.size() >= 4 ? c[3].get<float>() : 1.0f};
+            }
+            return def;
+        };
+        lp->barHeight    = j.value("barHeight",    lp->barHeight);
+        lp->barPadX      = j.value("barPadX",      lp->barPadX);
+        lp->barBottomY   = j.value("barBottomY",   lp->barBottomY);
+        lp->nameFontSize = j.value("nameFontSize", lp->nameFontSize);
+        lp->pctFontSize  = j.value("pctFontSize",  lp->pctFontSize);
+        lp->shadowOffset = j.value("shadowOffset", lp->shadowOffset);
+        lp->bgColor      = readColor("bgColor",      lp->bgColor);
+        lp->barBgColor   = readColor("barBgColor",   lp->barBgColor);
+        lp->barFillColor = readColor("barFillColor", lp->barFillColor);
+        lp->nameColor    = readColor("nameColor",    lp->nameColor);
+        lp->pctColor     = readColor("pctColor",     lp->pctColor);
+        lp->shadowColor  = readColor("shadowColor",  lp->shadowColor);
+        node = std::move(lp);
     }
     else if (type == "trade_window") {
         auto tw = std::make_unique<TradeWindow>(id);

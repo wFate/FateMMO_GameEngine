@@ -196,6 +196,8 @@ private:
     // Session tracking
     std::unordered_map<AuthToken, PendingSession, AuthTokenHash> pendingSessions_;
     std::unordered_map<int, uint16_t> activeAccountSessions_; // account_id -> clientId
+    // Active auth tokens for reconnect: token -> session (survives initial consumption)
+    std::unordered_map<AuthToken, PendingSession, AuthTokenHash> activeAuthTokens_;
 
     // Per-client movement tracking
     std::unordered_map<uint16_t, Vec2>  lastValidPositions_;
@@ -219,6 +221,9 @@ private:
 
     // Per-client auto-attack cooldown tracking
     std::unordered_map<uint16_t, float> lastAutoAttackTime_;
+
+    // Per-client buff sync: last sent effect mask (send SvBuffSync when it changes)
+    std::unordered_map<uint16_t, uint32_t> lastBuffMask_;
 
     // Per-client token bucket rate limiters
     std::unordered_map<uint16_t, ClientRateLimiter> rateLimiters_;
@@ -248,6 +253,9 @@ private:
     float bountyExpiryTimer_ = 0.0f;
     float tradeCleanupTimer_ = 0.0f;
     float pvpKillLogPruneTimer_ = 0.0f;
+
+    // Server-to-client heartbeat timer (keeps clients' lastPacketReceived_ fresh)
+    float serverHeartbeatTimer_ = 0.0f;
 
     // Aurora rotation state
     Faction lastFavoredFaction_ = Faction::None;
@@ -318,6 +326,7 @@ private:
     void processCraft(uint16_t clientId, const CmdCraftMsg& msg);
     void recalcEquipmentBonuses(Entity* player);
     void sendPlayerState(uint16_t clientId);
+    void sendBuffSync(uint16_t clientId);
     void sendSkillSync(uint16_t clientId);
     void sendSkillDefs(uint16_t clientId, const std::string& className);
     void sendQuestSync(uint16_t clientId);

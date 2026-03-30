@@ -871,12 +871,6 @@ void GameApp::onInit() {
     };
 
     netClient_.onDeathNotify = [this](const SvDeathNotifyMsg& msg) {
-#ifndef FATE_SHIPPING
-        if (Editor::instance().isPaused()) {
-            LOG_WARN("GameApp", "Death notification ignored — editor is paused");
-            return;
-        }
-#endif
         LOG_INFO("GameApp", "Death notification received: xpLost=%d honorLost=%d timer=%.1f source=%d",
                  msg.xpLost, msg.honorLost, msg.respawnTimer, msg.deathSource);
 
@@ -1137,6 +1131,7 @@ void GameApp::onInit() {
     // Auth callbacks
     netClient_.onConnectRejected = [this](const std::string& reason) {
         LOG_WARN("GameApp", "Connection rejected: %s", reason.c_str());
+        if (loadingPanel_) loadingPanel_->hide();
         if (loginScreenWidget_) {
             loginScreenWidget_->setStatus("Connection rejected: " + reason, true);
             loginScreenWidget_->setVisible(true);
@@ -1195,13 +1190,21 @@ void GameApp::onInit() {
                 loginScreenWidget_->reset();
                 loginScreenWidget_->setVisible(true);
             }
-            LOG_INFO("GameApp", "Disconnected, cleaned up %zu ghost entities", ghostEntities_.size());
+
+            // Dismiss loading panel now that login is visible
+            if (loadingPanel_) loadingPanel_->hide();
+            setIsLoading(false);
+            LOG_INFO("GameApp", "Disconnected, cleaned up and returned to login");
         }
     };
 
     // When auto-reconnect starts (heartbeat timeout), clear stale ghost entities.
     // The server will re-send all entities on successful reconnect.
     netClient_.onReconnectStart = [this]() {
+        // Show loading panel to hide the frozen game state (no isLoading_ — we
+        // still need onUpdate() to run so the reconnect timeout state machine
+        // advances via netClient_.poll()).
+        if (loadingPanel_) { loadingPanel_->show("Reconnecting..."); loadingPanel_->setProgress(0.0f); }
         auto* scene = SceneManager::instance().currentScene();
         if (scene) {
             for (auto& [pid, handle] : ghostEntities_) {
@@ -1594,6 +1597,9 @@ void GameApp::onInit() {
         sceneFbo.bind();
 
         if (renderSystem_ && !isLoading()) {
+            // Feed current selection to render system for the ground circle
+            renderSystem_->selectedMobOrPlayerId = combatSystem_ ? combatSystem_->getTargetEntityId() : INVALID_ENTITY;
+            renderSystem_->selectedNPCHandle = npcInteractionSystem_ ? npcInteractionSystem_->interactingNPCHandle : EntityHandle{};
             renderSystem_->update(0.0f);
         }
 
@@ -1714,11 +1720,17 @@ void GameApp::onInit() {
             retainedUILoaded_ = false;
         } else if (screenId == "login") {
             loginScreenWidget_ = nullptr;
+        } else if (screenId == "loading_screen") {
+            loadingPanel_ = dynamic_cast<LoadingPanel*>(uiManager().getScreen("loading_screen"));
         }
     });
 
     // Load retained-mode login screen (visible immediately at startup)
     uiManager().loadScreen("assets/ui/screens/login.json");
+
+    // Load loading screen (always available, starts hidden)
+    uiManager().loadScreen("assets/ui/screens/loading_screen.json");
+    loadingPanel_ = dynamic_cast<LoadingPanel*>(uiManager().getScreen("loading_screen"));
 
 #ifdef EDITOR_BUILD
     // Pre-load all UI screens so the editor hierarchy always shows everything.
@@ -1825,6 +1837,7 @@ void GameApp::onInit() {
                 };
                 chatPanel_->onClose = [this](const std::string&) {
                     if (chatPanel_) chatPanel_->setFullPanelMode(false);
+                    uiManager().clearFocus();
                     Input::instance().setChatMode(false);
                 };
             }
@@ -1876,6 +1889,16 @@ void GameApp::onInit() {
     });
 
     LOG_INFO("Game", "Initialized");
+}
+
+void GameApp::onLoadingUpdate(float deltaTime) {
+    // isLoading_ is set during scene loads. If the server drops during a
+    // scene load and reconnect starts, we still need to poll the net client
+    // so the reconnect timeout fires and returns to login.
+    if (netClient_.isReconnecting()) {
+        netTime_ += deltaTime;
+        netClient_.poll(netTime_);
+    }
 }
 
 void GameApp::onUpdate(float deltaTime) {
@@ -2029,8 +2052,7 @@ void GameApp::onUpdate(float deltaTime) {
                     // Tell the editor which scene file is loaded so Ctrl+S works
                     Editor::instance().setCurrentScenePath(jsonPath);
 #endif
-                    loadingScreen_.begin(pendingSceneName_, windowWidth(), windowHeight());
-                    setLoadingScreen(&loadingScreen_);
+                    if (loadingPanel_) loadingPanel_->show(pendingSceneName_);
                     setIsLoading(true);
                     loadingMinTimer_ = 2.0f;
                     loadingDataReady_ = false;
@@ -2061,7 +2083,7 @@ void GameApp::onUpdate(float deltaTime) {
                 LOG_WARN("GameApp", "Disconnected during scene load");
                 connState_ = ConnectionState::LoginScreen;
                 setIsLoading(false);
-                loadingScreen_.end();
+                if (loadingPanel_) loadingPanel_->hide();
                 pendingZoneTransition_ = false;
                 if (loginScreenWidget_) {
                     loginScreenWidget_->setStatus("Disconnected", true);
@@ -2075,7 +2097,7 @@ void GameApp::onUpdate(float deltaTime) {
                 LOG_ERROR("GameApp", "Scene load failed: %s", asyncLoader_.errorMessage().c_str());
                 connState_ = ConnectionState::LoginScreen;
                 setIsLoading(false);
-                loadingScreen_.end();
+                if (loadingPanel_) loadingPanel_->hide();
                 pendingZoneTransition_ = false;
                 if (loginScreenWidget_) {
                     loginScreenWidget_->setStatus("Failed to load scene", true);
@@ -2110,7 +2132,7 @@ void GameApp::onUpdate(float deltaTime) {
 
                 connState_ = ConnectionState::InGame;
                 setIsLoading(false);
-                loadingScreen_.end();
+                if (loadingPanel_) loadingPanel_->hide();
 
                 // Clear zone transition flag and replay buffered entity enters
                 pendingZoneTransition_ = false;
@@ -2129,7 +2151,7 @@ void GameApp::onUpdate(float deltaTime) {
             }
 
             // Show real progress while loading, hold at 100% while waiting for min timer
-            setLoadingProgress(loadingDataReady_ ? 1.0f : asyncLoader_.progress());
+            if (loadingPanel_) loadingPanel_->setProgress(loadingDataReady_ ? 1.0f : asyncLoader_.progress());
             break;
         }
 
@@ -2158,6 +2180,9 @@ void GameApp::onUpdate(float deltaTime) {
                     // initial login uses pendingSpawnPos_ from auth response
                     auto* t = player->getComponent<Transform>();
                     if (t) t->position = isZoneTransition ? pendingZoneSpawn_ : pendingSpawnPos_;
+
+                    // Prevent portal overlap from triggering an instant zone transition
+                    if (zoneSystem_) zoneSystem_->setSpawnGrace(1.0f);
 
                     if (isZoneTransition) {
                         // Restore player state from last SvPlayerState (zone transition)
@@ -2441,6 +2466,7 @@ void GameApp::onUpdate(float deltaTime) {
                                     chatPanel_->addMessage(6, "[System]", "Whisper target set to " + charId, 0);
                                     // Switch chat to whisper channel with target pre-filled
                                     chatPanel_->setFullPanelMode(true);
+                                    uiManager().setFocus(chatPanel_);
                                     Input::instance().setChatMode(true);
                                 }
                             };
@@ -2456,6 +2482,7 @@ void GameApp::onUpdate(float deltaTime) {
                         };
                         chatPanel_->onClose = [this](const std::string&) {
                             if (chatPanel_) chatPanel_->setFullPanelMode(false);
+                            uiManager().clearFocus();
                             Input::instance().setChatMode(false);
                         };
                         // Replay chat messages that arrived before UI was ready
@@ -2511,6 +2538,10 @@ void GameApp::onUpdate(float deltaTime) {
                                 if (!chatPanel_) return;
                                 bool opening = !chatPanel_->isFullPanelMode();
                                 chatPanel_->setFullPanelMode(opening);
+                                if (opening)
+                                    uiManager().setFocus(chatPanel_);
+                                else
+                                    uiManager().clearFocus();
                                 Input::instance().setChatMode(opening);
                             };
                             statusBar->onMenuItemSelected = [this](const std::string& item) {
@@ -2899,9 +2930,10 @@ void GameApp::onUpdate(float deltaTime) {
                     }
 
                     // Load and wire NPC panels screen
-                    ui.loadScreen("assets/ui/screens/npc_panels.json");
+                    if (!ui.getScreen("npc_panels")) ui.loadScreen("assets/ui/screens/npc_panels.json");
                     auto* npcScreen = ui.getScreen("npc_panels");
                     if (npcScreen) {
+                        npcScreen->setVisible(true);
                         npcDialoguePanel_ = dynamic_cast<NpcDialoguePanel*>(npcScreen->findById("npc_dialogue_panel"));
                         shopPanel_ = dynamic_cast<ShopPanel*>(npcScreen->findById("shop_panel"));
                         bankPanel_ = dynamic_cast<BankPanel*>(npcScreen->findById("bank_panel"));
@@ -3100,6 +3132,16 @@ void GameApp::onUpdate(float deltaTime) {
 
             // Network: poll for server messages and send movement
             netTime_ += deltaTime;
+            // Poll during reconnect so the timeout state machine advances
+            if (!netClient_.isConnected() && netClient_.isReconnecting()) {
+                netClient_.poll(netTime_);
+            }
+            // Reconnect succeeded — dismiss the "Reconnecting..." overlay
+            if (netClient_.isConnected() && !netClient_.isReconnecting() &&
+                loadingPanel_ && loadingPanel_->visibleSelf()) {
+                loadingPanel_->hide();
+                LOG_INFO("GameApp", "Reconnect succeeded, dismissed loading panel");
+            }
             if (netClient_.isConnected()) {
                 // If play mode was stopped (paused but not in play mode), sever the
                 // connection — otherwise server messages keep creating ghost entities
@@ -3146,8 +3188,7 @@ void GameApp::onUpdate(float deltaTime) {
 #ifndef FATE_SHIPPING
                     Editor::instance().setCurrentScenePath(jsonPath);
 #endif
-                    loadingScreen_.begin(pendingZoneScene_, windowWidth(), windowHeight());
-                    setLoadingScreen(&loadingScreen_);
+                    if (loadingPanel_) loadingPanel_->show(pendingZoneScene_);
                     setIsLoading(true);
                     loadingMinTimer_ = 2.0f;
                     loadingDataReady_ = false;
@@ -3879,6 +3920,7 @@ void GameApp::onUpdate(float deltaTime) {
                 (chatPanel_->visible() || chatPanel_->isFullPanelMode())) {
                 chatPanel_->setFullPanelMode(false);
                 chatPanel_->setVisible(true); // stay in idle overlay mode
+                uiManager().clearFocus();
                 input.setChatMode(false);
             }
             // Skill bar page switching
@@ -4461,13 +4503,15 @@ void GameApp::wireCharacterSelectCallbacks(CharacterSelectScreen* charSelect) {
 }
 
 void GameApp::closeAllNpcPanels() {
-    if (npcDialoguePanel_) npcDialoguePanel_->close();
-    if (shopPanel_) shopPanel_->close();
-    if (bankPanel_) bankPanel_->close();
-    if (teleporterPanel_) teleporterPanel_->close();
-    if (arenaPanel_) arenaPanel_->close();
-    if (battlefieldPanel_) battlefieldPanel_->close();
-    if (leaderboardPanel_) leaderboardPanel_->close();
+    // Use setVisible(false) instead of close() to avoid infinite recursion:
+    // close() fires onClose callbacks which call closeAllNpcPanels() again.
+    if (npcDialoguePanel_) npcDialoguePanel_->setVisible(false);
+    if (shopPanel_) shopPanel_->setVisible(false);
+    if (bankPanel_) bankPanel_->setVisible(false);
+    if (teleporterPanel_) teleporterPanel_->setVisible(false);
+    if (arenaPanel_) arenaPanel_->setVisible(false);
+    if (battlefieldPanel_) battlefieldPanel_->setVisible(false);
+    if (leaderboardPanel_) leaderboardPanel_->setVisible(false);
     if (npcInteractionSystem_) npcInteractionSystem_->closeDialogue();
 }
 

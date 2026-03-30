@@ -92,6 +92,12 @@ public:
     // --- Tick ---
     void tick(float deltaTime);
 
+    // --- Type queries (public for GM commands / external use) ---
+    [[nodiscard]] static bool isDoT(EffectType type);
+    [[nodiscard]] static bool isHoT(EffectType type);
+    [[nodiscard]] static bool isCC(EffectType type);
+    [[nodiscard]] static bool isDebuff(EffectType type);
+
 private:
     std::vector<StatusEffect> activeEffects_;
     std::unordered_map<EffectType, size_t> effectLookup_; // EffectType -> index
@@ -99,12 +105,7 @@ private:
     bool ticking_ = false;          // true while tick() is iterating activeEffects_
     bool pendingRemoveAll_ = false; // deferred removeAllEffects() during tick
 
-    // --- Helpers ---
     void rebuildLookup();
-    [[nodiscard]] static bool isDoT(EffectType type);
-    [[nodiscard]] static bool isHoT(EffectType type);
-    [[nodiscard]] static bool isCC(EffectType type);
-    [[nodiscard]] static bool isDebuff(EffectType type);
     [[nodiscard]] static bool canStack(EffectType type);
     [[nodiscard]] static bool isAdditiveStack(EffectType type);
     [[nodiscard]] static int  getMaxStacks(EffectType type);

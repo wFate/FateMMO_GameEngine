@@ -343,14 +343,6 @@ void ServerApp::processUseConsumable(uint16_t clientId, const CmdUseConsumableMs
                 return;
             }
 
-            if (seComp->effects.hasEffect(EffectType::ExpGainUp)) {
-                float existing = seComp->effects.getEffectValue(EffectType::ExpGainUp);
-                if (std::abs(existing - boostValue) < 0.001f) {
-                    sendResult(false, "Already have this boost active");
-                    return;
-                }
-            }
-
             seComp->effects.applyEffect(EffectType::ExpGainUp, static_cast<float>(boostDuration), boostValue);
 
             inv->inventory.removeItemQuantity(slotIndex, 1);

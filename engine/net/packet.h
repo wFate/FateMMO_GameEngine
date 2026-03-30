@@ -134,6 +134,7 @@ namespace PacketType {
     constexpr uint8_t SvCostumeSync     = 0xBE;
     constexpr uint8_t SvCostumeUpdate   = 0xBF;
     constexpr uint8_t SvCostumeDefs     = 0xC0;
+    constexpr uint8_t SvBuffSync        = 0xC1;
 } // namespace PacketType
 
 // ============================================================================

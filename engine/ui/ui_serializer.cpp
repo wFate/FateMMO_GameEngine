@@ -51,6 +51,7 @@
 #include "engine/ui/widgets/trade_window.h"
 #include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/settings_panel.h"
+#include "engine/ui/widgets/loading_panel.h"
 #include "engine/core/logger.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -1261,6 +1262,22 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["pressedColor"]         = {w->pressedColor.r, w->pressedColor.g, w->pressedColor.b, w->pressedColor.a};
             j["enabledTextColor"]     = {w->enabledTextColor.r, w->enabledTextColor.g, w->enabledTextColor.b, w->enabledTextColor.a};
             j["disabledTextColor"]    = {w->disabledTextColor.r, w->disabledTextColor.g, w->disabledTextColor.b, w->disabledTextColor.a};
+        }
+    }
+    else if (type == "loading_panel") {
+        if (auto* w = dynamic_cast<const LoadingPanel*>(node)) {
+            j["barHeight"]    = w->barHeight;
+            j["barPadX"]      = w->barPadX;
+            j["barBottomY"]   = w->barBottomY;
+            j["nameFontSize"] = w->nameFontSize;
+            j["pctFontSize"]  = w->pctFontSize;
+            j["shadowOffset"] = w->shadowOffset;
+            j["bgColor"]      = {w->bgColor.r, w->bgColor.g, w->bgColor.b, w->bgColor.a};
+            j["barBgColor"]   = {w->barBgColor.r, w->barBgColor.g, w->barBgColor.b, w->barBgColor.a};
+            j["barFillColor"] = {w->barFillColor.r, w->barFillColor.g, w->barFillColor.b, w->barFillColor.a};
+            j["nameColor"]    = {w->nameColor.r, w->nameColor.g, w->nameColor.b, w->nameColor.a};
+            j["pctColor"]     = {w->pctColor.r, w->pctColor.g, w->pctColor.b, w->pctColor.a};
+            j["shadowColor"]  = {w->shadowColor.r, w->shadowColor.g, w->shadowColor.b, w->shadowColor.a};
         }
     }
     else if (type == "trade_window") {

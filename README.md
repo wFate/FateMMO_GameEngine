@@ -173,6 +173,4 @@ out/build/x64-Debug/fate_tests.exe -tc="PersistenceQueue*"
 
 <br>
 
-<sub>*Built from scratch — every line, every system, every packet.*</sub>
-
 </div>

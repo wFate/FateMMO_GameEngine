@@ -190,7 +190,9 @@ void NetServer::sendConnectReject(const NetAddress& to, const std::string& reaso
     ByteWriter w(buf, sizeof(buf));
     PacketHeader hdr;
     hdr.packetType = PacketType::ConnectReject;
-    hdr.channel = Channel::ReliableOrdered;
+    hdr.channel = Channel::Unreliable; // must be Unreliable: this raw packet bypasses the
+                                       // connection reliability layer, so its sequence=0 would
+                                       // collide with ConnectAccept and be dropped as duplicate
     hdr.payloadSize = static_cast<uint16_t>(pw.size());
     hdr.write(w);
     w.writeBytes(payloadBuf, pw.size());

@@ -568,7 +568,10 @@ void App::update() {
     // Skip system updates during async scene loading — tickFinalization
     // destroys/creates entities mid-frame, so running systems against a
     // half-built world causes use-after-free crashes.
-    if (isLoading_) return;
+    if (isLoading_) {
+        onLoadingUpdate(deltaTime_);
+        return;
+    }
 
     fixedTimeAccumulator_ += deltaTime_;
     while (fixedTimeAccumulator_ >= config_.fixedTimestep) {
@@ -613,15 +616,16 @@ void App::render() {
         if (vpW > 0 && vpH > 0 && editorFbo.isValid()) {
             camera_.setViewportSize(vpW, vpH);
 
-            if (isLoading_ && loadingScreen_) {
-                // Loading screen — skip render graph, just draw loading UI
+            if (isLoading_) {
+                // Loading — skip render graph (world is half-built), render UI only
                 gfx::CommandList uiCmdList;
                 uiCmdList.begin();
                 spriteBatch_.setCommandList(&uiCmdList);
 
                 Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
                 spriteBatch_.begin(screenProj);
-                loadingScreen_->render(spriteBatch_, SDFText::instance(), loadingProgress_, vpW, vpH);
+                uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
+                uiManager_.render(spriteBatch_, SDFText::instance());
                 spriteBatch_.end();
 
                 spriteBatch_.setCommandList(nullptr);
@@ -674,15 +678,16 @@ void App::render() {
         int vpH = config_.windowHeight;
         camera_.setViewportSize(vpW, vpH);
 
-        if (isLoading_ && loadingScreen_) {
-            // Loading screen — skip render graph, just draw loading UI
+        if (isLoading_) {
+            // Loading — skip render graph, render UI only
             gfx::CommandList uiCmdList;
             uiCmdList.begin();
             spriteBatch_.setCommandList(&uiCmdList);
 
             Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
             spriteBatch_.begin(screenProj);
-            loadingScreen_->render(spriteBatch_, SDFText::instance(), loadingProgress_, vpW, vpH);
+            uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
+            uiManager_.render(spriteBatch_, SDFText::instance());
             spriteBatch_.end();
 
             spriteBatch_.setCommandList(nullptr);
@@ -743,14 +748,15 @@ void App::render() {
         // Adapt camera projection to FBO aspect ratio
         camera_.setViewportSize(vpW, vpH);
 
-        if (isLoading_ && loadingScreen_) {
-            // Loading screen — skip render graph, just draw loading UI into editor FBO
+        if (isLoading_) {
+            // Loading — skip render graph, render UI only into editor FBO
             editorFbo.bind();
             glClearColor(0.102f, 0.102f, 0.180f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
             Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
             spriteBatch_.begin(screenProj);
-            loadingScreen_->render(spriteBatch_, SDFText::instance(), loadingProgress_, vpW, vpH);
+            uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
+            uiManager_.render(spriteBatch_, SDFText::instance());
             spriteBatch_.end();
             editorFbo.unbind();
         } else {
@@ -830,15 +836,16 @@ void App::render() {
     int vpH = config_.windowHeight;
     camera_.setViewportSize(vpW, vpH);
 
-    if (isLoading_ && loadingScreen_) {
-        // Loading screen — skip render graph, just draw loading UI
+    if (isLoading_) {
+        // Loading — skip render graph, render UI only
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, vpW, vpH);
         glClearColor(0.102f, 0.102f, 0.180f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         Mat4 screenProj = SDFText::screenProjection(vpW, vpH);
         spriteBatch_.begin(screenProj);
-        loadingScreen_->render(spriteBatch_, SDFText::instance(), loadingProgress_, vpW, vpH);
+        uiManager_.computeLayout(static_cast<float>(vpW), static_cast<float>(vpH));
+        uiManager_.render(spriteBatch_, SDFText::instance());
         spriteBatch_.end();
     } else {
         RenderPassContext ctx;

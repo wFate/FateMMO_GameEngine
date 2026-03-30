@@ -730,4 +730,37 @@ struct SvBossLootOwnerMsg {
     }
 };
 
+struct SvBuffSyncMsg {
+    struct BuffEntry {
+        uint8_t effectType = 0;
+        float remainingTime = 0.0f;
+        float totalDuration = 0.0f;
+        uint8_t stacks = 1;
+    };
+    std::vector<BuffEntry> buffs;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(static_cast<uint8_t>(buffs.size()));
+        for (const auto& b : buffs) {
+            w.writeU8(b.effectType);
+            w.writeFloat(b.remainingTime);
+            w.writeFloat(b.totalDuration);
+            w.writeU8(b.stacks);
+        }
+    }
+
+    static SvBuffSyncMsg read(ByteReader& r) {
+        SvBuffSyncMsg msg;
+        uint8_t count = r.readU8();
+        msg.buffs.resize(count);
+        for (uint8_t i = 0; i < count; ++i) {
+            msg.buffs[i].effectType = r.readU8();
+            msg.buffs[i].remainingTime = r.readFloat();
+            msg.buffs[i].totalDuration = r.readFloat();
+            msg.buffs[i].stacks = r.readU8();
+        }
+        return msg;
+    }
+};
+
 } // namespace fate
