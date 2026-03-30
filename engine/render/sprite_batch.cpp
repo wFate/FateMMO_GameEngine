@@ -587,6 +587,17 @@ void SpriteBatch::flush() {
     shader_.setVec4("u_textGlowColor", {1.0f, 1.0f, 1.0f, 0.6f});
     shader_.setFloat("u_textGlowIntensity", 0.6f);
 
+    // Rounded rect defaults (renderType 7)
+    shader_.setVec2("u_rectSize", {100.0f, 40.0f});
+    shader_.setFloat("u_cornerRadius", 8.0f);
+    shader_.setFloat("u_rrBorderWidth", 1.0f);
+    shader_.setVec4("u_rrBorderColor", {0.0f, 0.0f, 0.0f, 1.0f});
+    shader_.setVec4("u_gradientTop", {1.0f, 1.0f, 1.0f, 1.0f});
+    shader_.setVec4("u_gradientBottom", {0.8f, 0.8f, 0.8f, 1.0f});
+    shader_.setVec2("u_rrShadowOffset", {2.0f, 2.0f});
+    shader_.setFloat("u_rrShadowBlur", 4.0f);
+    shader_.setVec4("u_rrShadowColor", {0.0f, 0.0f, 0.0f, 0.3f});
+
     glBindVertexArray(vao_);
 
     uintptr_t currentTexKey = ~(uintptr_t)0; // invalid initial key
