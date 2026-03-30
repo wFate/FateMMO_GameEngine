@@ -19,12 +19,13 @@ void ServerSpawnManager::initialize(
     ReplicationManager& replication,
     const SpawnZoneCache& spawnZoneCache,
     const MobDefCache& mobDefCache,
-    const CollisionGrid* /*collisionGrid*/,
+    const CollisionGrid* collisionGrid,
     ZoneMobStateRepository* mobStateRepo)
 {
     zoneRows_.clear();
     mobs_.clear();
     totalMobs_ = 0;
+    collisionGrid_ = collisionGrid;
     mobStateRepo_ = mobStateRepo;
     sceneId_ = sceneId;
     initializedTime_ = false;
@@ -174,7 +175,7 @@ EntityHandle ServerSpawnManager::createMob(
     }
 
     // Random position within zone bounds
-    Vec2 pos = randomPositionInZone(row.config);
+    Vec2 pos = randomPositionInZone(row.config, world);
 
     // Build params and delegate to the static factory
     MobCreateParams params;
@@ -304,12 +305,56 @@ void ServerSpawnManager::shutdown() {
 }
 
 // ---------------------------------------------------------------------------
-// randomPositionInZone — uniform random point within axis-aligned zone square
+// randomPositionInZone — validated random point within zone (circle or square)
+// Rejects positions inside static colliders and too close to existing mobs.
 // ---------------------------------------------------------------------------
-Vec2 ServerSpawnManager::randomPositionInZone(const SpawnZoneRow& zone) {
-    std::uniform_real_distribution<float> xDist(zone.centerX - zone.radius, zone.centerX + zone.radius);
-    std::uniform_real_distribution<float> yDist(zone.centerY - zone.radius, zone.centerY + zone.radius);
-    return {xDist(s_rng), yDist(s_rng)};
+Vec2 ServerSpawnManager::randomPositionInZone(const SpawnZoneRow& zone, World& world) {
+    constexpr int MAX_ATTEMPTS = 30;
+    constexpr float MIN_MOB_DISTANCE = 48.0f;
+
+    Vec2 candidate{};
+    bool isCircle = (zone.zoneShape == "circle");
+    float halfMob = 16.0f;
+
+    for (int attempt = 0; attempt < MAX_ATTEMPTS; ++attempt) {
+        std::uniform_real_distribution<float> xDist(zone.centerX - zone.radius,
+                                                     zone.centerX + zone.radius);
+        std::uniform_real_distribution<float> yDist(zone.centerY - zone.radius,
+                                                     zone.centerY + zone.radius);
+        candidate = {xDist(s_rng), yDist(s_rng)};
+
+        // Circle rejection
+        if (isCircle) {
+            float dx = candidate.x - zone.centerX;
+            float dy = candidate.y - zone.centerY;
+            if (dx * dx + dy * dy > zone.radius * zone.radius) continue;
+        }
+
+        // Static collision rejection
+        if (collisionGrid_ && collisionGrid_->isBlockedRect(
+                candidate.x, candidate.y, halfMob, halfMob)) continue;
+
+        // Mob overlap rejection
+        bool tooClose = false;
+        for (const auto& tracked : mobs_) {
+            if (!tracked.alive) continue;
+            Entity* e = world.getEntity(tracked.handle);
+            if (!e) continue;
+            auto* t = e->getComponent<Transform>();
+            if (!t) continue;
+            float dx = candidate.x - t->position.x;
+            float dy = candidate.y - t->position.y;
+            if (dx * dx + dy * dy < MIN_MOB_DISTANCE * MIN_MOB_DISTANCE) {
+                tooClose = true;
+                break;
+            }
+        }
+        if (tooClose) continue;
+
+        return candidate;
+    }
+
+    return candidate;
 }
 
 } // namespace fate

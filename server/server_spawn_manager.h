@@ -78,7 +78,9 @@ private:
     EntityHandle createMob(World& world, ReplicationManager& replication,
                            int zoneRowIndex, float gameTime);
 
-    Vec2 randomPositionInZone(const SpawnZoneRow& zone);
+    const CollisionGrid* collisionGrid_ = nullptr;
+
+    Vec2 randomPositionInZone(const SpawnZoneRow& zone, World& world);
 };
 
 } // namespace fate
