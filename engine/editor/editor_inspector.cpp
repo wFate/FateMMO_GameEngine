@@ -1311,20 +1311,20 @@ void Editor::drawInspector() {
                         a->dirty = true;
                     }
 
-                    INSPECTOR_ROW("Body");
-                    ImGui::Text("%s", a->bodyTexture ? "Loaded" : "Missing");
-
-                    INSPECTOR_ROW("Hair");
-                    ImGui::Text("%s", a->hairTexture ? "Loaded" : "Missing");
-
                     INSPECTOR_ROW("Armor");
-                    ImGui::Text("%s", a->armorTexture ? "Loaded" : "Missing");
+                    ImGui::Text("%s", a->armorStyle.empty() ? "(none)" : a->armorStyle.c_str());
 
                     INSPECTOR_ROW("Hat");
-                    ImGui::Text("%s", a->hatTexture ? "Loaded" : "Missing");
+                    ImGui::Text("%s", a->hatStyle.empty() ? "(none)" : a->hatStyle.c_str());
 
                     INSPECTOR_ROW("Weapon");
-                    ImGui::Text("%s", a->weaponTexture ? "Loaded" : "Missing");
+                    ImGui::Text("%s", a->weaponStyle.empty() ? "(none)" : a->weaponStyle.c_str());
+
+                    INSPECTOR_ROW("Body Tex");
+                    ImGui::Text("%s", a->body.front ? "OK" : "-");
+
+                    INSPECTOR_ROW("Hair Tex");
+                    ImGui::Text("%s", a->hair.front ? "OK" : "-");
 
                     ImGui::EndTable();
                 }

@@ -72,6 +72,7 @@
 #include "game/components/spawn_point_component.h"
 #include "game/components/faction_component.h"
 #include "game/procedural_tile_generator.h"
+#include "game/data/paper_doll_catalog.h"
 #ifndef FATE_SHIPPING
 #include "imgui.h"
 #endif
@@ -147,6 +148,7 @@ void GameApp::onInit() {
 
         combatSystem_ = world.addSystem<CombatActionSystem>();
         combatSystem_->camera = &camera();
+        combatSystem_->npcSystem_ = npcInteractionSystem_;
         combatSystem_->onSendAttack = [this](Entity* target) {
             if (!netClient_.isConnected() || !target) return;
             // Reverse lookup: find PersistentId for this entity by comparing entity handles.
@@ -1604,9 +1606,6 @@ void GameApp::onInit() {
         sceneFbo.bind();
 
         if (renderSystem_ && !isLoading()) {
-            // Feed current selection to render system for the ground circle
-            renderSystem_->selectedMobOrPlayerId = combatSystem_ ? combatSystem_->getTargetEntityId() : INVALID_ENTITY;
-            renderSystem_->selectedNPCHandle = npcInteractionSystem_ ? npcInteractionSystem_->interactingNPCHandle : EntityHandle{};
             renderSystem_->update(0.0f);
         }
 
@@ -1894,6 +1893,8 @@ void GameApp::onInit() {
             deathOverlay_ = dynamic_cast<DeathOverlay*>(ui.getScreen("death_overlay"));
         }
     });
+
+    PaperDollCatalog::instance().load("assets/paper_doll.json");
 
     LOG_INFO("Game", "Initialized");
 }
