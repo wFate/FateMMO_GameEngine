@@ -21,6 +21,7 @@
 #include "engine/editor/undo.h"
 #include "engine/ecs/prefab.h"
 #include "game/animation_loader.h"
+#include "game/data/paper_doll_catalog.h"
 #include <unordered_set>
 #include <string>
 #include <cstring>
@@ -1292,6 +1293,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Appearance", ImGuiTreeNodeFlags_DefaultOpen);
             if (fontHeading_) ImGui::PopFont();
             if (open) {
+                auto& catalog = PaperDollCatalog::instance();
                 if (ImGui::BeginTable("##AppearanceProps", 2, ImGuiTableFlags_SizingStretchProp)) {
                     ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 80.0f);
                     ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
@@ -1301,14 +1303,39 @@ void Editor::drawInspector() {
                     int genderInt = a->gender;
                     if (ImGui::Combo("##gender", &genderInt, genderNames, 2)) {
                         a->gender = static_cast<uint8_t>(genderInt);
+                        // Reset hairstyle if it exceeds available count for new gender
+                        const char* g = a->gender == 0 ? "Male" : "Female";
+                        if (a->hairstyle >= catalog.getHairstyleCount(g))
+                            a->hairstyle = 0;
                         a->dirty = true;
                     }
 
                     INSPECTOR_ROW("Hairstyle");
-                    int hairInt = a->hairstyle;
-                    if (ImGui::SliderInt("##hairstyle", &hairInt, 0, 2)) {
-                        a->hairstyle = static_cast<uint8_t>(hairInt);
-                        a->dirty = true;
+                    if (catalog.isLoaded()) {
+                        const char* genderStr = a->gender == 0 ? "Male" : "Female";
+                        auto hairNames = catalog.getHairstyleNames(genderStr);
+                        if (!hairNames.empty()) {
+                            int hairInt = a->hairstyle;
+                            if (hairInt >= static_cast<int>(hairNames.size())) hairInt = 0;
+                            if (ImGui::BeginCombo("##hairstyle", hairNames[hairInt].c_str())) {
+                                for (int i = 0; i < static_cast<int>(hairNames.size()); ++i) {
+                                    bool selected = (i == hairInt);
+                                    if (ImGui::Selectable(hairNames[i].c_str(), selected)) {
+                                        a->hairstyle = static_cast<uint8_t>(i);
+                                        a->dirty = true;
+                                    }
+                                }
+                                ImGui::EndCombo();
+                            }
+                        } else {
+                            ImGui::Text("(no hairstyles)");
+                        }
+                    } else {
+                        int hairInt = a->hairstyle;
+                        if (ImGui::SliderInt("##hairstyle", &hairInt, 0, 2)) {
+                            a->hairstyle = static_cast<uint8_t>(hairInt);
+                            a->dirty = true;
+                        }
                     }
 
                     INSPECTOR_ROW("Armor");
@@ -1319,12 +1346,6 @@ void Editor::drawInspector() {
 
                     INSPECTOR_ROW("Weapon");
                     ImGui::Text("%s", a->weaponStyle.empty() ? "(none)" : a->weaponStyle.c_str());
-
-                    INSPECTOR_ROW("Body Tex");
-                    ImGui::Text("%s", a->body.front ? "OK" : "-");
-
-                    INSPECTOR_ROW("Hair Tex");
-                    ImGui::Text("%s", a->hair.front ? "OK" : "-");
 
                     ImGui::EndTable();
                 }
