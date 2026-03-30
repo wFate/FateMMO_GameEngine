@@ -980,7 +980,7 @@ void Editor::drawSceneViewport() {
                         if (selDev.hasDynamicIsland) {
                             float pillW = 36.0f * scX;   // width in landscape (was height in portrait)
                             float pillH = 126.0f * scY;  // height in landscape (was width in portrait)
-                            float pillX = imgX;           // flush to left edge
+                            float pillX = imgX + 11.0f * scX; // ~11pt inset from screen edge
                             float pillY = imgY + imgH * 0.5f - pillH * 0.5f; // centered vertically
                             float rounding = pillH * 0.15f;
                             dl->AddRectFilled({pillX, pillY}, {pillX + pillW, pillY + pillH},
@@ -992,7 +992,7 @@ void Editor::drawSceneViewport() {
                         if (selDev.hasNotch && !selDev.hasDynamicIsland) {
                             float notchW = 30.0f * scX;
                             float notchH = 209.0f * scY;
-                            float notchX = imgX;
+                            float notchX = imgX + 11.0f * scX;
                             float notchY = imgY + imgH * 0.5f - notchH * 0.5f;
                             float rounding = notchW * 0.3f;
                             dl->AddRectFilled({notchX, notchY}, {notchX + notchW, notchY + notchH},
