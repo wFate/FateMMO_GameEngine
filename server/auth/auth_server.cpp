@@ -600,10 +600,10 @@ std::vector<CharacterPreview> AuthServer::buildCharacterList(int accountId) {
             for (const auto& row : rows) {
                 std::string itemId = row["item_id"].as<std::string>();
                 std::string slot   = row["equipped_slot"].as<std::string>();
-                uint16_t vi = itemDefCache_.getVisualIndex(itemId);
-                if (slot == "Weapon")    p.weaponVisualIdx = vi;
-                else if (slot == "Armor") p.armorVisualIdx = vi;
-                else if (slot == "Hat")   p.hatVisualIdx = vi;
+                std::string vs = itemDefCache_.getVisualStyle(itemId);
+                if (slot == "Weapon")    p.weaponStyle = vs;
+                else if (slot == "Armor") p.armorStyle = vs;
+                else if (slot == "Hat")   p.hatStyle = vs;
             }
         } catch (const std::exception& e) {
             LOG_ERROR("AuthServer", "Failed to query equip visuals for %s: %s",

@@ -274,7 +274,9 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
             dirtyMask |= (1 << 11);
         if (current.faction != last.faction)
             dirtyMask |= (1 << 12);
-        if (current.equipVisuals != last.equipVisuals)
+        if (current.armorStyle != last.armorStyle ||
+            current.hatStyle != last.hatStyle ||
+            current.weaponStyle != last.weaponStyle)
             dirtyMask |= (1 << 13);
         if (current.pkStatus != last.pkStatus)
             dirtyMask |= (1 << 14);
@@ -305,7 +307,9 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         deltaMsg.targetEntityId  = current.targetEntityId;
         deltaMsg.level           = current.level;
         deltaMsg.faction         = current.faction;
-        deltaMsg.equipVisuals    = current.equipVisuals;
+        deltaMsg.armorStyle      = current.armorStyle;
+        deltaMsg.hatStyle        = current.hatStyle;
+        deltaMsg.weaponStyle     = current.weaponStyle;
         deltaMsg.pkStatus        = current.pkStatus;
         deltaMsg.honorRank       = current.honorRank;
         deltaMsg.costumeVisuals  = current.costumeVisuals;
@@ -514,23 +518,23 @@ SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* en
     auto* targeting = entity->getComponent<TargetingComponent>();
     msg.targetEntityId = targeting ? static_cast<uint16_t>(targeting->selectedTargetId & 0xFFFF) : 0;
 
-    // equipVisuals: packed weapon/armor/hat visual indices
+    // Equipment visual styles
     auto* invComp = entity->getComponent<InventoryComponent>();
     if (invComp && itemDefCache_) {
         const auto& equip = invComp->inventory.getEquipmentMap();
-        uint16_t weaponIdx = 0, armorIdx = 0, hatIdx = 0;
-        auto wit = equip.find(EquipmentSlot::Weapon);
-        if (wit != equip.end() && wit->second.isValid())
-            weaponIdx = itemDefCache_->getVisualIndex(wit->second.itemId);
-        auto ait = equip.find(EquipmentSlot::Armor);
-        if (ait != equip.end() && ait->second.isValid())
-            armorIdx = itemDefCache_->getVisualIndex(ait->second.itemId);
-        auto hit = equip.find(EquipmentSlot::Hat);
-        if (hit != equip.end() && hit->second.isValid())
-            hatIdx = itemDefCache_->getVisualIndex(hit->second.itemId);
-        msg.equipVisuals = packEquipVisuals(weaponIdx, armorIdx, hatIdx);
+        auto getStyle = [&](EquipmentSlot slot) -> std::string {
+            auto it = equip.find(slot);
+            if (it != equip.end() && it->second.isValid())
+                return itemDefCache_->getVisualStyle(it->second.itemId);
+            return "";
+        };
+        msg.weaponStyle = getStyle(EquipmentSlot::Weapon);
+        msg.armorStyle  = getStyle(EquipmentSlot::Armor);
+        msg.hatStyle    = getStyle(EquipmentSlot::Hat);
     } else {
-        msg.equipVisuals = 0;
+        msg.weaponStyle.clear();
+        msg.armorStyle.clear();
+        msg.hatStyle.clear();
     }
 
     // costumeVisuals: packed costume visual indices (6 slots)
