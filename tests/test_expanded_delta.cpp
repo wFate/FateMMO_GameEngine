@@ -74,8 +74,8 @@ TEST_CASE("Delta only sends dirty fields - compact") {
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
 
-    // seq(1) + pid(8) + mask(2) + pos(8) + maxHP(4) = 23 bytes
-    CHECK(w.size() == 23);
+    // seq(1) + pid(8) + mask(4) + pos(8) + maxHP(4) = 25 bytes
+    CHECK(w.size() == 25);
 
     ByteReader r(buf, w.size());
     auto decoded = SvEntityUpdateMsg::read(r);
