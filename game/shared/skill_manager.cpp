@@ -676,7 +676,9 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
 
     int damage = 0;
     if (stats) {
-        damage = stats->calculateDamage(forceCrit, isCrit);
+        // Pass CritRateUp buff bonus to crit roll
+        float bonusCrit = (ctx.casterSEM) ? ctx.casterSEM->getCritRateBonus() : 0.0f;
+        damage = stats->calculateDamage(forceCrit, isCrit, bonusCrit);
         if (forceCrit && isCrit && ctx.casterSEM) {
             ctx.casterSEM->consumeGuaranteedCrit();
         }
@@ -699,6 +701,9 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
     if (ctx.casterSEM) {
         float seMult = ctx.casterSEM->getDamageMultiplier();
         damage = static_cast<int>(std::round(damage * seMult));
+        // AttackBuff: flat damage bonus from consumable/buff potions
+        float atkBuff = ctx.casterSEM->getAttackBuff();
+        if (atkBuff > 0.0f) damage += static_cast<int>(std::round(atkBuff));
     }
 
     // 5. Level multiplier (PvE only)
@@ -789,13 +794,28 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                     damage = static_cast<int>(std::round(damage * (1.0f - elemResist)));
                 }
             } else {
-                // Physical armor (reduced by ArmorShred stacks on target)
+                // Physical armor (reduced by ArmorShred stacks on target, boosted by ArmorBuff)
                 float effectiveArmor = ctx.targetArmor;
+                // ArmorBuff: flat armor bonus from buffs/consumables on target
                 if (ctx.targetSEM) {
+                    effectiveArmor += ctx.targetSEM->getArmorBuff();
                     float shred = ctx.targetSEM->getArmorShred();
                     if (shred > 0.0f) effectiveArmor = (std::max)(0.0f, effectiveArmor - shred);
                 }
+                // ArmorPierce: attacker's equipment armor penetration
+                if (stats && stats->equipBonusArmorPierce > 0) {
+                    effectiveArmor = (std::max)(0.0f, effectiveArmor - static_cast<float>(stats->equipBonusArmorPierce));
+                }
                 damage = CombatSystem::applyArmorReduction(damage, effectiveArmor);
+            }
+        }
+
+        // ArmorUp (Fortify) + DamageReductionBuff: percentage damage reduction on target
+        if (ctx.targetSEM && damage > 0) {
+            float drBuff = ctx.targetSEM->getDamageReduction() + ctx.targetSEM->getDamageReductionBuff();
+            if (drBuff > 0.0f) {
+                drBuff = (std::min)(drBuff, 0.90f); // cap at 90%
+                damage = (std::max)(1, static_cast<int>(std::round(damage * (1.0f - drBuff))));
             }
         }
     }
@@ -840,6 +860,10 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
         ctx.targetMobStats->takeDamageFrom(ctx.casterEntityId, damage);
         actualDamage = damage;  // takeDamageFrom doesn't return actual
     } else if (ctx.targetPlayerStats && damage > 0) {
+        // PvP attribution: record that a player hit another player
+        if (ctx.casterStats) {
+            ctx.targetPlayerStats->recordPvPHit(currentTime, ctx.casterEntityId);
+        }
         actualDamage = ctx.targetPlayerStats->takeDamage(damage);
     }
 
@@ -935,12 +959,15 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
     // 16. Lifesteal (capped at HP target actually had before THIS hit)
     //     After takeDamage, target HP = (pre-hit HP - actualDamage). So pre-hit HP
     //     for this specific hit = current HP + actualDamage. Cap lifesteal at that.
-    if (stats && stats->equipBonusLifesteal > 0.0f && actualDamage > 0) {
+    //     Includes both equipment lifesteal and LifestealUp buff.
+    float totalLifesteal = (stats ? stats->equipBonusLifesteal : 0.0f)
+                         + (ctx.casterSEM ? ctx.casterSEM->getLifestealBonus() : 0.0f);
+    if (stats && totalLifesteal > 0.0f && actualDamage > 0) {
         int preHitHP = 0;
         if (ctx.targetMobStats) preHitHP = ctx.targetMobStats->currentHP + actualDamage;
         else if (ctx.targetPlayerStats) preHitHP = ctx.targetPlayerStats->currentHP + actualDamage;
         int effectiveDamage = (std::min)(actualDamage, preHitHP);
-        int healAmount = static_cast<int>(std::round(stats->equipBonusLifesteal * effectiveDamage));
+        int healAmount = static_cast<int>(std::round(totalLifesteal * effectiveDamage));
         if (healAmount > 0) {
             stats->heal(healAmount);
         }
@@ -1103,7 +1130,8 @@ int SkillManager::executeSkillAOE(const std::string& skillId, int rank,
         // Calculate damage per target
         bool isCrit = false;
         bool forceCrit = (def->canCrit && primaryCtx.casterSEM && primaryCtx.casterSEM->hasGuaranteedCrit());
-        int damage = stats ? stats->calculateDamage(forceCrit, isCrit) : 0;
+        float bonusCrit = (primaryCtx.casterSEM) ? primaryCtx.casterSEM->getCritRateBonus() : 0.0f;
+        int damage = stats ? stats->calculateDamage(forceCrit, isCrit, bonusCrit) : 0;
         if (forceCrit && isCrit && primaryCtx.casterSEM) {
             primaryCtx.casterSEM->consumeGuaranteedCrit();
         }
@@ -1112,8 +1140,18 @@ int SkillManager::executeSkillAOE(const std::string& skillId, int rank,
                              ? def->damagePerRank[ri] : 100.0f;
         damage = static_cast<int>(std::round(damage * skillPercent / 100.0f));
 
+        // Passive spell damage bonus (Arcane Intellect) for magic AOE
+        if (stats && stats->passiveSpellDamageBonus > 0.0f &&
+            (def->damageType == DamageType::Magic || def->damageType == DamageType::Fire ||
+             def->damageType == DamageType::Water || def->damageType == DamageType::Lightning ||
+             def->damageType == DamageType::Void)) {
+            damage = static_cast<int>(std::round(damage * (1.0f + stats->passiveSpellDamageBonus / 100.0f)));
+        }
+
         if (primaryCtx.casterSEM) {
             damage = static_cast<int>(std::round(damage * primaryCtx.casterSEM->getDamageMultiplier()));
+            float atkBuff = primaryCtx.casterSEM->getAttackBuff();
+            if (atkBuff > 0.0f) damage += static_cast<int>(std::round(atkBuff));
         }
 
         if (!tctx.targetIsPlayer && stats) {
@@ -1156,7 +1194,25 @@ int SkillManager::executeSkillAOE(const std::string& skillId, int rank,
                     damage = static_cast<int>(std::round(damage * (1.0f - elemResist)));
                 }
             } else {
-                damage = CombatSystem::applyArmorReduction(damage, tctx.targetArmor);
+                float effectiveArmor = tctx.targetArmor;
+                if (tctx.targetSEM) {
+                    effectiveArmor += tctx.targetSEM->getArmorBuff();
+                    float shred = tctx.targetSEM->getArmorShred();
+                    if (shred > 0.0f) effectiveArmor = (std::max)(0.0f, effectiveArmor - shred);
+                }
+                if (stats && stats->equipBonusArmorPierce > 0) {
+                    effectiveArmor = (std::max)(0.0f, effectiveArmor - static_cast<float>(stats->equipBonusArmorPierce));
+                }
+                damage = CombatSystem::applyArmorReduction(damage, effectiveArmor);
+            }
+
+            // ArmorUp + DamageReductionBuff: percentage damage reduction on target
+            if (tctx.targetSEM && damage > 0) {
+                float drBuff = tctx.targetSEM->getDamageReduction() + tctx.targetSEM->getDamageReductionBuff();
+                if (drBuff > 0.0f) {
+                    drBuff = (std::min)(drBuff, 0.90f);
+                    damage = (std::max)(1, static_cast<int>(std::round(damage * (1.0f - drBuff))));
+                }
             }
         }
 
@@ -1172,6 +1228,9 @@ int SkillManager::executeSkillAOE(const std::string& skillId, int rank,
         if (tctx.targetMobStats) {
             tctx.targetMobStats->takeDamageFrom(primaryCtx.casterEntityId, damage);
         } else if (tctx.targetPlayerStats) {
+            if (stats) {
+                tctx.targetPlayerStats->recordPvPHit(currentTime, primaryCtx.casterEntityId);
+            }
             actualDamage = tctx.targetPlayerStats->takeDamage(damage);
         }
 
@@ -1243,10 +1302,14 @@ int SkillManager::executeSkillAOE(const std::string& skillId, int rank,
         }
     }
 
-    // Lifesteal on total damage
-    if (stats && stats->equipBonusLifesteal > 0.0f && totalDamage > 0) {
-        int heal = static_cast<int>(std::round(stats->equipBonusLifesteal * totalDamage));
-        if (heal > 0) stats->heal(heal);
+    // Lifesteal on total damage (equipment + LifestealUp buff)
+    {
+        float totalLifesteal = (stats ? stats->equipBonusLifesteal : 0.0f)
+                             + (primaryCtx.casterSEM ? primaryCtx.casterSEM->getLifestealBonus() : 0.0f);
+        if (stats && totalLifesteal > 0.0f && totalDamage > 0) {
+            int heal = static_cast<int>(std::round(totalLifesteal * totalDamage));
+            if (heal > 0) stats->heal(heal);
+        }
     }
 
     // Fury on hit

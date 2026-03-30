@@ -55,6 +55,15 @@ void ServerApp::processMobDeath(
             float expBonus = seComp->effects.getExpGainBonus();
             if (expBonus > 0.0f) xp = static_cast<int>(xp * (1.0f + expBonus));
         }
+        // Pet XP bonus (applied to player XP, not pet XP)
+        auto* petComp2 = killer->getComponent<PetComponent>();
+        if (petComp2 && petComp2->hasPet()) {
+            const auto* petDef2 = petDefCache_.getDefinition(petComp2->equippedPet.petDefinitionId);
+            if (petDef2) {
+                float petExpBonus = PetSystem::effectiveExpBonus(*petDef2, petComp2->equippedPet);
+                if (petExpBonus > 0.0f) xp = static_cast<int>(xp * (1.0f + petExpBonus));
+            }
+        }
         if (xp > 0) {
             // WAL: record XP gain before mutating
             if (client) wal_.appendXPGain(client->character_id, static_cast<int64_t>(xp));

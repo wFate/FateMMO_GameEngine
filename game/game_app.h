@@ -171,6 +171,7 @@ private:
     std::vector<SvEntityEnterMsg> pendingEntityEnters_;
     float loadingMinTimer_ = 0.0f;          // minimum display time remaining
     bool loadingDataReady_ = false;         // async load finished, waiting for timer
+    float logoutTimer_ = 0.0f;             // countdown before disconnect on logout
 
     // Network config UI
     char serverHost_[64] = "127.0.0.1";

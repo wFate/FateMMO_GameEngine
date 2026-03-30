@@ -360,6 +360,50 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll) {
         }
     }
 
+    // Snapshot quest progress
+    bool saveQuests = forceSaveAll || dirty.quests;
+    struct QuestSnapshot { std::string questId; int currentCount; };
+    std::vector<QuestSnapshot> questSnapshots;
+    if (saveQuests) {
+        auto* questComp = e->getComponent<QuestComponent>();
+        if (questComp) {
+            for (const auto& aq : questComp->quests.getActiveQuests()) {
+                QuestSnapshot qs;
+                qs.questId = std::to_string(aq.questId);
+                qs.currentCount = aq.objectiveProgress.empty() ? 0 : aq.objectiveProgress[0];
+                questSnapshots.push_back(std::move(qs));
+            }
+        }
+    }
+
+    // Snapshot bank gold
+    bool saveBank = forceSaveAll || dirty.bank;
+    int64_t bankGold = 0;
+    if (saveBank) {
+        auto* bankComp = e->getComponent<BankStorageComponent>();
+        if (bankComp) bankGold = bankComp->storage.getStoredGold();
+    }
+
+    // Snapshot pet state
+    bool savePet = forceSaveAll || dirty.pet;
+    PetRecord petSnapshot;
+    bool hasPetData = false;
+    if (savePet) {
+        auto* petComp = e->getComponent<PetComponent>();
+        if (petComp && petComp->hasPet()) {
+            hasPetData = true;
+            petSnapshot.id = petComp->dbPetId;
+            petSnapshot.characterId = client->character_id;
+            petSnapshot.petDefId = petComp->equippedPet.petDefinitionId;
+            petSnapshot.petName = petComp->equippedPet.petName;
+            petSnapshot.level = petComp->equippedPet.level;
+            petSnapshot.currentXP = petComp->equippedPet.currentXP;
+            petSnapshot.isEquipped = true;
+            petSnapshot.isSoulbound = petComp->equippedPet.isSoulbound;
+            petSnapshot.autoLootEnabled = petComp->equippedPet.autoLootEnabled;
+        }
+    }
+
     if (!forceSaveAll) {
         dirty.clearAll();
     }
@@ -372,7 +416,11 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll) {
     // inventory/gold while the async save is writing state.
     auto playerMtx = playerLocks_.get(charId);
     dbDispatcher_.dispatchVoid([this, rec, charId, skillRecords, skillEarned, skillSpent, skillBar,
-                                saveSkills, saveInventory, invSlots, playerMtx]
+                                saveSkills, saveInventory, invSlots,
+                                saveQuests, questSnapshots,
+                                saveBank, bankGold,
+                                savePet, hasPetData, petSnapshot,
+                                playerMtx]
                                (pqxx::connection& conn) {
         std::lock_guard<std::mutex> lock(*playerMtx);
         try {
@@ -444,6 +492,42 @@ void ServerApp::savePlayerToDBAsync(uint16_t clientId, bool forceSaveAll) {
                     "VALUES ($1, $2, $3, NOW()) "
                     "ON CONFLICT (character_id) DO UPDATE SET total_earned = $2, total_spent = $3, updated_at = NOW()",
                     charId, skillEarned, skillSpent);
+            }
+            if (saveQuests) {
+                for (const auto& qs : questSnapshots) {
+                    txn.exec_params(
+                        "INSERT INTO quest_progress (character_id, quest_id, status, current_count, target_count, started_at) "
+                        "VALUES ($1, $2, 'active', $3, 1, NOW()) "
+                        "ON CONFLICT ON CONSTRAINT quest_progress_pkey DO UPDATE "
+                        "SET current_count = $3",
+                        charId, qs.questId, qs.currentCount);
+                }
+            }
+            if (saveBank && bankGold > 0) {
+                txn.exec_params(
+                    "INSERT INTO character_bank_gold (character_id, stored_gold) "
+                    "VALUES ($1, $2) "
+                    "ON CONFLICT (character_id) DO UPDATE SET stored_gold = $2",
+                    charId, bankGold);
+            }
+            if (savePet && hasPetData) {
+                if (petSnapshot.id > 0) {
+                    txn.exec_params(
+                        "UPDATE character_pets SET pet_name = $2, level = $3, current_xp = $4, "
+                        "is_equipped = $5, is_soulbound = $6, auto_loot_enabled = $7 "
+                        "WHERE id = $1",
+                        petSnapshot.id, petSnapshot.petName, petSnapshot.level,
+                        petSnapshot.currentXP, petSnapshot.isEquipped,
+                        petSnapshot.isSoulbound, petSnapshot.autoLootEnabled);
+                } else {
+                    txn.exec_params(
+                        "INSERT INTO character_pets (character_id, pet_def_id, pet_name, level, "
+                        "current_xp, is_equipped, is_soulbound, auto_loot_enabled) "
+                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                        petSnapshot.characterId, petSnapshot.petDefId, petSnapshot.petName,
+                        petSnapshot.level, petSnapshot.currentXP, petSnapshot.isEquipped,
+                        petSnapshot.isSoulbound, petSnapshot.autoLootEnabled);
+                }
             }
             txn.commit();
         } catch (const std::exception& e) {

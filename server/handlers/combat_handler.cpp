@@ -790,6 +790,9 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
 
         // Validate auto-attack cooldown (shared for both PvE and PvP)
         float weaponSpeed = charStats ? charStats->stats.weaponAttackSpeed : 1.0f;
+        // Add attack speed bonus from rolled equipment stats, cap at 5.0 (0.2s cooldown)
+        if (charStats) weaponSpeed += charStats->stats.equipBonusAttackSpeed;
+        weaponSpeed = (std::min)(weaponSpeed, 5.0f);
         float cooldown = (weaponSpeed > 0.0f) ? (1.0f / weaponSpeed) : 1.5f;
         auto lastIt = lastAutoAttackTime_.find(clientId);
         if (lastIt != lastAutoAttackTime_.end() && gameTime_ - lastIt->second < cooldown - TICK_INTERVAL) return;
@@ -802,9 +805,31 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         if (charStats && !enemyStats->stats.sceneId.empty() &&
             charStats->stats.currentScene != enemyStats->stats.sceneId) return;
 
+        // Auto-attack hit roll (Warriors/Archers use hitRate, Mages use spell resist)
+        bool autoMiss = false;
+        if (charStats) {
+            ClassType cls = charStats->stats.classDef.classType;
+            if (cls == ClassType::Warrior || cls == ClassType::Archer) {
+                if (!CombatSystem::rollToHit(
+                        charStats->stats.level,
+                        static_cast<int>(charStats->stats.getHitRate()),
+                        enemyStats->stats.level, 0)) {
+                    autoMiss = true;
+                }
+            } else if (cls == ClassType::Mage) {
+                if (CombatSystem::rollSpellResist(
+                        charStats->stats.level,
+                        charStats->stats.getIntelligence(),
+                        enemyStats->stats.level,
+                        enemyStats->stats.magicResist)) {
+                    autoMiss = true;
+                }
+            }
+        }
+
         // Passive force-crit checks (Steady Aim, Predator's Instinct)
         bool forceCrit = false;
-        if (charStats) {
+        if (charStats && !autoMiss) {
             // Steady Aim: guaranteed crit after standing still for 5s
             if (charStats->stats.steadyAimReady) {
                 forceCrit = true;
@@ -823,14 +848,25 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             }
         }
 
-        // Calculate damage
-        int damage = 10; // default
+        // Calculate damage (with CritRateUp buff) — 0 on miss
+        int damage = 0;
         bool isCrit = false;
-        if (charStats) {
-            damage = charStats->stats.calculateDamage(forceCrit, isCrit);
+        if (!autoMiss) {
+            damage = 10; // default
+            if (charStats) {
+                float bonusCrit = 0.0f;
+                auto* attackerSE = attacker->getComponent<StatusEffectComponent>();
+                if (attackerSE) bonusCrit = attackerSE->effects.getCritRateBonus();
+                damage = charStats->stats.calculateDamage(forceCrit, isCrit, bonusCrit);
+                // AttackBuff: flat damage bonus from consumable/buff potions
+                if (attackerSE) {
+                    float atkBuff = attackerSE->effects.getAttackBuff();
+                    if (atkBuff > 0.0f) damage += static_cast<int>(std::round(atkBuff));
+                }
+            }
         }
 
-        // Apply damage
+        // Apply damage (skip on miss)
         enemyStats->stats.takeDamageFrom(attackerHandle.value, damage);
         enemyStats->stats.lastDamageTime = gameTime_;
         bool killed = !enemyStats->stats.isAlive;
@@ -856,6 +892,17 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             }
         }
 
+        // Lifesteal on auto-attack (equipment + buff)
+        if (charStats && damage > 0) {
+            auto* attackerSE2 = attacker->getComponent<StatusEffectComponent>();
+            float totalLifesteal = charStats->stats.equipBonusLifesteal
+                                 + (attackerSE2 ? attackerSE2->effects.getLifestealBonus() : 0.0f);
+            if (totalLifesteal > 0.0f) {
+                int heal = static_cast<int>(std::round(totalLifesteal * damage));
+                if (heal > 0) charStats->stats.heal(heal);
+            }
+        }
+
         // Build and broadcast combat event
         SvCombatEventMsg evt;
         evt.attackerId = attackerPid.value();
@@ -864,6 +911,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         evt.skillId    = action.skillId;
         evt.isCrit     = isCrit ? 1 : 0;
         evt.isKill     = killed ? 1 : 0;
+        evt.isMiss     = autoMiss ? 1 : 0;
 
         uint8_t buf[64];
         ByteWriter w(buf, sizeof(buf));
@@ -915,9 +963,32 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             if (charStats && !charStats->stats.currentScene.empty() &&
                 charStats->stats.currentScene != targetCharStats->stats.currentScene) return;
 
+            // PvP auto-attack hit roll
+            bool pvpAutoMiss = false;
+            if (charStats) {
+                ClassType cls = charStats->stats.classDef.classType;
+                if (cls == ClassType::Warrior || cls == ClassType::Archer) {
+                    if (!CombatSystem::rollToHit(
+                            charStats->stats.level,
+                            static_cast<int>(charStats->stats.getHitRate()),
+                            targetCharStats->stats.level,
+                            static_cast<int>(targetCharStats->stats.getEvasion()))) {
+                        pvpAutoMiss = true;
+                    }
+                } else if (cls == ClassType::Mage) {
+                    if (CombatSystem::rollSpellResist(
+                            charStats->stats.level,
+                            charStats->stats.getIntelligence(),
+                            targetCharStats->stats.level,
+                            targetCharStats->stats.getMagicResist())) {
+                        pvpAutoMiss = true;
+                    }
+                }
+            }
+
             // Passive force-crit checks (Steady Aim, Predator's Instinct)
             bool pvpForceCrit = false;
-            if (charStats) {
+            if (charStats && !pvpAutoMiss) {
                 if (charStats->stats.steadyAimReady) {
                     pvpForceCrit = true;
                     charStats->stats.steadyAimReady = false;
@@ -934,25 +1005,58 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                 }
             }
 
-            // Calculate PvP damage using shared formulas
-            int damage = 10;
+            // Calculate PvP damage using shared formulas (with CritRateUp buff) — 0 on miss
+            int damage = 0;
             bool isCrit = false;
-            if (charStats) {
-                damage = charStats->stats.calculateDamage(pvpForceCrit, isCrit);
+            if (!pvpAutoMiss) {
+                damage = 10;
+                if (charStats) {
+                    float bonusCrit = 0.0f;
+                    auto* attackerSE = attacker->getComponent<StatusEffectComponent>();
+                    if (attackerSE) bonusCrit = attackerSE->effects.getCritRateBonus();
+                    damage = charStats->stats.calculateDamage(pvpForceCrit, isCrit, bonusCrit);
+                    // AttackBuff: flat damage bonus
+                    if (attackerSE) {
+                        float atkBuff = attackerSE->effects.getAttackBuff();
+                        if (atkBuff > 0.0f) damage += static_cast<int>(std::round(atkBuff));
+                    }
+                }
             }
 
+            if (!pvpAutoMiss) {
             // Apply PvP damage multiplier (0.05x)
             damage = static_cast<int>(std::round(damage * CombatSystem::getPvPDamageMultiplier()));
             if (damage < 1) damage = 1;
 
-            // Apply armor reduction on target
-            damage = CombatSystem::applyArmorReduction(damage, targetCharStats->stats.getArmor());
+            // Apply armor reduction on target (with ArmorBuff and ArmorPierce)
+            {
+                float effectiveArmor = static_cast<float>(targetCharStats->stats.getArmor());
+                auto* targetSE = target->getComponent<StatusEffectComponent>();
+                if (targetSE) effectiveArmor += targetSE->effects.getArmorBuff();
+                if (charStats) {
+                    effectiveArmor = (std::max)(0.0f, effectiveArmor - static_cast<float>(charStats->stats.equipBonusArmorPierce));
+                }
+                damage = CombatSystem::applyArmorReduction(damage, effectiveArmor);
+
+                // ArmorUp + DamageReductionBuff on target
+                if (targetSE && damage > 0) {
+                    float drBuff = targetSE->effects.getDamageReduction() + targetSE->effects.getDamageReductionBuff();
+                    if (drBuff > 0.0f) {
+                        drBuff = (std::min)(drBuff, 0.90f);
+                        damage = (std::max)(1, static_cast<int>(std::round(damage * (1.0f - drBuff))));
+                    }
+                }
+            }
 
             // God mode check: skip damage if target is invulnerable
             if (godModeEntities_.count(targetPid.value())) return;
 
+            // Track PvP hit for attribution (mob/DoT kill within 10s = also PvP death)
+            targetCharStats->stats.recordPvPHit(gameTime_, static_cast<uint32_t>(attackerPid.value()));
+            } // !pvpAutoMiss
+
             // Apply damage
-            targetCharStats->stats.takeDamage(damage);
+            targetCharStats->stats.takeDamage(damage, DeathSource::PvP);
             bool killed = !targetCharStats->stats.isAlive();
 
             // Bloodlust: +1 stack on hit, reset on miss (auto-attacks only)
@@ -973,6 +1077,17 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
                         pvpTargetSE->effects.applyEffect(EffectType::ArmorShred, 5.0f,
                             charStats->stats.exploitWeaknessValue, 0.0f, attackerHandle.value);
                     }
+                }
+            }
+
+            // Lifesteal on PvP auto-attack (equipment + buff)
+            if (charStats && damage > 0) {
+                auto* attackerSE2 = attacker->getComponent<StatusEffectComponent>();
+                float totalLifesteal = charStats->stats.equipBonusLifesteal
+                                     + (attackerSE2 ? attackerSE2->effects.getLifestealBonus() : 0.0f);
+                if (totalLifesteal > 0.0f) {
+                    int heal = static_cast<int>(std::round(totalLifesteal * damage));
+                    if (heal > 0) charStats->stats.heal(heal);
                 }
             }
 
@@ -998,6 +1113,7 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             pvpEvt.skillId    = 0;
             pvpEvt.isCrit     = isCrit ? 1 : 0;
             pvpEvt.isKill     = killed ? 1 : 0;
+            pvpEvt.isMiss     = pvpAutoMiss ? 1 : 0;
             uint8_t pvpBuf[64];
             ByteWriter pvpW(pvpBuf, sizeof(pvpBuf));
             pvpEvt.write(pvpW);

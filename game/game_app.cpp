@@ -480,20 +480,11 @@ void GameApp::onInit() {
         if (!foundTarget) return;
 
         // Show floating damage/miss text from server-authoritative result.
-        // All text (hit, miss, resist) is driven by the server event —
-        // client prediction text was removed to prevent false "Miss" overlaps.
-        if (isLocalAttack) {
-            if (msg.damage > 0) {
-                combatSystem_->showDamageText(targetPos, msg.damage, msg.isCrit != 0);
-            } else {
-                combatSystem_->showMissText(targetPos);
-            }
+        // isMiss flag distinguishes actual misses from zero-damage hits (shields/absorption).
+        if (msg.isMiss) {
+            combatSystem_->showMissText(targetPos);
         } else {
-            if (msg.damage == 0) {
-                combatSystem_->showMissText(targetPos);
-            } else {
-                combatSystem_->showDamageText(targetPos, msg.damage, msg.isCrit != 0);
-            }
+            combatSystem_->showDamageText(targetPos, msg.damage, msg.isCrit != 0);
         }
 
         // Process kill: clear target, play death effects
@@ -809,7 +800,7 @@ void GameApp::onInit() {
         auto* sc = SceneManager::instance().currentScene();
         if (!sc) return;
         sc->world().forEach<InventoryComponent, PlayerController>(
-            [&](Entity*, InventoryComponent* invComp, PlayerController* ctrl) {
+            [&](Entity* entity, InventoryComponent* invComp, PlayerController* ctrl) {
                 if (!ctrl->isLocalPlayer) return;
                 // Build slots vector
                 std::vector<ItemInstance> slots;
@@ -866,6 +857,22 @@ void GameApp::onInit() {
                 }
                 invComp->inventory.setSerializedState(
                     invComp->inventory.getGold(), std::move(slots), std::move(equipment));
+
+                // Update paper-doll visual indices from equipped items
+                auto* ev = entity->getComponent<EquipVisualsComponent>();
+                if (ev) {
+                    ev->weaponVisualIdx = 0;
+                    ev->armorVisualIdx  = 0;
+                    ev->hatVisualIdx    = 0;
+                    for (const auto& e : msg.equipment) {
+                        auto eqSlot = static_cast<EquipmentSlot>(e.slot);
+                        if (eqSlot == EquipmentSlot::Weapon)    ev->weaponVisualIdx = e.visualIndex;
+                        else if (eqSlot == EquipmentSlot::Armor) ev->armorVisualIdx = e.visualIndex;
+                        else if (eqSlot == EquipmentSlot::Hat)   ev->hatVisualIdx   = e.visualIndex;
+                    }
+                }
+                auto* appearance = entity->getComponent<AppearanceComponent>();
+                if (appearance) appearance->dirty = true;
             }
         );
     };
@@ -1993,7 +2000,7 @@ void GameApp::onUpdate(float deltaTime) {
                         pendingCharName_ = sel.characterName;
                         pendingClassName_ = sel.className;
                         pendingSceneName_ = sel.sceneName;
-                        pendingSpawnPos_ = {sel.spawnX, sel.spawnY};
+                        pendingSpawnPos_ = Coords::toPixel({sel.spawnX, sel.spawnY});
                         pendingLevel_ = sel.level;
                         pendingFaction_ = static_cast<Faction>(sel.faction);
                         pendingAuthResponse_ = result;
@@ -2156,6 +2163,18 @@ void GameApp::onUpdate(float deltaTime) {
         }
 
         case ConnectionState::InGame: {
+            // Pending logout: count down then disconnect
+            if (logoutTimer_ > 0.0f) {
+                logoutTimer_ -= deltaTime;
+                if (loadingPanel_) loadingPanel_->setProgress(1.0f - logoutTimer_ / 1.5f);
+                if (logoutTimer_ <= 0.0f) {
+                    logoutTimer_ = 0.0f;
+                    authClient_.disconnectAuth();
+                    netClient_.disconnect();
+                }
+                break;
+            }
+
             // Deferred player creation — runs on first InGame frame.
             // Scene was already loaded by AsyncSceneLoader before we got here.
             if (!localPlayerCreated_) {
@@ -2798,8 +2817,8 @@ void GameApp::onUpdate(float deltaTime) {
                         if (settingsPanel) {
                             settingsPanel->onLogout = [this]() {
                                 LOG_INFO("GameApp", "Logout requested via Settings panel");
-                                authClient_.disconnectAuth();
-                                netClient_.disconnect();
+                                if (loadingPanel_) loadingPanel_->show("Logging out...");
+                                logoutTimer_ = 1.5f;
                             };
                         }
 
@@ -3168,6 +3187,33 @@ void GameApp::onUpdate(float deltaTime) {
 
                 // Process deferred zone transition (after poll completes safely)
                 if (pendingZoneTransition_ && !editorPaused && connState_ == ConnectionState::InGame) {
+                    // Snapshot skill state from the current player entity before the
+                    // async loader destroys the world.  The server does NOT re-send
+                    // SvSkillSync on zone transitions, so we must preserve it locally.
+                    {
+                        auto* sc2 = SceneManager::instance().currentScene();
+                        if (sc2) {
+                            sc2->world().forEach<SkillManagerComponent, PlayerController>(
+                                [&](Entity*, SkillManagerComponent* smc, PlayerController* ctrl) {
+                                    if (!ctrl->isLocalPlayer) return;
+                                    pendingSkillSync_ = {};
+                                    for (const auto& ls : smc->skills.getLearnedSkills()) {
+                                        SkillSyncEntry e;
+                                        e.skillId = ls.skillId;
+                                        e.unlockedRank = ls.unlockedRank;
+                                        e.activatedRank = ls.activatedRank;
+                                        pendingSkillSync_.skills.push_back(std::move(e));
+                                    }
+                                    pendingSkillSync_.skillBar = smc->skills.getSkillBarSlots();
+                                    pendingSkillSync_.availablePoints = static_cast<int16_t>(smc->skills.availablePoints());
+                                    pendingSkillSync_.earnedPoints = static_cast<int16_t>(smc->skills.earnedPoints());
+                                    pendingSkillSync_.spentPoints = static_cast<int16_t>(smc->skills.spentPoints());
+                                    hasPendingSkillSync_ = true;
+                                }
+                            );
+                        }
+                    }
+
                     // Clear ghost state and cached entity pointers before async load
                     // destroys all entities (prevents dangling pointer dereference)
                     ghostEntities_.clear();

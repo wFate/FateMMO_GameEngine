@@ -306,6 +306,7 @@ struct SvCombatEventMsg {
     uint16_t skillId    = 0;
     uint8_t  isCrit     = 0; // bool as u8
     uint8_t  isKill     = 0; // bool as u8
+    uint8_t  isMiss     = 0; // bool as u8 (miss/resist)
 
     void write(ByteWriter& w) const {
         detail::writeU64(w, attackerId);
@@ -314,6 +315,7 @@ struct SvCombatEventMsg {
         w.writeU16(skillId);
         w.writeU8(isCrit);
         w.writeU8(isKill);
+        w.writeU8(isMiss);
     }
 
     static SvCombatEventMsg read(ByteReader& r) {
@@ -324,6 +326,7 @@ struct SvCombatEventMsg {
         m.skillId    = r.readU16();
         m.isCrit     = r.readU8();
         m.isKill     = r.readU8();
+        m.isMiss     = r.readU8();
         return m;
     }
 };
@@ -618,6 +621,7 @@ struct InventorySyncEquip {
     std::string socketStat;
     int32_t socketValue = 0;
     uint8_t isBroken = 0;
+    uint16_t visualIndex = 0; // paper-doll sprite index for this equipment
 };
 
 struct SvInventorySyncMsg {
@@ -660,6 +664,7 @@ struct SvInventorySyncMsg {
             w.writeString(e.socketStat);
             w.writeI32(e.socketValue);
             w.writeU8(e.isBroken);
+            w.writeU16(e.visualIndex);
         }
     }
 
@@ -702,6 +707,7 @@ struct SvInventorySyncMsg {
             m.equipment[i].socketStat = r.readString();
             m.equipment[i].socketValue = r.readI32();
             m.equipment[i].isBroken = r.readU8();
+            m.equipment[i].visualIndex = r.readU16();
         }
         return m;
     }

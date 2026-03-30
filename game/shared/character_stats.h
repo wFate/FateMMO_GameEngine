@@ -79,6 +79,25 @@ public:
     PKStatus pkStatus = PKStatus::White;
     float pkDecayTimer = 0.0f;      // seconds remaining until PK status decays
     float combatTimer  = 0.0f;      // seconds remaining "in combat" (blocks equip changes)
+
+    // PvP attribution: if a player dies to a mob/DoT within this window after
+    // being hit by another player, it counts as BOTH PvE + PvP death.
+    static constexpr float PVP_ATTRIBUTION_WINDOW = 10.0f; // seconds
+    float lastPvPHitTime = -999.0f;          // game-time of last hit from another player
+    uint32_t lastPvPAttackerEntityId = 0;    // entity that last hit us in PvP
+
+    /// Record that another player just hit us (called from PvP damage paths).
+    void recordPvPHit(float gameTime, uint32_t attackerEntityId) {
+        lastPvPHitTime = gameTime;
+        lastPvPAttackerEntityId = attackerEntityId;
+    }
+
+    /// Returns true if this player was recently hit by another player.
+    [[nodiscard]] bool hasRecentPvPAttacker(float gameTime) const {
+        return (gameTime - lastPvPHitTime) <= PVP_ATTRIBUTION_WINDOW
+            && lastPvPAttackerEntityId != 0;
+    }
+
     LifeState lifeState = LifeState::Alive;
     bool editorPaused = false;  // Server sets this when client editor is paused (untargetable by mobs)
 
@@ -286,10 +305,12 @@ public:
                           int baseArmor, float baseAttackSpeed);
 
     /// Returns total damage dealt. Sets outIsCrit if the hit was critical.
-    int calculateDamage(bool forceCrit, bool& outIsCrit);
+    /// @param bonusCritRate  Additional crit rate from status effects (CritRateUp buff).
+    int calculateDamage(bool forceCrit, bool& outIsCrit, float bonusCritRate = 0.0f);
 
-    /// Apply damage after armor reduction. Returns actual damage dealt.
-    int takeDamage(int amount);
+    /// Apply pre-reduced damage. Armor is NOT applied here (callers handle it).
+    /// @param deathSource  Death type if this hit is lethal (determines XP loss).
+    int takeDamage(int amount, DeathSource deathSource = DeathSource::PvE);
 
     void heal(int amount);
     void addXP(int64_t amount);

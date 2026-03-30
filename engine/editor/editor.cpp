@@ -2708,7 +2708,9 @@ void Editor::drawHierarchy(World* world) {
                 if (entity == selectedEntity_) flags |= ImGuiTreeNodeFlags_Selected;
 
                 auto* spr = entity->getComponent<SpriteComponent>();
-                bool hasError = spr && !spr->texture;
+                // Paper-doll entities (players) use AppearanceComponent for rendering,
+                // not SpriteComponent::texture — don't flag them as errors
+                bool hasError = spr && !spr->texture && !entity->getComponent<AppearanceComponent>();
 
                 if (hasError) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
                 else if (hasTag) ImGui::PushStyleColor(ImGuiCol_Text, color);

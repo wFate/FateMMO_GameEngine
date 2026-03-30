@@ -1,5 +1,6 @@
 #include "game/entity_factory.h"
 #include "engine/core/logger.h"
+#include "engine/ecs/prefab.h"
 #include "game/shared/npc_types.h"
 #include <cmath>
 #include <cstdio>
@@ -13,35 +14,72 @@ namespace fate {
 /// Mirrors the Unity PlayerScene2 prefab (24 MonoBehaviours).
 Entity* EntityFactory::createPlayer(World& world, const std::string& name, ClassType classType, bool isLocal, Faction faction,
     uint8_t gender, uint8_t hairstyle) {
-    Entity* player = world.createEntity(name);
+
+    Entity* player = nullptr;
+
+    // --- Load layout from prefab (collider, sprite, nameplate, appearance, etc.) ---
+    if (PrefabLibrary::instance().has("player")) {
+        player = PrefabLibrary::instance().spawn("player", world, {0.0f, 0.0f});
+    }
+
+    // Fallback: create entity manually if prefab doesn't exist
+    if (!player) {
+        player = world.createEntity(name);
+        player->setTag("player");
+
+        auto* transform = player->addComponent<Transform>(0.0f, 0.0f);
+        transform->depth = 10.0f;
+
+        auto* sprite = player->addComponent<SpriteComponent>();
+        sprite->size = {48.0f, 96.0f};
+
+        auto* collider = player->addComponent<BoxCollider>();
+        collider->size = {44.0f, 48.0f};
+        collider->offset = {0.0f, -24.0f};
+        collider->isStatic = false;
+
+        auto* controller = player->addComponent<PlayerController>();
+        controller->moveSpeed = 96.0f;
+
+        player->addComponent<CombatControllerComponent>();
+        player->addComponent<DamageableComponent>();
+
+        auto* appearance = player->addComponent<AppearanceComponent>();
+        appearance->gender = gender;
+        appearance->hairstyle = hairstyle;
+        appearance->dirty = true;
+
+        auto* nameplate = player->addComponent<NameplateComponent>();
+        nameplate->displayName = name;
+        nameplate->displayLevel = 1;
+    }
+
+    // --- Override identity fields from runtime params ---
+    player->setName(name);
     player->setTag("player");
 
-    // --- Engine components ---
-    auto* transform = player->addComponent<Transform>(0.0f, 0.0f);
-    transform->depth = 10.0f;
+    auto* ctrl = player->getComponent<PlayerController>();
+    if (ctrl) ctrl->isLocalPlayer = isLocal;
 
-    auto* sprite = player->addComponent<SpriteComponent>();
-    // Rendering is handled by the paper doll system (AppearanceComponent);
-    // SpriteComponent only provides size for the collider and flipX for facing.
-    sprite->size = {48.0f, 96.0f};
+    auto* appear = player->getComponent<AppearanceComponent>();
+    if (!appear) appear = player->addComponent<AppearanceComponent>();
+    appear->gender = gender;
+    appear->hairstyle = hairstyle;
+    appear->dirty = true;
 
-    auto* collider = player->addComponent<BoxCollider>();
-    collider->size = {sprite->size.x - 4.0f, sprite->size.y * 0.5f};
-    collider->offset = {0.0f, -sprite->size.y * 0.25f}; // Lower half
-    collider->isStatic = false;
+    auto* np = player->getComponent<NameplateComponent>();
+    if (np) {
+        np->displayName = name;
+        np->displayLevel = 1;
+    }
 
-    auto* controller = player->addComponent<PlayerController>();
-    controller->moveSpeed = 96.0f;
-    controller->isLocalPlayer = isLocal;
-
-    // --- Game system components (matching Unity prefab) ---
+    // --- Add runtime-only components (not in prefab) ---
 
     // Character Stats
     auto* statsComp = player->addComponent<CharacterStatsComponent>();
     statsComp->stats.characterName = name;
     statsComp->stats.className = (classType == ClassType::Warrior) ? "Warrior" :
                                  (classType == ClassType::Mage) ? "Mage" : "Archer";
-    // Configure class definition based on type
     auto& cd = statsComp->stats.classDef;
     cd.classType = classType;
     switch (classType) {
@@ -88,26 +126,20 @@ Entity* EntityFactory::createPlayer(World& world, const std::string& name, Class
     statsComp->stats.currentHP = statsComp->stats.maxHP;
     statsComp->stats.currentMP = statsComp->stats.maxMP;
 
-    // Combat Controller
-    player->addComponent<CombatControllerComponent>();
-
-    // Damageable marker
-    player->addComponent<DamageableComponent>();
+    // Combat (already in prefab, but ensure present for old prefabs)
+    if (!player->getComponent<CombatControllerComponent>()) player->addComponent<CombatControllerComponent>();
+    if (!player->getComponent<DamageableComponent>()) player->addComponent<DamageableComponent>();
 
     // Inventory
     auto* invComp = player->addComponent<InventoryComponent>();
     invComp->inventory.initialize(name, 0);
 
-    // Skill Manager (stats pointer re-linked below after all addComponent calls)
+    // Skill Manager
     player->addComponent<SkillManagerComponent>();
 
-    // Status Effects
+    // Status Effects + Crowd Control + Targeting
     player->addComponent<StatusEffectComponent>();
-
-    // Crowd Control
     player->addComponent<CrowdControlComponent>();
-
-    // Targeting
     player->addComponent<TargetingComponent>();
 
     // Social systems
@@ -133,27 +165,14 @@ Entity* EntityFactory::createPlayer(World& world, const std::string& name, Class
     auto* factionComp = player->addComponent<FactionComponent>();
     factionComp->faction = faction;
 
-    // Equipment Visuals (for replicating appearance to other players)
+    // Equipment Visuals
     player->addComponent<EquipVisualsComponent>();
 
-    auto* appearance = player->addComponent<AppearanceComponent>();
-    appearance->gender = gender;
-    appearance->hairstyle = hairstyle;
-    appearance->dirty = true;
-
-    // Pet (empty by default — no pet equipped)
+    // Pet + Costume (empty defaults)
     player->addComponent<PetComponent>();
-
-    // Costume (empty by default — loaded from DB on login)
     player->addComponent<CostumeComponent>();
 
-    // Nameplate
-    auto* nameplate = player->addComponent<NameplateComponent>();
-    nameplate->displayName = name;
-    nameplate->displayLevel = 1;
-
     // Re-link cross-component pointers now that all addComponent calls are done.
-    // Archetype migrations invalidate raw pointers captured earlier.
     auto* finalStats = player->getComponent<CharacterStatsComponent>();
     auto* finalSkill = player->getComponent<SkillManagerComponent>();
     if (finalSkill && finalStats) {

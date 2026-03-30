@@ -67,10 +67,14 @@ void ServerApp::processMove(uint16_t clientId, const CmdMove& move) {
         float timeDelta = now - lastMoveTime_[clientId];
         if (timeDelta < 0.001f) timeDelta = 0.001f;
 
-        // Check distance against max allowed
+        // Check distance against max allowed (account for equipment + buff speed)
         Vec2 lastPos = lastValidPositions_[clientId];
         float dist = lastPos.distance(move.position);
-        float maxDist = MAX_MOVE_SPEED * timeDelta;
+        float playerSpeed = charStats ? charStats->stats.getSpeed() : 1.0f;
+        // Include SpeedUp/Slow/Transform buffs in validation
+        auto* seComp = e->getComponent<StatusEffectComponent>();
+        if (seComp) playerSpeed *= seComp->effects.getSpeedModifier();
+        float maxDist = MAX_MOVE_SPEED * playerSpeed * timeDelta;
 
         if (dist > maxDist + RUBBER_BAND_THRESHOLD) {
             // Rubber-band: reject move and send correction

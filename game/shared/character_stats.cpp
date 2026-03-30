@@ -248,7 +248,7 @@ void CharacterStats::applyItemBonuses(const ItemInstance& item,
 // ============================================================================
 // calculateDamage
 // ============================================================================
-int CharacterStats::calculateDamage(bool forceCrit, bool& outIsCrit) {
+int CharacterStats::calculateDamage(bool forceCrit, bool& outIsCrit, float bonusCritRate) {
     // Level-based damage range
     int levelBaseMin = 2 + static_cast<int>(std::floor((level - 1) * 0.5));
     int levelBaseMax = 4 + static_cast<int>(std::floor((level - 1) * 1.0));
@@ -267,19 +267,19 @@ int CharacterStats::calculateDamage(bool forceCrit, bool& outIsCrit) {
             break;
     }
 
-    int totalMin = levelBaseMin + statBonus + weaponDamageMin;
-    int totalMax = levelBaseMax + statBonus + weaponDamageMax;
+    int totalMin = levelBaseMin + statBonus + weaponDamageMin + collectionBonusDamage;
+    int totalMax = levelBaseMax + statBonus + weaponDamageMax + collectionBonusDamage;
 
     int damage = randomRange(totalMin, totalMax);
 
     // Apply damage multiplier
     damage = static_cast<int>(std::round(damage * _damageMultiplier));
 
-    // Critical hit check
+    // Critical hit check (includes CritRateUp buff bonus from caller)
     outIsCrit = forceCrit;
     if (!outIsCrit) {
         std::uniform_real_distribution<float> critDist(0.0f, 1.0f);
-        outIsCrit = critDist(s_rng) < getCritRate();
+        outIsCrit = critDist(s_rng) < (getCritRate() + bonusCritRate);
     }
 
     if (outIsCrit) {
@@ -305,13 +305,12 @@ int CharacterStats::calculateDamage(bool forceCrit, bool& outIsCrit) {
 // ============================================================================
 // takeDamage
 // ============================================================================
-int CharacterStats::takeDamage(int amount) {
+int CharacterStats::takeDamage(int amount, DeathSource deathSource) {
     if (lifeState != LifeState::Alive) return 0;
 
-    // Armor reduction: percentage = min(75, armor * 0.5), clamp armor >= 0
-    float effectiveArmor = (std::max)(0.0f, static_cast<float>(_armor));
-    float reductionPct = (std::min)(75.0f, effectiveArmor * 0.5f) / 100.0f;
-    int actualDamage = (std::max)(1, static_cast<int>(std::round(amount * (1.0f - reductionPct))));
+    // NOTE: Armor reduction is applied by callers (executeSkill, resolveAttack,
+    // combat_handler PvP path) BEFORE calling takeDamage. Do NOT re-apply here.
+    int actualDamage = (std::max)(1, amount);
 
     // Passive damage reduction from skills (capped at 90%)
     if (passiveDamageReduction > 0.0f) {
@@ -338,7 +337,7 @@ int CharacterStats::takeDamage(int amount) {
     }
 
     if (currentHP <= 0) {
-        die();
+        die(deathSource);
     }
 
     return actualDamage;

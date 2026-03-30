@@ -62,9 +62,9 @@ template<> struct component_traits<TargetingComponent> {
     static constexpr ComponentFlags flags = ComponentFlags::None;
 };
 
-// --- NameplateComponent: runtime only ---
+// --- NameplateComponent: serializable for player prefab ---
 template<> struct component_traits<NameplateComponent> {
-    static constexpr ComponentFlags flags = ComponentFlags::None;
+    static constexpr ComponentFlags flags = ComponentFlags::Serializable;
 };
 
 // --- MobNameplateComponent: runtime only ---
@@ -72,9 +72,9 @@ template<> struct component_traits<MobNameplateComponent> {
     static constexpr ComponentFlags flags = ComponentFlags::None;
 };
 
-// --- AppearanceComponent: runtime only, rebuilt from network data ---
+// --- AppearanceComponent: serializable for player prefab ---
 template<> struct component_traits<AppearanceComponent> {
-    static constexpr ComponentFlags flags = ComponentFlags::None;
+    static constexpr ComponentFlags flags = ComponentFlags::Serializable;
 };
 
 // --- Social components: runtime only ---
@@ -516,14 +516,45 @@ inline void registerAllComponents() {
     reg.registerComponent<CrowdControlComponent>();
     reg.registerComponent<TargetingComponent>();
     reg.registerComponent<EquipVisualsComponent>();
-    reg.registerComponent<AppearanceComponent>();
+    reg.registerComponent<AppearanceComponent>(
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const AppearanceComponent*>(data);
+            j["gender"]    = c->gender;
+            j["hairstyle"] = c->hairstyle;
+        },
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<AppearanceComponent*>(data);
+            if (j.contains("gender"))    c->gender    = j["gender"].get<uint8_t>();
+            if (j.contains("hairstyle")) c->hairstyle = j["hairstyle"].get<uint8_t>();
+            c->dirty = true; // trigger PaperDoll texture rebuild
+        }
+    );
     reg.registerComponent<ChatComponent>();
     reg.registerComponent<GuildComponent>();
     reg.registerComponent<PartyComponent>();
     reg.registerComponent<FriendsComponent>();
     reg.registerComponent<MarketComponent>();
     reg.registerComponent<TradeComponent>();
-    reg.registerComponent<NameplateComponent>();
+    reg.registerComponent<NameplateComponent>(
+        [](const void* data, nlohmann::json& j) {
+            const auto* c = static_cast<const NameplateComponent*>(data);
+            j["displayName"]    = c->displayName;
+            j["displayLevel"]   = c->displayLevel;
+            j["showLevel"]      = c->showLevel;
+            j["visible"]        = c->visible;
+            j["fontSize"]       = c->fontSize;
+            j["roleSubtitle"]   = c->roleSubtitle;
+        },
+        [](const nlohmann::json& j, void* data) {
+            auto* c = static_cast<NameplateComponent*>(data);
+            if (j.contains("displayName"))  c->displayName  = j["displayName"].get<std::string>();
+            if (j.contains("displayLevel")) c->displayLevel  = j["displayLevel"].get<int>();
+            if (j.contains("showLevel"))    c->showLevel     = j["showLevel"].get<bool>();
+            if (j.contains("visible"))      c->visible       = j["visible"].get<bool>();
+            if (j.contains("fontSize"))     c->fontSize      = j["fontSize"].get<float>();
+            if (j.contains("roleSubtitle")) c->roleSubtitle  = j["roleSubtitle"].get<std::string>();
+        }
+    );
 
     // ----- Mob / Enemy components -----
     reg.registerComponent<EnemyStatsComponent>(

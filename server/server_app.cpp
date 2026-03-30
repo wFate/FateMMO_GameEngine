@@ -749,6 +749,26 @@ void ServerApp::run() {
                 auto* tc = server_.connections().findByEntity(playerPid);
                 if (tc) {
                     uint16_t targetClientId = tc->clientId;
+                    int32_t honorLost = 0;
+
+                    // PvP attribution: if a player hit this victim within 10s,
+                    // also apply PvP honor penalties (XP loss already handled by PvE death).
+                    if (sc && sc->stats.hasRecentPvPAttacker(gameTime_)) {
+                        uint32_t attackerEid = sc->stats.lastPvPAttackerEntityId;
+                        uint16_t attackerClientId = 0;
+                        server_.connections().forEach([&](const ClientConnection& c) {
+                            if (c.playerEntityId == attackerEid) attackerClientId = c.clientId;
+                        });
+                        if (attackerClientId != 0) {
+                            processPKKill(attackerClientId, targetClientId);
+                            // processPKKill sends its own SvDeathNotify with PvP source,
+                            // but we still need to send one with the XP loss info.
+                            // The honor loss was applied inside processPKKill.
+                        }
+                        LOG_INFO("Server", "PvP-attributed mob kill: attacker entity %u, victim client %d",
+                                 attackerEid, targetClientId);
+                    }
+
                     SvDeathNotifyMsg deathMsg;
                     deathMsg.deathSource = static_cast<uint8_t>(DeathSource::PvE);
                     // Override for Aurora zones — client shows only "Return to Town"
@@ -757,7 +777,7 @@ void ServerApp::run() {
                     }
                     deathMsg.respawnTimer = 5.0f;
                     deathMsg.xpLost = xpLost;
-                    deathMsg.honorLost = 0;
+                    deathMsg.honorLost = honorLost;
                     uint8_t dbuf[32];
                     ByteWriter dw(dbuf, sizeof(dbuf));
                     deathMsg.write(dw);
@@ -941,7 +961,7 @@ void ServerApp::tick(float dt) {
     if (regenTimer_ >= 10.0f || mpRegenTimer_ >= 5.0f) {
         bool doHP = regenTimer_ >= 10.0f;
         bool doMP = mpRegenTimer_ >= 5.0f;
-        auto regenLambda = [&](Entity*, CharacterStatsComponent* cs) {
+        auto regenLambda = [&](Entity* e, CharacterStatsComponent* cs) {
             if (!cs->stats.isAlive()) return;
             // HP regen: 1% maxHP + equipment bonus, every 10 seconds
             if (doHP && cs->stats.currentHP < cs->stats.maxHP) {
@@ -949,11 +969,14 @@ void ServerApp::tick(float dt) {
                     cs->stats.maxHP * 0.01f + cs->stats.equipBonusHPRegen));
                 cs->stats.heal(amount);
             }
-            // MP regen: WIS-based + equipment bonus, every 5 seconds (mana classes only)
+            // MP regen: WIS-based + equipment bonus + ManaRegenUp buff, every 5 seconds (mana classes only)
             if (doMP && cs->stats.classDef.usesMana()
                 && cs->stats.currentMP < cs->stats.maxMP) {
+                float manaRegenBuff = 0.0f;
+                auto* seComp = e->getComponent<StatusEffectComponent>();
+                if (seComp) manaRegenBuff = seComp->effects.getManaRegenBonus();
                 int amount = std::max(1, static_cast<int>(
-                    cs->stats.getWisdom() * 0.5f + cs->stats.equipBonusMPRegen));
+                    cs->stats.getWisdom() * 0.5f + cs->stats.equipBonusMPRegen + manaRegenBuff));
                 cs->stats.currentMP = std::min(cs->stats.maxMP, cs->stats.currentMP + amount);
             }
         };
@@ -1403,13 +1426,11 @@ void ServerApp::consumePendingSessions() {
             // and invalidated iterator (onClientDisconnected also erases this key)
             activeAccountSessions_.erase(existing);
 
-            savePlayerToDB(oldClientId);
-
             auto* oldClient = server_.connections().findById(oldClientId);
             if (oldClient) {
                 // onClientDisconnected handles entity cleanup + tracking map cleanup
-                // It will try to erase from activeAccountSessions_ again but the key
-                // is already gone, so that's a harmless no-op
+                // (including async save). It will try to erase from activeAccountSessions_
+                // again but the key is already gone, so that's a harmless no-op
                 if (server_.onClientDisconnected) server_.onClientDisconnected(oldClientId);
                 server_.connections().removeClient(oldClientId);
             }
@@ -1999,32 +2020,47 @@ void ServerApp::onClientConnected(uint16_t clientId) {
             auto* cs = ent->getComponent<CharacterStatsComponent>();
             if (!cs || !cs->stats.isAlive()) return;
 
-            cs->stats.currentHP = (std::max)(0, cs->stats.currentHP - damage);
+            // Route through takeDamage() so passiveDamageReduction and
+            // Undying Will are respected. Armor is NOT re-applied (takeDamage
+            // no longer does armor reduction -- callers handle it, and DoTs
+            // intentionally bypass armor).
+            DeathSource deathSrc = DeathSource::PvE;
+            if (dungeonManager_.getInstanceForClient(clientId)) deathSrc = DeathSource::Dungeon;
+            else if (isAuroraScene(cs->stats.currentScene)) deathSrc = DeathSource::Aurora;
+            int actualDmg = cs->stats.takeDamage(damage, deathSrc);
             playerDirty_[clientId].vitals = true;
 
             // Broadcast DoT damage as a combat event
             SvCombatEventMsg evt;
             evt.attackerId = 0; // DoT source — could track via StatusEffect.sourceEntityId
             evt.targetId   = cl->playerEntityId;
-            evt.damage     = damage;
+            evt.damage     = actualDmg;
             evt.skillId    = 0;
             evt.isCrit     = 0;
-            evt.isKill     = cs->stats.currentHP <= 0 ? 1 : 0;
+            evt.isKill     = !cs->stats.isAlive() ? 1 : 0;
             uint8_t buf[64]; ByteWriter w(buf, sizeof(buf));
             evt.write(w);
             server_.broadcast(Channel::Unreliable, PacketType::SvCombatEvent, buf, w.size());
 
-            if (cs->stats.currentHP <= 0) {
-                // No XP loss in dungeons
-                DeathSource deathSrc = dungeonManager_.getInstanceForClient(clientId)
-                    ? DeathSource::Dungeon : DeathSource::PvE;
-                cs->stats.die(deathSrc);
-                SvDeathNotifyMsg deathMsg;
-                deathMsg.deathSource = static_cast<uint8_t>(DeathSource::PvE);
-                // Override for Aurora zones
-                if (cs && isAuroraScene(cs->stats.currentScene)) {
-                    deathMsg.deathSource = static_cast<uint8_t>(DeathSource::Aurora);
+            if (!cs->stats.isAlive()) {
+                // takeDamage() already called die(deathSrc) with correct source
+
+                // PvP attribution: DoT killed player who was recently hit by a player
+                if (cs->stats.hasRecentPvPAttacker(gameTime_)) {
+                    uint32_t attackerEid = cs->stats.lastPvPAttackerEntityId;
+                    uint16_t attackerClientId = 0;
+                    server_.connections().forEach([&](const ClientConnection& c) {
+                        if (c.playerEntityId == attackerEid) attackerClientId = c.clientId;
+                    });
+                    if (attackerClientId != 0) {
+                        processPKKill(attackerClientId, clientId);
+                    }
+                    LOG_INFO("Server", "PvP-attributed DoT kill: attacker entity %u, victim client %d",
+                             attackerEid, clientId);
                 }
+
+                SvDeathNotifyMsg deathMsg;
+                deathMsg.deathSource = static_cast<uint8_t>(deathSrc);
                 deathMsg.respawnTimer = 5.0f;
                 deathMsg.xpLost = 0;
                 deathMsg.honorLost = 0;
@@ -2199,16 +2235,10 @@ void ServerApp::onClientConnected(uint16_t clientId) {
 void ServerApp::onClientDisconnected(uint16_t clientId) {
     LOG_INFO("Server", "Client %d disconnected", clientId);
 
-    // Save player data first
-    savePlayerToDB(clientId);
-
-    // Truncate WAL if no async auto-saves are in flight.
-    // savePlayerToDB is synchronous, so this player's data is now safely in DB.
-    // If async saves ARE in flight for other players, WAL truncation will happen
-    // when those complete (in tickAutoSave).
-    if (autoSavesInFlight_ <= 0) {
-        wal_.truncate();
-    }
+    // Synchronous save — must complete before the player can re-login and
+    // read stale data from the DB.  The entity is still alive here so all
+    // component snapshots are valid.
+    savePlayerToDB(clientId, true); // forceSaveAll — entity about to be destroyed
 
     // Clean persistence dedup entries for this client
     for (uint8_t t = 0; t < 9; ++t) {

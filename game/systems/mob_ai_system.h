@@ -353,14 +353,24 @@ public:
             auto* playerStatsComp = atk.playerEntity->getComponent<CharacterStatsComponent>();
             if (!playerStatsComp || !playerStatsComp->stats.isAlive()) continue;
 
+            auto* targetSE = atk.playerEntity->getComponent<StatusEffectComponent>();
             int finalDamage;
             if (atk.isMagic) {
                 float reduction = CombatSystem::getPlayerMagicDamageReduction(
                     playerStatsComp->stats.getMagicResist());
                 finalDamage = (std::max)(1, static_cast<int>(atk.rawDamage * (1.0f - reduction)));
             } else {
-                finalDamage = CombatSystem::applyArmorReduction(atk.rawDamage,
-                    playerStatsComp->stats.getArmor());
+                float effectiveArmor = static_cast<float>(playerStatsComp->stats.getArmor());
+                if (targetSE) effectiveArmor += targetSE->effects.getArmorBuff();
+                finalDamage = CombatSystem::applyArmorReduction(atk.rawDamage, effectiveArmor);
+            }
+            // ArmorUp + DamageReductionBuff
+            if (targetSE && finalDamage > 0) {
+                float drBuff = targetSE->effects.getDamageReduction() + targetSE->effects.getDamageReductionBuff();
+                if (drBuff > 0.0f) {
+                    drBuff = (std::min)(drBuff, 0.90f);
+                    finalDamage = (std::max)(1, static_cast<int>(std::round(finalDamage * (1.0f - drBuff))));
+                }
             }
             // Server-only: client skips damage application, waits for SvCombatEventMsg
             if (onMobAttackResolved) {
@@ -592,13 +602,25 @@ private:
         }
 
         // Apply armor/MR reduction based on whether mob deals magic or physical
+        auto* targetSE = playerEntity->getComponent<StatusEffectComponent>();
         int finalDamage;
         if (mobStats.dealsMagicDamage) {
             float reduction = CombatSystem::getPlayerMagicDamageReduction(
                 playerStats.getMagicResist());
             finalDamage = (std::max)(1, static_cast<int>(rawDamage * (1.0f - reduction)));
         } else {
-            finalDamage = CombatSystem::applyArmorReduction(rawDamage, playerStats.getArmor());
+            float effectiveArmor = static_cast<float>(playerStats.getArmor());
+            if (targetSE) effectiveArmor += targetSE->effects.getArmorBuff();
+            finalDamage = CombatSystem::applyArmorReduction(rawDamage, effectiveArmor);
+        }
+
+        // ArmorUp + DamageReductionBuff: percentage damage reduction on target
+        if (targetSE && finalDamage > 0) {
+            float drBuff = targetSE->effects.getDamageReduction() + targetSE->effects.getDamageReductionBuff();
+            if (drBuff > 0.0f) {
+                drBuff = (std::min)(drBuff, 0.90f);
+                finalDamage = (std::max)(1, static_cast<int>(std::round(finalDamage * (1.0f - drBuff))));
+            }
         }
 
         // Apply damage only on server (where onMobAttackResolved is wired).
