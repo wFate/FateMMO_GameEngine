@@ -105,9 +105,9 @@ private:
     std::vector<std::string> animationNames_;
 
     // Texture caches (populated on load, updated on setPath)
-    mutable std::unordered_map<std::string, SpriteSet> bodyTexCache_;
-    mutable std::unordered_map<std::string, SpriteSet> hairTexCache_;   // key: "gender/name"
-    mutable std::unordered_map<std::string, SpriteSet> equipTexCache_;  // key: "category/style"
+    std::unordered_map<std::string, SpriteSet> bodyTexCache_;
+    std::unordered_map<std::string, SpriteSet> hairTexCache_;   // key: "gender/name"
+    std::unordered_map<std::string, SpriteSet> equipTexCache_;  // key: "category/style"
 
     void rebuildTextureCache();
 };

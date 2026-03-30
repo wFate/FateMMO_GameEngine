@@ -409,13 +409,6 @@ if(FATE_SHIPPING)
     target_compile_definitions(fate_engine PUBLIC FATE_SHIPPING=1)
 endif()
 
-# Engine code needs FATE_SOURCE_DIR for file path resolution (catalog save, texture loading)
-if(NOT FATE_SHIPPING)
-    target_compile_definitions(fate_engine PRIVATE
-        FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-    )
-endif()
-
 # Precompiled headers — stable, frequently-included headers
 target_precompile_headers(fate_engine PRIVATE
     <vector>

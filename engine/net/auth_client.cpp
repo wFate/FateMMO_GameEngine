@@ -146,11 +146,10 @@ void AuthClient::loginAsync(const std::string& host, uint16_t port,
         std::lock_guard<std::mutex> lock(resultMutex_);
         result_.reset();
     }
-    busy_.store(true);
-
-    // Tear down any previous connection
+    // Tear down any previous connection (its teardown may clear busy_)
     cleanup();
 
+    busy_.store(true);
     worker_ = std::thread(&AuthClient::workerLoop, this, host, port, requestData);
 }
 
@@ -191,11 +190,10 @@ void AuthClient::registerAsync(const std::string& host, uint16_t port,
         std::lock_guard<std::mutex> lock(resultMutex_);
         result_.reset();
     }
-    busy_.store(true);
-
-    // Tear down any previous connection
+    // Tear down any previous connection (its teardown may clear busy_)
     cleanup();
 
+    busy_.store(true);
     worker_ = std::thread(&AuthClient::workerLoop, this, host, port, requestData);
 }
 

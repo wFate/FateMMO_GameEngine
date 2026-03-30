@@ -619,6 +619,24 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         mtb->activeTab = j.value("activeTab", 0);
         mtb->tabSize   = j.value("tabSize", 50.0f);
         mtb->arrowSize = j.value("arrowSize", 28.0f);
+        mtb->tabFontSize   = j.value("tabFontSize", 9.0f);
+        mtb->arrowFontSize = j.value("arrowFontSize", 12.0f);
+        mtb->borderWidth   = j.value("borderWidth", 1.0f);
+        auto readColor = [&](const char* key, Color def) -> Color {
+            if (j.contains(key) && j[key].is_array() && j[key].size() >= 4) {
+                auto& c = j[key];
+                return {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
+            }
+            return def;
+        };
+        mtb->activeTabBg       = readColor("activeTabBg",       mtb->activeTabBg);
+        mtb->inactiveTabBg     = readColor("inactiveTabBg",     mtb->inactiveTabBg);
+        mtb->arrowBg           = readColor("arrowBg",           mtb->arrowBg);
+        mtb->borderColor       = readColor("borderColor",       mtb->borderColor);
+        mtb->activeTextColor   = readColor("activeTextColor",   mtb->activeTextColor);
+        mtb->inactiveTextColor = readColor("inactiveTextColor", mtb->inactiveTextColor);
+        mtb->arrowTextColor    = readColor("arrowTextColor",    mtb->arrowTextColor);
+        mtb->highlightColor    = readColor("highlightColor",    mtb->highlightColor);
         if (j.contains("tabLabels") && j["tabLabels"].is_array()) {
             mtb->tabLabels.clear();
             for (auto& l : j["tabLabels"]) mtb->tabLabels.push_back(l.get<std::string>());
@@ -677,6 +695,18 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
             }
             return def;
         };
+        // Slot appearance
+        ip->slotFilledBgColor    = readColor("slotFilledBgColor",    ip->slotFilledBgColor);
+        ip->slotEmptyBgColor     = readColor("slotEmptyBgColor",     ip->slotEmptyBgColor);
+        ip->slotEmptyBorderColor = readColor("slotEmptyBorderColor", ip->slotEmptyBorderColor);
+        ip->slotBorderWidth      = j.value("slotBorderWidth", 1.0f);
+
+        // Paper doll inset
+        ip->dollInsetBgColor     = readColor("dollInsetBgColor",     ip->dollInsetBgColor);
+        ip->dollInsetBorderColor = readColor("dollInsetBorderColor", ip->dollInsetBorderColor);
+        ip->dollInsetBorderW     = j.value("dollInsetBorderW", 1.0f);
+        ip->equipLabelGap        = j.value("equipLabelGap", 1.0f);
+
         ip->quantityColor   = readColor("quantityColor",   ip->quantityColor);
         ip->itemTextColor   = readColor("itemTextColor",   ip->itemTextColor);
         ip->equipLabelColor = readColor("equipLabelColor", ip->equipLabelColor);
@@ -713,6 +743,27 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         ip->rarityRareColor      = readColor("rarityRareColor",      ip->rarityRareColor);
         ip->rarityEpicColor      = readColor("rarityEpicColor",      ip->rarityEpicColor);
         ip->rarityLegendaryColor = readColor("rarityLegendaryColor", ip->rarityLegendaryColor);
+
+        // Close button
+        ip->closeBtnRadius   = j.value("closeBtnRadius", 12.0f);
+        ip->closeBtnOffset   = j.value("closeBtnOffset", 6.0f);
+        ip->closeBtnBorderW  = j.value("closeBtnBorderW", 1.5f);
+        ip->closeBtnFontSize = j.value("closeBtnFontSize", 12.0f);
+        ip->closeBtnBgColor     = readColor("closeBtnBgColor",     ip->closeBtnBgColor);
+        ip->closeBtnBorderColor = readColor("closeBtnBorderColor", ip->closeBtnBorderColor);
+        ip->closeBtnTextColor   = readColor("closeBtnTextColor",   ip->closeBtnTextColor);
+
+        // Context menu
+        ip->ctxMenuWidth      = j.value("ctxMenuWidth", 130.0f);
+        ip->ctxMenuItemHeight = j.value("ctxMenuItemHeight", 28.0f);
+        ip->ctxMenuPadding    = j.value("ctxMenuPadding", 4.0f);
+        ip->ctxMenuBorderW    = j.value("ctxMenuBorderW", 1.5f);
+        ip->ctxMenuFontSize   = j.value("ctxMenuFontSize", 13.0f);
+        ip->ctxMenuTextPadX   = j.value("ctxMenuTextPadX", 10.0f);
+        ip->ctxMenuBgColor       = readColor("ctxMenuBgColor",       ip->ctxMenuBgColor);
+        ip->ctxMenuBorderColor   = readColor("ctxMenuBorderColor",   ip->ctxMenuBorderColor);
+        ip->ctxMenuTextColor     = readColor("ctxMenuTextColor",     ip->ctxMenuTextColor);
+        ip->ctxMenuDisabledColor = readColor("ctxMenuDisabledColor", ip->ctxMenuDisabledColor);
 
         // Panel colors
         ip->panelBgColor     = readColor("panelBgColor",     ip->panelBgColor);
@@ -775,6 +826,25 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         skp->circleRadiusMul  = j.value("circleRadiusMul", 0.28f);
         skp->dotSize          = j.value("dotSize", 4.0f);
         skp->dotSpacing       = j.value("dotSpacing", 6.0f);
+        skp->headerHeight     = j.value("headerHeight", 28.0f);
+        skp->borderWidth      = j.value("borderWidth", 3.0f);
+        skp->contentPadding   = j.value("contentPadding", 4.0f);
+        skp->gridMargin       = j.value("gridMargin", 4.0f);
+        skp->dividerWidth     = j.value("dividerWidth", 1.5f);
+        skp->ringWidthNormal    = j.value("ringWidthNormal", 1.5f);
+        skp->ringWidthSelected  = j.value("ringWidthSelected", 2.5f);
+        skp->tabRadius        = j.value("tabRadius", 14.0f);
+        skp->tabSpacingMul    = j.value("tabSpacingMul", 2.5f);
+        skp->wheelStartDeg    = j.value("wheelStartDeg", 210.0f);
+        skp->wheelEndDeg      = j.value("wheelEndDeg", 330.0f);
+        skp->wheelSlotSizeMul = j.value("wheelSlotSizeMul", 0.40f);
+        skp->closeBtnRadius   = j.value("closeBtnRadius", 12.0f);
+        skp->closeBtnOffset   = j.value("closeBtnOffset", 6.0f);
+        skp->closeBtnBorderW  = j.value("closeBtnBorderW", 1.5f);
+        skp->closeBtnFontSize = j.value("closeBtnFontSize", 12.0f);
+        skp->ptsBadgeRadius   = j.value("ptsBadgeRadius", 12.0f);
+        skp->ptsFontSize      = j.value("ptsFontSize", 8.0f);
+        skp->slotNameFontSize = j.value("slotNameFontSize", 7.0f);
         skp->titleFontSize    = j.value("titleFontSize", 16.0f);
         skp->headerFontSize   = j.value("headerFontSize", 13.0f);
         skp->nameFontSize     = j.value("nameFontSize", 9.0f);
@@ -798,6 +868,18 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         skp->nameLocked       = readColor("nameLocked",      skp->nameLocked);
         skp->pointsBadge      = readColor("pointsBadge",     skp->pointsBadge);
         skp->pointsEmpty      = readColor("pointsEmpty",     skp->pointsEmpty);
+        skp->dividerColor     = readColor("dividerColor",    skp->dividerColor);
+        skp->ptsBadgeRingColor = readColor("ptsBadgeRingColor", skp->ptsBadgeRingColor);
+        skp->ptsTextColor     = readColor("ptsTextColor",    skp->ptsTextColor);
+        skp->tabBgActive      = readColor("tabBgActive",     skp->tabBgActive);
+        skp->tabBgInactive    = readColor("tabBgInactive",   skp->tabBgInactive);
+        skp->tabRingActive    = readColor("tabRingActive",   skp->tabRingActive);
+        skp->tabRingInactive  = readColor("tabRingInactive", skp->tabRingInactive);
+        skp->tabTextActive    = readColor("tabTextActive",   skp->tabTextActive);
+        skp->tabTextInactive  = readColor("tabTextInactive", skp->tabTextInactive);
+        skp->closeBtnBgColor     = readColor("closeBtnBgColor",     skp->closeBtnBgColor);
+        skp->closeBtnBorderColor = readColor("closeBtnBorderColor", skp->closeBtnBorderColor);
+        skp->closeBtnTextColor   = readColor("closeBtnTextColor",   skp->closeBtnTextColor);
         node = std::move(skp);
     }
     else if (type == "character_select_screen") {
@@ -1767,6 +1849,8 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         fsb->levelOffset    = readVec2("levelOffset",    fsb->levelOffset);
         fsb->hpLabelOffset  = readVec2("hpLabelOffset",  fsb->hpLabelOffset);
         fsb->mpLabelOffset  = readVec2("mpLabelOffset",  fsb->mpLabelOffset);
+        fsb->menuBtnOffset  = readVec2("menuBtnOffset",  fsb->menuBtnOffset);
+        fsb->chatBtnOffset  = readVec2("chatBtnOffset",  fsb->chatBtnOffset);
         fsb->topBarHeight   = j.value("topBarHeight",   40.0f);
         fsb->portraitRadius = j.value("portraitRadius",  20.0f);
         fsb->barHeight      = j.value("barHeight",      22.0f);

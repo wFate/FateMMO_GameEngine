@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <mutex>
 #include <atomic>
 #include <memory>
@@ -98,6 +99,7 @@ private:
     std::vector<AssetSlot> slots_;       // slot 0 reserved
     std::vector<uint32_t> freeList_;
     std::unordered_map<std::string, uint32_t> pathToIndex_;
+    std::unordered_set<std::string> failedPaths_;  // prevents re-attempting known-bad loads
     std::vector<AssetLoader> loaders_;
 
     std::mutex reloadQueueMutex_;

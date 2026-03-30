@@ -32,6 +32,9 @@ static std::string canonicalizePath(const std::string& path) {
 AssetHandle AssetRegistry::load(const std::string& path) {
     std::string canon = canonicalizePath(path);
 
+    // Fast reject: already tried and failed
+    if (failedPaths_.count(canon)) return AssetHandle{};
+
     // Check if already loaded or in-flight
     auto it = pathToIndex_.find(canon);
     if (it != pathToIndex_.end()) {
@@ -93,10 +96,9 @@ AssetHandle AssetRegistry::load(const std::string& path) {
 
     if (slot.state != AssetState::Ready) {
         LOG_ERROR("AssetRegistry", "Failed to load: %s", canon.c_str());
-        // Cache the failure so subsequent loads of the same path return
-        // immediately instead of re-attempting fopen (which spams errors
-        // when many entities reference the same missing/locked texture).
-        pathToIndex_[canon] = idx;
+        failedPaths_.insert(canon);
+        slot.generation++;
+        freeList_.push_back(idx);
         return AssetHandle{};
     }
 
@@ -330,6 +332,7 @@ void AssetRegistry::clear() {
     slots_[0] = AssetSlot{};
     freeList_.clear();
     pathToIndex_.clear();
+    failedPaths_.clear();
     loaders_.clear();
     {
         std::lock_guard lock(reloadQueueMutex_);

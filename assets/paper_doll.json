@@ -63,9 +63,9 @@
       "side": ""
     },
     "Male": {
-      "back": "",
+      "back": "assets/sprites/48x96Idle_Sprite_NoHair_SilverArmor.png",
       "front": "assets/sprites/48x96Idle_Sprite_NoHair_SilverArmor.png",
-      "side": ""
+      "side": "assets/sprites/48x96Idle_Sprite_NoHair_SilverArmor.png"
     }
   },
   "equipment": {
@@ -103,17 +103,17 @@
     "Female": {},
     "Male": {
       "BlondeHair": {
-        "back": "",
+        "back": "assets/sprites/48x96Idle_Sprite_Male_Front_BlondeHair.png",
         "front": "assets/sprites/48x96Idle_Sprite_Male_Front_BlondeHair.png",
-        "side": ""
+        "side": "assets/sprites/48x96Idle_Sprite_Male_Front_BlondeHair.png"
       },
       "RedHair": {
-        "back": "",
+        "back": "assets/sprites/48x96Idle_Sprite_Male_Front_RedHair.png",
         "front": "assets/sprites/48x96Idle_Sprite_Male_Front_RedHair.png",
-        "side": ""
+        "side": "assets/sprites/48x96Idle_Sprite_RedHair.png"
       },
       "SilverHair": {
-        "back": "",
+        "back": "assets/sprites/48x96Idle_Back_Sprite_Hair.png",
         "front": "assets/sprites/48x96Idle_Sprite_Male_Front_SilverHair.png",
         "side": ""
       }

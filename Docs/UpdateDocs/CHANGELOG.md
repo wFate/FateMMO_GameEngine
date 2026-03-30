@@ -1,5 +1,51 @@
 # FateEngine — Development Changelog
 
+### March 30, 2026 — Paper Doll System Revamp, Auth Fix, Engine Hardening
+
+**Paper Doll Catalog System (12 commits):**
+- New `PaperDollCatalog` singleton (`game/data/paper_doll_catalog.h/.cpp`) with JSON load/save, texture caching (`rebuildTextureCache`), and per-layer direction-aware sprite resolution
+- JSON catalog (`assets/paper_doll.json`) defines body sprites, hairstyles, equipment per gender with front/back/side texture paths, animation metadata (startFrame, frameCount, frameRate, hitFrame, per-layer Y offsets)
+- `AppearanceComponent` updated: visual indices replaced with style name strings (`armorStyle`, `weaponStyle`, `hatStyle`, `hairstyleName`) and directional `SpriteSet` textures
+- Network protocol changed: server sends `visual_style` strings instead of packed uint16 indices. `SvEntityEnter` and `SvEquipmentUpdate` carry style names. Client resolves via catalog
+- Direction-aware render system: catalog lookups for body/hair/equipment per facing direction, per-layer depth offsets from animation metadata
+- Character select and creation screens use catalog for sprite preview (replaced hardcoded `equip_visual_table.h` lookups)
+- Editor inspector uses catalog dropdowns for hairstyle selection instead of raw index input
+- **Paper Doll Manager editor panel**: new `PaperDollPanel` with live composite preview (body+hair+equipment layers), Browse buttons for texture assignment, Save writes to catalog JSON
+- `EquipVisualsComponent`, `equip_visual_table.h`, and associated pack/unpack functions removed (dead code after catalog migration)
+- **Breaking protocol change:** Client and server must both be updated (style name strings replace visual indices)
+
+**Paper Doll Manager Save Fix:**
+- Save button now uses stored absolute `loadedPath_` from catalog load (was writing to a relative path that failed under VS's unpredictable CWD)
+- `OFN_NOCHANGEDIR` added to Windows file Browse dialog to prevent CWD hijacking
+- Composite preview UV flip fix (GL bottom-up → ImGui top-down)
+
+**CWD Fix at Startup (root cause fix):**
+- `game/main.cpp`: `std::filesystem::current_path(FATE_SOURCE_DIR)` at startup ensures all relative paths resolve from the project root
+- This was the root cause of multiple path resolution failures — VS sets CWD to an unpredictable location
+- `FATE_SOURCE_DIR` compile definition on `fate_engine` library removed (redundant after CWD fix); retained on `FateEngine` exe and `fate_tests`
+
+**Asset Registry Failed-Load Hardening:**
+- Failed loads now tracked in a dedicated `failedPaths_` set — subsequent loads of the same bad path return immediately without re-attempting fopen
+- Slots are properly freed back to `freeList_` on failure (previous implementation cached failures in `pathToIndex_` which leaked slots permanently)
+- `failedPaths_` cleared in `AssetRegistry::clear()` for clean scene transitions
+
+**Auth Reconnect Bug Fix (3 bugs):**
+- **`busy_` race condition in `loginAsync()` and `registerAsync()`**: `busy_.store(true)` was set before `cleanup()`, but the old worker thread's teardown called `busy_.store(false)`, stomping the flag. The main thread then saw `!isBusy()` and displayed "Login failed" despite the server confirming success. Fix: moved `busy_.store(true)` to after `cleanup()` returns.
+- **Missing `disconnectAuth()` on rejection/disconnect**: When the game server rejected a connection or the client disconnected, the stale auth TLS connection was never torn down. The old auth worker thread remained blocked in `cmdCv_.wait()`. Added `authClient_.disconnectAuth()` to both `onConnectRejected` and `onDisconnected` handlers.
+- Symptoms: heartbeat timeout → auto-reconnect with expired token → rejected → user clicks Login → auth server succeeds (3x) → client shows "Login failed — try again" → persistent auth connection closes repeatedly
+
+**Production Build Title:**
+- `config.title` now uses `#ifdef FATE_SHIPPING` to select "FateMMO" (shipping) vs "FateMMO Engine" (dev/editor)
+
+**Miscellaneous:**
+- `imgui.ini` removed from git tracking, added to `.gitignore` (per-developer layout file)
+- `mutable` removed from paper doll texture cache members (no longer needed after cache refactor)
+- Redundant `FATE_SOURCE_DIR` path-resolution fallbacks removed from `async_scene_loader.cpp` and `paper_doll_catalog.cpp`
+- `tree.png` restored to `assets/sprites/` (was missing, caused 8 invisible tree entities in WhisperingWoods)
+- Debug logging added: slot selection shows armor/weapon/hat style strings, character select logs armor catalog lookup results
+
+**Files changed:** `game/main.cpp`, `game/data/paper_doll_catalog.h/.cpp`, `game/game_app.cpp`, `engine/net/auth_client.cpp`, `engine/asset/asset_registry.h/.cpp`, `engine/scene/async_scene_loader.cpp`, `engine/editor/paper_doll_panel.cpp`, `engine/ecs/components/appearance_component.h`, `engine/net/game_messages.h`, `server/server_app.cpp`, `CMakeLists.txt`, `.gitignore`, `assets/paper_doll.json`
+
 ### March 28, 2026 — Character Select Screen Overhaul
 
 **CharacterSelectScreen — Full Editor Serialization (70+ properties):**

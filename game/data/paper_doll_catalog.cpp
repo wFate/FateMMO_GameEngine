@@ -3,6 +3,7 @@
 #include "engine/core/logger.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <filesystem>
 #include <algorithm>
 
 namespace fate {
@@ -32,22 +33,13 @@ static nlohmann::json pathsToJson(const SpritePaths& p) {
 // ---------------------------------------------------------------------------
 
 bool PaperDollCatalog::load(const std::string& path) {
-    // Try the path as-is first, then try relative to exe directory
-    std::string resolvedPath = path;
-    std::ifstream file(resolvedPath);
-    if (!file.is_open()) {
-        // Try resolving relative to FATE_SOURCE_DIR (set by CMake for editor builds)
-#ifdef FATE_SOURCE_DIR
-        resolvedPath = std::string(FATE_SOURCE_DIR) + "/" + path;
-        file.open(resolvedPath);
-#endif
-    }
+    std::ifstream file(path);
     if (!file.is_open()) {
         LOG_ERROR("PaperDoll", "Failed to open catalog: %s", path.c_str());
         return false;
     }
-    // Store the resolved absolute path for save
-    loadedPath_ = resolvedPath;
+    // Store the absolute path for save (CWD is set to project root at startup)
+    loadedPath_ = std::filesystem::absolute(path).string();
 
     nlohmann::json root;
     try {
@@ -224,21 +216,10 @@ bool PaperDollCatalog::save(const std::string& path_) const {
 
 SpriteSet PaperDollCatalog::loadSpriteSet(const SpritePaths& paths) const {
     auto& cache = TextureCache::instance();
-    // Resolve paths relative to source dir to handle any CWD
-    auto resolve = [&](const std::string& p) -> std::shared_ptr<Texture> {
-        if (p.empty()) return nullptr;
-        auto tex = cache.load(p);
-        if (tex) return tex;
-#ifdef FATE_SOURCE_DIR
-        tex = cache.load(std::string(FATE_SOURCE_DIR) + "/" + p);
-        if (tex) return tex;
-#endif
-        return nullptr;
-    };
     SpriteSet set;
-    set.front = resolve(paths.front);
-    set.back  = resolve(paths.back);
-    set.side  = resolve(paths.side);
+    if (!paths.front.empty()) set.front = cache.load(paths.front);
+    if (!paths.back.empty())  set.back  = cache.load(paths.back);
+    if (!paths.side.empty())  set.side  = cache.load(paths.side);
     return set;
 }
 

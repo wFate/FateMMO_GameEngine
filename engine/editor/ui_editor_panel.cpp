@@ -629,11 +629,27 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
     }
     else if (auto* mtb = dynamic_cast<MenuTabBar*>(selectedNode_)) {
-        ImGui::SeparatorText("MenuTabBar");
+        ImGui::SeparatorText("MenuTabBar — Layout");
         ImGui::DragInt("Active Tab", &mtb->activeTab, 1.0f, 0, static_cast<int>(mtb->tabLabels.size()) - 1); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Tab Size", &mtb->tabSize, 1.0f, 20.0f, 120.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Arrow Size", &mtb->arrowSize, 1.0f, 16.0f, 60.0f); checkUndoCapture(uiMgr);
-        ImGui::Separator();
+        ImGui::DragFloat("Border Width", &mtb->borderWidth, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("Font Sizes");
+        ImGui::DragFloat("Tab Font", &mtb->tabFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Arrow Font", &mtb->arrowFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("Colors");
+        ImGui::ColorEdit4("Active Tab Bg", &mtb->activeTabBg.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Inactive Tab Bg", &mtb->inactiveTabBg.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Arrow Bg", &mtb->arrowBg.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Border Color", &mtb->borderColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Active Text", &mtb->activeTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Inactive Text", &mtb->inactiveTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Arrow Text", &mtb->arrowTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Highlight", &mtb->highlightColor.r); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("Tab Labels");
         for (size_t i = 0; i < mtb->tabLabels.size(); i++) {
             ImGui::Text("  Tab %zu: %s", i, mtb->tabLabels[i].c_str());
         }
@@ -726,6 +742,22 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::TreePop();
         }
 
+        if (ImGui::TreeNodeEx("Slot Appearance##inv", 0)) {
+            ImGui::ColorEdit4("Filled Bg##slot", &inv->slotFilledBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Empty Bg##slot", &inv->slotEmptyBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Empty Border##slot", &inv->slotEmptyBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##slot", &inv->slotBorderWidth, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Paper Doll Inset##inv", 0)) {
+            ImGui::ColorEdit4("Inset Bg##doll", &inv->dollInsetBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Inset Border##doll", &inv->dollInsetBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Inset Border Width##doll", &inv->dollInsetBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Label Gap##doll", &inv->equipLabelGap, 0.25f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
         if (ImGui::TreeNodeEx("Equipment Slots", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Equip Slot Size", &inv->equipSlotSize, 0.5f, 16.0f, 128.0f); checkUndoCapture(uiMgr);
             for (int i = 0; i < InventoryPanel::NUM_EQUIP_SLOTS; ++i) {
@@ -776,6 +808,31 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Gold Value##c", &inv->goldValueColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Plat Label##c", &inv->platLabelColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Plat Value##c", &inv->platValueColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Close Button##inv", 0)) {
+            ImGui::DragFloat("Radius##cb", &inv->closeBtnRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Offset##cb", &inv->closeBtnOffset, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##cb", &inv->closeBtnBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##cb", &inv->closeBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##cb", &inv->closeBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##cb", &inv->closeBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Color##cb", &inv->closeBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Context Menu##inv", 0)) {
+            ImGui::DragFloat("Width##ctx", &inv->ctxMenuWidth, 1.0f, 60.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Item Height##ctx", &inv->ctxMenuItemHeight, 0.5f, 12.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##ctx", &inv->ctxMenuPadding, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##ctx", &inv->ctxMenuBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##ctx", &inv->ctxMenuFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Text Pad X##ctx", &inv->ctxMenuTextPadX, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##ctx", &inv->ctxMenuBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##ctx", &inv->ctxMenuBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Color##ctx", &inv->ctxMenuTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Disabled Text##ctx", &inv->ctxMenuDisabledColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -882,40 +939,87 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::TreePop();
         }
 
-        if (ImGui::TreeNodeEx("Layout", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::TreeNodeEx("Layout##skp", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Split Ratio", &skp->splitRatio, 0.01f, 0.1f, 0.9f); checkUndoCapture(uiMgr);
             ImGui::DragInt("Grid Columns", &skp->gridColumns, 0.1f, 1, 8); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Circle Radius Mul", &skp->circleRadiusMul, 0.01f, 0.05f, 0.5f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Dot Size", &skp->dotSize, 0.1f, 1.0f, 20.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Dot Spacing", &skp->dotSpacing, 0.1f, 2.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header Height", &skp->headerHeight, 0.5f, 10.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width", &skp->borderWidth, 0.25f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Content Padding", &skp->contentPadding, 0.25f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Grid Margin", &skp->gridMargin, 0.25f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Divider Width", &skp->dividerWidth, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Ring Width Normal", &skp->ringWidthNormal, 0.25f, 0.5f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Ring Width Selected", &skp->ringWidthSelected, 0.25f, 0.5f, 8.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
-        if (ImGui::TreeNodeEx("Font Sizes", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat("Title", &skp->titleFontSize, 0.1f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Header", &skp->headerFontSize, 0.1f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Skill Name", &skp->nameFontSize, 0.1f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Tab", &skp->tabFontSize, 0.1f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Points", &skp->pointsFontSize, 0.1f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Tab Circles##skp", 0)) {
+            ImGui::DragFloat("Tab Radius", &skp->tabRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Tab Spacing Mul", &skp->tabSpacingMul, 0.1f, 1.0f, 5.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Bg Active", &skp->tabBgActive.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Bg Inactive", &skp->tabBgInactive.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Ring Active", &skp->tabRingActive.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Ring Inactive", &skp->tabRingInactive.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Text Active", &skp->tabTextActive.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tab Text Inactive", &skp->tabTextInactive.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
-        if (ImGui::TreeNode("Skill Colors")) {
+        if (ImGui::TreeNodeEx("Wheel Arc##skp", 0)) {
+            ImGui::DragFloat("Start Angle", &skp->wheelStartDeg, 1.0f, 0.0f, 360.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("End Angle", &skp->wheelEndDeg, 1.0f, 0.0f, 360.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Size Mul", &skp->wheelSlotSizeMul, 0.01f, 0.1f, 1.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Name Font", &skp->slotNameFontSize, 0.5f, 4.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Close Button##skp", 0)) {
+            ImGui::DragFloat("Radius##skcb", &skp->closeBtnRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Offset##skcb", &skp->closeBtnOffset, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##skcb", &skp->closeBtnBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##skcb", &skp->closeBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##skcb", &skp->closeBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##skcb", &skp->closeBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Color##skcb", &skp->closeBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Points Badge##skp", 0)) {
+            ImGui::DragFloat("Badge Radius", &skp->ptsBadgeRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Pts Font Size", &skp->ptsFontSize, 0.5f, 4.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Badge Ring", &skp->ptsBadgeRingColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Pts Text", &skp->ptsTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Font Sizes##skp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##skpf", &skp->titleFontSize, 0.1f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header##skpf", &skp->headerFontSize, 0.1f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Skill Name##skpf", &skp->nameFontSize, 0.1f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Tab##skpf", &skp->tabFontSize, 0.1f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Points##skpf", &skp->pointsFontSize, 0.1f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Skill Colors##skp")) {
             ImGui::ColorEdit4("BG Unlocked", &skp->skillBgUnlocked.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("BG Locked", &skp->skillBgLocked.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Ring Selected", &skp->ringSelected.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Ring Normal", &skp->ringNormal.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Divider", &skp->dividerColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
-        if (ImGui::TreeNode("Dot Colors")) {
+        if (ImGui::TreeNode("Dot Colors##skp")) {
             ImGui::ColorEdit4("Activated", &skp->dotActivated.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Unlocked", &skp->dotUnlocked.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Locked", &skp->dotLocked.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
-        if (ImGui::TreeNode("Text Colors")) {
+        if (ImGui::TreeNode("Text Colors##skp")) {
             ImGui::ColorEdit4("Title", &skp->titleColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Header", &skp->headerColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Name Unlocked", &skp->nameUnlocked.r); checkUndoCapture(uiMgr);
@@ -1271,6 +1375,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat2("Level##fsbo", &fsb->levelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("HP Label##fsbo", &fsb->hpLabelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("MP Label##fsbo", &fsb->mpLabelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Menu Btn##fsbo", &fsb->menuBtnOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Chat Btn##fsbo", &fsb->chatBtnOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         ImGui::DragFloat("Top Bar Height", &fsb->topBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);

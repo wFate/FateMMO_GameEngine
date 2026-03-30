@@ -1,6 +1,5 @@
 #pragma once
 #include "engine/app.h"
-#include "engine/tilemap/tilemap.h"
 #include "engine/render/sdf_text.h"
 #include "engine/net/net_client.h"
 #include "engine/net/interpolation.h"
@@ -76,7 +75,6 @@ private:
     ZoneSystem* zoneSystem_ = nullptr;
     NPCInteractionSystem* npcInteractionSystem_ = nullptr;
     QuestSystem* questSystem_ = nullptr;
-    std::unique_ptr<Tilemap> tilemap_;
     NetClient netClient_;
 
     // Retained-mode widget pointers (owned by UI screens, found by ID)

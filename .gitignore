@@ -93,5 +93,8 @@ docs/superpowers/
 # Scripts with credentials (backup scripts, deploy, etc.)
 scripts/
 
+# ImGui layout (per-developer)
+imgui.ini
+
 # Claude memory & tooling
 .claude/

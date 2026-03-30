@@ -1,7 +1,8 @@
 #include "game/game_app.h"
 #include <filesystem>
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[])
+{
     (void)argc;
     (void)argv;
 
@@ -22,10 +23,11 @@ int main(int argc, char* argv[]) {
     config.windowWidth = 1280;
     config.windowHeight = 720;
     config.vsync = true;
-    config.targetFPS = 60;
+    config.targetFPS = 120;
     config.fixedTimestep = 1.0f / 30.0f;
 
-    if (!game.init(config)) {
+    if (!game.init(config))
+    {
         return 1;
     }
 

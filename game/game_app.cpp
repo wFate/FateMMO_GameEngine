@@ -1136,6 +1136,7 @@ void GameApp::onInit() {
     // Auth callbacks
     netClient_.onConnectRejected = [this](const std::string& reason) {
         LOG_WARN("GameApp", "Connection rejected: %s", reason.c_str());
+        authClient_.disconnectAuth();
         if (loadingPanel_) loadingPanel_->hide();
         if (loginScreenWidget_) {
             loginScreenWidget_->setStatus("Connection rejected: " + reason, true);
@@ -1146,6 +1147,7 @@ void GameApp::onInit() {
 
     netClient_.onDisconnected = [this]() {
         if (connState_ == ConnectionState::InGame) {
+            authClient_.disconnectAuth();
             // Destroy ghost entities from the world (mobs, players, dropped items)
             auto* scene = SceneManager::instance().currentScene();
             if (scene) {
@@ -1564,35 +1566,16 @@ void GameApp::onInit() {
 
     CombatTextConfig::instance().load(CombatTextConfig::kDefaultPath);
 
-    // Try to load a tilemap (if present, replaces procedural ground)
-    tilemap_ = std::make_unique<Tilemap>();
-    if (tilemap_->loadFromFile("assets/maps/test_map.json")) {
-        tilemap_->origin = {
-            -(tilemap_->worldWidth() * 0.5f),
-            -(tilemap_->worldHeight() * 0.5f)
-        };
-    } else {
-        tilemap_.reset();
-    }
-
     // ========================================================================
     // Register game render passes with the render graph
     // ========================================================================
     auto& graph = renderGraph();
 
-    // Pass: GroundTiles — tilemap rendering into Scene FBO
+    // Pass: GroundTiles — clear Scene FBO for subsequent passes
     graph.addPass({"GroundTiles", true, [this](RenderPassContext& ctx) {
         auto& sceneFbo = ctx.graph->getFBO("Scene", ctx.viewportWidth, ctx.viewportHeight, true);
         sceneFbo.bind();
         glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-        if (tilemap_) {
-            Mat4 vp = ctx.camera->getViewProjection();
-            ctx.spriteBatch->begin(vp);
-            tilemap_->render(*ctx.spriteBatch, *ctx.camera, -10.0f);
-            ctx.spriteBatch->end();
-        }
-
         sceneFbo.unbind();
     }});
 
@@ -2573,6 +2556,16 @@ void GameApp::onUpdate(float deltaTime) {
                                     bool wasVisible = menuPanels->visible();
                                     menuPanels->setVisible(true);
                                     if (tabBar) tabBar->setActiveTab(tab);
+                                    // Hide skill arc / dpad when menu opens
+                                    if (!wasVisible) {
+                                        auto* hudScr = uiManager().getScreen("fate_hud");
+                                        if (hudScr) {
+                                            auto* dpad = hudScr->findById("dpad");
+                                            auto* arc  = hudScr->findById("skill_arc");
+                                            if (dpad) dpad->setVisible(false);
+                                            if (arc)  arc->setVisible(false);
+                                        }
+                                    }
                                 }
                             };
                         }
@@ -3644,13 +3637,25 @@ void GameApp::onUpdate(float deltaTime) {
                                 }
                             }
 
-                            // Paper doll textures
+                            // Paper doll textures (layered from AppearanceComponent)
+                            auto* appearance = localPlayer->getComponent<AppearanceComponent>();
+                            if (appearance) {
+                                ip->dollBodyTex   = appearance->body.front;
+                                ip->dollHairTex   = appearance->hair.front;
+                                ip->dollArmorTex  = appearance->armor.front;
+                                ip->dollHatTex    = appearance->hat.front;
+                                ip->dollWeaponTex = nullptr; // weapon not shown in idle pose
+                                auto& catalog = PaperDollCatalog::instance();
+                                if (catalog.isLoaded()) {
+                                    ip->dollFrameW = catalog.frameWidth();
+                                    ip->dollFrameH = catalog.frameHeight();
+                                }
+                            }
+                            // Legacy fallback
                             auto* sprite = localPlayer->getComponent<SpriteComponent>();
-                            if (sprite && sprite->texture) {
+                            if (!appearance && sprite && sprite->texture) {
                                 ip->characterTexture = sprite->texture;
                             }
-                            ip->armorTexture = nullptr;  // TODO: wire from equipment art
-                            ip->hatTexture = nullptr;    // TODO: wire from equipment art
                         }
 
                         // SkillPanel — populate from ClientSkillDefinitionCache (all class skills)
@@ -4347,7 +4352,6 @@ void GameApp::onShutdown() {
     }
 
     audioManager_.shutdown();
-    tilemap_.reset();
     SDFText::instance().shutdown();
     delete renderSystem_;
     renderSystem_ = nullptr;

@@ -339,6 +339,8 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["levelOffset"]   = {w->levelOffset.x, w->levelOffset.y};
             j["hpLabelOffset"] = {w->hpLabelOffset.x, w->hpLabelOffset.y};
             j["mpLabelOffset"] = {w->mpLabelOffset.x, w->mpLabelOffset.y};
+            j["menuBtnOffset"] = {w->menuBtnOffset.x, w->menuBtnOffset.y};
+            j["chatBtnOffset"] = {w->chatBtnOffset.x, w->chatBtnOffset.y};
             j["topBarHeight"]   = w->topBarHeight;
             j["portraitRadius"] = w->portraitRadius;
             j["barHeight"]      = w->barHeight;
@@ -380,6 +382,17 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["activeTab"] = w->activeTab;
             j["tabSize"]   = w->tabSize;
             j["arrowSize"] = w->arrowSize;
+            j["tabFontSize"]   = w->tabFontSize;
+            j["arrowFontSize"] = w->arrowFontSize;
+            j["borderWidth"]   = w->borderWidth;
+            j["activeTabBg"]       = {w->activeTabBg.r, w->activeTabBg.g, w->activeTabBg.b, w->activeTabBg.a};
+            j["inactiveTabBg"]     = {w->inactiveTabBg.r, w->inactiveTabBg.g, w->inactiveTabBg.b, w->inactiveTabBg.a};
+            j["arrowBg"]           = {w->arrowBg.r, w->arrowBg.g, w->arrowBg.b, w->arrowBg.a};
+            j["borderColor"]       = {w->borderColor.r, w->borderColor.g, w->borderColor.b, w->borderColor.a};
+            j["activeTextColor"]   = {w->activeTextColor.r, w->activeTextColor.g, w->activeTextColor.b, w->activeTextColor.a};
+            j["inactiveTextColor"] = {w->inactiveTextColor.r, w->inactiveTextColor.g, w->inactiveTextColor.b, w->inactiveTextColor.a};
+            j["arrowTextColor"]    = {w->arrowTextColor.r, w->arrowTextColor.g, w->arrowTextColor.b, w->arrowTextColor.a};
+            j["highlightColor"]    = {w->highlightColor.r, w->highlightColor.g, w->highlightColor.b, w->highlightColor.a};
             if (!w->tabLabels.empty())
                 j["tabLabels"] = nlohmann::json(w->tabLabels);
         }
@@ -449,6 +462,18 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             }
             j["equipLayout"] = slots;
 
+            // Slot appearance
+            j["slotFilledBgColor"]    = {w->slotFilledBgColor.r, w->slotFilledBgColor.g, w->slotFilledBgColor.b, w->slotFilledBgColor.a};
+            j["slotEmptyBgColor"]     = {w->slotEmptyBgColor.r, w->slotEmptyBgColor.g, w->slotEmptyBgColor.b, w->slotEmptyBgColor.a};
+            j["slotEmptyBorderColor"] = {w->slotEmptyBorderColor.r, w->slotEmptyBorderColor.g, w->slotEmptyBorderColor.b, w->slotEmptyBorderColor.a};
+            j["slotBorderWidth"]      = w->slotBorderWidth;
+
+            // Paper doll inset
+            j["dollInsetBgColor"]     = {w->dollInsetBgColor.r, w->dollInsetBgColor.g, w->dollInsetBgColor.b, w->dollInsetBgColor.a};
+            j["dollInsetBorderColor"] = {w->dollInsetBorderColor.r, w->dollInsetBorderColor.g, w->dollInsetBorderColor.b, w->dollInsetBorderColor.a};
+            j["dollInsetBorderW"]     = w->dollInsetBorderW;
+            j["equipLabelGap"]        = w->equipLabelGap;
+
             // Font sizes
             j["itemFontSize"]          = w->itemFontSize;
             j["quantityFontSize"]      = w->quantityFontSize;
@@ -494,6 +519,27 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["rarityEpicColor"]      = {w->rarityEpicColor.r, w->rarityEpicColor.g, w->rarityEpicColor.b, w->rarityEpicColor.a};
             j["rarityLegendaryColor"] = {w->rarityLegendaryColor.r, w->rarityLegendaryColor.g, w->rarityLegendaryColor.b, w->rarityLegendaryColor.a};
 
+            // Close button
+            j["closeBtnRadius"]   = w->closeBtnRadius;
+            j["closeBtnOffset"]   = w->closeBtnOffset;
+            j["closeBtnBorderW"]  = w->closeBtnBorderW;
+            j["closeBtnFontSize"] = w->closeBtnFontSize;
+            j["closeBtnBgColor"]     = {w->closeBtnBgColor.r, w->closeBtnBgColor.g, w->closeBtnBgColor.b, w->closeBtnBgColor.a};
+            j["closeBtnBorderColor"] = {w->closeBtnBorderColor.r, w->closeBtnBorderColor.g, w->closeBtnBorderColor.b, w->closeBtnBorderColor.a};
+            j["closeBtnTextColor"]   = {w->closeBtnTextColor.r, w->closeBtnTextColor.g, w->closeBtnTextColor.b, w->closeBtnTextColor.a};
+
+            // Context menu
+            j["ctxMenuWidth"]      = w->ctxMenuWidth;
+            j["ctxMenuItemHeight"] = w->ctxMenuItemHeight;
+            j["ctxMenuPadding"]    = w->ctxMenuPadding;
+            j["ctxMenuBorderW"]    = w->ctxMenuBorderW;
+            j["ctxMenuFontSize"]   = w->ctxMenuFontSize;
+            j["ctxMenuTextPadX"]   = w->ctxMenuTextPadX;
+            j["ctxMenuBgColor"]       = {w->ctxMenuBgColor.r, w->ctxMenuBgColor.g, w->ctxMenuBgColor.b, w->ctxMenuBgColor.a};
+            j["ctxMenuBorderColor"]   = {w->ctxMenuBorderColor.r, w->ctxMenuBorderColor.g, w->ctxMenuBorderColor.b, w->ctxMenuBorderColor.a};
+            j["ctxMenuTextColor"]     = {w->ctxMenuTextColor.r, w->ctxMenuTextColor.g, w->ctxMenuTextColor.b, w->ctxMenuTextColor.a};
+            j["ctxMenuDisabledColor"] = {w->ctxMenuDisabledColor.r, w->ctxMenuDisabledColor.g, w->ctxMenuDisabledColor.b, w->ctxMenuDisabledColor.a};
+
             // Panel colors
             j["panelBgColor"]     = {w->panelBgColor.r, w->panelBgColor.g, w->panelBgColor.b, w->panelBgColor.a};
             j["panelBorderColor"] = {w->panelBorderColor.r, w->panelBorderColor.g, w->panelBorderColor.b, w->panelBorderColor.a};
@@ -533,6 +579,25 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["circleRadiusMul"]  = w->circleRadiusMul;
             j["dotSize"]          = w->dotSize;
             j["dotSpacing"]       = w->dotSpacing;
+            j["headerHeight"]     = w->headerHeight;
+            j["borderWidth"]      = w->borderWidth;
+            j["contentPadding"]   = w->contentPadding;
+            j["gridMargin"]       = w->gridMargin;
+            j["dividerWidth"]     = w->dividerWidth;
+            j["ringWidthNormal"]    = w->ringWidthNormal;
+            j["ringWidthSelected"]  = w->ringWidthSelected;
+            j["tabRadius"]        = w->tabRadius;
+            j["tabSpacingMul"]    = w->tabSpacingMul;
+            j["wheelStartDeg"]    = w->wheelStartDeg;
+            j["wheelEndDeg"]      = w->wheelEndDeg;
+            j["wheelSlotSizeMul"] = w->wheelSlotSizeMul;
+            j["closeBtnRadius"]   = w->closeBtnRadius;
+            j["closeBtnOffset"]   = w->closeBtnOffset;
+            j["closeBtnBorderW"]  = w->closeBtnBorderW;
+            j["closeBtnFontSize"] = w->closeBtnFontSize;
+            j["ptsBadgeRadius"]   = w->ptsBadgeRadius;
+            j["ptsFontSize"]      = w->ptsFontSize;
+            j["slotNameFontSize"] = w->slotNameFontSize;
             j["titleFontSize"]    = w->titleFontSize;
             j["headerFontSize"]   = w->headerFontSize;
             j["nameFontSize"]     = w->nameFontSize;
@@ -551,6 +616,18 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["nameLocked"]       = {w->nameLocked.r, w->nameLocked.g, w->nameLocked.b, w->nameLocked.a};
             j["pointsBadge"]      = {w->pointsBadge.r, w->pointsBadge.g, w->pointsBadge.b, w->pointsBadge.a};
             j["pointsEmpty"]      = {w->pointsEmpty.r, w->pointsEmpty.g, w->pointsEmpty.b, w->pointsEmpty.a};
+            j["dividerColor"]     = {w->dividerColor.r, w->dividerColor.g, w->dividerColor.b, w->dividerColor.a};
+            j["ptsBadgeRingColor"] = {w->ptsBadgeRingColor.r, w->ptsBadgeRingColor.g, w->ptsBadgeRingColor.b, w->ptsBadgeRingColor.a};
+            j["ptsTextColor"]     = {w->ptsTextColor.r, w->ptsTextColor.g, w->ptsTextColor.b, w->ptsTextColor.a};
+            j["tabBgActive"]      = {w->tabBgActive.r, w->tabBgActive.g, w->tabBgActive.b, w->tabBgActive.a};
+            j["tabBgInactive"]    = {w->tabBgInactive.r, w->tabBgInactive.g, w->tabBgInactive.b, w->tabBgInactive.a};
+            j["tabRingActive"]    = {w->tabRingActive.r, w->tabRingActive.g, w->tabRingActive.b, w->tabRingActive.a};
+            j["tabRingInactive"]  = {w->tabRingInactive.r, w->tabRingInactive.g, w->tabRingInactive.b, w->tabRingInactive.a};
+            j["tabTextActive"]    = {w->tabTextActive.r, w->tabTextActive.g, w->tabTextActive.b, w->tabTextActive.a};
+            j["tabTextInactive"]  = {w->tabTextInactive.r, w->tabTextInactive.g, w->tabTextInactive.b, w->tabTextInactive.a};
+            j["closeBtnBgColor"]     = {w->closeBtnBgColor.r, w->closeBtnBgColor.g, w->closeBtnBgColor.b, w->closeBtnBgColor.a};
+            j["closeBtnBorderColor"] = {w->closeBtnBorderColor.r, w->closeBtnBorderColor.g, w->closeBtnBorderColor.b, w->closeBtnBorderColor.a};
+            j["closeBtnTextColor"]   = {w->closeBtnTextColor.r, w->closeBtnTextColor.g, w->closeBtnTextColor.b, w->closeBtnTextColor.a};
         }
     }
     else if (type == "buff_bar") {

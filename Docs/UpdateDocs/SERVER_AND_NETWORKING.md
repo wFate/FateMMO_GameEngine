@@ -49,6 +49,8 @@ System packets (Connect, Disconnect, Heartbeat, KeyExchange, ConnectAccept, Conn
 
 - `disconnect()` clears all connection state including `authToken_`, crypto keys, reliability buffers, heartbeat/reconnect timers. Fires `onDisconnected` callback.
 - `ConnectReject` handler clears `authToken_`, stops reconnect (`ReconnectPhase::Failed`), fires `onConnectRejected`. Stale tokens from prior sessions no longer cause infinite reconnect loops.
+- **Auth cleanup on disconnect/rejection:** `onConnectRejected` and `onDisconnected` callbacks call `authClient_.disconnectAuth()` to tear down the stale auth TLS connection before returning to login screen. Prevents orphaned auth worker threads blocking on `cmdCv_.wait()`.
+- **Auth `busy_` ordering:** `loginAsync()` and `registerAsync()` call `cleanup()` before setting `busy_.store(true)` to prevent the old worker's teardown from stomping the flag (race condition caused "Login failed" despite server-confirmed auth success).
 - Client skips ghost creation for own player entity (`SvEntityEnter` with `entityType==0` matching local character name). Stores `localPlayerPid_` for self-identification.
 
 ### Rate Limiting
