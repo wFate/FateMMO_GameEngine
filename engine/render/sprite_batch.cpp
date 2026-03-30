@@ -446,11 +446,11 @@ void SpriteBatch::flush() {
         cmdList_->setUniform("u_shadowOffset", Vec2{0.002f, 0.002f});
 
         // Text effect defaults (match previous hardcoded values)
-        cmdList_->setUniform("u_outlineColor", Vec4{0.0f, 0.0f, 0.0f, 1.0f});
+        cmdList_->setUniform("u_outlineColor", Color{0.0f, 0.0f, 0.0f, 1.0f});
         cmdList_->setUniform("u_outlineThickness", 0.35f);
         cmdList_->setUniform("u_textShadowOffset", Vec2{0.002f, 0.002f});
-        cmdList_->setUniform("u_textShadowColor", Vec4{0.0f, 0.0f, 0.0f, 0.5f});
-        cmdList_->setUniform("u_textGlowColor", Vec4{1.0f, 1.0f, 1.0f, 0.6f});
+        cmdList_->setUniform("u_textShadowColor", Color{0.0f, 0.0f, 0.0f, 0.5f});
+        cmdList_->setUniform("u_textGlowColor", Color{1.0f, 1.0f, 1.0f, 0.6f});
         cmdList_->setUniform("u_textGlowIntensity", 0.6f);
 
         if (hasRoundedRect_) {
@@ -458,12 +458,12 @@ void SpriteBatch::flush() {
             cmdList_->setUniform("u_rectSize", rr.size);
             cmdList_->setUniform("u_cornerRadius", rr.cornerRadius);
             cmdList_->setUniform("u_rrBorderWidth", rr.borderWidth);
-            cmdList_->setUniform("u_rrBorderColor", Vec4{rr.borderColor.r, rr.borderColor.g, rr.borderColor.b, rr.borderColor.a});
-            cmdList_->setUniform("u_gradientTop", Vec4{rr.fillTop.r, rr.fillTop.g, rr.fillTop.b, rr.fillTop.a});
-            cmdList_->setUniform("u_gradientBottom", Vec4{rr.fillBottom.r, rr.fillBottom.g, rr.fillBottom.b, rr.fillBottom.a});
+            cmdList_->setUniform("u_rrBorderColor", rr.borderColor);
+            cmdList_->setUniform("u_gradientTop", rr.fillTop);
+            cmdList_->setUniform("u_gradientBottom", rr.fillBottom);
             cmdList_->setUniform("u_rrShadowOffset", rr.shadowOffset);
             cmdList_->setUniform("u_rrShadowBlur", rr.shadowBlur);
-            cmdList_->setUniform("u_rrShadowColor", Vec4{rr.shadowColor.r, rr.shadowColor.g, rr.shadowColor.b, rr.shadowColor.a});
+            cmdList_->setUniform("u_rrShadowColor", rr.shadowColor);
         }
 
         cmdList_->bindVertexBuffer(vboHandle_);
@@ -627,35 +627,24 @@ void SpriteBatch::flush() {
     shader_.setVec2("u_shadowOffset", {0.002f, 0.002f});
 
     // Text effect defaults (match previous hardcoded values)
-    shader_.setVec4("u_outlineColor", {0.0f, 0.0f, 0.0f, 1.0f});
+    shader_.setVec4("u_outlineColor", 0.0f, 0.0f, 0.0f, 1.0f);
     shader_.setFloat("u_outlineThickness", 0.35f);
     shader_.setVec2("u_textShadowOffset", {0.002f, 0.002f});
-    shader_.setVec4("u_textShadowColor", {0.0f, 0.0f, 0.0f, 0.5f});
-    shader_.setVec4("u_textGlowColor", {1.0f, 1.0f, 1.0f, 0.6f});
+    shader_.setVec4("u_textShadowColor", 0.0f, 0.0f, 0.0f, 0.5f);
+    shader_.setVec4("u_textGlowColor", 1.0f, 1.0f, 1.0f, 0.6f);
     shader_.setFloat("u_textGlowIntensity", 0.6f);
-
-    // Rounded rect defaults (renderType 7)
-    shader_.setVec2("u_rectSize", {100.0f, 40.0f});
-    shader_.setFloat("u_cornerRadius", 8.0f);
-    shader_.setFloat("u_rrBorderWidth", 1.0f);
-    shader_.setVec4("u_rrBorderColor", {0.0f, 0.0f, 0.0f, 1.0f});
-    shader_.setVec4("u_gradientTop", {1.0f, 1.0f, 1.0f, 1.0f});
-    shader_.setVec4("u_gradientBottom", {0.8f, 0.8f, 0.8f, 1.0f});
-    shader_.setVec2("u_rrShadowOffset", {2.0f, 2.0f});
-    shader_.setFloat("u_rrShadowBlur", 4.0f);
-    shader_.setVec4("u_rrShadowColor", {0.0f, 0.0f, 0.0f, 0.3f});
 
     if (hasRoundedRect_) {
         auto& rr = pendingRoundedRect_;
         shader_.setVec2("u_rectSize", {rr.size.x, rr.size.y});
         shader_.setFloat("u_cornerRadius", rr.cornerRadius);
         shader_.setFloat("u_rrBorderWidth", rr.borderWidth);
-        shader_.setVec4("u_rrBorderColor", {rr.borderColor.r, rr.borderColor.g, rr.borderColor.b, rr.borderColor.a});
-        shader_.setVec4("u_gradientTop", {rr.fillTop.r, rr.fillTop.g, rr.fillTop.b, rr.fillTop.a});
-        shader_.setVec4("u_gradientBottom", {rr.fillBottom.r, rr.fillBottom.g, rr.fillBottom.b, rr.fillBottom.a});
+        shader_.setVec4("u_rrBorderColor", rr.borderColor.r, rr.borderColor.g, rr.borderColor.b, rr.borderColor.a);
+        shader_.setVec4("u_gradientTop", rr.fillTop.r, rr.fillTop.g, rr.fillTop.b, rr.fillTop.a);
+        shader_.setVec4("u_gradientBottom", rr.fillBottom.r, rr.fillBottom.g, rr.fillBottom.b, rr.fillBottom.a);
         shader_.setVec2("u_rrShadowOffset", {rr.shadowOffset.x, rr.shadowOffset.y});
         shader_.setFloat("u_rrShadowBlur", rr.shadowBlur);
-        shader_.setVec4("u_rrShadowColor", {rr.shadowColor.r, rr.shadowColor.g, rr.shadowColor.b, rr.shadowColor.a});
+        shader_.setVec4("u_rrShadowColor", rr.shadowColor.r, rr.shadowColor.g, rr.shadowColor.b, rr.shadowColor.a);
     }
 
     glBindVertexArray(vao_);

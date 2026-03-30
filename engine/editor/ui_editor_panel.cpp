@@ -2430,11 +2430,11 @@ void UIEditorPanel::drawStyleEditor(UINode* node, UIManager& uiMgr) {
         if (style.textStyle != fate::TextStyle::Normal) {
             auto& te = style.textEffects;
             ImGui::ColorEdit4("Outline Color", &te.outlineColor.r);
-            ImGui::DragFloat("Outline Thickness", &te.outlineThickness, 0.01f, 0.0f, 0.5f);
+            ImGui::DragFloat("Outline Width", &te.outlineWidth, 0.01f, 0.0f, 0.5f);
             ImGui::DragFloat2("Text Shadow Offset", &te.shadowOffset.x, 0.001f, -0.01f, 0.01f);
             ImGui::ColorEdit4("Text Shadow Color", &te.shadowColor.r);
             ImGui::ColorEdit4("Glow Color", &te.glowColor.r);
-            ImGui::DragFloat("Glow Intensity", &te.glowIntensity, 0.05f, 0.0f, 1.0f);
+            ImGui::DragFloat("Glow Radius", &te.glowRadius, 0.05f, 0.0f, 1.0f);
         }
         ImGui::TreePop();
     }

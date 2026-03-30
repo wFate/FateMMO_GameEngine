@@ -1,12 +1,19 @@
 #pragma once
 #include "engine/render/texture.h"
-#include "engine/render/sdf_text.h" // for GlyphMetrics
 #include <string>
 #include <unordered_map>
 #include <memory>
 #include <cstdint>
 
 namespace fate {
+
+// GlyphMetrics defined here to break circular include (sdf_font.h <-> sdf_text.h)
+struct GlyphMetrics {
+    float advance;
+    float bearingX, bearingY;
+    float width, height;
+    float uvX, uvY, uvW, uvH; // UV rect in atlas (0-1 normalized)
+};
 
 struct SDFFont {
     enum class Type { MSDF, Bitmap };

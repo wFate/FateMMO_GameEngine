@@ -369,7 +369,8 @@ void SDFText::drawBitmap(SpriteBatch& batch, const SDFFont& font, const std::str
                          Vec2 position, float fontSize, Color color, float depth, bool yDown) {
     if (!font.atlas || font.glyphHeight <= 0 || font.columns <= 0) return;
 
-    int scale = std::max(1, static_cast<int>(std::round(fontSize / font.glyphHeight)));
+    int scaleI = static_cast<int>(std::round(fontSize / font.glyphHeight));
+    int scale = (scaleI > 1) ? scaleI : 1;
     float scaledW = static_cast<float>(font.glyphWidth * scale);
     float scaledH = static_cast<float>(font.glyphHeight * scale);
     float atlasW  = static_cast<float>(font.atlas->width());
@@ -420,7 +421,8 @@ void SDFText::drawBitmap(SpriteBatch& batch, const SDFFont& font, const std::str
 Vec2 SDFText::measureBitmap(const SDFFont& font, const std::string& text, float fontSize) const {
     if (font.glyphHeight <= 0) return {0.0f, 0.0f};
 
-    int scale = std::max(1, static_cast<int>(std::round(fontSize / font.glyphHeight)));
+    int scaleI = static_cast<int>(std::round(fontSize / font.glyphHeight));
+    int scale = (scaleI > 1) ? scaleI : 1;
     float scaledW = static_cast<float>(font.glyphWidth * scale);
     float scaledH = static_cast<float>(font.glyphHeight * scale);
 

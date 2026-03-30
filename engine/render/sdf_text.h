@@ -25,12 +25,8 @@ struct TextEffects {
     Color shadowColor  = Color::clear();
 };
 
-struct GlyphMetrics {
-    float advance;
-    float bearingX, bearingY;
-    float width, height;
-    float uvX, uvY, uvW, uvH; // UV rect in atlas (0-1 normalized)
-};
+// GlyphMetrics is defined in sdf_font.h
+#include "engine/render/sdf_font.h"
 
 class SDFText {
 public:
