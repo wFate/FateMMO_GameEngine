@@ -504,6 +504,9 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             targetContexts.push_back(tctx);
         }
 
+        // Sync SkillManager time so internal cooldowns expire correctly
+        skillComp->skills.tick(gameTime_);
+
         // Execute AOE skill
         int totalDamage = skillComp->skills.executeSkillAOE(msg.skillId, msg.rank, primaryCtx, targetContexts);
 
@@ -613,6 +616,9 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
         }
         failReason = std::move(reason);
     };
+
+    // Sync SkillManager time so internal cooldowns expire correctly
+    skillComp->skills.tick(gameTime_);
 
     // Execute the skill
     int damage = skillComp->skills.executeSkill(msg.skillId, msg.rank, ctx);
