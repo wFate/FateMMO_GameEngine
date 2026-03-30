@@ -36,8 +36,7 @@ void PaperDollPanel::draw() {
     float saveX = ImGui::GetWindowWidth() - 80.0f;
     ImGui::SameLine(saveX);
     if (ImGui::Button("Save")) {
-        catalog.save("assets/paper_doll.json");
-        LOG_INFO("PaperDoll", "Catalog saved");
+        catalog.save("");  // uses stored absolute path from load()
     }
 
     // Split: left = preview, right = tabs
@@ -125,8 +124,9 @@ void PaperDollPanel::drawCompositePreview() {
         float texW = static_cast<float>(tex->width());
         float texH = static_cast<float>(tex->height());
         if (texW == 0 || texH == 0) return;
-        ImVec2 uv0 = {0, 0};
-        ImVec2 uv1 = {fw / texW, fh / texH};
+        // GL textures are bottom-up, ImGui is top-down — flip V
+        ImVec2 uv0 = {0, fh / texH};
+        ImVec2 uv1 = {fw / texW, 0};
         dl->AddImage((ImTextureID)(intptr_t)tex->id(), pMin, pMax, uv0, uv1);
     };
 
@@ -405,7 +405,7 @@ bool PaperDollPanel::browseButton(const char* id, std::string& path) {
     ofn.lpstrFilter = "PNG Files\0*.png\0All Files\0*.*\0";
     ofn.lpstrFile = filename;
     ofn.nMaxFile = MAX_PATH;
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 
     if (GetOpenFileNameA(&ofn)) {
         // Make path relative to assets/ if possible

@@ -1,91 +1,122 @@
 {
-  "frameSize": [48, 96],
-  "bodies": {
-    "Male": {
-      "front": "assets/sprites/48x96Idle_Sprite_NoHair_NoArmor.png",
-      "back":  "",
-      "side":  ""
+  "animations": {
+    "attack": {
+      "frameCount": 6,
+      "frameRate": 12.0,
+      "hitFrame": 3,
+      "layerOffsets": {},
+      "loop": false,
+      "startFrame": 5
     },
-    "Female": {
-      "front": "",
-      "back":  "",
-      "side":  ""
+    "idle": {
+      "frameCount": 1,
+      "frameRate": 1.0,
+      "layerOffsets": {},
+      "loop": true,
+      "startFrame": 0
+    },
+    "walk": {
+      "frameCount": 4,
+      "frameRate": 8.0,
+      "layerOffsets": {
+        "armor": {
+          "y": [
+            0.0,
+            -1.0,
+            0.0,
+            -1.0
+          ]
+        },
+        "hair": {
+          "y": [
+            0.0,
+            -1.0,
+            0.0,
+            -1.0
+          ]
+        },
+        "hat": {
+          "y": [
+            0.0,
+            -1.0,
+            0.0,
+            -1.0
+          ]
+        },
+        "weapon": {
+          "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "loop": true,
+      "startFrame": 1
     }
   },
-  "hairstyles": {
-    "Male": {
-      "SilverHair": {
-        "front": "",
-        "back":  "",
-        "side":  ""
-      },
-      "RedHair": {
-        "front": "",
-        "back":  "",
-        "side":  ""
-      },
-      "BlondeHair": {
-        "front": "",
-        "back":  "",
-        "side":  ""
-      }
+  "bodies": {
+    "Female": {
+      "back": "",
+      "front": "",
+      "side": ""
     },
-    "Female": {}
+    "Male": {
+      "back": "",
+      "front": "assets/sprites/48x96Idle_Sprite_NoHair_SilverArmor.png",
+      "side": ""
+    }
   },
   "equipment": {
     "armor": {
       "quilted_vest": {
+        "back": "",
         "front": "",
-        "back":  "",
-        "side":  ""
+        "side": ""
       }
     },
     "hat": {},
     "weapon": {
-      "rusty_dagger": {
-        "front": "",
-        "back":  "",
-        "side":  ""
-      },
       "gnarled_stick": {
+        "back": "",
         "front": "",
-        "back":  "",
-        "side":  ""
+        "side": ""
       },
       "makeshift_bow": {
+        "back": "",
         "front": "",
-        "back":  "",
-        "side":  ""
+        "side": ""
+      },
+      "rusty_dagger": {
+        "back": "",
+        "front": "",
+        "side": ""
       }
     }
   },
-  "animations": {
-    "idle": {
-      "startFrame": 0,
-      "frameCount": 1,
-      "frameRate": 1.0,
-      "loop": true,
-      "layerOffsets": {}
-    },
-    "walk": {
-      "startFrame": 1,
-      "frameCount": 4,
-      "frameRate": 8.0,
-      "loop": true,
-      "layerOffsets": {
-        "hair":   { "y": [0, -1, 0, -1] },
-        "armor":  { "y": [0, -1, 0, -1] },
-        "hat":    { "y": [0, -1, 0, -1] },
-        "weapon": { "y": [0,  0, 0,  0] }
+  "frameSize": [
+    48,
+    96
+  ],
+  "hairstyles": {
+    "Female": {},
+    "Male": {
+      "BlondeHair": {
+        "back": "",
+        "front": "assets/sprites/48x96Idle_Sprite_Male_Front_BlondeHair.png",
+        "side": ""
+      },
+      "RedHair": {
+        "back": "",
+        "front": "assets/sprites/48x96Idle_Sprite_Male_Front_RedHair.png",
+        "side": ""
+      },
+      "SilverHair": {
+        "back": "",
+        "front": "assets/sprites/48x96Idle_Sprite_Male_Front_SilverHair.png",
+        "side": ""
       }
-    },
-    "attack": {
-      "startFrame": 5,
-      "frameCount": 6,
-      "frameRate": 12.0,
-      "loop": false,
-      "hitFrame": 3,
-      "layerOffsets": {}
     }
   }
 }

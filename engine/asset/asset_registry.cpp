@@ -93,8 +93,10 @@ AssetHandle AssetRegistry::load(const std::string& path) {
 
     if (slot.state != AssetState::Ready) {
         LOG_ERROR("AssetRegistry", "Failed to load: %s", canon.c_str());
-        slot.generation++; // invalidate any handle already issued to this index
-        freeList_.push_back(idx);
+        // Cache the failure so subsequent loads of the same path return
+        // immediately instead of re-attempting fopen (which spams errors
+        // when many entities reference the same missing/locked texture).
+        pathToIndex_[canon] = idx;
         return AssetHandle{};
     }
 

@@ -3,6 +3,7 @@
 #include "engine/render/sdf_text.h"
 #include "engine/render/texture.h"
 #include "game/data/paper_doll_catalog.h"
+#include "engine/core/logger.h"
 #include <SDL_scancode.h>
 #include <cstdio>
 #include <cmath>
@@ -444,12 +445,17 @@ void CharacterSelectScreen::resolvePreviewTextures() {
     std::string hairName = catalog.getHairstyleNameByIndex(gender, slot.hairstyle);
     previewHairTex_ = catalog.getHairstyle(gender, hairName).front;
 
-    if (!slot.armorStyle.empty())
+    if (!slot.armorStyle.empty()) {
         previewArmorTex_ = catalog.getEquipment("armor", slot.armorStyle).front;
-    if (!slot.hatStyle.empty())
+        LOG_DEBUG("CharSelect", "armor='%s' tex=%s", slot.armorStyle.c_str(),
+                  previewArmorTex_ ? "loaded" : "NOT FOUND in catalog");
+    }
+    if (!slot.hatStyle.empty()) {
         previewHatTex_ = catalog.getEquipment("hat", slot.hatStyle).front;
-    if (!slot.weaponStyle.empty())
+    }
+    if (!slot.weaponStyle.empty()) {
         previewWeaponTex_ = catalog.getEquipment("weapon", slot.weaponStyle).front;
+    }
 }
 
 // ---------------------------------------------------------------------------

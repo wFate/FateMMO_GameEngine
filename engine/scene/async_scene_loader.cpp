@@ -26,6 +26,11 @@ static void asyncSceneLoadJob(void* param) {
 
     pending->workerProgress.store(0.0f, std::memory_order_relaxed);
     std::ifstream file(pending->jsonPath);
+#ifdef FATE_SOURCE_DIR
+    if (!file.is_open()) {
+        file.open(std::string(FATE_SOURCE_DIR) + "/" + pending->jsonPath);
+    }
+#endif
     if (!file.is_open()) {
         pending->errorMessage = "Cannot open scene: " + pending->jsonPath;
         pending->workerFailed.store(true, std::memory_order_relaxed);

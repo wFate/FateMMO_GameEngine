@@ -4467,15 +4467,20 @@ void GameApp::wireCharacterSelectCallbacks(CharacterSelectScreen* charSelect) {
     charSelect->onSlotSelected = [this](int index, const std::string& charId) {
         selectedCharacterId_ = charId;
         // Store appearance from the preview data for createPlayer
+        std::string dbArmor, dbWeapon, dbHat;
         for (const auto& c : pendingCharacterList_) {
             if (c.characterId == charId) {
                 pendingGender_ = c.gender;
                 pendingHairstyle_ = c.hairstyle;
+                dbArmor = c.armorStyle;
+                dbWeapon = c.weaponStyle;
+                dbHat = c.hatStyle;
                 break;
             }
         }
-        LOG_INFO("GameApp", "Selected slot %d, character '%s' (gender=%d hairstyle=%d)",
-                 index, charId.c_str(), pendingGender_, pendingHairstyle_);
+        LOG_INFO("GameApp", "Selected slot %d, character '%s' (gender=%d hairstyle=%d armor='%s' weapon='%s' hat='%s')",
+                 index, charId.c_str(), pendingGender_, pendingHairstyle_,
+                 dbArmor.c_str(), dbWeapon.c_str(), dbHat.c_str());
     };
 
     charSelect->onCreateNew = [this](const std::string&) {

@@ -32,11 +32,22 @@ static nlohmann::json pathsToJson(const SpritePaths& p) {
 // ---------------------------------------------------------------------------
 
 bool PaperDollCatalog::load(const std::string& path) {
-    std::ifstream file(path);
+    // Try the path as-is first, then try relative to exe directory
+    std::string resolvedPath = path;
+    std::ifstream file(resolvedPath);
+    if (!file.is_open()) {
+        // Try resolving relative to FATE_SOURCE_DIR (set by CMake for editor builds)
+#ifdef FATE_SOURCE_DIR
+        resolvedPath = std::string(FATE_SOURCE_DIR) + "/" + path;
+        file.open(resolvedPath);
+#endif
+    }
     if (!file.is_open()) {
         LOG_ERROR("PaperDoll", "Failed to open catalog: %s", path.c_str());
         return false;
     }
+    // Store the resolved absolute path for save
+    loadedPath_ = resolvedPath;
 
     nlohmann::json root;
     try {
@@ -117,12 +128,33 @@ bool PaperDollCatalog::load(const std::string& path) {
     }
 
     loaded_ = true;
+    rebuildTextureCache();
     LOG_INFO("PaperDoll", "Loaded catalog: %s (frame %dx%d, %zu bodies, %zu anim)",
              path.c_str(), frameWidth_, frameHeight_, bodies_.size(), animations_.size());
     return true;
 }
 
-bool PaperDollCatalog::save(const std::string& path) const {
+void PaperDollCatalog::rebuildTextureCache() {
+    bodyTexCache_.clear();
+    hairTexCache_.clear();
+    equipTexCache_.clear();
+    for (auto& [gender, paths] : bodies_)
+        bodyTexCache_[gender] = loadSpriteSet(paths);
+    for (auto& [gender, vec] : hairstyles_)
+        for (auto& [name, paths] : vec)
+            hairTexCache_[gender + "/" + name] = loadSpriteSet(paths);
+    for (auto& [category, vec] : equipment_)
+        for (auto& [style, paths] : vec)
+            equipTexCache_[category + "/" + style] = loadSpriteSet(paths);
+}
+
+bool PaperDollCatalog::save(const std::string& path_) const {
+    // Use the stored absolute path from load() if no explicit path given
+    std::string path = path_.empty() ? loadedPath_ : path_;
+    if (path.empty()) {
+        LOG_ERROR("PaperDoll", "No save path — catalog was never loaded");
+        return false;
+    }
     nlohmann::json root;
 
     // Frame size
@@ -191,10 +223,22 @@ bool PaperDollCatalog::save(const std::string& path) const {
 // ---------------------------------------------------------------------------
 
 SpriteSet PaperDollCatalog::loadSpriteSet(const SpritePaths& paths) const {
+    auto& cache = TextureCache::instance();
+    // Resolve paths relative to source dir to handle any CWD
+    auto resolve = [&](const std::string& p) -> std::shared_ptr<Texture> {
+        if (p.empty()) return nullptr;
+        auto tex = cache.load(p);
+        if (tex) return tex;
+#ifdef FATE_SOURCE_DIR
+        tex = cache.load(std::string(FATE_SOURCE_DIR) + "/" + p);
+        if (tex) return tex;
+#endif
+        return nullptr;
+    };
     SpriteSet set;
-    if (!paths.front.empty()) set.front = TextureCache::instance().load(paths.front);
-    if (!paths.back.empty())  set.back  = TextureCache::instance().load(paths.back);
-    if (!paths.side.empty())  set.side  = TextureCache::instance().load(paths.side);
+    set.front = resolve(paths.front);
+    set.back  = resolve(paths.back);
+    set.side  = resolve(paths.side);
     return set;
 }
 
@@ -203,9 +247,8 @@ SpriteSet PaperDollCatalog::loadSpriteSet(const SpritePaths& paths) const {
 // ---------------------------------------------------------------------------
 
 SpriteSet PaperDollCatalog::getBody(const std::string& gender) const {
-    auto it = bodies_.find(gender);
-    if (it == bodies_.end()) return {};
-    return loadSpriteSet(it->second);
+    auto it = bodyTexCache_.find(gender);
+    return it != bodyTexCache_.end() ? it->second : SpriteSet{};
 }
 
 SpritePaths PaperDollCatalog::getBodyPaths(const std::string& gender) const {
@@ -220,6 +263,7 @@ void PaperDollCatalog::setBodyPath(const std::string& gender, const std::string&
     if (direction == "front")      p.front = path;
     else if (direction == "back")  p.back  = path;
     else if (direction == "side")  p.side  = path;
+    bodyTexCache_[gender] = loadSpriteSet(p);
 }
 
 // ---------------------------------------------------------------------------
@@ -228,12 +272,8 @@ void PaperDollCatalog::setBodyPath(const std::string& gender, const std::string&
 
 SpriteSet PaperDollCatalog::getHairstyle(const std::string& gender,
                                           const std::string& name) const {
-    auto git = hairstyles_.find(gender);
-    if (git == hairstyles_.end()) return {};
-    for (auto& [n, paths] : git->second) {
-        if (n == name) return loadSpriteSet(paths);
-    }
-    return {};
+    auto it = hairTexCache_.find(gender + "/" + name);
+    return it != hairTexCache_.end() ? it->second : SpriteSet{};
 }
 
 SpritePaths PaperDollCatalog::getHairstylePaths(const std::string& gender,
@@ -289,6 +329,7 @@ void PaperDollCatalog::setHairstylePath(const std::string& gender, const std::st
             if (direction == "front")      p.front = path;
             else if (direction == "back")  p.back  = path;
             else if (direction == "side")  p.side  = path;
+            hairTexCache_[gender + "/" + name] = loadSpriteSet(p);
             return;
         }
     }
@@ -310,12 +351,9 @@ void PaperDollCatalog::removeHairstyle(const std::string& gender, const std::str
 
 SpriteSet PaperDollCatalog::getEquipment(const std::string& category,
                                           const std::string& style) const {
-    auto cit = equipment_.find(category);
-    if (cit == equipment_.end()) return {};
-    for (auto& [s, paths] : cit->second) {
-        if (s == style) return loadSpriteSet(paths);
-    }
-    return {};
+    if (style.empty()) return {};
+    auto it = equipTexCache_.find(category + "/" + style);
+    return it != equipTexCache_.end() ? it->second : SpriteSet{};
 }
 
 SpritePaths PaperDollCatalog::getEquipmentPaths(const std::string& category,
@@ -365,6 +403,7 @@ void PaperDollCatalog::setEquipmentPath(const std::string& category, const std::
             if (direction == "front")      p.front = path;
             else if (direction == "back")  p.back  = path;
             else if (direction == "side")  p.side  = path;
+            equipTexCache_[category + "/" + style] = loadSpriteSet(p);
             return;
         }
     }

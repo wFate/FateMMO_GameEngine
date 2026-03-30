@@ -87,6 +87,7 @@ private:
     SpriteSet loadSpriteSet(const SpritePaths& paths) const;
 
     bool loaded_ = false;
+    std::string loadedPath_;  // absolute path used for save
     int frameWidth_ = 48;
     int frameHeight_ = 96;
 
@@ -102,6 +103,13 @@ private:
     std::unordered_map<std::string, AnimInfo> animations_;
     // Ordered animation name list
     std::vector<std::string> animationNames_;
+
+    // Texture caches (populated on load, updated on setPath)
+    mutable std::unordered_map<std::string, SpriteSet> bodyTexCache_;
+    mutable std::unordered_map<std::string, SpriteSet> hairTexCache_;   // key: "gender/name"
+    mutable std::unordered_map<std::string, SpriteSet> equipTexCache_;  // key: "category/style"
+
+    void rebuildTextureCache();
 };
 
 } // namespace fate
