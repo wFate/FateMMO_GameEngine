@@ -188,7 +188,7 @@ std::vector<AOETarget> gatherPartyTargets(
     const float radiusSq = radiusPixels * radiusPixels;
 
     // Find the caster's party ID
-    Entity* casterEntity = world.getEntityById(casterEntityId);
+    Entity* casterEntity = world.getEntity(EntityHandle(casterEntityId));
     if (!casterEntity) return results;
 
     auto* casterParty = casterEntity->getComponent<PartyComponent>();

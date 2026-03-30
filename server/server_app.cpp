@@ -1021,6 +1021,46 @@ void ServerApp::tick(float dt) {
         }
     });
 
+    // Tick active channels for all players
+    world_.forEach<CharacterStatsComponent>([&](Entity* e, CharacterStatsComponent* cs) {
+        if (!cs->stats.isChanneling()) return;
+
+        auto& ch = cs->stats.channelState;
+        ch.remainingTime -= dt;
+        ch.nextTickTime -= dt;
+
+        // Channel expired
+        if (ch.remainingTime <= 0.0f) {
+            ch.active = false;
+            return;
+        }
+
+        // Process tick — fire damage at interval
+        if (ch.nextTickTime <= 0.0f) {
+            ch.nextTickTime += ch.tickInterval;
+
+            // Find owning client
+            uint16_t ownerClientId = 0;
+            server_.connections().forEach([&](const ClientConnection& c) {
+                if (c.playerEntityId != 0) {
+                    PersistentId p(c.playerEntityId);
+                    EntityHandle eh = replication_.getEntityHandle(p);
+                    if (world_.getEntity(eh) == e) ownerClientId = c.clientId;
+                }
+            });
+            if (ownerClientId == 0) return;
+
+            // Re-execute the skill as a tick (bypass cooldown/channel checks)
+            CmdUseSkillMsg tickMsg;
+            tickMsg.skillId = ch.skillId;
+            tickMsg.rank = static_cast<uint8_t>(ch.skillRank);
+            tickMsg.targetId = ch.targetEntityId;
+            castCompleting_ = true;  // bypass cooldown and channel entry checks
+            processUseSkill(ownerClientId, tickMsg);
+            castCompleting_ = false;
+        }
+    });
+
     auto tp3 = Clock::now(); // after ECS systems (status/CC/regen/casts)
 
     // Pet auto-loot tick

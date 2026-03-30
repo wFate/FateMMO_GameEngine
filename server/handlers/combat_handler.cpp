@@ -173,6 +173,24 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
             LOG_INFO("Server", "Client %d began casting '%s' (%.1fs)", clientId, msg.skillId.c_str(), skillDef->castTime);
             return; // don't execute yet — wait for cast to complete
         }
+
+        // Check channel time — if skill has a channel time, enter channeling state
+        if (skillDef && skillDef->channelTime > 0.0f && !casterStatsComp->stats.isChanneling()) {
+            // Deduct resource cost upfront
+            int ri = msg.rank - 1;
+            const CachedSkillRank* chRank = skillDefCache_.getRank(msg.skillId, msg.rank);
+            int cost = chRank ? chRank->resourceCost : 0;
+            if (cost > 0 && casterStatsComp->stats.currentMP < cost) return;
+            if (cost > 0) casterStatsComp->stats.spendMana(cost);
+
+            casterStatsComp->stats.beginChannel(msg.skillId, skillDef->channelTime, 0.5f, msg.targetId, msg.rank);
+
+            playerDirty_[clientId].vitals = true;
+            sendPlayerState(clientId);
+
+            LOG_INFO("Server", "Client %d began channeling '%s' (%.1fs)", clientId, msg.skillId.c_str(), skillDef->channelTime);
+            return; // don't execute yet — ticks handled in server tick loop
+        }
     }
 
     // ---- Life Tap: HP → MP conversion (self-cast, no target needed) ----
@@ -240,6 +258,87 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     // God mode check for skill targets (player targets only)
     if (targetIsPlayer && godModeEntities_.count(msg.targetId)) return;
 
+    // === ALLY-TARGETING SKILLS (Mend, Purify) ===
+    {
+        const SkillDefinition* allySkillDef = skillComp->skills.getSkillDefinition(msg.skillId);
+        if (allySkillDef && allySkillDef->targetType == SkillTargetType::SingleAlly && target) {
+            auto* targetCharStats = target->getComponent<CharacterStatsComponent>();
+            if (!targetCharStats) return; // target must be a player
+
+            // Validate same party or self
+            auto* casterParty = caster->getComponent<PartyComponent>();
+            auto* targetParty = target->getComponent<PartyComponent>();
+            bool isSelf = (msg.targetId == client->playerEntityId);
+            bool sameParty = isSelf;
+            if (!isSelf && casterParty && targetParty
+                && casterParty->party.isInParty() && targetParty->party.isInParty()
+                && casterParty->party.partyId == targetParty->party.partyId) {
+                sameParty = true;
+            }
+            if (!sameParty) return;
+
+            // Validate target is alive (for heals/purify)
+            if (!targetCharStats->stats.isAlive()) return;
+
+            // Validate CC
+            if (casterCCComp && !casterCCComp->cc.canAct()) return;
+
+            // Deduct resources
+            int ri = msg.rank - 1;
+            float cost = (ri < (int)allySkillDef->costPerRank.size()) ? allySkillDef->costPerRank[ri] : 0.0f;
+            if (cost > 0 && casterStatsComp->stats.currentMP < static_cast<int>(cost)) return;
+            if (cost > 0) casterStatsComp->stats.spendMana(static_cast<int>(cost));
+
+            // Start cooldown
+            auto& clientCooldowns = skillCooldowns_[clientId];
+            clientCooldowns[msg.skillId] = gameTime_;
+
+            // Apply effect based on skill
+            int healAmount = 0;
+            if (allySkillDef->removesDebuffs) {
+                // Purify: remove debuffs from target
+                auto* targetSE = target->getComponent<StatusEffectComponent>();
+                auto* targetCC = target->getComponent<CrowdControlComponent>();
+                if (targetSE) targetSE->effects.removeAllDebuffs();
+                if (targetCC) targetCC->cc.removeAllCC();
+            } else {
+                // Mend: heal target
+                float healPct = (ri < (int)allySkillDef->effectValuePerRank.size()) ? allySkillDef->effectValuePerRank[ri] : 15.0f;
+                healAmount = static_cast<int>(casterStatsComp->stats.getIntelligence() * healPct / 100.0f);
+                if (healAmount < 1) healAmount = 1;
+                targetCharStats->stats.heal(healAmount);
+            }
+
+            // Build and broadcast result
+            SvSkillResultMsg result;
+            result.casterId = casterPid.value();
+            result.targetId = msg.targetId;
+            result.skillId = msg.skillId;
+            result.damage = healAmount; // for heals, damage field carries heal amount
+            result.hitFlags = HitFlags::HIT;
+            const CachedSkillRank* allyRankInfo = skillDefCache_.getRank(msg.skillId, msg.rank);
+            result.cooldownMs = allyRankInfo ? static_cast<uint16_t>(allyRankInfo->cooldownSeconds * 1000.0f) : 0;
+            result.casterNewMP = static_cast<uint16_t>(casterStatsComp->stats.currentMP);
+            uint8_t buf[256];
+            ByteWriter w(buf, sizeof(buf));
+            result.write(w);
+            server_.broadcast(Channel::ReliableOrdered, PacketType::SvSkillResult, buf, w.size());
+
+            playerDirty_[clientId].vitals = true;
+            sendPlayerState(clientId);
+            // Also sync target's vitals
+            auto* targetConn = server_.connections().findByEntity(msg.targetId);
+            if (targetConn) {
+                playerDirty_[targetConn->clientId].vitals = true;
+                sendPlayerState(targetConn->clientId);
+            }
+
+            LOG_INFO("Server", "Client %d used ally skill '%s' rank %d -> heal=%d",
+                     clientId, msg.skillId.c_str(), msg.rank, healAmount);
+            return;
+        }
+    }
+
     // Detect AOE skill
     const SkillDefinition* skillDef = skillComp->skills.getSkillDefinition(msg.skillId);
     bool isAOE = false;
@@ -252,6 +351,69 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     }
 
     if (isAOE && skillDef) {
+        // === AOE RESURRECTION PATH (Mass Resurrect) ===
+        if (skillDef->isResurrection) {
+            auto* casterT = caster->getComponent<Transform>();
+            Vec2 center = casterT ? casterT->position : Vec2{0,0};
+            float radiusPixels = skillDef->aoeRadius * 32.0f + 16.0f;
+
+            // Gather DEAD party members
+            auto deadAllies = gatherPartyTargets(world, repl, center, radiusPixels,
+                                                 casterHandle.value, /*includeDead=*/true);
+
+            int ri = msg.rank - 1;
+            float hpPercent = (ri < (int)skillDef->resurrectHPPercentPerRank.size())
+                              ? skillDef->resurrectHPPercentPerRank[ri] : 50.0f;
+
+            // Deduct mana
+            float cost = (ri < (int)skillDef->costPerRank.size()) ? skillDef->costPerRank[ri] : 0.0f;
+            if (cost > 0 && casterStatsComp->stats.currentMP < static_cast<int>(cost)) {
+                LOG_INFO("Server", "Client %d Mass Resurrect rejected: not enough mana", clientId);
+                return;
+            }
+            if (cost > 0) casterStatsComp->stats.spendMana(static_cast<int>(cost));
+            auto& clientCooldowns2 = skillCooldowns_[clientId];
+            clientCooldowns2[msg.skillId] = gameTime_;
+
+            int resCount = 0;
+            for (auto& ally : deadAllies) {
+                Entity* allyEntity = world.getEntity(ally.handle);
+                if (!allyEntity) continue;
+                auto* allyStats = allyEntity->getComponent<CharacterStatsComponent>();
+                if (!allyStats || allyStats->stats.isAlive()) continue;
+
+                // Resurrect
+                int restoreHP = static_cast<int>(allyStats->stats.maxHP * hpPercent / 100.0f);
+                if (restoreHP < 1) restoreHP = 1;
+                allyStats->stats.currentHP = restoreHP;
+                allyStats->stats.respawn();
+                resCount++;
+
+                // Send respawn message
+                auto* allyConn = server_.connections().findByEntity(ally.persistentId);
+                if (allyConn) {
+                    auto* allyT = allyEntity->getComponent<Transform>();
+                    SvRespawnMsg respMsg;
+                    respMsg.spawnX = allyT ? allyT->position.x : 0;
+                    respMsg.spawnY = allyT ? allyT->position.y : 0;
+                    uint8_t rbuf[32];
+                    ByteWriter rw(rbuf, sizeof(rbuf));
+                    respMsg.write(rw);
+                    server_.sendTo(allyConn->clientId, Channel::ReliableOrdered,
+                                   PacketType::SvRespawn, rbuf, rw.size());
+                    playerDirty_[allyConn->clientId].vitals = true;
+                    sendPlayerState(allyConn->clientId);
+                }
+            }
+
+            playerDirty_[clientId].vitals = true;
+            sendPlayerState(clientId);
+
+            LOG_INFO("Server", "Client %d used Mass Resurrect rank %d -> %d allies",
+                     clientId, msg.rank, resCount);
+            return;
+        }
+
         // === AOE EXECUTION PATH ===
 
         // Hook callback (scoped tightly)
@@ -413,6 +575,15 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
                 }
             } else if (dmgDealt > 0 && tgtES) {
                 tgtES->stats.lastDamageTime = gameTime_;
+            }
+
+            // Apply taunt to mob targets
+            if (skillDef->appliesTaunt && tgtES && !isKill) {
+                int ri = msg.rank - 1;
+                const CachedSkillRank* tauntRank = skillDefCache_.getRank(msg.skillId, msg.rank);
+                float tauntDuration = tauntRank ? tauntRank->effectValue : 3.0f;
+                tgtES->stats.forcedTarget = casterHandle.value;
+                tgtES->stats.forcedTargetTimer = tauntDuration;
             }
         }
 

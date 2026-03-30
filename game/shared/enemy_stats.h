@@ -53,6 +53,10 @@ public:
     int   maxHP              = 100;
     bool  isAlive            = true;
 
+    // ---- Taunt (forced target) ----
+    uint32_t forcedTarget      = 0;      // Entity handle value of taunting player
+    float    forcedTargetTimer = 0.0f;   // Seconds remaining on taunt
+
     // ---- Combat Leash (boss/mini-boss only) ----
     float lastDamageTime     = 0.0f;   // game-time of last incoming damage
     static constexpr float LEASH_TIMEOUT = 15.0f; // seconds with no damage before HP reset

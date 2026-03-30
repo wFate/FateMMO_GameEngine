@@ -25,6 +25,20 @@ struct CastingState {
 };
 
 // ============================================================================
+// ChannelState — tracks an in-progress channeled skill (Barrage, etc.)
+// ============================================================================
+struct ChannelState {
+    std::string skillId;
+    int skillRank = 0;
+    float remainingTime = 0.0f;
+    float totalTime = 0.0f;
+    float tickInterval = 0.5f;
+    float nextTickTime = 0.0f;
+    uint64_t targetEntityId = 0;
+    bool active = false;
+};
+
+// ============================================================================
 // LifeState — two-tick death lifecycle
 // ============================================================================
 enum class LifeState : uint8_t {
@@ -95,6 +109,27 @@ public:
 
     void interruptCast() {
         castingState = CastingState{};
+    }
+
+    // ---- Channel State ----
+    ChannelState channelState;
+
+    [[nodiscard]] bool isChanneling() const { return channelState.active; }
+
+    void beginChannel(const std::string& skillId, float duration, float tickInterval, uint64_t targetId, int rank) {
+        channelState.skillId = skillId;
+        channelState.skillRank = rank;
+        channelState.remainingTime = duration;
+        channelState.totalTime = duration;
+        channelState.tickInterval = tickInterval;
+        channelState.nextTickTime = tickInterval;
+        channelState.targetEntityId = targetId;
+        channelState.active = true;
+    }
+
+    void interruptChannel() {
+        channelState.active = false;
+        channelState.remainingTime = 0.0f;
     }
     bool isDead    = false;   // backward compat — synced from lifeState in advanceDeathTick/respawn
     float respawnTimeRemaining = 0.0f;

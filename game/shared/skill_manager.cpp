@@ -873,9 +873,12 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
         }
         if (def->appliesFreeze && effectDuration > 0.0f && ctx.targetCC) {
             ctx.targetCC->applyFreeze(effectDuration, ctx.targetSEM, ctx.casterEntityId);
-            // Interrupt any active cast when CC is applied
+            // Interrupt any active cast or channel when CC is applied
             if (ctx.targetPlayerStats && ctx.targetPlayerStats->isCasting()) {
                 ctx.targetPlayerStats->interruptCast();
+            }
+            if (ctx.targetPlayerStats && ctx.targetPlayerStats->isChanneling()) {
+                ctx.targetPlayerStats->interruptChannel();
             }
         }
     }
@@ -886,9 +889,12 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                              ? def->stunDurationPerRank[ri] : 0.0f;
         if (stunDuration > 0.0f && !def->appliesFreeze) {
             ctx.targetCC->applyStun(stunDuration, ctx.targetSEM, ctx.casterEntityId);
-            // Interrupt any active cast when CC is applied
+            // Interrupt any active cast or channel when CC is applied
             if (ctx.targetPlayerStats && ctx.targetPlayerStats->isCasting()) {
                 ctx.targetPlayerStats->interruptCast();
+            }
+            if (ctx.targetPlayerStats && ctx.targetPlayerStats->isChanneling()) {
+                ctx.targetPlayerStats->interruptChannel();
             }
         }
     }
@@ -1195,6 +1201,13 @@ int SkillManager::executeSkillAOE(const std::string& skillId, int rank,
                     tctx.targetCC->applyFreeze(stunDur, tctx.targetSEM, primaryCtx.casterEntityId);
                 else
                     tctx.targetCC->applyStun(stunDur, tctx.targetSEM, primaryCtx.casterEntityId);
+                // Interrupt any active cast or channel when CC is applied (AOE path)
+                if (tctx.targetPlayerStats && tctx.targetPlayerStats->isCasting()) {
+                    tctx.targetPlayerStats->interruptCast();
+                }
+                if (tctx.targetPlayerStats && tctx.targetPlayerStats->isChanneling()) {
+                    tctx.targetPlayerStats->interruptChannel();
+                }
             }
         }
 
