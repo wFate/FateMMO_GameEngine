@@ -33,6 +33,20 @@ struct SpriteDrawParams {
     bool flipY = false;
 };
 
+struct RoundedRectParams {
+    Vec2  position;                          // center
+    Vec2  size;                              // width, height
+    float cornerRadius     = 0.0f;          // 0 = sharp corners
+    Color fillTop          = Color::white();
+    Color fillBottom       = Color::white(); // set equal for flat fill
+    float borderWidth      = 0.0f;
+    Color borderColor      = Color::clear();
+    Vec2  shadowOffset     = {0.0f, 0.0f};
+    float shadowBlur       = 0.0f;
+    Color shadowColor      = {0.0f, 0.0f, 0.0f, 0.0f};
+    float depth            = 0.0f;
+};
+
 // Batched 2D sprite renderer
 // Collects sprites, sorts by texture+depth, renders in minimal draw calls
 class SpriteBatch {
@@ -70,6 +84,9 @@ public:
     // Draw a filled arc (pie slice) from startAngle to endAngle (radians, 0=right, CCW)
     void drawArc(const Vec2& center, float radius, float startAngle, float endAngle,
                  const Color& color, float depth = 0.0f, int segments = 24);
+
+    // Draw an SDF rounded rectangle with optional gradient, border, and shadow
+    void drawRoundedRect(const RoundedRectParams& params);
 
 #ifndef FATEMMO_METAL
     // Draw a quad with a raw GL texture ID (for font atlas, custom textures)
@@ -158,6 +175,9 @@ private:
     void createWhiteTexture();
 
     std::vector<Rect> scissorStack_;
+
+    bool hasRoundedRect_ = false;
+    RoundedRectParams pendingRoundedRect_;
 
     // Get the pipeline handle for the current blend mode
     gfx::PipelineHandle currentPipeline() const;

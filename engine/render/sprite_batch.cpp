@@ -241,6 +241,40 @@ void SpriteBatch::drawRect(const Vec2& position, const Vec2& size, const Color& 
     entries_.push_back({nullptr, 0, params});
 }
 
+void SpriteBatch::drawRoundedRect(const RoundedRectParams& params) {
+    if (!drawing_) return;
+
+    // Flush any pending normal entries (without rounded rect uniforms)
+    if (!entries_.empty()) {
+        hasRoundedRect_ = false;
+        flushPending();
+    }
+
+    // Store rounded rect params for uniform setup during flush
+    hasRoundedRect_ = true;
+    pendingRoundedRect_ = params;
+
+    // Expand quad to accommodate shadow bleed
+    float expandX = params.shadowBlur + std::abs(params.shadowOffset.x);
+    float expandY = params.shadowBlur + std::abs(params.shadowOffset.y);
+    Vec2 expandedSize = {params.size.x + expandX * 2.0f, params.size.y + expandY * 2.0f};
+
+    // Create a single BatchEntry with renderType=7 (SDF rounded rect)
+    SpriteDrawParams sp;
+    sp.position = params.position;
+    sp.size = expandedSize;
+    sp.color = Color::white();
+    sp.depth = params.depth;
+    sp.sourceRect = {0, 0, 1, 1};
+    entries_.push_back({nullptr, 0, sp, 7.0f});
+
+    // Flush immediately (this sets rounded rect uniforms and draws the quad)
+    flushPending();
+
+    // Reset so subsequent flushes don't set rounded rect uniforms
+    hasRoundedRect_ = false;
+}
+
 #ifndef FATEMMO_METAL
 void SpriteBatch::drawTexturedQuad(unsigned int glTexId, const SpriteDrawParams& params, float renderType) {
     if (!drawing_) return;
@@ -418,6 +452,19 @@ void SpriteBatch::flush() {
         cmdList_->setUniform("u_textShadowColor", Vec4{0.0f, 0.0f, 0.0f, 0.5f});
         cmdList_->setUniform("u_textGlowColor", Vec4{1.0f, 1.0f, 1.0f, 0.6f});
         cmdList_->setUniform("u_textGlowIntensity", 0.6f);
+
+        if (hasRoundedRect_) {
+            auto& rr = pendingRoundedRect_;
+            cmdList_->setUniform("u_rectSize", rr.size);
+            cmdList_->setUniform("u_cornerRadius", rr.cornerRadius);
+            cmdList_->setUniform("u_rrBorderWidth", rr.borderWidth);
+            cmdList_->setUniform("u_rrBorderColor", Vec4{rr.borderColor.r, rr.borderColor.g, rr.borderColor.b, rr.borderColor.a});
+            cmdList_->setUniform("u_gradientTop", Vec4{rr.fillTop.r, rr.fillTop.g, rr.fillTop.b, rr.fillTop.a});
+            cmdList_->setUniform("u_gradientBottom", Vec4{rr.fillBottom.r, rr.fillBottom.g, rr.fillBottom.b, rr.fillBottom.a});
+            cmdList_->setUniform("u_rrShadowOffset", rr.shadowOffset);
+            cmdList_->setUniform("u_rrShadowBlur", rr.shadowBlur);
+            cmdList_->setUniform("u_rrShadowColor", Vec4{rr.shadowColor.r, rr.shadowColor.g, rr.shadowColor.b, rr.shadowColor.a});
+        }
 
         cmdList_->bindVertexBuffer(vboHandle_);
         cmdList_->bindIndexBuffer(eboHandle_);
@@ -597,6 +644,19 @@ void SpriteBatch::flush() {
     shader_.setVec2("u_rrShadowOffset", {2.0f, 2.0f});
     shader_.setFloat("u_rrShadowBlur", 4.0f);
     shader_.setVec4("u_rrShadowColor", {0.0f, 0.0f, 0.0f, 0.3f});
+
+    if (hasRoundedRect_) {
+        auto& rr = pendingRoundedRect_;
+        shader_.setVec2("u_rectSize", {rr.size.x, rr.size.y});
+        shader_.setFloat("u_cornerRadius", rr.cornerRadius);
+        shader_.setFloat("u_rrBorderWidth", rr.borderWidth);
+        shader_.setVec4("u_rrBorderColor", {rr.borderColor.r, rr.borderColor.g, rr.borderColor.b, rr.borderColor.a});
+        shader_.setVec4("u_gradientTop", {rr.fillTop.r, rr.fillTop.g, rr.fillTop.b, rr.fillTop.a});
+        shader_.setVec4("u_gradientBottom", {rr.fillBottom.r, rr.fillBottom.g, rr.fillBottom.b, rr.fillBottom.a});
+        shader_.setVec2("u_rrShadowOffset", {rr.shadowOffset.x, rr.shadowOffset.y});
+        shader_.setFloat("u_rrShadowBlur", rr.shadowBlur);
+        shader_.setVec4("u_rrShadowColor", {rr.shadowColor.r, rr.shadowColor.g, rr.shadowColor.b, rr.shadowColor.a});
+    }
 
     glBindVertexArray(vao_);
 
