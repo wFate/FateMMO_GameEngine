@@ -1,5 +1,6 @@
 #include "server/server_app.h"
 #include "server/target_validator.h"
+#include "server/handlers/aoe_helpers.h"
 #include "engine/core/logger.h"
 #include "engine/ecs/persistent_id.h"
 #include "game/components/game_components.h"
@@ -149,14 +150,6 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
         }
     }
 
-    // Track whether the skill was a miss by hooking onSkillFailed temporarily
-    bool wasMiss = false;
-    auto prevOnFailed = skillComp->skills.onSkillFailed;
-    skillComp->skills.onSkillFailed = [&wasMiss, &prevOnFailed](const std::string& id, std::string reason) {
-        wasMiss = true;
-        if (prevOnFailed) prevOnFailed(id, reason);
-    };
-
     // Validate skill cooldown
     auto& clientCooldowns = skillCooldowns_[clientId];
     auto cooldownIt = clientCooldowns.find(msg.skillId);
@@ -247,16 +240,226 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     // God mode check for skill targets (player targets only)
     if (targetIsPlayer && godModeEntities_.count(msg.targetId)) return;
 
+    // Detect AOE skill
+    const SkillDefinition* skillDef = skillComp->skills.getSkillDefinition(msg.skillId);
+    bool isAOE = false;
+    if (skillDef) {
+        isAOE = skillDef->aoeRadius > 0.0f ||
+                skillDef->targetType == SkillTargetType::AreaAtTarget ||
+                skillDef->targetType == SkillTargetType::AreaAroundSelf ||
+                skillDef->targetType == SkillTargetType::Cone ||
+                skillDef->targetType == SkillTargetType::Line;
+    }
+
+    if (isAOE && skillDef) {
+        // === AOE EXECUTION PATH ===
+
+        // Hook callback (scoped tightly)
+        bool wasMiss = false, wasResist = false, wasValidationError = false;
+        std::string failReason;
+        auto prevOnFailed = skillComp->skills.onSkillFailed;
+        skillComp->skills.onSkillFailed = [&](const std::string& id, std::string reason) {
+            if (reason == "Spell resisted") wasResist = true;
+            else if (reason == "Attack missed") wasMiss = true;
+            else wasValidationError = true;
+            failReason = std::move(reason);
+        };
+
+        // Determine gather center
+        auto* casterT = caster->getComponent<Transform>();
+        Vec2 center = casterT ? casterT->position : Vec2{0,0};
+        if ((skillDef->targetType == SkillTargetType::AreaAtTarget) && target) {
+            auto* targetT = target->getComponent<Transform>();
+            if (targetT) center = targetT->position;
+        }
+
+        float radiusPixels = skillDef->aoeRadius * 32.0f + 16.0f;
+        std::string casterScene = casterStatsComp->stats.currentScene;
+
+        // Gather targets based on geometry
+        std::vector<AOETarget> aoeTargets;
+        if (skillDef->targetType == SkillTargetType::Cone) {
+            Vec2 targetPos = target ? target->getComponent<Transform>()->position : center;
+            float lengthPx = skillDef->range * 32.0f + 16.0f;
+            aoeTargets = gatherConeTargets(world, repl, center, targetPos,
+                                           lengthPx, 0.5236f, casterHandle.value, casterScene);
+        } else if (skillDef->targetType == SkillTargetType::Line) {
+            Vec2 targetPos = target ? target->getComponent<Transform>()->position : center;
+            float lengthPx = skillDef->range * 32.0f + 16.0f;
+            aoeTargets = gatherLineTargets(world, repl, center, targetPos,
+                                           lengthPx, 32.0f, casterHandle.value, casterScene);
+        } else {
+            aoeTargets = gatherCircleTargets(world, repl, center, radiusPixels,
+                                             casterHandle.value, casterScene);
+        }
+
+        // Build per-target execution contexts
+        SkillExecutionContext primaryCtx = ctx; // copy the existing context for primary
+        std::vector<SkillExecutionContext> targetContexts;
+
+        for (auto& at : aoeTargets) {
+            Entity* tgtEntity = world.getEntity(at.handle);
+            if (!tgtEntity) continue;
+
+            SkillExecutionContext tctx;
+            tctx.casterEntityId = ctx.casterEntityId;
+            tctx.casterStats = ctx.casterStats;
+            tctx.casterSEM = ctx.casterSEM;
+            tctx.casterCC = ctx.casterCC;
+            tctx.targetEntityId = at.handle.value;
+
+            auto* tgtT = tgtEntity->getComponent<Transform>();
+            if (tgtT && casterT) {
+                tctx.distanceToTarget = casterT->position.distance(tgtT->position);
+            }
+
+            auto* tgtES = tgtEntity->getComponent<EnemyStatsComponent>();
+            auto* tgtCS = tgtEntity->getComponent<CharacterStatsComponent>();
+            if (tgtES) {
+                tctx.targetMobStats = &tgtES->stats;
+                tctx.targetLevel = tgtES->stats.level;
+                tctx.targetArmor = tgtES->stats.armor;
+                tctx.targetMagicResist = tgtES->stats.magicResist;
+                tctx.targetCurrentHP = tgtES->stats.currentHP;
+                tctx.targetMaxHP = tgtES->stats.maxHP;
+                tctx.targetAlive = tgtES->stats.isAlive;
+            } else if (tgtCS) {
+                tctx.targetPlayerStats = &tgtCS->stats;
+                tctx.targetIsPlayer = true;
+                tctx.targetLevel = tgtCS->stats.level;
+                tctx.targetArmor = tgtCS->stats.getArmor();
+                tctx.targetMagicResist = tgtCS->stats.getMagicResist();
+                tctx.targetCurrentHP = tgtCS->stats.currentHP;
+                tctx.targetMaxHP = tgtCS->stats.maxHP;
+                tctx.targetAlive = tgtCS->stats.isAlive();
+            }
+
+            auto* tgtSE = tgtEntity->getComponent<StatusEffectComponent>();
+            auto* tgtCC = tgtEntity->getComponent<CrowdControlComponent>();
+            tctx.targetSEM = tgtSE ? &tgtSE->effects : nullptr;
+            tctx.targetCC = tgtCC ? &tgtCC->cc : nullptr;
+
+            targetContexts.push_back(tctx);
+        }
+
+        // Execute AOE skill
+        int totalDamage = skillComp->skills.executeSkillAOE(msg.skillId, msg.rank, primaryCtx, targetContexts);
+
+        // Restore callback
+        skillComp->skills.onSkillFailed = prevOnFailed;
+
+        // Validation error -- don't broadcast
+        if (wasValidationError && totalDamage == 0) {
+            LOG_INFO("Server", "Client %d AOE skill '%s' rank %d rejected: %s",
+                     clientId, msg.skillId.c_str(), msg.rank, failReason.c_str());
+            return;
+        }
+
+        // Broadcast per-target results
+        const CachedSkillRank* aoeRankInfo = skillDefCache_.getRank(msg.skillId, msg.rank);
+        uint16_t aoeCooldownMs = aoeRankInfo ? static_cast<uint16_t>(aoeRankInfo->cooldownSeconds * 1000.0f) : 0;
+
+        for (size_t i = 0; i < targetContexts.size(); ++i) {
+            auto& tctx = targetContexts[i];
+            Entity* tgtEntity = world.getEntity(EntityHandle(tctx.targetEntityId));
+            if (!tgtEntity) continue;
+
+            int32_t tgtNewHP = 0;
+            bool isKill = false;
+            auto* tgtES = tgtEntity->getComponent<EnemyStatsComponent>();
+            auto* tgtCS = tgtEntity->getComponent<CharacterStatsComponent>();
+            if (tgtES) {
+                isKill = !tgtES->stats.isAlive;
+                tgtNewHP = tgtES->stats.currentHP;
+            } else if (tgtCS) {
+                isKill = !tgtCS->stats.isAlive();
+                tgtNewHP = tgtCS->stats.currentHP;
+            }
+
+            uint64_t tgtPid = repl.getPersistentId(EntityHandle(tctx.targetEntityId)).value();
+
+            // Calculate damage dealt to this target
+            int dmgDealt = 0;
+            if (tctx.targetCurrentHP > tgtNewHP) {
+                dmgDealt = tctx.targetCurrentHP - tgtNewHP;
+            }
+            if (isKill && dmgDealt == 0) {
+                dmgDealt = tctx.targetCurrentHP; // was killed
+            }
+
+            SvSkillResultMsg result;
+            result.casterId = casterPid.value();
+            result.targetId = tgtPid;
+            result.skillId = msg.skillId;
+            result.damage = dmgDealt;
+            result.targetNewHP = tgtNewHP;
+            result.hitFlags = (dmgDealt > 0) ? HitFlags::HIT : 0;
+            if (isKill) result.hitFlags |= HitFlags::KILLED;
+            result.cooldownMs = (i == 0) ? aoeCooldownMs : 0; // only first target sends cooldown
+            result.casterNewMP = static_cast<uint16_t>(casterStatsComp->stats.currentMP);
+
+            uint8_t buf[256];
+            ByteWriter w(buf, sizeof(buf));
+            result.write(w);
+            server_.broadcast(Channel::ReliableOrdered, PacketType::SvSkillResult, buf, w.size());
+
+            // Handle mob death
+            if (isKill) {
+                if (tgtES) {
+                    tgtES->stats.lastDamageTime = gameTime_;
+                    auto* tgtTransform = tgtEntity->getComponent<Transform>();
+                    Vec2 deathPos = tgtTransform ? tgtTransform->position : Vec2{0, 0};
+                    processMobDeath(clientId, casterStatsComp, tgtES, deathPos, world, repl);
+                }
+            } else if (dmgDealt > 0 && tgtES) {
+                tgtES->stats.lastDamageTime = gameTime_;
+            }
+        }
+
+        playerDirty_[clientId].vitals = true;
+        sendPlayerState(clientId);
+
+        LOG_INFO("Server", "Client %d used AOE skill '%s' rank %d -> %zu targets, total dmg=%d",
+                 clientId, msg.skillId.c_str(), msg.rank, targetContexts.size(), totalDamage);
+        return;
+    }
+
+    // === SINGLE TARGET PATH (existing code continues) ===
+
+    // Hook onSkillFailed to capture combat outcome (installed only around executeSkill)
+    bool wasMiss = false;
+    bool wasResist = false;
+    bool wasValidationError = false;
+    std::string failReason;
+    auto prevOnFailed = skillComp->skills.onSkillFailed;
+    skillComp->skills.onSkillFailed = [&](const std::string& id, std::string reason) {
+        if (reason == "Spell resisted") {
+            wasResist = true;
+        } else if (reason == "Attack missed") {
+            wasMiss = true;
+        } else {
+            wasValidationError = true;
+        }
+        failReason = std::move(reason);
+    };
+
     // Execute the skill
     int damage = skillComp->skills.executeSkill(msg.skillId, msg.rank, ctx);
+
+    // Restore callback immediately
+    skillComp->skills.onSkillFailed = prevOnFailed;
 
     // Stamp leash timer on mob targets that took damage
     if (damage > 0 && ctx.targetMobStats) {
         ctx.targetMobStats->lastDamageTime = gameTime_;
     }
 
-    // Restore callback
-    skillComp->skills.onSkillFailed = prevOnFailed;
+    // Validation errors (out of range, dead target, no resources) — don't broadcast
+    if (wasValidationError && damage == 0) {
+        LOG_INFO("Server", "Client %d skill '%s' rank %d rejected: %s",
+                 clientId, msg.skillId.c_str(), msg.rank, failReason.c_str());
+        return;
+    }
 
     // Determine kill state and build hitFlags
     bool isKill = false;
@@ -280,7 +483,9 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
 
     // Build hitFlags bitmask
     uint8_t hitFlags = 0;
-    if (wasMiss && damage == 0) {
+    if (wasResist && damage == 0) {
+        hitFlags |= HitFlags::RESIST;
+    } else if (wasMiss && damage == 0) {
         hitFlags |= HitFlags::MISS;
     } else if (damage > 0) {
         hitFlags |= HitFlags::HIT;
@@ -341,9 +546,14 @@ void ServerApp::processUseSkill(uint16_t clientId, const CmdUseSkillMsg& msg) {
     // Send updated player state (HP/MP/Fury may have changed)
     sendPlayerState(clientId);
 
-    LOG_INFO("Server", "Client %d used skill '%s' rank %d -> dmg=%d kill=%d miss=%d",
-             clientId, msg.skillId.c_str(), msg.rank, damage, isKill ? 1 : 0,
-             wasMiss ? 1 : 0);
+    if (!failReason.empty()) {
+        LOG_INFO("Server", "Client %d used skill '%s' rank %d -> dmg=%d kill=%d fail='%s'",
+                 clientId, msg.skillId.c_str(), msg.rank, damage, isKill ? 1 : 0,
+                 failReason.c_str());
+    } else {
+        LOG_INFO("Server", "Client %d used skill '%s' rank %d -> dmg=%d kill=%d",
+                 clientId, msg.skillId.c_str(), msg.rank, damage, isKill ? 1 : 0);
+    }
 }
 
 void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {

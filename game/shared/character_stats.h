@@ -172,6 +172,9 @@ public:
     float passiveSpeedBonus       = 0.0f;
     float passiveDamageReduction  = 0.0f;
     int   passiveStatBonus        = 0;
+    float passiveArmorBonus       = 0.0f;
+    float passiveHitRateBonus     = 0.0f;
+    float passiveSpellDamageBonus = 0.0f;
 
     // ---- Collection Bonuses (set by CollectionSystem) ----
     int collectionBonusSTR = 0;

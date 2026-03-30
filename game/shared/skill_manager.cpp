@@ -180,6 +180,11 @@ bool SkillManager::activateSkillRank(const std::string& skillId) {
                     if (ri < (int)def->passiveSpeedBonusPerRank.size()) passiveSpeedBonus_ += def->passiveSpeedBonusPerRank[ri];
                     if (ri < (int)def->passiveDamageReductionPerRank.size()) passiveDamageReduction_ += def->passiveDamageReductionPerRank[ri];
                     if (ri < (int)def->passiveStatBonusPerRank.size()) passiveStatBonus_ += def->passiveStatBonusPerRank[ri];
+                    if (ri < (int)def->passiveArmorBonusPerRank.size()) passiveArmorBonus_ += def->passiveArmorBonusPerRank[ri];
+                    if (ri < (int)def->passiveHitRateBonusPerRank.size()) passiveHitRateBonus_ += def->passiveHitRateBonusPerRank[ri];
+                    if (skillId == "mage_arcane_intellect") {
+                        if (ri < (int)def->effectValuePerRank.size()) passiveSpellDamageBonus_ += def->effectValuePerRank[ri];
+                    }
                     applyPassiveBonusesToStats();
                 }
             }
@@ -384,6 +389,9 @@ void SkillManager::applyPassiveBonusesToStats() {
     stats->passiveSpeedBonus      = passiveSpeedBonus_;
     stats->passiveDamageReduction = passiveDamageReduction_;
     stats->passiveStatBonus       = passiveStatBonus_;
+    stats->passiveArmorBonus      = passiveArmorBonus_;
+    stats->passiveHitRateBonus    = passiveHitRateBonus_;
+    stats->passiveSpellDamageBonus = passiveSpellDamageBonus_;
     stats->recalculateStats();
 }
 
@@ -464,9 +472,10 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
         }
     }
 
-    // 6. Check range (for targeted skills)
+    // 6. Check range (for targeted skills) — range is in tiles, distance is in pixels
     if (def->targetType != SkillTargetType::Self && def->range > 0.0f) {
-        if (ctx.distanceToTarget > def->range) {
+        float maxRange = def->range * 32.0f + 16.0f; // tiles to pixels + half-tile tolerance
+        if (ctx.distanceToTarget > maxRange) {
             if (onSkillFailed) onSkillFailed(skillId, "Out of range");
             return 0;
         }

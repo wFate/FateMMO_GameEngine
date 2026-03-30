@@ -62,6 +62,7 @@ void CharacterStats::recalculateStats() {
 
     // --- Armor ---
     _armor = static_cast<int>(std::round(_bonusVitality * 0.25f)) + equipBonusArmor + collectionBonusArmor;
+    _armor += static_cast<int>(std::round(passiveArmorBonus));
 
     // --- Magic Resist ---
     _magicResist = equipBonusMagDef;
@@ -69,10 +70,10 @@ void CharacterStats::recalculateStats() {
     // --- Hit Rate (class-dependent) ---
     switch (classDef.classType) {
         case ClassType::Warrior:
-            _hitRate = classDef.baseHitRate + _strength * 0.05f + equipBonusAccuracy;
+            _hitRate = classDef.baseHitRate + _strength * 0.05f + equipBonusAccuracy + passiveHitRateBonus;
             break;
         case ClassType::Archer:
-            _hitRate = classDef.baseHitRate + _dexterity * 0.1f + equipBonusAccuracy;
+            _hitRate = classDef.baseHitRate + _dexterity * 0.1f + equipBonusAccuracy + passiveHitRateBonus;
             break;
         case ClassType::Mage:
             _hitRate = 0.0f;

@@ -75,6 +75,7 @@ struct SkillDefinition {
     std::vector<float> stunDurationPerRank;
     std::vector<float> effectDurationPerRank;
     std::vector<float> effectValuePerRank;
+    std::vector<float> effectValue2PerRank;
 
     // ---- Passive Bonuses (per-rank) ----
     std::vector<float> passiveDamageReductionPerRank;
@@ -82,6 +83,12 @@ struct SkillDefinition {
     std::vector<float> passiveSpeedBonusPerRank;
     std::vector<int>   passiveHPBonusPerRank;
     std::vector<int>   passiveStatBonusPerRank;
+    std::vector<float> passiveArmorBonusPerRank;
+    std::vector<float> passiveHitRateBonusPerRank;
+    std::vector<float> passiveSpellDamageBonusPerRank;
+
+    // ---- Resurrection (per-rank) ----
+    std::vector<float> resurrectHPPercentPerRank;
 
     // ---- Special Mechanics ----
     bool isUltimate = false;
@@ -99,6 +106,11 @@ struct SkillDefinition {
     float dashDistance         = 0.0f;
     float transformDamageMult  = 0.0f;
     float transformSpeedBonus  = 0.0f;
+
+    bool  appliesTaunt    = false;
+    bool  isResurrection  = false;
+    bool  locksMovement   = false;
+    float channelTime     = 0.0f;
 };
 
 // ============================================================================
@@ -217,6 +229,9 @@ public:
         passiveSpeedBonus_      = 0.0f;
         passiveDamageReduction_ = 0.0f;
         passiveStatBonus_       = 0;
+        passiveArmorBonus_      = 0.0f;
+        passiveHitRateBonus_    = 0.0f;
+        passiveSpellDamageBonus_ = 0.0f;
 
         for (const auto& skill : learnedSkills) {
             if (skill.activatedRank <= 0) continue;
@@ -229,6 +244,11 @@ public:
                 if (r < (int)def->passiveSpeedBonusPerRank.size()) passiveSpeedBonus_ += def->passiveSpeedBonusPerRank[r];
                 if (r < (int)def->passiveDamageReductionPerRank.size()) passiveDamageReduction_ += def->passiveDamageReductionPerRank[r];
                 if (r < (int)def->passiveStatBonusPerRank.size()) passiveStatBonus_ += def->passiveStatBonusPerRank[r];
+                if (r < (int)def->passiveArmorBonusPerRank.size()) passiveArmorBonus_ += def->passiveArmorBonusPerRank[r];
+                if (r < (int)def->passiveHitRateBonusPerRank.size()) passiveHitRateBonus_ += def->passiveHitRateBonusPerRank[r];
+                if (skill.skillId == "mage_arcane_intellect") {
+                    if (r < (int)def->effectValuePerRank.size()) passiveSpellDamageBonus_ += def->effectValuePerRank[r];
+                }
             }
         }
 
@@ -241,6 +261,9 @@ public:
     [[nodiscard]] float getPassiveSpeedBonus() const      { return passiveSpeedBonus_; }
     [[nodiscard]] float getPassiveDamageReduction() const { return passiveDamageReduction_; }
     [[nodiscard]] int   getPassiveStatBonus() const       { return passiveStatBonus_; }
+    [[nodiscard]] float getPassiveArmorBonus() const      { return passiveArmorBonus_; }
+    [[nodiscard]] float getPassiveHitRateBonus() const    { return passiveHitRateBonus_; }
+    [[nodiscard]] float getPassiveSpellDamageBonus() const { return passiveSpellDamageBonus_; }
 
 private:
     std::vector<LearnedSkill>                 learnedSkills;
@@ -261,6 +284,9 @@ private:
     float passiveSpeedBonus_      = 0.0f;
     float passiveDamageReduction_ = 0.0f;
     int   passiveStatBonus_       = 0;
+    float passiveArmorBonus_      = 0.0f;
+    float passiveHitRateBonus_    = 0.0f;
+    float passiveSpellDamageBonus_ = 0.0f;
     void applyPassiveBonusesToStats();
 
     // ---- Double-cast state (transient, not serialized) ----

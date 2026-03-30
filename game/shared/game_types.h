@@ -223,6 +223,16 @@ enum class EffectType : uint8_t {
     Transform,
     Bewitched,
     ExpGainUp,
+    Stun,           // hard CC — prevents movement and attacks
+    Freeze,         // hard CC — ice-themed, prevents movement and attacks
+    HealOverTime,   // HoT — periodic healing tick (priest skills)
+    LifestealUp,    // increases lifesteal percentage
+    CritRateUp,     // increases critical hit rate
+    ArmorBuff,      // flat armor increase (self-buff skills)
+    AttackBuff,     // flat attack increase (self-buff skills)
+    DamageReductionBuff, // percentage damage reduction (self-buff skills)
+    ManaRegenBuff,  // flat mana regen increase (self-buff skills)
+    PoisonCoating,  // adds poison damage to attacks
     COUNT_ // keep last — used by static_assert below
 };
 static_assert(static_cast<int>(EffectType::COUNT_) <= 32,
@@ -247,6 +257,7 @@ namespace HitFlags {
     constexpr uint8_t BLOCKED  = 1 << 4;
     constexpr uint8_t ABSORBED = 1 << 5;
     constexpr uint8_t KILLED   = 1 << 6;
+    constexpr uint8_t RESIST   = 1 << 7;
 }
 
 enum class FaceDirection : uint8_t {

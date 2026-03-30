@@ -800,7 +800,30 @@ void ServerApp::run() {
             for (int i = 0; i < ticksNeeded && running_; ++i) {
                 gameTime_ += TICK_INTERVAL;
 
-                tick(TICK_INTERVAL);
+                try {
+                    tick(TICK_INTERVAL);
+                } catch (const std::exception& e) {
+                    LOG_ERROR("Server", "TICK EXCEPTION: %s", e.what());
+                    // Emergency save all connected players
+                    server_.connections().forEach([this](const ClientConnection& conn) {
+                        if (conn.playerEntityId != 0) {
+                            try { savePlayerToDB(conn.clientId, true); }
+                            catch (...) { LOG_ERROR("Server", "Emergency save failed for client %d", conn.clientId); }
+                        }
+                    });
+                    running_ = false;
+                    break;
+                } catch (...) {
+                    LOG_ERROR("Server", "TICK EXCEPTION: unknown");
+                    server_.connections().forEach([this](const ClientConnection& conn) {
+                        if (conn.playerEntityId != 0) {
+                            try { savePlayerToDB(conn.clientId, true); }
+                            catch (...) {}
+                        }
+                    });
+                    running_ = false;
+                    break;
+                }
             }
 
             // Reset to current time to prevent debt accumulation
@@ -1157,6 +1180,22 @@ void ServerApp::tick(float dt) {
 
     auto tp4 = Clock::now(); // after despawn + boss
 
+    // 3g. Buff sync: send SvBuffSync to each player whose effect mask changed
+    server_.connections().forEach([&](const ClientConnection& conn) {
+        if (conn.playerEntityId == 0) return;
+        PersistentId pid(conn.playerEntityId);
+        EntityHandle h = getReplicationForClient(conn.clientId).getEntityHandle(pid);
+        Entity* player = getWorldForClient(conn.clientId).getEntity(h);
+        if (!player) return;
+        auto* seComp = player->getComponent<StatusEffectComponent>();
+        uint32_t currentMask = seComp ? seComp->effects.getActiveEffectMask() : 0;
+        auto maskIt = lastBuffMask_.find(conn.clientId);
+        if (maskIt == lastBuffMask_.end() || maskIt->second != currentMask) {
+            lastBuffMask_[conn.clientId] = currentMask;
+            sendBuffSync(conn.clientId);
+        }
+    });
+
     // 4. Replicate entity state to connected clients
     replication_.update(world_, server_);
 
@@ -1402,6 +1441,11 @@ static SkillDefinition convertCachedToSkillDef(const CachedSkillDef& src,
     def.grantsCritGuarantee   = src.grantsCritGuarantee;
     def.removesDebuffs        = src.removesDebuffs;
 
+    def.appliesTaunt    = src.appliesTaunt;
+    def.isResurrection  = src.isResurrection;
+    def.locksMovement   = src.locksMovement;
+    def.channelTime     = src.channelTime;
+
     def.teleportDistance    = src.teleportDistance;
     def.dashDistance        = src.dashDistance;
     def.transformDamageMult = 0.0f;
@@ -1423,6 +1467,10 @@ static SkillDefinition convertCachedToSkillDef(const CachedSkillDef& src,
         def.passiveSpeedBonusPerRank.push_back(r.passiveSpeedBonus);
         def.passiveHPBonusPerRank.push_back(static_cast<int>(r.passiveHPBonus));
         def.passiveStatBonusPerRank.push_back(r.passiveStatBonus);
+        def.effectValue2PerRank.push_back(r.effectValue2);
+        def.passiveArmorBonusPerRank.push_back(r.passiveArmorBonus);
+        def.passiveHitRateBonusPerRank.push_back(r.passiveHitRateBonus);
+        def.resurrectHPPercentPerRank.push_back(r.resurrectHPPercent);
     }
 
     // Fill scalar convenience fields from rank 1 if available
@@ -2194,6 +2242,7 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     loadedPlaytimeSeconds_.erase(clientId);
     needsFirstMoveSync_.erase(clientId);
     lastAutoAttackTime_.erase(clientId);
+    lastBuffMask_.erase(clientId);
     skillCooldowns_.erase(clientId);
     // H12-FIX: Preserve rate limiter for this account
     if (client && client->account_id != 0) {
