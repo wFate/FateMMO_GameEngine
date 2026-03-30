@@ -279,12 +279,23 @@ int CharacterStats::calculateDamage(bool forceCrit, bool& outIsCrit) {
     outIsCrit = forceCrit;
     if (!outIsCrit) {
         std::uniform_real_distribution<float> critDist(0.0f, 1.0f);
-        outIsCrit = critDist(s_rng) < _critRate;
+        outIsCrit = critDist(s_rng) < getCritRate();
     }
 
     if (outIsCrit) {
         float critMultiplier = (std::min)(5.0f, 1.95f + equipBonusCritDamage);
         damage = static_cast<int>(std::round(damage * critMultiplier));
+
+        // Deathwish: bonus crit damage when below 20% HP
+        if (deathwishActive && currentHP < maxHP / 5) {
+            damage = static_cast<int>(std::round(damage * (1.0f + deathwishCritDamageBonus / 100.0f)));
+        }
+    }
+
+    // Retaliation: bonus damage on next attack after blocking
+    if (retaliationActive && retaliationReady) {
+        damage = static_cast<int>(std::round(damage * (1.0f + retaliationDamageBonus / 100.0f)));
+        retaliationReady = false;
     }
 
     // Minimum damage of 1
@@ -319,6 +330,13 @@ int CharacterStats::takeDamage(int amount) {
         addFury(classDef.furyPerDamageReceived);
     }
 
+    // Undying Will: survive lethal damage at 1 HP (internal cooldown)
+    if (currentHP <= 0 && undyingWillActive && undyingWillCooldownEnd <= 0.0f) {
+        currentHP = 1;
+        undyingWillCooldownEnd = undyingWillCooldown; // server ticks this down
+        return actualDamage;
+    }
+
     if (currentHP <= 0) {
         die();
     }
@@ -331,6 +349,12 @@ int CharacterStats::takeDamage(int amount) {
 // ============================================================================
 void CharacterStats::heal(int amount) {
     if (lifeState != LifeState::Alive) return;
+
+    // Deathwish: bonus healing when below 20% HP
+    if (deathwishActive && currentHP < maxHP / 5) {
+        amount = static_cast<int>(std::round(amount * (1.0f + deathwishHealingBonus / 100.0f)));
+    }
+
     currentHP = (std::min)(maxHP, currentHP + amount);
 }
 
@@ -536,6 +560,20 @@ void CharacterStats::tickTimers(float dt) {
     if (combatTimer > 0.0f) {
         combatTimer -= dt;
         if (combatTimer < 0.0f) combatTimer = 0.0f;
+    }
+
+    // Undying Will internal cooldown
+    if (undyingWillCooldownEnd > 0.0f) {
+        undyingWillCooldownEnd -= dt;
+        if (undyingWillCooldownEnd < 0.0f) undyingWillCooldownEnd = 0.0f;
+    }
+
+    // Steady Aim timer (incremented here; reset on movement in movement_handler)
+    if (steadyAimActive) {
+        steadyAimTimer += dt;
+        if (steadyAimTimer >= 5.0f) {
+            steadyAimReady = true;
+        }
     }
 
     // Respawn countdown (ticks in both Dying and Dead states)

@@ -8,6 +8,7 @@
 #include <string>
 #include <functional>
 #include <cstdint>
+#include <unordered_map>
 
 namespace fate {
 
@@ -176,6 +177,46 @@ public:
     float passiveHitRateBonus     = 0.0f;
     float passiveSpellDamageBonus = 0.0f;
 
+    // ---- Unique Passive State ----
+    // Undying Will (Warrior)
+    bool undyingWillActive = false;
+    float undyingWillCooldown = 300.0f;
+    float undyingWillCooldownEnd = 0.0f;
+
+    // Bloodlust (Warrior)
+    bool bloodlustActive = false;
+    int bloodlustStacks = 0;
+    float bloodlustCritPerStack = 0.0f;
+
+    // Retaliation (Warrior)
+    bool retaliationActive = false;
+    bool retaliationReady = false;
+    float retaliationDamageBonus = 0.0f;
+
+    // Deathwish (Warrior)
+    bool deathwishActive = false;
+    float deathwishCritDamageBonus = 0.0f;
+    float deathwishHealingBonus = 0.0f;
+
+    // Steady Aim (Archer)
+    bool steadyAimActive = false;
+    float steadyAimTimer = 0.0f;
+    bool steadyAimReady = false;
+    float steadyAimBonus = 0.0f;
+
+    // Exploit Weakness (Archer)
+    bool exploitWeaknessActive = false;
+    float exploitWeaknessValue = 0.0f;
+
+    // Predator's Instinct (Archer)
+    bool predatorsInstinctActive = false;
+    float predatorsInstinctCooldown = 10.0f;
+    std::unordered_map<uint64_t, float> predatorsInstinctTargets;
+
+    // Arcane Mastery (Mage)
+    bool arcaneMasteryActive = false;
+    float arcaneMasteryChance = 0.0f;
+
     // ---- Collection Bonuses (set by CollectionSystem) ----
     int collectionBonusSTR = 0;
     int collectionBonusINT = 0;
@@ -254,7 +295,14 @@ public:
     [[nodiscard]] int   getMagicResist() const   { return _magicResist; }
     [[nodiscard]] float getHitRate() const       { return _hitRate; }
     [[nodiscard]] float getEvasion() const       { return _evasion; }
-    [[nodiscard]] float getCritRate() const      { return _critRate; }
+    [[nodiscard]] float getCritRate() const {
+        float rate = _critRate;
+        // Bloodlust: dynamic crit bonus from auto-attack stacks
+        if (bloodlustActive && bloodlustStacks > 0) {
+            rate += bloodlustStacks * bloodlustCritPerStack / 100.0f;
+        }
+        return rate;
+    }
     [[nodiscard]] float getSpeed() const         { return _speed; }
     [[nodiscard]] float getDamageMultiplier() const { return _damageMultiplier; }
     [[nodiscard]] float getBlockChance() const   { return equipBonusBlockChance; }

@@ -32,6 +32,12 @@ void ServerApp::processMove(uint16_t clientId, const CmdMove& move) {
             LOG_INFO("Server", "Client %d cast interrupted by movement", clientId);
         }
 
+        // Steady Aim: reset timer on movement
+        if (charStats && charStats->stats.steadyAimActive) {
+            charStats->stats.steadyAimTimer = 0.0f;
+            charStats->stats.steadyAimReady = false;
+        }
+
         // First move after connect: accept unconditionally (position desync)
         if (needsFirstMoveSync_.count(clientId)) {
             needsFirstMoveSync_.erase(clientId);

@@ -489,8 +489,18 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
 
     // ---- Execution Phase ----
 
+    // Arcane Mastery: chance to cast for free (mana skills only, does NOT skip cooldown)
+    bool arcaneMasteryProc = false;
+    if (!isFreeCast && stats && stats->arcaneMasteryActive && def->resourceType == ResourceType::Mana) {
+        std::uniform_real_distribution<float> arcaneDist(0.0f, 1.0f);
+        thread_local std::mt19937 arcaneMasteryRng{std::random_device{}()};
+        if (arcaneDist(arcaneMasteryRng) < stats->arcaneMasteryChance / 100.0f) {
+            arcaneMasteryProc = true; // skip resource deduction only
+        }
+    }
+
     // 1. Deduct resource cost (skip for free cast and ResourceType::None)
-    if (!isFreeCast && def->resourceType != ResourceType::None) {
+    if (!isFreeCast && !arcaneMasteryProc && def->resourceType != ResourceType::None) {
         if (def->scalesWithResource && def->resourceType == ResourceType::Mana && stats) {
             // Cataclysm: spend all remaining mana
             cost = static_cast<float>(stats->currentMP);
@@ -560,6 +570,61 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                 ctx.casterSEM->applyTransform(effectDuration, def->transformDamageMult,
                                                def->transformSpeedBonus, ctx.casterEntityId);
             }
+
+            // Fortify: flat armor buff + self-root (can still attack)
+            if (def->locksMovement && !def->effectValuePerRank.empty()) {
+                float armorVal = (ri < static_cast<int>(def->effectValuePerRank.size()))
+                                 ? def->effectValuePerRank[ri] : 0.0f;
+                float dur = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                            ? def->effectDurationPerRank[ri] : 3.0f;
+                ctx.casterSEM->applyEffect(EffectType::ArmorBuff, dur, armorVal,
+                                            0.0f, ctx.casterEntityId);
+                if (ctx.casterCC) {
+                    ctx.casterCC->applyRoot(dur, ctx.casterSEM, ctx.casterEntityId);
+                }
+            }
+
+            // Poison Tip: coating that adds poison to next N attacks
+            if (def->appliesPoison && !def->effectValuePerRank.empty()) {
+                float charges = (ri < static_cast<int>(def->effectValuePerRank.size()))
+                                ? def->effectValuePerRank[ri] : 3.0f;
+                float poisonDur = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                                  ? def->effectDurationPerRank[ri] : 6.0f;
+                ctx.casterSEM->applyEffect(EffectType::PoisonCoating, 0.0f, charges,
+                                            poisonDur, ctx.casterEntityId);
+            }
+
+            // Mana Shield: absorption shield (effectDuration == 0 = permanent until broken)
+            if (!def->locksMovement && !def->appliesPoison &&
+                !def->grantsInvulnerability && !def->removesDebuffs &&
+                !def->grantsStunImmunity && !def->grantsCritGuarantee &&
+                def->transformDamageMult <= 0.0f &&
+                !def->effectValuePerRank.empty()) {
+                float effectDuration = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                                       ? def->effectDurationPerRank[ri] : 0.0f;
+                if (effectDuration <= 0.0f && stats) {
+                    float shieldPct = (ri < static_cast<int>(def->effectValuePerRank.size()))
+                                      ? def->effectValuePerRank[ri] : 0.0f;
+                    float shieldAmount = stats->maxHP * shieldPct / 100.0f;
+                    ctx.casterSEM->applyShield(shieldAmount, 0.0f, ctx.casterEntityId);
+                }
+            }
+
+            // Meditation: mana regen buff (effectDuration > 0)
+            if (!def->locksMovement && !def->appliesPoison &&
+                !def->grantsInvulnerability && !def->removesDebuffs &&
+                !def->grantsStunImmunity && !def->grantsCritGuarantee &&
+                def->transformDamageMult <= 0.0f &&
+                !def->effectValuePerRank.empty()) {
+                float effectDuration = (ri < static_cast<int>(def->effectDurationPerRank.size()))
+                                       ? def->effectDurationPerRank[ri] : 0.0f;
+                if (effectDuration > 0.0f) {
+                    float regenVal = (ri < static_cast<int>(def->effectValuePerRank.size()))
+                                     ? def->effectValuePerRank[ri] : 0.0f;
+                    ctx.casterSEM->applyEffect(EffectType::ManaRegenBuff, effectDuration,
+                                                regenVal, 0.0f, ctx.casterEntityId);
+                }
+            }
         }
         if (def->enablesDoubleCast && !isFreeCast) {
             activateDoubleCast(skillId, def->doubleCastWindow);
@@ -602,6 +667,13 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
         forceCrit = true;
     }
 
+    // Steady Aim: guaranteed crit after standing still for 5s
+    if (stats && stats->steadyAimReady) {
+        forceCrit = true;
+        stats->steadyAimReady = false;
+        stats->steadyAimTimer = 0.0f;
+    }
+
     int damage = 0;
     if (stats) {
         damage = stats->calculateDamage(forceCrit, isCrit);
@@ -614,6 +686,14 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
     float skillPercent = (ri < static_cast<int>(def->damagePerRank.size()))
                          ? def->damagePerRank[ri] : 100.0f;
     damage = static_cast<int>(std::round(damage * skillPercent / 100.0f));
+
+    // Passive spell damage bonus (Arcane Intellect)
+    if (stats && stats->passiveSpellDamageBonus > 0.0f &&
+        (def->damageType == DamageType::Magic || def->damageType == DamageType::Fire ||
+         def->damageType == DamageType::Water || def->damageType == DamageType::Lightning ||
+         def->damageType == DamageType::Void)) {
+        damage = static_cast<int>(std::round(damage * (1.0f + stats->passiveSpellDamageBonus / 100.0f)));
+    }
 
     // Apply status effect damage multiplier on caster
     if (ctx.casterSEM) {
@@ -680,6 +760,10 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
                 blockChance);
             if (blocked) {
                 damage = 0;
+                // Retaliation: flag next attack bonus after a successful block
+                if (ctx.targetPlayerStats->retaliationActive) {
+                    ctx.targetPlayerStats->retaliationReady = true;
+                }
             }
         }
     }
@@ -868,6 +952,15 @@ int SkillManager::executeSkill(const std::string& skillId, int rank,
             : 5.0f;
         ctx.targetSEM->applyEffect(EffectType::ArmorShred, 5.0f,
                                     armorShredValue, 0.0f, ctx.casterEntityId);
+    }
+
+    // Exploit Weakness: additional armor shred on crit (up to 3 stacks)
+    if (isCrit && stats && stats->exploitWeaknessActive && ctx.targetSEM) {
+        int stacks = ctx.targetSEM->getEffectStacks(EffectType::ArmorShred);
+        if (stacks < 3) {
+            ctx.targetSEM->applyEffect(EffectType::ArmorShred, 5.0f,
+                stats->exploitWeaknessValue, 0.0f, ctx.casterEntityId);
+        }
     }
 
     // Enable double-cast window if applicable (only on normal cast, not the free cast itself)

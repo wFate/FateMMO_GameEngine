@@ -625,17 +625,59 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
         if (charStats && !enemyStats->stats.sceneId.empty() &&
             charStats->stats.currentScene != enemyStats->stats.sceneId) return;
 
+        // Passive force-crit checks (Steady Aim, Predator's Instinct)
+        bool forceCrit = false;
+        if (charStats) {
+            // Steady Aim: guaranteed crit after standing still for 5s
+            if (charStats->stats.steadyAimReady) {
+                forceCrit = true;
+                charStats->stats.steadyAimReady = false;
+                charStats->stats.steadyAimTimer = 0.0f;
+            }
+            // Predator's Instinct: guaranteed crit on first hit against a new target
+            if (charStats->stats.predatorsInstinctActive) {
+                auto& targets = charStats->stats.predatorsInstinctTargets;
+                uint64_t tPid = targetPid.value();
+                auto it = targets.find(tPid);
+                if (it == targets.end() || gameTime_ - it->second >= charStats->stats.predatorsInstinctCooldown) {
+                    forceCrit = true;
+                    targets[tPid] = gameTime_;
+                }
+            }
+        }
+
         // Calculate damage
         int damage = 10; // default
         bool isCrit = false;
         if (charStats) {
-            damage = charStats->stats.calculateDamage(false, isCrit);
+            damage = charStats->stats.calculateDamage(forceCrit, isCrit);
         }
 
         // Apply damage
         enemyStats->stats.takeDamageFrom(attackerHandle.value, damage);
         enemyStats->stats.lastDamageTime = gameTime_;
         bool killed = !enemyStats->stats.isAlive;
+
+        // Bloodlust: +1 stack on hit, reset on miss (auto-attacks only)
+        if (charStats && charStats->stats.bloodlustActive) {
+            if (damage > 0) {
+                charStats->stats.bloodlustStacks = (std::min)(charStats->stats.bloodlustStacks + 1, 10);
+            } else {
+                charStats->stats.bloodlustStacks = 0;
+            }
+        }
+
+        // Exploit Weakness: shred target armor on crit (up to 3 stacks)
+        if (isCrit && charStats && charStats->stats.exploitWeaknessActive) {
+            auto* targetSEComp = target->getComponent<StatusEffectComponent>();
+            if (targetSEComp) {
+                int stacks = targetSEComp->effects.getEffectStacks(EffectType::ArmorShred);
+                if (stacks < 3) {
+                    targetSEComp->effects.applyEffect(EffectType::ArmorShred, 5.0f,
+                        charStats->stats.exploitWeaknessValue, 0.0f, attackerHandle.value);
+                }
+            }
+        }
 
         // Build and broadcast combat event
         SvCombatEventMsg evt;
@@ -696,11 +738,30 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             if (charStats && !charStats->stats.currentScene.empty() &&
                 charStats->stats.currentScene != targetCharStats->stats.currentScene) return;
 
+            // Passive force-crit checks (Steady Aim, Predator's Instinct)
+            bool pvpForceCrit = false;
+            if (charStats) {
+                if (charStats->stats.steadyAimReady) {
+                    pvpForceCrit = true;
+                    charStats->stats.steadyAimReady = false;
+                    charStats->stats.steadyAimTimer = 0.0f;
+                }
+                if (charStats->stats.predatorsInstinctActive) {
+                    auto& piTargets = charStats->stats.predatorsInstinctTargets;
+                    uint64_t tPid2 = targetPid.value();
+                    auto piIt = piTargets.find(tPid2);
+                    if (piIt == piTargets.end() || gameTime_ - piIt->second >= charStats->stats.predatorsInstinctCooldown) {
+                        pvpForceCrit = true;
+                        piTargets[tPid2] = gameTime_;
+                    }
+                }
+            }
+
             // Calculate PvP damage using shared formulas
             int damage = 10;
             bool isCrit = false;
             if (charStats) {
-                damage = charStats->stats.calculateDamage(false, isCrit);
+                damage = charStats->stats.calculateDamage(pvpForceCrit, isCrit);
             }
 
             // Apply PvP damage multiplier (0.05x)
@@ -716,6 +777,27 @@ void ServerApp::processAction(uint16_t clientId, const CmdAction& action) {
             // Apply damage
             targetCharStats->stats.takeDamage(damage);
             bool killed = !targetCharStats->stats.isAlive();
+
+            // Bloodlust: +1 stack on hit, reset on miss (auto-attacks only)
+            if (charStats && charStats->stats.bloodlustActive) {
+                if (damage > 0) {
+                    charStats->stats.bloodlustStacks = (std::min)(charStats->stats.bloodlustStacks + 1, 10);
+                } else {
+                    charStats->stats.bloodlustStacks = 0;
+                }
+            }
+
+            // Exploit Weakness: shred target armor on crit (up to 3 stacks)
+            if (isCrit && charStats && charStats->stats.exploitWeaknessActive) {
+                auto* pvpTargetSE = target->getComponent<StatusEffectComponent>();
+                if (pvpTargetSE) {
+                    int stacks = pvpTargetSE->effects.getEffectStacks(EffectType::ArmorShred);
+                    if (stacks < 3) {
+                        pvpTargetSE->effects.applyEffect(EffectType::ArmorShred, 5.0f,
+                            charStats->stats.exploitWeaknessValue, 0.0f, attackerHandle.value);
+                    }
+                }
+            }
 
             // Find target's clientId for dirty flags
             uint16_t pvpTargetClientId = 0;

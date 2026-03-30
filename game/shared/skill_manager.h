@@ -233,10 +233,24 @@ public:
         passiveHitRateBonus_    = 0.0f;
         passiveSpellDamageBonus_ = 0.0f;
 
+        // Reset unique passive flags
+        if (stats) {
+            stats->undyingWillActive = false;
+            stats->bloodlustActive = false;
+            stats->retaliationActive = false;
+            stats->deathwishActive = false;
+            stats->steadyAimActive = false;
+            stats->exploitWeaknessActive = false;
+            stats->predatorsInstinctActive = false;
+            stats->arcaneMasteryActive = false;
+        }
+
         for (const auto& skill : learnedSkills) {
             if (skill.activatedRank <= 0) continue;
             const SkillDefinition* def = getSkillDefinition(skill.skillId);
             if (!def || def->skillType != SkillType::Passive) continue;
+
+            int ri = skill.activatedRank - 1;
 
             for (int r = 0; r < skill.activatedRank; ++r) {
                 if (r < (int)def->passiveHPBonusPerRank.size()) passiveHPBonus_ += def->passiveHPBonusPerRank[r];
@@ -248,6 +262,36 @@ public:
                 if (r < (int)def->passiveHitRateBonusPerRank.size()) passiveHitRateBonus_ += def->passiveHitRateBonusPerRank[r];
                 if (skill.skillId == "mage_arcane_intellect") {
                     if (r < (int)def->effectValuePerRank.size()) passiveSpellDamageBonus_ += def->effectValuePerRank[r];
+                }
+            }
+
+            // Wire unique passive flags based on skill ID
+            if (stats) {
+                if (skill.skillId == "warrior_undying_will") {
+                    stats->undyingWillActive = true;
+                    stats->undyingWillCooldown = (ri < (int)def->cooldownPerRank.size()) ? def->cooldownPerRank[ri] : 300.0f;
+                } else if (skill.skillId == "warrior_bloodlust") {
+                    stats->bloodlustActive = true;
+                    stats->bloodlustCritPerStack = (ri < (int)def->effectValuePerRank.size()) ? def->effectValuePerRank[ri] : 1.0f;
+                } else if (skill.skillId == "warrior_retaliation") {
+                    stats->retaliationActive = true;
+                    stats->retaliationDamageBonus = (ri < (int)def->effectValuePerRank.size()) ? def->effectValuePerRank[ri] : 20.0f;
+                } else if (skill.skillId == "warrior_deathwish") {
+                    stats->deathwishActive = true;
+                    stats->deathwishCritDamageBonus = (ri < (int)def->effectValuePerRank.size()) ? def->effectValuePerRank[ri] : 100.0f;
+                    stats->deathwishHealingBonus = (ri < (int)def->effectValue2PerRank.size()) ? def->effectValue2PerRank[ri] : 50.0f;
+                } else if (skill.skillId == "archer_steady_aim") {
+                    stats->steadyAimActive = true;
+                    stats->steadyAimBonus = (ri < (int)def->effectValuePerRank.size()) ? def->effectValuePerRank[ri] : 15.0f;
+                } else if (skill.skillId == "archer_exploit_weakness") {
+                    stats->exploitWeaknessActive = true;
+                    stats->exploitWeaknessValue = (ri < (int)def->effectValuePerRank.size()) ? def->effectValuePerRank[ri] : 5.0f;
+                } else if (skill.skillId == "archer_predators_instinct") {
+                    stats->predatorsInstinctActive = true;
+                    stats->predatorsInstinctCooldown = (ri < (int)def->cooldownPerRank.size()) ? def->cooldownPerRank[ri] : 10.0f;
+                } else if (skill.skillId == "mage_arcane_mastery") {
+                    stats->arcaneMasteryActive = true;
+                    stats->arcaneMasteryChance = (ri < (int)def->effectValuePerRank.size()) ? def->effectValuePerRank[ri] : 15.0f;
                 }
             }
         }
