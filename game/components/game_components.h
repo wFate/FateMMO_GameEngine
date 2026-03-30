@@ -97,15 +97,26 @@ struct EquipVisualsComponent {
 
 struct AppearanceComponent {
     FATE_COMPONENT(AppearanceComponent)
-    uint8_t gender    = 0;  // 0=male, 1=female
-    uint8_t hairstyle = 0;  // 0-2 per gender, expandable
+    uint8_t gender    = 0;   // 0=male, 1=female
+    uint8_t hairstyle = 0;   // index into catalog hairstyle list for this gender
 
-    // Resolved textures (runtime only, rebuilt when dirty)
-    std::shared_ptr<Texture> bodyTexture;
-    std::shared_ptr<Texture> hairTexture;
-    std::shared_ptr<Texture> armorTexture;
-    std::shared_ptr<Texture> hatTexture;
-    std::shared_ptr<Texture> weaponTexture;
+    // Equipment style names (from item_definitions.visual_style)
+    std::string armorStyle;
+    std::string hatStyle;
+    std::string weaponStyle;
+
+    // Resolved textures per direction (runtime only, rebuilt when dirty)
+    struct LayerTextures {
+        std::shared_ptr<Texture> front;
+        std::shared_ptr<Texture> back;
+        std::shared_ptr<Texture> side;
+    };
+    LayerTextures body;
+    LayerTextures hair;
+    LayerTextures armor;
+    LayerTextures hat;
+    LayerTextures weapon;
+
     bool dirty = true;
 };
 

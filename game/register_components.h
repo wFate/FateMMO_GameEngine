@@ -519,14 +519,20 @@ inline void registerAllComponents() {
     reg.registerComponent<AppearanceComponent>(
         [](const void* data, nlohmann::json& j) {
             const auto* c = static_cast<const AppearanceComponent*>(data);
-            j["gender"]    = c->gender;
-            j["hairstyle"] = c->hairstyle;
+            j["gender"]      = c->gender;
+            j["hairstyle"]   = c->hairstyle;
+            j["armorStyle"]  = c->armorStyle;
+            j["hatStyle"]    = c->hatStyle;
+            j["weaponStyle"] = c->weaponStyle;
         },
         [](const nlohmann::json& j, void* data) {
             auto* c = static_cast<AppearanceComponent*>(data);
-            if (j.contains("gender"))    c->gender    = j["gender"].get<uint8_t>();
-            if (j.contains("hairstyle")) c->hairstyle = j["hairstyle"].get<uint8_t>();
-            c->dirty = true; // trigger PaperDoll texture rebuild
+            if (j.contains("gender"))      c->gender      = j["gender"].get<uint8_t>();
+            if (j.contains("hairstyle"))   c->hairstyle   = j["hairstyle"].get<uint8_t>();
+            if (j.contains("armorStyle"))  c->armorStyle  = j["armorStyle"].get<std::string>();
+            if (j.contains("hatStyle"))    c->hatStyle    = j["hatStyle"].get<std::string>();
+            if (j.contains("weaponStyle")) c->weaponStyle = j["weaponStyle"].get<std::string>();
+            c->dirty = true;
         }
     );
     reg.registerComponent<ChatComponent>();
