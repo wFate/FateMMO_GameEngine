@@ -5,8 +5,11 @@
 #include "engine/net/replication.h"
 #include "server/db/spawn_zone_cache.h"
 #include "server/db/definition_caches.h"
+#include "server/db/zone_mob_state_repository.h"
+#include "engine/spatial/collision_grid.h"
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace fate {
 
@@ -25,13 +28,18 @@ public:
                     World& world,
                     ReplicationManager& replication,
                     const SpawnZoneCache& spawnZoneCache,
-                    const MobDefCache& mobDefCache);
+                    const MobDefCache& mobDefCache,
+                    const CollisionGrid* collisionGrid = nullptr,
+                    ZoneMobStateRepository* mobStateRepo = nullptr);
 
     // Tick: check for dead mobs, process respawn timers
     void tick(float dt, float gameTime, World& world, ReplicationManager& replication);
 
     // Called when a mob entity dies (from MobAISystem combat callback)
     void onMobDeath(EntityHandle handle, float gameTime);
+
+    // Persist all currently-dead mobs to DB before server shutdown
+    void shutdown();
 
     int totalMobs() const { return totalMobs_; }
 
@@ -59,6 +67,10 @@ private:
     std::vector<ZoneRowState> zoneRows_;
     std::vector<TrackedMob> mobs_;
     int totalMobs_ = 0;
+
+    ZoneMobStateRepository* mobStateRepo_ = nullptr;
+    std::string sceneId_;
+    bool initializedTime_ = false;
 
     // Creates a mob entity, registers it with replication, and returns its handle.
     // NOTE: also pushes a new TrackedMob onto mobs_ — callers that reuse an

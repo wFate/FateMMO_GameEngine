@@ -18,11 +18,16 @@ void ServerSpawnManager::initialize(
     World& world,
     ReplicationManager& replication,
     const SpawnZoneCache& spawnZoneCache,
-    const MobDefCache& mobDefCache)
+    const MobDefCache& mobDefCache,
+    const CollisionGrid* /*collisionGrid*/,
+    ZoneMobStateRepository* mobStateRepo)
 {
     zoneRows_.clear();
     mobs_.clear();
     totalMobs_ = 0;
+    mobStateRepo_ = mobStateRepo;
+    sceneId_ = sceneId;
+    initializedTime_ = false;
 
     const auto& zones = spawnZoneCache.getZonesForScene(sceneId);
     for (const auto& zone : zones) {
@@ -41,8 +46,33 @@ void ServerSpawnManager::initialize(
             ? zone.respawnOverrideSeconds : def->respawnSeconds;
         zoneRows_.push_back(std::move(state));
 
-        // Spawn target_count mobs for this zone row
+        // Load persisted death state for this zone
+        std::vector<DeadMobRecord> persistedDeaths;
+        if (mobStateRepo_) {
+            persistedDeaths = mobStateRepo_->loadZoneDeaths(sceneId, zone.zoneName);
+        }
+
+        std::unordered_set<int> deadIndices;
+        std::unordered_map<int, float> remainingTimes;
+        for (const auto& rec : persistedDeaths) {
+            if (!rec.hasRespawned()) {
+                deadIndices.insert(rec.mobIndex);
+                remainingTimes[rec.mobIndex] = rec.getRemainingRespawnTime();
+            }
+        }
+
+        // Spawn target_count mobs for this zone row (skip persisted dead mobs)
         for (int i = 0; i < zone.targetCount; ++i) {
+            if (deadIndices.count(i)) {
+                TrackedMob tracked;
+                tracked.handle = EntityHandle{};
+                tracked.zoneRowIndex = idx;
+                tracked.alive = false;
+                tracked.respawnAt = remainingTimes[i]; // remaining seconds, converted in tick
+                mobs_.push_back(tracked);
+                ++totalMobs_;
+                continue;
+            }
             createMob(world, replication, idx, 0.0f);
         }
     }
@@ -172,6 +202,15 @@ EntityHandle ServerSpawnManager::createMob(
 // tick — check for deaths, process respawn timers
 // ---------------------------------------------------------------------------
 void ServerSpawnManager::tick(float /*dt*/, float gameTime, World& world, ReplicationManager& replication) {
+    if (!initializedTime_) {
+        for (auto& mob : mobs_) {
+            if (!mob.alive && mob.respawnAt > 0.0f) {
+                mob.respawnAt = gameTime + mob.respawnAt;
+            }
+        }
+        initializedTime_ = true;
+    }
+
     for (auto& mob : mobs_) {
         if (mob.alive) {
             // Check if entity was destroyed outside our knowledge
@@ -216,13 +255,52 @@ void ServerSpawnManager::tick(float /*dt*/, float gameTime, World& world, Replic
 // onMobDeath — external callback (MobAISystem combat result)
 // ---------------------------------------------------------------------------
 void ServerSpawnManager::onMobDeath(EntityHandle handle, float gameTime) {
-    for (auto& mob : mobs_) {
+    for (int i = 0; i < static_cast<int>(mobs_.size()); ++i) {
+        auto& mob = mobs_[i];
         if (mob.handle == handle && mob.alive) {
-            mob.alive     = false;
-            mob.respawnAt = gameTime + static_cast<float>(zoneRows_[mob.zoneRowIndex].respawnSeconds);
+            auto& row = zoneRows_[mob.zoneRowIndex];
+            mob.alive = false;
+            mob.respawnAt = gameTime + static_cast<float>(row.respawnSeconds);
+
+            if (mobStateRepo_) {
+                DeadMobRecord rec;
+                rec.enemyId = row.def->mobDefId;
+                rec.mobIndex = i;
+                rec.diedAtUnix = static_cast<int64_t>(std::time(nullptr));
+                rec.respawnSeconds = row.respawnSeconds;
+                mobStateRepo_->saveZoneDeaths(sceneId_, row.config.zoneName, {rec});
+            }
             break;
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// shutdown — persist all dead mobs to DB before server shutdown
+// ---------------------------------------------------------------------------
+void ServerSpawnManager::shutdown() {
+    if (!mobStateRepo_) return;
+
+    std::unordered_map<std::string, std::vector<DeadMobRecord>> deathsByZone;
+    for (int i = 0; i < static_cast<int>(mobs_.size()); ++i) {
+        const auto& mob = mobs_[i];
+        if (mob.alive) continue;
+
+        auto& row = zoneRows_[mob.zoneRowIndex];
+        DeadMobRecord rec;
+        rec.enemyId = row.def->mobDefId;
+        rec.mobIndex = i;
+        rec.diedAtUnix = static_cast<int64_t>(std::time(nullptr));
+        rec.respawnSeconds = row.respawnSeconds;
+        deathsByZone[row.config.zoneName].push_back(rec);
+    }
+
+    for (const auto& [zoneName, deaths] : deathsByZone) {
+        mobStateRepo_->saveZoneDeaths(sceneId_, zoneName, deaths);
+    }
+
+    LOG_INFO("SpawnManager", "Saved death state for scene '%s' (%zu zones with dead mobs)",
+             sceneId_.c_str(), deathsByZone.size());
 }
 
 // ---------------------------------------------------------------------------
