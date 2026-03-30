@@ -46,7 +46,7 @@
 #include "server/db/costume_repository.h"
 #include "server/db/spawn_zone_cache.h"
 #include "game/shared/collection_system.h"
-#include "server/server_spawn_manager.h"
+#include "server/scene_spawn_coordinator.h"
 #include "server/dungeon_manager.h"
 #include "engine/spatial/collision_grid.h"
 #include "engine/net/auth_protocol.h"
@@ -157,7 +157,7 @@ private:
 
     // Spawn system
     SpawnZoneCache spawnZoneCache_;
-    ServerSpawnManager spawnManager_;
+    SceneSpawnCoordinator sceneSpawns_;
 
     // GM command system
     GMCommandRegistry gmCommands_;

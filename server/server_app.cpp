@@ -797,7 +797,16 @@ void ServerApp::run() {
     }
 
     // Spawn server-side mobs from DB spawn zones
-    spawnManager_.initialize("WhisperingWoods", world_, replication_, spawnZoneCache_, mobDefCache_);
+    {
+        SceneSpawnCoordinator::Config spawnConfig;
+        spawnConfig.world = &world_;
+        spawnConfig.replication = &replication_;
+        spawnConfig.spawnZoneCache = &spawnZoneCache_;
+        spawnConfig.mobDefCache = &mobDefCache_;
+        spawnConfig.mobStateRepo = mobStateRepo_.get();
+        spawnConfig.collisionGrids = &collisionGrids_;
+        sceneSpawns_.initialize(spawnConfig);
+    }
 
     auto lastTick = std::chrono::high_resolution_clock::now();
 
@@ -897,7 +906,7 @@ void ServerApp::tick(float dt) {
 
     // 3. World update (systems)
     world_.update(dt);
-    spawnManager_.tick(dt, gameTime_, world_, replication_);
+    sceneSpawns_.tick(dt, gameTime_);
 
     auto tp2 = Clock::now(); // after world update + spawn
 
@@ -1639,6 +1648,7 @@ void ServerApp::onClientConnected(uint16_t clientId) {
         // Fix legacy "Scene2" default — migrate to real scene name
         s.currentScene = (rec.current_scene == "Scene2" || rec.current_scene.empty())
             ? "WhisperingWoods" : rec.current_scene;
+        sceneSpawns_.onPlayerEnterScene(s.currentScene);
 
         // DISABLED: stat allocation removed — stats are fixed per class
         // s.freeStatPoints = static_cast<int16_t>(rec.free_stat_points);
@@ -2257,6 +2267,19 @@ void ServerApp::onClientDisconnected(uint16_t clientId) {
     }
 
     if (client && client->playerEntityId != 0) {
+        // Notify spawn coordinator that player is leaving their scene
+        {
+            PersistentId pid(client->playerEntityId);
+            EntityHandle h = getReplicationForClient(clientId).getEntityHandle(pid);
+            Entity* playerEntity = getWorldForClient(clientId).getEntity(h);
+            if (playerEntity) {
+                auto* cs = playerEntity->getComponent<CharacterStatsComponent>();
+                if (cs) {
+                    sceneSpawns_.onPlayerLeaveScene(cs->stats.currentScene);
+                }
+            }
+        }
+
         uint32_t eid = static_cast<uint32_t>(client->playerEntityId);
 
         // Battlefield: move to grace period instead of removing (3 min to rejoin)

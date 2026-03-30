@@ -133,6 +133,8 @@ void ServerApp::processZoneTransition(uint16_t clientId, const CmdZoneTransition
                 if (sc2) {
                     previousScene = sc2->stats.currentScene;
                     sc2->stats.currentScene = cmd.targetScene;
+                    sceneSpawns_.onPlayerLeaveScene(previousScene);
+                    sceneSpawns_.onPlayerEnterScene(cmd.targetScene);
                     sc2->stats.combatTimer = 0.0f; // H20-FIX
                 }
             }
