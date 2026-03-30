@@ -58,6 +58,14 @@ bool NetClient::connectWithToken(const std::string& host, uint16_t port, const A
     lastHost_ = host;
     lastPort_ = port;
 
+    // Reset timing state so a stale lastPacketReceived_ from a prior session
+    // doesn't trigger an immediate heartbeat timeout on the fresh connection
+    lastPacketReceived_ = 0.0f;
+    lastHeartbeatSent_ = 0.0f;
+    heartbeatCounter_ = 0;
+    reconnectPhase_ = ReconnectPhase::None;
+    reconnectAttempts_ = 0;
+
     // Generate DH keypair for secure key exchange (required)
     if (!PacketCrypto::isAvailable()) {
         LOG_ERROR("NetClient", "Cannot connect: packet encryption not available (libsodium required)");

@@ -1864,6 +1864,8 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         fsb->numberFontSize = j.value("numberFontSize", 28.0f);
         fsb->coordFontSize  = j.value("coordFontSize",  11.0f);
         fsb->buttonFontSize = j.value("buttonFontSize",  9.0f);
+        fsb->menuBtnFontSize = j.value("menuBtnFontSize", 9.0f);
+        fsb->chatBtnFontSize = j.value("chatBtnFontSize", 9.0f);
         if (j.contains("hpBarColor") && j["hpBarColor"].is_array() && j["hpBarColor"].size() == 4) {
             auto& c = j["hpBarColor"];
             fsb->hpBarColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
@@ -1875,6 +1877,37 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         if (j.contains("coordColor") && j["coordColor"].is_array() && j["coordColor"].size() == 4) {
             auto& c = j["coordColor"];
             fsb->coordColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
+        }
+        if (j.contains("menuBtnTextColor") && j["menuBtnTextColor"].is_array() && j["menuBtnTextColor"].size() == 4) {
+            auto& c = j["menuBtnTextColor"];
+            fsb->menuBtnTextColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
+        }
+        if (j.contains("chatBtnTextColor") && j["chatBtnTextColor"].is_array() && j["chatBtnTextColor"].size() == 4) {
+            auto& c = j["chatBtnTextColor"];
+            fsb->chatBtnTextColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
+        }
+        if (j.contains("menuBtnBgColor") && j["menuBtnBgColor"].is_array() && j["menuBtnBgColor"].size() == 4) {
+            auto& c = j["menuBtnBgColor"];
+            fsb->menuBtnBgColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
+        }
+        fsb->menuOverlayW     = j.value("menuOverlayW",    140.0f);
+        fsb->menuItemH        = j.value("menuItemH",        36.0f);
+        fsb->menuItemFontSize = j.value("menuItemFontSize", 12.0f);
+        if (j.contains("menuItemTextColor") && j["menuItemTextColor"].is_array() && j["menuItemTextColor"].size() == 4) {
+            auto& c = j["menuItemTextColor"];
+            fsb->menuItemTextColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
+        }
+        if (j.contains("menuOverlayBgColor") && j["menuOverlayBgColor"].is_array() && j["menuOverlayBgColor"].size() == 4) {
+            auto& c = j["menuOverlayBgColor"];
+            fsb->menuOverlayBgColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
+        }
+        if (j.contains("menuOverlayBorderColor") && j["menuOverlayBorderColor"].is_array() && j["menuOverlayBorderColor"].size() == 4) {
+            auto& c = j["menuOverlayBorderColor"];
+            fsb->menuOverlayBorderColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
+        }
+        if (j.contains("menuDividerColor") && j["menuDividerColor"].is_array() && j["menuDividerColor"].size() == 4) {
+            auto& c = j["menuDividerColor"];
+            fsb->menuDividerColor = {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(), c[3].get<float>()};
         }
         fsb->showCoordinates = j.value("showCoordinates", true);
         fsb->showMenuButton  = j.value("showMenuButton",  true);

@@ -130,6 +130,8 @@ struct SvEntityEnterMsg {
     uint8_t gender    = 0; // 0=male, 1=female
     uint8_t hairstyle = 0; // 0-2 per gender
     uint64_t costumeVisuals = 0; // packed costume visual indices (only for entityType == 0)
+    std::string guildName;      // guild name (empty if not in guild, only for entityType == 0)
+    std::string guildIconPath;  // guild icon asset path (only for entityType == 0)
 
     void write(ByteWriter& w) const {
         detail::writeU64(w, persistentId);
@@ -146,6 +148,8 @@ struct SvEntityEnterMsg {
             w.writeU8(gender);
             w.writeU8(hairstyle);
             detail::writeU64(w, costumeVisuals);
+            w.writeString(guildName);
+            w.writeString(guildIconPath);
         }
         if (entityType == 3) {
             w.writeString(itemId);
@@ -177,6 +181,8 @@ struct SvEntityEnterMsg {
             m.gender    = r.readU8();
             m.hairstyle = r.readU8();
             m.costumeVisuals = detail::readU64(r);
+            m.guildName     = r.readString();
+            m.guildIconPath = r.readString();
         }
         if (m.entityType == 3) {
             m.itemId       = r.readString();

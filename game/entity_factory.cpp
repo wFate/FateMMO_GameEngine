@@ -68,10 +68,9 @@ Entity* EntityFactory::createPlayer(World& world, const std::string& name, Class
     appear->dirty = true;
 
     auto* np = player->getComponent<NameplateComponent>();
-    if (np) {
-        np->displayName = name;
-        np->displayLevel = 1;
-    }
+    if (!np) np = player->addComponent<NameplateComponent>();
+    np->displayName = name;
+    np->displayLevel = 1;
 
     // --- Add runtime-only components (not in prefab) ---
 

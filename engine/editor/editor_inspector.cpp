@@ -1012,8 +1012,32 @@ void Editor::drawInspector() {
                 captureInspectorUndo();
                 ImGui::DragFloat("Font Size##np", &np->fontSize, 0.02f, 0.3f, 2.0f, "%.2f");
                 captureInspectorUndo();
+                ImGui::DragFloat("Y Offset##np", &np->yOffset, 0.5f, -50.0f, 100.0f, "%.1f");
+                captureInspectorUndo();
                 ImGui::Checkbox("Visible##np", &np->visible);
                 captureInspectorUndo();
+
+                // --- Guild Tag ---
+                ImGui::Separator();
+                ImGui::Checkbox("Show Guild##np", &np->showGuild);
+                captureInspectorUndo();
+                if (np->showGuild) {
+                    char gName[64]; strncpy(gName, np->guildName.c_str(), sizeof(gName)-1); gName[sizeof(gName)-1]=0;
+                    if (ImGui::InputText("Guild Name##np", gName, sizeof(gName))) np->guildName = gName;
+                    captureInspectorUndo();
+                    ImGui::ColorEdit4("Guild Color##np", &np->guildColor.r);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Guild Font Size##np", &np->guildFontSize, 0.02f, 0.3f, 2.0f, "%.2f");
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Guild Y Offset##np", &np->guildYOffset, 0.5f, -50.0f, 100.0f, "%.1f");
+                    captureInspectorUndo();
+                    char gIcon[128]; strncpy(gIcon, np->guildIconPath.c_str(), sizeof(gIcon)-1); gIcon[sizeof(gIcon)-1]=0;
+                    if (ImGui::InputText("Guild Icon##np", gIcon, sizeof(gIcon))) {
+                        np->guildIconPath = gIcon;
+                        np->guildIconTex = nullptr; // force re-resolve
+                    }
+                    captureInspectorUndo();
+                }
             }
         }
 
@@ -1040,6 +1064,8 @@ void Editor::drawInspector() {
                 ImGui::Checkbox("Show Level##mnp", &mnp->showLevel);
                 captureInspectorUndo();
                 ImGui::DragFloat("Font Size##mnp", &mnp->fontSize, 0.02f, 0.3f, 2.0f, "%.2f");
+                captureInspectorUndo();
+                ImGui::DragFloat("Y Offset##mnp", &mnp->yOffset, 0.5f, -50.0f, 100.0f, "%.1f");
                 captureInspectorUndo();
                 ImGui::Checkbox("Visible##mnp", &mnp->visible);
                 captureInspectorUndo();

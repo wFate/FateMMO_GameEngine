@@ -1389,11 +1389,25 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::Checkbox("Show Menu Button", &fsb->showMenuButton); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Menu Btn Radius", &fsb->menuBtnSize, 1.0f, 5.0f, 60.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Menu Btn Gap", &fsb->menuBtnGap, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Menu Btn Font", &fsb->menuBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Menu Btn Text", &fsb->menuBtnTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Menu Btn Bg", &fsb->menuBtnBgColor.r); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("Menu Overlay");
+        ImGui::DragFloat("Overlay Width", &fsb->menuOverlayW, 1.0f, 60.0f, 300.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Item Height", &fsb->menuItemH, 1.0f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Item Font Size", &fsb->menuItemFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Item Text Color", &fsb->menuItemTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Overlay Bg", &fsb->menuOverlayBgColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Overlay Border", &fsb->menuOverlayBorderColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Divider Color", &fsb->menuDividerColor.r); checkUndoCapture(uiMgr);
 
         ImGui::SeparatorText("Chat Button");
         ImGui::Checkbox("Show Chat Button", &fsb->showChatButton); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Chat Btn Radius", &fsb->chatBtnSize, 1.0f, 5.0f, 60.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Chat Btn Offset X", &fsb->chatBtnOffsetX, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Chat Btn Font", &fsb->chatBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Chat Btn Color", &fsb->chatBtnTextColor.r); checkUndoCapture(uiMgr);
 
         ImGui::SeparatorText("Coordinates");
         ImGui::Checkbox("Show Coordinates", &fsb->showCoordinates); checkUndoCapture(uiMgr);

@@ -110,12 +110,12 @@
       "RedHair": {
         "back": "assets/sprites/48x96Idle_Sprite_Male_Front_RedHair.png",
         "front": "assets/sprites/48x96Idle_Sprite_Male_Front_RedHair.png",
-        "side": "assets/sprites/48x96Idle_Sprite_RedHair.png"
+        "side": "assets/sprites/48x96Idle_Sprite_Male_Front_RedHair.png"
       },
       "SilverHair": {
         "back": "assets/sprites/48x96Idle_Back_Sprite_Hair.png",
         "front": "assets/sprites/48x96Idle_Sprite_Male_Front_SilverHair.png",
-        "side": ""
+        "side": "assets/sprites/48x96Idle_Sprite_Male_Front_SilverHair.png"
       }
     }
   }

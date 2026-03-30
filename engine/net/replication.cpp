@@ -373,6 +373,12 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
             msg.name = nameplate->displayName;
         }
 
+        auto* guildComp = entity->getComponent<GuildComponent>();
+        if (guildComp && guildComp->guild.guildId > 0) {
+            msg.guildName     = guildComp->guild.guildName;
+            msg.guildIconPath = guildComp->guild.guildIconPath;
+        }
+
         auto* costumeComp = entity->getComponent<CostumeComponent>();
         if (costumeComp && costumeComp->showCostumes && costumeCache_) {
             uint16_t cW = 0, cA = 0, cH = 0, cS = 0, cG = 0, cB = 0;

@@ -224,10 +224,42 @@ namespace fate
                         else
                             std::snprintf(npBuf, sizeof(npBuf), "%s", np->displayName.c_str());
 
-                        Vec2 npPos = {t->position.x, t->position.y + spriteH * 0.5f + 4.0f * uiScale};
+                        Vec2 npPos = {t->position.x, t->position.y + spriteH * 0.5f + np->yOffset * uiScale};
                         drawOutlinedWorld(npBuf, npPos, NP_FONT, np->nameColor, NP_DEPTH);
 
-                        // Quest marker above nameplate
+                        // Guild tag above player name
+                        float topY = npPos.y + NP_FONT; // top of name text
+                        if (np->showGuild && !np->guildName.empty())
+                        {
+                            float guildFont = np->guildFontSize * NP_FONT / 0.7f;
+                            Vec2 guildPos = {t->position.x, topY + np->guildYOffset * uiScale};
+
+                            // Guild icon (16x16) to the left of guild name
+                            if (!np->guildIconPath.empty())
+                            {
+                                if (!np->guildIconTex)
+                                    np->guildIconTex = TextureCache::instance().load(np->guildIconPath);
+                                if (np->guildIconTex)
+                                {
+                                    Vec2 guildSz = sdf.measure(np->guildName, guildFont);
+                                    float iconSize = 16.0f * uiScale;
+                                    float totalW = iconSize + 2.0f * uiScale + guildSz.x;
+                                    float iconX = t->position.x - totalW * 0.5f + iconSize * 0.5f;
+                                    SpriteDrawParams iconP;
+                                    iconP.position = {iconX, guildPos.y + guildFont * 0.35f};
+                                    iconP.size = {iconSize, iconSize};
+                                    iconP.depth = NP_DEPTH;
+                                    batch.draw(np->guildIconTex, iconP);
+                                    // Shift guild text right to account for icon
+                                    guildPos.x = iconX + iconSize * 0.5f + 2.0f * uiScale + guildSz.x * 0.5f;
+                                }
+                            }
+
+                            drawOutlinedWorld(np->guildName, guildPos, guildFont, np->guildColor, NP_DEPTH);
+                            topY = guildPos.y + guildFont;
+                        }
+
+                        // Quest marker above nameplate (or guild tag)
                         auto *qm = entity->getComponent<QuestMarkerComponent>();
                         if (qm && qm->currentState != MarkerState::None)
                         {
@@ -235,7 +267,7 @@ namespace fate
                             Color markerCol = (qm->currentState == MarkerState::TurnIn)
                                                   ? Color(1.0f, 0.86f, 0.0f, 1.0f)
                                                   : Color::white();
-                            Vec2 markerPos = {npPos.x, npPos.y + NP_FONT * 1.2f};
+                            Vec2 markerPos = {npPos.x, topY + NP_FONT * 0.2f};
                             drawOutlinedWorld(marker, markerPos, NP_FONT, markerCol, NP_DEPTH);
                         }
                     });
@@ -278,7 +310,7 @@ namespace fate
                                 std::snprintf(mnpBuf, sizeof(mnpBuf), "%s", mnp->displayName.c_str());
                         }
 
-                        Vec2 npPos = {t->position.x, t->position.y + spriteH * 0.5f + 4.0f * uiScale};
+                        Vec2 npPos = {t->position.x, t->position.y + spriteH * 0.5f + mnp->yOffset * uiScale};
                         drawOutlinedWorld(mnpBuf, npPos, NP_FONT, mobColor, NP_DEPTH);
 
                         // HP bar below name

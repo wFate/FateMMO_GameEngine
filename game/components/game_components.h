@@ -149,12 +149,20 @@ struct NameplateComponent {
     std::string displayName;
     int displayLevel = 1;
     Color nameColor = Color::white();   // Based on PK status
-    bool showGuildSymbol = false;
-    std::string guildName;
     bool visible = true;
-    bool showLevel = true;              // Toggle level display on/off
+    bool showLevel = false;             // Toggle level display on/off
     std::string roleSubtitle;        // e.g., "[Merchant]", "[Quest]"
     float fontSize = 0.7f;              // Scale for nameplate text (0.3 - 2.0)
+    float yOffset = -15.0f;              // Extra pixels above sprite top for name position
+
+    // Guild tag (rendered above player name)
+    bool showGuild = true;
+    std::string guildName;
+    Color guildColor = Color(0.6f, 0.9f, 1.0f, 1.0f); // Light blue default
+    float guildFontSize = 0.55f;        // Scale for guild text (0.3 - 2.0)
+    float guildYOffset = 2.0f;          // Extra pixels above name for guild tag
+    std::string guildIconPath;          // Asset path for 16x16 guild icon
+    std::shared_ptr<Texture> guildIconTex; // Resolved at runtime (not serialized)
 };
 
 // ============================================================================
@@ -181,8 +189,9 @@ struct MobNameplateComponent {
     bool isBoss = false;
     bool isElite = false;
     bool visible = true;
-    bool showLevel = true;              // Toggle level display on/off
+    bool showLevel = false;             // Toggle level display on/off
     float fontSize = 0.6f;              // Scale for mob nameplate text (0.3 - 2.0)
+    float yOffset = 4.0f;               // Extra pixels above sprite top for name position
     // Color is computed per-viewer based on level difference (MobLevelColors)
 };
 
@@ -344,12 +353,17 @@ FATE_REFLECT(fate::NameplateComponent,
     FATE_FIELD(displayName, String),
     FATE_FIELD(displayLevel, Int),
     FATE_FIELD(nameColor, Color),
-    FATE_FIELD(showGuildSymbol, Bool),
-    FATE_FIELD(guildName, String),
     FATE_FIELD(visible, Bool),
     FATE_FIELD(showLevel, Bool),
     FATE_FIELD(roleSubtitle, String),
-    FATE_FIELD(fontSize, Float)
+    FATE_FIELD(fontSize, Float),
+    FATE_FIELD(yOffset, Float),
+    FATE_FIELD(showGuild, Bool),
+    FATE_FIELD(guildName, String),
+    FATE_FIELD(guildColor, Color),
+    FATE_FIELD(guildFontSize, Float),
+    FATE_FIELD(guildYOffset, Float),
+    FATE_FIELD(guildIconPath, String)
 )
 
 // --- Mob/Enemy Components ---
@@ -367,7 +381,8 @@ FATE_REFLECT(fate::MobNameplateComponent,
     FATE_FIELD(isElite, Bool),
     FATE_FIELD(visible, Bool),
     FATE_FIELD(showLevel, Bool),
-    FATE_FIELD(fontSize, Float)
+    FATE_FIELD(fontSize, Float),
+    FATE_FIELD(yOffset, Float)
 )
 
 // --- NPC Components ---

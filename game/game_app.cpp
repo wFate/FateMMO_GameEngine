@@ -247,6 +247,11 @@ void GameApp::onInit() {
                 auto* nameplate = ghost->getComponent<NameplateComponent>();
                 if (nameplate) {
                     nameplate->nameColor = pkStatusColor(static_cast<PKStatus>(msg.pkStatus));
+                    if (!msg.guildName.empty()) {
+                        nameplate->showGuild = true;
+                        nameplate->guildName = msg.guildName;
+                        nameplate->guildIconPath = msg.guildIconPath;
+                    }
                 }
                 auto* fc = ghost->getComponent<FactionComponent>();
                 if (fc) {
@@ -2556,7 +2561,7 @@ void GameApp::onUpdate(float deltaTime) {
                                     bool wasVisible = menuPanels->visible();
                                     menuPanels->setVisible(true);
                                     if (tabBar) tabBar->setActiveTab(tab);
-                                    // Hide skill arc / dpad when menu opens
+                                    // Hide skill arc / dpad / menu+chat buttons when menu opens
                                     if (!wasVisible) {
                                         auto* hudScr = uiManager().getScreen("fate_hud");
                                         if (hudScr) {
@@ -2564,6 +2569,14 @@ void GameApp::onUpdate(float deltaTime) {
                                             auto* arc  = hudScr->findById("skill_arc");
                                             if (dpad) dpad->setVisible(false);
                                             if (arc)  arc->setVisible(false);
+                                            auto* sb = hudScr->findById("status_bar");
+                                            if (sb) {
+                                                auto* fsb = dynamic_cast<FateStatusBar*>(sb);
+                                                if (fsb) {
+                                                    fsb->showMenuButton = false;
+                                                    fsb->showChatButton = false;
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -3942,8 +3955,16 @@ void GameApp::onUpdate(float deltaTime) {
                     if (hudScr) {
                         auto* dpad = hudScr->findById("dpad");
                         auto* arc  = hudScr->findById("skill_arc");
+                        auto* sb   = hudScr->findById("status_bar");
                         if (dpad) dpad->setVisible(!opening);
                         if (arc)  arc->setVisible(!opening);
+                        if (sb) {
+                            auto* fsb = dynamic_cast<FateStatusBar*>(sb);
+                            if (fsb) {
+                                fsb->showMenuButton = !opening;
+                                fsb->showChatButton = !opening;
+                            }
+                        }
                     }
                 }
             }
