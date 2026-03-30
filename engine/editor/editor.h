@@ -55,41 +55,44 @@ struct DeviceProfile {
     bool   hasDynamicIsland;
 };
 
+// Safe area insets are LANDSCAPE values (game runs landscape).
+// In landscape: Dynamic Island/notch moves to LEFT side, home indicator at BOTTOM (reduced).
+//                                                                      top bot left right
 static constexpr DeviceProfile kDeviceProfiles[] = {
     // Apple iPhone
-    {"iPhone SE (3rd gen)",  "Apple iPhone", 1334,  750, 2.0f, 20,  0, 0, 0, false, false},
-    {"iPhone 14",            "Apple iPhone", 2532, 1170, 3.0f, 47, 34, 0, 0, true,  false},
-    {"iPhone 14 Plus",       "Apple iPhone", 2778, 1284, 3.0f, 47, 34, 0, 0, true,  false},
-    {"iPhone 14 Pro",        "Apple iPhone", 2556, 1179, 3.0f, 59, 34, 0, 0, false, true},
-    {"iPhone 14 Pro Max",    "Apple iPhone", 2796, 1290, 3.0f, 59, 34, 0, 0, false, true},
-    {"iPhone 15",            "Apple iPhone", 2556, 1179, 3.0f, 59, 34, 0, 0, false, true},
-    {"iPhone 15 Plus",       "Apple iPhone", 2796, 1290, 3.0f, 59, 34, 0, 0, false, true},
-    {"iPhone 15 Pro",        "Apple iPhone", 2556, 1179, 3.0f, 59, 34, 0, 0, false, true},
-    {"iPhone 15 Pro Max",    "Apple iPhone", 2796, 1290, 3.0f, 59, 34, 0, 0, false, true},
-    {"iPhone 16",            "Apple iPhone", 2556, 1179, 3.0f, 59, 34, 0, 0, false, true},
-    {"iPhone 16 Plus",       "Apple iPhone", 2796, 1290, 3.0f, 59, 34, 0, 0, false, true},
-    {"iPhone 16 Pro",        "Apple iPhone", 2622, 1206, 3.0f, 59, 34, 0, 0, false, true},
-    {"iPhone 16 Pro Max",    "Apple iPhone", 2868, 1320, 3.0f, 59, 34, 0, 0, false, true},
-    {"iPhone 17 Pro",        "Apple iPhone", 2622, 1206, 3.0f, 59, 34, 0, 0, false, true},
-    // Apple iPad
-    {"iPad (10th gen)",      "Apple iPad",   2360, 1640, 2.0f, 20,  0, 0, 0, false, false},
-    {"iPad Air (M3)",        "Apple iPad",   2360, 1640, 2.0f, 20,  0, 0, 0, false, false},
-    {"iPad Pro 11\" (M4)",   "Apple iPad",   2420, 1668, 2.0f, 20,  0, 0, 0, false, false},
-    {"iPad Pro 13\" (M4)",   "Apple iPad",   2752, 2064, 2.0f, 20,  0, 0, 0, false, false},
-    // Android
-    {"Pixel 9",              "Android",      2424, 1080, 2.6f, 24, 24, 0, 0, false, false},
-    {"Pixel 9 Pro",          "Android",      2856, 1280, 2.8f, 24, 24, 0, 0, false, false},
-    {"Samsung S24",          "Android",      2340, 1080, 3.0f, 24, 24, 0, 0, false, false},
-    {"Samsung S24 Ultra",    "Android",      3120, 1440, 3.0f, 24, 24, 0, 0, false, false},
-    {"Samsung S25",          "Android",      2340, 1080, 3.0f, 24, 24, 0, 0, false, false},
+    {"iPhone SE (3rd gen)",  "Apple iPhone", 1334,  750, 2.0f,  0,  0,  0,  0, false, false},
+    {"iPhone 14",            "Apple iPhone", 2532, 1170, 3.0f,  0, 21, 47,  0, true,  false},
+    {"iPhone 14 Plus",       "Apple iPhone", 2778, 1284, 3.0f,  0, 21, 47,  0, true,  false},
+    {"iPhone 14 Pro",        "Apple iPhone", 2556, 1179, 3.0f,  0, 21, 59,  0, false, true},
+    {"iPhone 14 Pro Max",    "Apple iPhone", 2796, 1290, 3.0f,  0, 21, 59,  0, false, true},
+    {"iPhone 15",            "Apple iPhone", 2556, 1179, 3.0f,  0, 21, 59,  0, false, true},
+    {"iPhone 15 Plus",       "Apple iPhone", 2796, 1290, 3.0f,  0, 21, 59,  0, false, true},
+    {"iPhone 15 Pro",        "Apple iPhone", 2556, 1179, 3.0f,  0, 21, 59,  0, false, true},
+    {"iPhone 15 Pro Max",    "Apple iPhone", 2796, 1290, 3.0f,  0, 21, 59,  0, false, true},
+    {"iPhone 16",            "Apple iPhone", 2556, 1179, 3.0f,  0, 21, 59,  0, false, true},
+    {"iPhone 16 Plus",       "Apple iPhone", 2796, 1290, 3.0f,  0, 21, 59,  0, false, true},
+    {"iPhone 16 Pro",        "Apple iPhone", 2622, 1206, 3.0f,  0, 21, 59,  0, false, true},
+    {"iPhone 16 Pro Max",    "Apple iPhone", 2868, 1320, 3.0f,  0, 21, 59,  0, false, true},
+    {"iPhone 17 Pro",        "Apple iPhone", 2622, 1206, 3.0f,  0, 21, 59,  0, false, true},
+    // Apple iPad (fullscreen landscape games: no insets)
+    {"iPad (10th gen)",      "Apple iPad",   2360, 1640, 2.0f,  0,  0,  0,  0, false, false},
+    {"iPad Air (M3)",        "Apple iPad",   2360, 1640, 2.0f,  0,  0,  0,  0, false, false},
+    {"iPad Pro 11\" (M4)",   "Apple iPad",   2420, 1668, 2.0f,  0,  0,  0,  0, false, false},
+    {"iPad Pro 13\" (M4)",   "Apple iPad",   2752, 2064, 2.0f,  0,  0,  0,  0, false, false},
+    // Android (landscape: status bar hidden, nav bar at bottom)
+    {"Pixel 9",              "Android",      2424, 1080, 2.6f,  0, 24,  0,  0, false, false},
+    {"Pixel 9 Pro",          "Android",      2856, 1280, 2.8f,  0, 24,  0,  0, false, false},
+    {"Samsung S24",          "Android",      2340, 1080, 3.0f,  0, 24,  0,  0, false, false},
+    {"Samsung S24 Ultra",    "Android",      3120, 1440, 3.0f,  0, 24,  0,  0, false, false},
+    {"Samsung S25",          "Android",      2340, 1080, 3.0f,  0, 24,  0,  0, false, false},
     // Desktop
-    {"720p",                 "Desktop",      1280,  720, 1.0f,  0,  0, 0, 0, false, false},
-    {"1080p",                "Desktop",      1920, 1080, 1.0f,  0,  0, 0, 0, false, false},
-    {"1440p",                "Desktop",      2560, 1440, 1.0f,  0,  0, 0, 0, false, false},
-    {"4K",                   "Desktop",      3840, 2160, 1.0f,  0,  0, 0, 0, false, false},
-    {"Ultrawide 1080p",      "Desktop",      2560, 1080, 1.0f,  0,  0, 0, 0, false, false},
+    {"720p",                 "Desktop",      1280,  720, 1.0f,  0,  0,  0,  0, false, false},
+    {"1080p",                "Desktop",      1920, 1080, 1.0f,  0,  0,  0,  0, false, false},
+    {"1440p",                "Desktop",      2560, 1440, 1.0f,  0,  0,  0,  0, false, false},
+    {"4K",                   "Desktop",      3840, 2160, 1.0f,  0,  0,  0,  0, false, false},
+    {"Ultrawide 1080p",      "Desktop",      2560, 1080, 1.0f,  0,  0,  0,  0, false, false},
     // Free Aspect
-    {"Free Aspect",          "Free",            0,    0, 1.0f,  0,  0, 0, 0, false, false},
+    {"Free Aspect",          "Free",            0,    0, 1.0f,  0,  0,  0,  0, false, false},
 };
 static constexpr int kDeviceProfileCount = sizeof(kDeviceProfiles) / sizeof(kDeviceProfiles[0]);
 static constexpr int kDefaultDeviceIdx = 13; // iPhone 17 Pro
@@ -277,7 +280,7 @@ private:
 
     // Device profile index (default: iPhone 17 Pro)
     int displayPresetIdx_ = kDefaultDeviceIdx;
-    bool showSafeAreaOverlay_ = true;
+    bool showSafeAreaOverlay_ = false;
 
     // Saved camera state — restored when returning to edit mode
     Vec2 savedCamPos_ = {0, 0};
