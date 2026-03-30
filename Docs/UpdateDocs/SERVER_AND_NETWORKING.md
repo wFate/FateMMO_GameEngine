@@ -171,7 +171,7 @@ Fiber-based async dispatch via `DbDispatcher` (header-only) for non-blocking DB 
 | `SceneCache` | `scenes` | PvP status queries, `isAurora` flag for Aurora zone identification |
 | `RecipeCache` | `crafting_recipes` + `recipe_ingredients` | tier-based lookup (Novice / Book I / II / III) |
 | `PetDefinitionCache` | `pet_definitions` | `getDefinition(petDefId)` |
-| `SpawnZoneCache` | `spawn_zones` | `getZonesForScene(sceneId)` |
+| `SpawnZoneCache` | `spawn_zones` | `getZonesForScene(sceneId)`. Includes `zoneShape` (circle/square) per zone |
 | `CostumeCache` | `costume_definitions`, `mob_costume_drops` | `get(costumeDefId)`, `getBySlot()`, `getByRarity()`, `all()`, `getMobDrops(mobDefId)` |
 | `CollectionCache` | `collection_definitions` | `getByConditionType()`, `all()` |
 
@@ -194,7 +194,7 @@ Fiber-based async dispatch via `DbDispatcher` (header-only) for non-blocking DB 
 | `BankRepository` | `character_bank`, `character_bank_gold` | deposit/withdraw items and gold |
 | `PetRepository` | `character_pets` | load, equip/unequip, save state, add XP |
 | `PvpKillLogRepository` | `pvp_kill_log` | PK kill tracking |
-| `ZoneMobStateRepository` | `zone_mob_deaths` | boss death persistence, respawn tracking |
+| `ZoneMobStateRepository` | `zone_mob_deaths` | Mob death persistence — saves death timestamps on kill, loads on scene activate (skips mobs still on cooldown), batch-saves on scene teardown. Prevents boss respawn exploit. |
 | `CostumeRepository` | `player_costumes`, `player_equipped_costumes`, `characters` | grant, loadOwned, loadEquipped, equip/unequip, toggle state (pool-based) |
 | `CollectionRepository` | `player_collections` | save completed, load completed IDs |
 
@@ -204,7 +204,8 @@ Fiber-based async dispatch via `DbDispatcher` (header-only) for non-blocking DB 
 - **`loot_drops`** — FK to `loot_tables.loot_table_id` and `item_definitions.item_id`. Columns: `drop_chance` (0.0-1.0), `min_quantity`, `max_quantity`.
 - **`loot_tables`** — Referenced by `mob_definitions.loot_table_id`.
 - **`character_inventory`** — UUID `instance_id`, `rolled_stats` JSONB, `socket_stat`/`socket_value`, `enchant_level`, `is_equipped`/`equipped_slot`. Starter equipment inserted on registration.
-- **`zone_mob_deaths`** — `scene_name`, `zone_name`, `enemy_id`, `died_at_unix`, `respawn_seconds`. Loaded on server start, cleared after respawn.
+- **`zone_mob_deaths`** — `scene_name`, `zone_name`, `enemy_id`, `mob_index`, `died_at_unix`, `respawn_seconds`. Loaded per-scene when first player enters; saved on mob death and scene teardown. `cleanupExpiredDeaths()` runs every 5 minutes.
+- **`spawn_zones`** — `zone_id`, `scene_id`, `zone_name`, `mob_def_id`, `center_x/y`, `radius`, `target_count`, `respawn_override_seconds`, `zone_shape` (circle/square, default circle). Drives `SceneSpawnCoordinator` per-scene lifecycle.
 - **`costume_definitions`** — `costume_def_id` PK, `costume_name`, `display_name`, `slot_type` (equipment slot), `visual_index`, `rarity` (0–4), `source` (drop/shop/collection/craft/event).
 - **`player_costumes`** — player costume ownership. PK `(character_id, costume_def_id)`. `ON CONFLICT DO NOTHING` for idempotent grants.
 - **`player_equipped_costumes`** — equipped costumes per slot. PK `(character_id, slot_type)`. `ON CONFLICT DO UPDATE` for slot replacement.
@@ -228,7 +229,8 @@ Fiber-based async dispatch via `DbDispatcher` (header-only) for non-blocking DB 
 server/
 ├── server_app.h/.cpp              # ServerApp: main game loop, tick dispatch
 ├── server_main.cpp                # Entry point
-├── server_spawn_manager.h/.cpp    # Zone-based mob spawning
+├── server_spawn_manager.h/.cpp    # Per-scene mob spawning, createMobEntity() static, death persistence, spawn validation
+├── scene_spawn_coordinator.h/.cpp # Per-scene SpawnManager lifecycle (activate on player enter, deactivate on leave)
 ├── dungeon_manager.h/.cpp         # Per-party instanced dungeon worlds (lastMinuteBroadcast, decline cooldowns)
 ├── rate_limiter.h                 # Per-client token-bucket rate limiting
 ├── player_lock.h                  # Concurrent player-action locking

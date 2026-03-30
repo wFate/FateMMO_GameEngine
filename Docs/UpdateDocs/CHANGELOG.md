@@ -1,5 +1,54 @@
 # FateEngine — Development Changelog
 
+### March 30, 2026 — Spawn System Overhaul
+
+**Per-Scene Spawn Lifecycle (SceneSpawnCoordinator):**
+- New `SceneSpawnCoordinator` (`server/scene_spawn_coordinator.h/.cpp`) manages per-scene `ServerSpawnManager` instances — created when first player enters a scene, torn down when last player leaves
+- Replaces hardcoded single-scene `"WhisperingWoods"` initialization — all scenes in `spawn_zones` table now activate dynamically
+- Player login calls `onPlayerEnterScene()`, disconnect calls `onPlayerLeaveScene()`, zone transitions call both
+- Periodic cleanup of expired death records (every 5 minutes via `cleanupExpiredDeaths()`)
+
+**Consolidated Mob Creation (createMobEntity):**
+- New `ServerSpawnManager::createMobEntity()` static method is the single source of truth for server-side mob entity creation
+- `MobCreateParams` struct: def, position, level, sceneId, zoneRadius
+- Eliminated 3x code duplication: `ServerSpawnManager::createMob()` (now thin wrapper), `dungeon_handler.cpp` `spawnDungeonMobs()`, and `EntityFactory::createMobFromDef()` all consolidated
+- `attackCooldown` bug fixed: was `1.5f / attackSpeed` (inverted) in EntityFactory, now direct seconds everywhere
+
+**Death Persistence Wiring (ZoneMobStateRepository):**
+- `ZoneMobStateRepository` (existed but was never called) now wired into `ServerSpawnManager` lifecycle
+- On mob death: `DeadMobRecord` saved to `zone_mob_deaths` table with wall-clock timestamp
+- On scene activate: loads persisted deaths, skips spawning mobs still on cooldown (creates dead trackers with remaining respawn time)
+- On scene teardown (`shutdown()`): batch-saves all currently-dead mobs so timers survive server restarts
+- Prevents exploit: kill boss → leave scene → re-enter = instant respawn
+
+**Spawn Position Validation:**
+- `randomPositionInZone()` now validates candidates against static colliders (`CollisionGrid::isBlockedRect`) and existing mob overlap (48px minimum distance)
+- Up to 30 retry attempts per spawn, falls back to last candidate (matches client-side `SpawnSystem` behavior)
+- Prevents mobs spawning inside trees, rocks, buildings, or on top of each other
+
+**Zone Shape Support (circle/square per zone):**
+- New `zone_shape` column on `spawn_zones` table (VARCHAR(10), default `'circle'`)
+- `SpawnZoneRow` gains `zoneShape` field, `SpawnZoneCache` reads it from DB
+- Circle zones use rejection sampling (discard candidates outside radius); square zones use axis-aligned bounds
+- Migration: `024_spawn_zone_shape.sql`
+
+**EntityFactory Fixes:**
+- `createMobFromDef()` now accepts `sceneId` parameter (default `""`) — fixes scene-based AI filtering in `MobAISystem`
+- `attackCooldown` standardized to direct seconds (was inverted multiplier formula)
+
+**Dead Code Removal:**
+- Deleted `BossSpawnPointComponent` (defined but never referenced) and ~107 lines of dead boss spawn tick logic in `server_app.cpp`
+- Removed all references from `register_components.h` and `game_components.h`
+
+**Editor: Hierarchy Right-Click Context Menu:**
+- Right-clicking entities in the Hierarchy panel now shows Delete and Duplicate options
+- Works for both single entities and grouped entities
+- Previously only accessible via Edit menu or Delete key
+
+**Tests:** 11 new spawn system tests (zone shape geometry, collision grid rejection, mob overlap distance, DeadMobRecord timer math)
+
+**Files changed:** `server/scene_spawn_coordinator.h/.cpp` (new), `server/server_spawn_manager.h/.cpp`, `server/server_app.h/.cpp`, `server/handlers/zone_transition_handler.cpp`, `server/handlers/dungeon_handler.cpp`, `server/db/spawn_zone_cache.h/.cpp`, `game/entity_factory.h/.cpp`, `game/register_components.h`, `game/components/game_components.h`, `engine/editor/editor.cpp`, `tests/test_spawn_system.cpp` (new), `Docs/migrations/024_spawn_zone_shape.sql` (new)
+
 ### March 30, 2026 — Paper Doll System Revamp, Auth Fix, Engine Hardening
 
 **Paper Doll Catalog System (12 commits):**

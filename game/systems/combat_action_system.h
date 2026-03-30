@@ -314,18 +314,18 @@ namespace fate
                         drawOutlinedWorld(mnpBuf, npPos, NP_FONT, mobColor, NP_DEPTH);
 
                         // HP bar below name
-                        if (enemyComp && enemyComp->stats.isAlive)
+                        if (mnp->showHpBar && enemyComp && enemyComp->stats.isAlive)
                         {
-                            Vec2 barPos = {t->position.x, t->position.y + spriteH * 0.5f + 1.0f};
-                            float barW = 32.0f * uiScale;
-                            float barH = 4.0f * uiScale;
+                            Vec2 barPos = {t->position.x, t->position.y + spriteH * 0.5f + mnp->hpBarYOffset};
+                            float barW = mnp->hpBarWidth * uiScale;
+                            float barH = mnp->hpBarHeight * uiScale;
                             float hpPct = (enemyComp->stats.maxHP > 0)
                                               ? (float)enemyComp->stats.currentHP / (float)enemyComp->stats.maxHP
                                               : 0.0f;
-                            batch.drawRect(barPos, {barW + 2.0f, barH + 2.0f}, Color(0.08f, 0.08f, 0.1f, 0.85f), 83.5f);
-                            batch.drawRect(barPos, {barW, barH}, Color(0.2f, 0.08f, 0.08f, 0.8f), 84.0f);
+                            batch.drawRect(barPos, {barW + 2.0f, barH + 2.0f}, mnp->hpBarBorderColor, 83.5f);
+                            batch.drawRect(barPos, {barW, barH}, mnp->hpBarBgColor, 84.0f);
                             float fillW = barW * hpPct;
-                            Color hpColor = hpPct > 0.5f ? Color(0.2f, 0.8f, 0.2f, 0.9f) : Color(0.8f, 0.2f, 0.2f, 0.9f);
+                            Color hpColor = hpPct > 0.5f ? mnp->hpBarHighColor : mnp->hpBarLowColor;
                             batch.drawRect({barPos.x - (barW - fillW) * 0.5f, barPos.y}, {fillW, barH}, hpColor, 84.5f);
                         }
                     });

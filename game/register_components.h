@@ -21,7 +21,6 @@
 #include "engine/particle/particle_emitter_component.h"
 #include "engine/render/point_light_component.h"
 #include "game/components/spawn_point_component.h"
-#include "game/components/boss_spawn_point_component.h"
 #include "game/components/tile_layer_component.h"
 
 #include <nlohmann/json.hpp>
@@ -167,12 +166,6 @@ template<> struct component_traits<PointLightComponent> {
 template<> struct component_traits<DroppedItemComponent> {
     static constexpr ComponentFlags flags =
         ComponentFlags::Serializable | ComponentFlags::Networked;
-};
-
-// --- BossSpawnPointComponent: saved to disk ---
-template<> struct component_traits<BossSpawnPointComponent> {
-    static constexpr ComponentFlags flags =
-        ComponentFlags::Serializable | ComponentFlags::Persistent;
 };
 
 // --- SpawnPointComponent: serialized (placed in scene editor as respawn marker) ---
@@ -1072,9 +1065,6 @@ inline void registerAllComponents() {
     // ----- Dropped item component -----
     reg.registerComponent<DroppedItemComponent>();
 
-    // ----- Boss spawn point component -----
-    reg.registerComponent<BossSpawnPointComponent>();
-
     // ----- Player respawn point component -----
     reg.registerComponent<SpawnPointComponent>();
 
@@ -1094,4 +1084,3 @@ inline void registerAllComponents() {
 } // namespace fate
 
 FATE_REFLECT_EMPTY(fate::DroppedItemComponent)
-FATE_REFLECT_EMPTY(fate::BossSpawnPointComponent)

@@ -2725,6 +2725,29 @@ void Editor::drawHierarchy(World* world) {
 
                 if (ImGui::IsItemClicked()) { selectedEntity_ = entity; selectedHandle_ = entity->handle(); }
                 if (hasError || hasTag) ImGui::PopStyleColor();
+
+                // Right-click context menu
+                if (ImGui::BeginPopupContextItem()) {
+                    if (ImGui::MenuItem("Delete", "Del", false, !isEntityLocked(entity))) {
+                        if (dockWorld_) {
+                            dockWorld_->destroyEntity(entity->handle());
+                            if (selectedEntity_ == entity) { selectedEntity_ = nullptr; selectedHandle_ = {}; }
+                        }
+                    }
+                    if (ImGui::MenuItem("Duplicate")) {
+                        if (dockWorld_) {
+                            auto json = PrefabLibrary::entityToJson(entity);
+                            Entity* copy = PrefabLibrary::jsonToEntity(json, *dockWorld_);
+                            if (copy) {
+                                auto* t = copy->getComponent<Transform>();
+                                if (t) t->position += Vec2(32.0f, 0.0f);
+                                selectedEntity_ = copy;
+                                selectedHandle_ = copy->handle();
+                            }
+                        }
+                    }
+                    ImGui::EndPopup();
+                }
             } else {
                 // Multiple entities -- group with child count badge
                 if (hasTag) ImGui::PushStyleColor(ImGuiCol_Text, color);
@@ -2751,6 +2774,29 @@ void Editor::drawHierarchy(World* world) {
                         ImGui::TreeNodeEx((void*)(intptr_t)entity->id(), flags, "%s", entity->name().c_str());
 
                         if (ImGui::IsItemClicked()) { selectedEntity_ = entity; selectedHandle_ = entity->handle(); }
+
+                        // Right-click context menu
+                        if (ImGui::BeginPopupContextItem()) {
+                            if (ImGui::MenuItem("Delete", "Del", false, !isEntityLocked(entity))) {
+                                if (dockWorld_) {
+                                    dockWorld_->destroyEntity(entity->handle());
+                                    if (selectedEntity_ == entity) { selectedEntity_ = nullptr; selectedHandle_ = {}; }
+                                }
+                            }
+                            if (ImGui::MenuItem("Duplicate")) {
+                                if (dockWorld_) {
+                                    auto json = PrefabLibrary::entityToJson(entity);
+                                    Entity* copy = PrefabLibrary::jsonToEntity(json, *dockWorld_);
+                                    if (copy) {
+                                        auto* t = copy->getComponent<Transform>();
+                                        if (t) t->position += Vec2(32.0f, 0.0f);
+                                        selectedEntity_ = copy;
+                                        selectedHandle_ = copy->handle();
+                                    }
+                                }
+                            }
+                            ImGui::EndPopup();
+                        }
                     }
 
                     float endY = ImGui::GetCursorScreenPos().y - ImGui::GetStyle().ItemSpacing.y;

@@ -26,7 +26,6 @@
 #include <unordered_set>
 #include <unordered_map>
 #include "game/components/dropped_item_component.h"
-#include "game/components/boss_spawn_point_component.h"
 
 namespace fate {
 
@@ -193,6 +192,16 @@ struct MobNameplateComponent {
     float fontSize = 0.6f;              // Scale for mob nameplate text (0.3 - 2.0)
     float yOffset = 4.0f;               // Extra pixels above sprite top for name position
     // Color is computed per-viewer based on level difference (MobLevelColors)
+
+    // HP bar below nameplate
+    bool showHpBar = true;
+    float hpBarWidth  = 32.0f;           // Bar width in pixels (scaled by uiScale)
+    float hpBarHeight = 4.0f;            // Bar height in pixels (scaled by uiScale)
+    float hpBarYOffset = 1.0f;           // Pixels above sprite top for bar position
+    Color hpBarBorderColor = Color(0.08f, 0.08f, 0.1f, 0.85f);
+    Color hpBarBgColor     = Color(0.2f, 0.08f, 0.08f, 0.8f);
+    Color hpBarHighColor   = Color(0.2f, 0.8f, 0.2f, 0.9f);   // HP > 50%
+    Color hpBarLowColor    = Color(0.8f, 0.2f, 0.2f, 0.9f);   // HP <= 50%
 };
 
 // ============================================================================
@@ -382,7 +391,15 @@ FATE_REFLECT(fate::MobNameplateComponent,
     FATE_FIELD(visible, Bool),
     FATE_FIELD(showLevel, Bool),
     FATE_FIELD(fontSize, Float),
-    FATE_FIELD(yOffset, Float)
+    FATE_FIELD(yOffset, Float),
+    FATE_FIELD(showHpBar, Bool),
+    FATE_FIELD(hpBarWidth, Float),
+    FATE_FIELD(hpBarHeight, Float),
+    FATE_FIELD(hpBarYOffset, Float),
+    FATE_FIELD(hpBarBorderColor, Color),
+    FATE_FIELD(hpBarBgColor, Color),
+    FATE_FIELD(hpBarHighColor, Color),
+    FATE_FIELD(hpBarLowColor, Color)
 )
 
 // --- NPC Components ---

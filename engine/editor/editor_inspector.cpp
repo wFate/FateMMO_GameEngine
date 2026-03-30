@@ -1069,6 +1069,27 @@ void Editor::drawInspector() {
                 captureInspectorUndo();
                 ImGui::Checkbox("Visible##mnp", &mnp->visible);
                 captureInspectorUndo();
+
+                // --- HP Bar ---
+                ImGui::Separator();
+                ImGui::Checkbox("Show HP Bar##mnp", &mnp->showHpBar);
+                captureInspectorUndo();
+                if (mnp->showHpBar) {
+                    ImGui::DragFloat("HP Bar Width##mnp", &mnp->hpBarWidth, 1.0f, 8.0f, 128.0f, "%.0f");
+                    captureInspectorUndo();
+                    ImGui::DragFloat("HP Bar Height##mnp", &mnp->hpBarHeight, 0.5f, 1.0f, 32.0f, "%.1f");
+                    captureInspectorUndo();
+                    ImGui::DragFloat("HP Bar Y Offset##mnp", &mnp->hpBarYOffset, 0.5f, -50.0f, 100.0f, "%.1f");
+                    captureInspectorUndo();
+                    ImGui::ColorEdit4("HP Border##mnp", &mnp->hpBarBorderColor.r);
+                    captureInspectorUndo();
+                    ImGui::ColorEdit4("HP Background##mnp", &mnp->hpBarBgColor.r);
+                    captureInspectorUndo();
+                    ImGui::ColorEdit4("HP High##mnp", &mnp->hpBarHighColor.r);
+                    captureInspectorUndo();
+                    ImGui::ColorEdit4("HP Low##mnp", &mnp->hpBarLowColor.r);
+                    captureInspectorUndo();
+                }
             }
         }
 

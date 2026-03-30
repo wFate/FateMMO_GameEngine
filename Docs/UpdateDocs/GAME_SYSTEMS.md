@@ -204,9 +204,8 @@ PVP DAMAGE (loaded from assets/data/pvp_balance.json)
 | SpawnPointComponent | Player respawn marker (isTownSpawn flag), placed via editor |
 | ZoneComponent | Named region with size, level range, PvP flag, zone type (town/zone/dungeon) |
 | PortalComponent | Trigger area, target scene/zone/spawn position, fade transition |
-| SpawnZoneComponent | Region-based mob spawning config with per-mob rules, tick interval, zone containment |
+| SpawnZoneComponent | Client/editor-only mob spawning (disabled when connected to server). Server uses DB-driven `spawn_zones` table via `SceneSpawnCoordinator` |
 | DroppedItemComponent | Ground loot — itemId, rarity, owner, despawn timer, atomic `tryClaim()` |
-| BossSpawnPointComponent | Fixed-position boss spawning, respawn at different position |
 
 ---
 

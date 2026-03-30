@@ -2734,6 +2734,14 @@ void GameApp::onUpdate(float deltaTime) {
                                 auto* arc  = hudScr->findById("skill_arc");
                                 if (dpad) dpad->setVisible(true);
                                 if (arc)  arc->setVisible(true);
+                                auto* sb = hudScr->findById("status_bar");
+                                if (sb) {
+                                    auto* fsb = dynamic_cast<FateStatusBar*>(sb);
+                                    if (fsb) {
+                                        fsb->showMenuButton = true;
+                                        fsb->showChatButton = true;
+                                    }
+                                }
                             }
                         };
 
@@ -3367,11 +3375,18 @@ void GameApp::onUpdate(float deltaTime) {
                             buffBar->tickTimers(deltaTime);
                         }
 
-                        // TargetFrame — show/hide based on combat target
+                        // TargetFrame — show for boss/elite mobs and players, hide for normal mobs
                         auto* tf = dynamic_cast<TargetFrame*>(hudScreen->findById("target_frame"));
                         if (tf && combatSystem_) {
                             if (combatSystem_->hasTarget()) {
-                                tf->setVisible(true);
+                                bool showFrame = true;
+                                Entity* targetEnt = scene->world().getEntity(combatSystem_->getTargetEntityId());
+                                if (targetEnt) {
+                                    auto* mnp = targetEnt->getComponent<MobNameplateComponent>();
+                                    if (mnp && !mnp->isBoss && !mnp->isElite)
+                                        showFrame = false; // normal mob — HP visible below nameplate
+                                }
+                                tf->setVisible(showFrame);
                                 tf->targetName = combatSystem_->getTargetName();
                                 tf->hp    = static_cast<float>(combatSystem_->getTargetHP());
                                 tf->maxHp = static_cast<float>(combatSystem_->getTargetMaxHP());
