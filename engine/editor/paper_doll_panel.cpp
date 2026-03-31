@@ -1,5 +1,7 @@
 #include "engine/editor/paper_doll_panel.h"
+#ifdef FATE_HAS_GAME
 #include "game/data/paper_doll_catalog.h"
+#endif // FATE_HAS_GAME
 #include "engine/render/texture.h"
 #include "engine/core/logger.h"
 #include <imgui.h>
@@ -19,6 +21,16 @@ namespace fate {
 void PaperDollPanel::draw() {
     if (!open_) return;
 
+#ifndef FATE_HAS_GAME
+    ImGui::SetNextWindowSize({700, 500}, ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Paper Doll Manager", &open_)) {
+        ImGui::End();
+        return;
+    }
+    ImGui::Text("Paper Doll Manager requires game code");
+    ImGui::End();
+    return;
+#else
     ImGui::SetNextWindowSize({700, 500}, ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("Paper Doll Manager", &open_)) {
         ImGui::End();
@@ -61,12 +73,14 @@ void PaperDollPanel::draw() {
 
     ImGui::Columns(1);
     ImGui::End();
+#endif // FATE_HAS_GAME
 }
 
 // ---------------------------------------------------------------------------
 // Composite Preview (left panel)
 // ---------------------------------------------------------------------------
 
+#ifdef FATE_HAS_GAME
 void PaperDollPanel::drawCompositePreview() {
     auto& catalog = PaperDollCatalog::instance();
     const char* genderStr = previewGender_ == 0 ? "Male" : "Female";
@@ -387,6 +401,8 @@ void PaperDollPanel::drawAnimationsTab() {
         }
     }
 }
+
+#endif // FATE_HAS_GAME
 
 // ---------------------------------------------------------------------------
 // Browse Button Helper

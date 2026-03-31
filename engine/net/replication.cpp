@@ -1,14 +1,17 @@
 #include "engine/net/replication.h"
 #include "engine/net/packet.h"
+#ifdef FATE_HAS_GAME
 #include "game/components/dropped_item_component.h"
 #include "game/components/game_components.h"
 #include "game/shared/honor_system.h"
 #include "server/cache/item_definition_cache.h"
 #include "server/cache/costume_cache.h"
+#endif // FATE_HAS_GAME
 #include <cmath>
 
 namespace fate {
 
+#ifdef FATE_HAS_GAME
 void ReplicationManager::update(World& world, NetServer& server) {
     ++tickCounter_;
     // NOTE: Spatial index rebuild is commented out — it was rebuilt every tick but
@@ -567,5 +570,19 @@ SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* en
 
     return msg;
 }
+
+#else
+// Stubs when game code is not available
+void ReplicationManager::update(World&, NetServer&) {}
+void ReplicationManager::rebuildSpatialIndex(World&) {}
+void ReplicationManager::registerEntity(EntityHandle, PersistentId) {}
+void ReplicationManager::unregisterEntity(EntityHandle) {}
+PersistentId ReplicationManager::getPersistentId(EntityHandle) const { return PersistentId::null(); }
+EntityHandle ReplicationManager::getEntityHandle(PersistentId) const { return EntityHandle{}; }
+void ReplicationManager::buildVisibility(World&, ClientConnection&) {}
+void ReplicationManager::sendDiffs(World&, NetServer&, ClientConnection&) {}
+SvEntityEnterMsg ReplicationManager::buildEnterMessage(World&, Entity*, PersistentId) { return {}; }
+SvEntityUpdateMsg ReplicationManager::buildCurrentState(World&, Entity*, PersistentId) { return {}; }
+#endif // FATE_HAS_GAME
 
 } // namespace fate

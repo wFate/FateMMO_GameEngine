@@ -7,7 +7,11 @@
 #include <vector>
 #include "engine/net/byte_stream.h"
 #include "engine/net/protocol.h"
+#ifdef FATE_HAS_GAME
 #include "game/shared/game_types.h"
+#else
+namespace fate { enum class ClassType : uint8_t { Warrior = 0, Mage = 1, Archer = 2, Any = 255 }; }
+#endif
 
 namespace fate {
 

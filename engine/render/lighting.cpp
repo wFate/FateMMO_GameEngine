@@ -4,7 +4,9 @@
 #include "engine/render/gfx/command_list.h"
 #include "engine/ecs/world.h"
 #include "engine/render/camera.h"
+#ifdef FATE_HAS_GAME
 #include "game/components/transform.h"
+#endif // FATE_HAS_GAME
 #include "engine/core/logger.h"
 #include <mutex>
 
@@ -94,6 +96,7 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
         float cameraZoom = ctx.camera->zoom();
         Vec2 resolution{(float)w, (float)h};
 
+#ifdef FATE_HAS_GAME
         ctx.world->forEach<PointLightComponent, Transform>(
             [&](Entity*, PointLightComponent* plc, Transform* t) {
                 const PointLight& light = plc->light;
@@ -129,6 +132,7 @@ void registerLightingPass(RenderGraph& graph, LightingConfig& config) {
 
                 cmd->draw(gfx::PrimitiveType::Triangles, 3);
             });
+#endif // FATE_HAS_GAME
 
         // Optimization: if the light map is solid white (ambient is white and
         // no point lights exist), multiplying the scene by it is a no-op.

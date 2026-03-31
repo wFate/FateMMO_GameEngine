@@ -1,23 +1,29 @@
 #include "engine/editor/undo.h"
 #include "engine/ui/ui_manager.h"
+#ifdef FATE_HAS_GAME
 #include "game/components/transform.h"
 #include "game/components/sprite_component.h"
 #include "game/systems/spawn_system.h"
+#endif // FATE_HAS_GAME
 
 namespace fate {
 
 void ResizeCommand::undo(World* w) {
+#ifdef FATE_HAS_GAME
     auto* e = w->getEntity(entityHandle);
     if (!e) return;
     if (auto* sz = e->getComponent<SpawnZoneComponent>()) { sz->config.size = oldSize; return; }
     if (auto* s = e->getComponent<SpriteComponent>()) s->size = oldSize;
+#endif
 }
 
 void ResizeCommand::redo(World* w) {
+#ifdef FATE_HAS_GAME
     auto* e = w->getEntity(entityHandle);
     if (!e) return;
     if (auto* sz = e->getComponent<SpawnZoneComponent>()) { sz->config.size = newSize; return; }
     if (auto* s = e->getComponent<SpriteComponent>()) s->size = newSize;
+#endif
 }
 
 void PropertyCommand::undo(World* w) {

@@ -26,6 +26,7 @@
 #include "imgui_impl_opengl3.h"
 #endif
 
+#ifdef FATE_HAS_GAME
 #include "game/components/transform.h"
 #include "game/components/sprite_component.h"
 #include "game/components/player_controller.h"
@@ -37,13 +38,16 @@
 #include "game/components/faction_component.h"
 #include "game/components/pet_component.h"
 #include "game/systems/spawn_system.h"
+#endif // FATE_HAS_GAME
 #include "engine/ecs/prefab.h"
 #include "engine/scene/scene.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
+#ifdef FATE_HAS_GAME
 #include "engine/ui/ui_serializer.h"
 #include "game/animation_loader.h"
+#endif // FATE_HAS_GAME
 
 #include "engine/ecs/component_meta.h"
 
@@ -2409,6 +2413,7 @@ void Editor::drawImGuizmo(Camera* camera) {
 
 void Editor::enterPlayMode(World* world) {
     if (inPlayMode_ || !world) return;
+#ifdef FATE_HAS_GAME
     playModeSnapshot_ = nlohmann::json::array();
     world->forEachEntity([&](Entity* e) {
         // Skip transient runtime entities — same filter as saveScene
@@ -2425,6 +2430,7 @@ void Editor::enterPlayMode(World* world) {
             AnimationLoader::tryAutoLoad(*sprite, *animator);
         }
     });
+#endif // FATE_HAS_GAME
 
     paused_ = false;
     inPlayMode_ = true;
@@ -2433,6 +2439,7 @@ void Editor::enterPlayMode(World* world) {
 
 void Editor::exitPlayMode(World* world) {
     if (!inPlayMode_ || !world) return;
+#ifdef FATE_HAS_GAME
     // Destroy all current entities
     std::vector<EntityHandle> toDestroy;
     world->forEachEntity([&](Entity* e) {
@@ -2448,6 +2455,7 @@ void Editor::exitPlayMode(World* world) {
         PrefabLibrary::jsonToEntity(entityJson, *world);
     }
     playModeSnapshot_ = nlohmann::json();
+#endif // FATE_HAS_GAME
     paused_ = true;
     inPlayMode_ = false;
 

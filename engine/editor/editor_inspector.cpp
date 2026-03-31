@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "engine/ecs/component_meta.h"
+#ifdef FATE_HAS_GAME
 #include "game/components/transform.h"
 #include "game/components/sprite_component.h"
 #include "game/components/player_controller.h"
@@ -16,12 +17,15 @@
 #include "game/shared/faction_npc_data.h"
 #include "game/components/spawn_point_component.h"
 #include "game/systems/spawn_system.h"
+#endif // FATE_HAS_GAME
 #include "engine/scene/scene.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/editor/undo.h"
 #include "engine/ecs/prefab.h"
+#ifdef FATE_HAS_GAME
 #include "game/animation_loader.h"
 #include "game/data/paper_doll_catalog.h"
+#endif // FATE_HAS_GAME
 #include <unordered_set>
 #include <string>
 #include <cstring>
@@ -174,6 +178,7 @@ void Editor::drawInspector() {
             ImGui::TableSetColumnIndex(1); \
             ImGui::SetNextItemWidth(-1)
 
+#ifdef FATE_HAS_GAME
         // Transform
         if (auto* t = selectedEntity_->getComponent<Transform>()) {
             if (fontHeading_) ImGui::PushFont(fontHeading_);
@@ -1581,6 +1586,7 @@ void Editor::drawInspector() {
 
             ImGui::EndPopup();
         }
+#endif // FATE_HAS_GAME
     }
     ImGui::End();
 

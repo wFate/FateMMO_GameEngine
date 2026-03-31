@@ -4,7 +4,11 @@
 #include "engine/ecs/entity_handle.h"
 #include "engine/ecs/prefab.h"
 #include "engine/core/types.h"
+#ifdef FATE_HAS_GAME
 #include "game/components/transform.h"
+#else
+namespace fate { struct Transform { Vec2 position; float rotation = 0; Vec2 scale{1,1}; }; }
+#endif
 #include <vector>
 #include <memory>
 #include <string>

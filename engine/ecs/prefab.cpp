@@ -3,9 +3,11 @@
 #include "engine/ecs/component_traits.h"
 #include "engine/core/logger.h"
 
+#ifdef FATE_HAS_GAME
 #include "game/components/transform.h"  // needed by spawn() for position override
 #include "game/components/tile_layer_component.h"
 #include "game/components/sprite_component.h"  // needed for collision layer stripping
+#endif // FATE_HAS_GAME
 
 #include <fstream>
 #include <filesystem>
@@ -119,11 +121,13 @@ Entity* PrefabLibrary::spawn(const std::string& name, World& world, const Vec2& 
     Entity* entity = jsonToEntity(composedJson, world);
     if (!entity) return nullptr;
 
+#ifdef FATE_HAS_GAME
     // Override position
     auto* transform = entity->getComponent<Transform>();
     if (transform) {
         transform->position = position;
     }
+#endif // FATE_HAS_GAME
 
     LOG_DEBUG("Prefab", "Spawned '%s' at (%.0f, %.0f)", name.c_str(), position.x, position.y);
     return entity;
@@ -265,6 +269,7 @@ Entity* PrefabLibrary::jsonToEntity(const nlohmann::json& data, World& world) {
         }
     }
 
+#ifdef FATE_HAS_GAME
     // Backwards-compat: ground-tagged tiles without TileLayerComponent get default "ground" layer
     if (entity->tag() == "ground" && !entity->getComponent<TileLayerComponent>()) {
         auto* tlc = entity->addComponent<TileLayerComponent>();
@@ -280,6 +285,7 @@ Entity* PrefabLibrary::jsonToEntity(const nlohmann::json& data, World& world) {
         }
     }
 #endif
+#endif // FATE_HAS_GAME
 
     return entity;
 }

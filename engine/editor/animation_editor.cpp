@@ -1,7 +1,9 @@
 #include "engine/editor/animation_editor.h"
 #include "engine/core/logger.h"
 #include "engine/render/texture.h"
+#ifdef FATE_HAS_GAME
 #include "game/animation_loader.h"
+#endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <fstream>
 #include <filesystem>
@@ -1142,6 +1144,7 @@ void AnimationEditor::openWithSheet(const std::string& texturePath) {
         metaPath = metaPath.substr(0, dotPos) + ".meta.json";
     }
 
+#ifdef FATE_HAS_GAME
     PackedSheetMeta meta;
     if (AnimationLoader::loadPackedMeta(metaPath, meta)) {
         slicerCellW_ = meta.frameWidth;
@@ -1149,7 +1152,9 @@ void AnimationEditor::openWithSheet(const std::string& texturePath) {
         template_.states.clear();
         template_.name = fs::path(texturePath).stem().string();
         reconstructStatesFromMeta(meta);
-    } else {
+    } else
+#endif // FATE_HAS_GAME
+    {
         // No metadata — start fresh, default cell = full texture size
         auto tex = TextureCache::instance().get(texturePath);
         if (tex && tex->width() > 0) {
@@ -1242,6 +1247,7 @@ void AnimationEditor::saveMetaJson(const std::string& sheetPath) {
 }
 
 void AnimationEditor::loadMetaJson(const std::string& sheetPath) {
+#ifdef FATE_HAS_GAME
     std::string metaPath = sheetPath;
     auto dotPos = metaPath.rfind('.');
     if (dotPos != std::string::npos)
@@ -1258,8 +1264,10 @@ void AnimationEditor::loadMetaJson(const std::string& sheetPath) {
     reconstructStatesFromMeta(meta);
     LOG_INFO("AnimEditor", "Loaded meta: %s (%d states)", metaPath.c_str(),
              (int)template_.states.size());
+#endif // FATE_HAS_GAME
 }
 
+#ifdef FATE_HAS_GAME
 void AnimationEditor::reconstructStatesFromMeta(const PackedSheetMeta& meta) {
     static const char* directions[] = {"_down", "_up", "_left", "_right"};
 
@@ -1301,6 +1309,7 @@ void AnimationEditor::reconstructStatesFromMeta(const PackedSheetMeta& meta) {
         template_.states.push_back(state);
     }
 }
+#endif // FATE_HAS_GAME
 
 // ---------------------------------------------------------------------------
 // Slicer Mode: quick templates for mob / player

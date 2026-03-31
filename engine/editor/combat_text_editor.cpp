@@ -1,10 +1,13 @@
 #include "engine/editor/combat_text_editor.h"
+#ifdef FATE_HAS_GAME
 #include "game/systems/combat_text_config.h"
+#endif // FATE_HAS_GAME
 #include "imgui.h"
 #include <cstring>
 
 namespace fate {
 
+#ifdef FATE_HAS_GAME
 static void drawStyleEditor(const char* label, CombatTextStyle& s) {
     if (!ImGui::CollapsingHeader(label)) return;
     ImGui::PushID(label);
@@ -76,5 +79,15 @@ void drawCombatTextEditorWindow(bool* open) {
 
     ImGui::End();
 }
+#else
+void drawCombatTextEditorWindow(bool* open) {
+    if (!ImGui::Begin("Combat Text Editor", open)) {
+        ImGui::End();
+        return;
+    }
+    ImGui::Text("Combat Text Editor requires game code");
+    ImGui::End();
+}
+#endif // FATE_HAS_GAME
 
 } // namespace fate

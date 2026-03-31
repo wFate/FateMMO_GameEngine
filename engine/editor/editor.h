@@ -13,7 +13,9 @@
 #include <implot.h>
 #endif
 #include "engine/editor/tile_tools.h"
+#ifdef FATE_HAS_GAME
 #include "game/components/tile_layer_component.h"
+#endif
 #include "engine/editor/undo.h"
 #include "engine/editor/node_editor.h"
 #include "engine/editor/animation_editor.h"

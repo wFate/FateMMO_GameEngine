@@ -1,5 +1,6 @@
 #include "engine/ui/ui_manager.h"
 #include "engine/ui/ui_safe_area.h"
+#ifdef FATE_HAS_GAME
 #include "engine/ui/widgets/panel.h"
 #include "engine/ui/widgets/label.h"
 #include "engine/ui/widgets/button.h"
@@ -52,6 +53,7 @@
 #include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/settings_panel.h"
 #include "engine/ui/widgets/loading_panel.h"
+#endif // FATE_HAS_GAME
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
 #include "engine/input/input.h"
@@ -369,6 +371,7 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     // --- Create appropriate widget ---
     std::unique_ptr<UINode> node;
 
+#ifdef FATE_HAS_GAME
     if (type == "panel") {
         auto panel = std::make_unique<Panel>(id);
         panel->title     = j.value("title", "");
@@ -2042,6 +2045,9 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
     else {
         node = std::make_unique<UINode>(id, type);
     }
+#else
+    node = std::make_unique<UINode>(id, type);
+#endif // FATE_HAS_GAME
 
     // Reflected properties (new system) — auto-deserializes from metadata
     if (node) {

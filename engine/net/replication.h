@@ -7,12 +7,14 @@
 #include "engine/ecs/persistent_id.h"
 #include "engine/ecs/entity_handle.h"
 #include "engine/spatial/spatial_hash.h"
+#ifdef FATE_HAS_GAME
 #include "game/components/transform.h"
 #include "game/components/sprite_component.h"
 #include "game/components/game_components.h"
 #include "game/components/faction_component.h"
 #include "game/components/player_controller.h"
 #include "game/components/animator.h"
+#endif // FATE_HAS_GAME
 #include <unordered_map>
 #include <functional>
 

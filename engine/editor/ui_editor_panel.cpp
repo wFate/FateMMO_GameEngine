@@ -3,6 +3,7 @@
 #include "engine/editor/property_inspector.h"
 #include "engine/ui/ui_serializer.h"
 #include "engine/core/logger.h"
+#ifdef FATE_HAS_GAME
 #include "engine/ui/widgets/panel.h"
 #include "engine/ui/widgets/label.h"
 #include "engine/ui/widgets/button.h"
@@ -53,6 +54,7 @@
 #include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/settings_panel.h"
 #include "engine/ui/widgets/leaderboard_panel.h"
+#endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <cstdio>
 
@@ -335,6 +337,7 @@ void UIEditorPanel::drawNodeTree(UINode* node, const std::string& screenId) {
 
     // Right-click context menu
     if (ImGui::BeginPopupContextItem()) {
+#ifdef FATE_HAS_GAME
         if (ImGui::MenuItem("Add Panel Child")) {
             std::string childId = "new_panel_" + std::to_string(nextChildId_++);
             node->addChild(std::make_unique<Panel>(childId));
@@ -347,6 +350,7 @@ void UIEditorPanel::drawNodeTree(UINode* node, const std::string& screenId) {
             std::string childId = "new_button_" + std::to_string(nextChildId_++);
             node->addChild(std::make_unique<Button>(childId));
         }
+#endif // FATE_HAS_GAME
         ImGui::Separator();
         if (ImGui::MenuItem("Delete") && node->parent()) {
             if (node == selectedNode_) { selectedNode_ = nullptr; selectedNodeId_.clear(); }

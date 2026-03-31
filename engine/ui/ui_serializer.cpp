@@ -1,6 +1,7 @@
 #include "engine/ui/ui_serializer.h"
 #include "engine/ui/ui_node.h"
 #include "engine/ui/ui_anchor.h"
+#ifdef FATE_HAS_GAME
 #include "engine/ui/widgets/panel.h"
 #include "engine/ui/widgets/label.h"
 #include "engine/ui/widgets/button.h"
@@ -52,6 +53,7 @@
 #include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/settings_panel.h"
 #include "engine/ui/widgets/loading_panel.h"
+#endif // FATE_HAS_GAME
 #include "engine/core/logger.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -189,6 +191,7 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
     if (!reflectedFields.empty()) {
         node->serializeProperties(j);
     } else {
+#ifdef FATE_HAS_GAME
     // Legacy widget-specific serialization (dynamic_cast chain)
     const std::string& type = node->type();
 
@@ -1457,6 +1460,7 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["dividerColor"]        = {w->dividerColor.r, w->dividerColor.g, w->dividerColor.b, w->dividerColor.a};
         }
     }
+#endif // FATE_HAS_GAME
     } // end legacy serialization fallback
 
     // --- Event bindings ---
