@@ -2,8 +2,10 @@
 #include "engine/net/byte_stream.h"
 #include "engine/core/logger.h"
 
+#ifdef FATE_HAS_OPENSSL
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#endif
 
 #include <cstring>
 
@@ -21,6 +23,22 @@
 #endif
 
 namespace fate {
+
+#ifndef FATE_HAS_OPENSSL
+// Stub implementations when OpenSSL is not available (demo/open-source build)
+AuthClient::~AuthClient() {}
+void AuthClient::connect(const std::string&, uint16_t, const std::string&) {
+    LOG_WARN("AuthClient", "TLS not available — OpenSSL not linked");
+}
+void AuthClient::disconnect() {}
+void AuthClient::login(const std::string&, const std::string&) {}
+void AuthClient::registerAccount(const std::string&, const std::string&, const std::string&) {}
+void AuthClient::createCharacter(const std::string&, const std::string&) {}
+void AuthClient::deleteCharacter(const std::string&) {}
+void AuthClient::selectCharacter(const std::string&) {}
+bool AuthClient::isConnected() const { return false; }
+std::optional<AuthClientResult> AuthClient::poll() { return std::nullopt; }
+#else
 
 // ---------------------------------------------------------------------------
 // Platform socket helpers
@@ -594,5 +612,7 @@ AuthClientResult AuthClient::consumeResult() {
     result_.reset();
     return res;
 }
+
+#endif // FATE_HAS_OPENSSL
 
 } // namespace fate

@@ -36,7 +36,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++-13 libfreetype-dev xvfb mesa-utils libegl1-mesa-dev libgl-dev
+          sudo apt-get install -y g++-13 libfreetype-dev libgl-dev \
+            libx11-dev libxext-dev libxrandr-dev libxi-dev libxcursor-dev \
+            libxinerama-dev libxss-dev libwayland-dev libxkbcommon-dev \
+            libasound2-dev libpulse-dev libdbus-1-dev libudev-dev
 
       - name: Cache build
         uses: actions/cache@v4
@@ -59,7 +62,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-17 libfreetype-dev xvfb mesa-utils libegl1-mesa-dev libgl-dev
+          sudo apt-get install -y clang-17 libfreetype-dev libgl-dev \
+            libx11-dev libxext-dev libxrandr-dev libxi-dev libxcursor-dev \
+            libxinerama-dev libxss-dev libwayland-dev libxkbcommon-dev \
+            libasound2-dev libpulse-dev libdbus-1-dev libudev-dev
 
       - name: Cache build
         uses: actions/cache@v4
