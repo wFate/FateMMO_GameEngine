@@ -1,0 +1,529 @@
+{
+  "root": {
+    "anchor": {
+      "offset": [
+        0.0,
+        0.0
+      ],
+      "preset": "StretchAll",
+      "size": [
+        0.0,
+        0.0
+      ]
+    },
+    "children": [
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "TopLeft",
+          "size": [
+            0.0,
+            100.0
+          ],
+          "sizePercent": [
+            1.0,
+            0.0
+          ]
+        },
+        "barHeight": 22.0,
+        "buttonFontSize": 20.0,
+        "chatBtnFontSize": 10.0,
+        "chatBtnOffset": [
+          0.0,
+          0.0
+        ],
+        "chatBtnOffsetX": 8.0,
+        "chatBtnSize": 21.0,
+        "chatBtnTextColor": [
+          0.15000000596046448,
+          0.10000000149011612,
+          0.0,
+          1.0
+        ],
+        "coordColor": [
+          1.0,
+          1.0,
+          1.0,
+          0.800000011920929
+        ],
+        "coordFontSize": 30.0,
+        "coordOffsetY": 5.0,
+        "hpBarColor": [
+          1.0,
+          0.5625,
+          0.0,
+          1.0
+        ],
+        "hpLabelOffset": [
+          0.0,
+          0.0
+        ],
+        "id": "status_bar",
+        "labelFontSize": 22.0,
+        "levelFontSize": 26.0,
+        "levelOffset": [
+          0.0,
+          0.0
+        ],
+        "menuBtnBgColor": [
+          0.26160335540771484,
+          0.2250198870897293,
+          0.13356120884418488,
+          1.0
+        ],
+        "menuBtnFontSize": 30.0,
+        "menuBtnGap": 50.0,
+        "menuBtnOffset": [
+          30.0,
+          10.0
+        ],
+        "menuBtnSize": 50.0,
+        "menuBtnTextColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "menuDividerColor": [
+          0.699999988079071,
+          0.6000000238418579,
+          0.4000000059604645,
+          0.6000000238418579
+        ],
+        "menuItemFontSize": 20.0,
+        "menuItemH": 50.0,
+        "menuItemTextColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "menuOverlayBgColor": [
+          0.17299580574035645,
+          0.15055012702941895,
+          0.08321317285299301,
+          0.949999988079071
+        ],
+        "menuOverlayBorderColor": [
+          0.3291139006614685,
+          0.26199501752853394,
+          0.12775729596614838,
+          1.0
+        ],
+        "menuOverlayW": 200.0,
+        "mpBarColor": [
+          0.0,
+          0.4285719394683838,
+          1.0,
+          1.0
+        ],
+        "mpLabelOffset": [
+          0.0,
+          0.0
+        ],
+        "numberFontSize": 30.0,
+        "portraitOffset": [
+          0.0,
+          0.0
+        ],
+        "portraitRadius": 20.0,
+        "topBarHeight": 40.0,
+        "type": "fate_status_bar"
+      },
+      {
+        "abbrevFontSize": 7.0,
+        "abbrevTextColor": [
+          1.0,
+          1.0,
+          1.0,
+          0.8999999761581421
+        ],
+        "anchor": {
+          "offset": [
+            60.0,
+            50.0
+          ],
+          "preset": "TopLeft",
+          "size": [
+            300.0,
+            28.0
+          ]
+        },
+        "cooldownOverlayColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.550000011920929
+        ],
+        "iconAtlasCols": 8,
+        "iconAtlasRows": 4,
+        "iconSize": 24.0,
+        "id": "buff_bar",
+        "maxVisible": 12,
+        "spacing": 3.0,
+        "stackBadgeBgColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.699999988079071
+        ],
+        "stackBadgeOffset": [
+          0.0,
+          0.0
+        ],
+        "stackFontSize": 8.0,
+        "stackTextColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "tooltipBgColor": [
+          0.07999999821186066,
+          0.07999999821186066,
+          0.11999999731779099,
+          0.9200000166893005
+        ],
+        "tooltipBorderColor": [
+          0.5,
+          0.5,
+          0.5,
+          0.800000011920929
+        ],
+        "tooltipFontSize": 9.0,
+        "tooltipPadding": 6.0,
+        "tooltipTextColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "tooltipWidth": 140.0,
+        "type": "buff_bar"
+      },
+      {
+        "anchor": {
+          "offset": [
+            -10.0,
+            66.0
+          ],
+          "preset": "TopRight",
+          "size": [
+            180.0,
+            36.0
+          ]
+        },
+        "barHeight": 12.0,
+        "barPadding": 6.0,
+        "hpBarBgColor": [
+          0.10000000149011612,
+          0.10000000149011612,
+          0.10000000149011612,
+          0.8500000238418579
+        ],
+        "hpBarOffset": [
+          0.0,
+          0.0
+        ],
+        "hpFillColor": [
+          0.75,
+          0.15000000596046448,
+          0.15000000596046448,
+          1.0
+        ],
+        "hpFontSize": 9.0,
+        "hpTextOffset": [
+          0.0,
+          0.0
+        ],
+        "id": "target_frame",
+        "nameFontSize": 11.0,
+        "nameOffset": [
+          0.0,
+          0.0
+        ],
+        "nameTopPad": 4.0,
+        "targetName": "test",
+        "type": "target_frame",
+        "visible": false
+      },
+      {
+        "anchor": {
+          "offset": [
+            16.0,
+            -24.0
+          ],
+          "preset": "BottomLeft",
+          "size": [
+            150.0,
+            150.0
+          ]
+        },
+        "deadZoneRadius": 20.0,
+        "dpadSize": 150.0,
+        "id": "dpad",
+        "opacity": 0.8500000238418579,
+        "type": "dpad"
+      },
+      {
+        "anchor": {
+          "offset": [
+            -4.0,
+            -18.0
+          ],
+          "preset": "BottomRight",
+          "size": [
+            250.0,
+            380.0
+          ]
+        },
+        "arcRadius": 180.0,
+        "attackButtonSize": 80.0,
+        "attackOffset": [
+          0.0,
+          120.0
+        ],
+        "endAngleDeg": 280.0,
+        "id": "skill_arc",
+        "pickUpButtonSize": 60.0,
+        "pickUpOffset": [
+          -50.0,
+          40.0
+        ],
+        "skillArcOffset": [
+          0.0,
+          0.0
+        ],
+        "slotArcEndDeg": 280.0,
+        "slotArcOffset": [
+          0.0,
+          -70.0
+        ],
+        "slotArcRadius": 50.0,
+        "slotArcStartDeg": 140.0,
+        "slotCount": 5,
+        "slotSize": 70.0,
+        "startAngleDeg": 170.0,
+        "type": "skill_arc"
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "BottomLeft",
+          "size": [
+            0.0,
+            14.0
+          ],
+          "sizePercent": [
+            1.0,
+            0.0
+          ]
+        },
+        "backgroundColor": [
+          26,
+          26,
+          26,
+          217
+        ],
+        "borderColor": [
+          89,
+          89,
+          115,
+          230
+        ],
+        "borderWidth": 1.0,
+        "fillColor": [
+          0.800000011920929,
+          0.6499999761581421,
+          0.10000000149011612,
+          1.0
+        ],
+        "fontSize": 9.0,
+        "id": "exp_bar",
+        "shadowColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.8999999761581421
+        ],
+        "style": "bar_track",
+        "textOffset": [
+          0.0,
+          0.0
+        ],
+        "type": "exp_bar",
+        "xp": 264.0,
+        "xpToLevel": 161739120.0
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            300.0,
+            160.0
+          ]
+        },
+        "buttonColor": [
+          0.550000011920929,
+          0.44999998807907104,
+          0.25,
+          1.0
+        ],
+        "buttonFontSize": 13.0,
+        "buttonHeight": 32.0,
+        "buttonHoverColor": [
+          0.699999988079071,
+          0.5799999833106995,
+          0.30000001192092896,
+          1.0
+        ],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
+        "buttonSpacing": 16.0,
+        "buttonWidth": 100.0,
+        "cancelText": "Cancel",
+        "confirmText": "Confirm",
+        "id": "dungeon_invite_dialog",
+        "message": "Are you sure?",
+        "messageFontSize": 13.0,
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
+        "type": "confirm_dialog",
+        "visible": false,
+        "zOrder": 100
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            280.0,
+            140.0
+          ]
+        },
+        "buttonColor": [
+          0.550000011920929,
+          0.44999998807907104,
+          0.25,
+          1.0
+        ],
+        "buttonFontSize": 13.0,
+        "buttonHeight": 32.0,
+        "buttonHoverColor": [
+          0.699999988079071,
+          0.5799999833106995,
+          0.30000001192092896,
+          1.0
+        ],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
+        "buttonSpacing": 16.0,
+        "buttonWidth": 100.0,
+        "cancelText": "Cancel",
+        "confirmText": "Destroy",
+        "id": "destroy_item_dialog",
+        "message": "Destroy this item?",
+        "messageFontSize": 13.0,
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
+        "type": "confirm_dialog",
+        "visible": false,
+        "zOrder": 110
+      },
+      {
+        "anchor": {
+          "offset": [
+            1280.0,
+            664.5
+          ],
+          "preset": "TopLeft",
+          "size": [
+            187.60000610351563,
+            178.06
+          ]
+        },
+        "bgColor": [
+          0.07999999821186066,
+          0.07999999821186066,
+          0.10999999940395355,
+          0.9200000166893005
+        ],
+        "borderColor": [
+          0.6000000238418579,
+          0.5,
+          0.25,
+          0.8999999761581421
+        ],
+        "disabledTextColor": [
+          0.44999998807907104,
+          0.4300000071525574,
+          0.4000000059604645,
+          0.699999988079071
+        ],
+        "enabledTextColor": [
+          0.9200000166893005,
+          0.8999999761581421,
+          0.8500000238418579,
+          1.0
+        ],
+        "id": "player_context_menu",
+        "itemHeight": 28.0,
+        "itemOffset": [
+          0.0,
+          0.0
+        ],
+        "menuFontSize": 13.0,
+        "menuWidth": 140.0,
+        "nameHeaderColor": [
+          0.949999988079071,
+          0.8199999928474426,
+          0.44999998807907104,
+          1.0
+        ],
+        "nameOffset": [
+          0.0,
+          0.0
+        ],
+        "pressedColor": [
+          0.25,
+          0.2199999988079071,
+          0.11999999731779099,
+          0.6000000238418579
+        ],
+        "separatorColor": [
+          0.4000000059604645,
+          0.3499999940395355,
+          0.20000000298023224,
+          0.699999988079071
+        ],
+        "type": "player_context_menu",
+        "visible": false,
+        "zOrder": 120
+      }
+    ],
+    "id": "hud_root",
+    "type": "panel"
+  },
+  "screen": "fate_hud"
+}

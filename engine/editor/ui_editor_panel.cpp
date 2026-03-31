@@ -1855,7 +1855,6 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         if (ImGui::TreeNodeEx("Position Offsets##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat2("Title##shpo", &sp2->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Shop List##shpo", &sp2->shopListOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("Inventory##shpo", &sp2->inventoryOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Gold##shpo", &sp2->goldOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
@@ -1865,17 +1864,16 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Item##shpf", &sp2->itemFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Price##shpf", &sp2->priceFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Gold##shpf", &sp2->goldFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Quantity##shpf", &sp2->quantityFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Layout##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Header Height##shpl", &sp2->headerHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Row Height##shpl", &sp2->rowHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Slot Size##shpl", &sp2->slotSize, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Gold Bar Height##shpl", &sp2->goldBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Buy Btn Width##shpl", &sp2->buyBtnWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Buy Btn Height##shpl", &sp2->buyBtnHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Grid Padding##shpl", &sp2->gridPadding, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Content Padding##shpl", &sp2->contentPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Sub-Header Height##shpl", &sp2->subHeaderHeight, 1.0f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Colors##shp", 0)) {
@@ -1891,68 +1889,16 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Error##shpc", &sp2->errorColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNodeEx("Slot Appearance##shp", 0)) {
-            ImGui::ColorEdit4("Filled BG##shps", &sp2->slotFilledBgColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Empty BG##shps", &sp2->slotEmptyBgColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Empty Border##shps", &sp2->slotEmptyBorderColor.r); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Border Width##shps", &sp2->slotBorderWidth, 0.1f, 0.0f, 5.0f); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Item Text##shps", &sp2->itemTextColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Quantity Badge##shps", &sp2->quantityColor.r); checkUndoCapture(uiMgr);
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNodeEx("Rarity Colors##shp", 0)) {
-            ImGui::ColorEdit4("Common##shpr", &sp2->rarityCommonColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Uncommon##shpr", &sp2->rarityUncommonColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Rare##shpr", &sp2->rarityRareColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Epic##shpr", &sp2->rarityEpicColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Legendary##shpr", &sp2->rarityLegendaryColor.r); checkUndoCapture(uiMgr);
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNodeEx("Tooltip##shp", 0)) {
-            ImGui::DragFloat("Width##shpt", &sp2->tooltipWidth, 1.0f, 50.0f, 500.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Padding##shpt", &sp2->tooltipPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Slot Offset##shpt", &sp2->tooltipOffset, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Shadow Offset##shpt", &sp2->tooltipShadowOffset, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Line Spacing##shpt", &sp2->tooltipLineSpacing, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Border Width##shpt", &sp2->tooltipBorderWidth, 0.1f, 0.0f, 5.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Sep Height##shpt", &sp2->tooltipSepHeight, 0.1f, 0.0f, 5.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Name Font##shpt", &sp2->tooltipNameFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Stat Font##shpt", &sp2->tooltipStatFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Level Font##shpt", &sp2->tooltipLevelFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("BG##shptc", &sp2->tooltipBgColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Border##shptc", &sp2->tooltipBorderColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Shadow##shptc", &sp2->tooltipShadowColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Stat Text##shptc", &sp2->tooltipStatColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Separator##shptc", &sp2->tooltipSepColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Level Req##shptc", &sp2->tooltipLevelColor.r); checkUndoCapture(uiMgr);
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNodeEx("Icon Atlas##shp", 0)) {
-            char atkBuf[256] = {};
-            snprintf(atkBuf, sizeof(atkBuf), "%s", sp2->iconAtlasKey.c_str());
-            if (ImGui::InputText("Atlas Key##shp_icon", atkBuf, sizeof(atkBuf))) {
-                sp2->iconAtlasKey = atkBuf;
-            }
-            checkUndoCapture(uiMgr);
-            ImGui::DragInt("Atlas Cols##shp_icon", &sp2->iconAtlasCols, 1.0f, 1, 32); checkUndoCapture(uiMgr);
-            ImGui::DragInt("Atlas Rows##shp_icon", &sp2->iconAtlasRows, 1.0f, 1, 32); checkUndoCapture(uiMgr);
-            ImGui::TreePop();
-        }
         char shopBuf[128] = {};
         snprintf(shopBuf, sizeof(shopBuf), "%s", sp2->shopName.c_str());
         if (ImGui::InputText("Shop Name", shopBuf, sizeof(shopBuf))) {
             sp2->shopName = shopBuf;
         }
         checkUndoCapture(uiMgr);
-        int64_t pg = sp2->playerGold;
-        int pgInt = static_cast<int>(pg);
-        if (ImGui::DragInt("Player Gold##shop", &pgInt, 1.0f, 0, 999999)) {
-            sp2->playerGold = pgInt;
-        }
-        checkUndoCapture(uiMgr);
         ImGui::Separator();
         ImGui::Text("Shop Items: %zu", sp2->shopItems.size());
         ImGui::Text("NPC: %u", sp2->npcId);
+        ImGui::TextWrapped("Inventory displayed via InventoryPanel (shown alongside when shop opens)");
     }
     else if (auto* bp = dynamic_cast<BankPanel*>(selectedNode_)) {
         ImGui::SeparatorText("BankPanel");
@@ -2229,6 +2175,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::Separator();
         ImGui::Text("Target: %s", pcm->targetCharName.c_str());
         ImGui::Text("Can Trade: %s", pcm->canTrade ? "Yes" : "No");
+        ImGui::Text("Can Add Friend: %s", pcm->canAddFriend ? "Yes" : "No");
+        ImGui::Text("Can Guild Invite: %s", pcm->canGuildInvite ? "Yes" : "No");
     }
     else if (auto* tw = dynamic_cast<TradeWindow*>(selectedNode_)) {
         ImGui::SeparatorText("TradeWindow");
