@@ -64,6 +64,7 @@ namespace GuildAction {
     constexpr uint8_t Promote    = 5;  // + targetCharId:string
     constexpr uint8_t Demote     = 6;  // + targetCharId:string
     constexpr uint8_t Disband    = 7;
+    constexpr uint8_t DeclineInvite = 8;  // + inviterCharId:string
 }
 
 // ============================================================================
