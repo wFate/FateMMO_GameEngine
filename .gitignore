@@ -38,6 +38,9 @@ Release/
 secrets.*
 credentials.*
 
+# Configuration (certs, keys, server config)
+config/
+
 # OS files
 Thumbs.db
 .DS_Store
