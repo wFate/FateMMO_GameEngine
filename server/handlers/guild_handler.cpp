@@ -77,6 +77,97 @@ void ServerApp::processGuild(uint16_t clientId, ByteReader& payload) {
             server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, buf, w.size());
             break;
         }
+        case GuildAction::Invite: {
+            std::string targetCharId = payload.readString();
+            if (!validatePayload(payload, clientId, PacketType::CmdGuild)) return;
+
+            auto sendGuildResult = [&](uint8_t code, const std::string& msg) {
+                SvGuildUpdateMsg resp;
+                resp.updateType = 5; resp.resultCode = code;
+                resp.message = msg;
+                uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                resp.write(w);
+                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, buf, w.size());
+            };
+
+            // Must be in a guild
+            auto* guildComp = e->getComponent<GuildComponent>();
+            if (!guildComp || !guildComp->guild.isInGuild()) {
+                sendGuildResult(1, "You are not in a guild");
+                break;
+            }
+
+            // Must be officer or owner to invite
+            if (!guildComp->guild.canInvite()) {
+                sendGuildResult(1, "Only officers and the guild owner can invite");
+                break;
+            }
+
+            // Faction check: target must match guild's faction
+            auto guildInfo = guildRepo_->getGuildInfo(guildComp->guild.guildId);
+            if (!guildInfo) {
+                sendGuildResult(1, "Guild not found");
+                break;
+            }
+
+            Entity* targetEntity = nullptr;
+            uint16_t targetClientId = 0;
+            server_.connections().forEach([&](ClientConnection& c) {
+                if (c.character_id == targetCharId && c.playerEntityId != 0) {
+                    PersistentId tp(c.playerEntityId);
+                    EntityHandle th = getReplicationForClient(c.clientId).getEntityHandle(tp);
+                    targetEntity = getWorldForClient(c.clientId).getEntity(th);
+                    targetClientId = c.clientId;
+                }
+            });
+            if (!targetEntity) {
+                sendGuildResult(1, "Player not found or offline");
+                break;
+            }
+
+            auto* targetFaction = targetEntity->getComponent<FactionComponent>();
+            if (!targetFaction || static_cast<int>(targetFaction->faction) != guildInfo->factionId) {
+                sendGuildResult(1, "Player is not in your faction");
+                break;
+            }
+
+            // Target must not already be in a guild
+            auto* targetGuild = targetEntity->getComponent<GuildComponent>();
+            if (targetGuild && targetGuild->guild.isInGuild()) {
+                sendGuildResult(1, "Player is already in a guild");
+                break;
+            }
+
+            // Check guild is not full
+            if (guildInfo->memberCount >= guildInfo->maxMembers) {
+                sendGuildResult(1, "Guild is full");
+                break;
+            }
+
+            // Add member to guild in DB
+            GuildDbResult dbResult;
+            if (guildRepo_->addMember(guildComp->guild.guildId, targetCharId, 0, dbResult)) {
+                // Update target's GuildComponent
+                if (targetGuild) {
+                    targetGuild->guild.setGuildData(guildComp->guild.guildId, guildInfo->guildName,
+                                                     {}, GuildRank::Member, guildInfo->guildLevel);
+                }
+                // Notify inviter
+                sendGuildResult(0, targetCharId + " joined the guild");
+                // Notify target
+                SvGuildUpdateMsg targetResp;
+                targetResp.updateType = 1; // joined
+                targetResp.resultCode = 0;
+                targetResp.guildName = guildInfo->guildName;
+                targetResp.message = "You joined " + guildInfo->guildName;
+                uint8_t tbuf[256]; ByteWriter tw(tbuf, sizeof(tbuf));
+                targetResp.write(tw);
+                server_.sendTo(targetClientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, tbuf, tw.size());
+            } else {
+                sendGuildResult(static_cast<uint8_t>(dbResult), "Failed to add member");
+            }
+            break;
+        }
         case GuildAction::Leave: {
             auto* guildComp = e->getComponent<GuildComponent>();
             if (!guildComp || !guildComp->guild.isInGuild()) break;
