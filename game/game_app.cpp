@@ -453,24 +453,14 @@ void GameApp::onInit() {
         }
 
         // If target not found in ghosts AND attacker IS a ghost (mob→player),
-        // apply damage prediction to local player. Never apply when isLocalAttack
-        // — that would mean our own attack damage hits us if the target ghost is missing.
+        // this is a mob hitting the local player. Find position for floating text.
         if (!foundTarget && !isLocalAttack) {
-            scene->world().forEach<PlayerController, CharacterStatsComponent>(
-                [&](Entity* entity, PlayerController* ctrl, CharacterStatsComponent* sc) {
+            scene->world().forEach<PlayerController>(
+                [&](Entity* entity, PlayerController* ctrl) {
                     if (!ctrl->isLocalPlayer || foundTarget) return;
                     auto* t = entity->getComponent<Transform>();
                     if (t) targetPos = t->position;
                     foundTarget = true;
-
-                    // Update local HP prediction for HUD display only.
-                    // Death is server-authoritative — only SvDeathNotifyMsg triggers die().
-                    if (msg.damage > 0 && sc->stats.isAlive()) {
-                        int before = sc->stats.currentHP;
-                        sc->stats.currentHP = (std::max)(0, sc->stats.currentHP - msg.damage);
-                        LOG_INFO("CombatDbg", "HP prediction: %d -> %d (mob %llu hit us for %d)",
-                                 before, sc->stats.currentHP, msg.attackerId, msg.damage);
-                    }
                 }
             );
         } else if (!foundTarget && isLocalAttack) {
