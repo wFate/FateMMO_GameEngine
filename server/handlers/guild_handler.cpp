@@ -144,28 +144,32 @@ void ServerApp::processGuild(uint16_t clientId, ByteReader& payload) {
                 break;
             }
 
-            // Add member to guild in DB
-            GuildDbResult dbResult;
-            if (guildRepo_->addMember(guildComp->guild.guildId, targetCharId, 0, dbResult)) {
-                // Update target's GuildComponent
-                if (targetGuild) {
-                    targetGuild->guild.setGuildData(guildComp->guild.guildId, guildInfo->guildName,
-                                                     {}, GuildRank::Member, guildInfo->guildLevel);
-                }
-                // Notify inviter
-                sendGuildResult(0, targetCharId + " joined the guild");
-                // Notify target
-                SvGuildUpdateMsg targetResp;
-                targetResp.updateType = 1; // joined
-                targetResp.resultCode = 0;
-                targetResp.guildName = guildInfo->guildName;
-                targetResp.message = "You joined " + guildInfo->guildName;
-                uint8_t tbuf[256]; ByteWriter tw(tbuf, sizeof(tbuf));
-                targetResp.write(tw);
-                server_.sendTo(targetClientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, tbuf, tw.size());
-            } else {
-                sendGuildResult(static_cast<uint8_t>(dbResult), "Failed to add member");
+            // Check target is not busy with another prompt
+            auto* targetConn = server_.connections().findById(targetClientId);
+            if (targetConn && targetConn->hasActivePrompt) {
+                sendGuildResult(1, "Player is busy");
+                break;
             }
+
+            // Store pending invite on target's connection
+            if (targetConn) {
+                targetConn->pendingGuildInviteId = guildComp->guild.guildId;
+                targetConn->pendingGuildInviteFromCharId = client->character_id;
+                targetConn->hasActivePrompt = true;
+            }
+
+            // Send invite notification to target (updateType=6 = invite received)
+            SvGuildUpdateMsg inviteResp;
+            inviteResp.updateType = 6; // invite received
+            inviteResp.resultCode = 0;
+            inviteResp.guildName = guildInfo->guildName;
+            inviteResp.message = client->character_id; // inviter's charId for accept/decline
+            uint8_t tbuf[256]; ByteWriter tw(tbuf, sizeof(tbuf));
+            inviteResp.write(tw);
+            server_.sendTo(targetClientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, tbuf, tw.size());
+
+            // Notify inviter
+            sendGuildResult(0, "Guild invite sent to " + targetCharId);
             break;
         }
         case GuildAction::Leave: {
@@ -182,6 +186,87 @@ void ServerApp::processGuild(uint16_t clientId, ByteReader& payload) {
                 uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
                 resp.write(w);
                 server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, buf, w.size());
+            }
+            break;
+        }
+        case GuildAction::AcceptInvite: {
+            client->hasActivePrompt = false;
+
+            if (client->pendingGuildInviteId == 0) break;
+
+            int guildId = client->pendingGuildInviteId;
+            std::string inviterCharId = client->pendingGuildInviteFromCharId;
+            client->pendingGuildInviteId = 0;
+            client->pendingGuildInviteFromCharId.clear();
+
+            // Re-validate: guild still exists and has space
+            auto guildInfo = guildRepo_->getGuildInfo(guildId);
+            if (!guildInfo || guildInfo->memberCount >= guildInfo->maxMembers) {
+                SvGuildUpdateMsg resp;
+                resp.updateType = 5; resp.resultCode = 1;
+                resp.message = guildInfo ? "Guild is full" : "Guild no longer exists";
+                uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                resp.write(w);
+                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, buf, w.size());
+                break;
+            }
+
+            // Must not already be in a guild
+            auto* guildComp = e->getComponent<GuildComponent>();
+            if (guildComp && guildComp->guild.isInGuild()) break;
+
+            // Add to guild
+            GuildDbResult dbResult;
+            if (guildRepo_->addMember(guildId, client->character_id, 0, dbResult)) {
+                if (guildComp) {
+                    guildComp->guild.setGuildData(guildId, guildInfo->guildName,
+                                                   {}, GuildRank::Member, guildInfo->guildLevel);
+                }
+                // Notify joiner
+                SvGuildUpdateMsg resp;
+                resp.updateType = 1; // joined
+                resp.resultCode = 0;
+                resp.guildName = guildInfo->guildName;
+                resp.message = "You joined " + guildInfo->guildName;
+                uint8_t buf[256]; ByteWriter w(buf, sizeof(buf));
+                resp.write(w);
+                server_.sendTo(clientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, buf, w.size());
+
+                // Notify inviter
+                server_.connections().forEach([&](ClientConnection& c) {
+                    if (c.character_id == inviterCharId) {
+                        SvGuildUpdateMsg notif;
+                        notif.updateType = 5; notif.resultCode = 0;
+                        notif.message = client->character_id + " joined the guild";
+                        uint8_t nbuf[256]; ByteWriter nw(nbuf, sizeof(nbuf));
+                        notif.write(nw);
+                        server_.sendTo(c.clientId, Channel::ReliableOrdered, PacketType::SvGuildUpdate, nbuf, nw.size());
+                    }
+                });
+            }
+            break;
+        }
+        case GuildAction::DeclineInvite: {
+            client->hasActivePrompt = false;
+
+            std::string inviterCharId = client->pendingGuildInviteFromCharId;
+            client->pendingGuildInviteId = 0;
+            client->pendingGuildInviteFromCharId.clear();
+
+            // Notify inviter
+            if (!inviterCharId.empty()) {
+                server_.connections().forEach([&](ClientConnection& c) {
+                    if (c.character_id == inviterCharId) {
+                        SvChatMessageMsg chatMsg;
+                        chatMsg.channel    = static_cast<uint8_t>(ChatChannel::System);
+                        chatMsg.senderName = "[Guild]";
+                        chatMsg.message    = client->character_id + " declined your guild invite";
+                        chatMsg.faction    = 0;
+                        uint8_t buf[512]; ByteWriter w(buf, sizeof(buf));
+                        chatMsg.write(w);
+                        server_.sendTo(c.clientId, Channel::ReliableOrdered, PacketType::SvChatMessage, buf, w.size());
+                    }
+                });
             }
             break;
         }
