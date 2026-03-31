@@ -289,6 +289,7 @@ void Editor::beginFrame() {
     frameStarted_ = true;
 }
 
+#ifdef FATE_HAS_GAME
 // ============================================================================
 // Render
 // ============================================================================
@@ -3161,5 +3162,80 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
         pendingBrushStroke_.reset();
     }
 }
+
+#else // !FATE_HAS_GAME — stub implementations for demo build
+
+void Editor::applyLayerVisibility(World*) {}
+void Editor::renderScene(SpriteBatch*, Camera*) {}
+void Editor::renderUI(World* world, Camera*, SpriteBatch*, FrameArena*) {
+    if (!frameStarted_) return;
+    drawDockSpace();
+    drawSceneViewport();
+    if (showDemoWindow_) ImGui::ShowDemoWindow(&showDemoWindow_);
+    ImGui::Render();
+#ifndef FATEMMO_METAL
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#endif
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+    }
+    wantsKeyboard_ = io.WantCaptureKeyboard;
+    wantsMouse_ = io.WantCaptureMouse;
+}
+void Editor::drawDockSpace() {
+    ImGuiDockNodeFlags flags = ImGuiDockNodeFlags_PassthruCentralNode;
+    ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), flags);
+}
+void Editor::drawSceneViewport() {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    if (ImGui::Begin("Scene")) {
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImVec2 size = ImGui::GetContentRegionAvail();
+        viewportPos_ = {pos.x, pos.y};
+        viewportSize_ = {size.x, size.y};
+        viewportHovered_ = ImGui::IsWindowHovered();
+
+        int w = (int)size.x, h = (int)size.y;
+        if (w > 0 && h > 0) {
+            viewportFbo_.resize(w, h);
+            if (viewportFbo_.isValid()) {
+                ImGui::Image((ImTextureID)(uintptr_t)viewportFbo_.textureId(), size,
+                             ImVec2(0, 1), ImVec2(1, 0));
+            }
+        }
+    }
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+void Editor::drawSceneGridShader(Camera*) {}
+void Editor::handleSceneClick(World*, Camera*, const Vec2&, int, int) {}
+void Editor::handleSceneDrag(Camera*, const Vec2&, int, int) {}
+void Editor::handleMouseUp() {}
+void Editor::paintTileAt(World*, Camera*, const Vec2&, int, int) {}
+void Editor::eraseTileAt(World*, Camera*, const Vec2&, int, int) {}
+void Editor::scanAssets() {}
+void Editor::drawAssetBrowser(World*, Camera*) {}
+void Editor::drawTilePalette(World*, Camera*) {}
+void Editor::drawSceneGrid(SpriteBatch*, Camera*) {}
+void Editor::drawSelectionOutlines(SpriteBatch*, Camera*) {}
+void Editor::drawImGuizmo(Camera*) {}
+void Editor::saveScene(World*, const std::string&) {}
+void Editor::loadScene(World*, const std::string&) {}
+void Editor::enterPlayMode(World*) {}
+void Editor::exitPlayMode(World*) {}
+void Editor::drawHUD(World*) {}
+void Editor::drawMenuBar(World*) {}
+void Editor::drawToolbar(World*) {}
+void Editor::drawHierarchy(World*) {}
+void Editor::drawConsole(World*) {}
+void Editor::executeCommand(World*, const std::string&) {}
+void Editor::drawDebugInfoPanel(World*) {}
+void Editor::loadTileset(const std::string&, int) {}
+void Editor::handleKeyShortcuts(World*, const SDL_Event&) {}
+void Editor::captureInspectorUndo() {}
+
+#endif // FATE_HAS_GAME
 
 } // namespace fate
