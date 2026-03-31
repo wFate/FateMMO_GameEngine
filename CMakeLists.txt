@@ -216,29 +216,28 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     # OpenSSL (TLS for auth) — installed via vcpkg
     find_package(OpenSSL REQUIRED)
 
-    # PostgreSQL client (libpq — required by libpqxx) — installed via vcpkg
-    find_package(PostgreSQL REQUIRED)
-
     # FreeType (font rendering for ImGui) — installed via vcpkg
     find_package(Freetype REQUIRED)
 
-    # libpqxx (C++ PostgreSQL client, wraps libpq)
-    FetchContent_Declare(
-        libpqxx
-        GIT_REPOSITORY https://github.com/jtv/libpqxx.git
-        GIT_TAG        7.9.2
-        GIT_SHALLOW    TRUE
-    )
-    set(SKIP_BUILD_TEST ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(libpqxx)
+    # Server-only dependencies (PostgreSQL, libpqxx, bcrypt)
+    find_package(PostgreSQL QUIET)
+    if(PostgreSQL_FOUND)
+        FetchContent_Declare(
+            libpqxx
+            GIT_REPOSITORY https://github.com/jtv/libpqxx.git
+            GIT_TAG        7.9.2
+            GIT_SHALLOW    TRUE
+        )
+        set(SKIP_BUILD_TEST ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(libpqxx)
 
-    # bcrypt (password hashing — OpenBSD implementation)
-    file(GLOB BCRYPT_SOURCES third_party/bcrypt/*.c)
-    if(BCRYPT_SOURCES)
-        add_library(bcrypt_lib STATIC ${BCRYPT_SOURCES})
-        target_include_directories(bcrypt_lib PUBLIC third_party/bcrypt)
-        if(MSVC)
-            target_compile_options(bcrypt_lib PRIVATE /wd4100 /wd4244 /wd4267 /wd4996)
+        file(GLOB BCRYPT_SOURCES third_party/bcrypt/*.c)
+        if(BCRYPT_SOURCES)
+            add_library(bcrypt_lib STATIC ${BCRYPT_SOURCES})
+            target_include_directories(bcrypt_lib PUBLIC third_party/bcrypt)
+            if(MSVC)
+                target_compile_options(bcrypt_lib PRIVATE /wd4100 /wd4244 /wd4267 /wd4996)
+            endif()
         endif()
     endif()
 endif()
@@ -514,7 +513,7 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     file(GLOB_RECURSE SERVER_SHARED_SOURCES game/shared/*.cpp)
     # entity_factory.cpp is used by both game and server targets
     set(SERVER_GAME_SOURCES game/entity_factory.cpp)
-    if(SERVER_SOURCES)
+    if(SERVER_SOURCES AND PostgreSQL_FOUND)
         add_executable(FateServer ${SERVER_SOURCES} ${SERVER_SHARED_SOURCES} ${SERVER_GAME_SOURCES})
         target_link_libraries(FateServer PRIVATE fate_engine pqxx PostgreSQL::PostgreSQL bcrypt_lib OpenSSL::SSL OpenSSL::Crypto spdlog::spdlog)
         target_include_directories(FateServer PRIVATE ${CMAKE_SOURCE_DIR})
