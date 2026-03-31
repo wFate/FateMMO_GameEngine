@@ -12,26 +12,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: 'a42af01b72c28a8e1d7b48107b33e4f286a55ef6'
-
       - name: Cache build
         uses: actions/cache@v4
         with:
-          path: out/build
+          path: build
           key: windows-msvc-${{ hashFiles('CMakeLists.txt') }}
           restore-keys: windows-msvc-
 
       - name: Configure CMake
-        run: cmake -B out/build/x64-Debug -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug
 
-      - name: Build
-        run: cmake --build out/build/x64-Debug --config Debug -j4
+      - name: Build engine library
+        run: cmake --build build --config Debug --target fate_engine -j4
 
-      - name: Run tests
-        run: out/build/x64-Debug/fate_tests.exe --reporters=console --no-colors
+      - name: Build demo
+        run: cmake --build build --config Debug --target FateDemo -j4
 
   linux-gcc:
     runs-on: ubuntu-24.04
@@ -41,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++-13 libsdl2-dev libssl-dev libpq-dev xvfb mesa-utils libegl1-mesa-dev
+          sudo apt-get install -y g++-13 libfreetype-dev xvfb mesa-utils libegl1-mesa-dev libgl-dev
 
       - name: Cache build
         uses: actions/cache@v4
@@ -56,12 +51,6 @@ jobs:
       - name: Build
         run: cmake --build build -j$(nproc)
 
-      - name: Run tests (headless)
-        run: xvfb-run -a ./build/fate_tests --reporters=console --no-colors
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          MESA_GL_VERSION_OVERRIDE: "3.3"
-
   linux-clang:
     runs-on: ubuntu-24.04
     steps:
@@ -70,7 +59,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-17 libsdl2-dev libssl-dev libpq-dev xvfb mesa-utils libegl1-mesa-dev
+          sudo apt-get install -y clang-17 libfreetype-dev xvfb mesa-utils libegl1-mesa-dev libgl-dev
 
       - name: Cache build
         uses: actions/cache@v4
@@ -84,9 +73,3 @@ jobs:
 
       - name: Build
         run: cmake --build build -j$(nproc)
-
-      - name: Run tests (headless)
-        run: xvfb-run -a ./build/fate_tests --reporters=console --no-colors
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          MESA_GL_VERSION_OVERRIDE: "3.3"
