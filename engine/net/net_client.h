@@ -57,6 +57,18 @@ public:
     void sendToggleCostumes(bool show);
     void sendEditorPause(bool paused);
 
+    // Guild actions
+    void sendGuildAction(uint8_t action, const std::string& data);
+    void sendGuildAction(uint8_t action);
+
+    // Social actions (friend requests, block, etc.)
+    void sendSocialAction(uint8_t action, const std::string& targetCharId);
+
+    // Party actions
+    void sendPartyAction(uint8_t action, const std::string& targetCharId);
+    void sendPartyAction(uint8_t action);
+    void sendPartySetLootMode(uint8_t mode);
+
     void sendTradeAction(uint8_t action);
     void sendTradeAction(uint8_t action, const std::string& data);
     void sendTradeConfirm();
@@ -130,6 +142,7 @@ public:
     std::function<void(const SvCostumeUpdateMsg&)> onCostumeUpdate;
     std::function<void(const SvCostumeDefsMsg&)> onCostumeDefs;
     std::function<void(const SvBuffSyncMsg&)> onBuffSync;
+    std::function<void(const SvPartyUpdateMsg&)> onPartyUpdate;
     std::function<void(const std::string& reason)> onConnectRejected;
 
 private:

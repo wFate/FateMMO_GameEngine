@@ -644,6 +644,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onBuffSync) onBuffSync(msg);
             break;
         }
+        case PacketType::SvPartyUpdate: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvPartyUpdateMsg::read(payload);
+            if (onPartyUpdate) onPartyUpdate(msg);
+            break;
+        }
         default:
             break;
     }
@@ -1005,6 +1011,52 @@ void NetClient::sendMarketGetMyListings() {
     ByteWriter w(buf, sizeof(buf));
     w.writeU8(MarketAction::GetMyListings);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdMarket, w.data(), w.size());
+}
+
+void NetClient::sendGuildAction(uint8_t action, const std::string& data) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(action);
+    w.writeString(data);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdGuild, w.data(), w.size());
+}
+
+void NetClient::sendGuildAction(uint8_t action) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(action);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdGuild, w.data(), w.size());
+}
+
+void NetClient::sendSocialAction(uint8_t action, const std::string& targetCharId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(action);
+    w.writeString(targetCharId);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdSocial, w.data(), w.size());
+}
+
+void NetClient::sendPartyAction(uint8_t action, const std::string& targetCharId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(action);
+    w.writeString(targetCharId);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdParty, w.data(), w.size());
+}
+
+void NetClient::sendPartyAction(uint8_t action) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(action);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdParty, w.data(), w.size());
+}
+
+void NetClient::sendPartySetLootMode(uint8_t mode) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(PartyAction::SetLootMode);
+    w.writeU8(mode);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdParty, w.data(), w.size());
 }
 
 void NetClient::sendActivateSkillRank(const std::string& skillId) {
