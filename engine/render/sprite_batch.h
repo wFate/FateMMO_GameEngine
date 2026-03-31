@@ -81,6 +81,14 @@ public:
     void drawRing(const Vec2& center, float radius, float thickness, const Color& color,
                   float depth = 0.0f, int segments = 24);
 
+    // Draw a filled ellipse with separate X and Y radii (perspective-squashed circle)
+    void drawEllipse(const Vec2& center, float radiusX, float radiusY, const Color& color,
+                     float depth = 0.0f, int segments = 24);
+
+    // Draw an ellipse outline (ring) with separate X and Y radii
+    void drawEllipseRing(const Vec2& center, float radiusX, float radiusY, float thickness,
+                         const Color& color, float depth = 0.0f, int segments = 24);
+
     // Draw a filled arc (pie slice) from startAngle to endAngle (radians, 0=right, CCW)
     void drawArc(const Vec2& center, float radius, float startAngle, float endAngle,
                  const Color& color, float depth = 0.0f, int segments = 24);

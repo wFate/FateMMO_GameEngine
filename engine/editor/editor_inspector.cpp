@@ -1108,10 +1108,63 @@ void Editor::drawInspector() {
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<TargetingComponent>()) {
-                ImGui::DragFloat("Max Range##tgt", &tgt->maxTargetRange, 0.5f, 1.0f, 50.0f);
-                captureInspectorUndo();
+                // Runtime state
                 ImGui::Text("Target: %u", tgt->selectedTargetId);
                 if (tgt->hasTarget() && ImGui::Button("Clear Target##tgt")) tgt->clearTarget();
+                ImGui::Separator();
+
+                // Behavior
+                ImGui::DragFloat("Max Range##tgt", &tgt->maxTargetRange, 0.5f, 1.0f, 50.0f);
+                captureInspectorUndo();
+                ImGui::Checkbox("Can Target Self##tgt", &tgt->canTargetSelf);
+                captureInspectorUndo();
+
+                // Indicator shape
+                if (ImGui::TreeNode("Indicator Shape##tgt")) {
+                    ImGui::DragFloat("Radius Scale##tgt", &tgt->radiusScale, 0.01f, 0.1f, 1.0f);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Y Scale (Slant)##tgt", &tgt->yScale, 0.01f, 0.1f, 1.0f);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Ring Thickness##tgt", &tgt->ringThickness, 0.1f, 0.5f, 5.0f);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Depth Offset##tgt", &tgt->depthOffset, 0.05f, 0.0f, 5.0f);
+                    captureInspectorUndo();
+                    int segs = tgt->segments;
+                    if (ImGui::DragInt("Segments##tgt", &segs, 1, 6, 64)) tgt->segments = segs;
+                    captureInspectorUndo();
+                    ImGui::TreePop();
+                }
+
+                // Pulse animation
+                if (ImGui::TreeNode("Pulse Animation##tgt")) {
+                    ImGui::DragFloat("Pulse Speed##tgt", &tgt->pulseSpeed, 0.1f, 0.0f, 20.0f);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Pulse Min##tgt", &tgt->pulseMin, 0.01f, 0.0f, 1.0f);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Pulse Max##tgt", &tgt->pulseMax, 0.01f, 0.0f, 1.0f);
+                    captureInspectorUndo();
+                    ImGui::TreePop();
+                }
+
+                // Colors
+                if (ImGui::TreeNode("Colors##tgt")) {
+                    ImGui::ColorEdit4("Ring Color##tgt", &tgt->ringColor.r);
+                    captureInspectorUndo();
+                    ImGui::ColorEdit4("Fill Color##tgt", &tgt->fillColor.r);
+                    captureInspectorUndo();
+                    ImGui::ColorEdit4("Glow Color##tgt", &tgt->glowColor.r);
+                    captureInspectorUndo();
+                    ImGui::TreePop();
+                }
+
+                // Multi-ring effect
+                if (ImGui::TreeNode("Multi-Ring##tgt")) {
+                    ImGui::DragFloat("Inner Ring Scale##tgt", &tgt->innerRingScale, 0.01f, 0.0f, 0.99f);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Glow Scale##tgt", &tgt->glowScale, 0.01f, 0.0f, 3.0f);
+                    captureInspectorUndo();
+                    ImGui::TreePop();
+                }
             }
         }
 
