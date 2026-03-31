@@ -428,7 +428,9 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     if (!reflectedFields.empty()) {
         drawPropertyInspector(selectedNode_, reflectedFields,
                               [&]() { checkUndoCapture(uiMgr); });
-    } else
+    }
+#ifdef FATE_HAS_GAME
+    else
     // Legacy widget-specific properties (dynamic_cast chain)
     if (auto* panel = dynamic_cast<Panel*>(selectedNode_)) {
         char titleBuf[256] = {};
@@ -2416,6 +2418,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
         uiMgr.suppressHotReload();
     }
+#endif // FATE_HAS_GAME
 
     ImGui::End();
 }

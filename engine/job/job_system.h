@@ -159,7 +159,11 @@ private:
     Arena* fiberArenas_ = nullptr;
 
     void workerMain(int workerIndex);
+#ifdef _WIN32
     static void __stdcall fiberEntry(void* param);
+#else
+    static void fiberEntry(void* param);
+#endif
     FiberHandle acquireFiber(int& outIndex);
     void releaseFiber(int fiberIndex);
     void checkWaitList();

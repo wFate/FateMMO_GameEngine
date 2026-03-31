@@ -10,7 +10,10 @@
 #ifdef FATE_HAS_GAME
 #include "game/shared/game_types.h"
 #else
-namespace fate { enum class ClassType : uint8_t { Warrior = 0, Mage = 1, Archer = 2, Any = 255 }; }
+namespace fate {
+enum class ClassType : uint8_t { Warrior = 0, Mage = 1, Archer = 2, Any = 255 };
+enum class AdminRole : int { Player = 0, GM = 1, Admin = 2 };
+}
 #endif
 
 namespace fate {
