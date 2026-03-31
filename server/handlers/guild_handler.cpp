@@ -125,6 +125,13 @@ void ServerApp::processGuild(uint16_t clientId, ByteReader& payload) {
                 break;
             }
 
+            // Busy check — target already has a pending prompt
+            auto* targetConn = server_.connections().findById(targetClientId);
+            if (targetConn && targetConn->hasActivePrompt) {
+                sendGuildResult(1, "Player is busy");
+                break;
+            }
+
             auto* targetFaction = targetEntity->getComponent<FactionComponent>();
             if (!targetFaction || static_cast<int>(targetFaction->faction) != guildInfo->factionId) {
                 sendGuildResult(1, "Player is not in your faction");
@@ -141,13 +148,6 @@ void ServerApp::processGuild(uint16_t clientId, ByteReader& payload) {
             // Check guild is not full
             if (guildInfo->memberCount >= guildInfo->maxMembers) {
                 sendGuildResult(1, "Guild is full");
-                break;
-            }
-
-            // Check target is not busy with another prompt
-            auto* targetConn = server_.connections().findById(targetClientId);
-            if (targetConn && targetConn->hasActivePrompt) {
-                sendGuildResult(1, "Player is busy");
                 break;
             }
 
