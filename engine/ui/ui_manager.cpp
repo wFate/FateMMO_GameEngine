@@ -1223,6 +1223,15 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         pf->hpBarHeight    = j.value("hpBarHeight", 8.0f);
         pf->mpBarHeight    = j.value("mpBarHeight", 6.0f);
         pf->borderWidth    = j.value("borderWidth", 1.0f);
+        pf->portraitPadLeft      = j.value("portraitPadLeft", 6.0f);
+        pf->portraitRimWidth     = j.value("portraitRimWidth", 1.5f);
+        pf->crownSize            = j.value("crownSize", 5.0f);
+        pf->textGapAfterPortrait = j.value("textGapAfterPortrait", 6.0f);
+        pf->textPadRight         = j.value("textPadRight", 4.0f);
+        pf->namePadTop           = j.value("namePadTop", 6.0f);
+        pf->levelPadRight        = j.value("levelPadRight", 5.0f);
+        pf->barOffsetY           = j.value("barOffsetY", 13.0f);
+        pf->barGap               = j.value("barGap", 2.0f);
         auto readColor = [&](const char* key, Color def) -> Color {
             if (j.contains(key) && j[key].is_array() && j[key].size() >= 3) {
                 auto& c = j[key];

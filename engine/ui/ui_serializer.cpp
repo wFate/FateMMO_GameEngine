@@ -774,6 +774,15 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["hpBarHeight"]     = w->hpBarHeight;
             j["mpBarHeight"]     = w->mpBarHeight;
             j["borderWidth"]     = w->borderWidth;
+            j["portraitPadLeft"]       = w->portraitPadLeft;
+            j["portraitRimWidth"]      = w->portraitRimWidth;
+            j["crownSize"]             = w->crownSize;
+            j["textGapAfterPortrait"]  = w->textGapAfterPortrait;
+            j["textPadRight"]          = w->textPadRight;
+            j["namePadTop"]            = w->namePadTop;
+            j["levelPadRight"]         = w->levelPadRight;
+            j["barOffsetY"]            = w->barOffsetY;
+            j["barGap"]                = w->barGap;
             j["cardBgColor"]       = {w->cardBgColor.r, w->cardBgColor.g, w->cardBgColor.b, w->cardBgColor.a};
             j["cardBorderColor"]   = {w->cardBorderColor.r, w->cardBorderColor.g, w->cardBorderColor.b, w->cardBorderColor.a};
             j["portraitFillColor"] = {w->portraitFillColor.r, w->portraitFillColor.g, w->portraitFillColor.b, w->portraitFillColor.a};

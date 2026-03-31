@@ -1296,6 +1296,15 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("HP Bar Height##pfl", &pf->hpBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("MP Bar Height##pfl", &pf->mpBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Border Width##pfl", &pf->borderWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Portrait Pad L##pfl", &pf->portraitPadLeft, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Portrait Rim##pfl", &pf->portraitRimWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Crown Size##pfl", &pf->crownSize, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Text Gap##pfl", &pf->textGapAfterPortrait, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Text Pad R##pfl", &pf->textPadRight, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Name Pad Top##pfl", &pf->namePadTop, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Lvl Pad R##pfl", &pf->levelPadRight, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Bar Offset Y##pfl", &pf->barOffsetY, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Bar Gap##pfl", &pf->barGap, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Colors##pf", 0)) {
