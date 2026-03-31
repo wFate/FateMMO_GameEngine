@@ -53,6 +53,7 @@
 #include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/settings_panel.h"
 #include "engine/ui/widgets/loading_panel.h"
+#include "engine/ui/widgets/invite_prompt_panel.h"
 #endif // FATE_HAS_GAME
 #include "engine/ui/ui_data_binding.h"
 #include "engine/core/logger.h"
@@ -1780,6 +1781,48 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         cd->buttonColor      = readColor("buttonColor",      cd->buttonColor);
         cd->buttonHoverColor = readColor("buttonHoverColor", cd->buttonHoverColor);
         node = std::move(cd);
+    }
+    else if (type == "invite_prompt") {
+        auto w = std::make_unique<InvitePromptPanel>(id);
+        auto readVec2 = [&](const char* key, Vec2 def) -> Vec2 {
+            if (j.contains(key) && j[key].is_array() && j[key].size() >= 2)
+                return {j[key][0].get<float>(), j[key][1].get<float>()};
+            return def;
+        };
+        w->titleOffset   = readVec2("titleOffset",   w->titleOffset);
+        w->messageOffset = readVec2("messageOffset", w->messageOffset);
+        w->buttonOffset  = readVec2("buttonOffset",  w->buttonOffset);
+        w->titleFontSize   = j.value("titleFontSize",   14.0f);
+        w->messageFontSize = j.value("messageFontSize", 12.0f);
+        w->buttonFontSize  = j.value("buttonFontSize",  12.0f);
+        w->panelWidth      = j.value("panelWidth",      260.0f);
+        w->panelHeight     = j.value("panelHeight",     120.0f);
+        w->buttonWidth     = j.value("buttonWidth",      80.0f);
+        w->buttonHeight    = j.value("buttonHeight",     28.0f);
+        w->buttonSpacing   = j.value("buttonSpacing",    16.0f);
+        w->borderWidth     = j.value("borderWidth",       1.5f);
+        w->titlePadTop     = j.value("titlePadTop",      10.0f);
+        w->messagePadTop   = j.value("messagePadTop",     8.0f);
+        w->buttonPadBottom = j.value("buttonPadBottom",  12.0f);
+        auto readColor = [&](const char* key, Color def) -> Color {
+            if (j.contains(key) && j[key].is_array() && j[key].size() >= 3) {
+                auto& c = j[key];
+                return {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(),
+                        c.size() >= 4 ? c[3].get<float>() : 1.0f};
+            }
+            return def;
+        };
+        w->bgColor             = readColor("bgColor",             w->bgColor);
+        w->borderColor         = readColor("borderColor",         w->borderColor);
+        w->titleColor          = readColor("titleColor",          w->titleColor);
+        w->messageColor        = readColor("messageColor",        w->messageColor);
+        w->acceptBtnColor      = readColor("acceptBtnColor",      w->acceptBtnColor);
+        w->acceptBtnHoverColor = readColor("acceptBtnHoverColor", w->acceptBtnHoverColor);
+        w->acceptBtnTextColor  = readColor("acceptBtnTextColor",  w->acceptBtnTextColor);
+        w->declineBtnColor     = readColor("declineBtnColor",     w->declineBtnColor);
+        w->declineBtnHoverColor= readColor("declineBtnHoverColor",w->declineBtnHoverColor);
+        w->declineBtnTextColor = readColor("declineBtnTextColor", w->declineBtnTextColor);
+        node = std::move(w);
     }
     else if (type == "notification_toast") {
         auto nt = std::make_unique<NotificationToast>(id);

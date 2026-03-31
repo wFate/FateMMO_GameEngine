@@ -53,6 +53,7 @@
 #include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/settings_panel.h"
 #include "engine/ui/widgets/loading_panel.h"
+#include "engine/ui/widgets/invite_prompt_panel.h"
 #endif // FATE_HAS_GAME
 #include "engine/core/logger.h"
 #include <nlohmann/json.hpp>
@@ -702,6 +703,35 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["buttonFontSize"]  = w->buttonFontSize;
             j["buttonColor"]      = {w->buttonColor.r, w->buttonColor.g, w->buttonColor.b, w->buttonColor.a};
             j["buttonHoverColor"] = {w->buttonHoverColor.r, w->buttonHoverColor.g, w->buttonHoverColor.b, w->buttonHoverColor.a};
+        }
+    }
+    else if (type == "invite_prompt") {
+        if (auto* w = dynamic_cast<const InvitePromptPanel*>(node)) {
+            j["titleOffset"]   = {w->titleOffset.x, w->titleOffset.y};
+            j["messageOffset"] = {w->messageOffset.x, w->messageOffset.y};
+            j["buttonOffset"]  = {w->buttonOffset.x, w->buttonOffset.y};
+            j["titleFontSize"]   = w->titleFontSize;
+            j["messageFontSize"] = w->messageFontSize;
+            j["buttonFontSize"]  = w->buttonFontSize;
+            j["panelWidth"]      = w->panelWidth;
+            j["panelHeight"]     = w->panelHeight;
+            j["buttonWidth"]     = w->buttonWidth;
+            j["buttonHeight"]    = w->buttonHeight;
+            j["buttonSpacing"]   = w->buttonSpacing;
+            j["borderWidth"]     = w->borderWidth;
+            j["titlePadTop"]     = w->titlePadTop;
+            j["messagePadTop"]   = w->messagePadTop;
+            j["buttonPadBottom"] = w->buttonPadBottom;
+            j["bgColor"]              = {w->bgColor.r, w->bgColor.g, w->bgColor.b, w->bgColor.a};
+            j["borderColor"]          = {w->borderColor.r, w->borderColor.g, w->borderColor.b, w->borderColor.a};
+            j["titleColor"]           = {w->titleColor.r, w->titleColor.g, w->titleColor.b, w->titleColor.a};
+            j["messageColor"]         = {w->messageColor.r, w->messageColor.g, w->messageColor.b, w->messageColor.a};
+            j["acceptBtnColor"]       = {w->acceptBtnColor.r, w->acceptBtnColor.g, w->acceptBtnColor.b, w->acceptBtnColor.a};
+            j["acceptBtnHoverColor"]  = {w->acceptBtnHoverColor.r, w->acceptBtnHoverColor.g, w->acceptBtnHoverColor.b, w->acceptBtnHoverColor.a};
+            j["acceptBtnTextColor"]   = {w->acceptBtnTextColor.r, w->acceptBtnTextColor.g, w->acceptBtnTextColor.b, w->acceptBtnTextColor.a};
+            j["declineBtnColor"]      = {w->declineBtnColor.r, w->declineBtnColor.g, w->declineBtnColor.b, w->declineBtnColor.a};
+            j["declineBtnHoverColor"] = {w->declineBtnHoverColor.r, w->declineBtnHoverColor.g, w->declineBtnHoverColor.b, w->declineBtnHoverColor.a};
+            j["declineBtnTextColor"]  = {w->declineBtnTextColor.r, w->declineBtnTextColor.g, w->declineBtnTextColor.b, w->declineBtnTextColor.a};
         }
     }
     else if (type == "notification_toast") {

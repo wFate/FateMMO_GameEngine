@@ -54,6 +54,7 @@
 #include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/settings_panel.h"
 #include "engine/ui/widgets/leaderboard_panel.h"
+#include "engine/ui/widgets/invite_prompt_panel.h"
 #endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <cstdio>
@@ -214,6 +215,7 @@ TypeBadge badgeForType(const std::string& type) {
     if (type == "character_creation_screen") return {{0.50f, 0.60f, 0.70f, 1.0f}, "CRT"};
     if (type == "costume_panel")       return {{0.55f, 0.35f, 0.60f, 1.0f}, "COS"};
     if (type == "settings_panel")      return {{0.55f, 0.45f, 0.25f, 1.0f}, "SET"};
+    if (type == "invite_prompt")       return {{0.35f, 0.65f, 0.35f, 1.0f}, "INV"};
     return {{0.50f, 0.50f, 0.50f, 1.0f}, "???"};
 }
 
@@ -1222,6 +1224,48 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat("Button Width##cd", &cd->buttonWidth, 1.0f, 40.0f, 300.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Button Height##cd", &cd->buttonHeight, 1.0f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Button Spacing##cd", &cd->buttonSpacing, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+    }
+    else if (auto* ip = dynamic_cast<InvitePromptPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("InvitePromptPanel");
+        if (ImGui::TreeNodeEx("Position Offsets##ip", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##ipo", &ip->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Message##ipo", &ip->messageOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Buttons##ipo", &ip->buttonOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##ip", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##ipf", &ip->titleFontSize, 0.5f, 6.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Message##ipf", &ip->messageFontSize, 0.5f, 6.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button##ipf", &ip->buttonFontSize, 0.5f, 6.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Layout##ip", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Panel Width##ipl", &ip->panelWidth, 1.0f, 100.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Panel Height##ipl", &ip->panelHeight, 1.0f, 60.0f, 300.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Width##ipl", &ip->buttonWidth, 1.0f, 40.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Height##ipl", &ip->buttonHeight, 1.0f, 16.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Spacing##ipl", &ip->buttonSpacing, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##ipl", &ip->borderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Title Pad Top##ipl", &ip->titlePadTop, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Msg Pad Top##ipl", &ip->messagePadTop, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Pad Bot##ipl", &ip->buttonPadBottom, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##ip", 0)) {
+            ImGui::ColorEdit4("Background##ipc", &ip->bgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##ipc", &ip->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##ipc", &ip->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Message##ipc", &ip->messageColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Accept Btn##ipc", &ip->acceptBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Accept Hover##ipc", &ip->acceptBtnHoverColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Accept Text##ipc", &ip->acceptBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Decline Btn##ipc", &ip->declineBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Decline Hover##ipc", &ip->declineBtnHoverColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Decline Text##ipc", &ip->declineBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
+        ImGui::Text("Busy: %s", ip->isBusy() ? "Yes" : "No");
     }
     else if (auto* nt = dynamic_cast<NotificationToast*>(selectedNode_)) {
         ImGui::SeparatorText("NotificationToast");
