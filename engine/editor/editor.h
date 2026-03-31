@@ -222,7 +222,7 @@ public:
     UIManager* uiManager() const { return uiManager_; }
     UIEditorPanel& uiEditorPanel() { return uiEditorPanel_; }
 
-    void setAssetRoot(const std::string& root) { assetRoot_ = root; }
+    void setAssetRoot(const std::string& root) { assetRoot_ = root; assetBrowser_.init(root, sourceDir_); }
     void setSourceDir(const std::string& dir) { sourceDir_ = dir; uiEditorPanel_.setSourceDir(dir); animationEditor_.setSourceDir(dir); }
     void scanAssets();
 

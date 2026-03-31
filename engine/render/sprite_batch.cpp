@@ -191,6 +191,25 @@ bool SpriteBatch::init() {
     // (all pipelines share the same vertex layout, so any VAO will do)
     vao_ = device.resolveGLPipelineVAO(pipelineAlpha_);
 
+    // Configure vertex attributes on the VAO now so the direct-GL fallback
+    // path works even if the CommandList path never runs first (e.g. the
+    // open-source demo build where render-graph passes return early).
+    glBindVertexArray(vao_);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_);
+    for (const auto& attr : layout.attributes) {
+        glEnableVertexAttribArray(attr.location);
+        glVertexAttribPointer(
+            attr.location,
+            attr.components,
+            GL_FLOAT,
+            attr.normalized ? GL_TRUE : GL_FALSE,
+            static_cast<GLsizei>(layout.stride),
+            reinterpret_cast<const void*>(attr.offset)
+        );
+    }
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_);
+    glBindVertexArray(0);
+
     createWhiteTexture();
 
     entries_.reserve(1000);

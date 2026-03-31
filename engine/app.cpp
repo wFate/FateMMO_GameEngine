@@ -778,7 +778,9 @@ void App::render() {
 
             static Shader s_blitShader;
             static bool s_blitLoaded = false;
-            if (!s_blitLoaded) {
+            static bool s_blitAttempted = false;
+            if (!s_blitLoaded && !s_blitAttempted) {
+                s_blitAttempted = true;
                 s_blitLoaded = s_blitShader.loadFromFile(
                     "assets/shaders/fullscreen_quad.vert",
                     "assets/shaders/blit.frag"
@@ -797,6 +799,11 @@ void App::render() {
                 glEnable(GL_BLEND);
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             }
+
+            // Re-bind editor FBO — getFBO() above may have changed GL
+            // framebuffer state if it needed to create or resize the
+            // PostProcess FBO (destroy + create binds the new FBO).
+            editorFbo.bind();
 
             // Legacy onRender callback (for any remaining direct rendering)
             onRender(spriteBatch_, camera_);
@@ -866,7 +873,9 @@ void App::render() {
 
         static Shader s_blitShader;
         static bool s_blitLoaded = false;
-        if (!s_blitLoaded) {
+        static bool s_blitAttempted = false;
+        if (!s_blitLoaded && !s_blitAttempted) {
+            s_blitAttempted = true;
             s_blitLoaded = s_blitShader.loadFromFile(
                 "assets/shaders/fullscreen_quad.vert",
                 "assets/shaders/blit.frag"

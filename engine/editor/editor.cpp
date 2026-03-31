@@ -101,18 +101,17 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     fontCfg.OversampleH = 1;
     fontCfg.OversampleV = 1;
 
-    // Body font (14px) — default for all UI
-    fontBody_ = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter-Regular.ttf", 14.0f, &fontCfg);
-
-    // Heading font (16px) — CollapsingHeaders, entity names
-    fontHeading_ = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter-SemiBold.ttf", 16.0f, &fontCfg);
-
-    // Small font (12px) — metadata, FPS, breadcrumbs
-    fontSmall_ = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter-Regular.ttf", 12.0f, &fontCfg);
-
-    // Fallback: if fonts fail to load, ImGui uses its built-in font
+    // Load Inter fonts if present, otherwise fall back to ImGui default.
+    // AddFontFromFileTTF asserts on missing files, so check existence first.
+    FILE* fontCheck = fopen("assets/fonts/Inter-Regular.ttf", "rb");
+    if (fontCheck) {
+        fclose(fontCheck);
+        fontBody_ = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter-Regular.ttf", 14.0f, &fontCfg);
+        fontHeading_ = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter-SemiBold.ttf", 16.0f, &fontCfg);
+        fontSmall_ = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter-Regular.ttf", 12.0f, &fontCfg);
+    }
     if (!fontBody_) {
-        LOG_WARN("Editor", "Failed to load Inter fonts — using ImGui default");
+        LOG_WARN("Editor", "Inter fonts not found — using ImGui default");
         fontBody_ = io.Fonts->AddFontDefault();
         fontHeading_ = fontBody_;
         fontSmall_ = fontBody_;
@@ -3080,6 +3079,18 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
                 uiManager_->suppressHotReload();
             }
         }
+        // Save prefab-spawned entities (player, etc.) that are excluded
+        // from scene saves.  Find them in the world directly — don't rely
+        // on selectedEntity_ which may be null when the UI editor has focus.
+        if (world) {
+            world->forEachEntity([](Entity* e) {
+                if (e->tag() != "player") return;
+                if (PrefabLibrary::instance().has("player")) {
+                    PrefabLibrary::instance().save("player", e);
+                    LOG_INFO("Editor", "Ctrl+S: saved player entity to prefab 'player'");
+                }
+            });
+        }
     }
     // Ctrl+D = Duplicate
     if (ctrl && scancode == SDL_SCANCODE_D && selectedEntity_) {
@@ -3163,15 +3174,58 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     }
 }
 
-#else // !FATE_HAS_GAME — stub implementations for demo build
+#else // !FATE_HAS_GAME — demo build with engine-only panels
 
 void Editor::applyLayerVisibility(World*) {}
 void Editor::renderScene(SpriteBatch*, Camera*) {}
-void Editor::renderUI(World* world, Camera*, SpriteBatch*, FrameArena*) {
+void Editor::renderUI(World* world, Camera*, SpriteBatch*, FrameArena* frameArena) {
     if (!frameStarted_) return;
+
     drawDockSpace();
+    drawMenuBar(world);
     drawSceneViewport();
-    if (showDemoWindow_) ImGui::ShowDemoWindow(&showDemoWindow_);
+    drawHierarchy(world);
+    drawDebugInfoPanel(world);
+    LogViewer::instance().draw();
+    drawAssetBrowser(world, nullptr);
+    dialogueEditor_.draw();
+
+    if (uiManager_) {
+        uiEditorPanel_.draw(*uiManager_);
+    }
+
+#if defined(ENGINE_MEMORY_DEBUG)
+    if (showMemoryPanel_) {
+        drawMemoryPanel(&showMemoryPanel_, frameArena);
+    }
+#endif
+
+    if (showDemoWindow_) {
+        ImGui::ShowDemoWindow(&showDemoWindow_);
+    }
+
+    // Post-process config panel
+    if (showPostProcessPanel_ && postProcessConfig_) {
+        ImGui::SetNextWindowSize(ImVec2(280, 320), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Post Process", &showPostProcessPanel_)) {
+            ImGui::Checkbox("Bloom Enabled", &postProcessConfig_->bloomEnabled);
+            ImGui::DragFloat("Bloom Threshold", &postProcessConfig_->bloomThreshold, 0.01f, 0.0f, 2.0f);
+            ImGui::DragFloat("Bloom Strength", &postProcessConfig_->bloomStrength, 0.01f, 0.0f, 4.0f);
+            ImGui::Separator();
+            ImGui::Checkbox("Vignette", &postProcessConfig_->vignetteEnabled);
+            ImGui::DragFloat("Vignette Radius", &postProcessConfig_->vignetteRadius, 0.01f, 0.0f, 2.0f);
+            ImGui::DragFloat("Vignette Smoothness", &postProcessConfig_->vignetteSmoothness, 0.01f, 0.0f, 2.0f);
+            ImGui::Separator();
+            float tint[3] = {postProcessConfig_->colorTint.r, postProcessConfig_->colorTint.g, postProcessConfig_->colorTint.b};
+            if (ImGui::ColorEdit3("Color Tint", tint)) {
+                postProcessConfig_->colorTint = {tint[0], tint[1], tint[2], 1.0f};
+            }
+            ImGui::DragFloat("Brightness", &postProcessConfig_->brightness, 0.01f, 0.0f, 3.0f);
+            ImGui::DragFloat("Contrast", &postProcessConfig_->contrast, 0.01f, 0.0f, 3.0f);
+        }
+        ImGui::End();
+    }
+
     ImGui::Render();
 #ifndef FATEMMO_METAL
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -3187,6 +3241,27 @@ void Editor::renderUI(World* world, Camera*, SpriteBatch*, FrameArena*) {
 void Editor::drawDockSpace() {
     ImGuiDockNodeFlags flags = ImGuiDockNodeFlags_PassthruCentralNode;
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), flags);
+}
+void Editor::drawMenuBar(World*) {
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("View")) {
+            ImGui::MenuItem("Post Process", nullptr, &showPostProcessPanel_);
+            ImGui::Separator();
+            ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow_);
+#if defined(ENGINE_MEMORY_DEBUG)
+            ImGui::MenuItem("Memory", nullptr, &showMemoryPanel_);
+#endif
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("About")) {
+            ImGui::Text("FateMMO Engine v0.1.0");
+            ImGui::Separator();
+            ImGui::Text("C++23 | OpenGL 3.3 | Custom UDP");
+            ImGui::Text("github.com/wFate/FateMMO_GameEngine");
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
 }
 void Editor::drawSceneViewport() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -3209,6 +3284,34 @@ void Editor::drawSceneViewport() {
     ImGui::End();
     ImGui::PopStyleVar();
 }
+void Editor::drawHierarchy(World* world) {
+    if (ImGui::Begin("Hierarchy")) {
+        if (world) {
+            ImGui::Text("Entities: %zu", world->entityCount());
+            ImGui::Separator();
+            ImGui::TextDisabled("(Full game build shows entity tree)");
+        } else {
+            ImGui::TextDisabled("No world loaded");
+        }
+    }
+    ImGui::End();
+}
+void Editor::drawDebugInfoPanel(World* world) {
+    if (ImGui::Begin("Debug Info")) {
+        ImGuiIO& io = ImGui::GetIO();
+        ImGui::Text("FPS: %.1f (%.2f ms)", io.Framerate, 1000.0f / io.Framerate);
+        ImGui::Separator();
+        if (world) {
+            ImGui::Text("Entities: %zu", world->entityCount());
+        }
+        ImGui::Separator();
+        ImGui::Text("Viewport: %dx%d", (int)viewportSize_.x, (int)viewportSize_.y);
+        ImGui::Text("FBO: %dx%d", viewportFbo_.width(), viewportFbo_.height());
+        ImGui::Separator();
+        ImGui::Text("Paused: %s", paused_ ? "Yes" : "No");
+    }
+    ImGui::End();
+}
 void Editor::drawSceneGridShader(Camera*) {}
 void Editor::handleSceneClick(World*, Camera*, const Vec2&, int, int) {}
 void Editor::handleSceneDrag(Camera*, const Vec2&, int, int) {}
@@ -3216,7 +3319,12 @@ void Editor::handleMouseUp() {}
 void Editor::paintTileAt(World*, Camera*, const Vec2&, int, int) {}
 void Editor::eraseTileAt(World*, Camera*, const Vec2&, int, int) {}
 void Editor::scanAssets() {}
-void Editor::drawAssetBrowser(World*, Camera*) {}
+void Editor::drawAssetBrowser(World* world, Camera* camera) {
+    if (ImGui::Begin("Project")) {
+        assetBrowser_.draw(world, camera);
+    }
+    ImGui::End();
+}
 void Editor::drawTilePalette(World*, Camera*) {}
 void Editor::drawSceneGrid(SpriteBatch*, Camera*) {}
 void Editor::drawSelectionOutlines(SpriteBatch*, Camera*) {}
@@ -3226,12 +3334,9 @@ void Editor::loadScene(World*, const std::string&) {}
 void Editor::enterPlayMode(World*) {}
 void Editor::exitPlayMode(World*) {}
 void Editor::drawHUD(World*) {}
-void Editor::drawMenuBar(World*) {}
 void Editor::drawToolbar(World*) {}
-void Editor::drawHierarchy(World*) {}
 void Editor::drawConsole(World*) {}
 void Editor::executeCommand(World*, const std::string&) {}
-void Editor::drawDebugInfoPanel(World*) {}
 void Editor::loadTileset(const std::string&, int) {}
 void Editor::handleKeyShortcuts(World*, const SDL_Event&) {}
 void Editor::captureInspectorUndo() {}
