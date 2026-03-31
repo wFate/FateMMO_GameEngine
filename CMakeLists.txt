@@ -213,11 +213,36 @@ else()
 endif()
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
-    # OpenSSL (TLS for auth) — installed via vcpkg
-    find_package(OpenSSL REQUIRED)
+    # OpenSSL (TLS for auth) — optional, installed via vcpkg
+    find_package(OpenSSL QUIET)
+    if(OpenSSL_FOUND)
+        message(STATUS "OpenSSL found — TLS auth enabled")
+    else()
+        message(STATUS "OpenSSL NOT found — TLS auth disabled")
+    endif()
 
-    # FreeType (font rendering for ImGui) — installed via vcpkg
-    find_package(Freetype REQUIRED)
+    # FreeType (font rendering for ImGui) — try system/vcpkg first, fallback to FetchContent
+    find_package(Freetype QUIET)
+    if(NOT Freetype_FOUND AND NOT FREETYPE_FOUND)
+        message(STATUS "System FreeType not found — fetching via FetchContent")
+        FetchContent_Declare(
+            freetype
+            GIT_REPOSITORY https://github.com/freetype/freetype.git
+            GIT_TAG        VER-2-13-3
+            GIT_SHALLOW    TRUE
+        )
+        set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+        set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
+        set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+        set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(freetype)
+        # FetchContent freetype target is 'freetype', alias to match find_package convention
+        if(NOT TARGET Freetype::Freetype)
+            add_library(Freetype::Freetype ALIAS freetype)
+        endif()
+    else()
+        message(STATUS "System FreeType found")
+    endif()
 
     # Server-only dependencies (PostgreSQL, libpqxx, bcrypt)
     find_package(PostgreSQL QUIET)
@@ -383,7 +408,10 @@ if(APPLE)
     target_link_libraries(fate_engine PUBLIC ${METAL_LIBS})
 endif()
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
-    target_link_libraries(fate_engine PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+    if(OpenSSL_FOUND)
+        target_link_libraries(fate_engine PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+        target_compile_definitions(fate_engine PUBLIC FATE_HAS_OPENSSL=1)
+    endif()
 endif()
 
 # libsodium (AEAD packet encryption) — optional, via vcpkg
@@ -424,61 +452,94 @@ target_precompile_headers(fate_engine PRIVATE
 )
 
 # =============================================================================
-# Game Executable
+# Game Executable (only when game/ sources exist)
 # =============================================================================
 file(GLOB_RECURSE GAME_SOURCES
     game/*.cpp
     game/*.h
 )
 
-add_executable(FateEngine ${GAME_SOURCES})
-target_link_libraries(FateEngine PRIVATE
-    fate_engine
-    SDL2::SDL2main
-)
-if(APPLE)
-    target_link_libraries(FateEngine PRIVATE ${METAL_LIBS})
+if(GAME_SOURCES)
+    # Define FATE_HAS_GAME so engine code can conditionally include game headers
+    target_compile_definitions(fate_engine PUBLIC FATE_HAS_GAME=1)
+
+    add_executable(FateEngine ${GAME_SOURCES})
+    target_link_libraries(FateEngine PRIVATE
+        fate_engine
+        SDL2::SDL2main
+    )
+    if(APPLE)
+        target_link_libraries(FateEngine PRIVATE ${METAL_LIBS})
+    endif()
+
+    # Pass source directory to code so saves go to the right place
+    target_compile_definitions(FateEngine PRIVATE
+        FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        FATE_DEV_TLS
+        EDITOR_BUILD
+    )
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        set_target_properties(FateEngine PROPERTIES
+            MACOSX_BUNDLE TRUE
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.fatemmo.game"
+            MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/ios/Info.plist.in"
+            XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "iPhone Developer"
+            XCODE_ATTRIBUTE_DEVELOPMENT_TEAM ""
+            XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
+            XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
+            XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "15.0"
+            RESOURCE "${CMAKE_SOURCE_DIR}/ios/LaunchScreen.storyboard"
+        )
+
+        # Bundle assets into the .app
+        file(GLOB_RECURSE IOS_ASSETS "${CMAKE_SOURCE_DIR}/assets/*")
+        set_source_files_properties(${IOS_ASSETS} PROPERTIES
+            MACOSX_PACKAGE_LOCATION "Resources/assets"
+        )
+        target_sources(FateEngine PRIVATE ${IOS_ASSETS})
+    else()
+        # Copy assets to build directory on every build (desktop only)
+        add_custom_command(TARGET FateEngine POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets
+            $<TARGET_FILE_DIR:FateEngine>/assets
+        )
+    endif()
+else()
+    message(STATUS "game/ sources not found — skipping FateEngine target")
 endif()
 
-# Pass source directory to code so saves go to the right place
-target_compile_definitions(FateEngine PRIVATE
-    FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-    FATE_DEV_TLS
-    EDITOR_BUILD
-)
-
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set_target_properties(FateEngine PROPERTIES
-        MACOSX_BUNDLE TRUE
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.fatemmo.game"
-        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/ios/Info.plist.in"
-        XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "iPhone Developer"
-        XCODE_ATTRIBUTE_DEVELOPMENT_TEAM ""
-        XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
-        XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
-        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "15.0"
-        RESOURCE "${CMAKE_SOURCE_DIR}/ios/LaunchScreen.storyboard"
+# =============================================================================
+# Demo Application (always builds when examples/demo_app.cpp exists)
+# =============================================================================
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/demo_app.cpp")
+    add_executable(FateDemo examples/demo_app.cpp)
+    target_link_libraries(FateDemo PRIVATE
+        fate_engine
+        SDL2::SDL2main
     )
-
-    # Bundle assets into the .app
-    file(GLOB_RECURSE IOS_ASSETS "${CMAKE_SOURCE_DIR}/assets/*")
-    set_source_files_properties(${IOS_ASSETS} PROPERTIES
-        MACOSX_PACKAGE_LOCATION "Resources/assets"
+    target_compile_definitions(FateDemo PRIVATE
+        FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     )
-    target_sources(FateEngine PRIVATE ${IOS_ASSETS})
-else()
-    # Copy assets to build directory on every build (desktop only)
-    add_custom_command(TARGET FateEngine POST_BUILD
+    if(APPLE)
+        target_link_libraries(FateDemo PRIVATE ${METAL_LIBS})
+    endif()
+    # Copy assets to build directory
+    add_custom_command(TARGET FateDemo POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/assets
-        $<TARGET_FILE_DIR:FateEngine>/assets
+        $<TARGET_FILE_DIR:FateDemo>/assets
     )
+    message(STATUS "FateDemo target configured")
+else()
+    message(STATUS "examples/demo_app.cpp not found — skipping FateDemo target")
 endif()
 
 # =============================================================================
-# Shipping Metallib Build
+# Shipping Metallib Build (only when FateEngine target exists)
 # =============================================================================
-if(APPLE AND FATE_SHIPPING)
+if(APPLE AND FATE_SHIPPING AND TARGET FateEngine)
     file(GLOB METAL_SHADERS ${CMAKE_SOURCE_DIR}/assets/shaders/metal/*.metal)
     if(METAL_SHADERS)
         set(METAL_AIR_FILES "")
@@ -515,7 +576,10 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     set(SERVER_GAME_SOURCES game/entity_factory.cpp)
     if(SERVER_SOURCES AND PostgreSQL_FOUND)
         add_executable(FateServer ${SERVER_SOURCES} ${SERVER_SHARED_SOURCES} ${SERVER_GAME_SOURCES})
-        target_link_libraries(FateServer PRIVATE fate_engine pqxx PostgreSQL::PostgreSQL bcrypt_lib OpenSSL::SSL OpenSSL::Crypto spdlog::spdlog)
+        target_link_libraries(FateServer PRIVATE fate_engine pqxx PostgreSQL::PostgreSQL bcrypt_lib spdlog::spdlog)
+        if(OpenSSL_FOUND)
+            target_link_libraries(FateServer PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+        endif()
         target_include_directories(FateServer PRIVATE ${CMAKE_SOURCE_DIR})
         if(WIN32)
             target_link_libraries(FateServer PRIVATE winmm)
@@ -582,21 +646,29 @@ endif()
 
 if(MSVC)
     target_compile_definitions(fate_engine PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_definitions(FateEngine PRIVATE _CRT_SECURE_NO_WARNINGS)
+    if(TARGET FateEngine)
+        target_compile_definitions(FateEngine PRIVATE _CRT_SECURE_NO_WARNINGS)
+    endif()
     if(NOT FATE_SHIPPING)
         target_compile_definitions(imgui_lib PRIVATE _CRT_SECURE_NO_WARNINGS IMGUI_DEFINE_MATH_OPERATORS IMGUI_ENABLE_FREETYPE)
     endif()
     target_compile_options(fate_engine PRIVATE /W4 /wd4100 /wd4201 /wd4458)
-    target_compile_options(FateEngine PRIVATE /W4 /wd4100 /wd4201 /wd4458 /bigobj)
+    if(TARGET FateEngine)
+        target_compile_options(FateEngine PRIVATE /W4 /wd4100 /wd4201 /wd4458 /bigobj)
+    endif()
     if(NOT FATE_SHIPPING)
         target_compile_options(imgui_lib PRIVATE /W4 /wd4100 /wd4201 /wd4458 /wd4996)
     endif()
     target_compile_options(fate_engine PRIVATE /MP /bigobj)
-    target_compile_options(FateEngine PRIVATE /MP)
+    if(TARGET FateEngine)
+        target_compile_options(FateEngine PRIVATE /MP)
+    endif()
     if(NOT FATE_SHIPPING)
         target_compile_options(imgui_lib PRIVATE /MP)
     endif()
 else()
     target_compile_options(fate_engine PRIVATE -Wall -Wextra -Wpedantic)
-    target_compile_options(FateEngine PRIVATE -Wall -Wextra -Wpedantic)
+    if(TARGET FateEngine)
+        target_compile_options(FateEngine PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
 endif()
