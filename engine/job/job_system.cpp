@@ -167,7 +167,11 @@ void JobSystem::workerMain(int workerIndex) {
     fiber::convertFiberToThread();
 }
 
+#ifdef _WIN32
 void __stdcall JobSystem::fiberEntry(void* param) {
+#else
+void JobSystem::fiberEntry(void* param) {
+#endif
     (void)param;
     auto& js = JobSystem::instance();
 

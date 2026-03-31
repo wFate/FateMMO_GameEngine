@@ -220,6 +220,7 @@ void UIManager::update(float dt) {
         tooltipHoverTime_ = 0.0f;
     }
 
+#ifdef FATE_HAS_GAME
     // Resolve data bindings on all screen nodes
     for (auto& [id, root] : screens_) {
         std::function<void(UINode*)> resolveBindings = [&](UINode* node) {
@@ -246,6 +247,7 @@ void UIManager::update(float dt) {
         };
         resolveBindings(root.get());
     }
+#endif // FATE_HAS_GAME
 
     // Hot-reload check every 0.5s (suppressed briefly after editor save)
     if (hotReloadSuppressTimer_ > 0.0f) {
@@ -2239,6 +2241,7 @@ void UIManager::handleInput() {
 
     // Handle draggable panel/window movement while mouse is held
     if (pressedNode_ && input.isMouseDown(SDL_BUTTON_LEFT)) {
+#ifdef FATE_HAS_GAME
         auto* panel = dynamic_cast<Panel*>(pressedNode_);
         if (panel && panel->isDragging_) {
             Vec2 newPos = {mousePos.x - panel->dragOffset_.x,
@@ -2253,6 +2256,7 @@ void UIManager::handleInput() {
                 window->anchor().offset = newPos;
             }
         }
+#endif // FATE_HAS_GAME
 
         // Notify pressed widget of drag movement (for item drag cursors, etc.)
         Vec2 localPos = {mousePos.x - pressedNode_->computedRect().x,
