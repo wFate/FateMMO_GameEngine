@@ -1906,23 +1906,27 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     else if (auto* sp2 = dynamic_cast<ShopPanel*>(selectedNode_)) {
         ImGui::SeparatorText("ShopPanel");
         if (ImGui::TreeNodeEx("Position Offsets##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat2("Title##shpo", &sp2->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("Shop List##shpo", &sp2->shopListOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("Gold##shpo", &sp2->goldOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Title##shpo", &sp2->titleOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Sub-Header##shpo", &sp2->shopListOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Gold Bar##shpo", &sp2->goldOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Item Name##shpo", &sp2->itemNameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Price##shpo", &sp2->priceOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Stock##shpo", &sp2->stockOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Font Sizes##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat("Title##shpf", &sp2->titleFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Header##shpf", &sp2->headerFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Item##shpf", &sp2->itemFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Price##shpf", &sp2->priceFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Gold##shpf", &sp2->goldFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Title##shpf", &sp2->titleFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Sub-Header##shpf", &sp2->subHeaderFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Item Name##shpf", &sp2->itemFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Price##shpf", &sp2->priceFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Gold Bar##shpf", &sp2->goldFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Stock##shpf", &sp2->stockFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Layout##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat("Header Height##shpl", &sp2->headerHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header Height##shpl", &sp2->headerHeight, 1.0f, 0.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Row Height##shpl", &sp2->rowHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Gold Bar Height##shpl", &sp2->goldBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Gold Bar Height##shpl", &sp2->goldBarHeight, 1.0f, 0.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Buy Btn Width##shpl", &sp2->buyBtnWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Buy Btn Height##shpl", &sp2->buyBtnHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Content Padding##shpl", &sp2->contentPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
@@ -1935,11 +1939,17 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Title##shpc", &sp2->titleColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Header BG##shpc", &sp2->headerBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Text##shpc", &sp2->textColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Gold##shpc", &sp2->goldColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gold Text##shpc", &sp2->goldColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Price Text##shpc2", &sp2->priceColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Stock Text##shpc2", &sp2->stockColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Sub-Header##shpc2", &sp2->subHeaderColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Buy Btn##shpc", &sp2->buyBtnColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Buy Disabled##shpc", &sp2->buyBtnDisabledColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Divider##shpc", &sp2->dividerColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Error##shpc", &sp2->errorColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Row BG##shpc2", &sp2->rowBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Row Alt BG##shpc2", &sp2->rowAltBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gold Bar BG##shpc2", &sp2->goldBarBgColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         char shopBuf[128] = {};
@@ -1948,10 +1958,15 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             sp2->shopName = shopBuf;
         }
         checkUndoCapture(uiMgr);
+        char subHdrBuf[128] = {};
+        snprintf(subHdrBuf, sizeof(subHdrBuf), "%s", sp2->subHeaderLabel.c_str());
+        if (ImGui::InputText("Sub-Header Label", subHdrBuf, sizeof(subHdrBuf))) {
+            sp2->subHeaderLabel = subHdrBuf;
+        }
+        checkUndoCapture(uiMgr);
         ImGui::Separator();
         ImGui::Text("Shop Items: %zu", sp2->shopItems.size());
         ImGui::Text("NPC: %u", sp2->npcId);
-        ImGui::TextWrapped("Inventory displayed via InventoryPanel (shown alongside when shop opens)");
     }
     else if (auto* bp = dynamic_cast<BankPanel*>(selectedNode_)) {
         ImGui::SeparatorText("BankPanel");

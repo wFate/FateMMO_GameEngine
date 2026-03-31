@@ -1350,11 +1350,17 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         shp->titleOffset     = readVec2("titleOffset",     shp->titleOffset);
         shp->shopListOffset  = readVec2("shopListOffset",  shp->shopListOffset);
         shp->goldOffset      = readVec2("goldOffset",      shp->goldOffset);
+        shp->priceOffset     = readVec2("priceOffset",     shp->priceOffset);
+        shp->stockOffset     = readVec2("stockOffset",     shp->stockOffset);
+        shp->itemNameOffset  = readVec2("itemNameOffset",  shp->itemNameOffset);
+        shp->subHeaderLabel  = j.value("subHeaderLabel", std::string{"Shop Items"});
         shp->titleFontSize   = j.value("titleFontSize", 14.0f);
         shp->headerFontSize  = j.value("headerFontSize", 11.0f);
         shp->itemFontSize    = j.value("itemFontSize", 10.0f);
         shp->priceFontSize   = j.value("priceFontSize", 9.0f);
         shp->goldFontSize    = j.value("goldFontSize", 12.0f);
+        shp->stockFontSize   = j.value("stockFontSize", 8.0f);
+        shp->subHeaderFontSize = j.value("subHeaderFontSize", 11.0f);
         shp->headerHeight    = j.value("headerHeight", 30.0f);
         shp->rowHeight       = j.value("rowHeight", 36.0f);
         shp->goldBarHeight   = j.value("goldBarHeight", 28.0f);
@@ -1380,6 +1386,12 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         shp->buyBtnDisabledColor = readColor("buyBtnDisabledColor", shp->buyBtnDisabledColor);
         shp->dividerColor        = readColor("dividerColor",        shp->dividerColor);
         shp->errorColor          = readColor("errorColor",          shp->errorColor);
+        shp->rowBgColor          = readColor("rowBgColor",          shp->rowBgColor);
+        shp->rowAltBgColor       = readColor("rowAltBgColor",       shp->rowAltBgColor);
+        shp->subHeaderColor      = readColor("subHeaderColor",      shp->subHeaderColor);
+        shp->goldBarBgColor      = readColor("goldBarBgColor",      shp->goldBarBgColor);
+        shp->stockColor          = readColor("stockColor",          shp->stockColor);
+        shp->priceColor          = readColor("priceColor",          shp->priceColor);
         node = std::move(shp);
     }
     else if (type == "bank_panel") {

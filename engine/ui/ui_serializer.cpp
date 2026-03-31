@@ -1126,11 +1126,17 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["titleOffset"]      = {w->titleOffset.x, w->titleOffset.y};
             j["shopListOffset"]   = {w->shopListOffset.x, w->shopListOffset.y};
             j["goldOffset"]       = {w->goldOffset.x, w->goldOffset.y};
+            j["priceOffset"]      = {w->priceOffset.x, w->priceOffset.y};
+            j["stockOffset"]      = {w->stockOffset.x, w->stockOffset.y};
+            j["itemNameOffset"]   = {w->itemNameOffset.x, w->itemNameOffset.y};
+            j["subHeaderLabel"]   = w->subHeaderLabel;
             j["titleFontSize"]    = w->titleFontSize;
             j["headerFontSize"]   = w->headerFontSize;
             j["itemFontSize"]     = w->itemFontSize;
             j["priceFontSize"]    = w->priceFontSize;
             j["goldFontSize"]     = w->goldFontSize;
+            j["stockFontSize"]    = w->stockFontSize;
+            j["subHeaderFontSize"]= w->subHeaderFontSize;
             j["headerHeight"]     = w->headerHeight;
             j["rowHeight"]        = w->rowHeight;
             j["goldBarHeight"]    = w->goldBarHeight;
@@ -1149,6 +1155,12 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["buyBtnDisabledColor"] = c2a(w->buyBtnDisabledColor);
             j["dividerColor"]        = c2a(w->dividerColor);
             j["errorColor"]          = c2a(w->errorColor);
+            j["rowBgColor"]          = c2a(w->rowBgColor);
+            j["rowAltBgColor"]       = c2a(w->rowAltBgColor);
+            j["subHeaderColor"]      = c2a(w->subHeaderColor);
+            j["goldBarBgColor"]      = c2a(w->goldBarBgColor);
+            j["stockColor"]          = c2a(w->stockColor);
+            j["priceColor"]          = c2a(w->priceColor);
         }
     }
     else if (type == "bank_panel") {
