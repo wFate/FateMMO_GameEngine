@@ -49,6 +49,11 @@ struct ClientConnection {
     // In-memory trade state (avoids DB round-trip for guard checks)
     int activeTradeSessionId = 0;       // 0 = not in trade
     std::string tradePartnerCharId;     // partner's character_id
+
+    // Invite prompt busy state — prevents concurrent invites
+    bool hasActivePrompt = false;
+    int pendingGuildInviteId = 0;           // guild ID of pending invite
+    std::string pendingGuildInviteFromCharId; // who sent the guild invite
 };
 
 class ConnectionManager {
