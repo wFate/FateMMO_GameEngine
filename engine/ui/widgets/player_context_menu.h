@@ -21,12 +21,18 @@ public:
     float menuFontSize = 13.0f;
     float itemHeight = 28.0f;
     float menuWidth = 140.0f;
+    float headerPadding = 12.0f;
+    float borderWidth = 1.5f;
+    float separatorMargin = 8.0f;
+    float separatorHeight = 1.0f;
+    float itemTextPadding = 10.0f;
 
     // Colors
     Color bgColor = {0.08f, 0.08f, 0.11f, 0.92f};
     Color borderColor = {0.6f, 0.5f, 0.25f, 0.9f};
     Color nameHeaderColor = {0.95f, 0.82f, 0.45f, 1.0f};
     Color separatorColor = {0.4f, 0.35f, 0.2f, 0.7f};
+    Color hoverColor = {0.18f, 0.16f, 0.10f, 0.4f};
     Color pressedColor = {0.25f, 0.22f, 0.12f, 0.6f};
     Color enabledTextColor = {0.92f, 0.90f, 0.85f, 1.0f};
     Color disabledTextColor = {0.45f, 0.43f, 0.40f, 0.7f};

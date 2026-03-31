@@ -2161,17 +2161,23 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Border##pcmc", &pcm->borderColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Name Header##pcmc", &pcm->nameHeaderColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Separator##pcmc", &pcm->separatorColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Hover##pcmc", &pcm->hoverColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Pressed##pcmc", &pcm->pressedColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Enabled Text##pcmc", &pcm->enabledTextColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Disabled Text##pcmc", &pcm->disabledTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
-        ImGui::DragFloat("Font Size##pcm", &pcm->menuFontSize, 0.5f, 8.0f, 24.0f);
-        checkUndoCapture(uiMgr);
-        ImGui::DragFloat("Item Height##pcm", &pcm->itemHeight, 1.0f, 16.0f, 48.0f);
-        checkUndoCapture(uiMgr);
-        ImGui::DragFloat("Menu Width##pcm", &pcm->menuWidth, 1.0f, 80.0f, 300.0f);
-        checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Layout##pcm", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Font Size##pcm", &pcm->menuFontSize, 0.5f, 8.0f, 24.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Item Height##pcm", &pcm->itemHeight, 1.0f, 16.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Menu Width##pcm", &pcm->menuWidth, 1.0f, 80.0f, 300.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header Padding##pcm", &pcm->headerPadding, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##pcm", &pcm->borderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Sep Margin##pcm", &pcm->separatorMargin, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Sep Height##pcm", &pcm->separatorHeight, 0.25f, 0.0f, 4.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Text Padding##pcm", &pcm->itemTextPadding, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::Separator();
         ImGui::Text("Target: %s", pcm->targetCharName.c_str());
         ImGui::Text("Can Trade: %s", pcm->canTrade ? "Yes" : "No");

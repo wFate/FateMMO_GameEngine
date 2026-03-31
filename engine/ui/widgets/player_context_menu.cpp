@@ -33,7 +33,7 @@ void PlayerContextMenu::hide() {
 }
 
 float PlayerContextMenu::headerHeight() const {
-    return (menuFontSize + 12.0f) * layoutScale_; // font + padding
+    return (menuFontSize + headerPadding) * layoutScale_;
 }
 
 Rect PlayerContextMenu::itemRect(int index) const {
@@ -119,7 +119,7 @@ void PlayerContextMenu::render(SpriteBatch& batch, SDFText& sdf) {
                    {sMenuWidth, totalH}, bgColor, d);
 
     // Thin gold border
-    float bw = 1.5f * s;
+    float bw = borderWidth * s;
     float innerH = totalH - bw * 2.0f;
     batch.drawRect({rect.x + sMenuWidth * 0.5f, rect.y + bw * 0.5f}, {sMenuWidth, bw}, borderColor, d + 0.15f);
     batch.drawRect({rect.x + sMenuWidth * 0.5f, rect.y + totalH - bw * 0.5f}, {sMenuWidth, bw}, borderColor, d + 0.15f);
@@ -137,7 +137,7 @@ void PlayerContextMenu::render(SpriteBatch& batch, SDFText& sdf) {
     // Separator line below header
     {
         float sepY = rect.y + headerHeight();
-        batch.drawRect({rect.x + sMenuWidth * 0.5f, sepY}, {sMenuWidth - 8.0f * s, 1.0f * s}, separatorColor, d + 0.15f);
+        batch.drawRect({rect.x + sMenuWidth * 0.5f, sepY}, {sMenuWidth - separatorMargin * s, separatorHeight * s}, separatorColor, d + 0.15f);
     }
 
     // Menu items
@@ -159,6 +159,9 @@ void PlayerContextMenu::render(SpriteBatch& batch, SDFText& sdf) {
             if (isPressed) {
                 batch.drawRect({absX + ir.w * 0.5f, absY + ir.h * 0.5f},
                                {ir.w, ir.h}, pressedColor, d + 0.05f);
+            } else if (isHovered) {
+                batch.drawRect({absX + ir.w * 0.5f, absY + ir.h * 0.5f},
+                               {ir.w, ir.h}, hoverColor, d + 0.05f);
             }
         }
 
@@ -166,7 +169,7 @@ void PlayerContextMenu::render(SpriteBatch& batch, SDFText& sdf) {
         Color textColor = enabled[i] ? enabledTextColor : disabledTextColor;
 
         Vec2 textSize = sdf.measure(labels[i], fontSize);
-        float textX = absX + 10.0f * s + itemOffset.x * s; // left-aligned with padding
+        float textX = absX + itemTextPadding * s + itemOffset.x * s; // left-aligned with padding
         float textY = absY + (ir.h - textSize.y) * 0.5f + itemOffset.y * s;
         sdf.drawScreen(batch, labels[i], {textX, textY}, fontSize, textColor, d + 0.2f);
     }

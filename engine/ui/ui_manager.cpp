@@ -1339,19 +1339,19 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         };
         shp->titleOffset     = readVec2("titleOffset",     shp->titleOffset);
         shp->shopListOffset  = readVec2("shopListOffset",  shp->shopListOffset);
-        shp->inventoryOffset = readVec2("inventoryOffset", shp->inventoryOffset);
         shp->goldOffset      = readVec2("goldOffset",      shp->goldOffset);
-        shp->titleFontSize  = j.value("titleFontSize", 14.0f);
-        shp->headerFontSize = j.value("headerFontSize", 11.0f);
-        shp->itemFontSize   = j.value("itemFontSize", 10.0f);
-        shp->priceFontSize  = j.value("priceFontSize", 9.0f);
-        shp->goldFontSize   = j.value("goldFontSize", 12.0f);
-        shp->headerHeight   = j.value("headerHeight", 30.0f);
-        shp->rowHeight      = j.value("rowHeight", 36.0f);
-        shp->slotSize       = j.value("slotSize", 40.0f);
-        shp->goldBarHeight  = j.value("goldBarHeight", 28.0f);
-        shp->buyBtnWidth    = j.value("buyBtnWidth", 42.0f);
-        shp->buyBtnHeight   = j.value("buyBtnHeight", 22.0f);
+        shp->titleFontSize   = j.value("titleFontSize", 14.0f);
+        shp->headerFontSize  = j.value("headerFontSize", 11.0f);
+        shp->itemFontSize    = j.value("itemFontSize", 10.0f);
+        shp->priceFontSize   = j.value("priceFontSize", 9.0f);
+        shp->goldFontSize    = j.value("goldFontSize", 12.0f);
+        shp->headerHeight    = j.value("headerHeight", 30.0f);
+        shp->rowHeight       = j.value("rowHeight", 36.0f);
+        shp->goldBarHeight   = j.value("goldBarHeight", 28.0f);
+        shp->buyBtnWidth     = j.value("buyBtnWidth", 42.0f);
+        shp->buyBtnHeight    = j.value("buyBtnHeight", 22.0f);
+        shp->contentPadding  = j.value("contentPadding", 6.0f);
+        shp->subHeaderHeight = j.value("subHeaderHeight", 22.0f);
         auto readColor = [&](const char* key, Color def) -> Color {
             if (j.contains(key) && j[key].is_array() && j[key].size() >= 3) {
                 auto& c = j[key];
@@ -1360,8 +1360,6 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
             }
             return def;
         };
-        shp->quantityFontSize = j.value("quantityFontSize", 9.0f);
-        shp->gridPadding      = j.value("gridPadding", 4.0f);
         shp->bgColor             = readColor("bgColor",             shp->bgColor);
         shp->borderColor         = readColor("borderColor",         shp->borderColor);
         shp->titleColor          = readColor("titleColor",          shp->titleColor);
@@ -1370,43 +1368,8 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         shp->goldColor           = readColor("goldColor",           shp->goldColor);
         shp->buyBtnColor         = readColor("buyBtnColor",         shp->buyBtnColor);
         shp->buyBtnDisabledColor = readColor("buyBtnDisabledColor", shp->buyBtnDisabledColor);
-        shp->slotBgColor         = readColor("slotBgColor",         shp->slotBgColor);
         shp->dividerColor        = readColor("dividerColor",        shp->dividerColor);
         shp->errorColor          = readColor("errorColor",          shp->errorColor);
-        // Slot appearance
-        shp->slotFilledBgColor    = readColor("slotFilledBgColor",    shp->slotFilledBgColor);
-        shp->slotEmptyBgColor     = readColor("slotEmptyBgColor",     shp->slotEmptyBgColor);
-        shp->slotEmptyBorderColor = readColor("slotEmptyBorderColor", shp->slotEmptyBorderColor);
-        shp->slotBorderWidth      = j.value("slotBorderWidth", 1.0f);
-        shp->itemTextColor        = readColor("itemTextColor",        shp->itemTextColor);
-        shp->quantityColor        = readColor("quantityColor",        shp->quantityColor);
-        // Rarity colors
-        shp->rarityCommonColor    = readColor("rarityCommonColor",    shp->rarityCommonColor);
-        shp->rarityUncommonColor  = readColor("rarityUncommonColor",  shp->rarityUncommonColor);
-        shp->rarityRareColor      = readColor("rarityRareColor",      shp->rarityRareColor);
-        shp->rarityEpicColor      = readColor("rarityEpicColor",      shp->rarityEpicColor);
-        shp->rarityLegendaryColor = readColor("rarityLegendaryColor", shp->rarityLegendaryColor);
-        // Tooltip
-        shp->tooltipWidth        = j.value("tooltipWidth", 200.0f);
-        shp->tooltipPadding      = j.value("tooltipPadding", 8.0f);
-        shp->tooltipOffset       = j.value("tooltipOffset", 4.0f);
-        shp->tooltipShadowOffset = j.value("tooltipShadowOffset", 2.0f);
-        shp->tooltipLineSpacing  = j.value("tooltipLineSpacing", 2.0f);
-        shp->tooltipBorderWidth  = j.value("tooltipBorderWidth", 1.5f);
-        shp->tooltipSepHeight    = j.value("tooltipSepHeight", 1.5f);
-        shp->tooltipNameFontSize  = j.value("tooltipNameFontSize", 13.0f);
-        shp->tooltipStatFontSize  = j.value("tooltipStatFontSize", 11.0f);
-        shp->tooltipLevelFontSize = j.value("tooltipLevelFontSize", 10.0f);
-        shp->tooltipBgColor      = readColor("tooltipBgColor",     shp->tooltipBgColor);
-        shp->tooltipBorderColor  = readColor("tooltipBorderColor", shp->tooltipBorderColor);
-        shp->tooltipShadowColor  = readColor("tooltipShadowColor", shp->tooltipShadowColor);
-        shp->tooltipStatColor    = readColor("tooltipStatColor",   shp->tooltipStatColor);
-        shp->tooltipSepColor     = readColor("tooltipSepColor",    shp->tooltipSepColor);
-        shp->tooltipLevelColor   = readColor("tooltipLevelColor",  shp->tooltipLevelColor);
-        // Icon atlas
-        shp->iconAtlasKey  = j.value("iconAtlasKey", std::string{});
-        shp->iconAtlasCols = j.value("iconAtlasCols", 8);
-        shp->iconAtlasRows = j.value("iconAtlasRows", 4);
         node = std::move(shp);
     }
     else if (type == "bank_panel") {
@@ -1690,9 +1653,14 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         };
         w->nameOffset = readVec2("nameOffset", w->nameOffset);
         w->itemOffset = readVec2("itemOffset", w->itemOffset);
-        w->menuFontSize = j.value("menuFontSize", 13.0f);
-        w->itemHeight   = j.value("itemHeight", 28.0f);
-        w->menuWidth    = j.value("menuWidth", 140.0f);
+        w->menuFontSize    = j.value("menuFontSize", 13.0f);
+        w->itemHeight      = j.value("itemHeight", 28.0f);
+        w->menuWidth       = j.value("menuWidth", 140.0f);
+        w->headerPadding   = j.value("headerPadding", 12.0f);
+        w->borderWidth     = j.value("borderWidth", 1.5f);
+        w->separatorMargin = j.value("separatorMargin", 8.0f);
+        w->separatorHeight = j.value("separatorHeight", 1.0f);
+        w->itemTextPadding = j.value("itemTextPadding", 10.0f);
         auto readColor = [&](const char* key, Color def) -> Color {
             if (j.contains(key) && j[key].is_array() && j[key].size() >= 3) {
                 auto& c = j[key];
@@ -1705,6 +1673,7 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         w->borderColor       = readColor("borderColor",       w->borderColor);
         w->nameHeaderColor   = readColor("nameHeaderColor",   w->nameHeaderColor);
         w->separatorColor    = readColor("separatorColor",    w->separatorColor);
+        w->hoverColor        = readColor("hoverColor",        w->hoverColor);
         w->pressedColor      = readColor("pressedColor",      w->pressedColor);
         w->enabledTextColor  = readColor("enabledTextColor",  w->enabledTextColor);
         w->disabledTextColor = readColor("disabledTextColor", w->disabledTextColor);

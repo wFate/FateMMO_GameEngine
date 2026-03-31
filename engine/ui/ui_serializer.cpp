@@ -1084,23 +1084,21 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
     }
     else if (type == "shop_panel") {
         if (auto* w = dynamic_cast<const ShopPanel*>(node)) {
-            j["titleOffset"]     = {w->titleOffset.x, w->titleOffset.y};
-            j["shopListOffset"]  = {w->shopListOffset.x, w->shopListOffset.y};
-            j["inventoryOffset"] = {w->inventoryOffset.x, w->inventoryOffset.y};
-            j["goldOffset"]      = {w->goldOffset.x, w->goldOffset.y};
-            j["titleFontSize"]   = w->titleFontSize;
-            j["headerFontSize"]  = w->headerFontSize;
-            j["itemFontSize"]    = w->itemFontSize;
-            j["priceFontSize"]   = w->priceFontSize;
-            j["goldFontSize"]    = w->goldFontSize;
-            j["quantityFontSize"]= w->quantityFontSize;
-            j["headerHeight"]    = w->headerHeight;
-            j["rowHeight"]       = w->rowHeight;
-            j["slotSize"]        = w->slotSize;
-            j["goldBarHeight"]   = w->goldBarHeight;
-            j["buyBtnWidth"]     = w->buyBtnWidth;
-            j["buyBtnHeight"]    = w->buyBtnHeight;
-            j["gridPadding"]     = w->gridPadding;
+            j["titleOffset"]      = {w->titleOffset.x, w->titleOffset.y};
+            j["shopListOffset"]   = {w->shopListOffset.x, w->shopListOffset.y};
+            j["goldOffset"]       = {w->goldOffset.x, w->goldOffset.y};
+            j["titleFontSize"]    = w->titleFontSize;
+            j["headerFontSize"]   = w->headerFontSize;
+            j["itemFontSize"]     = w->itemFontSize;
+            j["priceFontSize"]    = w->priceFontSize;
+            j["goldFontSize"]     = w->goldFontSize;
+            j["headerHeight"]     = w->headerHeight;
+            j["rowHeight"]        = w->rowHeight;
+            j["goldBarHeight"]    = w->goldBarHeight;
+            j["buyBtnWidth"]      = w->buyBtnWidth;
+            j["buyBtnHeight"]     = w->buyBtnHeight;
+            j["contentPadding"]   = w->contentPadding;
+            j["subHeaderHeight"]  = w->subHeaderHeight;
             auto c2a = [](const Color& c) { return nlohmann::json::array({c.r, c.g, c.b, c.a}); };
             j["bgColor"]             = c2a(w->bgColor);
             j["borderColor"]         = c2a(w->borderColor);
@@ -1110,43 +1108,8 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["goldColor"]           = c2a(w->goldColor);
             j["buyBtnColor"]         = c2a(w->buyBtnColor);
             j["buyBtnDisabledColor"] = c2a(w->buyBtnDisabledColor);
-            j["slotBgColor"]         = c2a(w->slotBgColor);
             j["dividerColor"]        = c2a(w->dividerColor);
             j["errorColor"]          = c2a(w->errorColor);
-            // Slot appearance
-            j["slotFilledBgColor"]    = c2a(w->slotFilledBgColor);
-            j["slotEmptyBgColor"]     = c2a(w->slotEmptyBgColor);
-            j["slotEmptyBorderColor"] = c2a(w->slotEmptyBorderColor);
-            j["slotBorderWidth"]      = w->slotBorderWidth;
-            j["itemTextColor"]        = c2a(w->itemTextColor);
-            j["quantityColor"]        = c2a(w->quantityColor);
-            // Rarity colors
-            j["rarityCommonColor"]    = c2a(w->rarityCommonColor);
-            j["rarityUncommonColor"]  = c2a(w->rarityUncommonColor);
-            j["rarityRareColor"]      = c2a(w->rarityRareColor);
-            j["rarityEpicColor"]      = c2a(w->rarityEpicColor);
-            j["rarityLegendaryColor"] = c2a(w->rarityLegendaryColor);
-            // Tooltip
-            j["tooltipWidth"]        = w->tooltipWidth;
-            j["tooltipPadding"]      = w->tooltipPadding;
-            j["tooltipOffset"]       = w->tooltipOffset;
-            j["tooltipShadowOffset"] = w->tooltipShadowOffset;
-            j["tooltipLineSpacing"]  = w->tooltipLineSpacing;
-            j["tooltipBorderWidth"]  = w->tooltipBorderWidth;
-            j["tooltipSepHeight"]    = w->tooltipSepHeight;
-            j["tooltipNameFontSize"]  = w->tooltipNameFontSize;
-            j["tooltipStatFontSize"]  = w->tooltipStatFontSize;
-            j["tooltipLevelFontSize"] = w->tooltipLevelFontSize;
-            j["tooltipBgColor"]      = c2a(w->tooltipBgColor);
-            j["tooltipBorderColor"]  = c2a(w->tooltipBorderColor);
-            j["tooltipShadowColor"]  = c2a(w->tooltipShadowColor);
-            j["tooltipStatColor"]    = c2a(w->tooltipStatColor);
-            j["tooltipSepColor"]     = c2a(w->tooltipSepColor);
-            j["tooltipLevelColor"]   = c2a(w->tooltipLevelColor);
-            // Icon atlas
-            if (!w->iconAtlasKey.empty()) j["iconAtlasKey"] = w->iconAtlasKey;
-            j["iconAtlasCols"] = w->iconAtlasCols;
-            j["iconAtlasRows"] = w->iconAtlasRows;
         }
     }
     else if (type == "bank_panel") {
@@ -1385,13 +1348,19 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
         if (auto* w = dynamic_cast<const PlayerContextMenu*>(node)) {
             j["nameOffset"] = {w->nameOffset.x, w->nameOffset.y};
             j["itemOffset"] = {w->itemOffset.x, w->itemOffset.y};
-            j["menuFontSize"] = w->menuFontSize;
-            j["itemHeight"]   = w->itemHeight;
-            j["menuWidth"]    = w->menuWidth;
+            j["menuFontSize"]    = w->menuFontSize;
+            j["itemHeight"]      = w->itemHeight;
+            j["menuWidth"]       = w->menuWidth;
+            j["headerPadding"]   = w->headerPadding;
+            j["borderWidth"]     = w->borderWidth;
+            j["separatorMargin"] = w->separatorMargin;
+            j["separatorHeight"] = w->separatorHeight;
+            j["itemTextPadding"] = w->itemTextPadding;
             j["bgColor"]              = {w->bgColor.r, w->bgColor.g, w->bgColor.b, w->bgColor.a};
             j["borderColor"]          = {w->borderColor.r, w->borderColor.g, w->borderColor.b, w->borderColor.a};
             j["nameHeaderColor"]      = {w->nameHeaderColor.r, w->nameHeaderColor.g, w->nameHeaderColor.b, w->nameHeaderColor.a};
             j["separatorColor"]       = {w->separatorColor.r, w->separatorColor.g, w->separatorColor.b, w->separatorColor.a};
+            j["hoverColor"]           = {w->hoverColor.r, w->hoverColor.g, w->hoverColor.b, w->hoverColor.a};
             j["pressedColor"]         = {w->pressedColor.r, w->pressedColor.g, w->pressedColor.b, w->pressedColor.a};
             j["enabledTextColor"]     = {w->enabledTextColor.r, w->enabledTextColor.g, w->enabledTextColor.b, w->enabledTextColor.a};
             j["disabledTextColor"]    = {w->disabledTextColor.r, w->disabledTextColor.g, w->disabledTextColor.b, w->disabledTextColor.a};
