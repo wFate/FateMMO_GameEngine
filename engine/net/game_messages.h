@@ -79,6 +79,19 @@ namespace SocialAction {
 }
 
 // ============================================================================
+// Client -> Server: CmdParty sub-actions
+// ============================================================================
+namespace PartyAction {
+    constexpr uint8_t Invite        = 0;  // + targetCharId:string
+    constexpr uint8_t AcceptInvite  = 1;  // + inviterCharId:string
+    constexpr uint8_t DeclineInvite = 2;  // + inviterCharId:string
+    constexpr uint8_t Kick          = 3;  // + targetCharId:string
+    constexpr uint8_t Promote       = 4;  // + targetCharId:string
+    constexpr uint8_t Leave         = 5;
+    constexpr uint8_t SetLootMode   = 6;  // + mode:uint8
+}
+
+// ============================================================================
 // Client -> Server: CmdQuestAction sub-actions
 // ============================================================================
 namespace QuestAction {
@@ -235,6 +248,76 @@ struct SvSocialUpdateMsg {
         m.resultCode    = r.readU8();
         m.characterName = r.readString();
         m.message       = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvPartyUpdate
+// ============================================================================
+namespace PartyEvent {
+    constexpr uint8_t Invited         = 0;
+    constexpr uint8_t Joined          = 1;
+    constexpr uint8_t Left            = 2;
+    constexpr uint8_t Kicked          = 3;
+    constexpr uint8_t Promoted        = 4;
+    constexpr uint8_t Disbanded       = 5;
+    constexpr uint8_t LootModeChanged = 6;
+    constexpr uint8_t FullSync        = 7;
+}
+
+struct PartyMemberNetInfo {
+    std::string charId;
+    std::string name;
+    uint8_t level = 0;
+    int32_t hp = 0, maxHp = 0, mp = 0, maxMp = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeString(charId);
+        w.writeString(name);
+        w.writeU8(level);
+        w.writeI32(hp); w.writeI32(maxHp);
+        w.writeI32(mp); w.writeI32(maxMp);
+    }
+    static PartyMemberNetInfo read(ByteReader& r) {
+        PartyMemberNetInfo m;
+        m.charId = r.readString();
+        m.name   = r.readString();
+        m.level  = r.readU8();
+        m.hp = r.readI32(); m.maxHp = r.readI32();
+        m.mp = r.readI32(); m.maxMp = r.readI32();
+        return m;
+    }
+};
+
+struct SvPartyUpdateMsg {
+    uint8_t event = 0;
+    std::string actorCharId;    // who triggered the event
+    std::string targetCharId;   // who was affected (kick/promote)
+    std::string leaderId;
+    uint8_t lootMode = 0;
+    std::vector<PartyMemberNetInfo> members;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(event);
+        w.writeString(actorCharId);
+        w.writeString(targetCharId);
+        w.writeString(leaderId);
+        w.writeU8(lootMode);
+        w.writeU8(static_cast<uint8_t>(members.size()));
+        for (const auto& m : members) m.write(w);
+    }
+    static SvPartyUpdateMsg read(ByteReader& r) {
+        SvPartyUpdateMsg m;
+        m.event        = r.readU8();
+        m.actorCharId  = r.readString();
+        m.targetCharId = r.readString();
+        m.leaderId     = r.readString();
+        m.lootMode     = r.readU8();
+        uint8_t count  = r.readU8();
+        m.members.resize(count);
+        for (uint8_t i = 0; i < count; ++i)
+            m.members[i] = PartyMemberNetInfo::read(r);
         return m;
     }
 };
