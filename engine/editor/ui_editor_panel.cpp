@@ -71,19 +71,26 @@ void UIEditorPanel::checkUndoCapture(UIManager& uiMgr) {
             pendingSnapshot_ = UISerializer::serializeScreen(selectedScreenId_, root);
         }
     }
-    if (ImGui::IsItemDeactivatedAfterEdit() && !pendingSnapshot_.empty()) {
-        auto* root = uiMgr.getScreen(selectedScreenId_);
-        if (root) {
-            std::string newSnapshot = UISerializer::serializeScreen(selectedScreenId_, root);
-            if (newSnapshot != pendingSnapshot_) {
-                auto cmd = std::make_unique<UIPropertyCommand>();
-                cmd->screenId = selectedScreenId_;
-                cmd->oldJson = std::move(pendingSnapshot_);
-                cmd->newJson = newSnapshot;
-                cmd->nodeId = selectedNodeId_;
-                cmd->desc = "UI Property";
-                cmd->uiMgr = &uiMgr;
-                UndoSystem::instance().push(std::move(cmd));
+    if (ImGui::IsItemDeactivatedAfterEdit() && !selectedScreenId_.empty()) {
+        // For single-frame edits (Checkbox, etc.), IsItemActivated fires
+        // AFTER the value has already changed, making pendingSnapshot_ hold
+        // the post-edit state.  Fall back to the pre-frame snapshot which
+        // was captured before any widgets ran.
+        std::string& baseline = !pendingSnapshot_.empty() ? pendingSnapshot_ : preFrameSnapshot_;
+        if (!baseline.empty()) {
+            auto* root = uiMgr.getScreen(selectedScreenId_);
+            if (root) {
+                std::string newSnapshot = UISerializer::serializeScreen(selectedScreenId_, root);
+                if (newSnapshot != baseline) {
+                    auto cmd = std::make_unique<UIPropertyCommand>();
+                    cmd->screenId = selectedScreenId_;
+                    cmd->oldJson = baseline;
+                    cmd->newJson = newSnapshot;
+                    cmd->nodeId = selectedNodeId_;
+                    cmd->desc = "UI Property";
+                    cmd->uiMgr = &uiMgr;
+                    UndoSystem::instance().push(std::move(cmd));
+                }
             }
         }
         pendingSnapshot_.clear();
@@ -388,6 +395,16 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::TextDisabled("No node selected");
         ImGui::End();
         return;
+    }
+
+    // Capture a pre-frame snapshot before any widgets run.
+    // This is the undo baseline for single-frame edits (Checkbox, etc.)
+    // where IsItemActivated fires after the value has already changed.
+    if (!selectedScreenId_.empty() && pendingSnapshot_.empty()) {
+        auto* root = uiMgr.getScreen(selectedScreenId_);
+        if (root) {
+            preFrameSnapshot_ = UISerializer::serializeScreen(selectedScreenId_, root);
+        }
     }
 
     // --- Common properties ---
@@ -882,6 +899,18 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Rare##rar", &inv->rarityRareColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Epic##rar", &inv->rarityEpicColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Legendary##rar", &inv->rarityLegendaryColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Icon Atlas##inv", 0)) {
+            char atlasKeyBuf[256] = {};
+            snprintf(atlasKeyBuf, sizeof(atlasKeyBuf), "%s", inv->iconAtlasKey.c_str());
+            if (ImGui::InputText("Atlas Key##inv_icon", atlasKeyBuf, sizeof(atlasKeyBuf))) {
+                inv->iconAtlasKey = atlasKeyBuf;
+            }
+            checkUndoCapture(uiMgr);
+            ImGui::DragInt("Atlas Cols##inv_icon", &inv->iconAtlasCols, 1.0f, 1, 32); checkUndoCapture(uiMgr);
+            ImGui::DragInt("Atlas Rows##inv_icon", &inv->iconAtlasRows, 1.0f, 1, 32); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -1836,6 +1865,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Item##shpf", &sp2->itemFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Price##shpf", &sp2->priceFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Gold##shpf", &sp2->goldFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Quantity##shpf", &sp2->quantityFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Layout##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1845,6 +1875,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Gold Bar Height##shpl", &sp2->goldBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Buy Btn Width##shpl", &sp2->buyBtnWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Buy Btn Height##shpl", &sp2->buyBtnHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Grid Padding##shpl", &sp2->gridPadding, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Colors##shp", 0)) {
@@ -1856,9 +1887,55 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Gold##shpc", &sp2->goldColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Buy Btn##shpc", &sp2->buyBtnColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Buy Disabled##shpc", &sp2->buyBtnDisabledColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Slot BG##shpc", &sp2->slotBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Divider##shpc", &sp2->dividerColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Error##shpc", &sp2->errorColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Slot Appearance##shp", 0)) {
+            ImGui::ColorEdit4("Filled BG##shps", &sp2->slotFilledBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Empty BG##shps", &sp2->slotEmptyBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Empty Border##shps", &sp2->slotEmptyBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##shps", &sp2->slotBorderWidth, 0.1f, 0.0f, 5.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Item Text##shps", &sp2->itemTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Quantity Badge##shps", &sp2->quantityColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Rarity Colors##shp", 0)) {
+            ImGui::ColorEdit4("Common##shpr", &sp2->rarityCommonColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Uncommon##shpr", &sp2->rarityUncommonColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Rare##shpr", &sp2->rarityRareColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Epic##shpr", &sp2->rarityEpicColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Legendary##shpr", &sp2->rarityLegendaryColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Tooltip##shp", 0)) {
+            ImGui::DragFloat("Width##shpt", &sp2->tooltipWidth, 1.0f, 50.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##shpt", &sp2->tooltipPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Offset##shpt", &sp2->tooltipOffset, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Offset##shpt", &sp2->tooltipShadowOffset, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Line Spacing##shpt", &sp2->tooltipLineSpacing, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##shpt", &sp2->tooltipBorderWidth, 0.1f, 0.0f, 5.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Sep Height##shpt", &sp2->tooltipSepHeight, 0.1f, 0.0f, 5.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Name Font##shpt", &sp2->tooltipNameFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Stat Font##shpt", &sp2->tooltipStatFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Level Font##shpt", &sp2->tooltipLevelFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("BG##shptc", &sp2->tooltipBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##shptc", &sp2->tooltipBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##shptc", &sp2->tooltipShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Stat Text##shptc", &sp2->tooltipStatColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Separator##shptc", &sp2->tooltipSepColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Level Req##shptc", &sp2->tooltipLevelColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Icon Atlas##shp", 0)) {
+            char atkBuf[256] = {};
+            snprintf(atkBuf, sizeof(atkBuf), "%s", sp2->iconAtlasKey.c_str());
+            if (ImGui::InputText("Atlas Key##shp_icon", atkBuf, sizeof(atkBuf))) {
+                sp2->iconAtlasKey = atkBuf;
+            }
+            checkUndoCapture(uiMgr);
+            ImGui::DragInt("Atlas Cols##shp_icon", &sp2->iconAtlasCols, 1.0f, 1, 32); checkUndoCapture(uiMgr);
+            ImGui::DragInt("Atlas Rows##shp_icon", &sp2->iconAtlasRows, 1.0f, 1, 32); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         char shopBuf[128] = {};

@@ -3010,7 +3010,26 @@ void Editor::executeCommand(World* world, const std::string& cmd) {
 // ============================================================================
 
 void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
-    if (!open_ || !world) return;
+    if (!world) return;
+
+    // Ctrl+S prefab save works even when editor panels are hidden,
+    // so designers can tweak values in play mode and save without
+    // needing the full editor open.
+    {
+        auto scancode = event.key.keysym.scancode;
+        bool ctrl = (event.key.keysym.mod & KMOD_CTRL) != 0;
+        if (ctrl && scancode == SDL_SCANCODE_S) {
+            world->forEachEntity([](Entity* e) {
+                if (e->tag() != "player") return;
+                if (PrefabLibrary::instance().has("player")) {
+                    PrefabLibrary::instance().save("player", e);
+                    LOG_INFO("Editor", "Ctrl+S: saved player entity to prefab 'player'");
+                }
+            });
+        }
+    }
+
+    if (!open_) return;
 
     auto scancode = event.key.keysym.scancode;
     bool ctrl = (event.key.keysym.mod & KMOD_CTRL) != 0;
@@ -3079,18 +3098,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
                 uiManager_->suppressHotReload();
             }
         }
-        // Save prefab-spawned entities (player, etc.) that are excluded
-        // from scene saves.  Find them in the world directly — don't rely
-        // on selectedEntity_ which may be null when the UI editor has focus.
-        if (world) {
-            world->forEachEntity([](Entity* e) {
-                if (e->tag() != "player") return;
-                if (PrefabLibrary::instance().has("player")) {
-                    PrefabLibrary::instance().save("player", e);
-                    LOG_INFO("Editor", "Ctrl+S: saved player entity to prefab 'player'");
-                }
-            });
-        }
+        // Player prefab save is handled above (before the !open_ guard)
     }
     // Ctrl+D = Duplicate
     if (ctrl && scancode == SDL_SCANCODE_D && selectedEntity_) {

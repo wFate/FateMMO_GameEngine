@@ -774,6 +774,11 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         ip->panelBgColor     = readColor("panelBgColor",     ip->panelBgColor);
         ip->panelBorderColor = readColor("panelBorderColor", ip->panelBorderColor);
 
+        // Icon atlas
+        ip->iconAtlasKey  = j.value("iconAtlasKey", std::string{});
+        ip->iconAtlasCols = j.value("iconAtlasCols", 8);
+        ip->iconAtlasRows = j.value("iconAtlasRows", 4);
+
         node = std::move(ip);
     }
     else if (type == "status_panel") {
@@ -1355,6 +1360,8 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
             }
             return def;
         };
+        shp->quantityFontSize = j.value("quantityFontSize", 9.0f);
+        shp->gridPadding      = j.value("gridPadding", 4.0f);
         shp->bgColor             = readColor("bgColor",             shp->bgColor);
         shp->borderColor         = readColor("borderColor",         shp->borderColor);
         shp->titleColor          = readColor("titleColor",          shp->titleColor);
@@ -1366,6 +1373,40 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         shp->slotBgColor         = readColor("slotBgColor",         shp->slotBgColor);
         shp->dividerColor        = readColor("dividerColor",        shp->dividerColor);
         shp->errorColor          = readColor("errorColor",          shp->errorColor);
+        // Slot appearance
+        shp->slotFilledBgColor    = readColor("slotFilledBgColor",    shp->slotFilledBgColor);
+        shp->slotEmptyBgColor     = readColor("slotEmptyBgColor",     shp->slotEmptyBgColor);
+        shp->slotEmptyBorderColor = readColor("slotEmptyBorderColor", shp->slotEmptyBorderColor);
+        shp->slotBorderWidth      = j.value("slotBorderWidth", 1.0f);
+        shp->itemTextColor        = readColor("itemTextColor",        shp->itemTextColor);
+        shp->quantityColor        = readColor("quantityColor",        shp->quantityColor);
+        // Rarity colors
+        shp->rarityCommonColor    = readColor("rarityCommonColor",    shp->rarityCommonColor);
+        shp->rarityUncommonColor  = readColor("rarityUncommonColor",  shp->rarityUncommonColor);
+        shp->rarityRareColor      = readColor("rarityRareColor",      shp->rarityRareColor);
+        shp->rarityEpicColor      = readColor("rarityEpicColor",      shp->rarityEpicColor);
+        shp->rarityLegendaryColor = readColor("rarityLegendaryColor", shp->rarityLegendaryColor);
+        // Tooltip
+        shp->tooltipWidth        = j.value("tooltipWidth", 200.0f);
+        shp->tooltipPadding      = j.value("tooltipPadding", 8.0f);
+        shp->tooltipOffset       = j.value("tooltipOffset", 4.0f);
+        shp->tooltipShadowOffset = j.value("tooltipShadowOffset", 2.0f);
+        shp->tooltipLineSpacing  = j.value("tooltipLineSpacing", 2.0f);
+        shp->tooltipBorderWidth  = j.value("tooltipBorderWidth", 1.5f);
+        shp->tooltipSepHeight    = j.value("tooltipSepHeight", 1.5f);
+        shp->tooltipNameFontSize  = j.value("tooltipNameFontSize", 13.0f);
+        shp->tooltipStatFontSize  = j.value("tooltipStatFontSize", 11.0f);
+        shp->tooltipLevelFontSize = j.value("tooltipLevelFontSize", 10.0f);
+        shp->tooltipBgColor      = readColor("tooltipBgColor",     shp->tooltipBgColor);
+        shp->tooltipBorderColor  = readColor("tooltipBorderColor", shp->tooltipBorderColor);
+        shp->tooltipShadowColor  = readColor("tooltipShadowColor", shp->tooltipShadowColor);
+        shp->tooltipStatColor    = readColor("tooltipStatColor",   shp->tooltipStatColor);
+        shp->tooltipSepColor     = readColor("tooltipSepColor",    shp->tooltipSepColor);
+        shp->tooltipLevelColor   = readColor("tooltipLevelColor",  shp->tooltipLevelColor);
+        // Icon atlas
+        shp->iconAtlasKey  = j.value("iconAtlasKey", std::string{});
+        shp->iconAtlasCols = j.value("iconAtlasCols", 8);
+        shp->iconAtlasRows = j.value("iconAtlasRows", 4);
         node = std::move(shp);
     }
     else if (type == "bank_panel") {

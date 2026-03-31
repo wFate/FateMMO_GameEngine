@@ -1119,50 +1119,71 @@ void Editor::drawInspector() {
                 ImGui::Checkbox("Can Target Self##tgt", &tgt->canTargetSelf);
                 captureInspectorUndo();
 
-                // Indicator shape
-                if (ImGui::TreeNode("Indicator Shape##tgt")) {
-                    ImGui::DragFloat("Radius Scale##tgt", &tgt->radiusScale, 0.01f, 0.1f, 1.0f);
+                // Global defaults
+                if (ImGui::TreeNode("Global Defaults##tgt")) {
+                    ImGui::DragFloat("Radius Scale##tgtg", &tgt->radiusScale, 0.01f, 0.1f, 1.0f);
                     captureInspectorUndo();
-                    ImGui::DragFloat("Y Scale (Slant)##tgt", &tgt->yScale, 0.01f, 0.1f, 1.0f);
+                    ImGui::DragFloat("Y Scale (Slant)##tgtg", &tgt->yScale, 0.01f, 0.1f, 1.0f);
                     captureInspectorUndo();
-                    ImGui::DragFloat("Ring Thickness##tgt", &tgt->ringThickness, 0.1f, 0.5f, 5.0f);
+                    ImGui::DragFloat("Ring Thickness##tgtg", &tgt->ringThickness, 0.1f, 0.5f, 5.0f);
                     captureInspectorUndo();
-                    ImGui::DragFloat("Depth Offset##tgt", &tgt->depthOffset, 0.05f, 0.0f, 5.0f);
+                    ImGui::DragFloat("Depth Offset##tgtg", &tgt->depthOffset, 0.05f, 0.0f, 5.0f);
                     captureInspectorUndo();
                     int segs = tgt->segments;
-                    if (ImGui::DragInt("Segments##tgt", &segs, 1, 6, 64)) tgt->segments = segs;
+                    if (ImGui::DragInt("Segments##tgtg", &segs, 1, 6, 64)) tgt->segments = segs;
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Pulse Speed##tgtg", &tgt->pulseSpeed, 0.1f, 0.0f, 20.0f);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Pulse Min##tgtg", &tgt->pulseMin, 0.01f, 0.0f, 1.0f);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Pulse Max##tgtg", &tgt->pulseMax, 0.01f, 0.0f, 1.0f);
+                    captureInspectorUndo();
+                    ImGui::ColorEdit4("Ring Color##tgtg", &tgt->ringColor.r);
+                    captureInspectorUndo();
+                    ImGui::ColorEdit4("Fill Color##tgtg", &tgt->fillColor.r);
+                    captureInspectorUndo();
+                    ImGui::ColorEdit4("Glow Color##tgtg", &tgt->glowColor.r);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Inner Ring Scale##tgtg", &tgt->innerRingScale, 0.01f, 0.0f, 0.99f);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Glow Scale##tgtg", &tgt->glowScale, 0.01f, 0.0f, 3.0f);
                     captureInspectorUndo();
                     ImGui::TreePop();
                 }
 
-                // Pulse animation
-                if (ImGui::TreeNode("Pulse Animation##tgt")) {
-                    ImGui::DragFloat("Pulse Speed##tgt", &tgt->pulseSpeed, 0.1f, 0.0f, 20.0f);
-                    captureInspectorUndo();
-                    ImGui::DragFloat("Pulse Min##tgt", &tgt->pulseMin, 0.01f, 0.0f, 1.0f);
-                    captureInspectorUndo();
-                    ImGui::DragFloat("Pulse Max##tgt", &tgt->pulseMax, 0.01f, 0.0f, 1.0f);
-                    captureInspectorUndo();
-                    ImGui::TreePop();
-                }
-
-                // Colors
-                if (ImGui::TreeNode("Colors##tgt")) {
-                    ImGui::ColorEdit4("Ring Color##tgt", &tgt->ringColor.r);
-                    captureInspectorUndo();
-                    ImGui::ColorEdit4("Fill Color##tgt", &tgt->fillColor.r);
-                    captureInspectorUndo();
-                    ImGui::ColorEdit4("Glow Color##tgt", &tgt->glowColor.r);
-                    captureInspectorUndo();
-                    ImGui::TreePop();
-                }
-
-                // Multi-ring effect
-                if (ImGui::TreeNode("Multi-Ring##tgt")) {
-                    ImGui::DragFloat("Inner Ring Scale##tgt", &tgt->innerRingScale, 0.01f, 0.0f, 0.99f);
-                    captureInspectorUndo();
-                    ImGui::DragFloat("Glow Scale##tgt", &tgt->glowScale, 0.01f, 0.0f, 3.0f);
-                    captureInspectorUndo();
+                // Per-target-type configs
+                if (ImGui::TreeNode("Per-Type Overrides##tgt")) {
+                    ImGui::TextDisabled("(0 = use global default)");
+                    for (int i = 0; i < static_cast<int>(TargetCategory::Count); ++i) {
+                        auto& pt = tgt->perType[i];
+                        const char* catName = targetCategoryName(static_cast<TargetCategory>(i));
+                        char label[64];
+                        snprintf(label, sizeof(label), "%s##tpt%d", catName, i);
+                        if (ImGui::TreeNode(label)) {
+                            snprintf(label, sizeof(label), "Offset##tpto%d", i);
+                            float off[2] = {pt.offset.x, pt.offset.y};
+                            if (ImGui::DragFloat2(label, off, 0.5f, -200.0f, 200.0f)) {
+                                pt.offset = {off[0], off[1]};
+                            }
+                            captureInspectorUndo();
+                            snprintf(label, sizeof(label), "Radius Scale##tptr%d", i);
+                            ImGui::DragFloat(label, &pt.radiusScale, 0.01f, 0.0f, 2.0f);
+                            captureInspectorUndo();
+                            snprintf(label, sizeof(label), "Y Scale##tpty%d", i);
+                            ImGui::DragFloat(label, &pt.yScale, 0.01f, 0.0f, 1.0f);
+                            captureInspectorUndo();
+                            snprintf(label, sizeof(label), "Ring Color##tptrc%d", i);
+                            ImGui::ColorEdit4(label, &pt.ringColor.r);
+                            captureInspectorUndo();
+                            snprintf(label, sizeof(label), "Fill Color##tptfc%d", i);
+                            ImGui::ColorEdit4(label, &pt.fillColor.r);
+                            captureInspectorUndo();
+                            snprintf(label, sizeof(label), "Glow Color##tptgc%d", i);
+                            ImGui::ColorEdit4(label, &pt.glowColor.r);
+                            captureInspectorUndo();
+                            ImGui::TreePop();
+                        }
+                    }
                     ImGui::TreePop();
                 }
             }

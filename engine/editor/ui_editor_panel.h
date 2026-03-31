@@ -40,6 +40,11 @@ private:
 
     // Undo snapshot: JSON of the screen before editing started
     std::string pendingSnapshot_;
+    // Pre-frame snapshot: captured at the start of drawInspector before any
+    // widgets run.  Used as the undo baseline for single-frame edits
+    // (Checkbox, etc.) where IsItemActivated fires after the value has
+    // already changed.
+    std::string preFrameSnapshot_;
 
     // Viewport widget drag state
     bool isDraggingWidget_ = false;

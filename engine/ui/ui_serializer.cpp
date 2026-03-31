@@ -558,6 +558,11 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             // Panel colors
             j["panelBgColor"]     = {w->panelBgColor.r, w->panelBgColor.g, w->panelBgColor.b, w->panelBgColor.a};
             j["panelBorderColor"] = {w->panelBorderColor.r, w->panelBorderColor.g, w->panelBorderColor.b, w->panelBorderColor.a};
+
+            // Icon atlas
+            if (!w->iconAtlasKey.empty()) j["iconAtlasKey"] = w->iconAtlasKey;
+            j["iconAtlasCols"] = w->iconAtlasCols;
+            j["iconAtlasRows"] = w->iconAtlasRows;
         }
     }
     else if (type == "status_panel") {
@@ -1083,17 +1088,19 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["shopListOffset"]  = {w->shopListOffset.x, w->shopListOffset.y};
             j["inventoryOffset"] = {w->inventoryOffset.x, w->inventoryOffset.y};
             j["goldOffset"]      = {w->goldOffset.x, w->goldOffset.y};
-            j["titleFontSize"]  = w->titleFontSize;
-            j["headerFontSize"] = w->headerFontSize;
-            j["itemFontSize"]   = w->itemFontSize;
-            j["priceFontSize"]  = w->priceFontSize;
-            j["goldFontSize"]   = w->goldFontSize;
-            j["headerHeight"]   = w->headerHeight;
-            j["rowHeight"]      = w->rowHeight;
-            j["slotSize"]       = w->slotSize;
-            j["goldBarHeight"]  = w->goldBarHeight;
-            j["buyBtnWidth"]    = w->buyBtnWidth;
-            j["buyBtnHeight"]   = w->buyBtnHeight;
+            j["titleFontSize"]   = w->titleFontSize;
+            j["headerFontSize"]  = w->headerFontSize;
+            j["itemFontSize"]    = w->itemFontSize;
+            j["priceFontSize"]   = w->priceFontSize;
+            j["goldFontSize"]    = w->goldFontSize;
+            j["quantityFontSize"]= w->quantityFontSize;
+            j["headerHeight"]    = w->headerHeight;
+            j["rowHeight"]       = w->rowHeight;
+            j["slotSize"]        = w->slotSize;
+            j["goldBarHeight"]   = w->goldBarHeight;
+            j["buyBtnWidth"]     = w->buyBtnWidth;
+            j["buyBtnHeight"]    = w->buyBtnHeight;
+            j["gridPadding"]     = w->gridPadding;
             auto c2a = [](const Color& c) { return nlohmann::json::array({c.r, c.g, c.b, c.a}); };
             j["bgColor"]             = c2a(w->bgColor);
             j["borderColor"]         = c2a(w->borderColor);
@@ -1106,6 +1113,40 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["slotBgColor"]         = c2a(w->slotBgColor);
             j["dividerColor"]        = c2a(w->dividerColor);
             j["errorColor"]          = c2a(w->errorColor);
+            // Slot appearance
+            j["slotFilledBgColor"]    = c2a(w->slotFilledBgColor);
+            j["slotEmptyBgColor"]     = c2a(w->slotEmptyBgColor);
+            j["slotEmptyBorderColor"] = c2a(w->slotEmptyBorderColor);
+            j["slotBorderWidth"]      = w->slotBorderWidth;
+            j["itemTextColor"]        = c2a(w->itemTextColor);
+            j["quantityColor"]        = c2a(w->quantityColor);
+            // Rarity colors
+            j["rarityCommonColor"]    = c2a(w->rarityCommonColor);
+            j["rarityUncommonColor"]  = c2a(w->rarityUncommonColor);
+            j["rarityRareColor"]      = c2a(w->rarityRareColor);
+            j["rarityEpicColor"]      = c2a(w->rarityEpicColor);
+            j["rarityLegendaryColor"] = c2a(w->rarityLegendaryColor);
+            // Tooltip
+            j["tooltipWidth"]        = w->tooltipWidth;
+            j["tooltipPadding"]      = w->tooltipPadding;
+            j["tooltipOffset"]       = w->tooltipOffset;
+            j["tooltipShadowOffset"] = w->tooltipShadowOffset;
+            j["tooltipLineSpacing"]  = w->tooltipLineSpacing;
+            j["tooltipBorderWidth"]  = w->tooltipBorderWidth;
+            j["tooltipSepHeight"]    = w->tooltipSepHeight;
+            j["tooltipNameFontSize"]  = w->tooltipNameFontSize;
+            j["tooltipStatFontSize"]  = w->tooltipStatFontSize;
+            j["tooltipLevelFontSize"] = w->tooltipLevelFontSize;
+            j["tooltipBgColor"]      = c2a(w->tooltipBgColor);
+            j["tooltipBorderColor"]  = c2a(w->tooltipBorderColor);
+            j["tooltipShadowColor"]  = c2a(w->tooltipShadowColor);
+            j["tooltipStatColor"]    = c2a(w->tooltipStatColor);
+            j["tooltipSepColor"]     = c2a(w->tooltipSepColor);
+            j["tooltipLevelColor"]   = c2a(w->tooltipLevelColor);
+            // Icon atlas
+            if (!w->iconAtlasKey.empty()) j["iconAtlasKey"] = w->iconAtlasKey;
+            j["iconAtlasCols"] = w->iconAtlasCols;
+            j["iconAtlasRows"] = w->iconAtlasRows;
         }
     }
     else if (type == "bank_panel") {
