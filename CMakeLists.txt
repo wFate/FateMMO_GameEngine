@@ -511,9 +511,9 @@ else()
 endif()
 
 # =============================================================================
-# Demo Application (always builds when examples/demo_app.cpp exists)
+# Demo Application (open-source build only — when game/ sources are absent)
 # =============================================================================
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/demo_app.cpp")
+if(NOT GAME_SOURCES AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/demo_app.cpp")
     add_executable(FateDemo examples/demo_app.cpp)
     target_link_libraries(FateDemo PRIVATE
         fate_engine
@@ -521,17 +521,14 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/demo_app.cpp")
     )
     target_compile_definitions(FateDemo PRIVATE
         FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        EDITOR_BUILD
     )
     if(APPLE)
         target_link_libraries(FateDemo PRIVATE ${METAL_LIBS})
     endif()
-    # Copy assets to build directory
-    add_custom_command(TARGET FateDemo POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/assets
-        $<TARGET_FILE_DIR:FateDemo>/assets
-    )
-    message(STATUS "FateDemo target configured")
+    message(STATUS "FateDemo target configured (open-source build)")
+elseif(GAME_SOURCES)
+    message(STATUS "Skipping FateDemo (full game build — use FateEngine instead)")
 else()
     message(STATUS "examples/demo_app.cpp not found — skipping FateDemo target")
 endif()

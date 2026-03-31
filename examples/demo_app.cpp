@@ -18,7 +18,9 @@ using namespace fate;
 class DemoApp : public App {
 public:
     void onInit() override {
-        SceneManager::instance().createEmptyScene("demo");
+        // Register and switch to a minimal empty scene
+        SceneManager::instance().registerScene("demo", [](Scene&) {});
+        SceneManager::instance().switchScene("demo");
 
 #ifndef FATE_SHIPPING
         Editor::instance().setAssetRoot(config_.assetsDir);
@@ -34,7 +36,7 @@ public:
     void onRender(SpriteBatch& batch, Camera& cam) override {
         float tileSize = 32.0f;
         int range = 20;
-        Mat4 proj = cam.projectionMatrix();
+        Mat4 proj = cam.getViewProjection();
 
         batch.begin(proj);
         for (int y = -range; y < range; ++y) {
