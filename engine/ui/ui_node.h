@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/ui/ui_anchor.h"
 #include "engine/ui/ui_style.h"
+#include "engine/ecs/reflect.h"
 #include <nlohmann/json_fwd.hpp>
 #include <span>
 #include <string>
@@ -9,8 +10,6 @@
 #include <unordered_map>
 
 namespace fate {
-
-struct PropertyInfo;
 
 struct DragPayload;
 
