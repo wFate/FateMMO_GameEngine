@@ -239,6 +239,52 @@ static bool inspectShopItemList(std::vector<fate::ShopItem>& items) {
     return changed;
 }
 
+static bool inspectTeleportDestList(std::vector<fate::TeleportDestination>& dests) {
+    bool changed = false;
+    int removeIdx = -1;
+    for (int i = 0; i < (int)dests.size(); ++i) {
+        ImGui::PushID(i);
+        const char* name = dests[i].destinationName.empty() ? "(empty)" : dests[i].destinationName.c_str();
+        char treeLabel[128];
+        std::snprintf(treeLabel, sizeof(treeLabel), "[%d] %s###teleDest%d", i, name, i);
+        bool nodeOpen = ImGui::TreeNode(treeLabel);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("X")) removeIdx = i;
+        if (nodeOpen) {
+            char buf[128];
+            strncpy(buf, dests[i].destinationName.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+            if (ImGui::InputText("Destination", buf, sizeof(buf))) { dests[i].destinationName = buf; changed = true; }
+            strncpy(buf, dests[i].sceneId.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+            if (ImGui::InputText("Scene ID", buf, sizeof(buf))) { dests[i].sceneId = buf; changed = true; }
+            float pos[2] = { dests[i].targetPosition.x, dests[i].targetPosition.y };
+            if (ImGui::DragFloat2("Position", pos, 1.0f)) {
+                dests[i].targetPosition.x = pos[0];
+                dests[i].targetPosition.y = pos[1];
+                changed = true;
+            }
+            int64_t cost = dests[i].cost;
+            if (ImGui::DragScalar("Cost", ImGuiDataType_S64, &cost, 1.0f)) { dests[i].cost = cost; changed = true; }
+            int reqLvl = dests[i].requiredLevel;
+            if (ImGui::DragInt("Required Level", &reqLvl, 1.0f, 0, 65535)) { dests[i].requiredLevel = (uint16_t)reqLvl; changed = true; }
+            strncpy(buf, dests[i].requiredItem.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+            if (ImGui::InputText("Required Item", buf, sizeof(buf))) { dests[i].requiredItem = buf; changed = true; }
+            int reqQty = dests[i].requiredItemQty;
+            if (ImGui::DragInt("Required Qty", &reqQty, 1.0f, 0, 65535)) { dests[i].requiredItemQty = (uint16_t)reqQty; changed = true; }
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+    if (removeIdx >= 0) {
+        dests.erase(dests.begin() + removeIdx);
+        changed = true;
+    }
+    if (ImGui::SmallButton("+ Add Destination")) {
+        dests.push_back(fate::TeleportDestination{});
+        changed = true;
+    }
+    return changed;
+}
+
 #endif // FATE_HAS_GAME
 
 // ============================================================================
