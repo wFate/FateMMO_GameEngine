@@ -1109,7 +1109,6 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
     Vec2 worldPos = camera->screenToWorld(screenPos, windowWidth, windowHeight);
 
     // Asset placement mode: click to place
-    LOG_DEBUG("Editor", "handleSceneClick: isDragging=%d path='%s'", isDraggingAsset_, draggedAssetPath_.c_str());
     if (isDraggingAsset_ && !draggedAssetPath_.empty()) {
         Vec2 placePos = worldPos;
         if (gridSnap_) {
