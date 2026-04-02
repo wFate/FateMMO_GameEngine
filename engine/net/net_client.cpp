@@ -1,5 +1,6 @@
 #include "engine/net/net_client.h"
 #include "engine/net/game_messages.h"
+#include "engine/net/admin_messages.h"
 #include "engine/net/packet_crypto.h"
 #include "engine/core/logger.h"
 #include <cstring>
@@ -650,6 +651,24 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onPartyUpdate) onPartyUpdate(msg);
             break;
         }
+        case PacketType::SvAdminResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvAdminResultMsg::read(payload);
+            if (onAdminResult) onAdminResult(msg);
+            break;
+        }
+        case PacketType::SvAdminContentList: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvAdminContentListMsg::read(payload);
+            if (onAdminContentList) onAdminContentList(msg);
+            break;
+        }
+        case PacketType::SvValidationReport: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvValidationReportMsg::read(payload);
+            if (onValidationReport) onValidationReport(msg);
+            break;
+        }
         default:
             break;
     }
@@ -1208,6 +1227,54 @@ void NetClient::sendEditorPause(bool paused) {
     msg.paused = paused ? 1 : 0;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdEditorPause, w.data(), w.size());
+}
+
+void NetClient::sendAdminSaveContent(uint8_t contentType, bool isNew, const std::string& json) {
+    CmdAdminSaveContentMsg msg;
+    msg.contentType = contentType;
+    msg.isNew = isNew ? 1 : 0;
+    msg.jsonPayload = json;
+    // Heap buffer for potentially large JSON payloads
+    std::vector<uint8_t> buf(json.size() + 64);
+    ByteWriter w(buf.data(), buf.size());
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdAdminSaveContent, w.data(), w.size());
+}
+
+void NetClient::sendAdminDeleteContent(uint8_t contentType, const std::string& id) {
+    CmdAdminDeleteContentMsg msg;
+    msg.contentType = contentType;
+    msg.contentId = id;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdAdminDeleteContent, w.data(), w.size());
+}
+
+void NetClient::sendAdminReloadCache(uint8_t cacheType) {
+    CmdAdminReloadCacheMsg msg;
+    msg.cacheType = cacheType;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdAdminReloadCache, w.data(), w.size());
+}
+
+void NetClient::sendAdminValidate() {
+    CmdAdminValidateMsg msg;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdAdminValidate, w.data(), w.size());
+}
+
+void NetClient::sendAdminRequestContentList(uint8_t contentType) {
+    CmdAdminRequestContentListMsg msg;
+    msg.contentType = contentType;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdAdminRequestContentList, w.data(), w.size());
 }
 
 } // namespace fate

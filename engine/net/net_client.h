@@ -6,6 +6,7 @@
 #include "engine/net/protocol.h"
 #include "engine/net/auth_protocol.h"
 #include "engine/net/game_messages.h"
+#include "engine/net/admin_messages.h"
 #include "engine/net/packet_crypto.h"
 #include <functional>
 #include <string>
@@ -56,6 +57,13 @@ public:
     void sendUnequipCostume(uint8_t slotType);
     void sendToggleCostumes(bool show);
     void sendEditorPause(bool paused);
+
+    // Admin content pipeline
+    void sendAdminSaveContent(uint8_t contentType, bool isNew, const std::string& json);
+    void sendAdminDeleteContent(uint8_t contentType, const std::string& id);
+    void sendAdminReloadCache(uint8_t cacheType);
+    void sendAdminValidate();
+    void sendAdminRequestContentList(uint8_t contentType);
 
     // Guild actions
     void sendGuildAction(uint8_t action, const std::string& data);
@@ -144,6 +152,11 @@ public:
     std::function<void(const SvBuffSyncMsg&)> onBuffSync;
     std::function<void(const SvPartyUpdateMsg&)> onPartyUpdate;
     std::function<void(const std::string& reason)> onConnectRejected;
+
+    // Admin content pipeline callbacks
+    std::function<void(const SvAdminResultMsg&)>      onAdminResult;
+    std::function<void(const SvAdminContentListMsg&)>  onAdminContentList;
+    std::function<void(const SvValidationReportMsg&)>  onValidationReport;
 
 private:
     NetSocket socket_;
