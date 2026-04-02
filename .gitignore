@@ -58,7 +58,7 @@ cmake_install.cmake
 # =============================================================================
 
 # Game — all proprietary (shared, systems, components, sprites, oldscripts, etc.)
-game/
+/game/
 
 # Game content data — prefabs, scenes, level layouts
 assets/prefabs/
