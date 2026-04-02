@@ -23,6 +23,7 @@
 #include "engine/editor/asset_browser.h"
 #include "engine/editor/ui_editor_panel.h"
 #include "engine/editor/paper_doll_panel.h"
+#include "engine/editor/content_browser_panel.h"
 #include <ImGuizmo.h>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
@@ -221,6 +222,7 @@ public:
     }
     UIManager* uiManager() const { return uiManager_; }
     UIEditorPanel& uiEditorPanel() { return uiEditorPanel_; }
+    ContentBrowserPanel& contentBrowserPanel() { return contentBrowserPanel_; }
 
     void setAssetRoot(const std::string& root) { assetRoot_ = root; assetBrowser_.init(root, sourceDir_); }
     void setSourceDir(const std::string& dir) { sourceDir_ = dir; uiEditorPanel_.setSourceDir(dir); animationEditor_.setSourceDir(dir); }
@@ -377,6 +379,9 @@ private:
 
     // Paper doll editor panel
     PaperDollPanel paperDollPanel_;
+
+    // Content browser panel (admin content editing)
+    ContentBrowserPanel contentBrowserPanel_;
 
     // Combat text editor
     bool showCombatTextEditor_ = false;

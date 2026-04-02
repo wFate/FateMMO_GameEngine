@@ -16,6 +16,7 @@ class Camera;
 class AssetBrowser {
 public:
     void init(const std::string& assetRoot, const std::string& sourceDir);
+    void shutdown() { thumbCache_.clear(); }
     void scan();  // Recursively scan asset directory
     void draw(World* world, Camera* camera);  // Main ImGui rendering
 

@@ -250,6 +250,10 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
 }
 
 void Editor::shutdown() {
+    assetBrowser_.shutdown();
+    // Release GPU textures before GL context is destroyed
+    paletteTexture_.reset();
+    for (auto& entry : assets_) entry.thumbnail.reset();
     dialogueEditor_.shutdown();
     viewportFbo_.destroy();
 #if defined(ENGINE_MEMORY_DEBUG)
@@ -422,6 +426,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     dialogueEditor_.draw();
     animationEditor_.draw();
     paperDollPanel_.draw();
+    contentBrowserPanel_.draw();
 
     // UI editor panels (hierarchy tree + inspector)
     if (uiManager_) {
@@ -634,6 +639,10 @@ void Editor::drawDockSpace() {
             bool pdOpen = paperDollPanel_.isOpen();
             if (ImGui::MenuItem("Paper Doll Manager", nullptr, &pdOpen)) {
                 paperDollPanel_.setOpen(pdOpen);
+            }
+            bool cbOpen = contentBrowserPanel_.isOpen();
+            if (ImGui::MenuItem("Content Browser", nullptr, &cbOpen)) {
+                contentBrowserPanel_.setOpen(cbOpen);
             }
             ImGui::EndMenu();
         }
