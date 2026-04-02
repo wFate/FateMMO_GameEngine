@@ -201,6 +201,44 @@ static bool inspectIdList(const char* label, std::vector<uint32_t>& ids) {
     return changed;
 }
 
+static bool inspectShopItemList(std::vector<fate::ShopItem>& items) {
+    bool changed = false;
+    int removeIdx = -1;
+    for (int i = 0; i < (int)items.size(); ++i) {
+        ImGui::PushID(i);
+        const char* name = items[i].itemName.empty() ? "(empty)" : items[i].itemName.c_str();
+        char treeLabel[128];
+        std::snprintf(treeLabel, sizeof(treeLabel), "[%d] %s###shopItem%d", i, name, i);
+        bool nodeOpen = ImGui::TreeNode(treeLabel);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("X")) removeIdx = i;
+        if (nodeOpen) {
+            char buf[128];
+            strncpy(buf, items[i].itemId.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+            if (ImGui::InputText("Item ID", buf, sizeof(buf))) { items[i].itemId = buf; changed = true; }
+            strncpy(buf, items[i].itemName.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+            if (ImGui::InputText("Item Name", buf, sizeof(buf))) { items[i].itemName = buf; changed = true; }
+            int64_t bp = items[i].buyPrice;
+            if (ImGui::DragScalar("Buy Price", ImGuiDataType_S64, &bp, 1.0f)) { items[i].buyPrice = bp; changed = true; }
+            int64_t sp = items[i].sellPrice;
+            if (ImGui::DragScalar("Sell Price", ImGuiDataType_S64, &sp, 1.0f)) { items[i].sellPrice = sp; changed = true; }
+            int stock = items[i].stock;
+            if (ImGui::DragInt("Stock (0=unlimited)", &stock, 1.0f, 0, 65535)) { items[i].stock = (uint16_t)stock; changed = true; }
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+    if (removeIdx >= 0) {
+        items.erase(items.begin() + removeIdx);
+        changed = true;
+    }
+    if (ImGui::SmallButton("+ Add Item")) {
+        items.push_back(fate::ShopItem{});
+        changed = true;
+    }
+    return changed;
+}
+
 #endif // FATE_HAS_GAME
 
 // ============================================================================
