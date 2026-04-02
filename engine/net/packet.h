@@ -109,6 +109,13 @@ namespace PacketType {
     constexpr uint8_t CmdEditorPause       = 0x3B;
     constexpr uint8_t CmdParty             = 0x3C;
 
+    // Admin content pipeline (editor -> server)
+    constexpr uint8_t CmdAdminSaveContent       = 0x3D;
+    constexpr uint8_t CmdAdminDeleteContent      = 0x3E;
+    constexpr uint8_t CmdAdminReloadCache        = 0x3F;
+    constexpr uint8_t CmdAdminValidate           = 0x40;
+    constexpr uint8_t CmdAdminRequestContentList = 0x41;
+
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
     constexpr uint8_t SvRepairResult     = 0xA9;
@@ -137,6 +144,11 @@ namespace PacketType {
     constexpr uint8_t SvCostumeDefs     = 0xC0;
     constexpr uint8_t SvBuffSync        = 0xC1;
     constexpr uint8_t SvPartyUpdate     = 0xC2;
+
+    // Admin content pipeline (server -> editor)
+    constexpr uint8_t SvAdminResult       = 0xC3;
+    constexpr uint8_t SvAdminContentList  = 0xC4;
+    constexpr uint8_t SvValidationReport  = 0xC5;
 } // namespace PacketType
 
 // ============================================================================
