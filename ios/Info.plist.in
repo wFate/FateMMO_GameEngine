@@ -21,5 +21,6 @@
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <key>ITSAppUsesNonExemptEncryption</key> <false/>
+    <key>CADisableMinimumFrameDurationOnPhone</key> <true/>
 </dict>
 </plist>

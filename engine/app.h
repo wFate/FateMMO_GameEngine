@@ -27,7 +27,7 @@ struct AppConfig {
     int windowHeight = 900;
     bool fullscreen = false;
     bool vsync = true;
-    int targetFPS = 60;
+    int targetFPS = 0; // 0 = auto-detect from display refresh rate
     float fixedTimestep = 1.0f / 30.0f; // 30Hz fixed update
     std::string assetsDir;  // absolute path to assets/ directory (set by game)
 };

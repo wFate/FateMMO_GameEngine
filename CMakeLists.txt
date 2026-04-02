@@ -361,6 +361,7 @@ if(APPLE)
         engine/render/gfx/backend/metal/metal_device.mm
         engine/render/gfx/backend/metal/metal_command_list.mm
         engine/render/gfx/backend/metal/metal_shader_lib.mm
+        engine/platform/device_info_apple.mm
     )
     list(FILTER ENGINE_SOURCES EXCLUDE REGEX "engine/render/gfx/backend/gl/.*")
 else()

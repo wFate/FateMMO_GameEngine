@@ -14,5 +14,10 @@ struct DeviceInfo {
 
     // Thermal: 0=nominal, 1=fair, 2=serious, 3=critical
     static int getThermalState();
+
+    // Returns the display's native refresh rate (e.g. 60, 120). Requires SDL init.
+    static int getDisplayRefreshRate();
+
+    // Returns recommended FPS based on display refresh rate and thermal state.
     static int recommendedFPS();
 };

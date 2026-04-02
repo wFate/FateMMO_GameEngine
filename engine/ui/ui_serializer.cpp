@@ -52,6 +52,7 @@
 #include "engine/ui/widgets/trade_window.h"
 #include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/settings_panel.h"
+#include "engine/ui/widgets/fps_counter.h"
 #include "engine/ui/widgets/loading_panel.h"
 #include "engine/ui/widgets/invite_prompt_panel.h"
 #endif // FATE_HAS_GAME
@@ -559,6 +560,11 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             // Panel colors
             j["panelBgColor"]     = {w->panelBgColor.r, w->panelBgColor.g, w->panelBgColor.b, w->panelBgColor.a};
             j["panelBorderColor"] = {w->panelBorderColor.r, w->panelBorderColor.g, w->panelBorderColor.b, w->panelBorderColor.a};
+            j["panelBorderWidth"] = w->panelBorderWidth;
+
+            // Section visibility
+            j["equipAreaVisible"] = w->equipAreaVisible;
+            j["gridAreaVisible"]  = w->gridAreaVisible;
 
             // Icon atlas
             if (!w->iconAtlasKey.empty()) j["iconAtlasKey"] = w->iconAtlasKey;
@@ -1161,6 +1167,47 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["goldBarBgColor"]      = c2a(w->goldBarBgColor);
             j["stockColor"]          = c2a(w->stockColor);
             j["priceColor"]          = c2a(w->priceColor);
+
+            // Panel border
+            j["panelBorderWidth"] = w->panelBorderWidth;
+
+            // Close button
+            j["closeBtnRadius"]      = w->closeBtnRadius;
+            j["closeBtnOffset"]      = w->closeBtnOffset;
+            j["closeBtnBorderW"]     = w->closeBtnBorderW;
+            j["closeBtnFontSize"]    = w->closeBtnFontSize;
+            j["closeBtnBgColor"]     = c2a(w->closeBtnBgColor);
+            j["closeBtnBorderColor"] = c2a(w->closeBtnBorderColor);
+            j["closeBtnTextColor"]   = c2a(w->closeBtnTextColor);
+
+            // Buy button text/border
+            j["buyBtnBorderColor"]         = c2a(w->buyBtnBorderColor);
+            j["buyBtnDisabledBorderColor"] = c2a(w->buyBtnDisabledBorderColor);
+            j["buyBtnTextColor"]           = c2a(w->buyBtnTextColor);
+            j["buyBtnDisabledTextColor"]   = c2a(w->buyBtnDisabledTextColor);
+            j["buyBtnLabel"]               = w->buyBtnLabel;
+
+            // Gold bar
+            j["goldLabelPrefix"] = w->goldLabelPrefix;
+
+            // Sell confirmation popup
+            j["confirmPopupW"]          = w->confirmPopupW;
+            j["confirmPopupH"]          = w->confirmPopupH;
+            j["confirmBtnW"]            = w->confirmBtnW;
+            j["confirmBtnH"]            = w->confirmBtnH;
+            j["confirmQtyBtnSize"]      = w->confirmQtyBtnSize;
+            j["confirmBorderW"]         = w->confirmBorderW;
+            j["confirmTitleFontSize"]   = w->confirmTitleFontSize;
+            j["confirmQtyFontSize"]     = w->confirmQtyFontSize;
+            j["confirmPriceFontSize"]   = w->confirmPriceFontSize;
+            j["confirmBtnFontSize"]     = w->confirmBtnFontSize;
+            j["confirmQtyBtnFontSize"]  = w->confirmQtyBtnFontSize;
+            j["confirmBgColor"]         = c2a(w->confirmBgColor);
+            j["confirmBorderColor"]     = c2a(w->confirmBorderColor);
+            j["confirmBtnColor"]        = c2a(w->confirmBtnColor);
+            j["cancelBtnColor"]         = c2a(w->cancelBtnColor);
+            j["confirmBtnLabel"]        = w->confirmBtnLabel;
+            j["cancelBtnLabel"]         = w->cancelBtnLabel;
         }
     }
     else if (type == "bank_panel") {
@@ -1512,6 +1559,11 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["itemSpacing"]        = w->itemSpacing;
             j["borderWidth"]        = w->borderWidth;
 
+            j["toggleBtnWidth"]      = w->toggleBtnWidth;
+            j["toggleBtnHeight"]     = w->toggleBtnHeight;
+            j["checkboxSize"]        = w->checkboxSize;
+            j["displayOffset"]       = {w->displayOffset.x, w->displayOffset.y};
+
             j["titleColor"]          = {w->titleColor.r, w->titleColor.g, w->titleColor.b, w->titleColor.a};
             j["sectionColor"]        = {w->sectionColor.r, w->sectionColor.g, w->sectionColor.b, w->sectionColor.a};
             j["labelColor"]          = {w->labelColor.r, w->labelColor.g, w->labelColor.b, w->labelColor.a};
@@ -1519,6 +1571,18 @@ nlohmann::json UISerializer::serializeNode(const UINode* node) {
             j["logoutBtnHoverColor"] = {w->logoutBtnHoverColor.r, w->logoutBtnHoverColor.g, w->logoutBtnHoverColor.b, w->logoutBtnHoverColor.a};
             j["logoutTextColor"]     = {w->logoutTextColor.r, w->logoutTextColor.g, w->logoutTextColor.b, w->logoutTextColor.a};
             j["dividerColor"]        = {w->dividerColor.r, w->dividerColor.g, w->dividerColor.b, w->dividerColor.a};
+            j["toggleOnColor"]       = {w->toggleOnColor.r, w->toggleOnColor.g, w->toggleOnColor.b, w->toggleOnColor.a};
+            j["toggleOffColor"]      = {w->toggleOffColor.r, w->toggleOffColor.g, w->toggleOffColor.b, w->toggleOffColor.a};
+            j["checkOnColor"]        = {w->checkOnColor.r, w->checkOnColor.g, w->checkOnColor.b, w->checkOnColor.a};
+        }
+    }
+    else if (type == "fps_counter") {
+        if (auto* w = dynamic_cast<const FpsCounter*>(node)) {
+            j["textOffset"]   = {w->textOffset.x, w->textOffset.y};
+            j["fontSize"]     = w->fontSize;
+            j["showMs"]       = w->showMs;
+            j["textColor"]    = {w->textColor.r, w->textColor.g, w->textColor.b, w->textColor.a};
+            j["shadowColor"]  = {w->shadowColor.r, w->shadowColor.g, w->shadowColor.b, w->shadowColor.a};
         }
     }
 #endif // FATE_HAS_GAME

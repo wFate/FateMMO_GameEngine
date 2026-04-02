@@ -53,6 +53,7 @@
 #include "engine/ui/widgets/collection_panel.h"
 #include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/settings_panel.h"
+#include "engine/ui/widgets/fps_counter.h"
 #include "engine/ui/widgets/leaderboard_panel.h"
 #include "engine/ui/widgets/invite_prompt_panel.h"
 #endif // FATE_HAS_GAME
@@ -216,6 +217,7 @@ TypeBadge badgeForType(const std::string& type) {
     if (type == "costume_panel")       return {{0.55f, 0.35f, 0.60f, 1.0f}, "COS"};
     if (type == "settings_panel")      return {{0.55f, 0.45f, 0.25f, 1.0f}, "SET"};
     if (type == "invite_prompt")       return {{0.35f, 0.65f, 0.35f, 1.0f}, "INV"};
+    if (type == "fps_counter")         return {{0.70f, 0.70f, 0.30f, 1.0f}, "FPS"};
     return {{0.50f, 0.50f, 0.50f, 1.0f}, "???"};
 }
 
@@ -864,6 +866,12 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         if (ImGui::TreeNodeEx("Panel Colors##inv", 0)) {
             ImGui::ColorEdit4("Background##invpan", &inv->panelBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Border##invpan", &inv->panelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##invpan", &inv->panelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Visibility##inv", 0)) {
+            ImGui::Checkbox("Equip Area Visible", &inv->equipAreaVisible); checkUndoCapture(uiMgr);
+            ImGui::Checkbox("Grid Area Visible", &inv->gridAreaVisible); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -1931,6 +1939,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Buy Btn Height##shpl", &sp2->buyBtnHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Content Padding##shpl", &sp2->contentPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Sub-Header Height##shpl", &sp2->subHeaderHeight, 1.0f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##shpl", &sp2->panelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Colors##shp", 0)) {
@@ -1952,6 +1961,59 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Gold Bar BG##shpc2", &sp2->goldBarBgColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+        if (ImGui::TreeNodeEx("Close Button##shp", 0)) {
+            ImGui::DragFloat("Radius##shpcb", &sp2->closeBtnRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Offset##shpcb", &sp2->closeBtnOffset, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##shpcb", &sp2->closeBtnBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##shpcb", &sp2->closeBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##shpcb", &sp2->closeBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##shpcb", &sp2->closeBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Color##shpcb", &sp2->closeBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Buy Button##shp", 0)) {
+            ImGui::ColorEdit4("Border##shpbb", &sp2->buyBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Disabled Border##shpbb", &sp2->buyBtnDisabledBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##shpbb", &sp2->buyBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Disabled Text##shpbb", &sp2->buyBtnDisabledTextColor.r); checkUndoCapture(uiMgr);
+            char buyLblBuf[64] = {};
+            snprintf(buyLblBuf, sizeof(buyLblBuf), "%s", sp2->buyBtnLabel.c_str());
+            if (ImGui::InputText("Label##shpbb", buyLblBuf, sizeof(buyLblBuf))) {
+                sp2->buyBtnLabel = buyLblBuf;
+            }
+            checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Sell Popup##shp", 0)) {
+            ImGui::DragFloat("Width##shpsp", &sp2->confirmPopupW, 1.0f, 100.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Height##shpsp", &sp2->confirmPopupH, 1.0f, 60.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Width##shpsp", &sp2->confirmBtnW, 1.0f, 30.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Height##shpsp", &sp2->confirmBtnH, 1.0f, 12.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Qty Btn Size##shpsp", &sp2->confirmQtyBtnSize, 1.0f, 10.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##shpsp", &sp2->confirmBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Title Font##shpsp", &sp2->confirmTitleFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Qty Font##shpsp", &sp2->confirmQtyFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Price Font##shpsp", &sp2->confirmPriceFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Font##shpsp", &sp2->confirmBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Qty Btn Font##shpsp", &sp2->confirmQtyBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg##shpsp", &sp2->confirmBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##shpsp", &sp2->confirmBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Confirm Btn##shpsp", &sp2->confirmBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Cancel Btn##shpsp", &sp2->cancelBtnColor.r); checkUndoCapture(uiMgr);
+            char confLblBuf[64] = {};
+            snprintf(confLblBuf, sizeof(confLblBuf), "%s", sp2->confirmBtnLabel.c_str());
+            if (ImGui::InputText("Confirm Label##shpsp", confLblBuf, sizeof(confLblBuf))) {
+                sp2->confirmBtnLabel = confLblBuf;
+            }
+            checkUndoCapture(uiMgr);
+            char cancLblBuf[64] = {};
+            snprintf(cancLblBuf, sizeof(cancLblBuf), "%s", sp2->cancelBtnLabel.c_str());
+            if (ImGui::InputText("Cancel Label##shpsp", cancLblBuf, sizeof(cancLblBuf))) {
+                sp2->cancelBtnLabel = cancLblBuf;
+            }
+            checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         char shopBuf[128] = {};
         snprintf(shopBuf, sizeof(shopBuf), "%s", sp2->shopName.c_str());
         if (ImGui::InputText("Shop Name", shopBuf, sizeof(shopBuf))) {
@@ -1962,6 +2024,12 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         snprintf(subHdrBuf, sizeof(subHdrBuf), "%s", sp2->subHeaderLabel.c_str());
         if (ImGui::InputText("Sub-Header Label", subHdrBuf, sizeof(subHdrBuf))) {
             sp2->subHeaderLabel = subHdrBuf;
+        }
+        checkUndoCapture(uiMgr);
+        char goldPrefBuf[64] = {};
+        snprintf(goldPrefBuf, sizeof(goldPrefBuf), "%s", sp2->goldLabelPrefix.c_str());
+        if (ImGui::InputText("Gold Label Prefix", goldPrefBuf, sizeof(goldPrefBuf))) {
+            sp2->goldLabelPrefix = goldPrefBuf;
         }
         checkUndoCapture(uiMgr);
         ImGui::Separator();
@@ -2400,8 +2468,9 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::SeparatorText("SettingsPanel");
 
         if (ImGui::TreeNodeEx("Position Offsets##setp", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat2("Title##setpo",  &sp->titleOffset.x,  0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("Logout##setpo", &sp->logoutOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Title##setpo",   &sp->titleOffset.x,   0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Display##setpo", &sp->displayOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Logout##setpo",  &sp->logoutOffset.x,  0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -2414,9 +2483,12 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
 
         if (ImGui::TreeNodeEx("Button Dimensions##setp", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat("Logout Width",   &sp->logoutButtonWidth,  1.0f, 40.0f, 400.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Logout Height",  &sp->logoutButtonHeight, 1.0f, 16.0f, 100.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Corner Radius",  &sp->buttonCornerRadius, 0.5f, 0.0f, 20.0f);  checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Logout Width",    &sp->logoutButtonWidth,  1.0f, 40.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Logout Height",   &sp->logoutButtonHeight, 1.0f, 16.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius",   &sp->buttonCornerRadius, 0.5f, 0.0f, 20.0f);  checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Toggle Width",    &sp->toggleBtnWidth,     1.0f, 20.0f, 120.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Toggle Height",   &sp->toggleBtnHeight,    1.0f, 12.0f, 60.0f);  checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Checkbox Size",   &sp->checkboxSize,       0.5f, 8.0f, 30.0f);   checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -2435,8 +2507,19 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Logout Hover##setpc", &sp->logoutBtnHoverColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Logout Text##setpc",  &sp->logoutTextColor.r);     checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Divider##setpc",      &sp->dividerColor.r);        checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Toggle On##setpc",    &sp->toggleOnColor.r);       checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Toggle Off##setpc",   &sp->toggleOffColor.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Check On##setpc",     &sp->checkOnColor.r);        checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+    }
+    else if (auto* fc = dynamic_cast<FpsCounter*>(selectedNode_)) {
+        ImGui::SeparatorText("FpsCounter");
+        ImGui::DragFloat2("Text Offset##fpc", &fc->textOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Font Size##fpc", &fc->fontSize, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Show ms##fpc", &fc->showMs); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Text Color##fpc", &fc->textColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Shadow Color##fpc", &fc->shadowColor.r); checkUndoCapture(uiMgr);
     }
     else if (auto* lbp = dynamic_cast<LeaderboardPanel*>(selectedNode_)) {
         ImGui::SeparatorText("LeaderboardPanel");

@@ -52,6 +52,7 @@
 #include "engine/ui/widgets/menu_tab_bar.h"
 #include "engine/ui/widgets/costume_panel.h"
 #include "engine/ui/widgets/settings_panel.h"
+#include "engine/ui/widgets/fps_counter.h"
 #include "engine/ui/widgets/loading_panel.h"
 #include "engine/ui/widgets/invite_prompt_panel.h"
 #endif // FATE_HAS_GAME
@@ -774,6 +775,11 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         // Panel colors
         ip->panelBgColor     = readColor("panelBgColor",     ip->panelBgColor);
         ip->panelBorderColor = readColor("panelBorderColor", ip->panelBorderColor);
+        ip->panelBorderWidth = j.value("panelBorderWidth", 2.0f);
+
+        // Section visibility
+        ip->equipAreaVisible = j.value("equipAreaVisible", true);
+        ip->gridAreaVisible  = j.value("gridAreaVisible",  true);
 
         // Icon atlas
         ip->iconAtlasKey  = j.value("iconAtlasKey", std::string{});
@@ -1392,6 +1398,48 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         shp->goldBarBgColor      = readColor("goldBarBgColor",      shp->goldBarBgColor);
         shp->stockColor          = readColor("stockColor",          shp->stockColor);
         shp->priceColor          = readColor("priceColor",          shp->priceColor);
+
+        // Panel border
+        shp->panelBorderWidth = j.value("panelBorderWidth", 2.0f);
+
+        // Close button
+        shp->closeBtnRadius      = j.value("closeBtnRadius", 10.0f);
+        shp->closeBtnOffset      = j.value("closeBtnOffset", 5.0f);
+        shp->closeBtnBorderW     = j.value("closeBtnBorderW", 1.0f);
+        shp->closeBtnFontSize    = j.value("closeBtnFontSize", 10.0f);
+        shp->closeBtnBgColor     = readColor("closeBtnBgColor",     shp->closeBtnBgColor);
+        shp->closeBtnBorderColor = readColor("closeBtnBorderColor", shp->closeBtnBorderColor);
+        shp->closeBtnTextColor   = readColor("closeBtnTextColor",   shp->closeBtnTextColor);
+
+        // Buy button text/border
+        shp->buyBtnBorderColor         = readColor("buyBtnBorderColor",         shp->buyBtnBorderColor);
+        shp->buyBtnDisabledBorderColor = readColor("buyBtnDisabledBorderColor", shp->buyBtnDisabledBorderColor);
+        shp->buyBtnTextColor           = readColor("buyBtnTextColor",           shp->buyBtnTextColor);
+        shp->buyBtnDisabledTextColor   = readColor("buyBtnDisabledTextColor",   shp->buyBtnDisabledTextColor);
+        shp->buyBtnLabel               = j.value("buyBtnLabel", std::string{"Buy"});
+
+        // Gold bar
+        shp->goldLabelPrefix = j.value("goldLabelPrefix", std::string{"Gold: "});
+
+        // Sell confirmation popup
+        shp->confirmPopupW          = j.value("confirmPopupW", 220.0f);
+        shp->confirmPopupH          = j.value("confirmPopupH", 120.0f);
+        shp->confirmBtnW            = j.value("confirmBtnW", 70.0f);
+        shp->confirmBtnH            = j.value("confirmBtnH", 24.0f);
+        shp->confirmQtyBtnSize      = j.value("confirmQtyBtnSize", 20.0f);
+        shp->confirmBorderW         = j.value("confirmBorderW", 1.5f);
+        shp->confirmTitleFontSize   = j.value("confirmTitleFontSize", 11.0f);
+        shp->confirmQtyFontSize     = j.value("confirmQtyFontSize", 14.0f);
+        shp->confirmPriceFontSize   = j.value("confirmPriceFontSize", 10.0f);
+        shp->confirmBtnFontSize     = j.value("confirmBtnFontSize", 10.0f);
+        shp->confirmQtyBtnFontSize  = j.value("confirmQtyBtnFontSize", 12.0f);
+        shp->confirmBgColor         = readColor("confirmBgColor",     shp->confirmBgColor);
+        shp->confirmBorderColor     = readColor("confirmBorderColor", shp->confirmBorderColor);
+        shp->confirmBtnColor        = readColor("confirmBtnColor",    shp->confirmBtnColor);
+        shp->cancelBtnColor         = readColor("cancelBtnColor",     shp->cancelBtnColor);
+        shp->confirmBtnLabel        = j.value("confirmBtnLabel", std::string{"Confirm"});
+        shp->cancelBtnLabel         = j.value("cancelBtnLabel",  std::string{"Cancel"});
+
         node = std::move(shp);
     }
     else if (type == "bank_panel") {
@@ -2108,6 +2156,11 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
             }
             return def;
         };
+        sp->toggleBtnWidth      = j.value("toggleBtnWidth",      sp->toggleBtnWidth);
+        sp->toggleBtnHeight     = j.value("toggleBtnHeight",     sp->toggleBtnHeight);
+        sp->checkboxSize        = j.value("checkboxSize",        sp->checkboxSize);
+        sp->displayOffset       = readVec2("displayOffset",      sp->displayOffset);
+
         sp->titleColor          = readColor("titleColor",          sp->titleColor);
         sp->sectionColor        = readColor("sectionColor",        sp->sectionColor);
         sp->labelColor          = readColor("labelColor",          sp->labelColor);
@@ -2115,8 +2168,34 @@ std::unique_ptr<UINode> UIManager::parseNode(const nlohmann::json& j) {
         sp->logoutBtnHoverColor = readColor("logoutBtnHoverColor", sp->logoutBtnHoverColor);
         sp->logoutTextColor     = readColor("logoutTextColor",     sp->logoutTextColor);
         sp->dividerColor        = readColor("dividerColor",        sp->dividerColor);
+        sp->toggleOnColor       = readColor("toggleOnColor",       sp->toggleOnColor);
+        sp->toggleOffColor      = readColor("toggleOffColor",      sp->toggleOffColor);
+        sp->checkOnColor        = readColor("checkOnColor",        sp->checkOnColor);
 
         node = std::move(sp);
+    }
+    else if (type == "fps_counter") {
+        auto fc = std::make_unique<FpsCounter>(id);
+        auto readVec2 = [&](const char* key, Vec2 def) -> Vec2 {
+            if (j.contains(key) && j[key].is_array() && j[key].size() >= 2) {
+                return {j[key][0].get<float>(), j[key][1].get<float>()};
+            }
+            return def;
+        };
+        auto readColor = [&](const char* key, Color def) -> Color {
+            if (j.contains(key) && j[key].is_array() && j[key].size() >= 3) {
+                auto& c = j[key];
+                return {c[0].get<float>(), c[1].get<float>(), c[2].get<float>(),
+                        c.size() >= 4 ? c[3].get<float>() : 1.0f};
+            }
+            return def;
+        };
+        fc->textOffset  = readVec2("textOffset", fc->textOffset);
+        fc->fontSize    = j.value("fontSize", fc->fontSize);
+        fc->showMs      = j.value("showMs", fc->showMs);
+        fc->textColor   = readColor("textColor", fc->textColor);
+        fc->shadowColor = readColor("shadowColor", fc->shadowColor);
+        node = std::move(fc);
     }
     else {
         node = std::make_unique<UINode>(id, type);

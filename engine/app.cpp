@@ -13,6 +13,7 @@
 #include "engine/render/gfx/device.h"
 #include "engine/render/shader.h"
 #include "engine/core/logger.h"
+#include "engine/platform/device_info.h"
 #ifndef FATE_SHIPPING
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
@@ -45,15 +46,21 @@ bool App::init(const AppConfig& config) {
 
     Logger::instance().init("fate_engine.log");
     LOG_INFO("App", "=== FateEngine v%d.%d.%d starting ===", 0, 1, 0);
-    LOG_INFO("App", "Window: %dx%d, VSync: %s, Target FPS: %d",
-             config.windowWidth, config.windowHeight,
-             config.vsync ? "ON" : "OFF", config.targetFPS);
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0) {
         LOG_FATAL("App", "SDL_Init failed: %s", SDL_GetError());
         return false;
     }
     sdlInitialized_ = true;
+
+    // Resolve auto-detect target FPS from display refresh rate
+    if (config_.targetFPS <= 0) {
+        config_.targetFPS = DeviceInfo::getDisplayRefreshRate();
+    }
+    LOG_INFO("App", "Window: %dx%d, VSync: %s, Target FPS: %d (display: %dHz)",
+             config_.windowWidth, config_.windowHeight,
+             config_.vsync ? "ON" : "OFF", config_.targetFPS,
+             DeviceInfo::getDisplayRefreshRate());
 
     // Register lifecycle event filter — catches mobile background/foreground
     // events before the main event loop (critical for iOS 5-second deadline)
