@@ -285,6 +285,102 @@ static bool inspectTeleportDestList(std::vector<fate::TeleportDestination>& dest
     return changed;
 }
 
+static bool inspectDialogueTree(std::vector<fate::DialogueNode>& nodes, uint32_t& rootNodeId) {
+    bool changed = false;
+
+    if (ImGui::DragScalar("Root Node ID", ImGuiDataType_U32, &rootNodeId, 1.0f))
+        changed = true;
+
+    static const char* condNames[] = { "None", "HasFlag", "MinLevel", "HasItem", "HasClass" };
+    static const char* actNames[]  = { "None", "GiveItem", "GiveXP", "GiveGold", "SetFlag", "Heal" };
+
+    int removeNodeIdx = -1;
+    for (int ni = 0; ni < (int)nodes.size(); ++ni) {
+        ImGui::PushID(ni);
+        auto& node = nodes[ni];
+        char treeLabel[64];
+        std::snprintf(treeLabel, sizeof(treeLabel), "Node %u###dlgNode%d", node.nodeId, ni);
+        bool nodeOpen = ImGui::TreeNode(treeLabel);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("X##node")) removeNodeIdx = ni;
+        if (nodeOpen) {
+            if (ImGui::DragScalar("Node ID", ImGuiDataType_U32, &node.nodeId, 1.0f)) changed = true;
+
+            char textBuf[512];
+            strncpy(textBuf, node.npcText.c_str(), sizeof(textBuf) - 1); textBuf[sizeof(textBuf) - 1] = 0;
+            if (ImGui::InputTextMultiline("NPC Text", textBuf, sizeof(textBuf), ImVec2(-1, 60)))
+                { node.npcText = textBuf; changed = true; }
+
+            // Condition
+            int condIdx = static_cast<int>(node.condition.condition);
+            if (condIdx < 0 || condIdx > 4) condIdx = 0;
+            if (ImGui::Combo("Condition", &condIdx, condNames, 5))
+                { node.condition.condition = static_cast<fate::DialogueCondition>(condIdx); changed = true; }
+            if (node.condition.condition != fate::DialogueCondition::None) {
+                char cBuf[128];
+                strncpy(cBuf, node.condition.targetId.c_str(), sizeof(cBuf) - 1); cBuf[sizeof(cBuf) - 1] = 0;
+                if (ImGui::InputText("Cond Target", cBuf, sizeof(cBuf))) { node.condition.targetId = cBuf; changed = true; }
+                if (ImGui::DragInt("Cond Value", &node.condition.value)) changed = true;
+            }
+
+            // Choices
+            if (ImGui::TreeNode("Choices")) {
+                int removeChoiceIdx = -1;
+                for (int ci = 0; ci < (int)node.choices.size(); ++ci) {
+                    ImGui::PushID(ci);
+                    auto& choice = node.choices[ci];
+                    char choiceLabel[64];
+                    std::snprintf(choiceLabel, sizeof(choiceLabel), "Choice [%d]###dlgChoice%d", ci, ci);
+                    bool choiceOpen = ImGui::TreeNode(choiceLabel);
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("X##choice")) removeChoiceIdx = ci;
+                    if (choiceOpen) {
+                        char bBuf[128];
+                        strncpy(bBuf, choice.buttonText.c_str(), sizeof(bBuf) - 1); bBuf[sizeof(bBuf) - 1] = 0;
+                        if (ImGui::InputText("Button Text", bBuf, sizeof(bBuf))) { choice.buttonText = bBuf; changed = true; }
+                        if (ImGui::DragScalar("Next Node", ImGuiDataType_U32, &choice.nextNodeId, 1.0f)) changed = true;
+
+                        int actIdx = static_cast<int>(choice.onSelect.action);
+                        if (actIdx < 0 || actIdx > 5) actIdx = 0;
+                        if (ImGui::Combo("Action", &actIdx, actNames, 6))
+                            { choice.onSelect.action = static_cast<fate::DialogueAction>(actIdx); changed = true; }
+                        if (choice.onSelect.action != fate::DialogueAction::None) {
+                            char aBuf[128];
+                            strncpy(aBuf, choice.onSelect.targetId.c_str(), sizeof(aBuf) - 1); aBuf[sizeof(aBuf) - 1] = 0;
+                            if (ImGui::InputText("Act Target", aBuf, sizeof(aBuf))) { choice.onSelect.targetId = aBuf; changed = true; }
+                            if (ImGui::DragInt("Act Value", &choice.onSelect.value)) changed = true;
+                        }
+                        ImGui::TreePop();
+                    }
+                    ImGui::PopID();
+                }
+                if (removeChoiceIdx >= 0) {
+                    node.choices.erase(node.choices.begin() + removeChoiceIdx);
+                    changed = true;
+                }
+                if (ImGui::SmallButton("+ Add Choice")) {
+                    node.choices.push_back(fate::DialogueChoice{});
+                    changed = true;
+                }
+                ImGui::TreePop();
+            }
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+    if (removeNodeIdx >= 0) {
+        nodes.erase(nodes.begin() + removeNodeIdx);
+        changed = true;
+    }
+    if (ImGui::SmallButton("+ Add Node")) {
+        fate::DialogueNode newNode;
+        newNode.nodeId = nodes.empty() ? 0 : nodes.back().nodeId + 1;
+        nodes.push_back(std::move(newNode));
+        changed = true;
+    }
+    return changed;
+}
+
 #endif // FATE_HAS_GAME
 
 // ============================================================================
