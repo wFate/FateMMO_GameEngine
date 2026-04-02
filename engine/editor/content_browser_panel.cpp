@@ -5,6 +5,8 @@
 #include <imgui.h>
 #include <algorithm>
 #include <cstring>
+#include <set>
+#include <unordered_map>
 
 namespace fate {
 
@@ -271,7 +273,39 @@ void ContentBrowserPanel::draw() {
 // Mobs Tab
 // ============================================================================
 
+// Zone color palette for consistent scene coloring
+static ImVec4 sceneColor(const std::string& scene) {
+    // Deterministic color from scene name hash
+    uint32_t h = 0;
+    for (char c : scene) h = h * 31 + (uint8_t)c;
+    float hue = (h % 360) / 360.0f;
+    float sat = 0.5f + (h % 100) / 200.0f;
+    ImVec4 col;
+    ImGui::ColorConvertHSVtoRGB(hue, sat, 0.9f, col.x, col.y, col.z);
+    col.w = 1.0f;
+    return col;
+}
+
 void ContentBrowserPanel::drawMobsTab() {
+    // Build mob -> scene map from spawn zones
+    std::unordered_map<std::string, std::string> mobToScene;
+    for (const auto& zone : spawnList_) {
+        std::string mobId = jstr(zone, "mob_def_id");
+        std::string scene = jstr(zone, "scene_id");
+        if (!mobId.empty() && !scene.empty()) {
+            mobToScene[mobId] = scene; // last scene wins if multi-zone
+        }
+    }
+
+    // Collect unique scenes for the tab filter
+    std::vector<std::string> scenes = {"All", "Unspawned"};
+    {
+        std::set<std::string> seen;
+        for (const auto& [mid, sid] : mobToScene) {
+            if (seen.insert(sid).second) scenes.push_back(sid);
+        }
+    }
+
     // Toolbar
     if (ImGui::Button("New Mob")) {
         selectedMobIndex_ = -1;
@@ -296,8 +330,22 @@ void ContentBrowserPanel::drawMobsTab() {
     ImGui::SameLine();
     ImGui::Text("(%d mobs)", (int)mobList_.size());
 
+    // Zone filter tabs
+    static int mobZoneFilter = 0; // index into scenes
+    if (ImGui::BeginTabBar("##MobZoneTabs")) {
+        for (int t = 0; t < (int)scenes.size(); ++t) {
+            if (t > 1) ImGui::PushStyleColor(ImGuiCol_Text, sceneColor(scenes[t]));
+            if (ImGui::BeginTabItem(scenes[t].c_str())) {
+                mobZoneFilter = t;
+                ImGui::EndTabItem();
+            }
+            if (t > 1) ImGui::PopStyleColor();
+        }
+        ImGui::EndTabBar();
+    }
+
     // Left-right split
-    float leftW = 250.0f;
+    float leftW = 260.0f;
     if (ImGui::BeginChild("##MobList", ImVec2(leftW, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX)) {
         for (int i = 0; i < (int)mobList_.size(); ++i) {
             auto& mob = mobList_[i];
@@ -306,14 +354,30 @@ void ContentBrowserPanel::drawMobsTab() {
 
             if (!containsCI(name, mobFilterBuf_) && !containsCI(id, mobFilterBuf_)) continue;
 
+            // Zone filter
+            auto it = mobToScene.find(id);
+            std::string mobScene = (it != mobToScene.end()) ? it->second : "";
+            if (mobZoneFilter == 1 && !mobScene.empty()) continue;        // "Unspawned" tab
+            if (mobZoneFilter >= 2 && mobScene != scenes[mobZoneFilter]) continue; // specific scene
+
+            // Color by zone
+            ImVec4 color = mobScene.empty() ? ImVec4{0.5f,0.5f,0.5f,1.0f} : sceneColor(mobScene);
+            bool isBoss = mob.contains("is_boss") && mob["is_boss"].is_boolean() && mob["is_boss"].get<bool>();
+            bool isElite = mob.contains("is_elite") && mob["is_elite"].is_boolean() && mob["is_elite"].get<bool>();
+
+            if (isBoss || isElite) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 0.85f, 0.2f, 1.0f});
+            else ImGui::PushStyleColor(ImGuiCol_Text, color);
+
             bool selected = (i == selectedMobIndex_);
-            std::string label = name + "##mob" + std::to_string(i);
+            std::string prefix = isBoss ? "[B] " : (isElite ? "[E] " : "");
+            std::string label = prefix + name + "##mob" + std::to_string(i);
             if (ImGui::Selectable(label.c_str(), selected)) {
                 selectedMobIndex_ = i;
                 editingMob_ = mob;
             }
+            ImGui::PopStyleColor();
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", id.c_str());
+                ImGui::SetTooltip("%s\nZone: %s", id.c_str(), mobScene.empty() ? "Not spawned" : mobScene.c_str());
             }
         }
     }
@@ -410,7 +474,20 @@ void ContentBrowserPanel::drawMobsTab() {
 // Items Tab
 // ============================================================================
 
+static ImVec4 rarityColor(const std::string& rarity) {
+    if (rarity == "Uncommon")  return {0.2f,0.8f,0.2f,1};
+    if (rarity == "Rare")      return {0.3f,0.5f,1.0f,1};
+    if (rarity == "Epic")      return {0.7f,0.3f,0.9f,1};
+    if (rarity == "Legendary") return {1.0f,0.6f,0.1f,1};
+    return {0.85f,0.85f,0.85f,1}; // Common
+}
+
 void ContentBrowserPanel::drawItemsTab() {
+    static const std::vector<std::string> itemTypeTabs = {
+        "All", "Weapon", "Armor", "Accessory", "Consumable", "Material", "QuestItem", "Scroll", "Bag", "Pet"
+    };
+    static int itemTypeFilter = 0;
+
     if (ImGui::Button("New Item")) {
         selectedItemIndex_ = -1;
         editingItem_ = {
@@ -430,22 +507,42 @@ void ContentBrowserPanel::drawItemsTab() {
     ImGui::SameLine();
     ImGui::Text("(%d items)", (int)itemList_.size());
 
-    float leftW = 250.0f;
+    // Type filter tabs
+    if (ImGui::BeginTabBar("##ItemTypeTabs")) {
+        for (int t = 0; t < (int)itemTypeTabs.size(); ++t) {
+            if (ImGui::BeginTabItem(itemTypeTabs[t].c_str())) {
+                itemTypeFilter = t;
+                ImGui::EndTabItem();
+            }
+        }
+        ImGui::EndTabBar();
+    }
+
+    float leftW = 260.0f;
     if (ImGui::BeginChild("##ItemList", ImVec2(leftW, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX)) {
+        // Sub-group by class requirement when on equipment tabs
+        std::string lastClass;
         for (int i = 0; i < (int)itemList_.size(); ++i) {
             auto& item = itemList_[i];
             std::string name = jstr(item, "name", "???");
             std::string id = jstr(item, "item_id");
+            std::string type = jstr(item, "type");
+            std::string classReq = jstr(item, "class_req", "All");
 
             if (!containsCI(name, itemFilterBuf_) && !containsCI(id, itemFilterBuf_)) continue;
+            if (itemTypeFilter > 0 && type != itemTypeTabs[itemTypeFilter]) continue;
 
-            // Color-code by rarity
+            // Group by class on equipment tabs
+            bool isEquipTab = (itemTypeFilter >= 1 && itemTypeFilter <= 3);
+            if (isEquipTab && classReq != lastClass) {
+                if (!lastClass.empty()) ImGui::Spacing();
+                ImGui::TextColored({0.6f,0.8f,1.0f,1.0f}, "Class: %s", classReq.c_str());
+                ImGui::Separator();
+                lastClass = classReq;
+            }
+
             std::string rarity = jstr(item, "rarity", "Common");
-            ImVec4 color = {1,1,1,1};
-            if (rarity == "Uncommon") color = {0.2f,0.8f,0.2f,1};
-            else if (rarity == "Rare") color = {0.3f,0.5f,1.0f,1};
-            else if (rarity == "Epic") color = {0.7f,0.3f,0.9f,1};
-            else if (rarity == "Legendary") color = {1.0f,0.6f,0.1f,1};
+            ImVec4 color = rarityColor(rarity);
 
             bool selected = (i == selectedItemIndex_);
             ImGui::PushStyleColor(ImGuiCol_Text, color);
@@ -456,7 +553,8 @@ void ContentBrowserPanel::drawItemsTab() {
             }
             ImGui::PopStyleColor();
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("[%s] %s\n%s", rarity.c_str(), jstr(item, "type").c_str(), id.c_str());
+                ImGui::SetTooltip("[%s] %s | %s\n%s",
+                    rarity.c_str(), type.c_str(), classReq.c_str(), id.c_str());
             }
         }
     }
@@ -558,13 +656,60 @@ void ContentBrowserPanel::drawLootTab() {
     }
     std::sort(tableIds.begin(), tableIds.end());
 
+    // Build loot_table_id -> mob display_name map
+    std::unordered_map<std::string, std::string> tableToMob;
+    std::unordered_map<std::string, std::string> tableToMobScene;
+    for (const auto& mob : mobList_) {
+        std::string lt = jstr(mob, "loot_table_id");
+        if (!lt.empty()) {
+            tableToMob[lt] = jstr(mob, "display_name", jstr(mob, "mob_def_id"));
+            // Cross-ref with spawn zones for scene
+            std::string mobId = jstr(mob, "mob_def_id");
+            for (const auto& zone : spawnList_) {
+                if (jstr(zone, "mob_def_id") == mobId) {
+                    tableToMobScene[lt] = jstr(zone, "scene_id");
+                    break;
+                }
+            }
+        }
+    }
+
+    // Count entries per table
+    std::unordered_map<std::string, int> tableEntryCount;
+    for (const auto& entry : lootList_) {
+        tableEntryCount[jstr(entry, "loot_table_id")]++;
+    }
+
+    ImGui::Text("%d loot tables, %d total entries", (int)tableIds.size(), (int)lootList_.size());
+    ImGui::Separator();
+
     // Left pane: table list
-    float leftW = 200.0f;
+    float leftW = 280.0f;
     if (ImGui::BeginChild("##LootTableList", ImVec2(leftW, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX)) {
         for (auto& tid : tableIds) {
+            auto mobIt = tableToMob.find(tid);
+            auto sceneIt = tableToMobScene.find(tid);
+            std::string mobName = (mobIt != tableToMob.end()) ? mobIt->second : "";
+            std::string scene = (sceneIt != tableToMobScene.end()) ? sceneIt->second : "";
+            int count = tableEntryCount[tid];
+
+            // Color by scene (matches mob tab coloring)
+            ImVec4 color = scene.empty() ? ImVec4{0.6f,0.6f,0.6f,1.0f} : sceneColor(scene);
+            ImGui::PushStyleColor(ImGuiCol_Text, color);
+
             bool selected = (tid == selectedLootTable_);
-            if (ImGui::Selectable(tid.c_str(), selected)) {
+            std::string label = tid + " (" + std::to_string(count) + ")##loot_" + tid;
+            if (ImGui::Selectable(label.c_str(), selected)) {
                 selectedLootTable_ = tid;
+            }
+            ImGui::PopStyleColor();
+
+            if (ImGui::IsItemHovered()) {
+                if (!mobName.empty())
+                    ImGui::SetTooltip("Mob: %s\nScene: %s\n%d drop entries", mobName.c_str(),
+                        scene.empty() ? "Not spawned" : scene.c_str(), count);
+                else
+                    ImGui::SetTooltip("No mob assigned\n%d drop entries", count);
             }
         }
     }

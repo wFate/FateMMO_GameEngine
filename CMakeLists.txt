@@ -599,6 +599,10 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     # =============================================================================
     file(GLOB_RECURSE TEST_SOURCES tests/*.cpp)
     list(FILTER TEST_SOURCES EXCLUDE REGEX "tests/scenarios/")
+    # Exclude tests that require game/ (gitignored proprietary code)
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/game/shared/game_types.h")
+        list(FILTER TEST_SOURCES EXCLUDE REGEX "test_content_validator")
+    endif()
     # Some tests reference game/shared code (gitignored); include if present
     file(GLOB_RECURSE GAME_SHARED_SOURCES game/shared/*.cpp)
     # Game animation loader (needed by animation tests)

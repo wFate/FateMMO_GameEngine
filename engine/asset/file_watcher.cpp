@@ -110,15 +110,12 @@ void FileWatcher::stop() {
     running_.store(false);
 
 #ifdef _WIN32
-    LOG_DEBUG("FileWatcher", "stop: signaling event...");
     if (stopEvent_) {
         SetEvent(stopEvent_);
     }
-    LOG_DEBUG("FileWatcher", "stop: joining thread...");
     if (watchThread_.joinable()) {
         watchThread_.join();
     }
-    LOG_DEBUG("FileWatcher", "stop: closing handles...");
     if (dirHandle_ != INVALID_HANDLE_VALUE) {
         CloseHandle(dirHandle_);
         dirHandle_ = INVALID_HANDLE_VALUE;
@@ -127,7 +124,6 @@ void FileWatcher::stop() {
         CloseHandle(stopEvent_);
         stopEvent_ = nullptr;
     }
-    LOG_DEBUG("FileWatcher", "stop: handles closed");
 #endif
 
     LOG_INFO("FileWatcher", "Stopped watching: %s", watchDir_.c_str());
