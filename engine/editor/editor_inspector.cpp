@@ -28,6 +28,7 @@
 #endif // FATE_HAS_GAME
 #include "engine/render/text_style.h"
 #include "engine/render/font_registry.h"
+#include "game/systems/combat_text_config.h"
 #include <unordered_set>
 #include <string>
 #include <cstring>
@@ -91,6 +92,79 @@ static bool inspectTextStyle(const char* prefix,
     }
 
     return changed;
+}
+
+// ============================================================================
+// CombatTextStyle inspector helper
+// ============================================================================
+
+static void inspectCombatTextStyle(const char* name, fate::CombatTextStyle& s) {
+    if (!ImGui::TreeNode(name)) return;
+
+    char label[96];
+    char buf[64];
+
+    // --- Core ---
+    std::snprintf(label, sizeof(label), "Display Text##%s", name);
+    strncpy(buf, s.text.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+    if (ImGui::InputText(label, buf, sizeof(buf))) s.text = buf;
+
+    std::snprintf(label, sizeof(label), "Color##%s", name);
+    ImGui::ColorEdit4(label, &s.color.r);
+    std::snprintf(label, sizeof(label), "Outline Color##%s", name);
+    ImGui::ColorEdit4(label, &s.outlineColor.r);
+    std::snprintf(label, sizeof(label), "Font Size##%s", name);
+    ImGui::DragFloat(label, &s.fontSize, 0.5f, 4.0f, 48.0f, "%.1f");
+    std::snprintf(label, sizeof(label), "Scale##%s", name);
+    ImGui::DragFloat(label, &s.scale, 0.05f, 0.1f, 5.0f, "%.2f");
+
+    // --- Motion ---
+    if (ImGui::TreeNode("Motion")) {
+        std::snprintf(label, sizeof(label), "Lifetime##%s", name);
+        ImGui::DragFloat(label, &s.lifetime, 0.05f, 0.1f, 5.0f, "%.2fs");
+        std::snprintf(label, sizeof(label), "Float Speed##%s", name);
+        ImGui::DragFloat(label, &s.floatSpeed, 1.0f, 0.0f, 200.0f, "%.0f px/s");
+        std::snprintf(label, sizeof(label), "Float Angle##%s", name);
+        ImGui::DragFloat(label, &s.floatAngle, 1.0f, 0.0f, 360.0f, "%.0f deg");
+        std::snprintf(label, sizeof(label), "Start Offset Y##%s", name);
+        ImGui::DragFloat(label, &s.startOffsetY, 0.5f, -50.0f, 50.0f, "%.1f");
+        std::snprintf(label, sizeof(label), "Random Spread X##%s", name);
+        ImGui::DragFloat(label, &s.randomSpreadX, 0.5f, 0.0f, 50.0f, "%.1f");
+        ImGui::TreePop();
+    }
+
+    // --- Fade & Pop ---
+    if (ImGui::TreeNode("Fade & Pop")) {
+        std::snprintf(label, sizeof(label), "Fade Delay##%s", name);
+        ImGui::DragFloat(label, &s.fadeDelay, 0.05f, 0.0f, 3.0f, "%.2fs");
+        std::snprintf(label, sizeof(label), "Pop Scale##%s", name);
+        ImGui::DragFloat(label, &s.popScale, 0.05f, 0.5f, 5.0f, "%.2f");
+        std::snprintf(label, sizeof(label), "Pop Duration##%s", name);
+        ImGui::DragFloat(label, &s.popDuration, 0.01f, 0.0f, 1.0f, "%.2fs");
+        ImGui::TreePop();
+    }
+
+    // --- Font & Text Style ---
+    std::snprintf(label, sizeof(label), "ctFont_%s", name);
+    inspectTextStyle(label, s.fontName, s.textStyle, s.textEffects);
+
+    // --- Label (e.g., "CRIT!") ---
+    if (ImGui::TreeNode("Label")) {
+        std::snprintf(label, sizeof(label), "Label Text##%s", name);
+        strncpy(buf, s.label.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+        if (ImGui::InputText(label, buf, sizeof(buf))) s.label = buf;
+        std::snprintf(label, sizeof(label), "Label Font Size##%s", name);
+        ImGui::DragFloat(label, &s.labelFontSize, 0.5f, 4.0f, 48.0f, "%.1f");
+        std::snprintf(label, sizeof(label), "Label Color##%s", name);
+        ImGui::ColorEdit4(label, &s.labelColor.r);
+        std::snprintf(label, sizeof(label), "Label Offset Y##%s", name);
+        ImGui::DragFloat(label, &s.labelOffsetY, 0.5f, -50.0f, 50.0f, "%.1f");
+        std::snprintf(label, sizeof(label), "ctLabelFont_%s", name);
+        inspectTextStyle(label, s.labelFontName, s.labelTextStyle, s.labelTextEffects);
+        ImGui::TreePop();
+    }
+
+    ImGui::TreePop();
 }
 
 // ============================================================================
@@ -993,6 +1067,30 @@ void Editor::drawInspector() {
                 captureInspectorUndo();
                 ImGui::Checkbox("Show Disengage Range##cc", &cc->showDisengageRange);
                 captureInspectorUndo();
+
+                // --- Combat Text Config (game-wide) ---
+                ImGui::Separator();
+                auto& ctc = fate::CombatTextConfig::instance();
+                if (ImGui::TreeNode("Combat Text Styles")) {
+                    inspectCombatTextStyle("Damage", ctc.damage);
+                    inspectCombatTextStyle("Critical", ctc.crit);
+                    inspectCombatTextStyle("Miss", ctc.miss);
+                    inspectCombatTextStyle("Resist", ctc.resist);
+                    inspectCombatTextStyle("Heal", ctc.heal);
+                    inspectCombatTextStyle("Block", ctc.block);
+                    inspectCombatTextStyle("XP Gain", ctc.xp);
+                    inspectCombatTextStyle("Level Up", ctc.levelUp);
+
+                    ImGui::Separator();
+                    if (ImGui::Button("Save to JSON##ctc")) {
+                        ctc.save(fate::CombatTextConfig::kDefaultPath);
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Reset Defaults##ctc")) {
+                        ctc.loadDefaults();
+                    }
+                    ImGui::TreePop();
+                }
             }
         }
 

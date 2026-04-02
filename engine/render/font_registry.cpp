@@ -3,6 +3,7 @@
 #include "engine/core/logger.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include "stb_image.h"
 
 using json = nlohmann::json;
 
@@ -154,15 +155,29 @@ void FontRegistry::loadAtlases() {
             continue;
         }
 
+        // Font atlases must NOT be flipped — UVs are in image-space (y-down).
+        // Texture::loadFromFile always flips for GL, so we load manually.
+        stbi_set_flip_vertically_on_load(false);
+        int w = 0, h = 0, channels = 0;
+        unsigned char* data = stbi_load(it->second.c_str(), &w, &h, &channels, 4);
+        stbi_set_flip_vertically_on_load(true); // restore for other textures
+        if (!data) {
+            LOG_ERROR("FontRegistry", "Failed to load atlas for '%s': %s",
+                      name.c_str(), it->second.c_str());
+            continue;
+        }
+
         auto tex = std::make_shared<Texture>();
-        if (tex->loadFromFile(it->second)) {
+        if (tex->loadFromMemory(data, w, h, 4)) {
+            tex->setFilter(true); // linear filtering for SDF text
             font->atlas = tex;
             LOG_INFO("FontRegistry", "Loaded atlas for '%s': %s",
                      name.c_str(), it->second.c_str());
         } else {
-            LOG_ERROR("FontRegistry", "Failed to load atlas for '%s': %s",
-                      name.c_str(), it->second.c_str());
+            LOG_ERROR("FontRegistry", "Failed to create texture for '%s'",
+                      name.c_str());
         }
+        stbi_image_free(data);
     }
 }
 

@@ -141,17 +141,18 @@ bool SDFFontAtlas::generateIfMissing(const std::string& fontPath,
         stbtt_MakeGlyphBitmap(&fontInfo, glyphBmp.data(),
                                gw, gh, gw, scale, scale, glyphIdx);
 
-        // Copy into RGBA atlas (white colour, alpha = glyph coverage)
+        // Copy into RGBA atlas — coverage in all channels so the MSDF
+        // shader's median(R,G,B) picks up the glyph shape correctly.
         for (int gy = 0; gy < gh; ++gy) {
             for (int gx = 0; gx < gw; ++gx) {
                 const int ax = penX + gx;
                 const int ay = penY + gy;
                 const int ai = (ay * ATLAS_W + ax) * 4;
                 const unsigned char v = glyphBmp[gy * gw + gx];
-                atlas[ai + 0] = 255;  // R
-                atlas[ai + 1] = 255;  // G
-                atlas[ai + 2] = 255;  // B
-                atlas[ai + 3] = v;    // A = coverage
+                atlas[ai + 0] = v;    // R = coverage
+                atlas[ai + 1] = v;    // G = coverage
+                atlas[ai + 2] = v;    // B = coverage
+                atlas[ai + 3] = 255;  // A = fully opaque
             }
         }
 
