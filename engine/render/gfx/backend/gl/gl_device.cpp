@@ -105,9 +105,15 @@ static std::string readFileToString(const std::string& path) {
 // ============================================================================
 // Singleton
 // ============================================================================
+static bool s_deviceAlive = false;
+
 Device& Device::instance() {
     static Device s;
     return s;
+}
+
+bool Device::isAlive() {
+    return s_deviceAlive;
 }
 
 // ============================================================================
@@ -116,12 +122,14 @@ Device& Device::instance() {
 bool Device::init() {
     if (impl_) return true; // already initialised
     impl_ = new Impl();
+    s_deviceAlive = true;
     LOG_INFO("gfx", "Device initialised");
     return true;
 }
 
 void Device::shutdown() {
     if (!impl_) return;
+    s_deviceAlive = false;
 
     // Delete all GL resources
     for (auto& [id, prog] : impl_->shaders)        glDeleteProgram(prog);

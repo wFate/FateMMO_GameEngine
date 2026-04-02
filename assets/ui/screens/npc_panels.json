@@ -200,7 +200,8 @@
           0.0,
           -50.0
         ],
-        "type": "shop_panel"
+        "type": "shop_panel",
+        "visible": false
       },
       {
         "anchor": {

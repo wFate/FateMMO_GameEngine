@@ -43,13 +43,13 @@ struct CmdAdminSaveContentMsg {
     void write(ByteWriter& w) const {
         w.writeU8(contentType);
         w.writeU8(isNew);
-        w.writeString(jsonPayload);
+        w.writeLargeString(jsonPayload);
     }
     static CmdAdminSaveContentMsg read(ByteReader& r) {
         CmdAdminSaveContentMsg m;
         m.contentType  = r.readU8();
         m.isNew        = r.readU8();
-        m.jsonPayload  = r.readString();
+        m.jsonPayload  = r.readLargeString();
         return m;
     }
 };
@@ -141,16 +141,16 @@ struct SvAdminResultMsg {
 // ============================================================================
 struct SvAdminContentListMsg {
     uint8_t contentType = 0;
-    std::string jsonPayload;  // JSON array of all entries
+    std::string jsonPayload;  // JSON array of all entries (can be >64KB for items)
 
     void write(ByteWriter& w) const {
         w.writeU8(contentType);
-        w.writeString(jsonPayload);
+        w.writeLargeString(jsonPayload);
     }
     static SvAdminContentListMsg read(ByteReader& r) {
         SvAdminContentListMsg m;
         m.contentType = r.readU8();
-        m.jsonPayload = r.readString();
+        m.jsonPayload = r.readLargeString();
         return m;
     }
 };

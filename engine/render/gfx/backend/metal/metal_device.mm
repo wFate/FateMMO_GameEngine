@@ -77,9 +77,15 @@ static std::string deriveShaderBaseName(const std::string& path) {
 // ============================================================================
 // Singleton
 // ============================================================================
+static bool s_deviceAlive = false;
+
 Device& Device::instance() {
     static Device s;
     return s;
+}
+
+bool Device::isAlive() {
+    return s_deviceAlive;
 }
 
 // ============================================================================
@@ -136,6 +142,7 @@ bool Device::initMetal(void* metalLayerPtr) {
         // shaderLib.loadMetallib / shaderLib.compileSource before creating shaders)
         impl_->shaderLib.init((__bridge void*)impl_->device);
 
+        s_deviceAlive = true;
         LOG_INFO("gfx", "Metal Device initialised (%s)", [[impl_->device name] UTF8String]);
     }
     return true;
@@ -143,6 +150,7 @@ bool Device::initMetal(void* metalLayerPtr) {
 
 void Device::shutdown() {
     if (!impl_) return;
+    s_deviceAlive = false;
 
     // ARC releases all Metal objects when entries are cleared from the maps.
     impl_->textures.clear();

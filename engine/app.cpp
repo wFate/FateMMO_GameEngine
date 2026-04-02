@@ -948,13 +948,18 @@ void App::shutdown() {
     SceneManager::instance().unloadScene();
 
     // Destroy render graph FBOs while GL context is still alive
+    LOG_DEBUG("App", "Shutdown: clearing FBOs...");
     renderGraph_.clearFBOs();
+    LOG_DEBUG("App", "Shutdown: FullscreenQuad...");
     FullscreenQuad::instance().shutdown();
 
 #ifndef FATE_SHIPPING
+    LOG_DEBUG("App", "Shutdown: Editor...");
     Editor::instance().shutdown();
 #endif
+    LOG_DEBUG("App", "Shutdown: SpriteBatch...");
     spriteBatch_.shutdown();
+    LOG_DEBUG("App", "Shutdown: FileWatcher...");
     fileWatcher_.stop();
     TextureCache::instance().clear();
     AssetRegistry::instance().clear();

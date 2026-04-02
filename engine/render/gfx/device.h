@@ -15,7 +15,7 @@ public:
     bool loadMetalShaderLibrary(const std::string& path);
 #endif
     void shutdown();
-    bool isAlive() const { return impl_ != nullptr; }
+    static bool isAlive();
 
     // Resource creation
     ShaderHandle createShader(const std::string& vertSrc, const std::string& fragSrc);
