@@ -75,7 +75,13 @@ assets/audio/sfx/
 assets/audio/music/
 
 # All assets (superset — covers sprites, tiles, audio, etc.)
-assets/
+# Use wildcard so negation rules can un-ignore specific subdirs
+assets/*
+
+# Open-source: shader files (rendering infrastructure, not game content)
+!assets/shaders/
+# Open-source: UI screen layouts
+!assets/ui/
 
 # Server — all proprietary (auth, DB repos, caches, WAL, handlers)
 server/
