@@ -168,6 +168,7 @@ static void inspectCombatTextStyle(const char* name, fate::CombatTextStyle& s) {
 
     ImGui::TreePop();
 }
+
 // ============================================================================
 // NPC inspector helpers
 // ============================================================================
@@ -1811,8 +1812,9 @@ void Editor::drawInspector() {
                 strncpy(buf, npc->displayName.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
                 if (ImGui::InputText("Display Name##npc", buf, sizeof(buf))) npc->displayName = buf;
                 captureInspectorUndo();
-                strncpy(buf, npc->dialogueGreeting.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
-                if (ImGui::InputTextMultiline("Greeting##npc", buf, sizeof(buf), ImVec2(-1, 60))) npc->dialogueGreeting = buf;
+                char greetBuf[512];
+                strncpy(greetBuf, npc->dialogueGreeting.c_str(), sizeof(greetBuf) - 1); greetBuf[sizeof(greetBuf) - 1] = 0;
+                if (ImGui::InputTextMultiline("Greeting##npc", greetBuf, sizeof(greetBuf), ImVec2(-1, 60))) npc->dialogueGreeting = greetBuf;
                 captureInspectorUndo();
                 strncpy(buf, npc->sceneId.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
                 if (ImGui::InputText("Scene ID##npc", buf, sizeof(buf))) npc->sceneId = buf;
