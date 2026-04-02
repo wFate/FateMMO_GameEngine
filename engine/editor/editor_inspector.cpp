@@ -1828,6 +1828,46 @@ void Editor::drawInspector() {
             }
         }
 
+        // QuestGiverComponent
+        if (auto* qg = selectedEntity_->getComponent<QuestGiverComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Quest Giver");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmQG")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<QuestGiverComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<QuestGiverComponent>()) {
+                if (inspectIdList("questIds", qg->questIds))
+                    captureInspectorUndo();
+            }
+        }
+
+        // QuestMarkerComponent
+        if (auto* qm = selectedEntity_->getComponent<QuestMarkerComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Quest Marker");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmQM")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<QuestMarkerComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<QuestMarkerComponent>()) {
+                static const char* markerNames[] = { "None", "Available", "TurnIn" };
+                int mIdx = static_cast<int>(qm->currentState);
+                if (mIdx < 0 || mIdx > 2) mIdx = 0;
+                if (ImGui::Combo("Marker State##qm", &mIdx, markerNames, 3))
+                    qm->currentState = static_cast<MarkerState>(mIdx);
+                captureInspectorUndo();
+                static const char* tierNames[] = { "Starter", "Novice", "Apprentice", "Adept" };
+                int tIdx = static_cast<int>(qm->highestTier);
+                if (tIdx < 0 || tIdx > 3) tIdx = 0;
+                if (ImGui::Combo("Highest Tier##qm", &tIdx, tierNames, 4))
+                    qm->highestTier = static_cast<QuestTier>(tIdx);
+                captureInspectorUndo();
+            }
+        }
+
         // MarketplaceNPC
         if (auto* mktNpc = selectedEntity_->getComponent<MarketplaceNPCComponent>()) {
             bool open = ImGui::CollapsingHeader("Marketplace NPC");
