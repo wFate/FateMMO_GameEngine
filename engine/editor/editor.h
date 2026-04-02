@@ -23,6 +23,8 @@
 #include "engine/editor/asset_browser.h"
 #ifdef FATE_HAS_GAME
 #include "engine/editor/ui_editor_panel.h"
+#else
+class UIManager;
 #endif
 #include "engine/editor/paper_doll_panel.h"
 #include "engine/editor/content_browser_panel.h"

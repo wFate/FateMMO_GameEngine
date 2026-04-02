@@ -431,6 +431,7 @@ void App::processEvents() {
                         int vpH = (int)vpSize.y;
 
                         // Check if click lands on a selected UI widget first
+#ifdef FATE_HAS_GAME
                         if (Editor::instance().uiEditorPanel().handleViewportClick(screenPos)) {
                             // UI widget drag started — skip entity/tile handling
                         } else {
@@ -441,7 +442,9 @@ void App::processEvents() {
                         }
                         if (Editor::instance().uiEditorPanel().isDraggingWidget()) {
                             // already handled above
-                        } else if (Editor::instance().isTilePaintMode()) {
+                        } else
+#endif
+                        if (Editor::instance().isTilePaintMode()) {
                             Editor::instance().paintTileAt(
                                 &scene->world(), &camera_, screenPos, vpW, vpH);
                         } else if (Editor::instance().isEraseMode()) {
@@ -478,9 +481,12 @@ void App::processEvents() {
                     }
                     // Left-click drag: paint tiles or move entity (only when paused/editing)
                     else if ((event.motion.state & SDL_BUTTON_LMASK) && Editor::instance().isPaused()) {
+#ifdef FATE_HAS_GAME
                         if (Editor::instance().uiEditorPanel().isDraggingWidget()) {
                             Editor::instance().uiEditorPanel().handleViewportDrag(localPos);
-                        } else if (Editor::instance().isTilePaintMode()) {
+                        } else
+#endif
+                        if (Editor::instance().isTilePaintMode()) {
                             auto* scene = SceneManager::instance().currentScene();
                             if (scene) {
                                 Editor::instance().paintTileAt(
@@ -502,8 +508,10 @@ void App::processEvents() {
 
             case SDL_MOUSEBUTTONUP:
                 if (event.button.button == SDL_BUTTON_LEFT) {
+#ifdef FATE_HAS_GAME
                     Editor::instance().uiEditorPanel().handleViewportRelease(
                         Editor::instance().uiManager());
+#endif
                     Editor::instance().handleMouseUp();
                 }
                 break;
