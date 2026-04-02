@@ -39,16 +39,14 @@ void FileWatcher::start(const std::string& directory, Callback onFileChanged) {
     running_.store(true);
 
     watchThread_ = std::jthread([this](std::stop_token) {
-        alignas(DWORD) char buffer[4096];
-
         while (running_.load()) {
             OVERLAPPED overlapped = {};
             overlapped.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
 
             BOOL result = ReadDirectoryChangesW(
                 dirHandle_,
-                buffer,
-                sizeof(buffer),
+                ioBuffer_,
+                sizeof(ioBuffer_),
                 TRUE, // recursive
                 FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_FILE_NAME,
                 nullptr,
@@ -65,12 +63,12 @@ void FileWatcher::start(const std::string& directory, Callback onFileChanged) {
             DWORD waitResult = WaitForMultipleObjects(2, handles, FALSE, INFINITE);
 
             if (waitResult != WAIT_OBJECT_0) {
-                // Stop requested — cancel pending I/O and wait for the
-                // cancellation to complete so overlapped/buffer remain
-                // valid until the OS is done writing to them.
+                // Stop requested — cancel the pending I/O, then close
+                // the directory handle while overlapped is still on the
+                // stack so the kernel's cancellation write lands safely.
                 CancelIo(dirHandle_);
-                DWORD dummy = 0;
-                GetOverlappedResult(dirHandle_, &overlapped, &dummy, TRUE);
+                CloseHandle(dirHandle_);
+                dirHandle_ = INVALID_HANDLE_VALUE;
                 CloseHandle(overlapped.hEvent);
                 break;
             }
@@ -81,7 +79,7 @@ void FileWatcher::start(const std::string& directory, Callback onFileChanged) {
 
             if (bytesReturned == 0) continue;
 
-            auto* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer);
+            auto* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(ioBuffer_);
             while (true) {
                 if (info->Action == FILE_ACTION_MODIFIED ||
                     info->Action == FILE_ACTION_ADDED) {

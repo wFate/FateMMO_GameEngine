@@ -35,6 +35,7 @@ private:
 #ifdef _WIN32
     HANDLE dirHandle_ = INVALID_HANDLE_VALUE;
     HANDLE stopEvent_ = nullptr;
+    alignas(8) char ioBuffer_[4096] = {};
 #endif
 };
 

@@ -724,7 +724,7 @@ void ServerApp::processAdminRequestContentList(uint16_t clientId,
         listMsg.totalPages = totalPages;
         listMsg.jsonPayload = pages[i].dump();
 
-        uint8_t buf[MAX_PACKET_SIZE];
+        uint8_t buf[4096];  // pages are ~3KB, need more than MAX_PACKET_SIZE (1200)
         ByteWriter w(buf, sizeof(buf));
         listMsg.write(w);
         if (!w.overflowed()) {
