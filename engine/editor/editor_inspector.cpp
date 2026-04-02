@@ -100,7 +100,7 @@ static bool inspectTextStyle(const char* prefix,
 // ============================================================================
 // CombatTextStyle inspector helper
 // ============================================================================
-
+#ifdef FATE_HAS_GAME
 static void inspectCombatTextStyle(const char* name, fate::CombatTextStyle& s) {
     if (!ImGui::TreeNode(name)) return;
 
@@ -169,6 +169,7 @@ static void inspectCombatTextStyle(const char* name, fate::CombatTextStyle& s) {
 
     ImGui::TreePop();
 }
+#endif // FATE_HAS_GAME
 
 // ============================================================================
 // Reflection-driven inspector helper
