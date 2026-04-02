@@ -74,9 +74,28 @@ void ContentBrowserPanel::onContentListReceived(uint8_t contentType, uint16_t pa
         }
     }
 
-    // Mark complete only after last page
+    // Mark complete only after last page, then sort
     if (pageIndex + 1 >= totalPages) {
         *dirtyFlag = false;
+        // Sort alphabetically by display name for better usability
+        auto getSort = [&](const nlohmann::json& e) -> std::string {
+            if (contentType == AdminContentType::Mob)
+                return jstr(e, "display_name", jstr(e, "mob_def_id"));
+            if (contentType == AdminContentType::Item)
+                return jstr(e, "name", jstr(e, "item_id"));
+            if (contentType == AdminContentType::SpawnZone)
+                return jstr(e, "scene_id") + "/" + jstr(e, "mob_def_id");
+            if (contentType == AdminContentType::LootDrop)
+                return jstr(e, "loot_table_id") + "/" + jstr(e, "item_id");
+            return "";
+        };
+        std::sort(target->begin(), target->end(),
+            [&](const nlohmann::json& a, const nlohmann::json& b) {
+                std::string sa = getSort(a), sb = getSort(b);
+                std::transform(sa.begin(), sa.end(), sa.begin(), ::tolower);
+                std::transform(sb.begin(), sb.end(), sb.begin(), ::tolower);
+                return sa < sb;
+            });
     }
 }
 
@@ -288,10 +307,13 @@ void ContentBrowserPanel::drawMobsTab() {
             if (!containsCI(name, mobFilterBuf_) && !containsCI(id, mobFilterBuf_)) continue;
 
             bool selected = (i == selectedMobIndex_);
-            std::string label = name + "  (" + id + ")##mob" + std::to_string(i);
+            std::string label = name + "##mob" + std::to_string(i);
             if (ImGui::Selectable(label.c_str(), selected)) {
                 selectedMobIndex_ = i;
-                editingMob_ = mob; // local copy for editing
+                editingMob_ = mob;
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", id.c_str());
             }
         }
     }
@@ -417,11 +439,24 @@ void ContentBrowserPanel::drawItemsTab() {
 
             if (!containsCI(name, itemFilterBuf_) && !containsCI(id, itemFilterBuf_)) continue;
 
+            // Color-code by rarity
+            std::string rarity = jstr(item, "rarity", "Common");
+            ImVec4 color = {1,1,1,1};
+            if (rarity == "Uncommon") color = {0.2f,0.8f,0.2f,1};
+            else if (rarity == "Rare") color = {0.3f,0.5f,1.0f,1};
+            else if (rarity == "Epic") color = {0.7f,0.3f,0.9f,1};
+            else if (rarity == "Legendary") color = {1.0f,0.6f,0.1f,1};
+
             bool selected = (i == selectedItemIndex_);
-            std::string label = name + "  (" + id + ")##item" + std::to_string(i);
+            ImGui::PushStyleColor(ImGuiCol_Text, color);
+            std::string label = name + "##item" + std::to_string(i);
             if (ImGui::Selectable(label.c_str(), selected)) {
                 selectedItemIndex_ = i;
                 editingItem_ = item;
+            }
+            ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("[%s] %s\n%s", rarity.c_str(), jstr(item, "type").c_str(), id.c_str());
             }
         }
     }
@@ -647,18 +682,35 @@ void ContentBrowserPanel::drawSpawnsTab() {
     ImGui::SameLine();
     ImGui::Text("(%d zones)", (int)spawnList_.size());
 
-    float leftW = 250.0f;
+    float leftW = 280.0f;
     if (ImGui::BeginChild("##SpawnList", ImVec2(leftW, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX)) {
+        // Group by scene
+        std::string lastScene;
         for (int i = 0; i < (int)spawnList_.size(); ++i) {
             auto& zone = spawnList_[i];
-            std::string name = jstr(zone, "zone_name", jstr(zone, "scene_id", "???"));
+            std::string scene = jstr(zone, "scene_id", "???");
             std::string mobId = jstr(zone, "mob_def_id");
+            std::string zoneName = jstr(zone, "zone_name");
+            int count = 0;
+            if (zone.contains("target_count") && zone["target_count"].is_number())
+                count = zone["target_count"].get<int>();
+
+            // Scene group header
+            if (scene != lastScene) {
+                if (!lastScene.empty()) ImGui::Spacing();
+                ImGui::TextColored({0.6f,0.8f,1.0f,1.0f}, "%s", scene.c_str());
+                ImGui::Separator();
+                lastScene = scene;
+            }
 
             bool selected = (i == selectedSpawnIndex_);
-            std::string label = name + " [" + mobId + "]##spawn" + std::to_string(i);
+            std::string label = "  " + mobId + " x" + std::to_string(count) + "##spawn" + std::to_string(i);
             if (ImGui::Selectable(label.c_str(), selected)) {
                 selectedSpawnIndex_ = i;
                 editingSpawn_ = zone;
+            }
+            if (ImGui::IsItemHovered() && !zoneName.empty()) {
+                ImGui::SetTooltip("Zone: %s", zoneName.c_str());
             }
         }
     }
