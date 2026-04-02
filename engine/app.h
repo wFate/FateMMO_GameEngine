@@ -14,7 +14,11 @@
 #include "engine/asset/file_watcher.h"
 #include "engine/asset/asset_registry.h"
 #include "engine/asset/loaders.h"
+#ifdef FATE_HAS_GAME
 #include "engine/ui/ui_manager.h"
+#else
+#include "engine/ui_stubs.h"
+#endif
 #include "engine/memory/arena.h"
 #include <SDL.h>
 #include <string>

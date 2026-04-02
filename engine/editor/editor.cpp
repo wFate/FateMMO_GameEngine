@@ -1,6 +1,8 @@
 #include "engine/editor/editor.h"
 #include "engine/editor/combat_text_editor.h"
+#ifdef FATE_HAS_GAME
 #include "engine/ui/ui_safe_area.h"
+#endif
 #include "engine/core/logger.h"
 #ifndef FATEMMO_METAL
 // Editor uses direct GL for ImGui integration — intentionally outside RHI
@@ -429,6 +431,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     contentBrowserPanel_.draw();
 
     // UI editor panels (hierarchy tree + inspector)
+#ifdef FATE_HAS_GAME
     if (uiManager_) {
         uiEditorPanel_.draw(*uiManager_);
     }
@@ -458,6 +461,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
             dl->AddRectFilled(ImVec2(br.x - hs, br.y - hs), ImVec2(br.x + hs, br.y + hs), handleCol);
         }
     }
+#endif // FATE_HAS_GAME (UI editor panel)
 
     // Post-process config panel
     if (showPostProcessPanel_ && postProcessConfig_) {
@@ -859,6 +863,7 @@ void Editor::drawSceneViewport() {
                     ImGui::EndCombo();
                 }
 
+#ifdef FATE_HAS_GAME
                 // Update simulated safe area when device changes
                 {
                     const auto& selected = kDeviceProfiles[displayPresetIdx_];
@@ -869,6 +874,7 @@ void Editor::drawSceneViewport() {
                     insets.right  = selected.safeRight;
                     fate::setSimulatedSafeArea(insets);
                 }
+#endif
 
                 ImGui::SameLine();
                 ImGui::Checkbox("Safe Area", &showSafeAreaOverlay_);
@@ -3064,14 +3070,18 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     if (ctrl && scancode == SDL_SCANCODE_Z && !shift) {
         UndoSystem::instance().undo(world);
         refreshSelection(world);
+#ifdef FATE_HAS_GAME
         if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
+#endif
     }
     // Ctrl+Y or Ctrl+Shift+Z = Redo
     if ((ctrl && scancode == SDL_SCANCODE_Y) ||
         (ctrl && shift && scancode == SDL_SCANCODE_Z)) {
         UndoSystem::instance().redo(world);
         refreshSelection(world);
+#ifdef FATE_HAS_GAME
         if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
+#endif
     }
     // Ctrl+S = Save current scene
     if (ctrl && scancode == SDL_SCANCODE_S && !inPlayMode_) {
@@ -3082,6 +3092,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
             LOG_WARN("Editor", "Ctrl+S: no scene path set (currentScenePath_ is empty)");
         }
     }
+#ifdef FATE_HAS_GAME
     // Also save the focused UI screen if a UI widget is selected
     if (ctrl && scancode == SDL_SCANCODE_S) {
         auto& uiPanel = uiEditorPanel_;
@@ -3109,6 +3120,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
         }
         // Player prefab save is handled above (before the !open_ guard)
     }
+#endif // FATE_HAS_GAME
     // Ctrl+D = Duplicate
     if (ctrl && scancode == SDL_SCANCODE_D && selectedEntity_) {
         auto json = PrefabLibrary::entityToJson(selectedEntity_);
@@ -3207,9 +3219,11 @@ void Editor::renderUI(World* world, Camera*, SpriteBatch*, FrameArena* frameAren
     drawAssetBrowser(world, nullptr);
     dialogueEditor_.draw();
 
+#ifdef FATE_HAS_GAME
     if (uiManager_) {
         uiEditorPanel_.draw(*uiManager_);
     }
+#endif
 
 #if defined(ENGINE_MEMORY_DEBUG)
     if (showMemoryPanel_) {

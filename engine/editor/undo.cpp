@@ -1,6 +1,6 @@
 #include "engine/editor/undo.h"
-#include "engine/ui/ui_manager.h"
 #ifdef FATE_HAS_GAME
+#include "engine/ui/ui_manager.h"
 #include "game/components/transform.h"
 #include "game/components/sprite_component.h"
 #include "game/systems/spawn_system.h"
@@ -44,6 +44,7 @@ void PropertyCommand::redo(World* w) {
     if (restored) entityHandle = restored->handle();
 }
 
+#ifdef FATE_HAS_GAME
 void UIPropertyCommand::undo(World*) {
     if (uiMgr && !oldJson.empty()) {
         uiMgr->loadScreenFromString(screenId, oldJson);
@@ -71,5 +72,6 @@ void UIWidgetMoveCommand::redo(World*) {
     auto* node = root->findById(nodeId);
     if (node) node->anchor().offset = newOffset;
 }
+#endif // FATE_HAS_GAME
 
 } // namespace fate

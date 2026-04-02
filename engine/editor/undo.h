@@ -140,6 +140,7 @@ struct CompoundCommand : UndoCommand {
     bool empty() const { return commands.empty(); }
 };
 
+#ifdef FATE_HAS_GAME
 // UI widget property change (stores full screen JSON snapshot)
 class UIManager; // forward decl
 struct UIPropertyCommand : UndoCommand {
@@ -166,6 +167,7 @@ struct UIWidgetMoveCommand : UndoCommand {
     void redo(World*) override;
     std::string description() const override { return "Move UI Widget"; }
 };
+#endif // FATE_HAS_GAME
 
 // Undo/Redo stack
 class UndoSystem {

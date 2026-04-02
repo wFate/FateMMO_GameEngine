@@ -338,6 +338,11 @@ if(FATE_SHIPPING)
     list(FILTER ENGINE_SOURCES EXCLUDE REGEX "engine/editor/.*")
 endif()
 
+# Exclude UI editor panel when proprietary UI system is absent
+if(NOT GAME_SOURCES)
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "engine/editor/ui_editor_panel\\.cpp$")
+endif()
+
 # Exclude platform-specific fiber backends that don't apply to the current target
 if(WIN32 AND NOT FATEMMO_BUILD_MOBILE)
     list(FILTER ENGINE_SOURCES EXCLUDE REGEX "fiber_minicoro\.cpp$")

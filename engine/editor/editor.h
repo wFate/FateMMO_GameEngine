@@ -21,7 +21,9 @@
 #include "engine/editor/animation_editor.h"
 #include "engine/editor/combat_text_editor.h"
 #include "engine/editor/asset_browser.h"
+#ifdef FATE_HAS_GAME
 #include "engine/editor/ui_editor_panel.h"
+#endif
 #include "engine/editor/paper_doll_panel.h"
 #include "engine/editor/content_browser_panel.h"
 #include <ImGuizmo.h>
@@ -214,18 +216,28 @@ public:
     void setPostProcessConfig(PostProcessConfig* cfg) { postProcessConfig_ = cfg; }
     void setUIManager(UIManager* mgr) {
         uiManager_ = mgr;
+#ifdef FATE_HAS_GAME
         if (mgr) {
             mgr->addScreenReloadListener([this](const std::string&) {
                 if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
             });
         }
+#endif
     }
     UIManager* uiManager() const { return uiManager_; }
+#ifdef FATE_HAS_GAME
     UIEditorPanel& uiEditorPanel() { return uiEditorPanel_; }
+#endif
     ContentBrowserPanel& contentBrowserPanel() { return contentBrowserPanel_; }
 
     void setAssetRoot(const std::string& root) { assetRoot_ = root; assetBrowser_.init(root, sourceDir_); }
-    void setSourceDir(const std::string& dir) { sourceDir_ = dir; uiEditorPanel_.setSourceDir(dir); animationEditor_.setSourceDir(dir); }
+    void setSourceDir(const std::string& dir) {
+        sourceDir_ = dir;
+#ifdef FATE_HAS_GAME
+        uiEditorPanel_.setSourceDir(dir);
+#endif
+        animationEditor_.setSourceDir(dir);
+    }
     void scanAssets();
 
     // Multi-select
@@ -368,7 +380,9 @@ private:
     PostProcessConfig* postProcessConfig_ = nullptr;
 
     // UI editor panel
+#ifdef FATE_HAS_GAME
     UIEditorPanel uiEditorPanel_;
+#endif
     UIManager* uiManager_ = nullptr;
 
     // Dialogue node editor panel
