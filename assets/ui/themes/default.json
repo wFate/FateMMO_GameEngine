@@ -1,0 +1,184 @@
+{
+    "styles": {
+        "panel_dark": {
+            "backgroundColor": [0.08, 0.08, 0.12, 0.95],
+            "borderColor": [0.4, 0.35, 0.2, 1.0],
+            "borderWidth": 2,
+            "fontSize": 14
+        },
+        "panel_dark_inset": {
+            "backgroundColor": [0.05, 0.05, 0.08, 0.9],
+            "borderColor": [0.3, 0.25, 0.15, 0.8],
+            "borderWidth": 1
+        },
+        "button_default": {
+            "backgroundColor": [0.2, 0.18, 0.15, 1.0],
+            "borderColor": [0.5, 0.45, 0.3, 1.0],
+            "borderWidth": 1,
+            "textColor": [1, 1, 1, 1],
+            "hoverColor": [1, 0.9, 0.7, 1],
+            "pressedColor": [0.8, 0.7, 0.5, 1],
+            "fontSize": 14
+        },
+        "text_default": {
+            "textColor": [0.9, 0.9, 0.85, 1.0],
+            "fontSize": 14
+        },
+        "text_gold": {
+            "textColor": [1.0, 0.84, 0.0, 1.0],
+            "fontSize": 16
+        },
+        "text_title": {
+            "textColor": [1, 1, 1, 1],
+            "fontSize": 18
+        },
+        "bar_default": {
+            "backgroundColor": [0.15, 0.15, 0.2, 1.0],
+            "borderColor": [0.3, 0.3, 0.35, 1.0],
+            "borderWidth": 1
+        },
+        "bar_hp": {
+            "backgroundColor": [0.15, 0.05, 0.05, 1.0],
+            "borderColor": [0.4, 0.1, 0.1, 1.0],
+            "borderWidth": 1
+        },
+        "bar_mp": {
+            "backgroundColor": [0.05, 0.05, 0.15, 1.0],
+            "borderColor": [0.1, 0.1, 0.4, 1.0],
+            "borderWidth": 1
+        },
+        "slot_default": {
+            "backgroundColor": [0.12, 0.12, 0.16, 1.0],
+            "borderColor": [0.35, 0.3, 0.2, 0.8],
+            "borderWidth": 1
+        },
+        "panel_skillbar": {
+            "backgroundColor": [0.06, 0.06, 0.1, 0.85],
+            "borderColor": [0.3, 0.3, 0.4, 0.6],
+            "borderWidth": 1
+        },
+        "button_skillbar_nav": {
+            "backgroundColor": [0.12, 0.12, 0.18, 1.0],
+            "borderColor": [0.3, 0.3, 0.4, 0.6],
+            "borderWidth": 1,
+            "textColor": [0.8, 0.8, 0.85, 1.0],
+            "hoverColor": [0.2, 0.2, 0.3, 1.0],
+            "pressedColor": [0.15, 0.15, 0.25, 1.0],
+            "fontSize": 12
+        },
+        "text_small": {
+            "textColor": [0.7, 0.7, 0.65, 1.0],
+            "fontSize": 11
+        },
+        "panel_death": {
+            "backgroundColor": [0.05, 0.02, 0.02, 0.85],
+            "borderColor": [0.5, 0.1, 0.1, 0.8],
+            "borderWidth": 2
+        },
+        "text_death_title": {
+            "textColor": [1.0, 0.3, 0.3, 1.0],
+            "fontSize": 18
+        },
+        "text_death_xp": {
+            "textColor": [1.0, 0.6, 0.3, 1.0],
+            "fontSize": 13
+        },
+        "text_death_honor": {
+            "textColor": [0.8, 0.4, 0.8, 1.0],
+            "fontSize": 13
+        },
+        "button_death": {
+            "backgroundColor": [0.2, 0.2, 0.28, 0.86],
+            "borderColor": [0.35, 0.35, 0.45, 0.6],
+            "borderWidth": 1,
+            "textColor": [1, 1, 1, 1],
+            "hoverColor": [0.28, 0.28, 0.4, 0.94],
+            "pressedColor": [0.15, 0.15, 0.22, 0.9],
+            "fontSize": 13
+        },
+        "button_death_phoenix": {
+            "backgroundColor": [0.6, 0.4, 0.1, 1.0],
+            "borderColor": [0.7, 0.5, 0.15, 1.0],
+            "borderWidth": 1,
+            "textColor": [1, 1, 1, 1],
+            "hoverColor": [0.7, 0.5, 0.15, 1.0],
+            "pressedColor": [0.5, 0.35, 0.08, 1.0],
+            "fontSize": 13
+        },
+        "panel_parchment": {
+            "backgroundColor": [0.85, 0.78, 0.65, 0.95],
+            "borderColor": [0.4, 0.3, 0.2, 1.0],
+            "borderWidth": 3,
+            "fontSize": 14
+        },
+        "panel_parchment_inset": {
+            "backgroundColor": [0.75, 0.68, 0.55, 0.9],
+            "borderColor": [0.5, 0.4, 0.3, 0.7],
+            "borderWidth": 1
+        },
+        "text_parchment_title": {
+            "textColor": [0.3, 0.2, 0.1, 1.0],
+            "fontSize": 18
+        },
+        "text_parchment_body": {
+            "textColor": [0.2, 0.15, 0.1, 1.0],
+            "fontSize": 13
+        },
+        "text_parchment_label": {
+            "textColor": [0.5, 0.4, 0.3, 1.0],
+            "fontSize": 12
+        },
+        "button_parchment": {
+            "backgroundColor": [0.75, 0.68, 0.55, 1.0],
+            "borderColor": [0.4, 0.3, 0.2, 1.0],
+            "borderWidth": 1,
+            "textColor": [0.25, 0.18, 0.1, 1.0],
+            "hoverColor": [0.82, 0.75, 0.62, 1.0],
+            "pressedColor": [0.65, 0.58, 0.45, 1.0],
+            "fontSize": 13
+        },
+        "slot_parchment": {
+            "backgroundColor": [0.78, 0.72, 0.6, 1.0],
+            "borderColor": [0.45, 0.35, 0.25, 0.8],
+            "borderWidth": 1
+        },
+        "panel_hud": {
+            "backgroundColor": [0.10, 0.10, 0.15, 0.75],
+            "borderColor": [0.3, 0.3, 0.4, 0.6],
+            "borderWidth": 1,
+            "textColor": [1.0, 1.0, 1.0, 0.95]
+        },
+        "panel_hud_dark": {
+            "backgroundColor": [0.05, 0.05, 0.10, 0.78],
+            "textColor": [1.0, 1.0, 1.0, 1.0]
+        },
+        "bar_track": {
+            "backgroundColor": [0.1, 0.1, 0.1, 0.85],
+            "borderColor": [0.35, 0.35, 0.45, 0.9],
+            "borderWidth": 1
+        },
+        "panel_dialog": {
+            "backgroundColor": [0.10, 0.10, 0.13, 0.95],
+            "borderColor": [0.4, 0.35, 0.25, 1.0],
+            "borderWidth": 2,
+            "textColor": [1.0, 1.0, 1.0, 0.95]
+        },
+        "tab_active": {
+            "backgroundColor": [0.30, 0.52, 0.85, 1.0],
+            "borderColor": [0.55, 0.78, 1.0, 1.0],
+            "textColor": [1.0, 1.0, 1.0, 1.0]
+        },
+        "tab_inactive": {
+            "backgroundColor": [0.60, 0.54, 0.42, 0.85],
+            "borderColor": [0.40, 0.32, 0.22, 0.85],
+            "textColor": [0.85, 0.80, 0.72, 1.0]
+        },
+        "scrollbar_track": {
+            "backgroundColor": [0.2, 0.2, 0.25, 0.5]
+        },
+        "scrollbar_thumb": {
+            "backgroundColor": [0.5, 0.45, 0.3, 0.8],
+            "hoverColor": [0.6, 0.55, 0.35, 0.9]
+        }
+    }
+}

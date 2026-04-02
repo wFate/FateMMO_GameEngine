@@ -1,0 +1,9 @@
+{
+    "screen": "character_creation",
+    "root": {
+        "id": "char_create_root",
+        "type": "character_creation_screen",
+        "anchor": { "preset": "StretchAll" },
+        "visible": false
+    }
+}

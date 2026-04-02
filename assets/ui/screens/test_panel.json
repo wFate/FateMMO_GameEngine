@@ -1,0 +1,26 @@
+{
+    "screen": "test_panel",
+    "root": {
+        "id": "test_window",
+        "type": "panel",
+        "title": "Test Panel",
+        "anchor": { "preset": "Center", "offset": [0, 0], "size": [400, 300] },
+        "style": "panel_dark",
+        "children": [
+            {
+                "id": "greeting_label",
+                "type": "label",
+                "anchor": { "preset": "TopCenter", "offset": [0, 40], "size": [300, 30] },
+                "style": "text_gold",
+                "text": "Welcome to FateMMO"
+            },
+            {
+                "id": "info_label",
+                "type": "label",
+                "anchor": { "preset": "Center", "offset": [0, 0], "size": [350, 24] },
+                "style": "text_default",
+                "text": "UI System Phase 1 — Rendering!"
+            }
+        ]
+    }
+}

@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/core/types.h"
+#include "engine/render/text_style.h"
 #include "engine/render/sprite_batch.h"
 #include "engine/render/font_registry.h"
 #include "engine/render/gfx/types.h"
@@ -8,22 +9,6 @@
 #include <cstdint>
 
 namespace fate {
-
-enum class TextStyle : uint8_t {
-    Normal   = 1,
-    Outlined = 2,
-    Glow     = 3,
-    Shadow   = 4
-};
-
-struct TextEffects {
-    Color outlineColor = Color::clear();
-    float outlineWidth = 0.0f;
-    Color glowColor    = Color::clear();
-    float glowRadius   = 0.0f;
-    Vec2  shadowOffset = {0.0f, 0.0f};
-    Color shadowColor  = Color::clear();
-};
 
 // GlyphMetrics is defined in sdf_font.h
 #include "engine/render/sdf_font.h"
@@ -51,6 +36,11 @@ public:
                       float fontSize, Color color = Color::white(), float depth = 50.0f,
                       TextStyle style = TextStyle::Normal,
                       const std::string& fontName = "default");
+
+    void drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 position,
+                     float fontSize, Color color = Color::white(), float depth = 50.0f,
+                     TextStyle style = TextStyle::Normal,
+                     const std::string& fontName = "default");
 
     Vec2 measureEx(const std::string& text, float fontSize,
                    const std::string& fontName = "default") const;

@@ -1,0 +1,240 @@
+{
+  "root": {
+    "anchor": {
+      "offset": [
+        0.0,
+        0.0
+      ],
+      "preset": "Center",
+      "size": [
+        300.0,
+        220.0
+      ]
+    },
+    "backgroundColor": [
+      13,
+      5,
+      5,
+      217
+    ],
+    "borderColor": [
+      128,
+      26,
+      26,
+      204
+    ],
+    "borderWidth": 2.0,
+    "children": [
+      {
+        "align": "center",
+        "anchor": {
+          "offset": [
+            0.0,
+            14.0
+          ],
+          "preset": "TopCenter",
+          "size": [
+            260.0,
+            24.0
+          ]
+        },
+        "fontSize": 18.0,
+        "id": "death_title",
+        "style": "text_death_title",
+        "text": "You have died.",
+        "textColor": [
+          255,
+          77,
+          77,
+          255
+        ],
+        "type": "label",
+        "visible": false
+      },
+      {
+        "align": "center",
+        "anchor": {
+          "offset": [
+            0.0,
+            42.0
+          ],
+          "preset": "TopCenter",
+          "size": [
+            260.0,
+            18.0
+          ]
+        },
+        "bind": {
+          "text": "{death.xpLoss}"
+        },
+        "fontSize": 13.0,
+        "id": "death_xp_loss",
+        "style": "text_death_xp",
+        "textColor": [
+          255,
+          153,
+          77,
+          255
+        ],
+        "type": "label",
+        "visible": false
+      },
+      {
+        "align": "center",
+        "anchor": {
+          "offset": [
+            0.0,
+            62.0
+          ],
+          "preset": "TopCenter",
+          "size": [
+            260.0,
+            18.0
+          ]
+        },
+        "bind": {
+          "text": "{death.honorLoss}"
+        },
+        "fontSize": 13.0,
+        "id": "death_honor_loss",
+        "style": "text_death_honor",
+        "textColor": [
+          204,
+          102,
+          204,
+          255
+        ],
+        "type": "label",
+        "visible": false
+      },
+      {
+        "align": "center",
+        "anchor": {
+          "offset": [
+            0.0,
+            84.0
+          ],
+          "preset": "TopCenter",
+          "size": [
+            260.0,
+            18.0
+          ]
+        },
+        "bind": {
+          "text": "{death.countdown}"
+        },
+        "id": "death_countdown",
+        "style": "text_default",
+        "textColor": [
+          230,
+          230,
+          217,
+          255
+        ],
+        "type": "label",
+        "visible": false
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            110.0
+          ],
+          "preset": "TopCenter",
+          "size": [
+            260.0,
+            28.0
+          ]
+        },
+        "backgroundColor": [
+          51,
+          51,
+          71,
+          219
+        ],
+        "borderColor": [
+          89,
+          89,
+          115,
+          153
+        ],
+        "borderWidth": 1.0,
+        "fontSize": 13.0,
+        "id": "btn_respawn_town",
+        "style": "button_death",
+        "text": "Respawn in Town",
+        "type": "button",
+        "visible": false
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            142.0
+          ],
+          "preset": "TopCenter",
+          "size": [
+            260.0,
+            28.0
+          ]
+        },
+        "backgroundColor": [
+          51,
+          51,
+          71,
+          219
+        ],
+        "borderColor": [
+          89,
+          89,
+          115,
+          153
+        ],
+        "borderWidth": 1.0,
+        "fontSize": 13.0,
+        "id": "btn_respawn_spawn",
+        "style": "button_death",
+        "text": "Respawn at Spawn Point",
+        "type": "button",
+        "visible": false
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            174.0
+          ],
+          "preset": "TopCenter",
+          "size": [
+            260.0,
+            28.0
+          ]
+        },
+        "backgroundColor": [
+          153,
+          102,
+          26,
+          255
+        ],
+        "borderColor": [
+          179,
+          128,
+          38,
+          255
+        ],
+        "borderWidth": 1.0,
+        "fontSize": 13.0,
+        "id": "btn_respawn_phoenix",
+        "style": "button_death_phoenix",
+        "text": "Respawn Here (Phoenix Down)",
+        "type": "button",
+        "visible": false
+      }
+    ],
+    "id": "death_panel",
+    "style": "panel_death",
+    "type": "panel",
+    "visible": false
+  },
+  "screen": "death_overlay"
+}

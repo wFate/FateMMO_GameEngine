@@ -1,0 +1,8 @@
+{
+    "screen": "login",
+    "root": {
+        "id": "login_screen",
+        "type": "login_screen",
+        "anchor": { "preset": "StretchAll" }
+    }
+}

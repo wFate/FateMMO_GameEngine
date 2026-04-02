@@ -26,12 +26,72 @@
 #include "game/animation_loader.h"
 #include "game/data/paper_doll_catalog.h"
 #endif // FATE_HAS_GAME
+#include "engine/render/text_style.h"
+#include "engine/render/font_registry.h"
 #include <unordered_set>
 #include <string>
 #include <cstring>
 #include <filesystem>
 
 namespace fs = std::filesystem;
+
+// ============================================================================
+// Text style inspector helper (nameplate font/style/effects)
+// ============================================================================
+
+static bool inspectTextStyle(const char* prefix,
+                             std::string& fontName,
+                             fate::TextStyle& textStyle,
+                             fate::TextEffects& textEffects) {
+    bool changed = false;
+
+    // Font name combo
+    auto fontNames = fate::FontRegistry::instance().fontNames();
+    char label[64];
+    std::snprintf(label, sizeof(label), "Font##%s", prefix);
+    int currentFont = 0; // 0 = "(default)"
+    std::vector<const char*> items;
+    items.push_back("(default)");
+    for (int i = 0; i < (int)fontNames.size(); ++i) {
+        items.push_back(fontNames[i].c_str());
+        if (fontNames[i] == fontName) currentFont = i + 1;
+    }
+    if (ImGui::Combo(label, &currentFont, items.data(), (int)items.size())) {
+        fontName = (currentFont == 0) ? "" : fontNames[currentFont - 1];
+        changed = true;
+    }
+
+    // Text style combo
+    std::snprintf(label, sizeof(label), "Text Style##%s", prefix);
+    int styleIdx = static_cast<int>(textStyle) - 1; // enum starts at 1
+    if (styleIdx < 0 || styleIdx >= fate::kTextStyleCount) styleIdx = 0;
+    if (ImGui::Combo(label, &styleIdx, fate::kTextStyleNames, fate::kTextStyleCount)) {
+        textStyle = static_cast<fate::TextStyle>(styleIdx + 1);
+        changed = true;
+    }
+
+    // Text effects (collapsible)
+    std::snprintf(label, sizeof(label), "Text Effects##%s", prefix);
+    if (ImGui::TreeNode(label)) {
+        std::snprintf(label, sizeof(label), "Outline Color##%s", prefix);
+        changed |= ImGui::ColorEdit4(label, &textEffects.outlineColor.r);
+        std::snprintf(label, sizeof(label), "Outline Width##%s", prefix);
+        changed |= ImGui::DragFloat(label, &textEffects.outlineWidth, 0.1f, 0.0f, 10.0f, "%.1f");
+        std::snprintf(label, sizeof(label), "Glow Color##%s", prefix);
+        changed |= ImGui::ColorEdit4(label, &textEffects.glowColor.r);
+        std::snprintf(label, sizeof(label), "Glow Radius##%s", prefix);
+        changed |= ImGui::DragFloat(label, &textEffects.glowRadius, 0.1f, 0.0f, 20.0f, "%.1f");
+        std::snprintf(label, sizeof(label), "Shadow Color##%s", prefix);
+        changed |= ImGui::ColorEdit4(label, &textEffects.shadowColor.r);
+        std::snprintf(label, sizeof(label), "Shadow X##%s", prefix);
+        changed |= ImGui::DragFloat(label, &textEffects.shadowOffset.x, 0.5f, -20.0f, 20.0f, "%.1f");
+        std::snprintf(label, sizeof(label), "Shadow Y##%s", prefix);
+        changed |= ImGui::DragFloat(label, &textEffects.shadowOffset.y, 0.5f, -20.0f, 20.0f, "%.1f");
+        ImGui::TreePop();
+    }
+
+    return changed;
+}
 
 // ============================================================================
 // Reflection-driven inspector helper
@@ -1019,6 +1079,11 @@ void Editor::drawInspector() {
                 captureInspectorUndo();
                 ImGui::DragFloat("Y Offset##np", &np->yOffset, 0.5f, -50.0f, 100.0f, "%.1f");
                 captureInspectorUndo();
+                // --- Text Style ---
+                ImGui::Separator();
+                ImGui::Text("Text Style");
+                if (inspectTextStyle("npText", np->fontName, np->textStyle, np->textEffects))
+                    captureInspectorUndo();
                 ImGui::Checkbox("Visible##np", &np->visible);
                 captureInspectorUndo();
 
@@ -1036,6 +1101,11 @@ void Editor::drawInspector() {
                     captureInspectorUndo();
                     ImGui::DragFloat("Guild Y Offset##np", &np->guildYOffset, 0.5f, -50.0f, 100.0f, "%.1f");
                     captureInspectorUndo();
+                    // Guild text style
+                    ImGui::Separator();
+                    ImGui::Text("Guild Text Style");
+                    if (inspectTextStyle("npGuild", np->guildFontName, np->guildTextStyle, np->guildTextEffects))
+                        captureInspectorUndo();
                     char gIcon[128]; strncpy(gIcon, np->guildIconPath.c_str(), sizeof(gIcon)-1); gIcon[sizeof(gIcon)-1]=0;
                     if (ImGui::InputText("Guild Icon##np", gIcon, sizeof(gIcon))) {
                         np->guildIconPath = gIcon;
@@ -1072,6 +1142,11 @@ void Editor::drawInspector() {
                 captureInspectorUndo();
                 ImGui::DragFloat("Y Offset##mnp", &mnp->yOffset, 0.5f, -50.0f, 100.0f, "%.1f");
                 captureInspectorUndo();
+                // --- Text Style ---
+                ImGui::Separator();
+                ImGui::Text("Text Style");
+                if (inspectTextStyle("mnpText", mnp->fontName, mnp->textStyle, mnp->textEffects))
+                    captureInspectorUndo();
                 ImGui::Checkbox("Visible##mnp", &mnp->visible);
                 captureInspectorUndo();
 

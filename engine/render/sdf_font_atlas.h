@@ -24,7 +24,8 @@ namespace SDFFontAtlas {
     // Returns true on success or if the atlas already exists.
     bool generateIfMissing(const std::string& fontPath,
                            const std::string& outDir = "assets/fonts",
-                           float pixelSize = 48.0f);
+                           float pixelSize = 48.0f,
+                           const std::string& fontName = "default");
 
 } // namespace SDFFontAtlas
 

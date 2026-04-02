@@ -25,6 +25,8 @@ SDFText& SDFText::instance() {
 bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath) {
     // Ensure atlas + metrics exist (generate from system font if missing)
     SDFFontAtlas::generateIfMissing("C:/Windows/Fonts/consola.ttf", "assets/fonts", emSize_);
+    SDFFontAtlas::generateIfMissing("assets/fonts/PressStart2P-Regular.ttf", "assets/fonts", emSize_, "press_start_2p");
+    SDFFontAtlas::generateIfMissing("assets/fonts/PixelifySans-Regular.ttf", "assets/fonts", emSize_, "pixelify_sans");
 
     // Load atlas PNG via stb_image (4 channels: RGBA)
     int w = 0, h = 0, channels = 0;
@@ -280,7 +282,7 @@ void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 pos
                            const std::string& fontName) {
     if (fontRegistry_) {
         SDFFont* font = fontRegistry_->getFont(fontName);
-        if (font) {
+        if (font && font->atlas && !font->glyphs.empty()) {
             if (font->type == SDFFont::Type::Bitmap) {
                 drawBitmap(batch, *font, text, position, fontSize, color, depth, true);
                 return;
@@ -300,9 +302,9 @@ void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 pos
 
             glyphs_      = font->glyphs;
 #ifndef FATEMMO_METAL
-            atlasTexId_  = font->atlas ? font->atlas->id() : 0;
+            atlasTexId_  = font->atlas->id();
 #endif
-            atlasGfxHandle_ = font->atlas ? font->atlas->gfxHandle() : gfx::TextureHandle{};
+            atlasGfxHandle_ = font->atlas->gfxHandle();
             atlasWidth_  = font->atlasWidth;
             atlasHeight_ = font->atlasHeight;
             pxRange_     = font->pxRange;
@@ -330,11 +332,66 @@ void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 pos
     drawInternal(batch, text, position, fontSize, color, depth, style, true);
 }
 
+void SDFText::drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 position,
+                          float fontSize, Color color, float depth, TextStyle style,
+                          const std::string& fontName) {
+    if (fontRegistry_) {
+        SDFFont* font = fontRegistry_->getFont(fontName);
+        if (font && font->atlas && !font->glyphs.empty()) {
+            if (font->type == SDFFont::Type::Bitmap) {
+                drawBitmap(batch, *font, text, position, fontSize, color, depth, false);
+                return;
+            }
+            // MSDF font from registry: temporarily swap in the font's data
+            auto savedGlyphs      = std::move(glyphs_);
+#ifndef FATEMMO_METAL
+            auto savedAtlasTexId  = atlasTexId_;
+#endif
+            auto savedAtlasGfx    = atlasGfxHandle_;
+            auto savedAtlasWidth  = atlasWidth_;
+            auto savedAtlasHeight = atlasHeight_;
+            auto savedPxRange     = pxRange_;
+            auto savedLineHeight  = lineHeight_;
+            auto savedAscender    = ascender_;
+            auto savedEmSize      = emSize_;
+
+            glyphs_      = font->glyphs;
+#ifndef FATEMMO_METAL
+            atlasTexId_  = font->atlas->id();
+#endif
+            atlasGfxHandle_ = font->atlas->gfxHandle();
+            atlasWidth_  = font->atlasWidth;
+            atlasHeight_ = font->atlasHeight;
+            pxRange_     = font->pxRange;
+            lineHeight_  = font->lineHeight;
+            ascender_    = font->ascender;
+            emSize_      = font->emSize;
+
+            drawInternal(batch, text, position, fontSize, color, depth, style, false);
+
+            glyphs_         = std::move(savedGlyphs);
+#ifndef FATEMMO_METAL
+            atlasTexId_     = savedAtlasTexId;
+#endif
+            atlasGfxHandle_ = savedAtlasGfx;
+            atlasWidth_     = savedAtlasWidth;
+            atlasHeight_    = savedAtlasHeight;
+            pxRange_        = savedPxRange;
+            lineHeight_     = savedLineHeight;
+            ascender_       = savedAscender;
+            emSize_         = savedEmSize;
+            return;
+        }
+    }
+    // Fallback: use default font
+    drawInternal(batch, text, position, fontSize, color, depth, style, false);
+}
+
 Vec2 SDFText::measureEx(const std::string& text, float fontSize,
                         const std::string& fontName) const {
     if (fontRegistry_) {
         SDFFont* font = fontRegistry_->getFont(fontName);
-        if (font) {
+        if (font && !font->glyphs.empty()) {
             if (font->type == SDFFont::Type::Bitmap) {
                 return measureBitmap(*font, text, fontSize);
             }

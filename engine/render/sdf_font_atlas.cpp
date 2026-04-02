@@ -16,9 +16,10 @@ namespace fate {
 
 bool SDFFontAtlas::generateIfMissing(const std::string& fontPath,
                                      const std::string& outDir,
-                                     float pixelSize) {
-    const std::string pngPath  = outDir + "/default.png";
-    const std::string jsonPath = outDir + "/default.json";
+                                     float pixelSize,
+                                     const std::string& fontName) {
+    const std::string pngPath  = outDir + "/" + fontName + ".png";
+    const std::string jsonPath = outDir + "/" + fontName + ".json";
 
     // Skip if atlas already exists
     if (fs::exists(pngPath)) {

@@ -1,0 +1,14 @@
+{
+  "root": {
+    "id": "loading_panel",
+    "type": "loading_panel",
+    "anchor": {
+      "preset": "StretchAll",
+      "offset": [0, 0],
+      "size": [0, 0]
+    },
+    "zOrder": 999,
+    "visible": false
+  },
+  "screen": "loading_screen"
+}
