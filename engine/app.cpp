@@ -961,11 +961,13 @@ void App::shutdown() {
     spriteBatch_.shutdown();
     LOG_DEBUG("App", "Shutdown: FileWatcher...");
     fileWatcher_.stop();
+    LOG_DEBUG("App", "Shutdown: TextureCache...");
     TextureCache::instance().clear();
+    LOG_DEBUG("App", "Shutdown: AssetRegistry...");
     AssetRegistry::instance().clear();
-
+    LOG_DEBUG("App", "Shutdown: JobSystem...");
     JobSystem::instance().shutdown();
-
+    LOG_DEBUG("App", "Shutdown: Device...");
     gfx::Device::instance().shutdown();
 
 #ifdef FATEMMO_METAL
