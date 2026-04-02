@@ -563,6 +563,7 @@ struct QuestSyncEntry {
 
 struct SvQuestSyncMsg {
     std::vector<QuestSyncEntry> quests;
+    std::vector<std::pair<std::string, int64_t>> repeatableCompletionTimes; // questId, epoch
 
     void write(ByteWriter& w) const {
         w.writeU16(static_cast<uint16_t>(quests.size()));
@@ -574,6 +575,11 @@ struct SvQuestSyncMsg {
                 w.writeI32(cur);
                 w.writeI32(tgt);
             }
+        }
+        w.writeU16(static_cast<uint16_t>(repeatableCompletionTimes.size()));
+        for (const auto& [qid, epoch] : repeatableCompletionTimes) {
+            w.writeString(qid);
+            w.writeI64(epoch);
         }
     }
 
@@ -590,6 +596,12 @@ struct SvQuestSyncMsg {
                 m.quests[i].objectives[j].first = r.readI32();
                 m.quests[i].objectives[j].second = r.readI32();
             }
+        }
+        uint16_t repCount = r.readU16();
+        m.repeatableCompletionTimes.resize(repCount);
+        for (uint16_t i = 0; i < repCount; ++i) {
+            m.repeatableCompletionTimes[i].first = r.readString();
+            m.repeatableCompletionTimes[i].second = r.readI64();
         }
         return m;
     }
