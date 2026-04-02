@@ -1905,6 +1905,74 @@ void Editor::drawInspector() {
             }
         }
 
+        // GuildNPCComponent
+        if (auto* guild = selectedEntity_->getComponent<GuildNPCComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Guild NPC");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmGuildNPC")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<GuildNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<GuildNPCComponent>()) {
+                int64_t cost = guild->creationCost;
+                if (ImGui::DragScalar("Creation Cost##guild", ImGuiDataType_S64, &cost, 1.0f)) guild->creationCost = cost;
+                captureInspectorUndo();
+                int reqLvl = guild->requiredLevel;
+                if (ImGui::DragInt("Required Level##guild", &reqLvl, 1.0f, 0, 70)) guild->requiredLevel = (uint16_t)reqLvl;
+                captureInspectorUndo();
+            }
+        }
+
+        // TeleporterComponent
+        if (auto* tele = selectedEntity_->getComponent<TeleporterComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Teleporter");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmTeleporter")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<TeleporterComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<TeleporterComponent>()) {
+                ImGui::Text("Destinations (%d)", (int)tele->destinations.size());
+                if (inspectTeleportDestList(tele->destinations))
+                    captureInspectorUndo();
+            }
+        }
+
+        // StoryNPCComponent
+        if (auto* story = selectedEntity_->getComponent<StoryNPCComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Story NPC");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmStoryNPC")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<StoryNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<StoryNPCComponent>()) {
+                ImGui::Text("Dialogue Tree (%d nodes)", (int)story->dialogueTree.size());
+                if (inspectDialogueTree(story->dialogueTree, story->rootNodeId))
+                    captureInspectorUndo();
+            }
+        }
+
+        // DungeonNPCComponent
+        if (auto* dNpc = selectedEntity_->getComponent<DungeonNPCComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Dungeon NPC");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmDungeonNPC")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<DungeonNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<DungeonNPCComponent>()) {
+                char buf[128];
+                strncpy(buf, dNpc->dungeonSceneId.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+                if (ImGui::InputText("Dungeon Scene##dNpc", buf, sizeof(buf))) dNpc->dungeonSceneId = buf;
+                captureInspectorUndo();
+            }
+        }
+
         // MarketplaceNPC
         if (auto* mktNpc = selectedEntity_->getComponent<MarketplaceNPCComponent>()) {
             bool open = ImGui::CollapsingHeader("Marketplace NPC");
