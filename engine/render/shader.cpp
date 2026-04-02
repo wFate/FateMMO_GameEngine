@@ -39,7 +39,7 @@ namespace {
 #endif // !FATEMMO_METAL
 
 Shader::~Shader() {
-    if (gfxHandle_.valid()) {
+    if (gfxHandle_.valid() && gfx::Device::instance().isAlive()) {
         gfx::Device::instance().destroy(gfxHandle_);
     }
 }

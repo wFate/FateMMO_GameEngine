@@ -349,6 +349,7 @@ static nlohmann::json mobsToJson(const MobDefCache& cache) {
     for (const auto& [id, m] : cache.allMobs()) {
         nlohmann::json j;
         j["mob_def_id"]       = m.mobDefId;
+        j["mob_name"]         = m.mobDefId;  // mob_name defaults to id (COALESCE in DB)
         j["display_name"]     = m.displayName;
         j["base_hp"]          = m.baseHP;
         j["base_damage"]      = m.baseDamage;
@@ -408,6 +409,15 @@ static nlohmann::json itemsToJson(const ItemDefinitionCache& cache) {
         j["rarity"]       = d.rarity;
         j["max_enchant"]  = d.maxEnchant;
         j["visual_style"] = d.visualStyle;
+        j["attributes"]   = d.attributes;
+        // possible_stats stored as parsed vector in cache, serialize back to JSON string
+        {
+            nlohmann::json stats = nlohmann::json::array();
+            for (const auto& ps : d.possibleStats) {
+                stats.push_back({{"stat", ps.stat}, {"min", ps.min}, {"max", ps.max}});
+            }
+            j["possible_stats"] = stats.dump();
+        }
         arr.push_back(std::move(j));
     }
     return arr;

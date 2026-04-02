@@ -607,16 +607,13 @@ void ContentBrowserPanel::drawLootTab() {
                 ImGui::PopID();
             }
 
-            // Handle deletion
+            // Handle deletion — server expects "table_id:item_id" composite format
             if (removeIdx >= 0) {
-                std::string dropId;
                 auto& entry = lootList_[removeIdx];
-                if (entry.contains("drop_id")) {
-                    if (entry["drop_id"].is_number()) dropId = std::to_string(entry["drop_id"].get<int>());
-                    else if (entry["drop_id"].is_string()) dropId = entry["drop_id"].get<std::string>();
-                }
-                if (!dropId.empty()) {
-                    deleteContent(AdminContentType::LootDrop, dropId);
+                std::string tableId = entry.value("loot_table_id", "");
+                std::string itemId = entry.value("item_id", "");
+                if (!tableId.empty() && !itemId.empty()) {
+                    deleteContent(AdminContentType::LootDrop, tableId + ":" + itemId);
                 }
                 lootList_.erase(lootList_.begin() + removeIdx);
             }
