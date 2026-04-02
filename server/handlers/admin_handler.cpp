@@ -692,20 +692,49 @@ void ServerApp::processAdminRequestContentList(uint16_t clientId,
             return;
     }
 
-    SvAdminContentListMsg listMsg;
-    listMsg.contentType = msg.contentType;
-    listMsg.jsonPayload = arr.dump();
+    // Chunk into pages that fit within packet limits (~3KB per page to stay under 4096 with header+encryption overhead)
+    constexpr size_t MAX_PAGE_BYTES = 3000;
+    std::vector<nlohmann::json> pages;
+    nlohmann::json currentPage = nlohmann::json::array();
+    size_t currentSize = 2; // "[]"
 
-    // Use heap-allocated buffer since content lists can be large
-    size_t estimatedSize = listMsg.jsonPayload.size() + 64;
-    std::vector<uint8_t> buf(estimatedSize);
-    ByteWriter w(buf.data(), buf.size());
-    listMsg.write(w);
-    server_.sendTo(clientId, Channel::ReliableOrdered,
-                   PacketType::SvAdminContentList, buf.data(), w.size());
+    for (const auto& entry : arr) {
+        std::string entryStr = entry.dump();
+        size_t entrySize = entryStr.size() + 1; // +1 for comma
+        if (currentSize + entrySize > MAX_PAGE_BYTES && !currentPage.empty()) {
+            pages.push_back(std::move(currentPage));
+            currentPage = nlohmann::json::array();
+            currentSize = 2;
+        }
+        currentPage.push_back(entry);
+        currentSize += entrySize;
+    }
+    if (!currentPage.empty()) {
+        pages.push_back(std::move(currentPage));
+    }
+    if (pages.empty()) {
+        pages.push_back(nlohmann::json::array()); // at least one empty page
+    }
 
-    LOG_INFO("Admin", "Client %d requested content list type %d (%zu bytes)",
-             clientId, msg.contentType, w.size());
+    uint16_t totalPages = static_cast<uint16_t>(pages.size());
+    for (uint16_t i = 0; i < totalPages; ++i) {
+        SvAdminContentListMsg listMsg;
+        listMsg.contentType = msg.contentType;
+        listMsg.pageIndex = i;
+        listMsg.totalPages = totalPages;
+        listMsg.jsonPayload = pages[i].dump();
+
+        uint8_t buf[MAX_PACKET_SIZE];
+        ByteWriter w(buf, sizeof(buf));
+        listMsg.write(w);
+        if (!w.overflowed()) {
+            server_.sendTo(clientId, Channel::ReliableOrdered,
+                           PacketType::SvAdminContentList, buf, w.size());
+        }
+    }
+
+    LOG_INFO("Admin", "Client %d requested content list type %d (%zu entries, %d pages)",
+             clientId, msg.contentType, arr.size(), totalPages);
 }
 
 } // namespace fate

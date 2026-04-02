@@ -33,13 +33,6 @@ public:
         writeBytes(s.data(), len);
     }
 
-    // For admin/editor payloads that can exceed 64KB (content lists, validation reports)
-    void writeLargeString(const std::string& s) {
-        uint32_t len = static_cast<uint32_t>(s.size());
-        writeU32(len);
-        writeBytes(s.data(), len);
-    }
-
     void writeBytes(const void* data, size_t len) {
         writeRaw(data, len);
     }
@@ -109,23 +102,6 @@ public:
 
     std::string readString(uint16_t maxLen = 4096) {
         uint16_t len = readU16();
-        if (overflow_) return {};
-        if (len > maxLen) {
-            overflow_ = true;
-            return {};
-        }
-        if (pos_ + len > size_) {
-            overflow_ = true;
-            return {};
-        }
-        std::string s(reinterpret_cast<const char*>(buffer_ + pos_), len);
-        pos_ += len;
-        return s;
-    }
-
-    // For admin/editor payloads that can exceed 64KB
-    std::string readLargeString(uint32_t maxLen = 4 * 1024 * 1024) {
-        uint32_t len = readU32();
         if (overflow_) return {};
         if (len > maxLen) {
             overflow_ = true;

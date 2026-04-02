@@ -63,15 +63,21 @@ void FileWatcher::start(const std::string& directory, Callback onFileChanged) {
 
             HANDLE handles[] = { overlapped.hEvent, stopEvent_ };
             DWORD waitResult = WaitForMultipleObjects(2, handles, FALSE, INFINITE);
-            CloseHandle(overlapped.hEvent);
 
             if (waitResult != WAIT_OBJECT_0) {
+                // Stop requested — cancel pending I/O and wait for the
+                // cancellation to complete so overlapped/buffer remain
+                // valid until the OS is done writing to them.
                 CancelIo(dirHandle_);
+                DWORD dummy = 0;
+                GetOverlappedResult(dirHandle_, &overlapped, &dummy, TRUE);
+                CloseHandle(overlapped.hEvent);
                 break;
             }
 
             DWORD bytesReturned = 0;
             GetOverlappedResult(dirHandle_, &overlapped, &bytesReturned, FALSE);
+            CloseHandle(overlapped.hEvent);
 
             if (bytesReturned == 0) continue;
 

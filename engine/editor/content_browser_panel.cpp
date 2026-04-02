@@ -49,27 +49,34 @@ void ContentBrowserPanel::deleteContent(uint8_t contentType, const std::string& 
 // Server response handlers
 // ============================================================================
 
-void ContentBrowserPanel::onContentListReceived(uint8_t contentType, const std::string& json) {
+void ContentBrowserPanel::onContentListReceived(uint8_t contentType, uint16_t pageIndex,
+                                                  uint16_t totalPages, const std::string& json) {
     auto parsed = nlohmann::json::parse(json, nullptr, false);
     if (parsed.is_discarded() || !parsed.is_array()) return;
 
+    // Select the target list
+    nlohmann::json* target = nullptr;
+    bool* dirtyFlag = nullptr;
     switch (contentType) {
-        case AdminContentType::Mob:
-            mobList_ = std::move(parsed);
-            mobListDirty_ = false;
-            break;
-        case AdminContentType::Item:
-            itemList_ = std::move(parsed);
-            itemListDirty_ = false;
-            break;
-        case AdminContentType::LootDrop:
-            lootList_ = std::move(parsed);
-            lootListDirty_ = false;
-            break;
-        case AdminContentType::SpawnZone:
-            spawnList_ = std::move(parsed);
-            spawnListDirty_ = false;
-            break;
+        case AdminContentType::Mob:       target = &mobList_;   dirtyFlag = &mobListDirty_; break;
+        case AdminContentType::Item:      target = &itemList_;  dirtyFlag = &itemListDirty_; break;
+        case AdminContentType::LootDrop:  target = &lootList_;  dirtyFlag = &lootListDirty_; break;
+        case AdminContentType::SpawnZone: target = &spawnList_; dirtyFlag = &spawnListDirty_; break;
+        default: return;
+    }
+
+    // First page clears existing data; subsequent pages append
+    if (pageIndex == 0) {
+        *target = std::move(parsed);
+    } else {
+        for (auto& entry : parsed) {
+            target->push_back(std::move(entry));
+        }
+    }
+
+    // Mark complete only after last page
+    if (pageIndex + 1 >= totalPages) {
+        *dirtyFlag = false;
     }
 }
 

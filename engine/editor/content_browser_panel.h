@@ -16,7 +16,7 @@ public:
     void draw();
 
     // Called by game_app when server responses arrive
-    void onContentListReceived(uint8_t contentType, const std::string& json);
+    void onContentListReceived(uint8_t contentType, uint16_t pageIndex, uint16_t totalPages, const std::string& json);
     void onAdminResult(uint8_t requestType, bool success, const std::string& message);
     void onValidationReport(const std::vector<std::pair<uint8_t, std::string>>& issues);
 
