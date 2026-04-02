@@ -95,6 +95,9 @@ void ComponentMetaRegistry::registerComponent(
         meta->toJson = [fields](const void* data, nlohmann::json& j) {
             autoToJson(data, j, fields);
         };
+    } else {
+        // Empty/marker components: serialize as empty JSON object so they survive prefab round-trips
+        meta->toJson = [](const void*, nlohmann::json& j) { j = nlohmann::json::object(); };
     }
 
     if (customFromJson) {
@@ -104,6 +107,9 @@ void ComponentMetaRegistry::registerComponent(
         meta->fromJson = [fields](const nlohmann::json& j, void* data) {
             autoFromJson(j, data, fields);
         };
+    } else {
+        // Empty/marker components: no-op deserialize (component is created by presence alone)
+        meta->fromJson = [](const nlohmann::json&, void*) {};
     }
 
     ComponentMeta* rawPtr = meta.get();

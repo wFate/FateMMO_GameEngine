@@ -126,11 +126,23 @@
           0.4000000059604645,
           0.800000011920929
         ],
+        "buyBtnBorderColor": [
+          0.30000001192092896,
+          0.5,
+          0.30000001192092896,
+          0.800000011920929
+        ],
         "buyBtnColor": [
           0.15000000596046448,
           0.30000001192092896,
           0.15000000596046448,
           0.800000011920929
+        ],
+        "buyBtnDisabledBorderColor": [
+          0.30000001192092896,
+          0.30000001192092896,
+          0.30000001192092896,
+          0.5
         ],
         "buyBtnDisabledColor": [
           0.20000000298023224,
@@ -138,8 +150,80 @@
           0.20000000298023224,
           0.5
         ],
+        "buyBtnDisabledTextColor": [
+          0.5,
+          0.5,
+          0.5,
+          0.699999988079071
+        ],
         "buyBtnHeight": 30.0,
+        "buyBtnLabel": "Buy",
+        "buyBtnTextColor": [
+          0.8500000238418579,
+          0.949999988079071,
+          0.8500000238418579,
+          1.0
+        ],
         "buyBtnWidth": 40.0,
+        "cancelBtnColor": [
+          0.3499999940395355,
+          0.15000000596046448,
+          0.15000000596046448,
+          0.8500000238418579
+        ],
+        "cancelBtnLabel": "Cancel",
+        "closeBtnBgColor": [
+          0.4000000059604645,
+          0.11999999731779099,
+          0.11999999731779099,
+          0.8999999761581421
+        ],
+        "closeBtnBorderColor": [
+          0.6499999761581421,
+          0.25,
+          0.25,
+          1.0
+        ],
+        "closeBtnBorderW": 1.0,
+        "closeBtnFontSize": 10.0,
+        "closeBtnOffset": 5.0,
+        "closeBtnRadius": 10.0,
+        "closeBtnTextColor": [
+          1.0,
+          0.8999999761581421,
+          0.8999999761581421,
+          1.0
+        ],
+        "confirmBgColor": [
+          0.10000000149011612,
+          0.10000000149011612,
+          0.1599999964237213,
+          0.9700000286102295
+        ],
+        "confirmBorderColor": [
+          0.4000000059604645,
+          0.4000000059604645,
+          0.550000011920929,
+          0.8999999761581421
+        ],
+        "confirmBorderW": 1.5,
+        "confirmBtnColor": [
+          0.15000000596046448,
+          0.25,
+          0.44999998807907104,
+          0.8500000238418579
+        ],
+        "confirmBtnFontSize": 10.0,
+        "confirmBtnH": 24.0,
+        "confirmBtnLabel": "Confirm",
+        "confirmBtnW": 70.0,
+        "confirmPopupH": 120.0,
+        "confirmPopupW": 220.0,
+        "confirmPriceFontSize": 10.0,
+        "confirmQtyBtnFontSize": 12.0,
+        "confirmQtyBtnSize": 20.0,
+        "confirmQtyFontSize": 14.0,
+        "confirmTitleFontSize": 11.0,
         "contentPadding": 0.0,
         "dividerColor": [
           0.30000001192092896,
@@ -153,6 +237,12 @@
           0.20000000298023224,
           1.0
         ],
+        "goldBarBgColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
         "goldBarHeight": 40.0,
         "goldColor": [
           1.0,
@@ -161,6 +251,7 @@
           1.0
         ],
         "goldFontSize": 20.0,
+        "goldLabelPrefix": "Gold: ",
         "goldOffset": [
           0.0,
           0.0
@@ -175,14 +266,60 @@
         "headerHeight": 0.0,
         "id": "shop_panel",
         "itemFontSize": 30.0,
+        "itemNameOffset": [
+          0.0,
+          0.0
+        ],
+        "panelBorderWidth": 2.0,
+        "priceColor": [
+          1.0,
+          0.8399999737739563,
+          0.0,
+          1.0
+        ],
         "priceFontSize": 19.0,
+        "priceOffset": [
+          0.0,
+          0.0
+        ],
+        "rowAltBgColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.15000000596046448
+        ],
+        "rowBgColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
         "rowHeight": 50.0,
         "shopListOffset": [
           150.0,
           0.0
         ],
+        "stockColor": [
+          0.6000000238418579,
+          0.6000000238418579,
+          0.699999988079071,
+          0.800000011920929
+        ],
+        "stockFontSize": 8.0,
+        "stockOffset": [
+          0.0,
+          0.0
+        ],
         "style": "panel_parchment",
+        "subHeaderColor": [
+          0.8999999761581421,
+          0.8999999761581421,
+          0.8500000238418579,
+          1.0
+        ],
+        "subHeaderFontSize": 11.0,
         "subHeaderHeight": 50.0,
+        "subHeaderLabel": "Shop Items",
         "textColor": [
           0.8999999761581421,
           0.8999999761581421,
@@ -765,6 +902,260 @@
           0.0
         ],
         "type": "leaderboard_panel",
+        "visible": false
+      },
+      {
+        "anchor": {
+          "offset": [
+            -500.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            800.0,
+            600.0
+          ]
+        },
+        "backgroundColor": [
+          0.6823529601097107,
+          0.5529412031173706,
+          0.30588236451148987,
+          17.42745018005371
+        ],
+        "borderColor": [
+          0.4000000059604645,
+          0.30000001192092896,
+          0.20000000298023224,
+          1.0
+        ],
+        "borderWidth": 2.0,
+        "categoryActiveColor": [
+          0.7721518874168396,
+          0.6678950786590576,
+          0.511509895324707,
+          1.0
+        ],
+        "categoryActiveTextColor": [
+          0.15000000596046448,
+          0.07999999821186066,
+          0.019999999552965164,
+          1.0
+        ],
+        "categoryBgColor": [
+          0.7848101258277893,
+          0.667750895023346,
+          0.4503551721572876,
+          0.8999999761581421
+        ],
+        "categoryFontSize": 30.0,
+        "categoryItemHeight": 28.0,
+        "categoryOffset": [
+          0.0,
+          0.0
+        ],
+        "categorySpacing": 2.0,
+        "categoryTextColor": [
+          0.3499999940395355,
+          0.25,
+          0.15000000596046448,
+          1.0
+        ],
+        "categoryWidth": 200.0,
+        "closeBtnBorderColor": [
+          0.30000001192092896,
+          0.20000000298023224,
+          0.10000000149011612,
+          1.0
+        ],
+        "closeBtnColor": [
+          0.550000011920929,
+          0.41999998688697815,
+          0.2800000011920929,
+          1.0
+        ],
+        "closeRadius": 12.0,
+        "contentPadding": 4.0,
+        "enchantBadgeOffset": [
+          0.0,
+          0.0
+        ],
+        "enchantBadgeSize": 14.0,
+        "enchantFontSize": 30.0,
+        "enchantTextColor": [
+          0.20000000298023224,
+          0.699999988079071,
+          0.20000000298023224,
+          1.0
+        ],
+        "goldDisplayColor": [
+          0.8500000238418579,
+          0.7200000286102295,
+          0.15000000596046448,
+          1.0
+        ],
+        "goldDisplayFontSize": 30.0,
+        "goldDisplayOffset": [
+          0.0,
+          0.0
+        ],
+        "goldIconSize": 16.0,
+        "headerBgColor": [
+          0.7200000286102295,
+          0.6399999856948853,
+          0.5199999809265137,
+          0.800000011920929
+        ],
+        "headerFontSize": 30.0,
+        "headerHeight": 20.0,
+        "headerTextColor": [
+          0.25,
+          0.15000000596046448,
+          0.05000000074505806,
+          1.0
+        ],
+        "iconOffset": [
+          0.0,
+          0.0
+        ],
+        "iconSize": 48.0,
+        "id": "market_panel",
+        "itemNameColor": [
+          0.15000000596046448,
+          0.10000000149011612,
+          0.05000000074505806,
+          1.0
+        ],
+        "itemNameFontSize": 30.0,
+        "itemNameOffset": [
+          0.0,
+          0.0
+        ],
+        "listingAreaOffset": [
+          0.0,
+          0.0
+        ],
+        "pageArrowColor": [
+          0.30000001192092896,
+          0.2199999988079071,
+          0.11999999731779099,
+          1.0
+        ],
+        "pageArrowDisabledColor": [
+          0.550000011920929,
+          0.5,
+          0.41999998688697815,
+          0.5
+        ],
+        "pageFontSize": 30.0,
+        "pageNavHeight": 28.0,
+        "pageNavOffset": [
+          0.0,
+          0.0
+        ],
+        "pageTextColor": [
+          0.25,
+          0.15000000596046448,
+          0.05000000074505806,
+          1.0
+        ],
+        "priceColor": [
+          0.04641348123550415,
+          0.04576069116592407,
+          0.04445510730147362,
+          1.0
+        ],
+        "priceFontSize": 30.0,
+        "priceOffset": [
+          0.0,
+          0.0
+        ],
+        "refreshBtnColor": [
+          0.550000011920929,
+          0.5,
+          0.3799999952316284,
+          1.0
+        ],
+        "registrantOffset": [
+          0.0,
+          0.0
+        ],
+        "rowEvenColor": [
+          0.9019607901573181,
+          0.8509804010391235,
+          0.7490196228027344,
+          17.42745018005371
+        ],
+        "rowHeight": 64.0,
+        "rowOddColor": [
+          1.0,
+          1.0,
+          1.0,
+          17.42745018005371
+        ],
+        "rowPadding": 6.0,
+        "rowSelectedColor": [
+          0.699999988079071,
+          0.800000011920929,
+          0.949999988079071,
+          0.8999999761581421
+        ],
+        "rowsPerPage": 6,
+        "searchBarHeight": 32.0,
+        "searchBarOffset": [
+          0.0,
+          0.0
+        ],
+        "searchBgColor": [
+          0.7799999713897705,
+          0.7200000286102295,
+          0.6000000238418579,
+          0.8999999761581421
+        ],
+        "searchBorderColor": [
+          0.5,
+          0.4000000059604645,
+          0.2800000011920929,
+          1.0
+        ],
+        "searchFontSize": 30.0,
+        "searchPlaceholderColor": [
+          0.5358649492263794,
+          0.4499456286430359,
+          0.27810710668563843,
+          0.699999988079071
+        ],
+        "searchTextColor": [
+          0.20000000298023224,
+          0.11999999731779099,
+          0.05000000074505806,
+          1.0
+        ],
+        "sellerFontSize": 30.0,
+        "sellerNameColor": [
+          0.25,
+          0.15000000596046448,
+          0.07999999821186066,
+          1.0
+        ],
+        "titleBarColor": [
+          0.4261603355407715,
+          0.3561961054801941,
+          0.2337588220834732,
+          1.0
+        ],
+        "titleBarHeight": 34.0,
+        "titleColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "titleFontSize": 30.0,
+        "titleOffset": [
+          0.0,
+          0.0
+        ],
+        "type": "market_panel",
         "visible": false
       }
     ],

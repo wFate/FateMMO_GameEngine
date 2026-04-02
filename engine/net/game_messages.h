@@ -330,6 +330,7 @@ struct SvQuestUpdateMsg {
     int32_t currentCount = 0;
     int32_t targetCount  = 0;
     std::string message;
+    int64_t completionTime = 0;  // epoch seconds; non-zero for repeatable quest completion
 
     void write(ByteWriter& w) const {
         w.writeU8(updateType);
@@ -337,6 +338,7 @@ struct SvQuestUpdateMsg {
         w.writeI32(currentCount);
         w.writeI32(targetCount);
         w.writeString(message);
+        w.writeI64(completionTime);
     }
     static SvQuestUpdateMsg read(ByteReader& r) {
         SvQuestUpdateMsg m;
@@ -345,6 +347,7 @@ struct SvQuestUpdateMsg {
         m.currentCount = r.readI32();
         m.targetCount  = r.readI32();
         m.message      = r.readString();
+        m.completionTime = r.readI64();
         return m;
     }
 };

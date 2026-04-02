@@ -56,6 +56,7 @@
 #include "engine/ui/widgets/fps_counter.h"
 #include "engine/ui/widgets/leaderboard_panel.h"
 #include "engine/ui/widgets/invite_prompt_panel.h"
+#include "engine/ui/widgets/market_panel.h"
 #endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <cstdio>
@@ -2577,6 +2578,89 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::Text("Category: %u", lbp->currentCategory);
         ImGui::Text("Page: %u", lbp->currentPage);
         ImGui::Text("Entries: %zu / %u", lbp->entries.size(), lbp->totalEntries);
+    }
+    else if (auto* mp = dynamic_cast<MarketPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("MarketPanel");
+        if (ImGui::TreeNodeEx("Layout##mkt", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Category Width##mktl", &mp->categoryWidth, 1.0f, 0.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header Height##mktl", &mp->headerHeight, 1.0f, 0.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Row Height##mktl", &mp->rowHeight, 1.0f, 10.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Icon Size##mktl", &mp->iconSize, 1.0f, 8.0f, 128.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Enchant Badge Size##mktl", &mp->enchantBadgeSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Search Bar Height##mktl", &mp->searchBarHeight, 1.0f, 0.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Page Nav Height##mktl", &mp->pageNavHeight, 1.0f, 0.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Category Item Height##mktl", &mp->categoryItemHeight, 0.5f, 12.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Category Spacing##mktl", &mp->categorySpacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Row Padding##mktl", &mp->rowPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Gold Icon Size##mktl", &mp->goldIconSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##mktl", &mp->borderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Content Padding##mktl", &mp->contentPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Close Radius##mktl", &mp->closeRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Title Bar Height##mktl", &mp->titleBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragInt("Rows Per Page##mktl", &mp->rowsPerPage, 1, 1, 50); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##mkt", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##mktf", &mp->titleFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Header##mktf", &mp->headerFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Item Name##mktf", &mp->itemNameFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Enchant##mktf", &mp->enchantFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Seller##mktf", &mp->sellerFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Price##mktf", &mp->priceFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Category##mktf", &mp->categoryFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Search##mktf", &mp->searchFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Page##mktf", &mp->pageFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Gold Display##mktf", &mp->goldDisplayFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Position Offsets##mkt", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Title##mkto", &mp->titleOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Gold Display##mkto", &mp->goldDisplayOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Category##mkto", &mp->categoryOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Listing Area##mkto", &mp->listingAreaOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Item Name##mkto", &mp->itemNameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Registrant##mkto", &mp->registrantOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Price##mkto", &mp->priceOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Icon##mkto", &mp->iconOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Enchant Badge##mkto", &mp->enchantBadgeOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Search Bar##mkto", &mp->searchBarOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Page Nav##mkto", &mp->pageNavOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##mkt", 0)) {
+            ImGui::ColorEdit4("Background##mktc", &mp->backgroundColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##mktc", &mp->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar##mktc", &mp->titleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##mktc", &mp->titleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Category BG##mktc", &mp->categoryBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Category Active##mktc", &mp->categoryActiveColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Category Text##mktc", &mp->categoryTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Category Active Text##mktc", &mp->categoryActiveTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Header BG##mktc", &mp->headerBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Header Text##mktc", &mp->headerTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Row Even##mktc", &mp->rowEvenColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Row Odd##mktc", &mp->rowOddColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Row Selected##mktc", &mp->rowSelectedColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Item Name##mktc", &mp->itemNameColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Enchant Text##mktc", &mp->enchantTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Seller Name##mktc", &mp->sellerNameColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Price##mktc", &mp->priceColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Search BG##mktc", &mp->searchBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Search Border##mktc", &mp->searchBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Search Text##mktc", &mp->searchTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Search Placeholder##mktc", &mp->searchPlaceholderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Page Text##mktc", &mp->pageTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Page Arrow##mktc", &mp->pageArrowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Page Arrow Disabled##mktc", &mp->pageArrowDisabledColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn##mktc", &mp->closeBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Border##mktc", &mp->closeBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Refresh Btn##mktc", &mp->refreshBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gold Display##mktc", &mp->goldDisplayColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
+        ImGui::Text("Listings: %zu", mp->listings.size());
+        ImGui::Text("Page: %d / %d", mp->currentPage, mp->totalPages);
     }
     else {
         ImGui::TextDisabled("(no widget-specific properties)");
