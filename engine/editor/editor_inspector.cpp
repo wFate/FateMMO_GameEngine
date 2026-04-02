@@ -28,7 +28,10 @@
 #endif // FATE_HAS_GAME
 #include "engine/render/text_style.h"
 #include "engine/render/font_registry.h"
+#ifdef FATE_HAS_GAME
 #include "game/systems/combat_text_config.h"
+#include "game/systems/npc_nameplate_config.h"
+#endif // FATE_HAS_GAME
 #include <unordered_set>
 #include <string>
 #include <cstring>
@@ -1267,6 +1270,27 @@ void Editor::drawInspector() {
                     captureInspectorUndo();
                     ImGui::ColorEdit4("HP Low##mnp", &mnp->hpBarLowColor.r);
                     captureInspectorUndo();
+                }
+
+                // --- NPC Nameplate Preset ---
+                ImGui::Separator();
+                ImGui::Text("NPC Nameplate Preset");
+                if (ImGui::Button("Save as NPC Preset##mnp")) {
+                    auto& cfg = fate::NPCNameplateConfig::instance();
+                    cfg.pullFrom(*mnp);
+                    cfg.save(fate::NPCNameplateConfig::kDefaultPath);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Load NPC Preset##mnp")) {
+                    auto& cfg = fate::NPCNameplateConfig::instance();
+                    cfg.load(fate::NPCNameplateConfig::kDefaultPath);
+                    cfg.applyTo(*mnp);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Reset Defaults##mnpPreset")) {
+                    auto& cfg = fate::NPCNameplateConfig::instance();
+                    cfg.loadDefaults();
+                    cfg.applyTo(*mnp);
                 }
             }
         }

@@ -221,6 +221,53 @@ Custom polished dark theme — Inter font family (14px body, 16px SemiBold headi
 
 ---
 
+## Known Issues
+
+These are tracked issues in the open-source engine build. Contributions addressing any of these are welcome.
+
+**Build warnings (non-blocking):**
+- Unused parameter warnings in virtual base class methods (`world.h`, `app.h`) -- intentional empty defaults for overridable hooks
+- `warn_unused_result` on `nlohmann::json::parse` in `loaders.cpp:236` -- the call validates JSON syntax; return value is intentionally discarded
+- `cellH` unused variable in `asset_browser.cpp:325` -- leftover from a layout calculation, safe to remove
+- `-Wreturn-stack-address` in `undo.h:214` -- ternary returns a reference to a local `std::string`. Needs refactoring to return by value or hold the empty string as a static/member
+
+**Architectural:**
+- **AOI (Area of Interest) is disabled** -- two bugs remain: boundary flickering when entities cross cell edges, and empty `aoi.current` set on first tick. Replication currently sends all entities. Fix requires wider hysteresis band and minimum visibility duration.
+- **Fiber backend on non-Windows** uses minicoro, which is less battle-tested than the Win32 fiber path. Monitor for stack overflow on deep call chains.
+
+---
+
+## From Engine Demo to Full Game
+
+The open-source repo builds and runs as an editor/engine demo. To develop a full game on top of this engine, you would create the following directories (which the CMake system auto-detects):
+
+**Game Logic (`game/`):**
+- `game/components/` -- Game-specific ECS components (transform, sprite, animator, colliders, combat stats, inventory, equipment, pets, factions, etc.)
+- `game/systems/` -- Game systems that operate on components (combat, AI/mob behavior, skill execution, spawning, loot, party, nameplates, etc.)
+- `game/shared/` -- Data structures shared between client and server (item definitions, faction data, skill tables, mob stats)
+- `game/data/` -- Static game data catalogs (paper doll definitions, skill trees, enchant tables)
+- An entry point (`game/main.cpp` or similar) with a class inheriting from `fate::App`
+
+**Server (`server/`):**
+- Request handlers for every game action (auth, movement, combat, trade, inventory, chat, party, guild, arena, dungeons)
+- Database repositories (PostgreSQL via libpqxx)
+- Server-authoritative game state, validation, and anti-cheat
+- WAL (write-ahead log) for crash recovery
+
+**Content (`assets/`):**
+- `assets/sprites/` -- Character sheets, mob sprites, item icons, UI art, skill effects
+- `assets/tiles/` -- Tileset images for the tilemap renderer
+- `assets/audio/` -- Sound effects and music
+- `assets/prefabs/` -- Entity prefab definitions (JSON)
+- `assets/scenes/` -- Scene/map data files (JSON)
+
+**Tests (`tests/`):**
+- Unit and integration tests using doctest
+
+The engine's `#ifdef FATE_HAS_GAME` compile guards allow it to build cleanly both with and without the game layer. When `game/` sources are present, CMake defines `FATE_HAS_GAME` and builds the full `FateEngine` executable instead of the `FateDemo` target.
+
+---
+
 ## ⚡ Building & Targets
 
 All core dependencies are fetched automatically via CMake FetchContent — **zero manual installs required** for the engine and demo.
@@ -330,6 +377,16 @@ server/                    # 22,900 LOC — Headless authoritative server
 
 tests/                     # 20,800 LOC — 1,197 test cases across 168 files
 ```
+
+---
+
+## Contributing
+
+Contributions to the engine core are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on submitting issues, pull requests, and the `FATE_HAS_GAME` guard requirements for engine code.
+
+## License
+
+Apache License 2.0 -- see [LICENSE](LICENSE) for details.
 
 ---
 
