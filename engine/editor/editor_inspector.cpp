@@ -1868,6 +1868,43 @@ void Editor::drawInspector() {
             }
         }
 
+        // ShopComponent
+        if (auto* shop = selectedEntity_->getComponent<ShopComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Shop");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmShop")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<ShopComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<ShopComponent>()) {
+                char buf[128];
+                strncpy(buf, shop->shopName.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+                if (ImGui::InputText("Shop Name##shop", buf, sizeof(buf))) shop->shopName = buf;
+                captureInspectorUndo();
+                ImGui::Separator();
+                ImGui::Text("Inventory (%d items)", (int)shop->inventory.size());
+                if (inspectShopItemList(shop->inventory))
+                    captureInspectorUndo();
+            }
+        }
+
+        // BankerComponent
+        if (auto* bank = selectedEntity_->getComponent<BankerComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Banker");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmBanker")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<BankerComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<BankerComponent>()) {
+                int slots = bank->storageSlots;
+                if (ImGui::DragInt("Storage Slots##bank", &slots, 1.0f, 1, 500)) bank->storageSlots = (uint16_t)slots;
+                captureInspectorUndo();
+            }
+        }
+
         // MarketplaceNPC
         if (auto* mktNpc = selectedEntity_->getComponent<MarketplaceNPCComponent>()) {
             bool open = ImGui::CollapsingHeader("Marketplace NPC");
