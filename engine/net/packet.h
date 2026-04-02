@@ -149,6 +149,8 @@ namespace PacketType {
     constexpr uint8_t SvAdminResult       = 0xC3;
     constexpr uint8_t SvAdminContentList  = 0xC4;
     constexpr uint8_t SvValidationReport  = 0xC5;
+    constexpr uint8_t SvGuildRoster       = 0xC6;
+    constexpr uint8_t SvMarketListings    = 0xC7;
 } // namespace PacketType
 
 // ============================================================================

@@ -52,6 +52,7 @@ struct ClientConnection {
 
     // Invite prompt busy state — prevents concurrent invites
     bool hasActivePrompt = false;
+    float guildInviteExpiresAt = 0.0f;      // gameTime when invite auto-expires
     int pendingGuildInviteId = 0;           // guild ID of pending invite
     std::string pendingGuildInviteFromCharId; // who sent the guild invite
 };

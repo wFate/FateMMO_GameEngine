@@ -14,7 +14,6 @@
 #include "game/components/game_components.h"
 #include "game/components/faction_component.h"
 #include "game/components/pet_component.h"
-#include "game/shared/faction_npc_data.h"
 #include "game/components/spawn_point_component.h"
 #include "game/systems/spawn_system.h"
 #endif // FATE_HAS_GAME

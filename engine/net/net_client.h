@@ -151,6 +151,8 @@ public:
     std::function<void(const SvCostumeDefsMsg&)> onCostumeDefs;
     std::function<void(const SvBuffSyncMsg&)> onBuffSync;
     std::function<void(const SvPartyUpdateMsg&)> onPartyUpdate;
+    std::function<void(const SvGuildRosterMsg&)> onGuildRoster;
+    std::function<void(const SvMarketListingsMsg&)> onMarketListings;
     std::function<void(const std::string& reason)> onConnectRejected;
 
     // Admin content pipeline callbacks

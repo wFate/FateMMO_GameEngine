@@ -76,6 +76,7 @@ void drawCombatTextEditorWindow(bool* open) {
     drawStyleEditor("Level Up", cfg.levelUp);
     drawStyleEditor("Heal",     cfg.heal);
     drawStyleEditor("Block",    cfg.block);
+    drawStyleEditor("Dodge",    cfg.dodge);
 
     ImGui::End();
 }

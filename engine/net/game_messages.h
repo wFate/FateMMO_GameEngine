@@ -65,6 +65,7 @@ namespace GuildAction {
     constexpr uint8_t Demote     = 6;  // + targetCharId:string
     constexpr uint8_t Disband    = 7;
     constexpr uint8_t DeclineInvite = 8;  // + inviterCharId:string
+    constexpr uint8_t RequestRoster = 9;  // (no extra fields)
 }
 
 // ============================================================================
@@ -1735,6 +1736,108 @@ struct SvCostumeUpdateMsg {
         m.slotType     = r.readU8();
         m.show         = r.readU8();
         return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvGuildRoster (full member list for GuildPanel)
+// ============================================================================
+struct SvGuildRosterMsg {
+    struct Member {
+        std::string name;
+        uint8_t level = 1;
+        std::string rank;
+        uint8_t online = 0;
+    };
+    std::vector<Member> members;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(static_cast<uint8_t>(members.size()));
+        for (const auto& m : members) {
+            w.writeString(m.name);
+            w.writeU8(m.level);
+            w.writeString(m.rank);
+            w.writeU8(m.online);
+        }
+    }
+    static SvGuildRosterMsg read(ByteReader& r) {
+        SvGuildRosterMsg msg;
+        uint8_t count = r.readU8();
+        msg.members.reserve(count);
+        for (uint8_t i = 0; i < count; ++i) {
+            Member m;
+            m.name   = r.readString();
+            m.level  = r.readU8();
+            m.rank   = r.readString();
+            m.online = r.readU8();
+            msg.members.push_back(std::move(m));
+        }
+        return msg;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvMarketListings (browse/my-listings data)
+// ============================================================================
+struct SvMarketListingsMsg {
+    uint8_t action = 0;     // 3=Browse, 4=MyListings
+    int32_t page = 0;
+    int32_t totalPages = 0;
+    uint64_t nonce = 0;
+
+    struct ListingEntry {
+        int32_t listingId = 0;
+        std::string itemId;
+        std::string itemName;
+        uint8_t enchantLevel = 0;
+        std::string rarity;
+        int32_t quantity = 0;
+        std::string sellerName;
+        int64_t priceGold = 0;
+        std::string category;
+    };
+    std::vector<ListingEntry> listings;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(action);
+        w.writeI32(page);
+        w.writeI32(totalPages);
+        detail::writeU64(w, nonce);
+        w.writeU16(static_cast<uint16_t>(listings.size()));
+        for (const auto& l : listings) {
+            w.writeI32(l.listingId);
+            w.writeString(l.itemId);
+            w.writeString(l.itemName);
+            w.writeU8(l.enchantLevel);
+            w.writeString(l.rarity);
+            w.writeI32(l.quantity);
+            w.writeString(l.sellerName);
+            detail::writeI64(w, l.priceGold);
+            w.writeString(l.category);
+        }
+    }
+    static SvMarketListingsMsg read(ByteReader& r) {
+        SvMarketListingsMsg msg;
+        msg.action     = r.readU8();
+        msg.page       = r.readI32();
+        msg.totalPages = r.readI32();
+        msg.nonce      = detail::readU64(r);
+        uint16_t count = r.readU16();
+        msg.listings.reserve(count);
+        for (uint16_t i = 0; i < count; ++i) {
+            ListingEntry l;
+            l.listingId    = r.readI32();
+            l.itemId       = r.readString();
+            l.itemName     = r.readString();
+            l.enchantLevel = r.readU8();
+            l.rarity       = r.readString();
+            l.quantity     = r.readI32();
+            l.sellerName   = r.readString();
+            l.priceGold    = detail::readI64(r);
+            l.category     = r.readString();
+            msg.listings.push_back(std::move(l));
+        }
+        return msg;
     }
 };
 

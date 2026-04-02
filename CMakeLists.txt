@@ -339,7 +339,7 @@ if(FATE_SHIPPING)
 endif()
 
 # Exclude UI editor panel when proprietary UI system is absent
-if(NOT GAME_SOURCES)
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/game")
     list(FILTER ENGINE_SOURCES EXCLUDE REGEX "engine/editor/ui_editor_panel\\.cpp$")
 endif()
 

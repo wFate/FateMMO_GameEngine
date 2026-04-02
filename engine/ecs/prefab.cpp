@@ -26,11 +26,14 @@ void PrefabLibrary::loadAll() {
         return;
     }
 
-    for (auto& entry : fs::directory_iterator(directory_)) {
+    for (auto& entry : fs::recursive_directory_iterator(directory_)) {
         if (!entry.is_regular_file()) continue;
         if (entry.path().extension() != ".json") continue;
 
-        std::string name = entry.path().stem().string();
+        // Use path relative to directory_ as the prefab name (e.g. "npc/npc_shopkeeper")
+        fs::path relPath = fs::relative(entry.path(), directory_);
+        std::string name = relPath.replace_extension("").generic_string();
+
         std::ifstream file(entry.path());
         if (!file.is_open()) continue;
 

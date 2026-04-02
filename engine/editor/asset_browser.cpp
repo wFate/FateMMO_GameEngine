@@ -188,6 +188,9 @@ AssetBrowser::AssetType AssetBrowser::classifyFile(const std::string& name, cons
         // .meta.json files are animation metadata, not scenes
         if (name.size() > 10 && name.substr(name.size() - 10) == ".meta.json")
             return AssetType::Animation;
+        // .json files inside prefabs/ directory are prefabs, not scenes
+        if (currentDir_.find("prefabs") != std::string::npos)
+            return AssetType::Prefab;
         return AssetType::Scene;
     }
     if (ext == ".vert" || ext == ".frag" || ext == ".glsl")
@@ -358,6 +361,8 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
             if (!entry.isDirectory) {
                 isDraggingAsset_ = true;
                 draggedAssetPath_ = entry.relativePath;
+                LOG_INFO("AssetBrowser", "Click: name='%s' relPath='%s' type=%d dir='%s'",
+                    entry.name.c_str(), entry.relativePath.c_str(), (int)entry.type, currentDir_.c_str());
             }
         }
         bool isHov = ImGui::IsItemHovered();
@@ -419,8 +424,8 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
                           iconForType(typeInt), isSel, isHov);
         }
 
-        // Drag source for sprites
-        if (entry.type == AssetType::Sprite && !entry.isDirectory) {
+        // Drag source for sprites and prefabs
+        if ((entry.type == AssetType::Sprite || entry.type == AssetType::Prefab) && !entry.isDirectory) {
             if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                 const char* path = entry.fullPath.c_str();
                 ImGui::SetDragDropPayload("ASSET", path, strlen(path) + 1);
@@ -434,12 +439,12 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
             ImGui::TextDisabled("%s", entry.name.c_str());
             ImGui::Separator();
 
-            if (entry.type == AssetType::Sprite && !entry.isDirectory) {
+            if ((entry.type == AssetType::Sprite || entry.type == AssetType::Prefab) && !entry.isDirectory) {
                 if (ImGui::MenuItem("Place in Scene")) {
                     isDraggingAsset_ = true;
                     draggedAssetPath_ = entry.relativePath;
                 }
-                if (ImGui::MenuItem("Open in Animation Editor")) {
+                if (entry.type == AssetType::Sprite && ImGui::MenuItem("Open in Animation Editor")) {
                     if (onOpenAnimation) onOpenAnimation(entry.fullPath);
                 }
             }

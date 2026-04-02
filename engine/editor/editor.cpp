@@ -1109,6 +1109,7 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
     Vec2 worldPos = camera->screenToWorld(screenPos, windowWidth, windowHeight);
 
     // Asset placement mode: click to place
+    LOG_DEBUG("Editor", "handleSceneClick: isDragging=%d path='%s'", isDraggingAsset_, draggedAssetPath_.c_str());
     if (isDraggingAsset_ && !draggedAssetPath_.empty()) {
         Vec2 placePos = worldPos;
         if (gridSnap_) {
@@ -1121,10 +1122,30 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
         Entity* entity = nullptr;
 
         // Check if placing a prefab or a sprite
+        // Detect prefab files: if the path ends with .json and is inside prefabs/,
+        // derive the prefab name and spawn it via PrefabLibrary
+        bool isPrefab = false;
         if (draggedAssetPath_.substr(0, 7) == "prefab:") {
             std::string prefabName = draggedAssetPath_.substr(7);
             entity = PrefabLibrary::instance().spawn(prefabName, *world, placePos);
+            isPrefab = true;
         } else {
+            // Check if this is a prefab .json file from the asset browser
+            fs::path assetPath(draggedAssetPath_);
+            std::string ext = assetPath.extension().string();
+            std::string normalized = assetPath.generic_string(); // forward slashes
+            LOG_INFO("Editor", "Prefab check: ext='%s' normalized='%s'", ext.c_str(), normalized.c_str());
+            if (ext == ".json" && normalized.find("prefabs/") != std::string::npos) {
+                size_t prefabStart = normalized.find("prefabs/") + 8;
+                std::string prefabName = normalized.substr(prefabStart);
+                prefabName = prefabName.substr(0, prefabName.size() - 5); // strip .json
+                LOG_INFO("Editor", "Spawning prefab: '%s'", prefabName.c_str());
+                entity = PrefabLibrary::instance().spawn(prefabName, *world, placePos);
+                isPrefab = true;
+                if (!entity) LOG_ERROR("Editor", "PrefabLibrary::spawn returned nullptr for '%s'", prefabName.c_str());
+            }
+        }
+        if (!isPrefab) {
             // Placing a sprite asset
             std::string name = fs::path(draggedAssetPath_).stem().string();
             entity = world->createEntity(name);

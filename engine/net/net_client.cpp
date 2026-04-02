@@ -669,6 +669,21 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onValidationReport) onValidationReport(msg);
             break;
         }
+        case PacketType::SvGuildRoster: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvGuildRosterMsg::read(payload);
+            if (onGuildRoster) onGuildRoster(msg);
+            break;
+        }
+        case PacketType::SvMarketListings: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvMarketListingsMsg::read(payload);
+            if (msg.nonce != 0) {
+                marketNonce_ = msg.nonce;
+            }
+            if (onMarketListings) onMarketListings(msg);
+            break;
+        }
         default:
             break;
     }
