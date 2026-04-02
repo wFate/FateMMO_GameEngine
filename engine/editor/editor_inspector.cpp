@@ -1794,6 +1794,40 @@ void Editor::drawInspector() {
             }
         }
 
+        // NPCComponent
+        if (auto* npc = selectedEntity_->getComponent<NPCComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("NPC");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmNPC")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<NPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<NPCComponent>()) {
+                uint32_t nid = npc->npcId;
+                if (ImGui::DragScalar("NPC ID##npc", ImGuiDataType_U32, &nid, 1.0f)) npc->npcId = nid;
+                captureInspectorUndo();
+                char buf[256];
+                strncpy(buf, npc->displayName.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+                if (ImGui::InputText("Display Name##npc", buf, sizeof(buf))) npc->displayName = buf;
+                captureInspectorUndo();
+                strncpy(buf, npc->dialogueGreeting.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+                if (ImGui::InputTextMultiline("Greeting##npc", buf, sizeof(buf), ImVec2(-1, 60))) npc->dialogueGreeting = buf;
+                captureInspectorUndo();
+                strncpy(buf, npc->sceneId.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+                if (ImGui::InputText("Scene ID##npc", buf, sizeof(buf))) npc->sceneId = buf;
+                captureInspectorUndo();
+                ImGui::DragFloat("Interact Radius##npc", &npc->interactionRadius, 0.1f, 0.0f, 20.0f, "%.1f tiles");
+                captureInspectorUndo();
+                static const char* faceNames[] = { "Down", "Up", "Left", "Right" };
+                int faceIdx = static_cast<int>(npc->faceDirection);
+                if (faceIdx < 0 || faceIdx > 3) faceIdx = 0;
+                if (ImGui::Combo("Face Direction##npc", &faceIdx, faceNames, 4))
+                    npc->faceDirection = static_cast<FaceDirection>(faceIdx);
+                captureInspectorUndo();
+            }
+        }
+
         // MarketplaceNPC
         if (auto* mktNpc = selectedEntity_->getComponent<MarketplaceNPCComponent>()) {
             bool open = ImGui::CollapsingHeader("Marketplace NPC");
