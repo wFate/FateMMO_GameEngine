@@ -80,24 +80,88 @@ void ContentBrowserPanel::onContentListReceived(uint8_t contentType, uint16_t pa
     if (pageIndex + 1 >= totalPages) {
         *dirtyFlag = false;
         // Sort alphabetically by display name for better usability
-        auto getSort = [&](const nlohmann::json& e) -> std::string {
-            if (contentType == AdminContentType::Mob)
-                return jstr(e, "display_name", jstr(e, "mob_def_id"));
-            if (contentType == AdminContentType::Item)
-                return jstr(e, "name", jstr(e, "item_id"));
-            if (contentType == AdminContentType::SpawnZone)
-                return jstr(e, "scene_id") + "/" + jstr(e, "mob_def_id");
-            if (contentType == AdminContentType::LootDrop)
-                return jstr(e, "loot_table_id") + "/" + jstr(e, "item_id");
-            return "";
-        };
-        std::sort(target->begin(), target->end(),
-            [&](const nlohmann::json& a, const nlohmann::json& b) {
-                std::string sa = getSort(a), sb = getSort(b);
-                std::transform(sa.begin(), sa.end(), sa.begin(), ::tolower);
-                std::transform(sb.begin(), sb.end(), sb.begin(), ::tolower);
-                return sa < sb;
-            });
+        if (contentType == AdminContentType::Item) {
+            // Consumable sub-group key for sorting
+            auto consumableSortKey = [](const nlohmann::json& item) -> std::string {
+                std::string sub = jstr(item, "subtype"), name = jstr(item, "name");
+                std::string subL = sub, nameL = name;
+                std::transform(subL.begin(), subL.end(), subL.begin(), ::tolower);
+                std::transform(nameL.begin(), nameL.end(), nameL.begin(), ::tolower);
+                if (subL.find("skill_book") != std::string::npos || subL.find("skillbook") != std::string::npos
+                    || nameL.find("skill book") != std::string::npos || subL == "tome") return "1";
+                if (subL.find("enhance") != std::string::npos || nameL.find("enhancement stone") != std::string::npos
+                    || subL.find("stone") != std::string::npos) return "2";
+                if (subL.find("potion") != std::string::npos || subL == "hp" || subL == "mp"
+                    || nameL.find("potion") != std::string::npos || nameL.find("elixir") != std::string::npos) return "3";
+                if (subL.find("scroll") != std::string::npos || nameL.find("scroll") != std::string::npos) return "4";
+                if (subL.find("exp_boost") != std::string::npos || subL.find("stat_reset") != std::string::npos) return "5";
+                return "6";
+            };
+            // Sort items by: type, then within equipment: class_req -> level -> name
+            //                      within consumable: sub-group -> level -> name
+            auto consumableSortKeyLocal = consumableSortKey;
+            std::sort(target->begin(), target->end(),
+                [&consumableSortKeyLocal](const nlohmann::json& a, const nlohmann::json& b) {
+                    std::string ta = jstr(a, "type"), tb = jstr(b, "type");
+                    // Normalize type case for sorting
+                    std::string taL = ta, tbL = tb;
+                    std::transform(taL.begin(), taL.end(), taL.begin(), ::tolower);
+                    std::transform(tbL.begin(), tbL.end(), tbL.begin(), ::tolower);
+                    if (taL != tbL) return taL < tbL;
+
+                    if (ta == "Consumable") {
+                        // Sub-group first (Skill Books, Enhancement, Potions, etc.)
+                        std::string ga = consumableSortKeyLocal(a), gb = consumableSortKeyLocal(b);
+                        if (ga != gb) return ga < gb;
+                        // Then level
+                        int la = 0, lb = 0;
+                        if (a.contains("level_req") && a["level_req"].is_number()) la = a["level_req"].get<int>();
+                        if (b.contains("level_req") && b["level_req"].is_number()) lb = b["level_req"].get<int>();
+                        if (la != lb) return la < lb;
+                    } else {
+                        // Equipment: class then level
+                        std::string ca = jstr(a, "class_req", "All"), cb = jstr(b, "class_req", "All");
+                        if (ca != cb) return ca < cb;
+                        int la = 0, lb = 0;
+                        if (a.contains("level_req") && a["level_req"].is_number()) la = a["level_req"].get<int>();
+                        if (b.contains("level_req") && b["level_req"].is_number()) lb = b["level_req"].get<int>();
+                        if (la != lb) return la < lb;
+                    }
+                    std::string na = jstr(a, "name"), nb = jstr(b, "name");
+                    std::transform(na.begin(), na.end(), na.begin(), ::tolower);
+                    std::transform(nb.begin(), nb.end(), nb.begin(), ::tolower);
+                    return na < nb;
+                });
+        } else if (contentType == AdminContentType::Mob) {
+            // Sort mobs by min_spawn_level, then display_name
+            std::sort(target->begin(), target->end(),
+                [](const nlohmann::json& a, const nlohmann::json& b) {
+                    int la = 0, lb = 0;
+                    if (a.contains("min_spawn_level") && a["min_spawn_level"].is_number()) la = a["min_spawn_level"].get<int>();
+                    if (b.contains("min_spawn_level") && b["min_spawn_level"].is_number()) lb = b["min_spawn_level"].get<int>();
+                    if (la != lb) return la < lb;
+                    std::string na = jstr(a, "display_name"), nb = jstr(b, "display_name");
+                    std::transform(na.begin(), na.end(), na.begin(), ::tolower);
+                    std::transform(nb.begin(), nb.end(), nb.begin(), ::tolower);
+                    return na < nb;
+                });
+        } else {
+            // Default alpha sort for spawns, loot
+            auto getSort = [&](const nlohmann::json& e) -> std::string {
+                if (contentType == AdminContentType::SpawnZone)
+                    return jstr(e, "scene_id") + "/" + jstr(e, "mob_def_id");
+                if (contentType == AdminContentType::LootDrop)
+                    return jstr(e, "loot_table_id") + "/" + jstr(e, "item_id");
+                return "";
+            };
+            std::sort(target->begin(), target->end(),
+                [&](const nlohmann::json& a, const nlohmann::json& b) {
+                    std::string sa = getSort(a), sb = getSort(b);
+                    std::transform(sa.begin(), sa.end(), sa.begin(), ::tolower);
+                    std::transform(sb.begin(), sb.end(), sb.begin(), ::tolower);
+                    return sa < sb;
+                });
+        }
     }
 }
 
@@ -117,7 +181,13 @@ void ContentBrowserPanel::onAdminResult(uint8_t requestType, bool success, const
 }
 
 void ContentBrowserPanel::onValidationReport(const std::vector<std::pair<uint8_t, std::string>>& issues) {
-    validationIssues_ = issues;
+    // Accumulate chunks — first chunk clears (detected by having previously finished or being empty)
+    // We use a simple heuristic: if the panel just sent a validate request, clear on first response
+    if (validationPendingClear_) {
+        validationIssues_.clear();
+        validationPendingClear_ = false;
+    }
+    validationIssues_.insert(validationIssues_.end(), issues.begin(), issues.end());
 }
 
 // ============================================================================
@@ -143,6 +213,8 @@ bool ContentBrowserPanel::drawStringField(const char* label, nlohmann::json& obj
     std::strncpy(buf, val.c_str(), sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
 
+    ImGui::Text("%s", label);
+    ImGui::SameLine(140.0f);
     ImGui::SetNextItemWidth(-1.0f);
     ImGuiInputTextFlags flags = 0;
     if (readOnly) flags |= ImGuiInputTextFlags_ReadOnly;
@@ -162,6 +234,8 @@ bool ContentBrowserPanel::drawIntField(const char* label, nlohmann::json& obj, c
         else if (obj[key].is_number_float()) val = static_cast<int>(obj[key].get<float>());
     }
 
+    ImGui::Text("%s", label);
+    ImGui::SameLine(140.0f);
     ImGui::SetNextItemWidth(-1.0f);
     std::string id = std::string(label) + "##" + key;
     if (ImGui::DragInt(id.c_str(), &val, 1.0f, min, max)) {
@@ -178,6 +252,8 @@ bool ContentBrowserPanel::drawFloatField(const char* label, nlohmann::json& obj,
         else if (obj[key].is_number_integer()) val = static_cast<float>(obj[key].get<int>());
     }
 
+    ImGui::Text("%s", label);
+    ImGui::SameLine(140.0f);
     ImGui::SetNextItemWidth(-1.0f);
     std::string id = std::string(label) + "##" + key;
     if (ImGui::DragFloat(id.c_str(), &val, 0.01f, min, max, "%.3f")) {
@@ -206,6 +282,8 @@ bool ContentBrowserPanel::drawComboField(const char* label, nlohmann::json& obj,
         if (options[i] == current) { currentIdx = i; break; }
     }
 
+    ImGui::Text("%s", label);
+    ImGui::SameLine(140.0f);
     std::string id = std::string(label) + "##" + key;
     ImGui::SetNextItemWidth(-1.0f);
     if (ImGui::BeginCombo(id.c_str(), currentIdx < (int)options.size() ? options[currentIdx].c_str() : "")) {
@@ -365,19 +443,30 @@ void ContentBrowserPanel::drawMobsTab() {
             bool isBoss = mob.contains("is_boss") && mob["is_boss"].is_boolean() && mob["is_boss"].get<bool>();
             bool isElite = mob.contains("is_elite") && mob["is_elite"].is_boolean() && mob["is_elite"].get<bool>();
 
+            int minLvl = 0, maxLvl = 0;
+            if (mob.contains("min_spawn_level") && mob["min_spawn_level"].is_number()) minLvl = mob["min_spawn_level"].get<int>();
+            if (mob.contains("max_spawn_level") && mob["max_spawn_level"].is_number()) maxLvl = mob["max_spawn_level"].get<int>();
+
             if (isBoss || isElite) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4{1.0f, 0.85f, 0.2f, 1.0f});
             else ImGui::PushStyleColor(ImGuiCol_Text, color);
 
             bool selected = (i == selectedMobIndex_);
             std::string prefix = isBoss ? "[B] " : (isElite ? "[E] " : "");
-            std::string label = prefix + name + "##mob" + std::to_string(i);
+            std::string lvlStr = (minLvl == maxLvl) ?
+                "Lv" + std::to_string(minLvl) :
+                "Lv" + std::to_string(minLvl) + "-" + std::to_string(maxLvl);
+            std::string label = prefix + lvlStr + " " + name + "##mob" + std::to_string(i);
             if (ImGui::Selectable(label.c_str(), selected)) {
                 selectedMobIndex_ = i;
                 editingMob_ = mob;
             }
             ImGui::PopStyleColor();
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s\nZone: %s", id.c_str(), mobScene.empty() ? "Not spawned" : mobScene.c_str());
+                int hp = 0;
+                if (mob.contains("base_hp") && mob["base_hp"].is_number()) hp = mob["base_hp"].get<int>();
+                ImGui::SetTooltip("%s\nHP: %d | %s\nZone: %s", id.c_str(), hp,
+                    jstr(mob, "attack_style", "Melee").c_str(),
+                    mobScene.empty() ? "Not spawned" : mobScene.c_str());
             }
         }
     }
@@ -482,10 +571,34 @@ static ImVec4 rarityColor(const std::string& rarity) {
     return {0.85f,0.85f,0.85f,1}; // Common
 }
 
+// Item tab filter: matches by type string, or special logic for Accessory/Equipment
+struct ItemTabDef {
+    const char* label;
+    // Returns true if item matches this tab
+    bool (*matches)(const nlohmann::json& item);
+};
+
+static bool isAccessory(const nlohmann::json& item) {
+    std::string sub = jstr(item, "subtype");
+    return sub == "Necklace" || sub == "Ring" || sub == "Cloak" || sub == "Belt";
+}
+
+static const ItemTabDef itemTabs[] = {
+    {"All",        [](const nlohmann::json&) { return true; }},
+    {"Weapon",     [](const nlohmann::json& i) { return jstr(i,"type") == "Weapon"; }},
+    {"Armor",      [](const nlohmann::json& i) { return jstr(i,"type") == "Armor" && !isAccessory(i); }},
+    {"Accessory",  [](const nlohmann::json& i) { return isAccessory(i); }},
+    {"Consumable", [](const nlohmann::json& i) { return jstr(i,"type") == "Consumable"; }},
+    {"Material",   [](const nlohmann::json& i) {
+        std::string t = jstr(i,"type");
+        return t == "Material" || t == "material"; // DB has both cases
+    }},
+    {"Currency",   [](const nlohmann::json& i) { return jstr(i,"type") == "Currency"; }},
+    {"Enhancement",[](const nlohmann::json& i) { return jstr(i,"type") == "Enhancement"; }},
+};
+static constexpr int NUM_ITEM_TABS = sizeof(itemTabs) / sizeof(itemTabs[0]);
+
 void ContentBrowserPanel::drawItemsTab() {
-    static const std::vector<std::string> itemTypeTabs = {
-        "All", "Weapon", "Armor", "Accessory", "Consumable", "Material", "QuestItem", "Scroll", "Bag", "Pet"
-    };
     static int itemTypeFilter = 0;
 
     if (ImGui::Button("New Item")) {
@@ -509,8 +622,8 @@ void ContentBrowserPanel::drawItemsTab() {
 
     // Type filter tabs
     if (ImGui::BeginTabBar("##ItemTypeTabs")) {
-        for (int t = 0; t < (int)itemTypeTabs.size(); ++t) {
-            if (ImGui::BeginTabItem(itemTypeTabs[t].c_str())) {
+        for (int t = 0; t < NUM_ITEM_TABS; ++t) {
+            if (ImGui::BeginTabItem(itemTabs[t].label)) {
                 itemTypeFilter = t;
                 ImGui::EndTabItem();
             }
@@ -518,27 +631,65 @@ void ContentBrowserPanel::drawItemsTab() {
         ImGui::EndTabBar();
     }
 
-    float leftW = 260.0f;
+    // Consumable sub-category detection
+    auto consumableCat = [](const nlohmann::json& item) -> int {
+        std::string id = jstr(item, "item_id");
+        std::string sub = jstr(item, "subtype"), name = jstr(item, "name");
+        std::string subL = sub; std::transform(subL.begin(), subL.end(), subL.begin(), ::tolower);
+        std::string nameL = name; std::transform(nameL.begin(), nameL.end(), nameL.begin(), ::tolower);
+        if (id.starts_with("skillbook_") || subL.find("skill_book") != std::string::npos || subL == "tome") return 0; // Skill Books
+        if (id.starts_with("mat_enhance_stone_") || id.starts_with("mat_protect_")) return 1; // Enhancement
+        if (subL == "hp" || subL == "mp" || subL.find("potion") != std::string::npos
+            || nameL.find("potion") != std::string::npos || nameL.find("elixir") != std::string::npos) return 2; // Potions
+        if (subL == "scroll" || nameL.find("scroll:") != std::string::npos) return 3; // Scrolls
+        return 4; // Other
+    };
+
+    bool isConsumableTab = (itemTypeFilter == 4);
+    bool isEquipTab = (itemTypeFilter >= 1 && itemTypeFilter <= 3);
+
+    // Consumable sub-tabs
+    static int consumableSubFilter = -1; // -1 = All
+    if (isConsumableTab) {
+        static const char* conSubTabs[] = {"All", "Skill Books", "Enhancement", "Potions", "Scrolls", "Other"};
+        if (ImGui::BeginTabBar("##ConSubTabs")) {
+            for (int t = 0; t < 6; ++t) {
+                if (ImGui::BeginTabItem(conSubTabs[t])) {
+                    consumableSubFilter = t - 1; // -1=All, 0=SkillBooks, 1=Enhancement, etc.
+                    ImGui::EndTabItem();
+                }
+            }
+            ImGui::EndTabBar();
+        }
+    }
+
+    float leftW = 280.0f;
     if (ImGui::BeginChild("##ItemList", ImVec2(leftW, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX)) {
-        // Sub-group by class requirement when on equipment tabs
-        std::string lastClass;
+        std::string lastGroup;
+
         for (int i = 0; i < (int)itemList_.size(); ++i) {
             auto& item = itemList_[i];
             std::string name = jstr(item, "name", "???");
             std::string id = jstr(item, "item_id");
-            std::string type = jstr(item, "type");
             std::string classReq = jstr(item, "class_req", "All");
+            int levelReq = 0;
+            if (item.contains("level_req") && item["level_req"].is_number())
+                levelReq = item["level_req"].get<int>();
 
             if (!containsCI(name, itemFilterBuf_) && !containsCI(id, itemFilterBuf_)) continue;
-            if (itemTypeFilter > 0 && type != itemTypeTabs[itemTypeFilter]) continue;
+            if (!itemTabs[itemTypeFilter].matches(item)) continue;
 
-            // Group by class on equipment tabs
-            bool isEquipTab = (itemTypeFilter >= 1 && itemTypeFilter <= 3);
-            if (isEquipTab && classReq != lastClass) {
-                if (!lastClass.empty()) ImGui::Spacing();
-                ImGui::TextColored({0.6f,0.8f,1.0f,1.0f}, "Class: %s", classReq.c_str());
+            // Consumable sub-filter
+            if (isConsumableTab && consumableSubFilter >= 0) {
+                if (consumableCat(item) != consumableSubFilter) continue;
+            }
+
+            // Group headers by class for equipment tabs (skip "All" — it provides no grouping value)
+            if (isEquipTab && classReq != "All" && classReq != lastGroup) {
+                if (!lastGroup.empty()) ImGui::Spacing();
+                ImGui::TextColored({0.6f,0.8f,1.0f,1.0f}, "-- %s --", classReq.c_str());
                 ImGui::Separator();
-                lastClass = classReq;
+                lastGroup = classReq;
             }
 
             std::string rarity = jstr(item, "rarity", "Common");
@@ -546,15 +697,22 @@ void ContentBrowserPanel::drawItemsTab() {
 
             bool selected = (i == selectedItemIndex_);
             ImGui::PushStyleColor(ImGuiCol_Text, color);
-            std::string label = name + "##item" + std::to_string(i);
+            std::string label;
+            if ((isEquipTab || isConsumableTab) && levelReq > 0)
+                label = "Lv" + std::to_string(levelReq) + " " + name + "##item" + std::to_string(i);
+            else
+                label = name + "##item" + std::to_string(i);
             if (ImGui::Selectable(label.c_str(), selected)) {
                 selectedItemIndex_ = i;
                 editingItem_ = item;
             }
             ImGui::PopStyleColor();
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("[%s] %s | %s\n%s",
-                    rarity.c_str(), type.c_str(), classReq.c_str(), id.c_str());
+                std::string sub = jstr(item, "subtype");
+                ImGui::SetTooltip("[%s] %s%s | %s | Lv%d\n%s",
+                    rarity.c_str(), jstr(item, "type").c_str(),
+                    sub.empty() ? "" : (" / " + sub).c_str(),
+                    classReq.c_str(), levelReq, id.c_str());
             }
         }
     }
@@ -916,7 +1074,10 @@ void ContentBrowserPanel::drawSpawnsTab() {
 
 void ContentBrowserPanel::drawValidationTab() {
     if (ImGui::Button("Run Validation")) {
-        if (netClient_) netClient_->sendAdminValidate();
+        if (netClient_) {
+            validationPendingClear_ = true;
+            netClient_->sendAdminValidate();
+        }
     }
 
     ImGui::SameLine();

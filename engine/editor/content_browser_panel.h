@@ -54,6 +54,7 @@ private:
     // Validation
     std::vector<std::pair<uint8_t, std::string>> validationIssues_;
     bool showErrors_ = true, showWarnings_ = true, showInfo_ = true;
+    bool validationPendingClear_ = false;
 
     void drawMobsTab();
     void drawItemsTab();

@@ -648,21 +648,31 @@ void ServerApp::processAdminValidate(uint16_t clientId) {
 
     auto issues = contentValidator_.runAll();
 
-    SvValidationReportMsg report;
-    report.issues.reserve(issues.size());
-    for (const auto& issue : issues) {
-        SvValidationReportMsg::ValidationIssueNet net;
-        net.severity = issue.severity;
-        net.message  = issue.message;
-        report.issues.push_back(std::move(net));
-    }
+    // Send in chunks of 40 issues to fit within packet limits
+    constexpr size_t CHUNK_SIZE = 40;
+    size_t totalIssues = issues.size();
+    size_t offset = 0;
 
-    // Use heap-allocated buffer since the report can be large
-    std::vector<uint8_t> buf(65536);
-    ByteWriter w(buf.data(), buf.size());
-    report.write(w);
-    server_.sendTo(clientId, Channel::ReliableOrdered,
-                   PacketType::SvValidationReport, buf.data(), w.size());
+    while (offset < totalIssues || offset == 0) {
+        SvValidationReportMsg report;
+        size_t end = std::min(offset + CHUNK_SIZE, totalIssues);
+        for (size_t i = offset; i < end; ++i) {
+            SvValidationReportMsg::ValidationIssueNet net;
+            net.severity = issues[i].severity;
+            net.message  = issues[i].message;
+            report.issues.push_back(std::move(net));
+        }
+
+        uint8_t buf[4096];
+        ByteWriter w(buf, sizeof(buf));
+        report.write(w);
+        if (!w.overflowed()) {
+            server_.sendTo(clientId, Channel::ReliableOrdered,
+                           PacketType::SvValidationReport, buf, w.size());
+        }
+        offset = end;
+        if (totalIssues == 0) break; // sent one empty report
+    }
 
     LOG_INFO("Admin", "Client %d requested validation: %zu issues", clientId, issues.size());
 }
