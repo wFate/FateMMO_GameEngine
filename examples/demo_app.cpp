@@ -44,7 +44,7 @@ public:
 
         // Large fixed range — the GPU clips via the projection matrix so
         // we don't need to compute exact visible bounds.
-        constexpr int RANGE = 64; // tiles from origin in each direction
+        constexpr int RANGE = 512; // tiles from origin in each direction
         float extent = RANGE * TILE_SIZE;
 
         // World-space width for ~1 screen pixel.

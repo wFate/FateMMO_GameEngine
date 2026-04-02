@@ -527,6 +527,12 @@ if(NOT GAME_SOURCES AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/demo_app.cp
     if(APPLE)
         target_link_libraries(FateDemo PRIVATE ${METAL_LIBS})
     endif()
+    # Copy assets to build directory so shaders, UI themes, etc. are found at runtime
+    add_custom_command(TARGET FateDemo POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:FateDemo>/assets
+    )
     message(STATUS "FateDemo target configured (open-source build)")
 elseif(GAME_SOURCES)
     message(STATUS "Skipping FateDemo (full game build — use FateEngine instead)")
