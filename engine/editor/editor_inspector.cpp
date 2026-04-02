@@ -2128,6 +2128,19 @@ void Editor::drawInspector() {
                 componentId<FactionComponent>(),
                 componentId<PetComponent>(),
                 componentId<AppearanceComponent>(),
+                componentId<NPCComponent>(),
+                componentId<QuestGiverComponent>(),
+                componentId<QuestMarkerComponent>(),
+                componentId<ShopComponent>(),
+                componentId<BankerComponent>(),
+                componentId<GuildNPCComponent>(),
+                componentId<TeleporterComponent>(),
+                componentId<StoryNPCComponent>(),
+                componentId<DungeonNPCComponent>(),
+                componentId<ArenaNPCComponent>(),
+                componentId<BattlefieldNPCComponent>(),
+                componentId<MarketplaceNPCComponent>(),
+                componentId<LeaderboardNPCComponent>(),
             };
 
             selectedEntity_->forEachComponent([&](void* data, CompId id) {
