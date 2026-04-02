@@ -20,6 +20,7 @@ public:
     void writeU16(uint16_t v) { writeRaw(&v, sizeof(v)); }
     void writeU32(uint32_t v) { writeRaw(&v, sizeof(v)); }
     void writeI32(int32_t v) { writeRaw(&v, sizeof(v)); }
+    void writeI64(int64_t v) { writeRaw(&v, sizeof(v)); }
     void writeFloat(float v) { writeRaw(&v, sizeof(v)); }
 
     void writeVec2(const Vec2& v) {
@@ -73,6 +74,7 @@ public:
     uint16_t readU16() { uint16_t v = 0; readRaw(&v, sizeof(v)); return v; }
     uint32_t readU32() { uint32_t v = 0; readRaw(&v, sizeof(v)); return v; }
     int32_t readI32() { int32_t v = 0; readRaw(&v, sizeof(v)); return v; }
+    int64_t readI64() { int64_t v = 0; readRaw(&v, sizeof(v)); return v; }
     float readFloat() {
         float v = 0;
         readRaw(&v, sizeof(v));
