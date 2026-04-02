@@ -1973,6 +1973,34 @@ void Editor::drawInspector() {
             }
         }
 
+        // ArenaNPCComponent
+        if (auto* arena = selectedEntity_->getComponent<ArenaNPCComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Arena NPC");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmArenaNPC")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<ArenaNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open) {
+                ImGui::TextDisabled("Arena registration marker");
+            }
+        }
+
+        // BattlefieldNPCComponent
+        if (auto* bf = selectedEntity_->getComponent<BattlefieldNPCComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Battlefield NPC");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmBattlefieldNPC")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<BattlefieldNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open) {
+                ImGui::TextDisabled("Battlefield registration marker");
+            }
+        }
+
         // MarketplaceNPC
         if (auto* mktNpc = selectedEntity_->getComponent<MarketplaceNPCComponent>()) {
             bool open = ImGui::CollapsingHeader("Marketplace NPC");
