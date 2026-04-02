@@ -168,6 +168,39 @@ static void inspectCombatTextStyle(const char* name, fate::CombatTextStyle& s) {
 
     ImGui::TreePop();
 }
+// ============================================================================
+// NPC inspector helpers
+// ============================================================================
+
+static bool inspectIdList(const char* label, std::vector<uint32_t>& ids) {
+    bool changed = false;
+    int removeIdx = -1;
+    for (int i = 0; i < (int)ids.size(); ++i) {
+        ImGui::PushID(i);
+        char itemLabel[64];
+        std::snprintf(itemLabel, sizeof(itemLabel), "[%d]##%s", i, label);
+        uint32_t val = ids[i];
+        if (ImGui::DragScalar(itemLabel, ImGuiDataType_U32, &val, 1.0f)) {
+            ids[i] = val;
+            changed = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("X")) removeIdx = i;
+        ImGui::PopID();
+    }
+    if (removeIdx >= 0) {
+        ids.erase(ids.begin() + removeIdx);
+        changed = true;
+    }
+    char addLabel[64];
+    std::snprintf(addLabel, sizeof(addLabel), "+ Add##%s", label);
+    if (ImGui::SmallButton(addLabel)) {
+        ids.push_back(0);
+        changed = true;
+    }
+    return changed;
+}
+
 #endif // FATE_HAS_GAME
 
 // ============================================================================
