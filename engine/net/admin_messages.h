@@ -37,18 +37,18 @@ namespace AdminCacheType {
 // ============================================================================
 struct CmdAdminSaveContentMsg {
     uint8_t contentType = 0;   // AdminContentType
-    uint32_t contentId = 0;    // 0 = new (server assigns ID)
-    std::string jsonPayload;   // Full definition as JSON
+    uint8_t isNew = 1;         // 1 = INSERT, 0 = UPDATE
+    std::string jsonPayload;   // Full definition as JSON (includes string ID)
 
     void write(ByteWriter& w) const {
         w.writeU8(contentType);
-        w.writeU32(contentId);
+        w.writeU8(isNew);
         w.writeString(jsonPayload);
     }
     static CmdAdminSaveContentMsg read(ByteReader& r) {
         CmdAdminSaveContentMsg m;
         m.contentType  = r.readU8();
-        m.contentId    = r.readU32();
+        m.isNew        = r.readU8();
         m.jsonPayload  = r.readString();
         return m;
     }
@@ -59,16 +59,16 @@ struct CmdAdminSaveContentMsg {
 // ============================================================================
 struct CmdAdminDeleteContentMsg {
     uint8_t contentType = 0;
-    uint32_t contentId = 0;
+    std::string contentId;     // String PK (mob_def_id, item_id, or int as string for zone_id/drop_id)
 
     void write(ByteWriter& w) const {
         w.writeU8(contentType);
-        w.writeU32(contentId);
+        w.writeString(contentId);
     }
     static CmdAdminDeleteContentMsg read(ByteReader& r) {
         CmdAdminDeleteContentMsg m;
         m.contentType = r.readU8();
-        m.contentId   = r.readU32();
+        m.contentId   = r.readString();
         return m;
     }
 };
@@ -93,19 +93,9 @@ struct CmdAdminReloadCacheMsg {
 // Client -> Server: Validate content
 // ============================================================================
 struct CmdAdminValidateMsg {
-    uint8_t contentType = 0;
-    uint32_t contentId = 0;   // 0 = validate all of this type
-
-    void write(ByteWriter& w) const {
-        w.writeU8(contentType);
-        w.writeU32(contentId);
-    }
-    static CmdAdminValidateMsg read(ByteReader& r) {
-        CmdAdminValidateMsg m;
-        m.contentType = r.readU8();
-        m.contentId   = r.readU32();
-        return m;
-    }
+    // No payload — validates all content types
+    void write(ByteWriter&) const {}
+    static CmdAdminValidateMsg read(ByteReader&) { return {}; }
 };
 
 // ============================================================================
@@ -113,16 +103,13 @@ struct CmdAdminValidateMsg {
 // ============================================================================
 struct CmdAdminRequestContentListMsg {
     uint8_t contentType = 0;
-    uint16_t page = 0;
 
     void write(ByteWriter& w) const {
         w.writeU8(contentType);
-        w.writeU16(page);
     }
     static CmdAdminRequestContentListMsg read(ByteReader& r) {
         CmdAdminRequestContentListMsg m;
         m.contentType = r.readU8();
-        m.page        = r.readU16();
         return m;
     }
 };
@@ -131,23 +118,20 @@ struct CmdAdminRequestContentListMsg {
 // Server -> Client: Admin operation result
 // ============================================================================
 struct SvAdminResultMsg {
-    uint8_t action = 0;      // Original command type (Save/Delete/Reload)
-    uint8_t success = 0;     // 1 = success, 0 = failure
-    uint32_t contentId = 0;  // Assigned/affected content ID
-    std::string message;     // Human-readable result or error
+    uint8_t requestType = 0;  // PacketType of the command that triggered this
+    uint8_t success = 0;      // 1 = success, 0 = failure
+    std::string message;      // Human-readable result or error
 
     void write(ByteWriter& w) const {
-        w.writeU8(action);
+        w.writeU8(requestType);
         w.writeU8(success);
-        w.writeU32(contentId);
         w.writeString(message);
     }
     static SvAdminResultMsg read(ByteReader& r) {
         SvAdminResultMsg m;
-        m.action    = r.readU8();
-        m.success   = r.readU8();
-        m.contentId = r.readU32();
-        m.message   = r.readString();
+        m.requestType = r.readU8();
+        m.success     = r.readU8();
+        m.message     = r.readString();
         return m;
     }
 };
@@ -157,22 +141,16 @@ struct SvAdminResultMsg {
 // ============================================================================
 struct SvAdminContentListMsg {
     uint8_t contentType = 0;
-    uint16_t page = 0;
-    uint16_t totalPages = 0;
-    std::string entriesJson;  // JSON array of content summaries
+    std::string jsonPayload;  // JSON array of all entries
 
     void write(ByteWriter& w) const {
         w.writeU8(contentType);
-        w.writeU16(page);
-        w.writeU16(totalPages);
-        w.writeString(entriesJson);
+        w.writeString(jsonPayload);
     }
     static SvAdminContentListMsg read(ByteReader& r) {
         SvAdminContentListMsg m;
         m.contentType = r.readU8();
-        m.page        = r.readU16();
-        m.totalPages  = r.readU16();
-        m.entriesJson = r.readString();
+        m.jsonPayload = r.readString();
         return m;
     }
 };
@@ -182,17 +160,13 @@ struct SvAdminContentListMsg {
 // ============================================================================
 struct SvValidationReportMsg {
     struct ValidationIssueNet {
-        uint8_t severity = 0;    // 0=info, 1=warning, 2=error
+        uint8_t severity = 0;    // 0=Error, 1=Warning, 2=Info
         std::string message;
     };
 
-    uint8_t contentType = 0;
-    uint32_t contentId = 0;
     std::vector<ValidationIssueNet> issues;
 
     void write(ByteWriter& w) const {
-        w.writeU8(contentType);
-        w.writeU32(contentId);
         uint16_t count = static_cast<uint16_t>(issues.size());
         w.writeU16(count);
         for (const auto& issue : issues) {
@@ -202,8 +176,6 @@ struct SvValidationReportMsg {
     }
     static SvValidationReportMsg read(ByteReader& r) {
         SvValidationReportMsg m;
-        m.contentType = r.readU8();
-        m.contentId   = r.readU32();
         uint16_t count = r.readU16();
         m.issues.reserve(count);
         for (uint16_t i = 0; i < count; ++i) {
