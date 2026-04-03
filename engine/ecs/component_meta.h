@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <nlohmann/json_fwd.hpp>
+#include <nlohmann/json.hpp>
 
 #include "engine/ecs/component_registry.h"
 #include "engine/ecs/component_traits.h"

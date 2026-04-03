@@ -827,7 +827,7 @@ void App::render() {
             editor.renderScene(&spriteBatch_, &camera_);
 
             // UI system: render loaded screens in screen-space on top of game world
-            {
+            if (editor.showGameUI()) {
                 gfx::CommandList uiCmdList;
                 uiCmdList.begin();
                 spriteBatch_.setCommandList(&uiCmdList);

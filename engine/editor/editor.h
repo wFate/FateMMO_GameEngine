@@ -145,6 +145,7 @@ public:
     // Toolbar toggle accessors
     bool showCollisionDebug() const { return showCollisionDebug_; }
     bool showGrid() const { return showGrid_; }
+    bool showGameUI() const { return showGameUI_; }
 
     // FBO management
     Framebuffer& viewportFbo() { return viewportFbo_; }
@@ -296,6 +297,7 @@ private:
     // Toolbar toggles
     bool showGrid_ = true;
     bool showCollisionDebug_ = false;
+    bool showGameUI_ = true;
 
     // Device profile index (default: iPhone 17 Pro)
     int displayPresetIdx_ = kDefaultDeviceIdx;

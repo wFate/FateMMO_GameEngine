@@ -752,6 +752,7 @@ void Editor::drawSceneViewport() {
             toggleBtn("Grid", &showGrid_);
             toggleBtn("Snap", &gridSnap_);
             toggleBtn("Colliders", &showCollisionDebug_);
+            toggleBtn("Game UI", &showGameUI_);
 
             // Ground tile lock toggle (inverted: button shows locked state)
             {

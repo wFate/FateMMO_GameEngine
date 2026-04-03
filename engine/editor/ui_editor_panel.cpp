@@ -993,6 +993,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Circle Radius Mul", &skp->circleRadiusMul, 0.01f, 0.05f, 0.5f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Dot Size", &skp->dotSize, 0.1f, 1.0f, 20.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Dot Spacing", &skp->dotSpacing, 0.1f, 2.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Dot Offset", &skp->dotOffset.x, 0.5f, -50.0f, 50.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Header Height", &skp->headerHeight, 0.5f, 10.0f, 80.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Border Width", &skp->borderWidth, 0.25f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Content Padding", &skp->contentPadding, 0.25f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
@@ -2718,6 +2719,28 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Yes Btn##ccc", &mp->cancelConfirmYesBtnColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("No Btn##ccc", &mp->cancelConfirmNoBtnColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Btn Text##ccc", &mp->cancelConfirmBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Tooltip Layout##mkt", 0)) {
+            ImGui::DragFloat("Width##mkttt", &mp->tooltipWidth, 1.0f, 50.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##mkttt", &mp->tooltipPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Offset##mkttt", &mp->tooltipOffset, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Offset##mkttt", &mp->tooltipShadowOffset, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Line Spacing##mkttt", &mp->tooltipLineSpacing, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##mkttt", &mp->tooltipBorderWidth, 0.25f, 0.0f, 5.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Sep Height##mkttt", &mp->tooltipSepHeight, 0.25f, 0.0f, 5.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Name Font##mkttt", &mp->tooltipNameFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Stat Font##mkttt", &mp->tooltipStatFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Level Font##mkttt", &mp->tooltipLevelFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Tooltip Colors##mkt", 0)) {
+            ImGui::ColorEdit4("Background##mktttc", &mp->tooltipBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##mktttc", &mp->tooltipBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##mktttc", &mp->tooltipShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Stat Text##mktttc", &mp->tooltipStatColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Separator##mktttc", &mp->tooltipSepColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Level Req##mktttc", &mp->tooltipLevelColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         ImGui::Separator();

@@ -7,7 +7,12 @@
 
 namespace fate {
 
+// Snap to 8-pixel boundary to avoid per-pixel FBO recreation during window resize
+static int snapFBO(int v) { return (v + 7) & ~7; }
+
 bool Framebuffer::create(int width, int height, bool withDepthStencil) {
+    width = snapFBO(width);
+    height = snapFBO(height);
     if (width <= 0 || height <= 0) return false;
 
     width_ = width;
@@ -56,6 +61,8 @@ void Framebuffer::destroy() {
 }
 
 void Framebuffer::resize(int w, int h) {
+    w = snapFBO(w);
+    h = snapFBO(h);
     if (w == width_ && h == height_) return;
     bool ds = hasDepthStencil_;
     destroy();

@@ -1804,6 +1804,9 @@ struct SvMarketListingsMsg {
         std::string sellerName;
         int64_t priceGold = 0;
         std::string category;
+        std::string itemType;
+        uint8_t levelReq = 0;
+        std::vector<std::string> statLines;
     };
     std::vector<ListingEntry> listings;
 
@@ -1823,6 +1826,10 @@ struct SvMarketListingsMsg {
             w.writeString(l.sellerName);
             detail::writeI64(w, l.priceGold);
             w.writeString(l.category);
+            w.writeString(l.itemType);
+            w.writeU8(l.levelReq);
+            w.writeU8(static_cast<uint8_t>(l.statLines.size()));
+            for (const auto& s : l.statLines) w.writeString(s);
         }
     }
     static SvMarketListingsMsg read(ByteReader& r) {
@@ -1844,6 +1851,11 @@ struct SvMarketListingsMsg {
             l.sellerName   = r.readString();
             l.priceGold    = detail::readI64(r);
             l.category     = r.readString();
+            l.itemType     = r.readString();
+            l.levelReq     = r.readU8();
+            uint8_t statCount = r.readU8();
+            l.statLines.reserve(statCount);
+            for (uint8_t s = 0; s < statCount; ++s) l.statLines.push_back(r.readString());
             msg.listings.push_back(std::move(l));
         }
         return msg;

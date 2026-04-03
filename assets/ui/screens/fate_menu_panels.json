@@ -13,7 +13,7 @@
     },
     "children": [
       {
-        "activeTab": 1,
+        "activeTab": 2,
         "activeTabBg": [
           0.7839999794960022,
           0.6589999794960022,
@@ -283,6 +283,7 @@
         ],
         "dollInsetBorderW": 12.0,
         "dollWidthRatio": 0.44999998807907104,
+        "equipAreaVisible": true,
         "equipLabelColor": [
           0.3333333432674408,
           0.250980406999588,
@@ -356,9 +357,12 @@
           0.30000001192092896,
           1.0
         ],
+        "gridAreaVisible": true,
         "gridColumns": 4,
         "gridPadding": 17.0,
         "gridRows": 4,
+        "iconAtlasCols": 8,
+        "iconAtlasRows": 4,
         "id": "inventory_panel",
         "itemFontSize": 30.0,
         "itemTextColor": [
@@ -379,6 +383,7 @@
           0.0,
           1.0
         ],
+        "panelBorderWidth": 2.0,
         "platLabelColor": [
           0.550000011920929,
           0.7200000286102295,
@@ -496,7 +501,8 @@
         ],
         "tooltipStatFontSize": 14.0,
         "tooltipWidth": 200.0,
-        "type": "inventory_panel"
+        "type": "inventory_panel",
+        "visible": false
       },
       {
         "activeSetPage": 0,
@@ -517,7 +523,38 @@
             0.0
           ]
         },
-        "circleRadiusMul": 0.2800000011920929,
+        "borderWidth": 6.0,
+        "circleRadiusMul": 0.20000000298023224,
+        "closeBtnBgColor": [
+          0.550000011920929,
+          0.41999998688697815,
+          0.2800000011920929,
+          1.0
+        ],
+        "closeBtnBorderColor": [
+          0.30000001192092896,
+          0.20000000298023224,
+          0.10000000149011612,
+          1.0
+        ],
+        "closeBtnBorderW": 1.5,
+        "closeBtnFontSize": 12.0,
+        "closeBtnOffset": 6.0,
+        "closeBtnRadius": 12.0,
+        "closeBtnTextColor": [
+          1.0,
+          0.949999988079071,
+          0.8799999952316284,
+          1.0
+        ],
+        "contentPadding": 33.0,
+        "dividerColor": [
+          0.4000000059604645,
+          0.30000001192092896,
+          0.20000000298023224,
+          0.5
+        ],
+        "dividerWidth": 1.5,
         "dotActivated": [
           0.8999999761581421,
           0.5199999809265137,
@@ -530,15 +567,16 @@
           0.4000000059604645,
           0.699999988079071
         ],
-        "dotSize": 4.0,
-        "dotSpacing": 6.0,
+        "dotSize": 20.0,
+        "dotSpacing": 30.0,
         "dotUnlocked": [
           0.8500000238418579,
           0.75,
           0.25,
           0.8500000238418579
         ],
-        "gridColumns": 4,
+        "gridColumns": 5,
+        "gridMargin": 200.0,
         "headerColor": [
           0.2800000011920929,
           0.18000000715255737,
@@ -546,6 +584,7 @@
           1.0
         ],
         "headerFontSize": 13.0,
+        "headerHeight": 40.0,
         "id": "skill_panel",
         "nameFontSize": 9.0,
         "nameLocked": [
@@ -577,6 +616,20 @@
           0.8500000238418579
         ],
         "pointsFontSize": 10.0,
+        "ptsBadgeRadius": 12.0,
+        "ptsBadgeRingColor": [
+          0.30000001192092896,
+          0.2199999988079071,
+          0.10000000149011612,
+          1.0
+        ],
+        "ptsFontSize": 8.0,
+        "ptsTextColor": [
+          1.0,
+          1.0,
+          0.8999999761581421,
+          1.0
+        ],
         "ringNormal": [
           0.41999998688697815,
           0.3199999928474426,
@@ -589,6 +642,8 @@
           0.20000000298023224,
           1.0
         ],
+        "ringWidthNormal": 1.5,
+        "ringWidthSelected": 2.5,
         "skillBgLocked": [
           0.47999998927116394,
           0.4300000071525574,
@@ -605,11 +660,50 @@
           0.0,
           0.0
         ],
-        "splitRatio": 0.41999998688697815,
+        "slotNameFontSize": 7.0,
+        "splitRatio": 0.20000000298023224,
+        "tabBgActive": [
+          0.30000001192092896,
+          0.5199999809265137,
+          0.8500000238418579,
+          1.0
+        ],
+        "tabBgInactive": [
+          0.6000000238418579,
+          0.5400000214576721,
+          0.41999998688697815,
+          0.8500000238418579
+        ],
         "tabFontSize": 11.0,
         "tabOffset": [
           0.0,
           0.0
+        ],
+        "tabRadius": 14.0,
+        "tabRingActive": [
+          0.550000011920929,
+          0.7799999713897705,
+          1.0,
+          1.0
+        ],
+        "tabRingInactive": [
+          0.4000000059604645,
+          0.3199999928474426,
+          0.2199999988079071,
+          0.8500000238418579
+        ],
+        "tabSpacingMul": 2.5,
+        "tabTextActive": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "tabTextInactive": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.7200000286102295,
+          1.0
         ],
         "titleColor": [
           0.4000000059604645,
@@ -623,7 +717,9 @@
           0.0
         ],
         "type": "skill_panel",
-        "visible": false
+        "wheelEndDeg": 330.0,
+        "wheelSlotSizeMul": 0.4000000059604645,
+        "wheelStartDeg": 210.0
       },
       {
         "anchor": {
@@ -796,6 +892,17 @@
         "borderWidth": 2.0,
         "buttonCornerRadius": 4.0,
         "buttonFontSize": 13.0,
+        "checkOnColor": [
+          0.800000011920929,
+          0.699999988079071,
+          0.30000001192092896,
+          1.0
+        ],
+        "checkboxSize": 14.0,
+        "displayOffset": [
+          0.0,
+          0.0
+        ],
         "dividerColor": [
           0.699999988079071,
           0.6000000238418579,
@@ -853,6 +960,20 @@
         "titleOffset": [
           0.0,
           0.0
+        ],
+        "toggleBtnHeight": 22.0,
+        "toggleBtnWidth": 50.0,
+        "toggleOffColor": [
+          0.44999998807907104,
+          0.3499999940395355,
+          0.25,
+          0.699999988079071
+        ],
+        "toggleOnColor": [
+          0.30000001192092896,
+          0.550000011920929,
+          0.30000001192092896,
+          0.8999999761581421
         ],
         "type": "settings_panel",
         "visible": false
