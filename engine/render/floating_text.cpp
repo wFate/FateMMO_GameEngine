@@ -118,6 +118,20 @@ void FloatingTextManager::spawnCustom(Vec2 worldPos, const std::string& text, Fl
     addEntry(std::move(e));
 }
 
+void FloatingTextManager::spawnEmoticon(Vec2 worldPos, uint8_t emoticonId) {
+    static constexpr const char* labels[] = {
+        ":)", ":D", "<3", ":(", ";)", ":P", ":O", "XD",
+        ">:(", "T_T", "^_^", "o_o", ":3", "B)", ":/", "!!"
+    };
+    FloatingTextEntry e;
+    e.text = (emoticonId < 16) ? labels[emoticonId] : "?";
+    e.type = FloatingTextType::Emoticon;
+    e.worldPos = worldPos;
+    e.lifetime = 3.0f;
+    e.velocityY = -20.0f;
+    addEntry(std::move(e));
+}
+
 // ---------------------------------------------------------------------------
 // Update
 // ---------------------------------------------------------------------------
@@ -180,6 +194,7 @@ Color FloatingTextManager::colorForType(FloatingTextType type) {
         case FloatingTextType::XPGain:     return Color(0.7f, 0.5f, 1.0f);
         case FloatingTextType::GoldGain:   return Color(1.0f, 0.85f, 0.3f);
         case FloatingTextType::LevelUp:    return Color(1.0f, 0.9f, 0.4f);
+        case FloatingTextType::Emoticon:  return {1.0f, 0.95f, 0.7f, 1.0f};
         default:                           return Color::white();
     }
 }
@@ -196,6 +211,7 @@ float FloatingTextManager::fontSizeForType(FloatingTextType type) {
         case FloatingTextType::XPGain:     return 10.0f;
         case FloatingTextType::GoldGain:   return 10.0f;
         case FloatingTextType::LevelUp:    return 18.0f;
+        case FloatingTextType::Emoticon:  return 16.0f;
         default:                           return 11.0f;
     }
 }

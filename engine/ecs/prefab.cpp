@@ -16,9 +16,50 @@ namespace fs = std::filesystem;
 
 namespace fate {
 
+// Write JSON string to path atomically: write to .tmp, then rename over target.
+static bool atomicWriteJson(const std::string& path, const std::string& jsonStr) {
+    fs::path target(path);
+    fs::path parentDir = target.parent_path();
+    if (!parentDir.empty() && !fs::exists(parentDir))
+        fs::create_directories(parentDir);
+
+    fs::path tmp = target;
+    tmp += ".tmp";
+    {
+        std::ofstream file(tmp);
+        if (!file.is_open()) return false;
+        file << jsonStr;
+        if (!file.good()) {
+            std::error_code ec;
+            fs::remove(tmp, ec);
+            return false;
+        }
+    }
+
+    std::error_code ec;
+    fs::rename(tmp, target, ec);
+    if (ec) {
+        // rename can fail cross-device on some OS; fall back to copy+remove
+        fs::copy_file(tmp, target, fs::copy_options::overwrite_existing, ec);
+        fs::remove(tmp);
+        if (ec) return false;
+    }
+    return true;
+}
+
+// Reject names that could escape the prefab directory.
+static bool isValidPrefabName(const std::string& name) {
+    if (name.empty()) return false;
+    if (name.find("..") != std::string::npos) return false;
+    if (name.front() == '/' || name.front() == '\\') return false;
+    if (name.find(':') != std::string::npos) return false;
+    return true;
+}
+
 void PrefabLibrary::loadAll() {
     prefabs_.clear();
     variants_.clear();
+    composedVariantCache_.clear();
 
     if (!fs::exists(directory_)) {
         fs::create_directories(directory_);
@@ -61,32 +102,27 @@ void PrefabLibrary::loadAll() {
 
 bool PrefabLibrary::save(const std::string& name, Entity* entity) {
     if (!entity) return false;
+    if (!isValidPrefabName(name)) {
+        LOG_ERROR("Prefab", "Invalid prefab name: '%s'", name.c_str());
+        return false;
+    }
 
     nlohmann::json data = entityToJson(entity);
     data["prefabName"] = name;
 
     std::string jsonStr = data.dump(2);
 
-    // Write to runtime directory (where exe runs)
-    if (!fs::exists(directory_)) fs::create_directories(directory_);
+    // Atomic write to runtime directory
     std::string path = directory_ + "/" + name + ".json";
-    {
-        std::ofstream file(path);
-        if (!file.is_open()) {
-            LOG_ERROR("Prefab", "Cannot write to %s", path.c_str());
-            return false;
-        }
-        file << jsonStr;
+    if (!atomicWriteJson(path, jsonStr)) {
+        LOG_ERROR("Prefab", "Cannot write to %s", path.c_str());
+        return false;
     }
 
-    // Also write to source directory (persists across rebuilds)
+    // Atomic write to source directory (persists across rebuilds)
     if (!sourceDirectory_.empty() && sourceDirectory_ != directory_) {
-        if (!fs::exists(sourceDirectory_)) fs::create_directories(sourceDirectory_);
         std::string srcPath = sourceDirectory_ + "/" + name + ".json";
-        std::ofstream srcFile(srcPath);
-        if (srcFile.is_open()) {
-            srcFile << jsonStr;
-        }
+        atomicWriteJson(srcPath, jsonStr);
     }
 
     // Cache it
@@ -155,13 +191,30 @@ std::vector<std::string> PrefabLibrary::names() const {
 
 const nlohmann::json* PrefabLibrary::getJson(const std::string& name) const {
     auto it = prefabs_.find(name);
-    return (it != prefabs_.end()) ? &it->second : nullptr;
+    if (it != prefabs_.end()) return &it->second;
+
+    // For variants, compose on first request and cache the result
+    auto vit = variants_.find(name);
+    if (vit != variants_.end()) {
+        auto pit = prefabs_.find(vit->second.parentName);
+        if (pit != prefabs_.end()) {
+            nlohmann::json composed = applyPrefabPatches(pit->second, vit->second.patches);
+            auto& self = const_cast<PrefabLibrary&>(*this);
+            auto [inserted, _] = self.composedVariantCache_.emplace(name, std::move(composed));
+            return &inserted->second;
+        }
+    }
+    return nullptr;
 }
 
 bool PrefabLibrary::saveVariant(const std::string& variantName,
                                  const std::string& parentName,
                                  Entity* entity) {
     if (!entity) return false;
+    if (!isValidPrefabName(variantName)) {
+        LOG_ERROR("Prefab", "Invalid variant name: '%s'", variantName.c_str());
+        return false;
+    }
 
     auto pit = prefabs_.find(parentName);
     if (pit == prefabs_.end()) {
@@ -179,26 +232,17 @@ bool PrefabLibrary::saveVariant(const std::string& variantName,
 
     std::string jsonStr = variantFile.dump(2);
 
-    // Write to runtime directory
-    if (!fs::exists(directory_)) fs::create_directories(directory_);
+    // Atomic write to runtime directory
     std::string path = directory_ + "/" + variantName + ".json";
-    {
-        std::ofstream file(path);
-        if (!file.is_open()) {
-            LOG_ERROR("Prefab", "Cannot write variant to %s", path.c_str());
-            return false;
-        }
-        file << jsonStr;
+    if (!atomicWriteJson(path, jsonStr)) {
+        LOG_ERROR("Prefab", "Cannot write variant to %s", path.c_str());
+        return false;
     }
 
-    // Also write to source directory (persists across rebuilds)
+    // Atomic write to source directory (persists across rebuilds)
     if (!sourceDirectory_.empty() && sourceDirectory_ != directory_) {
-        if (!fs::exists(sourceDirectory_)) fs::create_directories(sourceDirectory_);
         std::string srcPath = sourceDirectory_ + "/" + variantName + ".json";
-        std::ofstream srcFile(srcPath);
-        if (srcFile.is_open()) {
-            srcFile << jsonStr;
-        }
+        atomicWriteJson(srcPath, jsonStr);
     }
 
     // Cache it

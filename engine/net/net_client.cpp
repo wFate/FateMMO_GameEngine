@@ -373,6 +373,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onChatMessage) onChatMessage(msg);
             break;
         }
+        case PacketType::SvEmoticon: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvEmoticonMsg::read(payload);
+            if (onEmoticon) onEmoticon(msg);
+            break;
+        }
         case PacketType::SvPlayerState: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvPlayerStateMsg::read(payload);
@@ -878,6 +884,17 @@ void NetClient::sendChat(uint8_t channel, const std::string& message, const std:
     chat.write(w);
 
     sendPacket(Channel::ReliableOrdered, PacketType::CmdChat, w.data(), w.size());
+}
+
+void NetClient::sendEmoticon(uint8_t emoticonId) {
+    CmdEmoticon cmd;
+    cmd.emoticonId = emoticonId;
+
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    cmd.write(w);
+
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdEmoticon, w.data(), w.size());
 }
 
 void NetClient::sendZoneTransition(const std::string& targetScene) {

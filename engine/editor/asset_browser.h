@@ -15,9 +15,9 @@ class Camera;
 
 class AssetBrowser {
 public:
-    void init(const std::string& assetRoot, const std::string& sourceDir);
+    void init(const std::string& projectRoot, const std::string& assetRoot, const std::string& sourceDir);
     void shutdown() { thumbCache_.clear(); }
-    void scan();  // Recursively scan asset directory
+    void scan();  // Recursively scan current directory
     void draw(World* world, Camera* camera);  // Main ImGui rendering
 
     // Drag-and-drop state (read by Editor for scene placement)
@@ -25,8 +25,9 @@ public:
     const std::string& draggedAssetPath() const { return draggedAssetPath_; }
     void clearDrag() { isDraggingAsset_ = false; draggedAssetPath_.clear(); }
 
-    // Callback for opening animation files
+    // Callbacks
     std::function<void(const std::string&)> onOpenAnimation;
+    std::function<void(const std::string&)> onDeleteFile;  // request file deletion (editor shows confirm)
 
     void setFonts(ImFont* heading, ImFont* small) { fontHeading_ = heading; fontSmall_ = small; }
 
@@ -37,14 +38,15 @@ private:
     struct Entry {
         std::string name;
         std::string fullPath;
-        std::string relativePath;  // relative to assetRoot_
+        std::string relativePath;  // relative to projectRoot_
         std::string extension;
         AssetType type = AssetType::Other;
         std::shared_ptr<Texture> thumbnail;  // lazy-loaded
         bool isDirectory = false;
     };
 
-    std::string assetRoot_;
+    std::string projectRoot_;  // project root (shows engine/, game/, assets/)
+    std::string assetRoot_;    // asset directory name (for drag-drop path detection)
     std::string sourceDir_;
 
     // Current view state

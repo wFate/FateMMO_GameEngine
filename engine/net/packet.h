@@ -115,6 +115,7 @@ namespace PacketType {
     constexpr uint8_t CmdAdminReloadCache        = 0x3F;
     constexpr uint8_t CmdAdminValidate           = 0x40;
     constexpr uint8_t CmdAdminRequestContentList = 0x41;
+    constexpr uint8_t CmdEmoticon                = 0x42;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
@@ -151,6 +152,7 @@ namespace PacketType {
     constexpr uint8_t SvValidationReport  = 0xC5;
     constexpr uint8_t SvGuildRoster       = 0xC6;
     constexpr uint8_t SvMarketListings    = 0xC7;
+    constexpr uint8_t SvEmoticon                 = 0xC8;
 } // namespace PacketType
 
 // ============================================================================

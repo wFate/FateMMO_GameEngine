@@ -66,6 +66,7 @@ private:
     std::string sourceDirectory_; // project source path for persistent saves
     std::unordered_map<std::string, nlohmann::json> prefabs_;
     std::unordered_map<std::string, PrefabVariant> variants_;
+    mutable std::unordered_map<std::string, nlohmann::json> composedVariantCache_;
 };
 
 } // namespace fate

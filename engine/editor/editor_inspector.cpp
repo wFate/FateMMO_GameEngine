@@ -1013,16 +1013,6 @@ void Editor::drawInspector() {
                     ImGui::DragFloat2("##pSpawn", &p->targetSpawnPos.x, 1.0f);
                     captureInspectorUndo();
 
-                    INSPECTOR_ROW("Fade");
-                    ImGui::Checkbox("##pFade", &p->useFadeTransition);
-                    captureInspectorUndo();
-
-                    if (p->useFadeTransition) {
-                        INSPECTOR_ROW("Duration");
-                        ImGui::DragFloat("##pFadeDur", &p->fadeDuration, 0.05f, 0.1f, 2.0f);
-                        captureInspectorUndo();
-                    }
-
                     INSPECTOR_ROW("Label");
                     ImGui::Checkbox("##pShowLbl", &p->showLabel);
                     captureInspectorUndo();

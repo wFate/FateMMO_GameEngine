@@ -54,10 +54,20 @@ static void asyncSceneLoadJob(void* param) {
         for (auto& entityJson : root["entities"]) {
             pending->prefabs.push_back(std::move(entityJson));
             auto& last = pending->prefabs.back();
-            if (last.contains("SpriteComponent")) {
-                auto& sc = last["SpriteComponent"];
-                if (sc.contains("texturePath") && sc["texturePath"].is_string()) {
-                    std::string path = sc["texturePath"].get<std::string>();
+            if (last.contains("components")) {
+                auto& comps = last["components"];
+                // Check canonical name and backward-compat alias
+                const char* spriteKey = nullptr;
+                if (comps.contains("SpriteComponent")) spriteKey = "SpriteComponent";
+                else if (comps.contains("Sprite"))     spriteKey = "Sprite";
+                if (spriteKey) {
+                    auto& sc = comps[spriteKey];
+                    // Support both current ("texturePath") and legacy ("texture") key
+                    std::string path;
+                    if (sc.contains("texturePath") && sc["texturePath"].is_string())
+                        path = sc["texturePath"].get<std::string>();
+                    else if (sc.contains("texture") && sc["texture"].is_string())
+                        path = sc["texture"].get<std::string>();
                     if (!path.empty()) uniqueTextures.insert(path);
                 }
             }

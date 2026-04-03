@@ -236,12 +236,16 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     SDL_SetWindowTitle(window, "FateMMO Engine | Editor");
 
     scanAssets();
-    assetBrowser_.init(assetRoot_, sourceDir_);
+    assetBrowser_.init(".", assetRoot_, sourceDir_);
     assetBrowser_.onOpenAnimation = [this](const std::string& path) {
         if (path.find(".png") != std::string::npos || path.find(".jpg") != std::string::npos)
             animationEditor_.openWithSheet(path);
         else
             animationEditor_.openFile(path);
+    };
+    assetBrowser_.onDeleteFile = [this](const std::string& path) {
+        pendingDeleteFile_ = true;
+        pendingDeletePath_ = path;
     };
 
     dialogueEditor_.init();

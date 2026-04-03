@@ -23,6 +23,7 @@ public:
     void sendMove(const Vec2& position, const Vec2& velocity, float timestamp);
     void sendAction(uint8_t actionType, uint64_t targetId, uint16_t skillId);
     void sendChat(uint8_t channel, const std::string& message, const std::string& target);
+    void sendEmoticon(uint8_t emoticonId);
     void sendZoneTransition(const std::string& targetScene);
     void sendRespawn(uint8_t respawnType);
     void sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId);
@@ -106,6 +107,7 @@ public:
     std::function<void(const SvEntityUpdateMsg&)> onEntityUpdate;
     std::function<void(const SvCombatEventMsg&)> onCombatEvent;
     std::function<void(const SvChatMessageMsg&)> onChatMessage;
+    std::function<void(const SvEmoticonMsg&)> onEmoticon;
     std::function<void(const SvPlayerStateMsg&)> onPlayerState;
     std::function<void(const SvMovementCorrectionMsg&)> onMovementCorrection;
     std::function<void(const SvLootPickupMsg&)> onLootPickup;

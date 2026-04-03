@@ -8,10 +8,15 @@
 #include <algorithm>
 #include <cstring>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 namespace fs = std::filesystem;
 
 // ============================================================================
-// File-local helpers for type colors/icons (need ImVec4 from imgui.h)
+// File-local helpers
 // ============================================================================
 namespace {
 
@@ -103,6 +108,31 @@ static void drawAssetCard(ImDrawList* dl, ImVec2 pos, float w, float h,
     }
 }
 
+#ifdef _WIN32
+static std::wstring utf8ToWide(const std::string& str) {
+    if (str.empty()) return {};
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
+    std::wstring wstr(wlen - 1, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, wstr.data(), wlen);
+    return wstr;
+}
+
+static void shellOpenInVSCode(const std::string& fullPath) {
+    std::wstring wpath = utf8ToWide(fullPath);
+    ShellExecuteW(nullptr, L"open", L"code", wpath.c_str(), nullptr, SW_SHOWNORMAL);
+}
+
+static void shellOpenInVisualStudio(const std::string& fullPath) {
+    std::wstring warg = L"/edit \"" + utf8ToWide(fullPath) + L"\"";
+    ShellExecuteW(nullptr, L"open", L"devenv.exe", warg.c_str(), nullptr, SW_SHOWNORMAL);
+}
+
+static void shellShowInExplorer(const std::string& fullPath) {
+    std::wstring warg = L"/select,\"" + utf8ToWide(fullPath) + L"\"";
+    ShellExecuteW(nullptr, L"open", L"explorer.exe", warg.c_str(), nullptr, SW_SHOWNORMAL);
+}
+#endif
+
 } // anonymous namespace
 
 namespace fate {
@@ -111,7 +141,9 @@ namespace fate {
 // Init / Scan
 // ============================================================================
 
-void AssetBrowser::init(const std::string& assetRoot, const std::string& sourceDir) {
+void AssetBrowser::init(const std::string& projectRoot, const std::string& assetRoot,
+                        const std::string& sourceDir) {
+    projectRoot_ = projectRoot;
     assetRoot_ = assetRoot;
     sourceDir_ = sourceDir;
     currentDir_.clear();  // root
@@ -125,8 +157,8 @@ void AssetBrowser::scan() {
 void AssetBrowser::scanDirectory(const std::string& relDir) {
     currentEntries_.clear();
 
-    // Build absolute path: assetRoot / relDir
-    fs::path absDir = fs::path(assetRoot_);
+    // Build absolute path: projectRoot / relDir
+    fs::path absDir = fs::path(projectRoot_);
     if (!relDir.empty()) {
         absDir /= relDir;
     }
@@ -137,13 +169,29 @@ void AssetBrowser::scanDirectory(const std::string& relDir) {
     }
 
     for (auto& dirEntry : fs::directory_iterator(absDir)) {
+        std::string name = dirEntry.path().filename().string();
+
+        // Skip hidden directories/files and build artifacts at project root
+        if (name.empty() || name[0] == '.') continue;
+        if (relDir.empty()) {
+            // At project root, only show relevant directories
+            if (dirEntry.is_directory()) {
+                if (name == "out" || name == "build" || name == "cmake-build-debug" ||
+                    name == "cmake-build-release" || name == ".vs" || name == "vcpkg_installed" ||
+                    name == "node_modules") continue;
+            } else {
+                // Skip loose files at root (CMakeLists.txt, .gitignore, etc.)
+                continue;
+            }
+        }
+
         Entry e;
-        e.name = dirEntry.path().filename().string();
+        e.name = name;
         e.fullPath = dirEntry.path().string();
         std::replace(e.fullPath.begin(), e.fullPath.end(), '\\', '/');
 
-        // Compute relative path from assetRoot
-        auto relPath = fs::relative(dirEntry.path(), fs::path(assetRoot_));
+        // Compute relative path from projectRoot
+        auto relPath = fs::relative(dirEntry.path(), fs::path(projectRoot_));
         e.relativePath = relPath.string();
         std::replace(e.relativePath.begin(), e.relativePath.end(), '\\', '/');
 
@@ -263,7 +311,7 @@ void AssetBrowser::drawBreadcrumb() {
     if (fontSmall_) ImGui::PushFont(fontSmall_);
 
     // Root button
-    if (ImGui::SmallButton("assets")) {
+    if (ImGui::SmallButton("Project")) {
         navigateTo("");
     }
 
@@ -359,8 +407,11 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
         if (ImGui::InvisibleButton(btnId, ImVec2(thumbF, thumbF))) {
             selectedPath_ = entry.fullPath;
             if (!entry.isDirectory) {
-                isDraggingAsset_ = true;
-                draggedAssetPath_ = entry.relativePath;
+                // Only enable drag placement for sprites and prefabs under assets/
+                if (entry.type == AssetType::Sprite || entry.type == AssetType::Prefab) {
+                    isDraggingAsset_ = true;
+                    draggedAssetPath_ = entry.relativePath;
+                }
                 LOG_INFO("AssetBrowser", "Click: name='%s' relPath='%s' type=%d dir='%s'",
                     entry.name.c_str(), entry.relativePath.c_str(), (int)entry.type, currentDir_.c_str());
             }
@@ -377,6 +428,11 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
                 return;
             } else if (entry.type == AssetType::Animation) {
                 if (onOpenAnimation) onOpenAnimation(entry.fullPath);
+            } else if (entry.type == AssetType::Script || entry.type == AssetType::Shader) {
+                // Double-click code files to open in Visual Studio
+#ifdef _WIN32
+                shellOpenInVisualStudio(entry.fullPath);
+#endif
             }
         }
 
@@ -450,24 +506,33 @@ void AssetBrowser::drawGrid(World* world, Camera* camera) {
             }
 #ifdef _WIN32
             if ((entry.type == AssetType::Script || entry.type == AssetType::Shader) && !entry.isDirectory) {
+                if (ImGui::MenuItem("Open in Visual Studio")) {
+                    shellOpenInVisualStudio(entry.fullPath);
+                }
                 if (ImGui::MenuItem("Open in VS Code")) {
-                    std::string cmd = "start \"\" code \"" + entry.fullPath + "\"";
-                    system(cmd.c_str());
+                    shellOpenInVSCode(entry.fullPath);
                 }
             }
-            if (ImGui::MenuItem("Show in Explorer")) {
-                std::string dir = entry.fullPath;
-                if (!entry.isDirectory) {
-                    size_t lastSlash = dir.find_last_of("/\\");
-                    if (lastSlash != std::string::npos) dir = dir.substr(0, lastSlash);
+            if (!entry.isDirectory) {
+                if (ImGui::MenuItem("Show in Explorer")) {
+                    shellShowInExplorer(entry.fullPath);
                 }
-                for (auto& c : dir) if (c == '/') c = '\\';
-                std::string cmd = "start \"\" explorer \"" + dir + "\"";
-                system(cmd.c_str());
+            } else {
+                if (ImGui::MenuItem("Open in Explorer")) {
+                    std::wstring wpath = utf8ToWide(entry.fullPath);
+                    ShellExecuteW(nullptr, L"open", L"explorer.exe", wpath.c_str(), nullptr, SW_SHOWNORMAL);
+                }
             }
 #endif
             if (ImGui::MenuItem("Copy Path")) {
                 ImGui::SetClipboardText(entry.fullPath.c_str());
+            }
+
+            if (!entry.isDirectory) {
+                ImGui::Separator();
+                if (ImGui::MenuItem("Delete File")) {
+                    if (onDeleteFile) onDeleteFile(entry.fullPath);
+                }
             }
 
             ImGui::EndPopup();

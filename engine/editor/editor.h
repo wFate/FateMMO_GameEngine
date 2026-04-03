@@ -232,7 +232,7 @@ public:
 #endif
     ContentBrowserPanel& contentBrowserPanel() { return contentBrowserPanel_; }
 
-    void setAssetRoot(const std::string& root) { assetRoot_ = root; assetBrowser_.init(root, sourceDir_); }
+    void setAssetRoot(const std::string& root) { assetRoot_ = root; assetBrowser_.init(".", root, sourceDir_); }
     void setSourceDir(const std::string& dir) {
         sourceDir_ = dir;
 #ifdef FATE_HAS_GAME

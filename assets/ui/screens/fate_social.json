@@ -199,6 +199,26 @@
       {
         "anchor": {
           "offset": [
+            0.0,
+            -60.0
+          ],
+          "preset": "BottomCenter",
+          "size": [
+            1600.0,
+            60.0
+          ]
+        },
+        "id": "emoticon_panel",
+        "type": "emoticon_panel",
+        "visible": false,
+        "slotCount": 16,
+        "slotSize": 48.0,
+        "slotPadding": 8.0,
+        "stripHeight": 60.0
+      },
+      {
+        "anchor": {
+          "offset": [
             44.0,
             -207.0
           ],

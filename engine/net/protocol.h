@@ -792,4 +792,35 @@ struct SvBuffSyncMsg {
     }
 };
 
+struct CmdEmoticon {
+    uint8_t emoticonId = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(emoticonId);
+    }
+
+    static CmdEmoticon read(ByteReader& r) {
+        CmdEmoticon m;
+        m.emoticonId = r.readU8();
+        return m;
+    }
+};
+
+struct SvEmoticonMsg {
+    uint32_t entityId = 0;
+    uint8_t  emoticonId = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(entityId);
+        w.writeU8(emoticonId);
+    }
+
+    static SvEmoticonMsg read(ByteReader& r) {
+        SvEmoticonMsg m;
+        m.entityId   = r.readU32();
+        m.emoticonId = r.readU8();
+        return m;
+    }
+};
+
 } // namespace fate

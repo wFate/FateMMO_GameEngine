@@ -57,6 +57,7 @@
 #include "engine/ui/widgets/leaderboard_panel.h"
 #include "engine/ui/widgets/invite_prompt_panel.h"
 #include "engine/ui/widgets/market_panel.h"
+#include "engine/ui/widgets/emoticon_panel.h"
 #endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <cstdio>
@@ -193,6 +194,7 @@ TypeBadge badgeForType(const std::string& type) {
     if (type == "fate_status_bar")    return {{0.50f, 0.65f, 0.75f, 1.0f}, "STS"};
     if (type == "chat_panel")         return {{0.55f, 0.60f, 0.45f, 1.0f}, "CHT"};
     if (type == "chat_ticker")        return {{0.50f, 0.55f, 0.45f, 1.0f}, "TKR"};
+    if (type == "emoticon_panel")     return {{0.55f, 0.55f, 0.50f, 1.0f}, "EMO"};
     if (type == "inventory_panel")    return {{0.60f, 0.50f, 0.65f, 1.0f}, "INV"};
     if (type == "skill_panel")        return {{0.70f, 0.50f, 0.40f, 1.0f}, "SKL"};
     if (type == "status_panel")       return {{0.40f, 0.65f, 0.65f, 1.0f}, "STA"};
@@ -1407,6 +1409,18 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::TreePop();
         }
 
+        if (ImGui::TreeNodeEx("Emoticon & Dice Buttons##cp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Emoticon Btn Size", &cp->emoticonBtnSize, 0.5f, 0.0f, 60.0f, "%.1f (0=bar)"); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Dice Btn Size", &cp->diceBtnSize, 0.5f, 0.0f, 60.0f, "%.1f (0=bar)"); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Spacing", &cp->buttonSpacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Keyboard Height Ratio", &cp->keyboardHeightRatio, 0.01f, 0.0f, 0.6f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Emote Btn BG##cpb", &cp->emoticonBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Emote Btn Active##cpb", &cp->emoticonBtnActiveColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Dice Btn BG##cpb", &cp->diceBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Dice Btn Text##cpb", &cp->diceBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
         if (ImGui::TreeNodeEx("Font Sizes##cp", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Message Font", &cp->messageFontSize, 0.5f, 7.0f, 24.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Input Font", &cp->inputFontSize, 0.5f, 7.0f, 24.0f); checkUndoCapture(uiMgr);
@@ -1464,6 +1478,27 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::Text("Mode: %s", cp->fullPanelMode_ ? "Full Panel" : "Idle Overlay");
         ImGui::Text("In Party: %s", cp->isInParty ? "Yes" : "No");
         ImGui::Text("In Guild: %s", cp->isInGuild ? "Yes" : "No");
+    }
+    else if (auto* ep = dynamic_cast<EmoticonPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("EmoticonPanel");
+
+        if (ImGui::TreeNodeEx("Layout##ep", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragInt("Slot Count", &ep->slotCount, 1.0f, 1, 32); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Size", &ep->slotSize, 0.5f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Padding", &ep->slotPadding, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Strip Height", &ep->stripHeight, 0.5f, 24.0f, 120.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Radius", &ep->borderRadius, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Scroll Offset", &ep->scrollOffset, 1.0f, 0.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Colors##ep", 0)) {
+            ImGui::ColorEdit4("Background##ep", &ep->bgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##ep", &ep->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Slot BG##ep", &ep->slotBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Slot Hover##ep", &ep->slotHoverColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* fsb = dynamic_cast<FateStatusBar*>(selectedNode_)) {
         ImGui::SeparatorText("FateStatusBar — Layout");

@@ -19,7 +19,8 @@ enum class FloatingTextType : uint8_t {
     XPGain,     // "+XXX XP", purple
     GoldGain,   // "+XXX G", gold
     LevelUp,    // "LEVEL UP!", large, gold, dramatic
-    Dodge       // "DODGE" text, grey
+    Dodge,      // "DODGE" text, grey
+    Emoticon    // emoticon floating above player, 3s lifetime
 };
 
 struct FloatingTextEntry {
@@ -48,6 +49,7 @@ public:
     void spawnGold(Vec2 worldPos, int amount);
     void spawnLevelUp(Vec2 worldPos);
     void spawnCustom(Vec2 worldPos, const std::string& text, FloatingTextType type);
+    void spawnEmoticon(Vec2 worldPos, uint8_t emoticonId);
 
     // Per-frame
     void update(float dt);
