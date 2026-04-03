@@ -609,6 +609,7 @@ struct SvQuestSyncMsg {
 
 struct InventorySyncSlot {
     int32_t slotIndex = -1;
+    std::string instanceId;  // unique item instance UUID
     std::string itemId;
     std::string displayName;
     std::string rarity;
@@ -652,6 +653,7 @@ struct SvInventorySyncMsg {
         w.writeU16(static_cast<uint16_t>(slots.size()));
         for (const auto& s : slots) {
             w.writeI32(s.slotIndex);
+            w.writeString(s.instanceId);
             w.writeString(s.itemId);
             w.writeString(s.displayName);
             w.writeString(s.rarity);
@@ -694,6 +696,7 @@ struct SvInventorySyncMsg {
         m.slots.resize(slotCount);
         for (uint16_t i = 0; i < slotCount; ++i) {
             m.slots[i].slotIndex = r.readI32();
+            m.slots[i].instanceId = r.readString();
             m.slots[i].itemId = r.readString();
             m.slots[i].displayName = r.readString();
             m.slots[i].rarity = r.readString();

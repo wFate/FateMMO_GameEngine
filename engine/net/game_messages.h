@@ -1337,6 +1337,8 @@ struct SkillDefEntry {
     uint8_t maxRank = 3;
     uint8_t isUltimate = 0;
     uint8_t consumesAllResource = 0;
+    uint8_t enablesDoubleCast = 0;
+    float doubleCastWindow = 2.0f;
     float range = 0.0f;
     float aoeRadius = 0.0f;
     std::string vfxId;
@@ -1368,6 +1370,8 @@ struct SkillDefEntry {
         w.writeU8(maxRank);
         w.writeU8(isUltimate);
         w.writeU8(consumesAllResource);
+        w.writeU8(enablesDoubleCast);
+        w.writeFloat(doubleCastWindow);
         w.writeFloat(range);
         w.writeFloat(aoeRadius);
         w.writeString(vfxId);
@@ -1398,6 +1402,8 @@ struct SkillDefEntry {
         e.maxRank = r.readU8();
         e.isUltimate = r.readU8();
         e.consumesAllResource = r.readU8();
+        e.enablesDoubleCast = r.readU8();
+        e.doubleCastWindow = r.readFloat();
         e.range = r.readFloat();
         e.aoeRadius = r.readFloat();
         e.vfxId = r.readString();
