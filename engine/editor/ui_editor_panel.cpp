@@ -2658,6 +2658,33 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Gold Display##mktc", &mp->goldDisplayColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+        if (ImGui::TreeNodeEx("Cancel Confirm Layout##mkt", 0)) {
+            ImGui::DragFloat("Width Ratio##ccl", &mp->cancelConfirmWidthRatio, 0.01f, 0.1f, 1.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Height Ratio##ccl", &mp->cancelConfirmHeightRatio, 0.01f, 0.1f, 1.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Title Font##ccl", &mp->cancelConfirmTitleFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Body Font##ccl", &mp->cancelConfirmBodyFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Width Ratio##ccl", &mp->cancelConfirmBtnWidthRatio, 0.01f, 0.1f, 0.5f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Height##ccl", &mp->cancelConfirmBtnHeight, 0.5f, 10.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Bottom Margin##ccl", &mp->cancelConfirmBtnBottomMargin, 0.5f, 5.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Spacing##ccl", &mp->cancelConfirmBtnSpacing, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Prompt Y Ratio##ccl", &mp->cancelConfirmPromptYRatio, 0.01f, 0.1f, 0.9f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Dialog Offset##ccl", &mp->cancelConfirmOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Title Offset##ccl", &mp->cancelConfirmTitleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Item Name Offset##ccl", &mp->cancelConfirmItemNameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Cancel Confirm Colors##mkt", 0)) {
+            ImGui::ColorEdit4("Dim##ccc", &mp->cancelConfirmDimColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##ccc", &mp->cancelConfirmBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##ccc", &mp->cancelConfirmBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##ccc", &mp->cancelConfirmTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Item Name##ccc", &mp->cancelConfirmItemNameColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Prompt##ccc", &mp->cancelConfirmPromptColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Yes Btn##ccc", &mp->cancelConfirmYesBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("No Btn##ccc", &mp->cancelConfirmNoBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Btn Text##ccc", &mp->cancelConfirmBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::Separator();
         ImGui::Text("Listings: %zu", mp->listings.size());
         ImGui::Text("Page: %d / %d", mp->currentPage, mp->totalPages);
