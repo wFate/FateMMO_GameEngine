@@ -2022,6 +2022,24 @@ void Editor::drawInspector() {
             }
         }
 
+        // CraftingNPCComponent
+        if (auto* craftNpc = selectedEntity_->getComponent<CraftingNPCComponent>()) {
+            bool open = ImGui::CollapsingHeader("Crafting NPC");
+            if (ImGui::BeginPopupContextItem("##rmCraftingNPC")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<CraftingNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<CraftingNPCComponent>()) {
+                char crafterIdBuf[64];
+                snprintf(crafterIdBuf, sizeof(crafterIdBuf), "%s", craftNpc->crafterId.c_str());
+                if (ImGui::InputText("Crafter ID", crafterIdBuf, sizeof(crafterIdBuf))) {
+                    craftNpc->crafterId = crafterIdBuf;
+                }
+                ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
+                    "Maps to crafting_recipes.crafter_id");
+            }
+        }
+
         // AppearanceComponent
         if (auto* a = selectedEntity_->getComponent<AppearanceComponent>()) {
             if (fontHeading_) ImGui::PushFont(fontHeading_);
@@ -2268,6 +2286,8 @@ void Editor::drawInspector() {
                 selectedEntity_->addComponent<MarketplaceNPCComponent>();
             if (!selectedEntity_->hasComponent<LeaderboardNPCComponent>() && ImGui::MenuItem("Leaderboard NPC"))
                 selectedEntity_->addComponent<LeaderboardNPCComponent>();
+            if (!selectedEntity_->hasComponent<CraftingNPCComponent>() && ImGui::MenuItem("Crafting NPC"))
+                selectedEntity_->addComponent<CraftingNPCComponent>();
 
             ImGui::Separator();
             ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "-- Player Quest/Bank --");

@@ -713,11 +713,106 @@ struct SvExtractResultMsg {
 // ============================================================================
 struct CmdCraftMsg {
     std::string recipeId;
+    uint32_t npcId = 0;
 
-    void write(ByteWriter& w) const { w.writeString(recipeId); }
+    void write(ByteWriter& w) const {
+        w.writeString(recipeId);
+        w.writeU32(npcId);
+    }
     static CmdCraftMsg read(ByteReader& r) {
         CmdCraftMsg m;
         m.recipeId = r.readString();
+        m.npcId = r.readU32();
+        return m;
+    }
+};
+
+struct CmdOpenCraftingMsg {
+    uint32_t npcId = 0;
+    void write(ByteWriter& w) const { w.writeU32(npcId); }
+    static CmdOpenCraftingMsg read(ByteReader& r) {
+        CmdOpenCraftingMsg m;
+        m.npcId = r.readU32();
+        return m;
+    }
+};
+
+struct SvCraftingIngredientMsg {
+    std::string itemId;
+    std::string itemName;
+    uint16_t quantity = 0;
+    uint8_t playerHas = 0;  // 1 if player has enough
+
+    void write(ByteWriter& w) const {
+        w.writeString(itemId);
+        w.writeString(itemName);
+        w.writeU16(quantity);
+        w.writeU8(playerHas);
+    }
+    static SvCraftingIngredientMsg read(ByteReader& r) {
+        SvCraftingIngredientMsg m;
+        m.itemId = r.readString();
+        m.itemName = r.readString();
+        m.quantity = r.readU16();
+        m.playerHas = r.readU8();
+        return m;
+    }
+};
+
+struct SvCraftingRecipeEntry {
+    std::string recipeId;
+    std::string resultName;
+    std::string resultItemId;
+    uint16_t resultQuantity = 0;
+    uint16_t requiredLevel = 0;
+    int64_t goldCost = 0;
+    uint8_t canCraft = 0;
+    std::vector<SvCraftingIngredientMsg> ingredients;
+
+    void write(ByteWriter& w) const {
+        w.writeString(recipeId);
+        w.writeString(resultName);
+        w.writeString(resultItemId);
+        w.writeU16(resultQuantity);
+        w.writeU16(requiredLevel);
+        w.writeI64(goldCost);
+        w.writeU8(canCraft);
+        w.writeU16(static_cast<uint16_t>(ingredients.size()));
+        for (const auto& ing : ingredients) ing.write(w);
+    }
+    static SvCraftingRecipeEntry read(ByteReader& r) {
+        SvCraftingRecipeEntry m;
+        m.recipeId = r.readString();
+        m.resultName = r.readString();
+        m.resultItemId = r.readString();
+        m.resultQuantity = r.readU16();
+        m.requiredLevel = r.readU16();
+        m.goldCost = r.readI64();
+        m.canCraft = r.readU8();
+        uint16_t count = r.readU16();
+        m.ingredients.resize(count);
+        for (uint16_t i = 0; i < count; ++i)
+            m.ingredients[i] = SvCraftingIngredientMsg::read(r);
+        return m;
+    }
+};
+
+struct SvCraftingRecipeListMsg {
+    uint32_t npcId = 0;
+    std::vector<SvCraftingRecipeEntry> recipes;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(npcId);
+        w.writeU16(static_cast<uint16_t>(recipes.size()));
+        for (const auto& recipe : recipes) recipe.write(w);
+    }
+    static SvCraftingRecipeListMsg read(ByteReader& r) {
+        SvCraftingRecipeListMsg m;
+        m.npcId = r.readU32();
+        uint16_t count = r.readU16();
+        m.recipes.resize(count);
+        for (uint16_t i = 0; i < count; ++i)
+            m.recipes[i] = SvCraftingRecipeEntry::read(r);
         return m;
     }
 };

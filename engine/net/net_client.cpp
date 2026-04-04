@@ -525,6 +525,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onCraftResult) onCraftResult(msg);
             break;
         }
+        case PacketType::SvCraftingRecipeList: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCraftingRecipeListMsg::read(payload);
+            if (onCraftingRecipeList) onCraftingRecipeList(msg);
+            break;
+        }
         case PacketType::SvBattlefieldUpdate: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvBattlefieldUpdateMsg::read(payload);
@@ -682,6 +688,7 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             break;
         }
         case PacketType::SvMarketListings: {
+            LOG_INFO("Market", "NetClient: SvMarketListings packet received (%d bytes)", payloadLen);
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvMarketListingsMsg::read(payload);
             if (msg.nonce != 0) {
@@ -1171,13 +1178,23 @@ void NetClient::sendExtractCore(uint8_t itemSlot, uint8_t scrollSlot) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdExtractCore, w.data(), w.size());
 }
 
-void NetClient::sendCraft(const std::string& recipeId) {
+void NetClient::sendCraft(const std::string& recipeId, uint32_t npcId) {
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
     CmdCraftMsg msg;
     msg.recipeId = recipeId;
+    msg.npcId = npcId;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdCraft, w.data(), w.size());
+}
+
+void NetClient::sendOpenCrafting(uint32_t npcId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdOpenCraftingMsg msg;
+    msg.npcId = npcId;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdOpenCrafting, w.data(), w.size());
 }
 
 void NetClient::sendSocketItem(uint8_t equipSlot, const std::string& scrollItemId) {

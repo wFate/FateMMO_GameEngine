@@ -48,7 +48,8 @@ public:
     void sendEnchant(uint8_t inventorySlot, uint8_t useProtectionStone);
     void sendRepair(uint8_t inventorySlot);
     void sendExtractCore(uint8_t itemSlot, uint8_t scrollSlot);
-    void sendCraft(const std::string& recipeId);
+    void sendCraft(const std::string& recipeId, uint32_t npcId);
+    void sendOpenCrafting(uint32_t npcId);
     void sendSocketItem(uint8_t equipSlot, const std::string& scrollItemId);
     void sendArena(uint8_t action, uint8_t mode);
     void sendBattlefield(uint8_t action);
@@ -131,6 +132,7 @@ public:
     std::function<void(const SvRepairResultMsg&)> onRepairResult;
     std::function<void(const SvExtractResultMsg&)> onExtractResult;
     std::function<void(const SvCraftResultMsg&)> onCraftResult;
+    std::function<void(const SvCraftingRecipeListMsg&)> onCraftingRecipeList;
     std::function<void(const SvBattlefieldUpdateMsg&)> onBattlefieldUpdate;
     std::function<void(const SvArenaUpdateMsg&)> onArenaUpdate;
     std::function<void(const SvPetUpdateMsg&)> onPetUpdate;
