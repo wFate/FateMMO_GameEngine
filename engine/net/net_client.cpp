@@ -91,7 +91,7 @@ bool NetClient::connectWithToken(const std::string& host, uint16_t port, const A
 void NetClient::disconnect() {
     if (connected_) {
         // Send Disconnect multiple times (unreliable) to maximize delivery chance
-        // before we close the socket — can't use Reliable since socket closes immediately
+        // before we close the socket --can't use Reliable since socket closes immediately
         sendPacket(Channel::Unreliable, PacketType::Disconnect);
         sendPacket(Channel::Unreliable, PacketType::Disconnect);
         sendPacket(Channel::Unreliable, PacketType::Disconnect);
@@ -165,7 +165,7 @@ void NetClient::poll(float currentTime) {
             LOG_WARN("NetClient", "Connection timed out");
             waitingForAccept_ = false;
             socket_.close();
-            // If we were reconnecting, stop — the token is likely expired
+            // If we were reconnecting, stop --the token is likely expired
             // and retrying will just spam the server with rejected connections
             if (reconnectPhase_ == ReconnectPhase::Reconnecting) {
                 LOG_WARN("NetClient", "Reconnect connect-attempt timed out, giving up");
@@ -191,7 +191,7 @@ void NetClient::poll(float currentTime) {
         }
     }
 
-    // Heartbeat timeout detection — start reconnect if no packets for 5+ seconds
+    // Heartbeat timeout detection --start reconnect if no packets for 5+ seconds
     // Only auto-reconnect if we have a stored auth token (non-zero)
     static constexpr AuthToken EMPTY_TOKEN = {};
     if (connected_ && lastPacketReceived_ > 0.0f &&
@@ -269,11 +269,11 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
 
     if (crypto_.hasKeys() && !isSystemPacket(hdr.packetType) && payloadLen > 0) {
         if (payloadLen <= PacketCrypto::TAG_SIZE) {
-            return; // too short to contain tag — drop
+            return; // too short to contain tag --drop
         }
         size_t decryptedSize = payloadLen - PacketCrypto::TAG_SIZE;
         if (!crypto_.decrypt(payloadData, payloadLen, hdr.sequence, decryptedBuf, sizeof(decryptedBuf))) {
-            return; // tampered or wrong key — silently drop
+            return; // tampered or wrong key --silently drop
         }
         payloadData = decryptedBuf;
         payloadLen = decryptedSize;
@@ -309,10 +309,10 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
                     auto keys = PacketCrypto::deriveClientSessionKeys(
                         clientKeypair_.pk, clientKeypair_.sk, serverPk);
                     crypto_.setKeys(keys.txKey, keys.rxKey);
-                    // Wipe secret key — no longer needed
+                    // Wipe secret key --no longer needed
                     PacketCrypto::secureWipe(clientKeypair_.sk.data(), clientKeypair_.sk.size());
                     keypairGenerated_ = false;
-                    LOG_INFO("NetClient", "AEAD session keys derived via DH — encryption active");
+                    LOG_INFO("NetClient", "AEAD session keys derived via DH --encryption active");
                 }
             } else {
                 LOG_ERROR("NetClient", "Invalid KeyExchange payload (%d bytes), expected %d-byte DH public key",
@@ -325,7 +325,7 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             connected_ = false;
             socket_.close();
             authToken_ = {};
-            // Stop reconnect — token is invalid, must re-authenticate
+            // Stop reconnect --token is invalid, must re-authenticate
             reconnectPhase_ = ReconnectPhase::Failed;
             reconnectAttempts_ = 0;
             ByteReader payload(payloadData, payloadLen);
@@ -816,10 +816,11 @@ void NetClient::sendDungeonResponse(uint8_t accept) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdDungeonResponse, w.data(), w.size());
 }
 
-void NetClient::sendMoveItem(int32_t sourceSlot, int32_t destSlot) {
+void NetClient::sendMoveItem(int32_t sourceSlot, int32_t destSlot, int32_t quantity) {
     CmdMoveItemMsg msg;
     msg.sourceSlot = sourceSlot;
     msg.destSlot = destSlot;
+    msg.quantity = quantity;
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);

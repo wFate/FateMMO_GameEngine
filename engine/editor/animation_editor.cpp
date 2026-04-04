@@ -149,7 +149,7 @@ void AnimationEditor::loadTemplate(const std::string& path) {
 
 void AnimationEditor::saveTemplate() {
     if (templatePath_.empty()) {
-        LOG_WARN("AnimEditor", "No template path set — cannot save");
+        LOG_WARN("AnimEditor", "No template path set --cannot save");
         return;
     }
 
@@ -1155,7 +1155,7 @@ void AnimationEditor::openWithSheet(const std::string& texturePath) {
     } else
 #endif // FATE_HAS_GAME
     {
-        // No metadata — start fresh, default cell = full texture size
+        // No metadata --start fresh, default cell = full texture size
         auto tex = TextureCache::instance().get(texturePath);
         if (tex && tex->width() > 0) {
             slicerCellW_ = tex->width();

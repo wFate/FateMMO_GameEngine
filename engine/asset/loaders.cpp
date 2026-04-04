@@ -212,7 +212,7 @@ static void* jsonLoad(const std::string& path) {
         *j = nlohmann::json::parse(file);
         return j;
     } catch (const nlohmann::json::exception& e) {
-        LOG_ERROR("JsonLoader", "Parse failed: %s — %s", path.c_str(), e.what());
+        LOG_ERROR("JsonLoader", "Parse failed: %s --%s", path.c_str(), e.what());
         return nullptr;
     }
 }

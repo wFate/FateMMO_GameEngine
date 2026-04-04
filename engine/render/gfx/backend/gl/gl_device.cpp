@@ -251,7 +251,7 @@ TextureHandle Device::createCompressedTexture(int width, int height, TextureForm
     // Check for GL errors (unsupported format on this GPU)
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) {
-        LOG_ERROR("gfx", "glCompressedTexImage2D failed (0x%X) — format 0x%X may not be supported", err, internalFmt);
+        LOG_ERROR("gfx", "glCompressedTexImage2D failed (0x%X) --format 0x%X may not be supported", err, internalFmt);
         glDeleteTextures(1, &tex);
         return {};
     }
@@ -292,7 +292,7 @@ BufferHandle Device::createBuffer(BufferType type, BufferUsage usage, size_t siz
 PipelineHandle Device::createPipeline(const PipelineDesc& desc) {
     GLuint vao = 0;
     glGenVertexArrays(1, &vao);
-    // VAO is created empty — vertex attributes are configured at draw time
+    // VAO is created empty --vertex attributes are configured at draw time
 
     uint32_t id = impl_->allocId();
     impl_->pipelines[id]    = desc;

@@ -144,6 +144,7 @@ public:
 
     // Toolbar toggle accessors
     bool showCollisionDebug() const { return showCollisionDebug_; }
+    bool showSpawnDebug() const { return showSpawnDebug_; }
     bool showGrid() const { return showGrid_; }
     bool showGameUI() const { return showGameUI_; }
 
@@ -297,6 +298,7 @@ private:
     // Toolbar toggles
     bool showGrid_ = true;
     bool showCollisionDebug_ = false;
+    bool showSpawnDebug_ = false;
     bool showGameUI_ = true;
 
     // Device profile index (default: iPhone 17 Pro)

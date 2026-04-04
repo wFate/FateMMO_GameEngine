@@ -58,6 +58,8 @@
 #include "engine/ui/widgets/invite_prompt_panel.h"
 #include "engine/ui/widgets/market_panel.h"
 #include "engine/ui/widgets/emoticon_panel.h"
+#include "engine/ui/widgets/quantity_selector.h"
+#include "engine/ui/widgets/bag_view_panel.h"
 #endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <cstdio>
@@ -210,6 +212,8 @@ TypeBadge badgeForType(const std::string& type) {
     if (type == "crafting_panel")         return {{0.55f, 0.50f, 0.65f, 1.0f}, "CRF"};
     if (type == "player_context_menu")  return {{0.60f, 0.55f, 0.45f, 1.0f}, "CTX"};
     if (type == "confirm_dialog")       return {{0.70f, 0.50f, 0.50f, 1.0f}, "DLG"};
+    if (type == "quantity_selector")  return {{0.70f, 0.55f, 0.50f, 1.0f}, "QTY"};
+    if (type == "bag_view_panel")    return {{0.50f, 0.60f, 0.55f, 1.0f}, "BAG"};
     if (type == "notification_toast") return {{0.65f, 0.55f, 0.40f, 1.0f}, "TST"};
     if (type == "login_screen")       return {{0.50f, 0.60f, 0.70f, 1.0f}, "LOG"};
     if (type == "death_overlay")      return {{0.75f, 0.35f, 0.35f, 1.0f}, "DTH"};
@@ -1237,6 +1241,62 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat("Button Height##cd", &cd->buttonHeight, 1.0f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Button Spacing##cd", &cd->buttonSpacing, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
     }
+    else if (auto* qs = dynamic_cast<QuantitySelector*>(selectedNode_)) {
+        ImGui::SeparatorText("QuantitySelector");
+        if (ImGui::TreeNodeEx("Layout##qs", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Button Width##qs", &qs->buttonWidth, 1.0f, 40.0f, 300.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Height##qs", &qs->buttonHeight, 1.0f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button Spacing##qs", &qs->buttonSpacing, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Arrow Btn Size##qs", &qs->arrowButtonSize, 1.0f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##qs", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##qsf", &qs->titleFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Quantity##qsf", &qs->quantityFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button##qsf", &qs->buttonFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##qs", 0)) {
+            ImGui::ColorEdit4("Button##qsc", &qs->buttonColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button Hover##qsc", &qs->buttonHoverColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Arrow##qsc", &qs->arrowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Arrow Hover##qsc", &qs->arrowHoverColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        char confBuf[128] = {};
+        snprintf(confBuf, sizeof(confBuf), "%s", qs->confirmText.c_str());
+        if (ImGui::InputText("Confirm Text##qs", confBuf, sizeof(confBuf))) {
+            qs->confirmText = confBuf;
+        }
+        checkUndoCapture(uiMgr);
+        char canBuf[128] = {};
+        snprintf(canBuf, sizeof(canBuf), "%s", qs->cancelText.c_str());
+        if (ImGui::InputText("Cancel Text##qs", canBuf, sizeof(canBuf))) {
+            qs->cancelText = canBuf;
+        }
+        checkUndoCapture(uiMgr);
+    }
+    else if (auto* bv = dynamic_cast<BagViewPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("BagViewPanel");
+        if (ImGui::TreeNodeEx("Layout##bvp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Slot Size##bvp", &bv->slotSize, 1.0f, 16.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Padding##bvp", &bv->slotPadding, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragInt("Grid Columns##bvp", &bv->gridColumns, 1, 1, 10); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Content Padding##bvp", &bv->contentPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Font Sizes##bvp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title##bvpf", &bv->titleFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Text##bvpf", &bv->slotFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##bvp", 0)) {
+            ImGui::ColorEdit4("Slot BG##bvpc", &bv->slotBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Slot Border##bvpc", &bv->slotBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Empty Slot##bvpc", &bv->emptySlotColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+    }
     else if (auto* ip = dynamic_cast<InvitePromptPanel*>(selectedNode_)) {
         ImGui::SeparatorText("InvitePromptPanel");
         if (ImGui::TreeNodeEx("Position Offsets##ip", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1454,6 +1514,15 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         if (ImGui::TreeNodeEx("Message Colors##cp", 0)) {
             ImGui::ColorEdit4("Text##msg", &cp->messageTextColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Shadow##msg", &cp->messageShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("System Broadcast Colors##cp", 0)) {
+            ImGui::ColorEdit4("Default [System]##sys", &cp->colorSystemDefault.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Loot] Drops##sys", &cp->colorSystemLoot.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Event]##sys", &cp->colorSystemEvent.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Guild]##sys", &cp->colorSystemGuild.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Boss] Kills##sys", &cp->colorSystemBoss.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 

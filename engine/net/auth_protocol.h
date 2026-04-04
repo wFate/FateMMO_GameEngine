@@ -109,6 +109,7 @@ struct RegisterRequest {
     uint8_t faction = 0;
     uint8_t gender = 0;
     uint8_t hairstyle = 0;
+    uint16_t clientVersion = 0;
 
     void write(ByteWriter& w) const {
         w.writeU8(static_cast<uint8_t>(AuthMessageType::RegisterRequest));
@@ -120,6 +121,7 @@ struct RegisterRequest {
         w.writeU8(faction);
         w.writeU8(gender);
         w.writeU8(hairstyle);
+        w.writeU16(clientVersion);
     }
 
     static RegisterRequest read(ByteReader& r) {
@@ -132,6 +134,7 @@ struct RegisterRequest {
         m.faction       = r.readU8();
         m.gender        = r.readU8();
         m.hairstyle     = r.readU8();
+        m.clientVersion = r.readU16();
         return m;
     }
 };
@@ -139,17 +142,20 @@ struct RegisterRequest {
 struct LoginRequest {
     std::string username;
     std::string password;
+    uint16_t clientVersion = 0;
 
     void write(ByteWriter& w) const {
         w.writeU8(static_cast<uint8_t>(AuthMessageType::LoginRequest));
         w.writeString(username);
         w.writeString(password);
+        w.writeU16(clientVersion);
     }
 
     static LoginRequest read(ByteReader& r) {
         LoginRequest m;
         m.username = r.readString();
         m.password = r.readString();
+        m.clientVersion = r.readU16();
         return m;
     }
 };

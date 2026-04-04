@@ -5,7 +5,7 @@
 #endif
 #include "engine/core/logger.h"
 #ifndef FATEMMO_METAL
-// Editor uses direct GL for ImGui integration — intentionally outside RHI
+// Editor uses direct GL for ImGui integration --intentionally outside RHI
 #include "engine/render/gfx/backend/gl/gl_loader.h"
 #endif
 #include "engine/render/fullscreen_quad.h"
@@ -113,7 +113,7 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
         fontSmall_ = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter-Regular.ttf", 12.0f, &fontCfg);
     }
     if (!fontBody_) {
-        LOG_WARN("Editor", "Inter fonts not found — using ImGui default");
+        LOG_WARN("Editor", "Inter fonts not found --using ImGui default");
         fontBody_ = io.Fonts->AddFontDefault();
         fontHeading_ = fontBody_;
         fontSmall_ = fontBody_;
@@ -128,7 +128,7 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
 
-    // Spacing — 8px grid, tight vertical, comfortable horizontal
+    // Spacing --8px grid, tight vertical, comfortable horizontal
     style.WindowPadding     = ImVec2(8, 8);
     style.FramePadding      = ImVec2(6, 4);
     style.CellPadding       = ImVec2(4, 3);
@@ -138,7 +138,7 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     style.ScrollbarSize     = 11.0f;
     style.GrabMinSize       = 8.0f;
 
-    // Rounding — subtle modern softness
+    // Rounding --subtle modern softness
     style.WindowRounding    = 3.0f;
     style.ChildRounding     = 3.0f;
     style.FrameRounding     = 3.0f;
@@ -147,7 +147,7 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     style.GrabRounding      = 3.0f;
     style.TabRounding       = 3.0f;
 
-    // Borders — minimal, modern
+    // Borders --minimal, modern
     style.WindowBorderSize     = 1.0f;
     style.ChildBorderSize      = 0.0f;
     style.PopupBorderSize      = 1.0f;
@@ -155,7 +155,7 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
     style.TabBorderSize        = 0.0f;
     style.DockingSeparatorSize = 2.0f;
 
-    // Color scheme — layered dark backgrounds with blue accent
+    // Color scheme --layered dark backgrounds with blue accent
     ImVec4* c = style.Colors;
 
     // Background hierarchy (darkest -> lightest)
@@ -283,7 +283,7 @@ void Editor::beginFrame() {
 
     // Capture previous frame's IO state BEFORE NewFrame() resets it.
     // ImGui's WantCaptureKeyboard/Mouse reflect which widgets had focus
-    // last frame — reading after NewFrame() always returns false.
+    // last frame --reading after NewFrame() always returns false.
     ImGuiIO& io = ImGui::GetIO();
     wantsKeyboard_ = io.WantCaptureKeyboard;
     wantsMouse_ = io.WantCaptureMouse;
@@ -314,7 +314,7 @@ void Editor::applyLayerVisibility(World* world) {
 }
 
 void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
-    // Called while FBO is bound — draw in-viewport overlays via SpriteBatch
+    // Called while FBO is bound --draw in-viewport overlays via SpriteBatch
     if (!open_ || !batch || !camera) return;
 
     // Apply tile layer visibility toggles
@@ -367,7 +367,7 @@ void Editor::drawSceneGridShader(Camera* camera) {
             "assets/shaders/fullscreen_quad.vert",
             "assets/shaders/grid.frag");
         if (!gridShaderLoaded_) {
-            LOG_ERROR("Editor", "Failed to load grid shader — falling back to SpriteBatch grid");
+            LOG_ERROR("Editor", "Failed to load grid shader --falling back to SpriteBatch grid");
             return;
         }
     }
@@ -407,7 +407,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     drawDockSpace();
     drawMenuBar(world);
     drawSceneViewport();
-    // drawViewportHUD removed — coordinates now shown by FateStatusBar in the game HUD
+    // drawViewportHUD removed --coordinates now shown by FateStatusBar in the game HUD
     drawHierarchy(world);
     drawInspector();
     drawConsole(world);
@@ -551,11 +551,11 @@ void Editor::drawDockSpace() {
                 ImGui::EndMenu();
             }
             ImGui::Separator();
-            // Save — enabled when a scene path is set (from Open Scene or async load)
+            // Save --enabled when a scene path is set (from Open Scene or async load)
             if (ImGui::MenuItem("Save", "Ctrl+S", false, !inPlayMode_ && !currentScenePath_.empty())) {
                 saveScene(dockWorld_, currentScenePath_);
             }
-            // Save As — always prompts for a new name
+            // Save As --always prompts for a new name
             if (ImGui::BeginMenu("Save As...", !inPlayMode_)) {
                 static char saveNameBuf[64] = "WhisperingWoods";
                 ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
@@ -587,6 +587,7 @@ void Editor::drawDockSpace() {
             ImGui::Separator();
             ImGui::MenuItem("Show Grid", nullptr, &showGrid_);
             ImGui::MenuItem("Show Colliders", nullptr, &showCollisionDebug_);
+            ImGui::MenuItem("Show Spawn Zones", nullptr, &showSpawnDebug_);
             ImGui::Separator();
             ImGui::MenuItem("Post Process", nullptr, &showPostProcessPanel_);
             ImGui::Separator();
@@ -752,6 +753,7 @@ void Editor::drawSceneViewport() {
             toggleBtn("Grid", &showGrid_);
             toggleBtn("Snap", &gridSnap_);
             toggleBtn("Colliders", &showCollisionDebug_);
+            toggleBtn("Spawns", &showSpawnDebug_);
             toggleBtn("Game UI", &showGameUI_);
 
             // Ground tile lock toggle (inverted: button shows locked state)
@@ -818,7 +820,7 @@ void Editor::drawSceneViewport() {
 
                     ImGui::SameLine();
 
-                    // Stop — destroy runtime state, restore scene from snapshot
+                    // Stop --destroy runtime state, restore scene from snapshot
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.20f, 0.20f, 1.00f));
                     if (ImGui::Button("Stop", ImVec2(playBtnW, btnH))) {
                         // Restore editor camera state
@@ -930,11 +932,11 @@ void Editor::drawSceneViewport() {
 
         int fbW, fbH;
         if (useDeviceRes) {
-            // Play mode with device preset — FBO at device resolution
+            // Play mode with device preset --FBO at device resolution
             fbW = preset.width;
             fbH = preset.height;
         } else {
-            // Edit mode or Free Aspect — FBO fills the panel
+            // Edit mode or Free Aspect --FBO fills the panel
             fbW = panelW;
             fbH = panelH;
         }
@@ -976,7 +978,7 @@ void Editor::drawSceneViewport() {
                         ImVec2(0, 1), ImVec2(1, 0)
                     );
                 } else {
-                    // Free aspect — image fills the panel
+                    // Free aspect --image fills the panel
                     viewportPos_ = {cursorScreen.x, cursorScreen.y};
                     viewportSize_ = {avail.x, avail.y};
 
@@ -1073,7 +1075,7 @@ void Editor::drawSceneViewport() {
     ImGui::PopStyleVar();
 }
 
-// drawViewportHUD removed — coordinates now shown by FateStatusBar in the game HUD
+// drawViewportHUD removed --coordinates now shown by FateStatusBar in the game HUD
 
 void Editor::drawDebugInfoPanel(World* world) {
     if (ImGui::Begin("Debug Info")) {
@@ -1286,7 +1288,7 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
         );
     }
 
-    // Click was outside the selected entity — select a new one
+    // Click was outside the selected entity --select a new one
     if (best) {
         selectedEntity_ = best;
         selectedHandle_ = best->handle();
@@ -1932,7 +1934,7 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
 
     // --- Fill tool: flood fill on click ---
     if (currentTool_ == EditorTool::Fill) {
-        // Collision layer has no source rects — fill is not meaningful
+        // Collision layer has no source rects --fill is not meaningful
         if (isCollisionLayer) return;
         // Build a lookup of occupied tile positions (same tileset, same GID)
         int srcCol = selectedTileIndex_ % paletteColumns_;
@@ -2156,7 +2158,7 @@ void Editor::drawTilePalette(World* world, Camera* camera) {
         return;
     }
 
-    // Paint mode toggle — shows active tool name
+    // Paint mode toggle --shows active tool name
     bool isTileToolActive = (currentTool_ == EditorTool::Paint ||
                              currentTool_ == EditorTool::Fill ||
                              currentTool_ == EditorTool::RectFill ||
@@ -2373,7 +2375,7 @@ void Editor::drawImGuizmo(Camera* camera) {
     ImGuizmo::SetRect(viewportPos_.x, viewportPos_.y, viewportSize_.x, viewportSize_.y);
     ImGuizmo::SetOrthographic(true);
 
-    // Build view matrix (camera space — translate by -camPos, scale by zoom)
+    // Build view matrix (camera space --translate by -camPos, scale by zoom)
     float zoom = camera->zoom();
     Vec2 camPos = camera->position();
     float invZoom = 1.0f / zoom;
@@ -2456,7 +2458,7 @@ void Editor::enterPlayMode(World* world) {
 #ifdef FATE_HAS_GAME
     playModeSnapshot_ = nlohmann::json::array();
     world->forEachEntity([&](Entity* e) {
-        // Skip transient runtime entities — same filter as saveScene
+        // Skip transient runtime entities --same filter as saveScene
         std::string tag = e->tag();
         if (tag == "mob" || tag == "boss" || tag == "player" ||
             tag == "ghost" || tag == "dropped_item") return;
@@ -2519,14 +2521,14 @@ void Editor::saveScene(World* world, const std::string& path) {
     nlohmann::json entitiesJson = nlohmann::json::array();
 
     world->forEachEntity([&](Entity* entity) {
-        // Skip transient runtime entities — these are not part of the scene:
+        // Skip transient runtime entities --these are not part of the scene:
         // mob/boss: spawned by SpawnSystem, player: created on server connect,
         // ghost: networked other-player entities, dropped_item: runtime loot
         std::string tag = entity->tag();
         if (tag == "mob" || tag == "boss" || tag == "player" ||
             tag == "ghost" || tag == "dropped_item") return;
 
-        // Registry-based serialization — all registered components are handled
+        // Registry-based serialization --all registered components are handled
         entitiesJson.push_back(PrefabLibrary::entityToJson(entity));
     });
 
@@ -2595,7 +2597,7 @@ void Editor::loadScene(World* world, const std::string& path) {
 
     if (!root.contains("entities")) return;
 
-    // Registry-based deserialization — all registered components are handled
+    // Registry-based deserialization --all registered components are handled
     size_t loadedCount = 0;
     for (auto& ej : root["entities"]) {
         PrefabLibrary::jsonToEntity(ej, *world);
@@ -2649,7 +2651,7 @@ void Editor::drawHUD(World* world) {
 // ============================================================================
 
 void Editor::drawMenuBar(World* world) {
-    // Menu bar content is now integrated into the toolbar — this just handles the prefab popup
+    // Menu bar content is now integrated into the toolbar --this just handles the prefab popup
 
     if (openSavePrefab_) {
         ImGui::OpenPopup("SavePrefabPopup");
@@ -2762,7 +2764,7 @@ void Editor::drawHierarchy(World* world) {
 
                 auto* spr = entity->getComponent<SpriteComponent>();
                 // Paper-doll entities (players) use AppearanceComponent for rendering,
-                // not SpriteComponent::texture — don't flag them as errors
+                // not SpriteComponent::texture --don't flag them as errors
                 bool hasError = spr && !spr->texture && !entity->getComponent<AppearanceComponent>();
 
                 if (hasError) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
@@ -3076,7 +3078,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     bool shift = (event.key.keysym.mod & KMOD_SHIFT) != 0;
 
     // Non-modifier shortcuts (W/E/R/B/X/Delete) only fire when paused.
-    // In Play mode the game owns the keyboard — tool switching would
+    // In Play mode the game owns the keyboard --tool switching would
     // conflict with WASD movement, chat, and other gameplay keys.
     bool allowToolKeys = paused_;
 
@@ -3130,7 +3132,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
                 UISerializer::saveToFile(relPath, screenId, root);
                 LOG_INFO("Editor", "Saved UI screen: %s", relPath.c_str());
                 // Also save to source directory so changes survive rebuilds
-                // sourceDir_ is FATE_SOURCE_DIR/assets/scenes — go up to project root
+                // sourceDir_ is FATE_SOURCE_DIR/assets/scenes --go up to project root
                 if (!sourceDir_.empty()) {
                     std::string projectRoot = sourceDir_;
                     auto pos = projectRoot.rfind("/assets/scenes");
@@ -3186,7 +3188,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
         selectedEntity_ = nullptr;
         selectedHandle_ = {};
     }
-    // W = Move tool (paused only — W is move-up in Play mode)
+    // W = Move tool (paused only --W is move-up in Play mode)
     if (allowToolKeys && scancode == SDL_SCANCODE_W && !ctrl) {
         currentTool_ = EditorTool::Move;
         pendingBrushStroke_.reset();
@@ -3228,7 +3230,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     }
 }
 
-#else // !FATE_HAS_GAME — demo build with engine-only panels
+#else // !FATE_HAS_GAME --demo build with engine-only panels
 
 void Editor::applyLayerVisibility(World*) {}
 void Editor::renderScene(SpriteBatch*, Camera*) {}

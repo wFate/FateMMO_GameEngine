@@ -1537,6 +1537,16 @@
           0.8999999761581421
         ],
         "visible": false
+      },
+      {
+        "anchor": {
+          "preset": "Center",
+          "size": [220.0, 140.0]
+        },
+        "id": "quantity_selector",
+        "type": "quantity_selector",
+        "visible": false,
+        "zOrder": 115
       }
     ],
     "id": "menu_root",

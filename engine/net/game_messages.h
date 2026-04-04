@@ -518,15 +518,18 @@ struct CmdEquipMsg {
 struct CmdMoveItemMsg {
     int32_t sourceSlot = -1;
     int32_t destSlot   = -1;
+    int32_t quantity   = 0;   // 0 = move all (default), >0 = split this many to dest
 
     void write(ByteWriter& w) const {
         w.writeI32(sourceSlot);
         w.writeI32(destSlot);
+        w.writeI32(quantity);
     }
     static CmdMoveItemMsg read(ByteReader& r) {
         CmdMoveItemMsg m;
         m.sourceSlot = r.readI32();
         m.destSlot   = r.readI32();
+        m.quantity   = r.readI32();
         return m;
     }
 };

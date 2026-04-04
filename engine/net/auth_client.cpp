@@ -28,7 +28,7 @@ namespace fate {
 // Stub implementations when OpenSSL is not available (demo/open-source build)
 AuthClient::~AuthClient() {}
 void AuthClient::connect(const std::string&, uint16_t, const std::string&) {
-    LOG_WARN("AuthClient", "TLS not available — OpenSSL not linked");
+    LOG_WARN("AuthClient", "TLS not available --OpenSSL not linked");
 }
 void AuthClient::disconnect() {}
 void AuthClient::login(const std::string&, const std::string&) {}
@@ -60,7 +60,7 @@ static void closeSocket(uintptr_t fd) {
 #endif
 
 // ---------------------------------------------------------------------------
-// SSL I/O helpers — length-prefixed (4-byte LE length + body)
+// SSL I/O helpers --length-prefixed (4-byte LE length + body)
 // ---------------------------------------------------------------------------
 static bool sslWriteAll(SSL* ssl, const void* data, int len) {
     const uint8_t* p = static_cast<const uint8_t*>(data);
@@ -147,6 +147,7 @@ void AuthClient::loginAsync(const std::string& host, uint16_t port,
     LoginRequest req;
     req.username = username;
     req.password = password;
+    req.clientVersion = 1;
 
     uint8_t buf[1024];
     ByteWriter w(buf, sizeof(buf));
@@ -191,6 +192,7 @@ void AuthClient::registerAsync(const std::string& host, uint16_t port,
     req.faction = faction;
     req.gender = gender;
     req.hairstyle = hairstyle;
+    req.clientVersion = 1;
 
     uint8_t buf[2048];
     ByteWriter w(buf, sizeof(buf));
@@ -295,7 +297,7 @@ void AuthClient::disconnectAuth() {
 }
 
 // ---------------------------------------------------------------------------
-// workerLoop — runs on background thread, maintains persistent TLS connection
+// workerLoop --runs on background thread, maintains persistent TLS connection
 // ---------------------------------------------------------------------------
 void AuthClient::workerLoop(const std::string& host, uint16_t port,
                             const std::vector<uint8_t>& initialData) {
@@ -461,7 +463,7 @@ void AuthClient::workerLoop(const std::string& host, uint16_t port,
     busy_.store(false);
 
     // -----------------------------------------------------------------------
-    // Command processing loop — waits for commands, sends/receives on the
+    // Command processing loop --waits for commands, sends/receives on the
     // persistent TLS connection
     // -----------------------------------------------------------------------
     while (!shouldStop_.load()) {
@@ -521,14 +523,14 @@ void AuthClient::workerLoop(const std::string& host, uint16_t port,
 
         // Send the message
         if (!sslSendMessage(ssl, w.data(), static_cast<uint32_t>(w.size()))) {
-            LOG_ERROR("AuthClient", "Failed to send command — connection lost");
+            LOG_ERROR("AuthClient", "Failed to send command --connection lost");
             break;
         }
 
         // Read the response
         respBuf.clear();
         if (!sslRecvMessage(ssl, respBuf)) {
-            LOG_ERROR("AuthClient", "Failed to read response — connection lost");
+            LOG_ERROR("AuthClient", "Failed to read response --connection lost");
             break;
         }
 
@@ -586,7 +588,7 @@ void AuthClient::workerLoop(const std::string& host, uint16_t port,
     }
 
     // -----------------------------------------------------------------------
-    // Cleanup — tear down TLS and socket
+    // Cleanup --tear down TLS and socket
     // -----------------------------------------------------------------------
     SSL_shutdown(ssl);
     SSL_free(ssl);

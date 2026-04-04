@@ -39,7 +39,7 @@ public:
     void sendTeleport(uint32_t npcId, uint8_t destinationIndex);
     void sendStartDungeon(const std::string& sceneId);
     void sendDungeonResponse(uint8_t accept);
-    void sendMoveItem(int32_t sourceSlot, int32_t destSlot);
+    void sendMoveItem(int32_t sourceSlot, int32_t destSlot, int32_t quantity = 0);
     void sendDestroyItem(int32_t slot, const std::string& expectedItemId);
     void sendEquip(uint8_t action, int32_t inventorySlot, uint8_t equipSlot);
     void sendActivateSkillRank(const std::string& skillId);

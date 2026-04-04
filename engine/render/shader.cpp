@@ -89,7 +89,7 @@ bool Shader::reloadFromFile(const std::string& vertPath, const std::string& frag
     gfxHandle_ = gfx::Device::instance().createShaderFromFiles(vertPath, fragPath);
     if (!gfxHandle_.valid()) {
         gfxHandle_ = oldHandle;
-        LOG_WARN("Shader", "Reload failed — keeping old Metal shader");
+        LOG_WARN("Shader", "Reload failed --keeping old Metal shader");
         return false;
     }
 
@@ -122,10 +122,10 @@ bool Shader::reloadFromFile(const std::string& vertPath, const std::string& frag
     programId_ = 0;
 
     if (!loadFromSource(vertSrc, fragSrc)) {
-        // Restore old handle — loadFromSource already logged the error
+        // Restore old handle --loadFromSource already logged the error
         gfxHandle_ = oldHandle;
         programId_ = oldProgram;
-        LOG_WARN("Shader", "Reload failed — keeping old program %u", programId_);
+        LOG_WARN("Shader", "Reload failed --keeping old program %u", programId_);
         return false;
     }
 

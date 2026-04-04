@@ -29,6 +29,7 @@ public:
     bool isOpen() const { return false; }
     bool wantsKeyboard() const { return false; }
     bool showCollisionDebug() const { return false; }
+    bool showSpawnDebug() const { return false; }
     bool isTilePaintMode() const { return false; }
     bool isEraseMode() const { return false; }
     bool inPlayMode() const { return false; }

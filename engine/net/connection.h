@@ -50,6 +50,15 @@ struct ClientConnection {
     int activeTradeSessionId = 0;       // 0 = not in trade
     std::string tradePartnerCharId;     // partner's character_id
 
+    // Safe return point — set when entering instanced/event content (dungeon,
+    // arena, battlefield).  On disconnect the save uses this instead of the
+    // temporary event scene so the player isn't stranded on next login.
+    struct ReturnPoint {
+        std::string scene;
+        float x = 0.0f, y = 0.0f;
+    };
+    ReturnPoint eventReturnPoint;  // non-empty scene = active
+
     // Invite prompt busy state — prevents concurrent invites
     bool hasActivePrompt = false;
     float guildInviteExpiresAt = 0.0f;      // gameTime when invite auto-expires
