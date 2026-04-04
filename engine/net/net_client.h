@@ -50,6 +50,9 @@ public:
     void sendExtractCore(uint8_t itemSlot, uint8_t scrollSlot);
     void sendCraft(const std::string& recipeId, uint32_t npcId);
     void sendOpenCrafting(uint32_t npcId);
+    void sendOpenBag(uint8_t inventorySlot);
+    void sendBagStore(uint8_t srcSlot, uint8_t bagSlot, uint8_t bagSubSlot);
+    void sendBagRetrieve(uint8_t bagSlot, uint8_t bagSubSlot);
     void sendSocketItem(uint8_t equipSlot, const std::string& scrollItemId);
     void sendArena(uint8_t action, uint8_t mode);
     void sendBattlefield(uint8_t action);
@@ -157,6 +160,7 @@ public:
     std::function<void(const SvPartyUpdateMsg&)> onPartyUpdate;
     std::function<void(const SvGuildRosterMsg&)> onGuildRoster;
     std::function<void(const SvMarketListingsMsg&)> onMarketListings;
+    std::function<void(const SvBagContentsMsg&)> onBagContents;
     std::function<void(const std::string& reason)> onConnectRejected;
 
     // Admin content pipeline callbacks

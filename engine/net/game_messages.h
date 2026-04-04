@@ -1960,4 +1960,108 @@ struct SvMarketListingsMsg {
     }
 };
 
+// ============================================================================
+// Client -> Server: Bag operations
+// ============================================================================
+struct CmdOpenBagMsg {
+    uint8_t inventorySlot = 0;
+    void write(ByteWriter& w) const { w.writeU8(inventorySlot); }
+    static CmdOpenBagMsg read(ByteReader& r) {
+        CmdOpenBagMsg m;
+        m.inventorySlot = r.readU8();
+        return m;
+    }
+};
+
+struct CmdBagStoreMsg {
+    uint8_t srcInventorySlot = 0;  // main inventory slot to move FROM
+    uint8_t bagSlot = 0;           // which bag (main inventory slot the bag is in)
+    uint8_t bagSubSlot = 0;        // which sub-slot in the bag to move TO
+    void write(ByteWriter& w) const {
+        w.writeU8(srcInventorySlot);
+        w.writeU8(bagSlot);
+        w.writeU8(bagSubSlot);
+    }
+    static CmdBagStoreMsg read(ByteReader& r) {
+        CmdBagStoreMsg m;
+        m.srcInventorySlot = r.readU8();
+        m.bagSlot = r.readU8();
+        m.bagSubSlot = r.readU8();
+        return m;
+    }
+};
+
+struct CmdBagRetrieveMsg {
+    uint8_t bagSlot = 0;           // which bag (main inventory slot)
+    uint8_t bagSubSlot = 0;        // which sub-slot to take FROM
+    void write(ByteWriter& w) const {
+        w.writeU8(bagSlot);
+        w.writeU8(bagSubSlot);
+    }
+    static CmdBagRetrieveMsg read(ByteReader& r) {
+        CmdBagRetrieveMsg m;
+        m.bagSlot = r.readU8();
+        m.bagSubSlot = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: Bag contents response
+// ============================================================================
+struct SvBagContentsSlot {
+    uint8_t subSlot = 0;
+    std::string instanceId;
+    std::string itemId;
+    std::string displayName;
+    std::string rarity;
+    uint16_t quantity = 0;
+    uint8_t enchantLevel = 0;
+    void write(ByteWriter& w) const {
+        w.writeU8(subSlot);
+        w.writeString(instanceId);
+        w.writeString(itemId);
+        w.writeString(displayName);
+        w.writeString(rarity);
+        w.writeU16(quantity);
+        w.writeU8(enchantLevel);
+    }
+    static SvBagContentsSlot read(ByteReader& r) {
+        SvBagContentsSlot m;
+        m.subSlot = r.readU8();
+        m.instanceId = r.readString();
+        m.itemId = r.readString();
+        m.displayName = r.readString();
+        m.rarity = r.readString();
+        m.quantity = r.readU16();
+        m.enchantLevel = r.readU8();
+        return m;
+    }
+};
+
+struct SvBagContentsMsg {
+    uint8_t bagSlot = 0;
+    uint8_t slotCount = 0;
+    std::string bagName;
+    std::vector<SvBagContentsSlot> items;
+    void write(ByteWriter& w) const {
+        w.writeU8(bagSlot);
+        w.writeU8(slotCount);
+        w.writeString(bagName);
+        w.writeU16(static_cast<uint16_t>(items.size()));
+        for (const auto& item : items) item.write(w);
+    }
+    static SvBagContentsMsg read(ByteReader& r) {
+        SvBagContentsMsg m;
+        m.bagSlot = r.readU8();
+        m.slotCount = r.readU8();
+        m.bagName = r.readString();
+        uint16_t count = r.readU16();
+        m.items.resize(count);
+        for (uint16_t i = 0; i < count; ++i)
+            m.items[i] = SvBagContentsSlot::read(r);
+        return m;
+    }
+};
+
 } // namespace fate

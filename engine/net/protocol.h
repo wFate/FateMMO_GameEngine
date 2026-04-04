@@ -624,6 +624,8 @@ struct InventorySyncSlot {
     std::string socketStat;
     int32_t socketValue = 0;
     uint8_t isBroken = 0;
+    uint8_t isBag = 0;
+    uint8_t bagSlotCount = 0;
 };
 
 struct InventorySyncEquip {
@@ -668,6 +670,8 @@ struct SvInventorySyncMsg {
             w.writeString(s.socketStat);
             w.writeI32(s.socketValue);
             w.writeU8(s.isBroken);
+            w.writeU8(s.isBag);
+            w.writeU8(s.bagSlotCount);
         }
         w.writeU16(static_cast<uint16_t>(equipment.size()));
         for (const auto& e : equipment) {
@@ -711,6 +715,8 @@ struct SvInventorySyncMsg {
             m.slots[i].socketStat = r.readString();
             m.slots[i].socketValue = r.readI32();
             m.slots[i].isBroken = r.readU8();
+            m.slots[i].isBag = r.readU8();
+            m.slots[i].bagSlotCount = r.readU8();
         }
         uint16_t equipCount = r.readU16();
         m.equipment.resize(equipCount);

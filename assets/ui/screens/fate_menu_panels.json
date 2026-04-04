@@ -101,7 +101,6 @@
           "SET",
           "SHP",
           "PET",
-          "CRAFT",
           "COL",
           "COS"
         ],
@@ -1537,6 +1536,22 @@
           0.8999999761581421
         ],
         "visible": false
+      },
+      {
+        "anchor": {
+          "preset": "TopLeft",
+          "offset": [380.0, 100.0],
+          "size": [220.0, 280.0]
+        },
+        "id": "bag_view_panel",
+        "type": "bag_view_panel",
+        "visible": false,
+        "slotSize": 36.0,
+        "slotPadding": 4.0,
+        "gridColumns": 5,
+        "titleFontSize": 13.0,
+        "slotFontSize": 10.0,
+        "zOrder": 110
       },
       {
         "anchor": {

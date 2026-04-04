@@ -697,6 +697,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onMarketListings) onMarketListings(msg);
             break;
         }
+        case PacketType::SvBagContents: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvBagContentsMsg::read(payload);
+            if (onBagContents) onBagContents(msg);
+            break;
+        }
         default:
             break;
     }
@@ -1195,6 +1201,36 @@ void NetClient::sendOpenCrafting(uint32_t npcId) {
     msg.npcId = npcId;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdOpenCrafting, w.data(), w.size());
+}
+
+void NetClient::sendOpenBag(uint8_t inventorySlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdOpenBagMsg msg;
+    msg.inventorySlot = inventorySlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdOpenBag, w.data(), w.size());
+}
+
+void NetClient::sendBagStore(uint8_t srcSlot, uint8_t bagSlot, uint8_t bagSubSlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdBagStoreMsg msg;
+    msg.srcInventorySlot = srcSlot;
+    msg.bagSlot = bagSlot;
+    msg.bagSubSlot = bagSubSlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBagStore, w.data(), w.size());
+}
+
+void NetClient::sendBagRetrieve(uint8_t bagSlot, uint8_t bagSubSlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdBagRetrieveMsg msg;
+    msg.bagSlot = bagSlot;
+    msg.bagSubSlot = bagSubSlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBagRetrieve, w.data(), w.size());
 }
 
 void NetClient::sendSocketItem(uint8_t equipSlot, const std::string& scrollItemId) {
