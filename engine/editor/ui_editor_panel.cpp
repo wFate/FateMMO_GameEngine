@@ -60,6 +60,7 @@
 #include "engine/ui/widgets/emoticon_panel.h"
 #include "engine/ui/widgets/quantity_selector.h"
 #include "engine/ui/widgets/bag_view_panel.h"
+#include "engine/ui/widgets/loading_panel.h"
 #endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <cstdio>
@@ -2815,6 +2816,27 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::Separator();
         ImGui::Text("Listings: %zu", mp->listings.size());
         ImGui::Text("Page: %d / %d", mp->currentPage, mp->totalPages);
+    }
+    else if (auto* lp = dynamic_cast<LoadingPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("LoadingPanel");
+        if (ImGui::TreeNodeEx("Layout##lp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Bar Height", &lp->barHeight, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Bar Pad X", &lp->barPadX, 0.5f, 0.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Bar Bottom Y", &lp->barBottomY, 0.5f, 0.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Name Font Size", &lp->nameFontSize, 0.5f, 8.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Pct Font Size", &lp->pctFontSize, 0.5f, 6.0f, 36.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Offset##lp", &lp->shadowOffset, 0.1f, 0.0f, 5.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Colors##lp", ImGuiTreeNodeFlags_None)) {
+            ImGui::ColorEdit4("BG##lp", &lp->bgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bar BG##lp", &lp->barBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bar Fill##lp", &lp->barFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Name##lp", &lp->nameColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Pct##lp", &lp->pctColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##lp", &lp->shadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else {
         ImGui::TextDisabled("(no widget-specific properties)");
