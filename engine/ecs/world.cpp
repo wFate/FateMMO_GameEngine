@@ -1,6 +1,7 @@
 #include "engine/ecs/world.h"
 #include "engine/core/logger.h"
 #include <algorithm>
+#include <cassert>
 
 namespace fate {
 
@@ -140,6 +141,7 @@ Entity* World::findByTag(const std::string& tag) const {
 // --- Type-erased component addition ---
 
 void* World::addComponentById(EntityHandle handle, CompId id, size_t size, size_t alignment) {
+    assert(iteratingDepth_ == 0 && "Structural changes during forEach are not allowed — use CommandBuffer");
     Entity* entity = getEntity(handle);
     if (!entity) return nullptr;
 

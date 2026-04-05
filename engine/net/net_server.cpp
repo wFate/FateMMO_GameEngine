@@ -92,7 +92,7 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
         if (client->crypto.hasKeys() && !isSystemPacket(hdr.packetType) && payloadLen > 0) {
             if (payloadLen <= PacketCrypto::TAG_SIZE) return; // too short
             size_t decryptedSize = payloadLen - PacketCrypto::TAG_SIZE;
-            if (!client->crypto.decrypt(payloadData, payloadLen, hdr.sequence,
+            if (!client->crypto.decrypt(payloadData, payloadLen, client->crypto.buildDecryptNonce(hdr.sequence),
                                         decryptedBuf, sizeof(decryptedBuf))) {
                 return; // tampered or wrong key — silently drop
             }
@@ -237,7 +237,7 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
     if (client.crypto.hasKeys() && !isSystemPacket(packetType) && payload && payloadSize > 0) {
         size_t encSize = payloadSize + PacketCrypto::TAG_SIZE;
         if (encSize <= sizeof(encryptedBuf) &&
-            client.crypto.encrypt(payload, payloadSize, hdr.sequence, encryptedBuf, sizeof(encryptedBuf))) {
+            client.crypto.encrypt(payload, payloadSize, client.crypto.buildEncryptNonce(hdr.sequence), encryptedBuf, sizeof(encryptedBuf))) {
             sendPayload = encryptedBuf;
             sendPayloadSize = encSize;
         }
@@ -275,8 +275,17 @@ void NetServer::processRetransmits(float currentTime) {
         float retransmitDelay = (std::max)(0.2f, client.reliability.rtt() * 2.0f);
         auto retransmits = client.reliability.getRetransmits(currentTime, retransmitDelay);
         for (auto& pkt : retransmits) {
-            socket_.sendTo(pkt.data.data(), pkt.data.size(), client.address);
-            client.reliability.markRetransmitted(pkt.sequence, currentTime);
+            // Patch stale ack/ackBits in stored buffer with fresh values
+            // Header layout: protocolId(2) + sessionToken(4) + sequence(2) + ack(2) + ackBits(4)
+            if (pkt->data.size() >= PACKET_HEADER_SIZE) {
+                uint16_t freshAck;
+                uint32_t freshAckBits;
+                client.reliability.buildAckFields(freshAck, freshAckBits);
+                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 8, &freshAck, sizeof(freshAck));
+                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 10, &freshAckBits, sizeof(freshAckBits));
+            }
+            socket_.sendTo(pkt->data.data(), pkt->data.size(), client.address);
+            client.reliability.markRetransmitted(pkt->sequence, currentTime);
         }
     });
 }

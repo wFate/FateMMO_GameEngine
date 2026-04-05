@@ -32,6 +32,8 @@ struct ChunkGPU {
     unsigned int ebo = 0;
     int vertexCount = 0;
     int indexCount = 0;
+    size_t vboCapacity = 0;  // allocated GPU buffer size in bytes
+    size_t eboCapacity = 0;  // allocated GPU buffer size in bytes
     bool uploaded = false;
     unsigned int textureId = 0; // the tileset GL texture for this chunk
 

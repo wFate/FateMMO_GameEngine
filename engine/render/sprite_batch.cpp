@@ -243,6 +243,12 @@ void SpriteBatch::begin(const Mat4& viewProjection) {
     spriteCount_ = 0;
     drawing_ = true;
     sortDirty_ = true;
+#ifndef FATEMMO_METAL
+    // Cache viewport height once per frame to avoid glGetIntegerv stalls in scissor
+    GLint vp[4];
+    glGetIntegerv(GL_VIEWPORT, vp);
+    cachedViewportHeight_ = vp[3];
+#endif
 }
 
 void SpriteBatch::draw(const std::shared_ptr<Texture>& texture, const SpriteDrawParams& params) {
@@ -412,13 +418,9 @@ void SpriteBatch::applyScissorState() {
     int ch = static_cast<int>(clip.h);
 
 #ifndef FATEMMO_METAL
-    // GL scissor uses bottom-left origin — flip Y
-    GLint vp[4];
-    glGetIntegerv(GL_VIEWPORT, vp);
-    int vpH = vp[3];
-
+    // GL scissor uses bottom-left origin — flip Y (use cached viewport height)
     glEnable(GL_SCISSOR_TEST);
-    glScissor(cx, vpH - cy - ch, cw, ch);
+    glScissor(cx, cachedViewportHeight_ - cy - ch, cw, ch);
 #else
     // Metal uses top-left origin (same as screen space)
     if (metalEncoder_) {
@@ -765,7 +767,7 @@ void SpriteBatch::flush() {
 
 void SpriteBatch::setBlendMode(BlendMode mode) {
     if (mode == blendMode_) return;
-    flush(); // must flush before changing blend state
+    flushPending(); // must flush AND clear before changing blend state
     blendMode_ = mode;
 
     if (cmdList_) {
@@ -798,17 +800,29 @@ void SpriteBatch::setBlendMode(BlendMode mode) {
 
 void SpriteBatch::setPalette(const Color* colors, int count) {
     count = (std::min)(count, 16);
-    shader_.bind();
-    shader_.setFloat("u_paletteSize", static_cast<float>(count));
-    for (int i = 0; i < count; ++i) {
-        std::string name = "u_palette[" + std::to_string(i) + "]";
-        shader_.setVec4(name, colors[i].r, colors[i].g, colors[i].b, colors[i].a);
+    if (cmdList_) {
+        cmdList_->setUniform("u_paletteSize", static_cast<float>(count));
+        for (int i = 0; i < count; ++i) {
+            std::string name = "u_palette[" + std::to_string(i) + "]";
+            cmdList_->setUniform(name.c_str(), colors[i]);
+        }
+    } else {
+        shader_.bind();
+        shader_.setFloat("u_paletteSize", static_cast<float>(count));
+        for (int i = 0; i < count; ++i) {
+            std::string name = "u_palette[" + std::to_string(i) + "]";
+            shader_.setVec4(name, colors[i].r, colors[i].g, colors[i].b, colors[i].a);
+        }
     }
 }
 
 void SpriteBatch::clearPalette() {
-    shader_.bind();
-    shader_.setFloat("u_paletteSize", 0.0f);
+    if (cmdList_) {
+        cmdList_->setUniform("u_paletteSize", 0.0f);
+    } else {
+        shader_.bind();
+        shader_.setFloat("u_paletteSize", 0.0f);
+    }
 }
 
 void SpriteBatch::drawPaletteSwapped(std::shared_ptr<Texture>& texture,

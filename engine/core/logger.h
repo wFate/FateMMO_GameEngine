@@ -8,6 +8,7 @@
 #include <functional>
 #include <cstdio>
 #include <cstdarg>
+#include <mutex>
 
 namespace fate {
 
@@ -79,19 +80,24 @@ public:
         vsnprintf(buffer, sizeof(buffer), fmt, args);
         va_end(args);
 
-        auto logger = spdlog::get(category);
-        if (!logger) {
-            if (defaultLogger_) {
-                logger = std::make_shared<spdlog::logger>(
-                    category,
-                    defaultLogger_->sinks().begin(),
-                    defaultLogger_->sinks().end());
-                logger->set_level(defaultLogger_->level());
-                logger->set_pattern("[%H:%M:%S.%e] [%^%l%$] [%n] %v");
-                spdlog::register_logger(logger);
-            } else {
-                fprintf(stderr, "[%s] %s\n", category, buffer);
-                return;
+        std::shared_ptr<spdlog::logger> logger;
+        {
+            static std::mutex loggerMtx;
+            std::lock_guard<std::mutex> lock(loggerMtx);
+            logger = spdlog::get(category);
+            if (!logger) {
+                if (defaultLogger_) {
+                    logger = std::make_shared<spdlog::logger>(
+                        category,
+                        defaultLogger_->sinks().begin(),
+                        defaultLogger_->sinks().end());
+                    logger->set_level(defaultLogger_->level());
+                    logger->set_pattern("[%H:%M:%S.%e] [%^%l%$] [%n] %v");
+                    spdlog::register_logger(logger);
+                } else {
+                    fprintf(stderr, "[%s] %s\n", category, buffer);
+                    return;
+                }
             }
         }
 

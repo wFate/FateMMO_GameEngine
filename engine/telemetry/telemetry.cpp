@@ -2,6 +2,7 @@
 #include <spdlog/spdlog.h>
 
 void TelemetryCollector::record(const std::string& name, float value) {
+    if (pending_.size() >= MAX_PENDING) return; // drop new entries at capacity
     auto now = std::chrono::duration<double>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     pending_.push_back({name, value, now});

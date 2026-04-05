@@ -22,6 +22,8 @@ struct UndoCommand {
     virtual void undo(World* world) = 0;
     virtual void redo(World* world) = 0;
     virtual std::string description() const = 0;
+    // Update any stored EntityHandles that match oldH to newH (used by PropertyCommand fixup)
+    virtual void remapEntityHandle(EntityHandle oldH, EntityHandle newH) { (void)oldH; (void)newH; }
 };
 
 // Move entity
@@ -38,6 +40,9 @@ struct MoveCommand : UndoCommand {
         if (e) if (auto* t = e->getComponent<Transform>()) t->position = newPos;
     }
     std::string description() const override { return "Move"; }
+    void remapEntityHandle(EntityHandle oldH, EntityHandle newH) override {
+        if (entityHandle == oldH) entityHandle = newH;
+    }
 };
 
 // Resize entity
@@ -48,6 +53,9 @@ struct ResizeCommand : UndoCommand {
     void undo(World* w) override;
     void redo(World* w) override;
     std::string description() const override { return "Resize"; }
+    void remapEntityHandle(EntityHandle oldH, EntityHandle newH) override {
+        if (entityHandle == oldH) entityHandle = newH;
+    }
 };
 
 // Create entity (undo = delete, redo = recreate)
@@ -63,6 +71,9 @@ struct CreateCommand : UndoCommand {
         if (e) createdHandle = e->handle();
     }
     std::string description() const override { return "Create"; }
+    void remapEntityHandle(EntityHandle oldH, EntityHandle newH) override {
+        if (createdHandle == oldH) createdHandle = newH;
+    }
 };
 
 // Delete entity (undo = recreate, redo = delete)
@@ -78,6 +89,9 @@ struct DeleteCommand : UndoCommand {
         if (deletedHandle) { w->destroyEntity(deletedHandle); w->processDestroyQueue(); }
     }
     std::string description() const override { return "Delete"; }
+    void remapEntityHandle(EntityHandle oldH, EntityHandle newH) override {
+        if (deletedHandle == oldH) deletedHandle = newH;
+    }
 };
 
 // Rotate entity
@@ -94,6 +108,9 @@ struct RotateCommand : UndoCommand {
         if (e) if (auto* t = e->getComponent<Transform>()) t->rotation = newRotation;
     }
     std::string description() const override { return "Rotate"; }
+    void remapEntityHandle(EntityHandle oldH, EntityHandle newH) override {
+        if (entityHandle == oldH) entityHandle = newH;
+    }
 };
 
 // Scale entity (via ImGuizmo)
@@ -110,6 +127,9 @@ struct ScaleCommand : UndoCommand {
         if (e) if (auto* t = e->getComponent<Transform>()) t->scale = newScale;
     }
     std::string description() const override { return "Scale"; }
+    void remapEntityHandle(EntityHandle oldH, EntityHandle newH) override {
+        if (entityHandle == oldH) entityHandle = newH;
+    }
 };
 
 // Generic property change (stores full entity snapshot)
@@ -121,6 +141,9 @@ struct PropertyCommand : UndoCommand {
     void undo(World* w) override;
     void redo(World* w) override;
     std::string description() const override { return desc; }
+    void remapEntityHandle(EntityHandle oldH, EntityHandle newH) override {
+        if (entityHandle == oldH) entityHandle = newH;
+    }
 };
 
 // Group multiple commands into a single undo step (e.g., brush stroke)
@@ -138,6 +161,10 @@ struct CompoundCommand : UndoCommand {
     }
     std::string description() const override { return desc; }
     bool empty() const { return commands.empty(); }
+    void remapEntityHandle(EntityHandle oldH, EntityHandle newH) override {
+        for (auto& cmd : commands)
+            cmd->remapEntityHandle(oldH, newH);
+    }
 };
 
 #ifdef FATE_HAS_GAME
@@ -207,6 +234,15 @@ public:
     }
 
     void clear() { undoStack_.clear(); redoStack_.clear(); }
+
+    // After a command recreates an entity (new handle), update all other commands
+    // in both stacks so they reference the new handle instead of the stale one.
+    void remapHandle(EntityHandle oldH, EntityHandle newH) {
+        for (auto& cmd : undoStack_)
+            cmd->remapEntityHandle(oldH, newH);
+        for (auto& cmd : redoStack_)
+            cmd->remapEntityHandle(oldH, newH);
+    }
 
     size_t undoCount() const { return undoStack_.size(); }
     size_t redoCount() const { return redoStack_.size(); }

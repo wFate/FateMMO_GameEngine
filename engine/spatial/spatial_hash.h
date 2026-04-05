@@ -194,9 +194,8 @@ private:
     }
 
     uint32_t hashCell(int cx, int cy) const {
-        // Mueller-style spatial hash
-        uint32_t raw = static_cast<uint32_t>(
-            std::abs(cx * 92837111 ^ cy * 689287499));
+        // Mueller-style spatial hash (unsigned to avoid signed overflow UB)
+        uint32_t raw = static_cast<uint32_t>(cx) * 92837111u ^ static_cast<uint32_t>(cy) * 689287499u;
         return raw % tableSize_;
     }
 

@@ -6,6 +6,7 @@
 #include "engine/core/logger.h"
 #include "engine/asset/asset_registry.h"
 #include "stb_image.h"
+#include <algorithm>
 #include <fstream>
 #include <cstring>
 #include <filesystem>
@@ -351,21 +352,35 @@ void TextureCache::touch(const std::string& path) {
 }
 
 void TextureCache::evictIfOverBudget() {
+    if (estimatedVRAM_ <= vramBudget_ || cache_.empty()) return;
+
     size_t target = static_cast<size_t>(vramBudget_ * 0.85); // evict to 85%
-    while (estimatedVRAM_ > vramBudget_ && !cache_.empty()) {
-        // Find oldest entry with refcount == 1 (only cache holds it)
-        auto oldest = cache_.end();
-        uint64_t oldestFrame = UINT64_MAX;
-        for (auto it = cache_.begin(); it != cache_.end(); ++it) {
-            if (it->second.texture.use_count() <= 1 &&
-                it->second.lastAccessFrame < oldestFrame) {
-                oldest = it;
-                oldestFrame = it->second.lastAccessFrame;
-            }
+
+    // Single-pass: collect all evictable entries (refcount == 1)
+    struct Candidate {
+        std::string key;
+        uint64_t lastAccessFrame;
+        size_t bytes;
+    };
+    std::vector<Candidate> candidates;
+    candidates.reserve(cache_.size());
+    for (auto& [key, entry] : cache_) {
+        if (entry.texture.use_count() <= 1) {
+            candidates.push_back({key, entry.lastAccessFrame, entry.estimatedBytes});
         }
-        if (oldest == cache_.end()) break; // everything is in use
-        estimatedVRAM_ -= oldest->second.estimatedBytes;
-        cache_.erase(oldest);
+    }
+    if (candidates.empty()) return; // everything is in use
+
+    // Sort by oldest access first
+    std::sort(candidates.begin(), candidates.end(),
+        [](const Candidate& a, const Candidate& b) {
+            return a.lastAccessFrame < b.lastAccessFrame;
+        });
+
+    // Evict from oldest until under target
+    for (auto& c : candidates) {
+        estimatedVRAM_ -= c.bytes;
+        cache_.erase(c.key);
         if (estimatedVRAM_ <= target) break;
     }
 }

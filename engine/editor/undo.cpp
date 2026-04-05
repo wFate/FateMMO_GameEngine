@@ -29,19 +29,29 @@ void ResizeCommand::redo(World* w) {
 void PropertyCommand::undo(World* w) {
     auto* e = w->getEntity(entityHandle);
     if (!e) return;
+    EntityHandle oldH = entityHandle;
     w->destroyEntity(entityHandle);
     w->processDestroyQueue();
     auto* restored = PrefabLibrary::jsonToEntity(oldState, *w);
-    if (restored) entityHandle = restored->handle();
+    if (restored) {
+        entityHandle = restored->handle();
+        if (entityHandle != oldH)
+            UndoSystem::instance().remapHandle(oldH, entityHandle);
+    }
 }
 
 void PropertyCommand::redo(World* w) {
     auto* e = w->getEntity(entityHandle);
     if (!e) return;
+    EntityHandle oldH = entityHandle;
     w->destroyEntity(entityHandle);
     w->processDestroyQueue();
     auto* restored = PrefabLibrary::jsonToEntity(newState, *w);
-    if (restored) entityHandle = restored->handle();
+    if (restored) {
+        entityHandle = restored->handle();
+        if (entityHandle != oldH)
+            UndoSystem::instance().remapHandle(oldH, entityHandle);
+    }
 }
 
 #ifdef FATE_HAS_GAME

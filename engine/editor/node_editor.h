@@ -44,8 +44,8 @@ private:
 
     std::vector<EditorNode> nodes_;
     int nextNodeId_ = 1;
-    int nextChoiceId_ = 1000;
-    int nextLinkId_ = 10000;
+    int nextChoiceId_ = 100000;
+    int nextLinkId_ = 200000;
 
     // Track links: linkId -> {choiceAttrId, targetAttrId}
     struct LinkInfo {

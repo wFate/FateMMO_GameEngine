@@ -164,6 +164,7 @@ private:
 #endif
 
     Mat4 viewProjection_;
+    int cachedViewportHeight_ = 0;  // cached to avoid glGetIntegerv stalls in scissor
     std::vector<BatchEntry> entries_;
     std::vector<SpriteVertex> vertices_;
 

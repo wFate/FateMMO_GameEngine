@@ -239,10 +239,13 @@ bool App::init(const AppConfig& config) {
 void App::run() {
     Uint64 lastTick = SDL_GetPerformanceCounter();
     Uint64 freq = SDL_GetPerformanceFrequency();
+    const double targetFrameTime = (config_.targetFPS > 0)
+        ? 1.0 / static_cast<double>(config_.targetFPS) : 0.0;
 
     while (running_) {
+        Uint64 frameStartTick = SDL_GetPerformanceCounter();
         frameArena_.swap();
-        Uint64 currentTick = SDL_GetPerformanceCounter();
+        Uint64 currentTick = frameStartTick;
         deltaTime_ = (float)(currentTick - lastTick) / (float)freq;
         lastTick = currentTick;
 
@@ -260,6 +263,16 @@ void App::run() {
         render();
 
         FATE_FRAME_MARK;
+
+        // Frame pacing when VSync is off — cap to targetFPS to avoid burning CPU
+        if (!config_.vsync && targetFrameTime > 0.0) {
+            Uint64 frameEndTick = SDL_GetPerformanceCounter();
+            double elapsed = static_cast<double>(frameEndTick - frameStartTick) / static_cast<double>(freq);
+            if (elapsed < targetFrameTime) {
+                Uint32 sleepMs = static_cast<Uint32>((targetFrameTime - elapsed) * 1000.0);
+                if (sleepMs > 0) SDL_Delay(sleepMs);
+            }
+        }
     }
 }
 

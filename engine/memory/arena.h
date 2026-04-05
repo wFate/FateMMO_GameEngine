@@ -81,11 +81,19 @@ public:
             size_t commitTarget = alignUp(newPos, pageSize());
             if (commitTarget > reserveSize_) commitTarget = reserveSize_;
 #ifdef _WIN32
-            VirtualAlloc(base_ + committed_, commitTarget - committed_,
+            void* committed = VirtualAlloc(base_ + committed_, commitTarget - committed_,
                          MEM_COMMIT, PAGE_READWRITE);
+            if (!committed) {
+                LOG_ERROR("Arena", "VirtualAlloc commit failed (%zu bytes)", commitTarget - committed_);
+                return nullptr;
+            }
 #else
-            mprotect(base_ + committed_, commitTarget - committed_,
+            int ret = mprotect(base_ + committed_, commitTarget - committed_,
                      PROT_READ | PROT_WRITE);
+            if (ret != 0) {
+                LOG_ERROR("Arena", "mprotect commit failed (%zu bytes)", commitTarget - committed_);
+                return nullptr;
+            }
 #endif
             committed_ = commitTarget;
         }

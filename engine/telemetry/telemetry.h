@@ -15,6 +15,8 @@ public:
     void setSessionId(const std::string& id) { sessionId_ = id; }
     void setEndpoint(const std::string& url) { endpoint_ = url; }
 
+    static constexpr size_t MAX_PENDING = 10000;
+
     void record(const std::string& name, float value);
     size_t pendingCount() const { return pending_.size(); }
 

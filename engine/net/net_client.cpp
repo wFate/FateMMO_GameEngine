@@ -219,8 +219,17 @@ void NetClient::poll(float currentTime) {
         float retransmitDelay = (std::max)(0.2f, reliability_.rtt() * 2.0f);
         auto retransmits = reliability_.getRetransmits(currentTime, retransmitDelay);
         for (auto& pkt : retransmits) {
-            socket_.sendTo(pkt.data.data(), pkt.data.size(), serverAddress_);
-            reliability_.markRetransmitted(pkt.sequence, currentTime);
+            // Patch stale ack/ackBits in stored buffer with fresh values
+            // Header layout: protocolId(2) + sessionToken(4) + sequence(2) + ack(2) + ackBits(4)
+            if (pkt->data.size() >= PACKET_HEADER_SIZE) {
+                uint16_t freshAck;
+                uint32_t freshAckBits;
+                reliability_.buildAckFields(freshAck, freshAckBits);
+                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 8, &freshAck, sizeof(freshAck));
+                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 10, &freshAckBits, sizeof(freshAckBits));
+            }
+            socket_.sendTo(pkt->data.data(), pkt->data.size(), serverAddress_);
+            reliability_.markRetransmitted(pkt->sequence, currentTime);
         }
     }
 }
@@ -267,12 +276,19 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
     const uint8_t* payloadData = data + r.position();
     size_t payloadLen = hdr.payloadSize;
 
+    // Validate payloadSize against actual remaining bytes in packet
+    size_t actualRemaining = static_cast<size_t>(size) - r.position();
+    if (payloadLen > actualRemaining) {
+        LOG_WARN("NetClient", "Server payloadSize %zu exceeds remaining %zu bytes", payloadLen, actualRemaining);
+        return;
+    }
+
     if (crypto_.hasKeys() && !isSystemPacket(hdr.packetType) && payloadLen > 0) {
         if (payloadLen <= PacketCrypto::TAG_SIZE) {
             return; // too short to contain tag --drop
         }
         size_t decryptedSize = payloadLen - PacketCrypto::TAG_SIZE;
-        if (!crypto_.decrypt(payloadData, payloadLen, hdr.sequence, decryptedBuf, sizeof(decryptedBuf))) {
+        if (!crypto_.decrypt(payloadData, payloadLen, crypto_.buildDecryptNonce(hdr.sequence), decryptedBuf, sizeof(decryptedBuf))) {
             return; // tampered or wrong key --silently drop
         }
         payloadData = decryptedBuf;
@@ -973,7 +989,7 @@ void NetClient::sendPacket(Channel channel, uint8_t packetType,
     if (crypto_.hasKeys() && !isSystemPacket(packetType) && payload && payloadSize > 0) {
         size_t encSize = payloadSize + PacketCrypto::TAG_SIZE;
         if (encSize <= sizeof(encryptedBuf) &&
-            crypto_.encrypt(payload, payloadSize, hdr.sequence, encryptedBuf, sizeof(encryptedBuf))) {
+            crypto_.encrypt(payload, payloadSize, crypto_.buildEncryptNonce(hdr.sequence), encryptedBuf, sizeof(encryptedBuf))) {
             sendPayload = encryptedBuf;
             sendPayloadSize = encSize;
         }

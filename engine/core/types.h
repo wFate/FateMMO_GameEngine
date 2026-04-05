@@ -302,8 +302,8 @@ namespace Coords {
         return { tile.x * TILE_SIZE, tile.y * TILE_SIZE };
     }
 
-    inline int tileX(float pixelX) { return (int)(pixelX / TILE_SIZE); }
-    inline int tileY(float pixelY) { return (int)(pixelY / TILE_SIZE); }
+    inline int tileX(float pixelX) { return (int)std::floor(pixelX / TILE_SIZE); }
+    inline int tileY(float pixelY) { return (int)std::floor(pixelY / TILE_SIZE); }
 }
 
 } // namespace fate

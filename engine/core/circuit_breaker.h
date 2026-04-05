@@ -22,17 +22,24 @@ public:
             }
             return false;
         }
-        return true; // HalfOpen allows one request
+        // HalfOpen: allow only one probe request
+        if (!halfOpenProbeUsed_) {
+            halfOpenProbeUsed_ = true;
+            return true;
+        }
+        return false;
     }
 
     void recordSuccess() {
         consecutiveFailures_ = 0;
+        halfOpenProbeUsed_ = false;
         state_ = CircuitState::Closed;
     }
 
     void recordFailure() {
         ++consecutiveFailures_;
-        if (consecutiveFailures_ >= failureThreshold_) {
+        if (consecutiveFailures_ >= failureThreshold_ || state_ == CircuitState::HalfOpen) {
+            halfOpenProbeUsed_ = false;
             state_ = CircuitState::Open;
             openedAt_ = std::chrono::steady_clock::now();
         }
@@ -46,6 +53,7 @@ private:
     float cooldownSeconds_;
     CircuitState state_ = CircuitState::Closed;
     uint32_t consecutiveFailures_ = 0;
+    bool halfOpenProbeUsed_ = false;
     std::chrono::steady_clock::time_point openedAt_;
 };
 

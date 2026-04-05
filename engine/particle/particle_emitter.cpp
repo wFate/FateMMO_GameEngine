@@ -1,12 +1,11 @@
 #include "engine/particle/particle_emitter.h"
-#include <cstdlib>
 #include <cmath>
 #include <algorithm>
 
 namespace fate {
 
 float ParticleEmitter::randomRange(float min, float max) {
-    float t = static_cast<float>(rand()) / RAND_MAX;
+    float t = dist01_(rng_);
     return min + t * (max - min);
 }
 

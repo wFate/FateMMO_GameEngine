@@ -315,24 +315,30 @@ void ChunkRenderer::rebuildChunk(ChunkData& chunk, const std::vector<Tileset>& t
 
     auto& device = gfx::Device::instance();
 
-    // Create or recreate VBO
+    // Update or recreate VBO (reuse if existing buffer is large enough)
     size_t vboSize = vertexBuf_.size() * sizeof(SpriteVertex);
-    if (gpu.vboHandle.valid()) {
-        device.destroy(gpu.vboHandle);
+    if (gpu.vboHandle.valid() && gpu.vboCapacity >= vboSize) {
+        device.updateBuffer(gpu.vboHandle, vertexBuf_.data(), vboSize);
+    } else {
+        if (gpu.vboHandle.valid()) device.destroy(gpu.vboHandle);
+        gpu.vboHandle = device.createBuffer(gfx::BufferType::Vertex, gfx::BufferUsage::Dynamic,
+                                             vboSize, vertexBuf_.data());
+        gpu.vboCapacity = vboSize;
     }
-    gpu.vboHandle = device.createBuffer(gfx::BufferType::Vertex, gfx::BufferUsage::Static,
-                                         vboSize, vertexBuf_.data());
 #ifndef FATEMMO_METAL
     gpu.vbo = device.resolveGLBuffer(gpu.vboHandle);
 #endif
 
-    // Create or recreate EBO
+    // Update or recreate EBO (reuse if existing buffer is large enough)
     size_t eboSize = indexBuf_.size() * sizeof(unsigned int);
-    if (gpu.eboHandle.valid()) {
-        device.destroy(gpu.eboHandle);
+    if (gpu.eboHandle.valid() && gpu.eboCapacity >= eboSize) {
+        device.updateBuffer(gpu.eboHandle, indexBuf_.data(), eboSize);
+    } else {
+        if (gpu.eboHandle.valid()) device.destroy(gpu.eboHandle);
+        gpu.eboHandle = device.createBuffer(gfx::BufferType::Index, gfx::BufferUsage::Dynamic,
+                                             eboSize, indexBuf_.data());
+        gpu.eboCapacity = eboSize;
     }
-    gpu.eboHandle = device.createBuffer(gfx::BufferType::Index, gfx::BufferUsage::Static,
-                                         eboSize, indexBuf_.data());
 #ifndef FATEMMO_METAL
     gpu.ebo = device.resolveGLBuffer(gpu.eboHandle);
 
@@ -403,24 +409,30 @@ void ChunkRenderer::rebuildChunkTextureArray(ChunkData& chunk,
 
     auto& device = gfx::Device::instance();
 
-    // Create or recreate VBO (TileChunkVertex sized)
+    // Update or recreate VBO (reuse if existing buffer is large enough)
     size_t vboSize = tileVertexBuf_.size() * sizeof(TileChunkVertex);
-    if (gpu.vboHandle.valid()) {
-        device.destroy(gpu.vboHandle);
+    if (gpu.vboHandle.valid() && gpu.vboCapacity >= vboSize) {
+        device.updateBuffer(gpu.vboHandle, tileVertexBuf_.data(), vboSize);
+    } else {
+        if (gpu.vboHandle.valid()) device.destroy(gpu.vboHandle);
+        gpu.vboHandle = device.createBuffer(gfx::BufferType::Vertex, gfx::BufferUsage::Dynamic,
+                                             vboSize, tileVertexBuf_.data());
+        gpu.vboCapacity = vboSize;
     }
-    gpu.vboHandle = device.createBuffer(gfx::BufferType::Vertex, gfx::BufferUsage::Static,
-                                         vboSize, tileVertexBuf_.data());
 #ifndef FATEMMO_METAL
     gpu.vbo = device.resolveGLBuffer(gpu.vboHandle);
 #endif
 
-    // Create or recreate EBO
+    // Update or recreate EBO (reuse if existing buffer is large enough)
     size_t eboSize = indexBuf_.size() * sizeof(unsigned int);
-    if (gpu.eboHandle.valid()) {
-        device.destroy(gpu.eboHandle);
+    if (gpu.eboHandle.valid() && gpu.eboCapacity >= eboSize) {
+        device.updateBuffer(gpu.eboHandle, indexBuf_.data(), eboSize);
+    } else {
+        if (gpu.eboHandle.valid()) device.destroy(gpu.eboHandle);
+        gpu.eboHandle = device.createBuffer(gfx::BufferType::Index, gfx::BufferUsage::Dynamic,
+                                             eboSize, indexBuf_.data());
+        gpu.eboCapacity = eboSize;
     }
-    gpu.eboHandle = device.createBuffer(gfx::BufferType::Index, gfx::BufferUsage::Static,
-                                         eboSize, indexBuf_.data());
 #ifndef FATEMMO_METAL
     gpu.ebo = device.resolveGLBuffer(gpu.eboHandle);
 

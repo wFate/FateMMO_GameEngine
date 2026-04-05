@@ -119,8 +119,10 @@ void JobSystem::waitForCounter(Counter* counter, int target) {
     waitList_[idx].fiber = fiber::current();
     waitList_[idx].counter = counter;
     waitList_[idx].target = target;
+    waitList_[idx].fiberIndex = t_currentFiberIndex;
     waitLock_.clear(std::memory_order_release);
 
+    fiberContexts_[t_currentFiberIndex].suspended = true;
     fiber::switchTo(t_schedulerFiber);
 }
 
@@ -160,8 +162,11 @@ void JobSystem::workerMain(int workerIndex) {
 
         fiber::switchTo(f);
 
-        // Fiber returned — release it
-        releaseFiber(fiberIdx);
+        // Fiber returned — only release if it didn't suspend (waitForCounter)
+        if (!fiberContexts_[fiberIdx].suspended) {
+            releaseFiber(fiberIdx);
+        }
+        fiberContexts_[fiberIdx].suspended = false;
     }
 
     fiber::convertFiberToThread();
@@ -224,6 +229,7 @@ void JobSystem::checkWaitList() {
             if (entry.counter->value.load(std::memory_order_acquire) <= entry.target) {
                 FiberHandle f = entry.fiber;
                 Counter* c = entry.counter;
+                int resumedFiberIndex = entry.fiberIndex;
 
                 // Remove from wait list (swap with last)
                 entry = waitList_[count - 1];
@@ -231,14 +237,20 @@ void JobSystem::checkWaitList() {
                 waitCount_.fetch_sub(1, std::memory_order_relaxed);
                 --count;
                 --i;
-
                 waitLock_.clear(std::memory_order_release);
 
                 // Resume the waiting fiber — release counter AFTER it returns,
                 // so the fiber can't observe a recycled counter.
-                t_currentFiberIndex = -1;
+                int savedFiberIndex = t_currentFiberIndex;
+                t_currentFiberIndex = resumedFiberIndex;
                 fiber::switchTo(f);
+                t_currentFiberIndex = savedFiberIndex;
                 counterPool_.release(c);
+
+                // Resumed fiber completed — release its slot
+                if (resumedFiberIndex >= 0) {
+                    releaseFiber(resumedFiberIndex);
+                }
 
                 // Re-acquire lock to continue
                 while (waitLock_.test_and_set(std::memory_order_acquire)) {}

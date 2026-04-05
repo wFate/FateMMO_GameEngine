@@ -134,11 +134,13 @@ private:
         FiberHandle fiber = nullptr;
         Counter* counter = nullptr;
         int target = 0;
+        int fiberIndex = -1;
     };
 
     struct FiberContext {
         Job currentJob;
         int workerIndex = -1;
+        bool suspended = false;
     };
 
     std::thread workers_[8];

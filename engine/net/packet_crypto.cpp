@@ -105,6 +105,17 @@ void PacketCrypto::setKeys(const Key& encryptKey, const Key& decryptKey) {
     encryptKey_ = encryptKey;
     decryptKey_ = decryptKey;
     keysSet_ = true;
+
+    // Derive per-direction nonce prefixes from the first 6 bytes of each key,
+    // shifted into the upper 48 bits.  Both sides share the same key material
+    // (sender's encryptKey == receiver's decryptKey) so the prefixes match.
+    auto derivePrefix = [](const Key& key) -> uint64_t {
+        uint64_t v = 0;
+        std::memcpy(&v, key.data(), 6); // first 6 bytes of key
+        return v << 16;                 // shift into upper 48 bits
+    };
+    encNoncePrefix_ = derivePrefix(encryptKey_);
+    decNoncePrefix_ = derivePrefix(decryptKey_);
 }
 
 bool PacketCrypto::encrypt(const uint8_t* plaintext, size_t plaintextSize,

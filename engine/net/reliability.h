@@ -24,7 +24,7 @@ public:
     bool onReceive(uint16_t remoteSequence);
     void buildAckFields(uint16_t& ack, uint32_t& ackBits) const;
     void processAck(uint16_t ack, uint32_t ackBits, float currentTime = 0.0f);
-    std::vector<PendingPacket> getRetransmits(float currentTime, float retransmitDelay = 0.2f);
+    std::vector<const PendingPacket*> getRetransmits(float currentTime, float retransmitDelay = 0.2f);
     void markRetransmitted(uint16_t sequence, float currentTime);
 
     size_t pendingReliableCount() const { return pending_.size(); }

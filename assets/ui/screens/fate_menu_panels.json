@@ -13,7 +13,7 @@
     },
     "children": [
       {
-        "activeTab": 2,
+        "activeTab": 1,
         "activeTabBg": [
           0.7839999794960022,
           0.6589999794960022,
@@ -500,8 +500,7 @@
         ],
         "tooltipStatFontSize": 14.0,
         "tooltipWidth": 200.0,
-        "type": "inventory_panel",
-        "visible": false
+        "type": "inventory_panel"
       },
       {
         "activeSetPage": 0,
@@ -565,6 +564,10 @@
           0.5,
           0.4000000059604645,
           0.699999988079071
+        ],
+        "dotOffset": [
+          0.0,
+          0.0
         ],
         "dotSize": 20.0,
         "dotSpacing": 30.0,
@@ -716,6 +719,7 @@
           0.0
         ],
         "type": "skill_panel",
+        "visible": false,
         "wheelEndDeg": 330.0,
         "wheelSlotSizeMul": 0.4000000059604645,
         "wheelStartDeg": 210.0
@@ -1539,26 +1543,90 @@
       },
       {
         "anchor": {
+          "offset": [
+            1500.0,
+            150.0
+          ],
           "preset": "TopLeft",
-          "offset": [380.0, 100.0],
-          "size": [220.0, 280.0]
+          "size": [
+            240.0,
+            620.0
+          ]
         },
+        "contentPadding": 10.0,
+        "emptySlotColor": [
+          0.11999999731779099,
+          0.11999999731779099,
+          0.14000000059604645,
+          0.6000000238418579
+        ],
+        "gridColumns": 2,
         "id": "bag_view_panel",
-        "type": "bag_view_panel",
-        "visible": false,
-        "slotSize": 36.0,
-        "slotPadding": 4.0,
-        "gridColumns": 5,
-        "titleFontSize": 13.0,
+        "slotBgColor": [
+          0.15000000596046448,
+          0.15000000596046448,
+          0.18000000715255737,
+          0.8999999761581421
+        ],
+        "slotBorderColor": [
+          0.3499999940395355,
+          0.3499999940395355,
+          0.4000000059604645,
+          1.0
+        ],
         "slotFontSize": 10.0,
+        "slotPadding": 20.0,
+        "slotSize": 100.0,
+        "titleFontSize": 22.0,
+        "type": "bag_view_panel",
         "zOrder": 110
       },
       {
         "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
           "preset": "Center",
-          "size": [220.0, 140.0]
+          "size": [
+            220.0,
+            140.0
+          ]
         },
+        "arrowButtonSize": 32.0,
+        "arrowColor": [
+          0.4000000059604645,
+          0.3499999940395355,
+          0.20000000298023224,
+          1.0
+        ],
+        "arrowHoverColor": [
+          0.550000011920929,
+          0.47999998927116394,
+          0.2800000011920929,
+          1.0
+        ],
+        "buttonColor": [
+          0.550000011920929,
+          0.44999998807907104,
+          0.25,
+          1.0
+        ],
+        "buttonFontSize": 13.0,
+        "buttonHeight": 30.0,
+        "buttonHoverColor": [
+          0.699999988079071,
+          0.5799999833106995,
+          0.30000001192092896,
+          1.0
+        ],
+        "buttonSpacing": 12.0,
+        "buttonWidth": 90.0,
+        "cancelText": "Cancel",
+        "confirmText": "Confirm",
         "id": "quantity_selector",
+        "quantityFontSize": 16.0,
+        "titleFontSize": 14.0,
         "type": "quantity_selector",
         "visible": false,
         "zOrder": 115

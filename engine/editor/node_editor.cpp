@@ -257,8 +257,8 @@ void DialogueNodeEditor::drawMenuBar() {
                 nodes_.clear();
                 links_.clear();
                 nextNodeId_ = 1;
-                nextChoiceId_ = 1000;
-                nextLinkId_ = 10000;
+                nextChoiceId_ = 100000;
+                nextLinkId_ = 200000;
                 currentFilePath_.clear();
             }
             if (ImGui::MenuItem("Open...")) {
@@ -315,8 +315,8 @@ void DialogueNodeEditor::loadFromJson(const nlohmann::json& data) {
     nodes_.clear();
     links_.clear();
     nextNodeId_ = 1;
-    nextChoiceId_ = 1000;
-    nextLinkId_ = 10000;
+    nextChoiceId_ = 100000;
+    nextLinkId_ = 200000;
 
     if (!data.contains("nodes") || !data["nodes"].is_array()) return;
 

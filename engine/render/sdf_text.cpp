@@ -68,6 +68,7 @@ bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath)
 
     // Load glyph metrics from JSON
     loadMetrics(metricsPath);
+    activeGlyphs_ = &glyphs_;
 
     LOG_INFO("SDFText", "Initialized with %dx%d atlas, %zu glyphs",
              w, h, glyphs_.size());
@@ -83,6 +84,7 @@ void SDFText::shutdown() {
 #endif
     }
     glyphs_.clear();
+    activeGlyphs_ = nullptr;
 }
 
 void SDFText::loadMetrics(const std::string& jsonPath) {
@@ -176,19 +178,20 @@ void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 pos
                            float fontSize, Color color, float depth, TextStyle style,
                            bool yDown) {
 #ifdef FATEMMO_METAL
-    if (glyphs_.empty() || !atlasGfxHandle_.valid()) return;
+    if (!activeGlyphs_ || activeGlyphs_->empty() || !atlasGfxHandle_.valid()) return;
 #else
-    if (glyphs_.empty() || !atlasTexId_) {
+    if (!activeGlyphs_ || activeGlyphs_->empty() || !atlasTexId_) {
         static bool logged = false;
         if (!logged) {
             LOG_ERROR("SDFText", "drawInternal BAIL: glyphs=%zu atlasTexId=%u",
-                      glyphs_.size(), atlasTexId_);
+                      activeGlyphs_ ? activeGlyphs_->size() : 0u, atlasTexId_);
             logged = true;
         }
         return;
     }
 #endif
 
+    const auto& glyphs = *activeGlyphs_;
     const float scale = fontSize;
     float penX = position.x;
     float penY = position.y;
@@ -204,10 +207,10 @@ void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 pos
             continue;
         }
 
-        auto it = glyphs_.find(cp);
-        if (it == glyphs_.end()) {
-            it = glyphs_.find(32);
-            if (it == glyphs_.end()) continue;
+        auto it = glyphs.find(cp);
+        if (it == glyphs.end()) {
+            it = glyphs.find(32);
+            if (it == glyphs.end()) continue;
         }
 
         const GlyphMetrics& gm = it->second;
@@ -247,6 +250,8 @@ void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 pos
 }
 
 Vec2 SDFText::measure(const std::string& text, float fontSize) const {
+    if (!activeGlyphs_) return {0.0f, 0.0f};
+    const auto& glyphs = *activeGlyphs_;
     const float scale = fontSize;
     float totalWidth = 0.0f;
     float maxWidth   = 0.0f;
@@ -263,8 +268,8 @@ Vec2 SDFText::measure(const std::string& text, float fontSize) const {
             continue;
         }
 
-        auto it = glyphs_.find(cp);
-        if (it != glyphs_.end()) {
+        auto it = glyphs.find(cp);
+        if (it != glyphs.end()) {
             totalWidth += it->second.advance * scale;
         }
     }
@@ -288,7 +293,7 @@ void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 pos
                 return;
             }
             // MSDF font from registry: temporarily swap in the font's data
-            auto savedGlyphs      = std::move(glyphs_);
+            auto savedActiveGlyphs = activeGlyphs_;
 #ifndef FATEMMO_METAL
             auto savedAtlasTexId  = atlasTexId_;
 #endif
@@ -300,7 +305,7 @@ void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 pos
             auto savedAscender    = ascender_;
             auto savedEmSize      = emSize_;
 
-            glyphs_      = font->glyphs;
+            activeGlyphs_ = &font->glyphs;
 #ifndef FATEMMO_METAL
             atlasTexId_  = font->atlas->id();
 #endif
@@ -314,7 +319,7 @@ void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 pos
 
             drawInternal(batch, text, position, fontSize, color, depth, style, true);
 
-            glyphs_         = std::move(savedGlyphs);
+            activeGlyphs_   = savedActiveGlyphs;
 #ifndef FATEMMO_METAL
             atlasTexId_     = savedAtlasTexId;
 #endif
@@ -343,7 +348,7 @@ void SDFText::drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 posi
                 return;
             }
             // MSDF font from registry: temporarily swap in the font's data
-            auto savedGlyphs      = std::move(glyphs_);
+            auto savedActiveGlyphs = activeGlyphs_;
 #ifndef FATEMMO_METAL
             auto savedAtlasTexId  = atlasTexId_;
 #endif
@@ -355,7 +360,7 @@ void SDFText::drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 posi
             auto savedAscender    = ascender_;
             auto savedEmSize      = emSize_;
 
-            glyphs_      = font->glyphs;
+            activeGlyphs_ = &font->glyphs;
 #ifndef FATEMMO_METAL
             atlasTexId_  = font->atlas->id();
 #endif
@@ -369,7 +374,7 @@ void SDFText::drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 posi
 
             drawInternal(batch, text, position, fontSize, color, depth, style, false);
 
-            glyphs_         = std::move(savedGlyphs);
+            activeGlyphs_   = savedActiveGlyphs;
 #ifndef FATEMMO_METAL
             atlasTexId_     = savedAtlasTexId;
 #endif

@@ -2,6 +2,7 @@
 #include "engine/particle/particle.h"
 #include "engine/render/sprite_batch.h"
 #include <vector>
+#include <random>
 
 namespace fate {
 
@@ -31,7 +32,10 @@ private:
 
     void spawn(const Vec2& pos);
     void buildVertices(const Vec2& emitterPos);
-    static float randomRange(float min, float max);
+    float randomRange(float min, float max);
+
+    std::mt19937 rng_{std::random_device{}()};
+    std::uniform_real_distribution<float> dist01_{0.0f, 1.0f};
 };
 
 } // namespace fate

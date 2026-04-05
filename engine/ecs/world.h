@@ -11,6 +11,7 @@
 #include <memory>
 #include <functional>
 #include <string>
+#include <cassert>
 
 namespace fate {
 
@@ -71,6 +72,7 @@ public:
     // Add a component to an entity, migrating to a new archetype
     template<typename T, typename... Args>
     T* addComponentToEntity(Entity* entity, Args&&... args) {
+        assert(iteratingDepth_ == 0 && "Structural changes during forEach are not allowed — use CommandBuffer");
         CompId cid = componentId<T>();
         archetypes_.registerType<T>();
 
@@ -120,6 +122,7 @@ public:
     // Remove a component from an entity, migrating to a new archetype
     template<typename T>
     void removeComponentFromEntity(Entity* entity) {
+        assert(iteratingDepth_ == 0 && "Structural changes during forEach are not allowed — use CommandBuffer");
         if (entity->archetypeId_ == UINT32_MAX) return;
         CompId cid = componentId<T>();
         const auto& arch = archetypes_.getArchetype(entity->archetypeId_);
@@ -148,8 +151,10 @@ public:
     void forEachComponentOfEntity(Entity* entity, const std::function<void(void*, CompId)>& fn);
 
     // --- Query entities with specific components (archetype iteration) ---
-    template<typename T>
-    void forEach(const std::function<void(Entity*, T*)>& fn) {
+    template<typename T, typename Fn>
+    void forEach(Fn&& fn) {
+        ++iteratingDepth_;
+        struct Guard { int& depth; ~Guard() { --depth; } } guard{iteratingDepth_};
         CompId typeId = componentId<T>();
         for (size_t i = 0; i < archetypes_.archetypeCount(); ++i) {
             ArchetypeId aid = static_cast<ArchetypeId>(i);
@@ -171,8 +176,10 @@ public:
     }
 
     // Query entities with two components
-    template<typename T1, typename T2>
-    void forEach(const std::function<void(Entity*, T1*, T2*)>& fn) {
+    template<typename T1, typename T2, typename Fn>
+    void forEach(Fn&& fn) {
+        ++iteratingDepth_;
+        struct Guard { int& depth; ~Guard() { --depth; } } guard{iteratingDepth_};
         CompId cid1 = componentId<T1>();
         CompId cid2 = componentId<T2>();
         for (size_t i = 0; i < archetypes_.archetypeCount(); ++i) {
@@ -258,6 +265,7 @@ private:
     std::vector<EntityHandle> destroyQueue_;
     std::vector<std::unique_ptr<System>> systems_;
     uint32_t nextSlotIndex_ = 1; // slot 0 is reserved (null handle)
+    int iteratingDepth_ = 0;     // re-entrancy depth counter for forEach
 };
 
 } // namespace fate

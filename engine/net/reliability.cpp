@@ -1,11 +1,13 @@
 #include "engine/net/reliability.h"
+#include "engine/core/logger.h"
 #include <algorithm>
 
 namespace fate {
 
 void ReliabilityLayer::trackReliable(uint16_t sequence, const uint8_t* data, size_t size, float currentTime) {
     if (pending_.size() >= MAX_PENDING_PACKETS) {
-        // Drop oldest unacked packet to prevent memory exhaustion
+        LOG_WARN("Reliability", "Dropping oldest unacked reliable packet (seq=%u) — pending queue full (%d)",
+                 pending_.begin()->sequence, static_cast<int>(MAX_PENDING_PACKETS));
         pending_.erase(pending_.begin());
     }
 
@@ -86,11 +88,11 @@ void ReliabilityLayer::processAck(uint16_t ack, uint32_t ackBits, float currentT
         pending_.end());
 }
 
-std::vector<PendingPacket> ReliabilityLayer::getRetransmits(float currentTime, float retransmitDelay) {
-    std::vector<PendingPacket> result;
+std::vector<const PendingPacket*> ReliabilityLayer::getRetransmits(float currentTime, float retransmitDelay) {
+    std::vector<const PendingPacket*> result;
     for (const auto& pkt : pending_) {
         if (currentTime - pkt.lastRetransmit >= retransmitDelay) {
-            result.push_back(pkt);
+            result.push_back(&pkt);
         }
     }
     return result;

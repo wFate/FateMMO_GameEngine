@@ -63,6 +63,7 @@ private:
     float ascender_ = 0.95f;
     float emSize_ = 48.0f;
     std::unordered_map<uint32_t, GlyphMetrics> glyphs_;
+    const std::unordered_map<uint32_t, GlyphMetrics>* activeGlyphs_ = nullptr;
 
     FontRegistry* fontRegistry_ = nullptr;
 

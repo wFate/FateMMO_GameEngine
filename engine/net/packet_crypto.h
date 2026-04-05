@@ -48,14 +48,23 @@ public:
     // Securely wipe sensitive memory (e.g. secret keys after use).
     static void secureWipe(void* data, size_t size);
 
-    // Set the encrypt/decrypt keys for this session.
+    // Set the encrypt/decrypt keys for this session (also resets nonce counters).
     void setKeys(const Key& encryptKey, const Key& decryptKey);
     bool hasKeys() const { return keysSet_; }
     void clearKeys() { keysSet_ = false; }
 
+    // Build a unique 64-bit nonce from a per-direction key-derived prefix + the
+    // 16-bit packet sequence number.  The prefix is the first 6 bytes of the
+    // key shifted left 16 bits, so both sides derive the same prefix for the
+    // same direction (sender's encryptKey == receiver's decryptKey).
+    // This is order-independent (works with UDP reordering/retransmits) and
+    // unique per session because each DH exchange produces fresh keys.
+    uint64_t buildEncryptNonce(uint16_t sequence) const { return encNoncePrefix_ | sequence; }
+    uint64_t buildDecryptNonce(uint16_t sequence) const { return decNoncePrefix_ | sequence; }
+
     // Encrypt payload in-place.
     // Output buffer must have capacity for plaintextSize + TAG_SIZE bytes.
-    // nonce = packet sequence number (unique per packet direction).
+    // nonce = monotonic counter from nextSendNonce() (unique per packet direction).
     // Returns true on success.
     bool encrypt(const uint8_t* plaintext, size_t plaintextSize,
                  uint64_t nonce,
@@ -75,6 +84,8 @@ private:
     Key encryptKey_{};
     Key decryptKey_{};
     bool keysSet_ = false;
+    uint64_t encNoncePrefix_ = 0; // derived from encryptKey, upper 48 bits
+    uint64_t decNoncePrefix_ = 0; // derived from decryptKey, upper 48 bits
 };
 
 // Returns true if the packet type is a system packet that must NOT be encrypted.
