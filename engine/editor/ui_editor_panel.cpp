@@ -2,6 +2,7 @@
 #include "engine/editor/undo.h"
 #include "engine/editor/property_inspector.h"
 #include "engine/ui/ui_serializer.h"
+#include "engine/ui/ui_widget_registry.h"
 #include "engine/core/logger.h"
 #ifdef FATE_HAS_GAME
 #include "engine/ui/widgets/panel.h"
@@ -161,6 +162,12 @@ void UIEditorPanel::handleViewportRelease(UIManager* uiMgr) {
 // ============================================================================
 
 void UIEditorPanel::draw(UIManager& uiMgr) {
+    static bool validatedOnce = false;
+    if (!validatedOnce) {
+        validateWidgetCoverage();
+        validatedOnce = true;
+    }
+
     // Re-resolve selection each frame (handles undo/redo screen reloads)
     revalidateSelection(uiMgr);
 
@@ -2873,7 +2880,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     ImGui::SeparatorText("Bindings");
     if (ImGui::TreeNode("Event Bindings")) {
         auto& map = selectedNode_->eventBindings;
-        std::string toRemove;
+        std::string toRemove, renameKey, renameVal;
         int idx = 0;
         for (auto& [k, v] : map) {
             ImGui::PushID(idx++);
@@ -2882,7 +2889,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             snprintf(vBuf, sizeof(vBuf), "%s", v.c_str());
             ImGui::SetNextItemWidth(120.0f);
             if (ImGui::InputText("##ek", kBuf, sizeof(kBuf))) {
-                if (std::string(kBuf) != k) { toRemove = k; map[kBuf] = v; }
+                if (std::string(kBuf) != k) { toRemove = k; renameKey = kBuf; renameVal = v; }
             }
             ImGui::SameLine();
             ImGui::SetNextItemWidth(180.0f);
@@ -2892,7 +2899,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             checkUndoCapture(uiMgr);
             ImGui::PopID();
         }
-        if (!toRemove.empty()) map.erase(toRemove);
+        if (!toRemove.empty()) { map.erase(toRemove); if (!renameKey.empty()) map[renameKey] = renameVal; }
         if (ImGui::SmallButton("+ Event")) { map["new_event"] = "handler"; }
         checkUndoCapture(uiMgr);
         ImGui::TreePop();
@@ -2900,7 +2907,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
 
     if (ImGui::TreeNode("Data Bindings")) {
         auto& map = selectedNode_->dataBindings;
-        std::string toRemove;
+        std::string toRemove, renameKey, renameVal;
         int idx = 1000;
         for (auto& [k, v] : map) {
             ImGui::PushID(idx++);
@@ -2909,7 +2916,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             snprintf(vBuf, sizeof(vBuf), "%s", v.c_str());
             ImGui::SetNextItemWidth(120.0f);
             if (ImGui::InputText("##dk", kBuf, sizeof(kBuf))) {
-                if (std::string(kBuf) != k) { toRemove = k; map[kBuf] = v; }
+                if (std::string(kBuf) != k) { toRemove = k; renameKey = kBuf; renameVal = v; }
             }
             ImGui::SameLine();
             ImGui::SetNextItemWidth(180.0f);
@@ -2919,7 +2926,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             checkUndoCapture(uiMgr);
             ImGui::PopID();
         }
-        if (!toRemove.empty()) map.erase(toRemove);
+        if (!toRemove.empty()) { map.erase(toRemove); if (!renameKey.empty()) map[renameKey] = renameVal; }
         if (ImGui::SmallButton("+ Binding")) { map["new_key"] = "value"; }
         checkUndoCapture(uiMgr);
         ImGui::TreePop();
@@ -2927,7 +2934,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
 
     if (ImGui::TreeNode("Custom Properties")) {
         auto& map = selectedNode_->properties;
-        std::string toRemove;
+        std::string toRemove, renameKey, renameVal;
         int idx = 2000;
         for (auto& [k, v] : map) {
             ImGui::PushID(idx++);
@@ -2936,7 +2943,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             snprintf(vBuf, sizeof(vBuf), "%s", v.c_str());
             ImGui::SetNextItemWidth(120.0f);
             if (ImGui::InputText("##pk", kBuf, sizeof(kBuf))) {
-                if (std::string(kBuf) != k) { toRemove = k; map[kBuf] = v; }
+                if (std::string(kBuf) != k) { toRemove = k; renameKey = kBuf; renameVal = v; }
             }
             ImGui::SameLine();
             ImGui::SetNextItemWidth(180.0f);
@@ -2946,7 +2953,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             checkUndoCapture(uiMgr);
             ImGui::PopID();
         }
-        if (!toRemove.empty()) map.erase(toRemove);
+        if (!toRemove.empty()) { map.erase(toRemove); if (!renameKey.empty()) map[renameKey] = renameVal; }
         if (ImGui::SmallButton("+ Property")) { map["new_prop"] = "value"; }
         checkUndoCapture(uiMgr);
         ImGui::TreePop();
