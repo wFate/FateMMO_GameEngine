@@ -61,6 +61,7 @@
 #include "engine/ui/widgets/quantity_selector.h"
 #include "engine/ui/widgets/bag_view_panel.h"
 #include "engine/ui/widgets/loading_panel.h"
+#include "engine/ui/widgets/tooltip.h"
 #endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <cstdio>
@@ -2837,6 +2838,15 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Shadow##lp", &lp->shadowColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+    }
+    else if (auto* tt = dynamic_cast<Tooltip*>(selectedNode_)) {
+        char textBuf[512] = {};
+        snprintf(textBuf, sizeof(textBuf), "%s", tt->tooltipText.c_str());
+        if (ImGui::InputText("Tooltip Text", textBuf, sizeof(textBuf))) {
+            tt->tooltipText = textBuf;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Max Width", &tt->maxWidth, 1.0f, 50.0f, 800.0f); checkUndoCapture(uiMgr);
     }
     else {
         ImGui::TextDisabled("(no widget-specific properties)");
