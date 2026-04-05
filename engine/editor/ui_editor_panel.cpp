@@ -2838,6 +2838,88 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
         uiMgr.suppressHotReload();
     }
+    ImGui::SeparatorText("Bindings");
+    if (ImGui::TreeNode("Event Bindings")) {
+        auto& map = selectedNode_->eventBindings;
+        std::string toRemove;
+        int idx = 0;
+        for (auto& [k, v] : map) {
+            ImGui::PushID(idx++);
+            char kBuf[128] = {}, vBuf[256] = {};
+            snprintf(kBuf, sizeof(kBuf), "%s", k.c_str());
+            snprintf(vBuf, sizeof(vBuf), "%s", v.c_str());
+            ImGui::SetNextItemWidth(120.0f);
+            if (ImGui::InputText("##ek", kBuf, sizeof(kBuf))) {
+                if (std::string(kBuf) != k) { toRemove = k; map[kBuf] = v; }
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(180.0f);
+            if (ImGui::InputText("##ev", vBuf, sizeof(vBuf))) { v = vBuf; }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("X")) { toRemove = k; }
+            checkUndoCapture(uiMgr);
+            ImGui::PopID();
+        }
+        if (!toRemove.empty()) map.erase(toRemove);
+        if (ImGui::SmallButton("+ Event")) { map["new_event"] = "handler"; }
+        checkUndoCapture(uiMgr);
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Data Bindings")) {
+        auto& map = selectedNode_->dataBindings;
+        std::string toRemove;
+        int idx = 1000;
+        for (auto& [k, v] : map) {
+            ImGui::PushID(idx++);
+            char kBuf[128] = {}, vBuf[256] = {};
+            snprintf(kBuf, sizeof(kBuf), "%s", k.c_str());
+            snprintf(vBuf, sizeof(vBuf), "%s", v.c_str());
+            ImGui::SetNextItemWidth(120.0f);
+            if (ImGui::InputText("##dk", kBuf, sizeof(kBuf))) {
+                if (std::string(kBuf) != k) { toRemove = k; map[kBuf] = v; }
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(180.0f);
+            if (ImGui::InputText("##dv", vBuf, sizeof(vBuf))) { v = vBuf; }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("X")) { toRemove = k; }
+            checkUndoCapture(uiMgr);
+            ImGui::PopID();
+        }
+        if (!toRemove.empty()) map.erase(toRemove);
+        if (ImGui::SmallButton("+ Binding")) { map["new_key"] = "value"; }
+        checkUndoCapture(uiMgr);
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Custom Properties")) {
+        auto& map = selectedNode_->properties;
+        std::string toRemove;
+        int idx = 2000;
+        for (auto& [k, v] : map) {
+            ImGui::PushID(idx++);
+            char kBuf[128] = {}, vBuf[256] = {};
+            snprintf(kBuf, sizeof(kBuf), "%s", k.c_str());
+            snprintf(vBuf, sizeof(vBuf), "%s", v.c_str());
+            ImGui::SetNextItemWidth(120.0f);
+            if (ImGui::InputText("##pk", kBuf, sizeof(kBuf))) {
+                if (std::string(kBuf) != k) { toRemove = k; map[kBuf] = v; }
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(180.0f);
+            if (ImGui::InputText("##pv", vBuf, sizeof(vBuf))) { v = vBuf; }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("X")) { toRemove = k; }
+            checkUndoCapture(uiMgr);
+            ImGui::PopID();
+        }
+        if (!toRemove.empty()) map.erase(toRemove);
+        if (ImGui::SmallButton("+ Property")) { map["new_prop"] = "value"; }
+        checkUndoCapture(uiMgr);
+        ImGui::TreePop();
+    }
+
 #endif // FATE_HAS_GAME
 
     ImGui::End();
@@ -2866,6 +2948,8 @@ void UIEditorPanel::drawAnchorEditor(UINode* node, UIManager& uiMgr) {
 
     ImGui::DragFloat2("Offset", &anchor.offset.x, 1.0f); checkUndoCapture(uiMgr);
     ImGui::DragFloat2("Size", &anchor.size.x, 1.0f, 0.0f, 4096.0f); checkUndoCapture(uiMgr);
+    ImGui::DragFloat2("Offset %", &anchor.offsetPercent.x, 0.01f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
+    ImGui::DragFloat2("Size %", &anchor.sizePercent.x, 0.01f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
 
     if (ImGui::TreeNode("Margin")) {
         ImGui::DragFloat("Top##margin", &anchor.margin.x, 0.5f); checkUndoCapture(uiMgr);
@@ -2954,6 +3038,22 @@ void UIEditorPanel::drawStyleEditor(UINode* node, UIManager& uiMgr) {
         if (ImGui::InputText("Font Name", fontBuf, sizeof(fontBuf))) {
             style.fontName = fontBuf;
         }
+    }
+
+    // --- Background Texture / Nine-Slice ---
+    if (ImGui::TreeNode("Background Texture")) {
+        char texBuf[128] = {};
+        if (!style.backgroundTexture.empty())
+            snprintf(texBuf, sizeof(texBuf), "%s", style.backgroundTexture.c_str());
+        if (ImGui::InputText("Texture Key", texBuf, sizeof(texBuf))) {
+            style.backgroundTexture = texBuf;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::DragFloat("9S Left", &style.nineSlice.left, 0.5f, 0.0f, 256.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("9S Right", &style.nineSlice.right, 0.5f, 0.0f, 256.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("9S Top", &style.nineSlice.top, 0.5f, 0.0f, 256.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("9S Bottom", &style.nineSlice.bottom, 0.5f, 0.0f, 256.0f); checkUndoCapture(uiMgr);
+        ImGui::TreePop();
     }
 
     // --- Rounded Rect ---

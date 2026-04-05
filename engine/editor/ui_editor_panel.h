@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/ui/ui_manager.h"
+#include "engine/ui/ui_serialize_helpers.h"
 #include <string>
 
 namespace fate {
