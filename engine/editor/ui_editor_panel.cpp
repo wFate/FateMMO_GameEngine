@@ -3039,6 +3039,7 @@ void UIEditorPanel::drawStyleEditor(UINode* node, UIManager& uiMgr) {
             style.fontName = fontBuf;
         }
     }
+    checkUndoCapture(uiMgr);
 
     // --- Background Texture / Nine-Slice ---
     if (ImGui::TreeNode("Background Texture")) {
@@ -3058,12 +3059,12 @@ void UIEditorPanel::drawStyleEditor(UINode* node, UIManager& uiMgr) {
 
     // --- Rounded Rect ---
     if (ImGui::TreeNode("Rounded Rect")) {
-        ImGui::DragFloat("Corner Radius", &style.cornerRadius, 0.5f, 0.0f, 50.0f);
-        ImGui::ColorEdit4("Gradient Top", &style.gradientTop.r);
-        ImGui::ColorEdit4("Gradient Bottom", &style.gradientBottom.r);
-        ImGui::DragFloat2("Shadow Offset", &style.shadowOffset.x, 0.5f, -20.0f, 20.0f);
-        ImGui::DragFloat("Shadow Blur", &style.shadowBlur, 0.5f, 0.0f, 30.0f);
-        ImGui::ColorEdit4("Shadow Color", &style.shadowColor.r);
+        ImGui::DragFloat("Corner Radius", &style.cornerRadius, 0.5f, 0.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Gradient Top", &style.gradientTop.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Gradient Bottom", &style.gradientBottom.r); checkUndoCapture(uiMgr);
+        ImGui::DragFloat2("Shadow Offset", &style.shadowOffset.x, 0.5f, -20.0f, 20.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Shadow Blur", &style.shadowBlur, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Shadow Color", &style.shadowColor.r); checkUndoCapture(uiMgr);
         ImGui::TreePop();
     }
 
@@ -3074,14 +3075,15 @@ void UIEditorPanel::drawStyleEditor(UINode* node, UIManager& uiMgr) {
         if (ImGui::Combo("Text Style", &ts, styleNames, 4)) {
             style.textStyle = static_cast<fate::TextStyle>(ts + 1);
         }
+        checkUndoCapture(uiMgr);
         if (style.textStyle != fate::TextStyle::Normal) {
             auto& te = style.textEffects;
-            ImGui::ColorEdit4("Outline Color", &te.outlineColor.r);
-            ImGui::DragFloat("Outline Width", &te.outlineWidth, 0.01f, 0.0f, 0.5f);
-            ImGui::DragFloat2("Text Shadow Offset", &te.shadowOffset.x, 0.001f, -0.01f, 0.01f);
-            ImGui::ColorEdit4("Text Shadow Color", &te.shadowColor.r);
-            ImGui::ColorEdit4("Glow Color", &te.glowColor.r);
-            ImGui::DragFloat("Glow Radius", &te.glowRadius, 0.05f, 0.0f, 1.0f);
+            ImGui::ColorEdit4("Outline Color", &te.outlineColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Outline Width", &te.outlineWidth, 0.01f, 0.0f, 0.5f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Text Shadow Offset", &te.shadowOffset.x, 0.001f, -0.01f, 0.01f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Shadow Color", &te.shadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Glow Color", &te.glowColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Glow Radius", &te.glowRadius, 0.05f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
         }
         ImGui::TreePop();
     }
