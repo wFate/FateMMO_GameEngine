@@ -32,6 +32,14 @@ namespace MarketAction {
     constexpr uint8_t CancelListing  = 2;  // + listingId:i32
     constexpr uint8_t GetListings    = 3;  // + page:i32, filterJson:string
     constexpr uint8_t GetMyListings  = 4;  // (no extra fields)
+    constexpr uint8_t ClaimListing   = 5;  // + listingId:i32
+}
+
+namespace ListingStatus {
+    constexpr uint8_t Active    = 0;
+    constexpr uint8_t Sold      = 1;
+    constexpr uint8_t Expired   = 2;
+    constexpr uint8_t Completed = 3;
 }
 
 // ============================================================================
@@ -1904,6 +1912,7 @@ struct SvMarketListingsMsg {
         std::string category;
         std::string itemType;
         uint8_t levelReq = 0;
+        uint8_t status = 0;  // ListingStatus: 0=Active, 1=Sold, 2=Expired
         std::vector<std::string> statLines;
     };
     std::vector<ListingEntry> listings;
@@ -1926,6 +1935,7 @@ struct SvMarketListingsMsg {
             w.writeString(l.category);
             w.writeString(l.itemType);
             w.writeU8(l.levelReq);
+            w.writeU8(l.status);
             w.writeU8(static_cast<uint8_t>(l.statLines.size()));
             for (const auto& s : l.statLines) w.writeString(s);
         }
@@ -1951,6 +1961,7 @@ struct SvMarketListingsMsg {
             l.category     = r.readString();
             l.itemType     = r.readString();
             l.levelReq     = r.readU8();
+            l.status       = r.readU8();
             uint8_t statCount = r.readU8();
             l.statLines.reserve(statCount);
             for (uint8_t s = 0; s < statCount; ++s) l.statLines.push_back(r.readString());

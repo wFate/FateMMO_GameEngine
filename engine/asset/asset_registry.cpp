@@ -83,6 +83,7 @@ AssetHandle AssetRegistry::load(const std::string& path) {
     const AssetLoader* loader = findLoader(canon);
     if (!loader) {
         LOG_ERROR("AssetRegistry", "No loader for: %s", canon.c_str());
+        failedPaths_.insert(canon);
         return AssetHandle{};
     }
 
@@ -201,6 +202,7 @@ AssetHandle AssetRegistry::loadAsync(const std::string& path) {
     const AssetLoader* loader = findLoader(canon);
     if (!loader) {
         LOG_ERROR("AssetRegistry", "No loader for: %s", canon.c_str());
+        failedPaths_.insert(canon);
         return AssetHandle{};
     }
 

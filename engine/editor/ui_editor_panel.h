@@ -23,7 +23,7 @@ public:
     void handleViewportRelease(UIManager* uiMgr);
     bool isDraggingWidget() const { return isDraggingWidget_; }
     bool hasSelection() const { return selectedNode_ != nullptr; }
-    void clearSelection() { selectedNode_ = nullptr; selectedNodeId_.clear(); selectedScreenId_.clear(); }
+    void clearSelection() { selectedNode_ = nullptr; selectedNodeId_.clear(); selectedScreenId_.clear(); preFrameSnapshot_.clear(); pendingSnapshot_.clear(); }
 
     bool showHierarchy = true;
     bool showInspector = true;

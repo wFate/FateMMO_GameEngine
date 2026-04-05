@@ -38,24 +38,24 @@
         "chatBtnOffsetX": 8.0,
         "chatBtnSize": 21.0,
         "chatBtnTextColor": [
-          0.15000000596046448,
-          0.10000000149011612,
-          0.0,
-          1.0
+          38,
+          26,
+          0,
+          255
         ],
         "coordColor": [
-          1.0,
-          1.0,
-          1.0,
-          0.800000011920929
+          255,
+          255,
+          255,
+          204
         ],
         "coordFontSize": 30.0,
         "coordOffsetY": 5.0,
         "hpBarColor": [
-          1.0,
-          0.5625,
-          0.0,
-          1.0
+          255,
+          143,
+          0,
+          255
         ],
         "hpLabelOffset": [
           0.0,
@@ -69,10 +69,10 @@
           0.0
         ],
         "menuBtnBgColor": [
-          0.26160335540771484,
-          0.2250198870897293,
-          0.13356120884418488,
-          1.0
+          67,
+          57,
+          34,
+          255
         ],
         "menuBtnFontSize": 30.0,
         "menuBtnGap": 50.0,
@@ -82,43 +82,43 @@
         ],
         "menuBtnSize": 50.0,
         "menuBtnTextColor": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
+          255,
+          255,
+          255,
+          255
         ],
         "menuDividerColor": [
-          0.699999988079071,
-          0.6000000238418579,
-          0.4000000059604645,
-          0.6000000238418579
+          179,
+          153,
+          102,
+          153
         ],
         "menuItemFontSize": 20.0,
         "menuItemH": 50.0,
         "menuItemTextColor": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
+          255,
+          255,
+          255,
+          255
         ],
         "menuOverlayBgColor": [
-          0.17299580574035645,
-          0.15055012702941895,
-          0.08321317285299301,
-          0.949999988079071
+          44,
+          38,
+          21,
+          242
         ],
         "menuOverlayBorderColor": [
-          0.3291139006614685,
-          0.26199501752853394,
-          0.12775729596614838,
-          1.0
+          84,
+          67,
+          33,
+          255
         ],
         "menuOverlayW": 200.0,
         "mpBarColor": [
-          0.0,
-          0.4285719394683838,
-          1.0,
-          1.0
+          0,
+          109,
+          255,
+          255
         ],
         "mpLabelOffset": [
           0.0,
@@ -130,16 +130,18 @@
           0.0
         ],
         "portraitRadius": 20.0,
+        "showChatButton": false,
+        "showMenuButton": false,
         "topBarHeight": 40.0,
         "type": "fate_status_bar"
       },
       {
         "abbrevFontSize": 7.0,
         "abbrevTextColor": [
-          1.0,
-          1.0,
-          1.0,
-          0.8999999761581421
+          255,
+          255,
+          255,
+          230
         ],
         "anchor": {
           "offset": [
@@ -153,10 +155,10 @@
           ]
         },
         "cooldownOverlayColor": [
-          0.0,
-          0.0,
-          0.0,
-          0.550000011920929
+          0,
+          0,
+          0,
+          140
         ],
         "iconAtlasCols": 8,
         "iconAtlasRows": 4,
@@ -165,10 +167,10 @@
         "maxVisible": 12,
         "spacing": 3.0,
         "stackBadgeBgColor": [
-          0.0,
-          0.0,
-          0.0,
-          0.699999988079071
+          0,
+          0,
+          0,
+          179
         ],
         "stackBadgeOffset": [
           0.0,
@@ -176,30 +178,30 @@
         ],
         "stackFontSize": 8.0,
         "stackTextColor": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
+          255,
+          255,
+          255,
+          255
         ],
         "tooltipBgColor": [
-          0.07999999821186066,
-          0.07999999821186066,
-          0.11999999731779099,
-          0.9200000166893005
+          20,
+          20,
+          31,
+          235
         ],
         "tooltipBorderColor": [
-          0.5,
-          0.5,
-          0.5,
-          0.800000011920929
+          128,
+          128,
+          128,
+          204
         ],
         "tooltipFontSize": 9.0,
         "tooltipPadding": 6.0,
         "tooltipTextColor": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
+          255,
+          255,
+          255,
+          255
         ],
         "tooltipWidth": 140.0,
         "type": "buff_bar"
@@ -219,20 +221,20 @@
         "barHeight": 12.0,
         "barPadding": 6.0,
         "hpBarBgColor": [
-          0.10000000149011612,
-          0.10000000149011612,
-          0.10000000149011612,
-          0.8500000238418579
+          26,
+          26,
+          26,
+          217
         ],
         "hpBarOffset": [
           0.0,
           0.0
         ],
         "hpFillColor": [
-          0.75,
-          0.15000000596046448,
-          0.15000000596046448,
-          1.0
+          191,
+          38,
+          38,
+          255
         ],
         "hpFontSize": 9.0,
         "hpTextOffset": [
@@ -246,9 +248,9 @@
           0.0
         ],
         "nameTopPad": 4.0,
-        "targetName": "test",
+        "targetName": "Veylan",
         "type": "target_frame",
-        "visible": false
+        "zOrder": -1
       },
       {
         "anchor": {
@@ -266,7 +268,8 @@
         "dpadSize": 150.0,
         "id": "dpad",
         "opacity": 0.8500000238418579,
-        "type": "dpad"
+        "type": "dpad",
+        "visible": false
       },
       {
         "anchor": {
@@ -307,7 +310,8 @@
         "slotCount": 5,
         "slotSize": 70.0,
         "startAngleDeg": 170.0,
-        "type": "skill_arc"
+        "type": "skill_arc",
+        "visible": false
       },
       {
         "anchor": {
@@ -339,18 +343,18 @@
         ],
         "borderWidth": 1.0,
         "fillColor": [
-          0.800000011920929,
-          0.6499999761581421,
-          0.10000000149011612,
-          1.0
+          204,
+          166,
+          26,
+          255
         ],
         "fontSize": 9.0,
         "id": "exp_bar",
         "shadowColor": [
-          0.0,
-          0.0,
-          0.0,
-          0.8999999761581421
+          0,
+          0,
+          0,
+          230
         ],
         "style": "bar_track",
         "textOffset": [
@@ -374,18 +378,18 @@
           ]
         },
         "buttonColor": [
-          0.550000011920929,
-          0.44999998807907104,
-          0.25,
-          1.0
+          140,
+          115,
+          64,
+          255
         ],
         "buttonFontSize": 13.0,
         "buttonHeight": 32.0,
         "buttonHoverColor": [
-          0.699999988079071,
-          0.5799999833106995,
-          0.30000001192092896,
-          1.0
+          179,
+          148,
+          77,
+          255
         ],
         "buttonOffset": [
           0.0,
@@ -419,18 +423,18 @@
           ]
         },
         "buttonColor": [
-          0.550000011920929,
-          0.44999998807907104,
-          0.25,
-          1.0
+          140,
+          115,
+          64,
+          255
         ],
         "buttonFontSize": 13.0,
         "buttonHeight": 32.0,
         "buttonHoverColor": [
-          0.699999988079071,
-          0.5799999833106995,
-          0.30000001192092896,
-          1.0
+          179,
+          148,
+          77,
+          255
         ],
         "buttonOffset": [
           0.0,
@@ -460,105 +464,174 @@
           "preset": "TopLeft",
           "size": [
             187.60000610351563,
-            178.06
+            178.05999755859375
           ]
         },
         "bgColor": [
-          0.07999999821186066,
-          0.07999999821186066,
-          0.10999999940395355,
-          0.9200000166893005
+          20,
+          20,
+          28,
+          235
         ],
         "borderColor": [
-          0.6000000238418579,
-          0.5,
-          0.25,
-          0.8999999761581421
+          153,
+          128,
+          64,
+          230
         ],
+        "borderWidth": 1.5,
         "disabledTextColor": [
-          0.44999998807907104,
-          0.4300000071525574,
-          0.4000000059604645,
-          0.699999988079071
+          115,
+          110,
+          102,
+          179
         ],
         "enabledTextColor": [
-          0.9200000166893005,
-          0.8999999761581421,
-          0.8500000238418579,
-          1.0
+          235,
+          230,
+          217,
+          255
         ],
         "headerPadding": 12.0,
         "hoverColor": [
-          0.18,
-          0.16,
-          0.10,
-          0.4
+          46,
+          41,
+          26,
+          102
         ],
         "id": "player_context_menu",
         "itemHeight": 28.0,
-        "itemTextPadding": 10.0,
         "itemOffset": [
           0.0,
           0.0
         ],
+        "itemTextPadding": 10.0,
         "menuFontSize": 13.0,
         "menuWidth": 140.0,
-        "borderWidth": 1.5,
-        "separatorMargin": 8.0,
-        "separatorHeight": 1.0,
         "nameHeaderColor": [
-          0.949999988079071,
-          0.8199999928474426,
-          0.44999998807907104,
-          1.0
+          242,
+          209,
+          115,
+          255
         ],
         "nameOffset": [
           0.0,
           0.0
         ],
         "pressedColor": [
-          0.25,
-          0.2199999988079071,
-          0.11999999731779099,
-          0.6000000238418579
+          64,
+          56,
+          31,
+          153
         ],
         "separatorColor": [
-          0.4000000059604645,
-          0.3499999940395355,
-          0.20000000298023224,
-          0.699999988079071
+          102,
+          89,
+          51,
+          179
         ],
+        "separatorHeight": 1.0,
+        "separatorMargin": 8.0,
         "type": "player_context_menu",
         "visible": false,
         "zOrder": 120
       },
       {
-        "acceptBtnColor": [0.18, 0.45, 0.18, 1.0],
-        "acceptBtnHoverColor": [0.25, 0.58, 0.25, 1.0],
-        "acceptBtnTextColor": [1.0, 1.0, 1.0, 1.0],
-        "anchor": { "preset": "Center", "size": [280.0, 140.0] },
-        "bgColor": [0.08, 0.08, 0.11, 0.95],
-        "borderColor": [0.6, 0.5, 0.25, 0.9],
+        "acceptBtnColor": [
+          46,
+          115,
+          46,
+          255
+        ],
+        "acceptBtnHoverColor": [
+          64,
+          148,
+          64,
+          255
+        ],
+        "acceptBtnTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            280.0,
+            140.0
+          ]
+        },
+        "bgColor": [
+          20,
+          20,
+          28,
+          242
+        ],
+        "borderColor": [
+          153,
+          128,
+          64,
+          230
+        ],
         "borderWidth": 1.5,
         "buttonFontSize": 12.0,
         "buttonHeight": 28.0,
-        "buttonOffset": [0.0, 0.0],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
         "buttonPadBottom": 12.0,
         "buttonSpacing": 16.0,
         "buttonWidth": 80.0,
-        "declineBtnColor": [0.50, 0.20, 0.18, 1.0],
-        "declineBtnHoverColor": [0.65, 0.28, 0.25, 1.0],
-        "declineBtnTextColor": [1.0, 1.0, 1.0, 1.0],
+        "declineBtnColor": [
+          128,
+          51,
+          46,
+          255
+        ],
+        "declineBtnHoverColor": [
+          166,
+          71,
+          64,
+          255
+        ],
+        "declineBtnTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
         "id": "invite_prompt",
-        "messageColor": [0.92, 0.90, 0.85, 1.0],
+        "messageColor": [
+          235,
+          230,
+          217,
+          255
+        ],
         "messageFontSize": 12.0,
-        "messageOffset": [0.0, 0.0],
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
         "messagePadTop": 8.0,
         "panelHeight": 120.0,
         "panelWidth": 260.0,
-        "titleColor": [0.95, 0.82, 0.45, 1.0],
+        "titleColor": [
+          242,
+          209,
+          115,
+          255
+        ],
         "titleFontSize": 14.0,
-        "titleOffset": [0.0, 0.0],
+        "titleOffset": [
+          0.0,
+          0.0
+        ],
         "titlePadTop": 10.0,
         "type": "invite_prompt",
         "visible": false,

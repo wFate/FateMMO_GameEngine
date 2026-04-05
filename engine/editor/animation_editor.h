@@ -3,6 +3,7 @@
 #include <vector>
 #include <unordered_map>
 #include <nlohmann/json.hpp>
+#include "engine/editor/animation_preview.h"
 
 struct ImFont;
 
@@ -17,6 +18,7 @@ struct AnimState {
     bool loop = true;
     int hitFrame = -1;
     std::unordered_map<std::string, int> frameCount; // direction -> count
+    std::vector<int> frameDurationsMs; // per-frame ms, empty = use frameRate
 };
 
 struct AnimTemplate {
@@ -74,6 +76,10 @@ private:
     bool previewPlaying_ = false;
     float previewTimer_ = 0.0f;
     int previewFrame_ = 0;
+    float previewZoom_ = 3.0f;
+
+    // Multi-layer preview widget
+    AnimationPreview preview_;
 
     // Texture cache
     std::unordered_map<std::string, unsigned int> frameTexCache_;
@@ -83,6 +89,13 @@ private:
     char newStateBuf_[64] = {};
     char variantBuf_[64] = {};
     char loadFrameSetBuf_[256] = {};
+    char importAsePathBuf_[256] = {};
+    std::vector<std::string> importWarnings_;
+
+    // Duration edit popup state
+    int editDurationFrameIdx_ = 0;
+    int editDurationStateIdx_ = 0;
+    int editDurationValue_ = 100;
 
     // Slicer mode state
     bool slicerMode_ = false;
@@ -115,6 +128,9 @@ private:
     void reconstructStatesFromMeta(const PackedSheetMeta& meta);
     void newMobTemplate();
     void newPlayerTemplate();
+
+    // Aseprite import
+    void importAseprite(const std::string& jsonPath);
 
     // File I/O
     void newTemplate(const std::string& entityType);

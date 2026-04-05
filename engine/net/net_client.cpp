@@ -1094,6 +1094,14 @@ void NetClient::sendMarketGetMyListings() {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdMarket, w.data(), w.size());
 }
 
+void NetClient::sendMarketClaim(int32_t listingId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(MarketAction::ClaimListing);
+    w.writeI32(listingId);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdMarket, w.data(), w.size());
+}
+
 void NetClient::sendGuildAction(uint8_t action, const std::string& data) {
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));

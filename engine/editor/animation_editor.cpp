@@ -1,4 +1,5 @@
 #include "engine/editor/animation_editor.h"
+#include "engine/editor/aseprite_importer.h"
 #include "engine/core/logger.h"
 #include "engine/render/texture.h"
 #ifdef FATE_HAS_GAME
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <cstring>
 #include <set>
+#include <numeric>
 #include <stb_image.h>
 #include <stb_image_write.h>
 
@@ -36,9 +38,12 @@ static void drawCheckerboard(ImDrawList* dl, ImVec2 pos, float w, float h, int c
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
-void AnimationEditor::init() {}
+void AnimationEditor::init() {
+    preview_.init();
+}
 
 void AnimationEditor::shutdown() {
+    preview_.shutdown();
     frameTexCache_.clear();
 }
 
@@ -51,6 +56,55 @@ void AnimationEditor::draw() {
         ImGui::Separator();
         drawFrameWorkspace();
         drawPreview();
+
+        // Keyboard shortcuts when window is focused
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+            if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
+                previewPlaying_ = false;
+                int frameCount = 1;
+                if (selectedStateIdx_ >= 0 && selectedStateIdx_ < (int)template_.states.size()) {
+                    auto& state = template_.states[selectedStateIdx_];
+                    std::string dir = directionName(selectedDirection_);
+                    auto it = state.frameCount.find(dir);
+                    if (it != state.frameCount.end()) frameCount = std::max(1, it->second);
+                }
+                previewFrame_ = (previewFrame_ - 1 + frameCount) % frameCount;
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+                previewPlaying_ = false;
+                int frameCount = 1;
+                if (selectedStateIdx_ >= 0 && selectedStateIdx_ < (int)template_.states.size()) {
+                    auto& state = template_.states[selectedStateIdx_];
+                    std::string dir = directionName(selectedDirection_);
+                    auto it = state.frameCount.find(dir);
+                    if (it != state.frameCount.end()) frameCount = std::max(1, it->second);
+                }
+                previewFrame_ = (previewFrame_ + 1) % frameCount;
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Space)) {
+                previewPlaying_ = !previewPlaying_;
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_H)) {
+                // Toggle hit frame on hovered slicer cell
+                if (slicerMode_ && slicerHoveredFrame_ >= 0) {
+                    // Find which state+dir owns the hovered frame
+                    for (int si = 0; si < (int)template_.states.size(); ++si) {
+                        auto& state = template_.states[si];
+                        auto stIt = slicerFrameAssignments_.find(state.name);
+                        if (stIt == slicerFrameAssignments_.end()) continue;
+                        for (auto& [dir, frameVec] : stIt->second) {
+                            for (int fi = 0; fi < (int)frameVec.size(); ++fi) {
+                                if (frameVec[fi] == slicerHoveredFrame_) {
+                                    state.hitFrame = (state.hitFrame == fi) ? -1 : fi;
+                                    goto hitDone;
+                                }
+                            }
+                        }
+                    }
+                    hitDone:;
+                }
+            }
+        }
     }
     ImGui::End();
 }
@@ -248,9 +302,33 @@ void AnimationEditor::drawMenuBar() {
                 saveMetaJson(sheetTexturePath_);
             }
 
+            ImGui::Separator();
+
+            // Import Aseprite JSON
+            if (ImGui::BeginMenu("Import Aseprite JSON")) {
+                ImGui::InputText("Path##ase", importAsePathBuf_, sizeof(importAsePathBuf_));
+                if (ImGui::Button("Import##ase")) {
+                    importAseprite(importAsePathBuf_);
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndMenu();
+            }
+
             ImGui::EndMenu();
         }
         ImGui::EndMenuBar();
+    }
+
+    // Show import warnings if any
+    if (!importWarnings_.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.7f, 0.0f, 1.0f));
+        for (auto& w : importWarnings_) {
+            ImGui::TextWrapped("Warning: %s", w.c_str());
+        }
+        ImGui::PopStyleColor();
+        if (ImGui::SmallButton("Dismiss Warnings")) {
+            importWarnings_.clear();
+        }
     }
 }
 
@@ -351,6 +429,8 @@ void AnimationEditor::drawFrameStrip() {
 
         bool isSelected = (i == selectedFrameIdx_);
 
+        ImGui::BeginGroup();
+
         ImVec2 framePos = ImGui::GetCursorScreenPos();
         drawCheckerboard(ImGui::GetWindowDrawList(), framePos, 48.0f, 48.0f);
 
@@ -415,8 +495,56 @@ void AnimationEditor::drawFrameStrip() {
             ImGui::EndDragDropTarget();
         }
 
+        // Duration label button
+        if (selectedStateIdx_ >= 0 && selectedStateIdx_ < (int)template_.states.size()) {
+            auto& state = template_.states[selectedStateIdx_];
+            char durBuf[16];
+            if (!state.frameDurationsMs.empty() && i < (int)state.frameDurationsMs.size()) {
+                snprintf(durBuf, sizeof(durBuf), "%dms", state.frameDurationsMs[i]);
+            } else {
+                snprintf(durBuf, sizeof(durBuf), "%.0fms", (state.frameRate > 0) ? 1000.0f / state.frameRate : 100.0f);
+            }
+            if (ImGui::SmallButton(durBuf)) {
+                editDurationFrameIdx_ = i;
+                editDurationStateIdx_ = selectedStateIdx_;
+                editDurationValue_ = (!state.frameDurationsMs.empty() && i < (int)state.frameDurationsMs.size())
+                    ? state.frameDurationsMs[i]
+                    : (int)((state.frameRate > 0) ? 1000.0f / state.frameRate : 100.0f);
+                ImGui::OpenPopup("EditDuration");
+            }
+        }
+
+        ImGui::EndGroup();
+
         ImGui::SameLine();
         ImGui::PopID();
+    }
+
+    // Duration edit popup (frame strip mode)
+    if (ImGui::BeginPopup("EditDuration")) {
+        ImGui::Text("Frame %d Duration", editDurationFrameIdx_);
+        ImGui::InputInt("ms", &editDurationValue_, 10, 50);
+        if (editDurationValue_ < 1) editDurationValue_ = 1;
+        if (ImGui::Button("Apply")) {
+            if (editDurationStateIdx_ >= 0 && editDurationStateIdx_ < (int)template_.states.size()) {
+                auto& editState = template_.states[editDurationStateIdx_];
+                if (editState.frameDurationsMs.empty()) {
+                    int uniformMs = (editState.frameRate > 0) ? (int)(1000.0f / editState.frameRate) : 100;
+                    std::string editDir = directionName(selectedDirection_);
+                    auto fcIt = editState.frameCount.find(editDir);
+                    int count = (fcIt != editState.frameCount.end()) ? fcIt->second : 1;
+                    if (count < 1) count = 1;
+                    editState.frameDurationsMs.resize(count, uniformMs);
+                }
+                if (editDurationFrameIdx_ < (int)editState.frameDurationsMs.size()) {
+                    editState.frameDurationsMs[editDurationFrameIdx_] = editDurationValue_;
+                }
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
     }
 
     // "Drop here" zone at end of strip for ASSET drops
@@ -646,7 +774,7 @@ void AnimationEditor::saveFrameSet(const std::string& layerVariantKey) {
 }
 
 // ---------------------------------------------------------------------------
-// Task 6: Preview Playback
+// Task 6: Preview Playback (with AnimationPreview widget + variable duration)
 // ---------------------------------------------------------------------------
 void AnimationEditor::drawPreview() {
     ImGui::Separator();
@@ -658,30 +786,70 @@ void AnimationEditor::drawPreview() {
     }
 
     auto& state = template_.states[selectedStateIdx_];
-    auto& frames = currentFrameList();
-    int frameCount = (int)frames.size();
+
+    // Determine frame count from slicer assignments or frame-set frames
+    int frameCount = 0;
+    if (slicerMode_) {
+        std::string dir = directionName(selectedDirection_);
+        auto stIt = slicerFrameAssignments_.find(state.name);
+        if (stIt != slicerFrameAssignments_.end()) {
+            auto dIt = stIt->second.find(dir);
+            if (dIt != stIt->second.end()) frameCount = (int)dIt->second.size();
+        }
+    } else {
+        auto& frames = currentFrameList();
+        frameCount = (int)frames.size();
+    }
 
     if (frameCount == 0) {
         ImGui::TextDisabled("No frames");
         return;
     }
 
-    // Advance timer if playing
-    if (previewPlaying_ && state.frameRate > 0.0f) {
+    // --- Variable-duration transport ---
+    if (previewPlaying_) {
         previewTimer_ += ImGui::GetIO().DeltaTime;
-        float frameDuration = 1.0f / state.frameRate;
-        float totalDuration = frameCount * frameDuration;
 
-        if (state.loop) {
-            if (totalDuration > 0.0f) {
-                while (previewTimer_ >= totalDuration) previewTimer_ -= totalDuration;
+        if (!state.frameDurationsMs.empty()) {
+            // Variable duration: cumulative ms approach (mirrors Animator::getFrameIndex)
+            int totalMs = std::accumulate(state.frameDurationsMs.begin(),
+                                          state.frameDurationsMs.end(), 0);
+            if (totalMs > 0) {
+                float timerMs = previewTimer_ * 1000.0f;
+                if (state.loop) {
+                    timerMs = std::fmod(timerMs, (float)totalMs);
+                    if (timerMs < 0.0f) timerMs += (float)totalMs;
+                }
+                int cumulative = 0;
+                previewFrame_ = (int)state.frameDurationsMs.size() - 1;
+                for (size_t i = 0; i < state.frameDurationsMs.size(); ++i) {
+                    cumulative += state.frameDurationsMs[i];
+                    if (timerMs < (float)cumulative) {
+                        previewFrame_ = (int)i;
+                        break;
+                    }
+                }
+                if (!state.loop && previewFrame_ >= frameCount - 1) {
+                    previewFrame_ = frameCount - 1;
+                    previewPlaying_ = false;
+                }
             }
-            previewFrame_ = (int)(previewTimer_ * state.frameRate) % frameCount;
-        } else {
-            previewFrame_ = (int)(previewTimer_ * state.frameRate);
-            if (previewFrame_ >= frameCount) {
-                previewFrame_ = frameCount - 1;
-                previewPlaying_ = false;
+        } else if (state.frameRate > 0.0f) {
+            // Fixed-rate timing
+            float frameDuration = 1.0f / state.frameRate;
+            float totalDuration = frameCount * frameDuration;
+
+            if (state.loop) {
+                if (totalDuration > 0.0f) {
+                    while (previewTimer_ >= totalDuration) previewTimer_ -= totalDuration;
+                }
+                previewFrame_ = (int)(previewTimer_ * state.frameRate) % frameCount;
+            } else {
+                previewFrame_ = (int)(previewTimer_ * state.frameRate);
+                if (previewFrame_ >= frameCount) {
+                    previewFrame_ = frameCount - 1;
+                    previewPlaying_ = false;
+                }
             }
         }
     }
@@ -690,15 +858,88 @@ void AnimationEditor::drawPreview() {
     if (previewFrame_ < 0) previewFrame_ = 0;
     if (previewFrame_ >= frameCount) previewFrame_ = frameCount - 1;
 
-    // Show current frame at 4x zoom
-    if (previewFrame_ >= 0 && previewFrame_ < (int)frames.size()) {
-        unsigned int texId = loadFrameTexture(frames[previewFrame_]);
-        if (texId != 0) {
-            ImVec2 previewPos = ImGui::GetCursorScreenPos();
-            drawCheckerboard(ImGui::GetWindowDrawList(), previewPos, 128.0f, 128.0f);
-            ImGui::Image((ImTextureID)(intptr_t)texId, ImVec2(128, 128));
-        } else {
-            ImGui::Dummy(ImVec2(128, 128));
+    // --- Preview layer controls ---
+    ImGui::Text("Preview Controls:");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(80);
+    ImGui::SliderFloat("Zoom##prev", &previewZoom_, 1.0f, 8.0f, "%.0fx");
+
+    // Class preset dropdown
+    {
+        const char* presets[] = {"warrior", "mage", "archer"};
+        int currentPreset = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (preview_.classPreset_ == presets[i]) { currentPreset = i; break; }
+        }
+        ImGui::SetNextItemWidth(100);
+        if (ImGui::Combo("Class##prev", &currentPreset, "Warrior\0Mage\0Archer\0")) {
+            preview_.classPreset_ = presets[currentPreset];
+        }
+    }
+
+    ImGui::SameLine();
+
+    // Layer visibility checkboxes
+    ImGui::Checkbox("Body",   &preview_.layerVisible_[0]);
+    ImGui::SameLine();
+    ImGui::Checkbox("Hair",   &preview_.layerVisible_[1]);
+    ImGui::SameLine();
+    ImGui::Checkbox("Armor",  &preview_.layerVisible_[2]);
+    ImGui::SameLine();
+    ImGui::Checkbox("Hat",    &preview_.layerVisible_[3]);
+    ImGui::SameLine();
+    ImGui::Checkbox("Weapon", &preview_.layerVisible_[4]);
+
+    // Direction selector
+    ImGui::RadioButton("Down##prev",  &preview_.selectedDirection_, 0);
+    ImGui::SameLine();
+    ImGui::RadioButton("Up##prev",    &preview_.selectedDirection_, 1);
+    ImGui::SameLine();
+    ImGui::RadioButton("Side##prev",  &preview_.selectedDirection_, 2);
+    ImGui::SameLine();
+
+    // Onion skin toggle
+    {
+        bool onion = preview_.onionSkinEnabled();
+        if (ImGui::Checkbox("Onion Skin", &onion)) {
+            preview_.setOnionSkin(onion);
+        }
+    }
+
+    // --- Draw the preview ---
+    // Use AnimationPreview widget when in slicer mode with a sheet
+    if (slicerMode_ && !sheetTexturePath_.empty()) {
+        auto tex = TextureCache::instance().get(sheetTexturePath_);
+        if (tex) {
+            int texW = tex->width();
+            int columns = (slicerCellW_ > 0) ? texW / slicerCellW_ : 1;
+            preview_.setPrimarySheet(sheetTexturePath_, slicerCellW_, slicerCellH_, columns);
+        }
+
+        // Map preview frame to absolute frame index in the sheet
+        int absFrame = previewFrame_;
+        std::string dir = directionName(selectedDirection_);
+        auto stIt = slicerFrameAssignments_.find(state.name);
+        if (stIt != slicerFrameAssignments_.end()) {
+            auto dIt = stIt->second.find(dir);
+            if (dIt != stIt->second.end() && previewFrame_ < (int)dIt->second.size()) {
+                absFrame = dIt->second[previewFrame_];
+            }
+        }
+
+        preview_.draw(absFrame, preview_.selectedDirection_, previewZoom_);
+    } else {
+        // Non-slicer mode: individual frame textures
+        auto& frames = currentFrameList();
+        if (previewFrame_ >= 0 && previewFrame_ < (int)frames.size()) {
+            unsigned int texId = loadFrameTexture(frames[previewFrame_]);
+            if (texId != 0) {
+                ImVec2 previewPos = ImGui::GetCursorScreenPos();
+                drawCheckerboard(ImGui::GetWindowDrawList(), previewPos, 128.0f, 128.0f);
+                ImGui::Image((ImTextureID)(intptr_t)texId, ImVec2(128, 128));
+            } else {
+                ImGui::Dummy(ImVec2(128, 128));
+            }
         }
     }
 
@@ -719,7 +960,14 @@ void AnimationEditor::drawPreview() {
     if (ImGui::Button("Step")) {
         previewPlaying_ = false;
         previewFrame_ = (previewFrame_ + 1) % frameCount;
-        previewTimer_ = previewFrame_ / state.frameRate;
+        // Sync timer to new frame
+        if (!state.frameDurationsMs.empty() && previewFrame_ < (int)state.frameDurationsMs.size()) {
+            int cumMs = 0;
+            for (int i = 0; i < previewFrame_; ++i) cumMs += state.frameDurationsMs[i];
+            previewTimer_ = cumMs / 1000.0f;
+        } else if (state.frameRate > 0.0f) {
+            previewTimer_ = previewFrame_ / state.frameRate;
+        }
     }
     ImGui::SameLine();
     if (ImGui::Button("Reset")) {
@@ -995,6 +1243,15 @@ void AnimationEditor::drawSlicerView() {
     ImGui::SetNextItemWidth(80);
     ImGui::SliderFloat("Zoom", &slicerZoom_, 0.5f, 8.0f, "%.1fx");
 
+    // Mousewheel zoom
+    if (ImGui::IsWindowHovered()) {
+        float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f) {
+            slicerZoom_ += wheel * 0.25f;
+            slicerZoom_ = std::clamp(slicerZoom_, 0.5f, 8.0f);
+        }
+    }
+
     // Scrollable sheet view with grid overlay
     ImVec2 canvasSize = ImGui::GetContentRegionAvail();
     canvasSize.y = std::max(canvasSize.y * 0.6f, 200.0f);
@@ -1016,18 +1273,26 @@ void AnimationEditor::drawSlicerView() {
     float cellDispH = slicerCellH_ * slicerZoom_;
     ImU32 gridColor = IM_COL32(255, 255, 255, 60);
     ImU32 hoverColor = IM_COL32(100, 180, 255, 100);
-    ImU32 assignedColor = IM_COL32(100, 255, 100, 80);
 
-    // Collect assigned frames for current state+direction
-    std::set<int> currentAssigned;
-    if (selectedStateIdx_ >= 0 && selectedStateIdx_ < (int)template_.states.size()) {
-        auto& state = template_.states[selectedStateIdx_];
-        std::string dir = directionName(selectedDirection_);
-        auto it = slicerFrameAssignments_.find(state.name);
-        if (it != slicerFrameAssignments_.end()) {
-            auto dit = it->second.find(dir);
-            if (dit != it->second.end()) {
-                for (int f : dit->second) currentAssigned.insert(f);
+    // Direction-specific overlay colors
+    ImU32 colorDown  = IM_COL32(80, 140, 255, 100); // blue
+    ImU32 colorUp    = IM_COL32(80, 220, 120, 100); // green
+    ImU32 colorSide  = IM_COL32(240, 200, 60, 100); // yellow
+
+    // Build reverse lookup: frame index -> (state index, direction, frame-within-direction index)
+    struct FrameInfo {
+        int stateIdx;
+        const char* direction;
+        int frameInDir; // index within that direction's frame list
+    };
+    std::unordered_map<int, FrameInfo> assignedFrames;
+    for (int si = 0; si < (int)template_.states.size(); ++si) {
+        auto& state = template_.states[si];
+        auto stateIt = slicerFrameAssignments_.find(state.name);
+        if (stateIt == slicerFrameAssignments_.end()) continue;
+        for (auto& [dir, frameVec] : stateIt->second) {
+            for (int fi = 0; fi < (int)frameVec.size(); ++fi) {
+                assignedFrames[frameVec[fi]] = { si, dir.c_str(), fi };
             }
         }
     }
@@ -1042,17 +1307,64 @@ void AnimationEditor::drawSlicerView() {
             float y0 = cursorPos.y + row * cellDispH;
             float x1 = x0 + cellDispW;
             float y1 = y0 + cellDispH;
+            ImVec2 cellMin(x0, y0);
+            ImVec2 cellMax(x1, y1);
 
-            drawList->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), gridColor);
+            drawList->AddRect(cellMin, cellMax, gridColor);
 
-            if (currentAssigned.count(frameIdx)) {
-                drawList->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), assignedColor);
+            // Direction-colored overlay for assigned cells
+            auto ait = assignedFrames.find(frameIdx);
+            if (ait != assignedFrames.end()) {
+                const char* dir = ait->second.direction;
+                ImU32 overlayColor;
+                if (std::strcmp(dir, "down") == 0)
+                    overlayColor = colorDown;
+                else if (std::strcmp(dir, "up") == 0)
+                    overlayColor = colorUp;
+                else
+                    overlayColor = colorSide; // side, left, right
+
+                drawList->AddRectFilled(cellMin, cellMax, overlayColor);
+
+                // Hit frame badge
+                int si = ait->second.stateIdx;
+                int frameInDir = ait->second.frameInDir;
+                if (si >= 0 && si < (int)template_.states.size() &&
+                    template_.states[si].hitFrame == frameInDir) {
+                    ImVec2 badgeMin(cellMax.x - 14, cellMin.y + 2);
+                    ImVec2 badgeMax(cellMax.x - 2, cellMin.y + 14);
+                    drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(220, 50, 50, 200));
+                    drawList->AddText(ImVec2(badgeMin.x + 2, badgeMin.y), IM_COL32(255, 255, 255, 255), "H");
+                }
             }
 
-            if (mousePos.x >= x0 && mousePos.x < x1 &&
-                mousePos.y >= y0 && mousePos.y < y1) {
+            bool hovered = mousePos.x >= x0 && mousePos.x < x1 &&
+                           mousePos.y >= y0 && mousePos.y < y1;
+            if (hovered) {
                 slicerHoveredFrame_ = frameIdx;
-                drawList->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), hoverColor);
+                drawList->AddRectFilled(cellMin, cellMax, hoverColor);
+
+                // Frame info tooltip
+                if (ait != assignedFrames.end()) {
+                    int si = ait->second.stateIdx;
+                    const char* dir = ait->second.direction;
+                    int frameInDir = ait->second.frameInDir;
+                    ImGui::BeginTooltip();
+                    ImGui::Text("Frame %d", frameIdx);
+                    if (si >= 0 && si < (int)template_.states.size()) {
+                        ImGui::Text("State: %s_%s", template_.states[si].name.c_str(), dir);
+                        ImGui::Text("Index in direction: %d", frameInDir);
+                        auto& durations = template_.states[si].frameDurationsMs;
+                        if (frameInDir < (int)durations.size()) {
+                            ImGui::Text("Duration: %d ms", durations[frameInDir]);
+                        } else {
+                            float rate = template_.states[si].frameRate;
+                            if (rate > 0.0f)
+                                ImGui::Text("Duration: %.0f ms (from rate)", 1000.0f / rate);
+                        }
+                    }
+                    ImGui::EndTooltip();
+                }
             }
 
             char label[8];
@@ -1061,13 +1373,30 @@ void AnimationEditor::drawSlicerView() {
         }
     }
 
-    // Click to assign frame to current state+direction
+    // Left-click to assign frame to current state+direction
     if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(0) && slicerHoveredFrame_ >= 0) {
         if (selectedStateIdx_ >= 0 && selectedStateIdx_ < (int)template_.states.size()) {
             auto& state = template_.states[selectedStateIdx_];
             std::string dir = directionName(selectedDirection_);
             slicerFrameAssignments_[state.name][dir].push_back(slicerHoveredFrame_);
             state.frameCount[dir] = (int)slicerFrameAssignments_[state.name][dir].size();
+        }
+    }
+
+    // Right-click on assigned cell to toggle hit frame
+    if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(1) && slicerHoveredFrame_ >= 0) {
+        auto ait = assignedFrames.find(slicerHoveredFrame_);
+        if (ait != assignedFrames.end()) {
+            int si = ait->second.stateIdx;
+            int frameInDir = ait->second.frameInDir;
+            if (si >= 0 && si < (int)template_.states.size()) {
+                auto& state = template_.states[si];
+                if (state.hitFrame == frameInDir) {
+                    state.hitFrame = -1; // toggle off
+                } else {
+                    state.hitFrame = frameInDir; // set new hit frame
+                }
+            }
         }
     }
 
@@ -1086,7 +1415,7 @@ void AnimationEditor::drawSlicerFrameStrip() {
     auto& frames = slicerFrameAssignments_[state.name][dir];
 
     ImGui::Text("Frames (%d):", (int)frames.size());
-    ImGui::BeginChild("##slicerStrip", ImVec2(0, 64), true, ImGuiWindowFlags_HorizontalScrollbar);
+    ImGui::BeginChild("##slicerStrip", ImVec2(0, 88), true, ImGuiWindowFlags_HorizontalScrollbar);
 
     auto tex = TextureCache::instance().get(sheetTexturePath_);
     int texW = tex ? tex->width() : 1;
@@ -1105,6 +1434,9 @@ void AnimationEditor::drawSlicerFrameStrip() {
         ImVec2 uv1(u1, 1.0f - v_bottom);
 
         ImGui::PushID(i);
+
+        // Column group: image button + duration label stacked vertically
+        ImGui::BeginGroup();
         ImTextureID slicerTexId = (ImTextureID)(intptr_t)(tex ? tex->id() : 0);
         if (ImGui::ImageButton("##fr", slicerTexId, ImVec2(48, 48), uv0, uv1)) {
             // Select frame
@@ -1114,13 +1446,61 @@ void AnimationEditor::drawSlicerFrameStrip() {
                 frames.erase(frames.begin() + i);
                 state.frameCount[dir] = (int)frames.size();
                 ImGui::EndPopup();
+                ImGui::EndGroup();
                 ImGui::PopID();
                 break;
             }
             ImGui::EndPopup();
         }
+
+        // Duration label button
+        char durBuf[16];
+        if (!state.frameDurationsMs.empty() && i < (int)state.frameDurationsMs.size()) {
+            snprintf(durBuf, sizeof(durBuf), "%dms", state.frameDurationsMs[i]);
+        } else {
+            snprintf(durBuf, sizeof(durBuf), "%.0fms", (state.frameRate > 0) ? 1000.0f / state.frameRate : 100.0f);
+        }
+        if (ImGui::SmallButton(durBuf)) {
+            editDurationFrameIdx_ = i;
+            editDurationStateIdx_ = selectedStateIdx_;
+            editDurationValue_ = (!state.frameDurationsMs.empty() && i < (int)state.frameDurationsMs.size())
+                ? state.frameDurationsMs[i]
+                : (int)((state.frameRate > 0) ? 1000.0f / state.frameRate : 100.0f);
+            ImGui::OpenPopup("EditDuration");
+        }
+        ImGui::EndGroup();
+
         ImGui::PopID();
         ImGui::SameLine();
+    }
+
+    // Duration edit popup
+    if (ImGui::BeginPopup("EditDuration")) {
+        ImGui::Text("Frame %d Duration", editDurationFrameIdx_);
+        ImGui::InputInt("ms", &editDurationValue_, 10, 50);
+        if (editDurationValue_ < 1) editDurationValue_ = 1;
+        if (ImGui::Button("Apply")) {
+            if (editDurationStateIdx_ >= 0 && editDurationStateIdx_ < (int)template_.states.size()) {
+                auto& editState = template_.states[editDurationStateIdx_];
+                // Expand from uniform if frameDurationsMs is empty
+                if (editState.frameDurationsMs.empty()) {
+                    int uniformMs = (editState.frameRate > 0) ? (int)(1000.0f / editState.frameRate) : 100;
+                    // Use the current direction's frame count
+                    std::string editDir = directionName(selectedDirection_);
+                    auto fcIt = editState.frameCount.find(editDir);
+                    int count = (fcIt != editState.frameCount.end()) ? fcIt->second : (int)frames.size();
+                    if (count < 1) count = 1;
+                    editState.frameDurationsMs.resize(count, uniformMs);
+                }
+                if (editDurationFrameIdx_ < (int)editState.frameDurationsMs.size()) {
+                    editState.frameDurationsMs[editDurationFrameIdx_] = editDurationValue_;
+                }
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
     }
 
     ImGui::EndChild();
@@ -1209,6 +1589,9 @@ void AnimationEditor::saveMetaJson(const std::string& sheetPath) {
             sj["frameRate"] = state.frameRate;
             sj["loop"] = state.loop;
             sj["hitFrame"] = state.hitFrame;
+            if (!state.frameDurationsMs.empty()) {
+                sj["frameDurations"] = state.frameDurationsMs;
+            }
 
             if (dirKey == "side") {
                 j["states"][state.name + "_right"] = sj;
@@ -1297,6 +1680,7 @@ void AnimationEditor::reconstructStatesFromMeta(const PackedSheetMeta& meta) {
         state.frameRate = first->frameRate;
         state.loop = first->loop;
         state.hitFrame = first->hitFrame;
+        state.frameDurationsMs = first->frameDurationsMs;
 
         for (auto& [dir, sm] : dirMap) {
             state.frameCount[dir] = sm->frameCount;
@@ -1355,6 +1739,95 @@ void AnimationEditor::newPlayerTemplate() {
     template_.states.push_back(makeState("death",  6.0f, false, -1));
     slicerFrameAssignments_.clear();
     selectedStateIdx_ = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Aseprite Import
+// ---------------------------------------------------------------------------
+void AnimationEditor::importAseprite(const std::string& jsonPath) {
+    importWarnings_.clear();
+
+    auto result = AsepriteImporter::parse(jsonPath);
+    if (!result) {
+        LOG_ERROR("AnimEditor", "Aseprite import failed: %s", jsonPath.c_str());
+        importWarnings_.push_back("Failed to parse Aseprite JSON: " + jsonPath);
+        return;
+    }
+
+    // Collect warnings from the importer
+    importWarnings_ = result->warnings;
+
+    // Clear existing states and slicer assignments
+    template_.states.clear();
+    slicerFrameAssignments_.clear();
+
+    // Group imported states by state name (e.g. idle_down + idle_up share the same AnimState)
+    // Use indices into template_.states to avoid dangling pointers from vector reallocation.
+    std::unordered_map<std::string, int> stateIndexMap;
+
+    for (const auto& imp : result->states) {
+        // Normalize direction: left/right -> side
+        std::string dir = imp.direction;
+        if (dir == "left" || dir == "right") dir = "side";
+
+        auto it = stateIndexMap.find(imp.name);
+        if (it == stateIndexMap.end()) {
+            // Create new AnimState
+            AnimState state;
+            state.name = imp.name;
+            state.frameRate = imp.frameRate;
+            state.loop = imp.loop;
+            state.hitFrame = imp.hitFrame;
+            state.frameDurationsMs = imp.frameDurationsMs;
+            state.frameCount[dir] = imp.frameCount;
+            stateIndexMap[imp.name] = (int)template_.states.size();
+            template_.states.push_back(std::move(state));
+        } else {
+            // Update existing AnimState with additional direction
+            template_.states[it->second].frameCount[dir] = imp.frameCount;
+        }
+
+        // Populate slicer frame assignments
+        // Build sequential frame indices from startFrame + frameCount
+        std::vector<int> frameIndices;
+        frameIndices.reserve(imp.frameCount);
+        for (int i = 0; i < imp.frameCount; ++i) {
+            frameIndices.push_back(imp.startFrame + i);
+        }
+        slicerFrameAssignments_[imp.name][dir] = std::move(frameIndices);
+    }
+
+    // Update slicer cell size from import result
+    slicerCellW_ = result->frameWidth;
+    slicerCellH_ = result->frameHeight;
+
+    // Load companion .png as slicer sheet texture
+    if (!result->sheetPath.empty()) {
+        sheetTexturePath_ = result->sheetPath;
+        sheetTexture_ = loadFrameTexture(result->sheetPath);
+
+        // Also feed it to the preview widget
+        int columns = result->columns > 0 ? result->columns : 1;
+        preview_.setPrimarySheet(result->sheetPath, result->frameWidth,
+                                 result->frameHeight, columns);
+    }
+
+    // Enter slicer mode
+    slicerMode_ = true;
+    open_ = true;
+    selectedStateIdx_ = 0;
+    selectedDirection_ = 0;
+    previewFrame_ = 0;
+    previewTimer_ = 0.0f;
+    previewPlaying_ = false;
+
+    // Set template name from sheet filename
+    template_.name = fs::path(result->sheetPath).stem().string();
+    template_.entityType = "player"; // Default; user can change
+
+    LOG_INFO("AnimEditor", "Imported Aseprite: %s (%d states, %d total frames, %dx%d cells)",
+             jsonPath.c_str(), (int)template_.states.size(), result->totalFrames,
+             result->frameWidth, result->frameHeight);
 }
 
 } // namespace fate

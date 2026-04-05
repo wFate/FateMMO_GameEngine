@@ -92,6 +92,14 @@ public:
         for (auto& [id, client] : clients_) fn(client);
     }
 
+    // Returns clientId for a given character_id, or 0 if not online
+    uint16_t findClientByCharacterId(const std::string& charId) const {
+        for (const auto& [id, client] : clients_) {
+            if (client.character_id == charId) return id;
+        }
+        return 0;
+    }
+
 private:
     uint16_t nextClientId_ = 1;
     size_t maxClients_ = 2000;  // default cap to prevent DoS

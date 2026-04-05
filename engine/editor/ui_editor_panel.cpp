@@ -314,9 +314,7 @@ void UIEditorPanel::drawHierarchy(UIManager& uiMgr) {
 
     // Escape to deselect
     if (selectedNode_ && ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-        selectedNode_ = nullptr;
-        selectedNodeId_.clear();
-        selectedScreenId_.clear();
+        clearSelection();
     }
 
     ImGui::End();
@@ -769,6 +767,9 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Plat Offset X", &inv->platOffsetX, 0.5f, -200.0f, 400.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Plat Offset Y", &inv->platOffsetY, 0.5f, -50.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Grid Padding", &inv->gridPadding, 0.5f, 0.0f, 16.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Doll Area Offset", &inv->dollAreaOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Grid Area Offset", &inv->gridAreaOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Currency Offset", &inv->currencyOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -892,7 +893,11 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
 
         if (ImGui::TreeNodeEx("Tooltip Layout##inv", 0)) {
-            ImGui::DragFloat("Width##tt", &inv->tooltipWidth, 1.0f, 80.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::Checkbox("Auto Width##tt", &inv->tooltipAutoWidth); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Min Width##tt", &inv->tooltipWidth, 1.0f, 40.0f, 500.0f); checkUndoCapture(uiMgr);
+            if (inv->tooltipAutoWidth) {
+                ImGui::DragFloat("Max Width##tt", &inv->tooltipMaxWidth, 1.0f, 100.0f, 800.0f); checkUndoCapture(uiMgr);
+            }
             ImGui::DragFloat("Padding##tt", &inv->tooltipPadding, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Slot Offset##tt", &inv->tooltipOffset, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Shadow Offset##tt", &inv->tooltipShadowOffset, 0.5f, 0.0f, 16.0f); checkUndoCapture(uiMgr);
@@ -2706,10 +2711,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Category Item Height##mktl", &mp->categoryItemHeight, 0.5f, 12.0f, 80.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Category Spacing##mktl", &mp->categorySpacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Row Padding##mktl", &mp->rowPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Gold Icon Size##mktl", &mp->goldIconSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Border Width##mktl", &mp->borderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Content Padding##mktl", &mp->contentPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Close Radius##mktl", &mp->closeRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Title Bar Height##mktl", &mp->titleBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragInt("Rows Per Page##mktl", &mp->rowsPerPage, 1, 1, 50); checkUndoCapture(uiMgr);
             ImGui::TreePop();
@@ -2724,12 +2727,11 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Category##mktf", &mp->categoryFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Search##mktf", &mp->searchFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Page##mktf", &mp->pageFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Gold Display##mktf", &mp->goldDisplayFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Status Badge##mktf", &mp->statusBadgeFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Position Offsets##mkt", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat2("Title##mkto", &mp->titleOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("Gold Display##mkto", &mp->goldDisplayOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Category##mkto", &mp->categoryOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Listing Area##mkto", &mp->listingAreaOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Item Name##mkto", &mp->itemNameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
@@ -2756,9 +2758,15 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Row Odd##mktc", &mp->rowOddColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Row Selected##mktc", &mp->rowSelectedColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Item Name##mktc", &mp->itemNameColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Item Name (Sold)##mktc", &mp->itemNameSoldColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Item Name (Expired)##mktc", &mp->itemNameExpiredColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Enchant Text##mktc", &mp->enchantTextColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Seller Name##mktc", &mp->sellerNameColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Seller Name (Sold)##mktc", &mp->sellerNameSoldColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Seller Name (Expired)##mktc", &mp->sellerNameExpiredColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Price##mktc", &mp->priceColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Price (Sold)##mktc", &mp->priceSoldColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Price (Expired)##mktc", &mp->priceExpiredColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Search BG##mktc", &mp->searchBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Search Border##mktc", &mp->searchBorderColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Search Text##mktc", &mp->searchTextColor.r); checkUndoCapture(uiMgr);
@@ -2767,9 +2775,11 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Page Arrow##mktc", &mp->pageArrowColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Page Arrow Disabled##mktc", &mp->pageArrowDisabledColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Close Btn##mktc", &mp->closeBtnColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Close Btn Border##mktc", &mp->closeBtnBorderColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Refresh Btn##mktc", &mp->refreshBtnColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Gold Display##mktc", &mp->goldDisplayColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Sold Badge##mktc", &mp->soldBadgeColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Expired Badge##mktc", &mp->expiredBadgeColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Sold Badge Text##mktc", &mp->soldBadgeTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Expired Badge Text##mktc", &mp->expiredBadgeTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Cancel Confirm Layout##mkt", 0)) {
@@ -2800,7 +2810,11 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Tooltip Layout##mkt", 0)) {
-            ImGui::DragFloat("Width##mkttt", &mp->tooltipWidth, 1.0f, 50.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::Checkbox("Auto Width##mkttt", &mp->tooltipAutoWidth); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Min Width##mkttt", &mp->tooltipWidth, 1.0f, 40.0f, 500.0f); checkUndoCapture(uiMgr);
+            if (mp->tooltipAutoWidth) {
+                ImGui::DragFloat("Max Width##mkttt", &mp->tooltipMaxWidth, 1.0f, 100.0f, 800.0f); checkUndoCapture(uiMgr);
+            }
             ImGui::DragFloat("Padding##mkttt", &mp->tooltipPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Offset##mkttt", &mp->tooltipOffset, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Shadow Offset##mkttt", &mp->tooltipShadowOffset, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);

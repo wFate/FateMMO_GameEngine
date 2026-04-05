@@ -657,14 +657,20 @@ void Editor::drawInspector() {
                     ImGui::TreePop();
                 }
 
-                // --- Animation metadata (read-only) ---
+                // --- Animation metadata ---
                 if (ImGui::TreeNode("Animation")) {
-                    if (s->frameWidth > 0 && s->frameHeight > 0) {
-                        ImGui::Text("Frame Size: %d x %d", s->frameWidth, s->frameHeight);
-                        ImGui::Text("Grid: %d columns, %d total", s->columns, s->totalFrames);
-                    } else {
-                        ImGui::TextDisabled("No animation metadata loaded");
+                    if (ImGui::DragInt("Frame Width##sprite", &s->frameWidth, 1.0f, 0, 2048))
+                        captureInspectorUndo();
+                    if (ImGui::DragInt("Frame Height##sprite", &s->frameHeight, 1.0f, 0, 2048))
+                        captureInspectorUndo();
+                    if (ImGui::DragInt("Current Frame##sprite", &s->currentFrame, 1.0f, 0, std::max(0, s->totalFrames - 1))) {
+                        s->updateSourceRect();
+                        captureInspectorUndo();
                     }
+                    if (ImGui::DragInt("Total Frames##sprite", &s->totalFrames, 1.0f, 1, 10000))
+                        captureInspectorUndo();
+                    if (ImGui::DragInt("Columns##sprite", &s->columns, 1.0f, 1, 256))
+                        captureInspectorUndo();
 
                     if (!s->texturePath.empty()) {
                         std::string metaName = fs::path(s->texturePath).stem().string() + ".meta.json";
@@ -888,6 +894,22 @@ void Editor::drawInspector() {
                         animationEditor_.openWithSheet(sprite->texturePath);
                     } else {
                         animationEditor_.setOpen(true);
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Reload from Meta##anim")) {
+                    auto* sprite = selectedEntity_->getComponent<SpriteComponent>();
+                    if (sprite && !sprite->texturePath.empty()) {
+                        a->animations.clear();
+                        a->flipXPerAnim.clear();
+                        if (AnimationLoader::tryAutoLoad(*sprite, *a)) {
+                            LOG_INFO("Inspector", "Reloaded animations from meta for %s",
+                                     sprite->texturePath.c_str());
+                        } else {
+                            LOG_WARN("Inspector", "No .meta.json found for %s",
+                                     sprite->texturePath.c_str());
+                        }
+                        captureInspectorUndo();
                     }
                 }
             }

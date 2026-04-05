@@ -92,6 +92,7 @@ public:
     void sendMarketCancel(int32_t listingId);
     void sendMarketGetListings(int32_t page, const std::string& filterJson);
     void sendMarketGetMyListings();
+    void sendMarketClaim(int32_t listingId);
 
     bool isConnected() const { return connected_; }
     bool isWaitingForConnection() const { return waitingForAccept_; }
