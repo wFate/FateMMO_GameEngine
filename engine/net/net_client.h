@@ -15,6 +15,10 @@ namespace fate {
 
 class NetClient {
 public:
+    // Set the server's static identity public key for Noise_NK handshake.
+    // Must be called before connect. Without this, falls back to legacy DH.
+    void setServerStaticKey(const PacketCrypto::PublicKey& pk);
+
     bool connect(const std::string& host, uint16_t port);
     bool connectWithToken(const std::string& host, uint16_t port, const AuthToken& token);
     void disconnect();
@@ -186,6 +190,11 @@ private:
     PacketCrypto crypto_;
     PacketCrypto::Keypair clientKeypair_ = {};
     bool keypairGenerated_ = false;
+
+    // Server's static identity public key for Noise_NK (MITM prevention).
+    // Loaded from server_identity.key.pub or compiled-in.
+    PacketCrypto::PublicKey serverStaticPk_{};
+    bool hasServerStaticPk_ = false;
 
     // Reconnect state machine
     enum class ReconnectPhase : uint8_t { None, Reconnecting, Failed };

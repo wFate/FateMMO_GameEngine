@@ -7,6 +7,11 @@
 
 namespace fate {
 
+void NetClient::setServerStaticKey(const PacketCrypto::PublicKey& pk) {
+    serverStaticPk_ = pk;
+    hasServerStaticPk_ = true;
+}
+
 bool NetClient::connect(const std::string& host, uint16_t port) {
     if (connected_ || waitingForAccept_) return false;
 
@@ -318,21 +323,37 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         case PacketType::KeyExchange: {
             ByteReader payload(payloadData, payloadLen);
             if (payloadLen == PacketCrypto::PUBLIC_KEY_SIZE && keypairGenerated_) {
-                // DH exchange: server sent its public key, derive shared session keys
-                PacketCrypto::PublicKey serverPk{};
-                payload.readBytes(serverPk.data(), PacketCrypto::PUBLIC_KEY_SIZE);
+                // Server sent its ephemeral public key — derive session keys
+                PacketCrypto::PublicKey serverEphPk{};
+                payload.readBytes(serverEphPk.data(), PacketCrypto::PUBLIC_KEY_SIZE);
                 if (payload.ok()) {
-                    auto keys = PacketCrypto::deriveClientSessionKeys(
-                        clientKeypair_.pk, clientKeypair_.sk, serverPk);
+                    PacketCrypto::SessionKeys keys;
+                    if (hasServerStaticPk_) {
+                        // Noise_NK: two DH ops (es + ee) — server-authenticated, MITM-resistant
+                        keys = PacketCrypto::deriveNoiseNKClientKeys(
+                            clientKeypair_.sk, serverStaticPk_, serverEphPk);
+                        LOG_INFO("NetClient", "Noise_NK session keys derived --encryption active (MITM-protected)");
+                    } else {
+                        // Legacy single-DH fallback (no server authentication)
+                        keys = PacketCrypto::deriveClientSessionKeys(
+                            clientKeypair_.pk, clientKeypair_.sk, serverEphPk);
+                        LOG_WARN("NetClient", "Legacy DH session keys derived --encryption active (no MITM protection)");
+                    }
                     crypto_.setKeys(keys.txKey, keys.rxKey);
                     // Wipe secret key --no longer needed
                     PacketCrypto::secureWipe(clientKeypair_.sk.data(), clientKeypair_.sk.size());
                     keypairGenerated_ = false;
-                    LOG_INFO("NetClient", "AEAD session keys derived via DH --encryption active");
                 }
             } else {
                 LOG_ERROR("NetClient", "Invalid KeyExchange payload (%d bytes), expected %d-byte DH public key",
                           payloadLen, PacketCrypto::PUBLIC_KEY_SIZE);
+            }
+            break;
+        }
+        case PacketType::Rekey: {
+            if (crypto_.hasKeys()) {
+                crypto_.symmetricRekey();
+                LOG_INFO("NetClient", "Session keys rekeyed (server-initiated)");
             }
             break;
         }

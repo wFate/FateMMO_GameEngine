@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <array>
+#include <chrono>
 
 namespace fate {
 
@@ -45,13 +46,30 @@ public:
     static SessionKeys deriveServerSessionKeys(const PublicKey& serverPk, const SecretKey& serverSk,
                                                const PublicKey& clientPk);
 
+    // ── Noise_NK key derivation (MITM-resistant) ──────────────────────────
+    // Two DH operations: es (ephemeral×static) + ee (ephemeral×ephemeral),
+    // combined via BLAKE2b.  The server's static key is pre-shared with the
+    // client, so a MITM cannot forge the es DH without the private key.
+
+    // Client side: has own ephemeral SK, knows server static PK (embedded),
+    // receives server ephemeral PK via KeyExchange packet.
+    static SessionKeys deriveNoiseNKClientKeys(const SecretKey& clientEphSk,
+                                               const PublicKey& serverStaticPk,
+                                               const PublicKey& serverEphPk);
+
+    // Server side: has static SK + ephemeral SK, receives client ephemeral PK
+    // via Connect packet.
+    static SessionKeys deriveNoiseNKServerKeys(const SecretKey& serverStaticSk,
+                                               const SecretKey& serverEphSk,
+                                               const PublicKey& clientEphPk);
+
     // Securely wipe sensitive memory (e.g. secret keys after use).
     static void secureWipe(void* data, size_t size);
 
     // Set the encrypt/decrypt keys for this session (also resets nonce counters).
     void setKeys(const Key& encryptKey, const Key& decryptKey);
     bool hasKeys() const { return keysSet_; }
-    void clearKeys() { keysSet_ = false; }
+    void clearKeys();
 
     // Build a unique 64-bit nonce from a per-direction key-derived prefix + the
     // 16-bit packet sequence number.  The prefix is the first 6 bytes of the
@@ -68,17 +86,30 @@ public:
     // Returns true on success.
     bool encrypt(const uint8_t* plaintext, size_t plaintextSize,
                  uint64_t nonce,
-                 uint8_t* ciphertext, size_t ciphertextCapacity) const;
+                 uint8_t* ciphertext, size_t ciphertextCapacity);
 
     // Decrypt ciphertext.
     // Output buffer must have capacity for ciphertextSize - TAG_SIZE bytes.
     // Returns false if authentication fails (tampered or wrong key).
+    // Falls back to previous keys during rekey grace period.
     bool decrypt(const uint8_t* ciphertext, size_t ciphertextSize,
                  uint64_t nonce,
-                 uint8_t* plaintext, size_t plaintextCapacity) const;
+                 uint8_t* plaintext, size_t plaintextCapacity);
 
     // Check whether real crypto is available (libsodium compiled in).
     static bool isAvailable();
+
+    // ── Symmetric rekeying ────────────────────────────────────────────────
+    // Derives new keys from current keys via KDF.  Both sides call this at
+    // the same logical point (server sends Rekey packet, client processes it)
+    // so they derive identical new keys.  Previous keys kept for a grace
+    // period to handle in-flight UDP packets.
+    static constexpr uint64_t REKEY_AFTER_PACKETS = 1ULL << 16; // 65536
+    static constexpr int REKEY_AFTER_MINUTES = 15;
+
+    bool needsRekey() const;
+    void symmetricRekey();
+    uint64_t packetsEncrypted() const { return packetsEncrypted_; }
 
 private:
     Key encryptKey_{};
@@ -86,14 +117,37 @@ private:
     bool keysSet_ = false;
     uint64_t encNoncePrefix_ = 0; // derived from encryptKey, upper 48 bits
     uint64_t decNoncePrefix_ = 0; // derived from decryptKey, upper 48 bits
+
+    // Rekey state
+    uint64_t packetsEncrypted_ = 0;
+    std::chrono::steady_clock::time_point lastRekeyTime_{};
+
+    // Previous keys for grace period during rekey transition
+    Key prevEncryptKey_{};
+    Key prevDecryptKey_{};
+    uint64_t prevEncNoncePrefix_ = 0;
+    uint64_t prevDecNoncePrefix_ = 0;
+    bool hasPrevKeys_ = false;
+    std::chrono::steady_clock::time_point prevKeyExpiry_{};
+
+    // Internal: AEAD encrypt/decrypt with a specific key+nonce prefix
+    static bool encryptWith(const Key& key, const uint8_t* plaintext, size_t plaintextSize,
+                            uint64_t nonce, uint8_t* ciphertext, size_t ciphertextCapacity);
+    static bool decryptWith(const Key& key, const uint8_t* ciphertext, size_t ciphertextSize,
+                            uint64_t nonce, uint8_t* plaintext, size_t plaintextCapacity);
+
+    // Internal: Noise_NK shared derivation from two DH results
+    static SessionKeys deriveNoiseNKFinal(const uint8_t dh_es[32], const uint8_t dh_ee[32],
+                                          bool isInitiator);
 };
 
 // Returns true if the packet type is a system packet that must NOT be encrypted.
 inline bool isSystemPacket(uint8_t packetType) {
     // System packets: Connect (0x01), Disconnect (0x02), Heartbeat (0x03),
-    // ConnectAccept (0x80), ConnectReject (0x81), KeyExchange (0x82)
+    // ConnectAccept (0x80), ConnectReject (0x81), KeyExchange (0x82), Rekey (0x83)
     return packetType == 0x01 || packetType == 0x02 || packetType == 0x03 ||
-           packetType == 0x80 || packetType == 0x81 || packetType == 0x82;
+           packetType == 0x80 || packetType == 0x81 || packetType == 0x82 ||
+           packetType == 0x83;
 }
 
 } // namespace fate
