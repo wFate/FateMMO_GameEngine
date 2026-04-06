@@ -2517,6 +2517,7 @@ void Editor::saveScene(World* world, const std::string& path) {
     root["version"]   = SCENE_FORMAT_VERSION;
     root["gridSize"]  = gridSize_;
     root["sceneName"] = SceneManager::instance().currentSceneName();
+    root["metadata"]  = sceneMetadata_;
 
     nlohmann::json entitiesJson = nlohmann::json::array();
 
@@ -2536,24 +2537,41 @@ void Editor::saveScene(World* world, const std::string& path) {
 
     std::string jsonStr = root.dump(2);
 
-    // Save to runtime dir (where exe runs)
-    {
-        auto parentDir = fs::path(path).parent_path();
-        if (!fs::exists(parentDir)) fs::create_directories(parentDir);
-        std::ofstream file(path);
-        file << jsonStr;
-    }
+    // Atomic write to runtime dir: write .tmp then rename over target
+    auto atomicWrite = [](const std::string& target, const std::string& content) -> bool {
+        auto parentDir = fs::path(target).parent_path();
+        if (!parentDir.empty() && !fs::exists(parentDir))
+            fs::create_directories(parentDir);
+
+        fs::path tmp = fs::path(target);
+        tmp += ".tmp";
+        {
+            std::ofstream file(tmp);
+            if (!file.is_open()) return false;
+            file << content;
+            if (!file.good()) {
+                std::error_code ec;
+                fs::remove(tmp, ec);
+                return false;
+            }
+        }
+        std::error_code ec;
+        fs::rename(tmp, fs::path(target), ec);
+        if (ec) {
+            fs::copy_file(tmp, fs::path(target), fs::copy_options::overwrite_existing, ec);
+            fs::remove(tmp);
+            if (ec) return false;
+        }
+        return true;
+    };
+
+    atomicWrite(path, jsonStr);
 
     // Also save to source dir (persists across rebuilds)
     if (!sourceDir_.empty()) {
         std::string srcPath = sourceDir_ + "/" + fs::path(path).filename().string();
-        auto parentDir = fs::path(srcPath).parent_path();
-        if (!fs::exists(parentDir)) fs::create_directories(parentDir);
-        std::ofstream srcFile(srcPath);
-        if (srcFile.is_open()) {
-            srcFile << jsonStr;
-            LOG_INFO("Editor", "Scene also saved to source: %s", srcPath.c_str());
-        }
+        atomicWrite(srcPath, jsonStr);
+        LOG_INFO("Editor", "Scene also saved to source: %s", srcPath.c_str());
     }
 
     LOG_INFO("Editor", "Scene saved to %s (%zu entities)", path.c_str(), entitiesJson.size());
@@ -2593,6 +2611,13 @@ void Editor::loadScene(World* world, const std::string& path) {
 
     if (root.contains("gridSize")) {
         gridSize_ = root["gridSize"].get<float>();
+    }
+
+    // Preserve scene metadata for round-trip (sceneType, minLevel, pvpEnabled, etc.)
+    if (root.contains("metadata")) {
+        sceneMetadata_ = root["metadata"];
+    } else {
+        sceneMetadata_ = nlohmann::json::object();
     }
 
     if (!root.contains("entities")) return;

@@ -268,6 +268,7 @@ private:
     bool open_ = true;   // Editor is always visible — the editor IS the application
     bool paused_ = true;  // Start paused (editing mode)
     nlohmann::json playModeSnapshot_;  // ECS state before entering play mode
+    nlohmann::json sceneMetadata_;  // preserved across editor save/load for round-trip
     bool inPlayMode_ = false;
     bool frameStarted_ = false;
     bool wantsKeyboard_ = false;
