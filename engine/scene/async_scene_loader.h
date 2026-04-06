@@ -44,6 +44,7 @@ public:
     const std::string& errorMessage() const;
     float progress() const;
     const std::string& sceneName() const;
+    const nlohmann::json& sceneMetadata() const;
     bool isActive() const { return active_; }
     PendingSceneLoad* pendingLoad() { return pending_.get(); }
 

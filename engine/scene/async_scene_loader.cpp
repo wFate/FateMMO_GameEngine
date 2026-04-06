@@ -186,4 +186,9 @@ const std::string& AsyncSceneLoader::sceneName() const {
     return pending_ ? pending_->sceneName : empty;
 }
 
+const nlohmann::json& AsyncSceneLoader::sceneMetadata() const {
+    static const nlohmann::json empty = nlohmann::json::object();
+    return pending_ ? pending_->sceneMetadata : empty;
+}
+
 } // namespace fate
