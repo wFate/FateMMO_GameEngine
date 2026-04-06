@@ -13,6 +13,12 @@
 #include <set>
 #include <numeric>
 #include <stb_image.h>
+
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#include <commdlg.h>
+#endif
 #include <stb_image_write.h>
 
 namespace fate {
@@ -305,13 +311,26 @@ void AnimationEditor::drawMenuBar() {
             ImGui::Separator();
 
             // Import Aseprite JSON
-            if (ImGui::BeginMenu("Import Aseprite JSON")) {
-                ImGui::InputText("Path##ase", importAsePathBuf_, sizeof(importAsePathBuf_));
-                if (ImGui::Button("Import##ase")) {
-                    importAseprite(importAsePathBuf_);
-                    ImGui::CloseCurrentPopup();
+            if (ImGui::MenuItem("Import Aseprite JSON...")) {
+#ifdef _WIN32
+                char filename[MAX_PATH] = "";
+                OPENFILENAMEA ofn = {};
+                ofn.lStructSize = sizeof(ofn);
+                ofn.lpstrFilter = "Aseprite JSON\0*.json\0All Files\0*.*\0";
+                ofn.lpstrFile = filename;
+                ofn.nMaxFile = MAX_PATH;
+                ofn.lpstrTitle = "Import Aseprite JSON";
+                ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+                if (GetOpenFileNameA(&ofn)) {
+                    std::string path = filename;
+                    for (auto& c : path) if (c == '\\') c = '/';
+                    importAseprite(path);
                 }
-                ImGui::EndMenu();
+#else
+                // Fallback: copy path into buffer and import
+                // (non-Windows platforms can extend with zenity/osascript)
+                importAseprite(importAsePathBuf_);
+#endif
             }
 
             ImGui::EndMenu();
@@ -1615,12 +1634,14 @@ void AnimationEditor::saveMetaJson(const std::string& sheetPath) {
         }
     }
 
-    // Dual-save to source dir
-    if (!sourceDir_.empty()) {
+    // Dual-save to source dir (only for relative paths -- absolute paths
+    // already saved to the correct location above)
+    if (!sourceDir_.empty() && !fs::path(metaPath).is_absolute()) {
         std::string srcPath = sourceDir_ + "/" + metaPath;
+        std::error_code ec;
         auto parentDir = fs::path(srcPath).parent_path();
-        if (!parentDir.empty() && !fs::exists(parentDir))
-            fs::create_directories(parentDir);
+        if (!parentDir.empty() && !fs::exists(parentDir, ec))
+            fs::create_directories(parentDir, ec);
         std::ofstream f(srcPath);
         if (f.is_open()) {
             f << j.dump(2);

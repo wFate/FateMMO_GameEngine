@@ -163,19 +163,21 @@ void AssetBrowser::scanDirectory(const std::string& relDir) {
         absDir /= relDir;
     }
 
-    if (!fs::exists(absDir) || !fs::is_directory(absDir)) {
+    std::error_code ec;
+    if (!fs::exists(absDir, ec) || !fs::is_directory(absDir, ec)) {
         LOG_WARN("AssetBrowser", "Directory does not exist: %s", absDir.string().c_str());
         return;
     }
 
-    for (auto& dirEntry : fs::directory_iterator(absDir)) {
+    for (auto& dirEntry : fs::directory_iterator(absDir, ec)) {
+        if (ec) break;
         std::string name = dirEntry.path().filename().string();
 
         // Skip hidden directories/files and build artifacts at project root
         if (name.empty() || name[0] == '.') continue;
         if (relDir.empty()) {
             // At project root, only show relevant directories
-            if (dirEntry.is_directory()) {
+            if (dirEntry.is_directory(ec)) {
                 if (name == "out" || name == "build" || name == "cmake-build-debug" ||
                     name == "cmake-build-release" || name == ".vs" || name == "vcpkg_installed" ||
                     name == "node_modules") continue;
@@ -191,15 +193,15 @@ void AssetBrowser::scanDirectory(const std::string& relDir) {
         std::replace(e.fullPath.begin(), e.fullPath.end(), '\\', '/');
 
         // Compute relative path from projectRoot
-        auto relPath = fs::relative(dirEntry.path(), fs::path(projectRoot_));
-        e.relativePath = relPath.string();
+        auto relPath = fs::relative(dirEntry.path(), fs::path(projectRoot_), ec);
+        e.relativePath = ec ? name : relPath.string();
         std::replace(e.relativePath.begin(), e.relativePath.end(), '\\', '/');
 
-        if (dirEntry.is_directory()) {
+        if (dirEntry.is_directory(ec)) {
             e.isDirectory = true;
             e.type = AssetType::Other;
             currentEntries_.push_back(std::move(e));
-        } else if (dirEntry.is_regular_file()) {
+        } else if (dirEntry.is_regular_file(ec)) {
             e.extension = dirEntry.path().extension().string();
             std::transform(e.extension.begin(), e.extension.end(), e.extension.begin(), ::tolower);
             e.type = classifyFile(e.name, e.extension);

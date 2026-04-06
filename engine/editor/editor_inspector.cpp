@@ -678,7 +678,8 @@ void Editor::drawInspector() {
                         auto dotPos = metaPath.rfind('.');
                         if (dotPos != std::string::npos)
                             metaPath = metaPath.substr(0, dotPos) + ".meta.json";
-                        bool metaExists = fs::exists(metaPath);
+                        std::error_code ec;
+                        bool metaExists = fs::exists(metaPath, ec);
                         ImGui::Text("Meta File: %s %s", metaName.c_str(), metaExists ? "" : "(not found)");
                     }
 

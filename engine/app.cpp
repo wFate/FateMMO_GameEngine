@@ -216,8 +216,12 @@ bool App::init(const AppConfig& config) {
     // Start file watcher on assets directory
     if (!assetsDir_.empty()) {
         fileWatcher_.start(assetsDir_, [this](const std::string& relativePath) {
-            std::string fullPath = assetsDir_ + "/" + relativePath;
-            AssetRegistry::instance().queueReload(fullPath);
+            try {
+                std::string fullPath = assetsDir_ + "/" + relativePath;
+                AssetRegistry::instance().queueReload(fullPath);
+            } catch (const std::exception& e) {
+                LOG_WARN("FileWatcher", "Reload queue failed for %s: %s", relativePath.c_str(), e.what());
+            }
         });
     }
 

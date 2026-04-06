@@ -24,9 +24,16 @@ void AssetRegistry::registerLoader(AssetLoader loader) {
 // Canonicalize path for consistent lookups (forward slashes, absolute)
 static std::string canonicalizePath(const std::string& path) {
     namespace fs = std::filesystem;
-    auto canon = fs::weakly_canonical(fs::path(path)).string();
-    std::replace(canon.begin(), canon.end(), '\\', '/');
-    return canon;
+    try {
+        auto canon = fs::weakly_canonical(fs::path(path)).string();
+        std::replace(canon.begin(), canon.end(), '\\', '/');
+        return canon;
+    } catch (const fs::filesystem_error&) {
+        // Fallback: just normalize slashes without resolving symlinks
+        std::string result = path;
+        std::replace(result.begin(), result.end(), '\\', '/');
+        return result;
+    }
 }
 
 AssetHandle AssetRegistry::load(const std::string& path) {
