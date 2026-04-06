@@ -1111,6 +1111,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         if (ImGui::TreeNodeEx("Character Display##sp", 0)) {
             ImGui::ColorEdit4("Background##spcd", &sp->charDisplayBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Border##spcd", &sp->charDisplayBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Char Scale##spcd", &sp->characterScale, 0.1f, 0.5f, 10.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
