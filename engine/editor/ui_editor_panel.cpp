@@ -1704,12 +1704,54 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::TreePop();
         }
 
-        if (ImGui::TreeNodeEx("System Broadcast Colors##cp", 0)) {
+        if (ImGui::TreeNodeEx("System Message Colors##cp", 0)) {
             ImGui::ColorEdit4("Default [System]##sys", &cp->colorSystemDefault.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("[Loot] Drops##sys", &cp->colorSystemLoot.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("[Event]##sys", &cp->colorSystemEvent.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Loot]##sys", &cp->colorSystemLoot.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Trade]##sys", &cp->colorSystemTrade.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Market]##sys", &cp->colorSystemMarket.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Bounty]##sys", &cp->colorSystemBounty.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Gauntlet]##sys", &cp->colorSystemGauntlet.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("[Guild]##sys", &cp->colorSystemGuild.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("[Boss] Kills##sys", &cp->colorSystemBoss.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Social]##sys", &cp->colorSystemSocial.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Party]##sys", &cp->colorSystemParty.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Item]##sys", &cp->colorSystemItem.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Quest]##sys", &cp->colorSystemQuest.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Enchant]##sys", &cp->colorSystemEnchant.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Repair]##sys", &cp->colorSystemRepair.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Extract]##sys", &cp->colorSystemExtract.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Craft]##sys", &cp->colorSystemCraft.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Socket]##sys", &cp->colorSystemSocket.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Pet]##sys", &cp->colorSystemPet.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Arena]##sys", &cp->colorSystemArena.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Battlefield]##sys", &cp->colorSystemBattlefield.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Boss]##sys", &cp->colorSystemBoss.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("[Event]##sys", &cp->colorSystemEvent.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("System Message Font Sizes##cp", 0)) {
+            ImGui::Text("0 = use default messageFontSize");
+            ImGui::DragFloat("Default [System]##sfs", &cp->fontSizeSystemDefault, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Loot]##sfs", &cp->fontSizeSystemLoot, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Trade]##sfs", &cp->fontSizeSystemTrade, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Market]##sfs", &cp->fontSizeSystemMarket, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Bounty]##sfs", &cp->fontSizeSystemBounty, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Gauntlet]##sfs", &cp->fontSizeSystemGauntlet, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Guild]##sfs", &cp->fontSizeSystemGuild, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Social]##sfs", &cp->fontSizeSystemSocial, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Party]##sfs", &cp->fontSizeSystemParty, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Item]##sfs", &cp->fontSizeSystemItem, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Quest]##sfs", &cp->fontSizeSystemQuest, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Enchant]##sfs", &cp->fontSizeSystemEnchant, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Repair]##sfs", &cp->fontSizeSystemRepair, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Extract]##sfs", &cp->fontSizeSystemExtract, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Craft]##sfs", &cp->fontSizeSystemCraft, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Socket]##sfs", &cp->fontSizeSystemSocket, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Pet]##sfs", &cp->fontSizeSystemPet, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Arena]##sfs", &cp->fontSizeSystemArena, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Battlefield]##sfs", &cp->fontSizeSystemBattlefield, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Boss]##sfs", &cp->fontSizeSystemBoss, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("[Event]##sfs", &cp->fontSizeSystemEvent, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
