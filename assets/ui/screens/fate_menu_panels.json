@@ -195,6 +195,7 @@
           0.0
         ],
         "type": "status_panel",
+        "visible": false,
         "xpBarBgColor": [
           32,
           40,
@@ -565,8 +566,7 @@
         ],
         "tooltipStatFontSize": 20.0,
         "tooltipWidth": 200.0,
-        "type": "inventory_panel",
-        "visible": false
+        "type": "inventory_panel"
       },
       {
         "activeSetPage": 0,
@@ -1672,6 +1672,19 @@
           1.0,
           1.0
         ],
+        "panelBgColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.949999988079071
+        ],
+        "panelBorderColor": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "panelBorderWidth": 2.0,
         "quantityTextColor": [
           1.0,
           1.0,
@@ -1697,8 +1710,13 @@
         "titleFontSize": 28.0,
         "titleHeight": 100.0,
         "titlePadTop": 40.0,
+        "titleTextColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
         "type": "bag_view_panel",
-        "visible": false,
         "zOrder": 110
       },
       {
@@ -1752,7 +1770,7 @@
         "zOrder": 115
       },
       {
-        "activeTab": 0,
+        "activeTab": 1,
         "activeTabBg": [
           253,
           160,

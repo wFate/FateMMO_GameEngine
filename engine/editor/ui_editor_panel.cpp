@@ -1367,6 +1367,9 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     else if (auto* bv = dynamic_cast<BagViewPanel*>(selectedNode_)) {
         ImGui::SeparatorText("BagViewPanel");
         if (ImGui::TreeNodeEx("Panel##bvp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("BG Width##bvpp", &bv->bgWidth, 1.0f, 0.0f, 1000.0f, "%.0f (0=full)"); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("BG Height##bvpp", &bv->bgHeight, 1.0f, 0.0f, 1000.0f, "%.0f (0=full)"); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("BG Offset##bvpp", &bv->bgOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Background##bvpp", &bv->panelBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Border Color##bvpp", &bv->panelBorderColor.r); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Border Width##bvpp", &bv->panelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
