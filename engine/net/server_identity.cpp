@@ -2,6 +2,7 @@
 #include "engine/core/logger.h"
 #include <fstream>
 #include <cstring>
+#include <filesystem>
 
 #if FATE_HAS_SODIUM
 #include <sodium.h>
@@ -32,6 +33,14 @@ bool ServerIdentity::loadOrGenerate(const std::string& keyFilePath,
 
     // Generate new keypair (crypto_box keypair = X25519)
     crypto_box_keypair(outKeypair.pk.data(), outKeypair.sk.data());
+
+    // Ensure parent directory exists
+    {
+        auto parent = std::filesystem::path(keyFilePath).parent_path();
+        if (!parent.empty()) {
+            std::filesystem::create_directories(parent);
+        }
+    }
 
     // Save to file
     {

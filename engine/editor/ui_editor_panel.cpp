@@ -3,6 +3,7 @@
 #include "engine/editor/property_inspector.h"
 #include "engine/ui/ui_serializer.h"
 #include "engine/ui/ui_widget_registry.h"
+#include "engine/render/font_registry.h"
 #include "engine/core/logger.h"
 #ifdef FATE_HAS_GAME
 #include "engine/ui/widgets/panel.h"
@@ -655,10 +656,28 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat2("SlotArc Offset", &arc->slotArcOffset.x, 1.0f, -300.0f, 300.0f); checkUndoCapture(uiMgr);
     }
     else if (auto* dp = dynamic_cast<DPad*>(selectedNode_)) {
-        ImGui::SeparatorText("DPad");
+        ImGui::SeparatorText("DPad — Layout");
         ImGui::DragFloat("DPad Size", &dp->dpadSize, 1.0f, 60.0f, 400.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Dead Zone Radius", &dp->deadZoneRadius, 0.5f, 0.0f, 50.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Opacity##dpad", &dp->opacity, 0.01f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Show Bounds##dpad", &dp->showBounds); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("DPad — Colors");
+        ImGui::ColorEdit4("Background##dpad", &dp->bgColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Arm Color##dpad", &dp->armColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Active Color##dpad", &dp->activeColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Center Color##dpad", &dp->centerColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Arrow Color##dpad", &dp->arrowColor.r); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("DPad — Sizing Ratios");
+        ImGui::DragFloat("Arm Width", &dp->armWidthRatio, 0.01f, 0.05f, 1.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Arm Height", &dp->armHeightRatio, 0.01f, 0.1f, 1.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Center Size", &dp->centerSizeRatio, 0.01f, 0.05f, 0.5f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Arrow Dist", &dp->arrowDistRatio, 0.01f, 0.1f, 0.5f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Arrow Width", &dp->arrowWidthRatio, 0.005f, 0.02f, 0.3f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Arrow Height", &dp->arrowHeightRatio, 0.005f, 0.02f, 0.3f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Active Length", &dp->activeLenRatio, 0.01f, 0.1f, 1.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Active Offset", &dp->activeOffsetRatio, 0.01f, 0.0f, 0.5f); checkUndoCapture(uiMgr);
     }
     else if (auto* mbr = dynamic_cast<MenuButtonRow*>(selectedNode_)) {
         ImGui::SeparatorText("MenuButtonRow");
@@ -984,8 +1003,11 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat2("Title##spo",    &sp->titleOffset.x,    0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Name##spo",     &sp->nameOffset.x,     0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Level##spo",    &sp->levelOffset.x,    0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("Stat Grid##spo", &sp->statGridOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("Faction##spo",  &sp->factionOffset.x,  0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Stat Grid##spo",    &sp->statGridOffset.x,    0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Faction##spo",      &sp->factionOffset.x,     0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Char Display##spo", &sp->charDisplayOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Diamond##spo",      &sp->diamondOffset.x,     0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Char Sprite##spo",  &sp->charSpriteOffset.x,  0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -1690,16 +1712,33 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat2("Portrait##fsbo", &fsb->portraitOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Level##fsbo", &fsb->levelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("HP Label##fsbo", &fsb->hpLabelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("HP Bar##fsbo", &fsb->hpBarOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("HP Text##fsbo", &fsb->hpTextOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("MP Label##fsbo", &fsb->mpLabelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("MP Bar##fsbo", &fsb->mpBarOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("MP Text##fsbo", &fsb->mpTextOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Menu Btn##fsbo", &fsb->menuBtnOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Chat Btn##fsbo", &fsb->chatBtnOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         ImGui::DragFloat("Top Bar Height", &fsb->topBarHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Show Portrait", &fsb->showPortrait); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Portrait Radius", &fsb->portraitRadius, 1.0f, 5.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Portrait Fill", &fsb->portraitFillColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Portrait Border", &fsb->portraitBorderColor.r); checkUndoCapture(uiMgr);
         ImGui::DragFloat("HP/MP Bar Height", &fsb->barHeight, 1.0f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("HP Bar Width (0=auto)", &fsb->hpBarWidth, 1.0f, 0.0f, 400.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("HP Bar Height (0=shared)", &fsb->hpBarHeight, 1.0f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("MP Bar Width (0=auto)", &fsb->mpBarWidth, 1.0f, 0.0f, 400.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("MP Bar Height (0=shared)", &fsb->mpBarHeight, 1.0f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("HP Bar Color", &fsb->hpBarColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("HP Bar Track", &fsb->hpBarBgColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("MP Bar Color", &fsb->mpBarColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("MP Bar Track", &fsb->mpBarBgColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Strip Background", &fsb->stripBgColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Strip Border", &fsb->stripBorderColor.r); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Strip Border Width", &fsb->stripBorderWidth, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Strip Corner Radius", &fsb->stripCornerRadius, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
 
         ImGui::SeparatorText("Menu Button");
         ImGui::Checkbox("Show Menu Button", &fsb->showMenuButton); checkUndoCapture(uiMgr);
@@ -1723,18 +1762,41 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat("Chat Btn Radius", &fsb->chatBtnSize, 1.0f, 5.0f, 60.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Chat Btn Offset X", &fsb->chatBtnOffsetX, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Chat Btn Font", &fsb->chatBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
-        ImGui::ColorEdit4("Chat Btn Color", &fsb->chatBtnTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Chat Btn Text", &fsb->chatBtnTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Chat Btn Bg", &fsb->chatBtnBgColor.r); checkUndoCapture(uiMgr);
 
         ImGui::SeparatorText("Coordinates");
         ImGui::Checkbox("Show Coordinates", &fsb->showCoordinates); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Coord Font Size", &fsb->coordFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
-        ImGui::DragFloat("Coord Offset Y", &fsb->coordOffsetY, 0.5f, -20.0f, 40.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat2("Coord Offset", &fsb->coordOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Coord Color", &fsb->coordColor.r); checkUndoCapture(uiMgr);
+        {
+            char fmtBuf[64];
+            snprintf(fmtBuf, sizeof(fmtBuf), "%s", fsb->coordFormat.c_str());
+            if (ImGui::InputText("Coord Format", fmtBuf, sizeof(fmtBuf))) {
+                fsb->coordFormat = fmtBuf; checkUndoCapture(uiMgr);
+            }
+        }
+        {
+            int styleIdx = static_cast<int>(fsb->coordStyle) - 1;
+            if (ImGui::Combo("Coord Style", &styleIdx, kTextStyleNames, kTextStyleCount)) {
+                fsb->coordStyle = static_cast<TextStyle>(styleIdx + 1); checkUndoCapture(uiMgr);
+            }
+        }
 
         ImGui::SeparatorText("Font Sizes");
         ImGui::DragFloat("Level Font", &fsb->levelFontSize, 0.5f, 6.0f, 50.0f); checkUndoCapture(uiMgr);
-        ImGui::DragFloat("Label Font (HP/MP)", &fsb->labelFontSize, 0.5f, 6.0f, 50.0f); checkUndoCapture(uiMgr);
-        ImGui::DragFloat("Number Font", &fsb->numberFontSize, 0.5f, 6.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Level Color", &fsb->levelColor.r); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Label Font (shared)", &fsb->labelFontSize, 0.5f, 6.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Number Font (shared)", &fsb->numberFontSize, 0.5f, 6.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("HP Label Font (0=shared)", &fsb->hpLabelFontSize, 0.5f, 0.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("HP Label Color", &fsb->hpLabelColor.r); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("HP Number Font (0=shared)", &fsb->hpNumberFontSize, 0.5f, 0.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("HP Number Color", &fsb->hpNumberColor.r); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("MP Label Font (0=shared)", &fsb->mpLabelFontSize, 0.5f, 0.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("MP Label Color", &fsb->mpLabelColor.r); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("MP Number Font (0=shared)", &fsb->mpNumberFontSize, 0.5f, 0.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("MP Number Color", &fsb->mpNumberColor.r); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Button Font", &fsb->buttonFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
     }
     else if (auto* dov = dynamic_cast<DeathOverlay*>(selectedNode_)) {
@@ -2909,6 +2971,33 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Btn Text##ccc", &mp->cancelConfirmBtnTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+        if (ImGui::TreeNodeEx("Buy Confirm Layout##mkt", 0)) {
+            ImGui::DragFloat("Width Ratio##bcl", &mp->buyConfirmWidthRatio, 0.01f, 0.1f, 1.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Height Ratio##bcl", &mp->buyConfirmHeightRatio, 0.01f, 0.1f, 1.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Title Font##bcl", &mp->buyConfirmTitleFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Body Font##bcl", &mp->buyConfirmBodyFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Width Ratio##bcl", &mp->buyConfirmBtnWidthRatio, 0.01f, 0.1f, 0.5f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Height##bcl", &mp->buyConfirmBtnHeight, 0.5f, 10.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Bottom Margin##bcl", &mp->buyConfirmBtnBottomMargin, 0.5f, 5.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Spacing##bcl", &mp->buyConfirmBtnSpacing, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Prompt Y Ratio##bcl", &mp->buyConfirmPromptYRatio, 0.01f, 0.1f, 0.9f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Dialog Offset##bcl", &mp->buyConfirmOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Title Offset##bcl", &mp->buyConfirmTitleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Item Name Offset##bcl", &mp->buyConfirmItemNameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Buy Confirm Colors##mkt", 0)) {
+            ImGui::ColorEdit4("Dim##bcc", &mp->buyConfirmDimColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##bcc", &mp->buyConfirmBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##bcc", &mp->buyConfirmBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##bcc", &mp->buyConfirmTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Item Name##bcc", &mp->buyConfirmItemNameColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Prompt##bcc", &mp->buyConfirmPromptColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Yes Btn##bcc", &mp->buyConfirmYesBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("No Btn##bcc", &mp->buyConfirmNoBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Btn Text##bcc", &mp->buyConfirmBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Tooltip Layout##mkt", 0)) {
             ImGui::Checkbox("Auto Width##mkttt", &mp->tooltipAutoWidth); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Min Width##mkttt", &mp->tooltipWidth, 1.0f, 40.0f, 500.0f); checkUndoCapture(uiMgr);
@@ -3183,13 +3272,22 @@ void UIEditorPanel::drawStyleEditor(UINode* node, UIManager& uiMgr) {
     ImGui::DragFloat("Font Size", &style.fontSize, 0.5f, 6.0f, 72.0f); checkUndoCapture(uiMgr);
     ImGui::DragFloat("Opacity", &style.opacity, 0.01f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
 
-    // --- Font Name ---
+    // --- Font Name (dropdown) ---
     {
-        char fontBuf[64] = {};
-        if (!style.fontName.empty())
-            snprintf(fontBuf, sizeof(fontBuf), "%s", style.fontName.c_str());
-        if (ImGui::InputText("Font Name", fontBuf, sizeof(fontBuf))) {
-            style.fontName = fontBuf;
+        auto names = FontRegistry::instance().fontNames();
+        // Find current selection index (0 = "(default)")
+        int current = 0;
+        for (int i = 0; i < static_cast<int>(names.size()); ++i) {
+            if (names[i] == style.fontName) { current = i + 1; break; }
+        }
+        auto getter = [](void* data, int idx, const char** out) -> bool {
+            auto* v = static_cast<std::vector<std::string>*>(data);
+            if (idx == 0) { *out = "(default)"; return true; }
+            if (idx - 1 < static_cast<int>(v->size())) { *out = (*v)[idx - 1].c_str(); return true; }
+            return false;
+        };
+        if (ImGui::Combo("Font Name", &current, getter, &names, static_cast<int>(names.size()) + 1)) {
+            style.fontName = (current == 0) ? "" : names[current - 1];
         }
     }
     checkUndoCapture(uiMgr);

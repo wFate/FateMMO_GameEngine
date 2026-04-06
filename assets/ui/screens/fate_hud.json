@@ -28,57 +28,104 @@
             0.0
           ]
         },
-        "barHeight": 22.0,
+        "barHeight": 70.0,
         "buttonFontSize": 20.0,
-        "chatBtnFontSize": 10.0,
+        "chatBtnBgColor": [
+          40,
+          28,
+          0,
+          255
+        ],
+        "chatBtnFontSize": 40.0,
         "chatBtnOffset": [
           0.0,
-          0.0
+          34.0
         ],
-        "chatBtnOffsetX": 8.0,
-        "chatBtnSize": 21.0,
+        "chatBtnOffsetX": 20.0,
+        "chatBtnSize": 50.0,
         "chatBtnTextColor": [
-          38,
-          26,
-          0,
+          255,
+          255,
+          255,
           255
         ],
         "coordColor": [
+          232,
+          194,
           255,
-          255,
-          255,
-          204
+          333
         ],
-        "coordFontSize": 30.0,
-        "coordOffsetY": 5.0,
+        "coordFontSize": 40.0,
+        "coordFormat": "(%d, %d)",
+        "coordOffset": [
+          220.0,
+          40.0
+        ],
+        "coordStyle": "Normal",
+        "hpBarBgColor": [
+          26,
+          26,
+          26,
+          217
+        ],
         "hpBarColor": [
           255,
-          143,
+          174,
           0,
           255
         ],
+        "hpBarHeight": 0.0,
+        "hpBarOffset": [
+          50.0,
+          25.0
+        ],
+        "hpBarWidth": 500.0,
+        "hpLabelColor": [
+          255,
+          0,
+          0,
+          255
+        ],
+        "hpLabelFontSize": 40.0,
         "hpLabelOffset": [
-          0.0,
-          0.0
+          50.0,
+          30.0
+        ],
+        "hpNumberColor": [
+          255,
+          71,
+          0,
+          255
+        ],
+        "hpNumberFontSize": 0.0,
+        "hpTextOffset": [
+          -250.0,
+          30.0
         ],
         "id": "status_bar",
         "labelFontSize": 22.0,
-        "levelFontSize": 26.0,
-        "levelOffset": [
-          0.0,
-          0.0
-        ],
-        "menuBtnBgColor": [
-          67,
-          57,
-          34,
+        "levelColor": [
+          177,
+          249,
+          165,
           255
         ],
-        "menuBtnFontSize": 30.0,
-        "menuBtnGap": 50.0,
+        "levelFontSize": 50.0,
+        "levelOffset": [
+          895.0,
+          30.0
+        ],
+        "menuBtnBgColor": [
+          42,
+          30,
+          0,
+          255
+        ],
+        "menuBtnFontSize": 40.0,
+        "menuBtnGap": 40.0,
         "menuBtnOffset": [
-          30.0,
-          10.0
+          70.0,
+          -60.0
         ],
         "menuBtnSize": 50.0,
         "menuBtnTextColor": [
@@ -102,36 +149,85 @@
           255
         ],
         "menuOverlayBgColor": [
-          44,
-          38,
-          21,
+          26,
+          22,
+          12,
           242
         ],
         "menuOverlayBorderColor": [
-          84,
-          67,
-          33,
+          57,
+          47,
+          26,
           255
         ],
         "menuOverlayW": 200.0,
+        "mpBarBgColor": [
+          26,
+          26,
+          26,
+          217
+        ],
         "mpBarColor": [
           0,
-          109,
+          161,
           255,
           255
         ],
+        "mpBarHeight": 0.0,
+        "mpBarOffset": [
+          400.0,
+          25.0
+        ],
+        "mpBarWidth": 500.0,
+        "mpLabelColor": [
+          0,
+          103,
+          255,
+          255
+        ],
+        "mpLabelFontSize": 40.0,
         "mpLabelOffset": [
-          0.0,
-          0.0
+          400.0,
+          30.0
+        ],
+        "mpNumberColor": [
+          0,
+          71,
+          255,
+          255
+        ],
+        "mpNumberFontSize": 0.0,
+        "mpTextOffset": [
+          100.0,
+          30.0
         ],
         "numberFontSize": 30.0,
+        "portraitBorderColor": [
+          140,
+          140,
+          191,
+          0
+        ],
+        "portraitFillColor": [
+          255,
+          255,
+          255,
+          0
+        ],
         "portraitOffset": [
           0.0,
           0.0
         ],
-        "portraitRadius": 20.0,
-        "showChatButton": false,
-        "showMenuButton": false,
+        "portraitRadius": 0.0,
+        "showPortrait": false,
+        "stripBgColor": [
+          60,
+          58,
+          58,
+          3
+        ],
+        "stripBorderWidth": 0.0,
+        "stripCornerRadius": 0.0,
         "topBarHeight": 40.0,
         "type": "fate_status_bar"
       },
@@ -248,28 +344,67 @@
           0.0
         ],
         "nameTopPad": 4.0,
-        "targetName": "Veylan",
+        "targetName": "test",
         "type": "target_frame",
+        "visible": false,
         "zOrder": -1
       },
       {
+        "activeColor": [
+          251,
+          251,
+          251,
+          217
+        ],
+        "activeLenRatio": 0.2800000011920929,
+        "activeOffsetRatio": 0.28999999165534973,
         "anchor": {
           "offset": [
-            16.0,
-            -24.0
+            100.0,
+            -100.0
           ],
           "preset": "BottomLeft",
           "size": [
-            150.0,
-            150.0
+            250.0,
+            250.0
           ]
         },
-        "deadZoneRadius": 20.0,
-        "dpadSize": 150.0,
+        "armColor": [
+          255,
+          239,
+          0,
+          217
+        ],
+        "armHeightRatio": 0.8500000238418579,
+        "armWidthRatio": 0.3199999928474426,
+        "arrowColor": [
+          0,
+          0,
+          0,
+          217
+        ],
+        "arrowDistRatio": 0.4000000059604645,
+        "arrowHeightRatio": 0.019999999552965164,
+        "arrowWidthRatio": 0.07000000029802322,
+        "bgColor": [
+          33,
+          24,
+          0,
+          255
+        ],
+        "centerColor": [
+          159,
+          154,
+          77,
+          49
+        ],
+        "centerSizeRatio": 0.20000000298023224,
+        "deadZoneRadius": 40.0,
+        "dpadSize": 250.0,
         "id": "dpad",
         "opacity": 0.8500000238418579,
-        "type": "dpad",
-        "visible": false
+        "showBounds": true,
+        "type": "dpad"
       },
       {
         "anchor": {
@@ -310,8 +445,7 @@
         "slotCount": 5,
         "slotSize": 70.0,
         "startAngleDeg": 170.0,
-        "type": "skill_arc",
-        "visible": false
+        "type": "skill_arc"
       },
       {
         "anchor": {
@@ -322,7 +456,7 @@
           "preset": "BottomLeft",
           "size": [
             0.0,
-            14.0
+            40.0
           ],
           "sizePercent": [
             1.0,
@@ -343,17 +477,17 @@
         ],
         "borderWidth": 1.0,
         "fillColor": [
-          204,
-          166,
-          26,
+          255,
+          236,
+          45,
           255
         ],
-        "fontSize": 9.0,
+        "fontSize": 30.0,
         "id": "exp_bar",
         "shadowColor": [
-          0,
-          0,
-          0,
+          107,
+          57,
+          57,
           230
         ],
         "style": "bar_track",

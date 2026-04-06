@@ -52,7 +52,7 @@
           0,
           444
         ],
-        "borderWidth": 3.0,
+        "borderWidth": 0.0,
         "charDisplayBgColor": [
           38,
           38,
@@ -192,7 +192,7 @@
         "titleFontSize": 50.0,
         "titleOffset": [
           220.0,
-          0.0
+          20.0
         ],
         "type": "status_panel",
         "visible": false,
@@ -566,7 +566,8 @@
         ],
         "tooltipStatFontSize": 20.0,
         "tooltipWidth": 200.0,
-        "type": "inventory_panel"
+        "type": "inventory_panel",
+        "visible": false
       },
       {
         "activeSetPage": 0,
@@ -1628,6 +1629,12 @@
             620.0
           ]
         },
+        "bgHeight": 0.0,
+        "bgOffset": [
+          0.0,
+          0.0
+        ],
+        "bgWidth": 0.0,
         "closeBtnBgColor": [
           0.0,
           0.0,
@@ -1717,6 +1724,7 @@
           1.0
         ],
         "type": "bag_view_panel",
+        "visible": false,
         "zOrder": 110
       },
       {
@@ -1792,7 +1800,7 @@
           ],
           "offset": [
             0.0,
-            60.0
+            20.0
           ],
           "padding": [
             3.0,
@@ -1803,7 +1811,7 @@
           "preset": "StretchX",
           "size": [
             0.0,
-            50.0
+            100.0
           ]
         },
         "arrowBg": [
@@ -1812,7 +1820,7 @@
           255,
           255
         ],
-        "arrowFontSize": 27.0,
+        "arrowFontSize": 77.0,
         "arrowSize": 100.0,
         "arrowTextColor": [
           255,
@@ -1848,7 +1856,7 @@
           255
         ],
         "opacity": 2222.0,
-        "tabFontSize": 30.0,
+        "tabFontSize": 40.0,
         "tabLabels": [
           "STS",
           "INV",
@@ -1863,11 +1871,13 @@
         ],
         "tabSize": 160.0,
         "type": "menu_tab_bar",
+        "visible": false,
         "zOrder": 10
       }
     ],
     "id": "menu_root",
-    "type": "panel"
+    "type": "panel",
+    "visible": false
   },
   "screen": "fate_menu_panels"
 }

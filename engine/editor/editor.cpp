@@ -928,7 +928,7 @@ void Editor::drawSceneViewport() {
         int panelH = (int)avail.y;
 
         const auto& preset = kDeviceProfiles[displayPresetIdx_];
-        bool useDeviceRes = !paused_ && preset.width > 0 && preset.height > 0;
+        bool useDeviceRes = preset.width > 0 && preset.height > 0;
 
         int fbW, fbH;
         if (useDeviceRes) {
