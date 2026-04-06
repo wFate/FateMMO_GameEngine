@@ -64,6 +64,7 @@
 #include "engine/ui/widgets/bag_view_panel.h"
 #include "engine/ui/widgets/loading_panel.h"
 #include "engine/ui/widgets/tooltip.h"
+#include "engine/ui/widgets/chat_idle_overlay.h"
 #endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <cstdio>
@@ -206,6 +207,7 @@ TypeBadge badgeForType(const std::string& type) {
     if (type == "fate_status_bar")    return {{0.50f, 0.65f, 0.75f, 1.0f}, "STS"};
     if (type == "chat_panel")         return {{0.55f, 0.60f, 0.45f, 1.0f}, "CHT"};
     if (type == "chat_ticker")        return {{0.50f, 0.55f, 0.45f, 1.0f}, "TKR"};
+    if (type == "chat_idle_overlay")  return {{0.45f, 0.55f, 0.50f, 1.0f}, "IDL"};
     if (type == "emoticon_panel")     return {{0.55f, 0.55f, 0.50f, 1.0f}, "EMO"};
     if (type == "inventory_panel")    return {{0.60f, 0.50f, 0.65f, 1.0f}, "INV"};
     if (type == "skill_panel")        return {{0.70f, 0.50f, 0.40f, 1.0f}, "SKL"};
@@ -767,6 +769,29 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     else if (auto* ticker = dynamic_cast<ChatTicker*>(selectedNode_)) {
         ImGui::SeparatorText("ChatTicker");
         ImGui::DragFloat("Scroll Speed##ticker", &ticker->scrollSpeed, 1.0f, 0.0f, 200.0f); checkUndoCapture(uiMgr);
+    }
+    else if (auto* idle = dynamic_cast<ChatIdleOverlay*>(selectedNode_)) {
+        ImGui::SeparatorText("ChatIdleOverlay");
+        if (ImGui::TreeNodeEx("Layout##idle", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragInt("Max Lines", &idle->maxLines, 1.0f, 0, 10); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##idle", &idle->fontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Line Spacing##idle", &idle->lineSpacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Offset##idle", &idle->shadowOffset, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##idle", &idle->padding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Background##idle", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("BG Width##idle", &idle->bgWidth, 1.0f, 0.0f, 2000.0f, "%.0f (0=widget)"); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("BG Height##idle", &idle->bgHeight, 1.0f, 0.0f, 500.0f, "%.0f (0=auto)"); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("BG Offset##idle", &idle->bgOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("BG Color##idle", &idle->bgColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Text Colors##idle", 0)) {
+            ImGui::ColorEdit4("Text##idle", &idle->textColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##idle", &idle->shadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* expBar = dynamic_cast<EXPBar*>(selectedNode_)) {
         ImGui::SeparatorText("EXPBar");
@@ -1646,7 +1671,6 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
 
         if (ImGui::TreeNodeEx("Layout##cp", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragInt("Idle Lines", &cp->chatIdleLines, 1.0f, 0, 5); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Full Panel Width", &cp->fullPanelWidth, 1.0f, 100.0f, 2000.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Full Panel Height", &cp->fullPanelHeight, 1.0f, 100.0f, 900.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Input Bar Height", &cp->inputBarHeight, 0.5f, 16.0f, 60.0f); checkUndoCapture(uiMgr);

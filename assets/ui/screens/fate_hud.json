@@ -407,6 +407,13 @@
         "type": "dpad"
       },
       {
+        "actionFontSize": 10.0,
+        "actionTextColor": [
+          77,
+          51,
+          26,
+          242
+        ],
         "anchor": {
           "offset": [
             -4.0,
@@ -424,12 +431,89 @@
           0.0,
           120.0
         ],
+        "cooldownFontSize": 11.0,
+        "cooldownOverlayColor": [
+          0,
+          0,
+          0,
+          166
+        ],
+        "cooldownTextColor": [
+          255,
+          255,
+          255,
+          230
+        ],
+        "emptySlotBgColor": [
+          38,
+          38,
+          46,
+          89
+        ],
+        "emptySlotBorderColor": [
+          128,
+          122,
+          148,
+          140
+        ],
+        "emptySlotPlusColor": [
+          153,
+          153,
+          166,
+          102
+        ],
         "endAngleDeg": 280.0,
+        "filledSlotBgColor": [
+          46,
+          41,
+          56,
+          224
+        ],
+        "filledSlotBorderColor": [
+          153,
+          140,
+          184,
+          242
+        ],
         "id": "skill_arc",
+        "lvFontSize": 8.0,
+        "lvTextColor": [
+          255,
+          230,
+          153,
+          230
+        ],
+        "pageActiveTextColor": [
+          77,
+          51,
+          26,
+          242
+        ],
+        "pageDotRadius": 12.0,
+        "pageFontSize": 11.0,
+        "pageInactiveBgColor": [
+          115,
+          115,
+          128,
+          179
+        ],
+        "pageInactiveTextColor": [
+          255,
+          255,
+          255,
+          204
+        ],
         "pickUpButtonSize": 60.0,
+        "pickUpFontSize": 9.0,
         "pickUpOffset": [
           -50.0,
           40.0
+        ],
+        "pickUpTextColor": [
+          77,
+          51,
+          26,
+          242
         ],
         "skillArcOffset": [
           0.0,
@@ -770,6 +854,51 @@
         "type": "invite_prompt",
         "visible": false,
         "zOrder": 130
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            -50.0
+          ],
+          "preset": "BottomLeft",
+          "size": [
+            400.0,
+            80.0
+          ]
+        },
+        "bgColor": [
+          0,
+          0,
+          0,
+          222
+        ],
+        "bgHeight": 500.0,
+        "bgOffset": [
+          700.0,
+          350.0
+        ],
+        "bgWidth": 800.0,
+        "fontSize": 33.0,
+        "id": "chat_idle_overlay",
+        "lineSpacing": 10.0,
+        "maxLines": 3,
+        "padding": 800.0,
+        "shadowColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "shadowOffset": 0.0,
+        "textColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "type": "chat_idle_overlay",
+        "zOrder": 50
       }
     ],
     "id": "hud_root",

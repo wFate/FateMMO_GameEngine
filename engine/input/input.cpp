@@ -159,7 +159,12 @@ void Input::setChatMode(bool enabled) {
         SDL_StartTextInput();
     } else {
         actionMap_.setContext(InputContext::Gameplay);
+#ifndef FATE_SHIPPING
+        // Editor build: keep text input active so ImGui widgets remain editable
+        SDL_StartTextInput();
+#else
         SDL_StopTextInput();
+#endif
     }
 }
 

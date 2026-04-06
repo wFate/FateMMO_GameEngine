@@ -21,7 +21,7 @@
           "preset": "BottomCenter",
           "size": [
             1600.0,
-            800.0
+            777.0
           ]
         },
         "backgroundColor": [
@@ -31,140 +31,314 @@
           180
         ],
         "channelBtnBgColor": [
-          0.18000000715255737,
-          0.18000000715255737,
-          0.25,
-          0.949999988079071
+          46,
+          46,
+          64,
+          242
         ],
         "channelBtnHeight": 0.0,
-        "channelBtnWidth": 80.0,
-        "channelLabelFontSize": 9.0,
+        "channelBtnWidth": 120.0,
+        "channelLabelFontSize": 40.0,
         "channelOffset": [
           0.0,
           0.0
         ],
         "chatIdleLines": 3,
         "closeBtnBgColor": [
-          0.15000000596046448,
-          0.11999999731779099,
-          0.11999999731779099,
-          0.75
+          38,
+          31,
+          31,
+          191
         ],
         "closeBtnBorderColor": [
-          0.6499999761581421,
-          0.25,
-          0.25,
-          1.0
+          26,
+          24,
+          24,
+          255
         ],
         "closeBtnIconColor": [
-          1.0,
-          0.8799999952316284,
-          0.8799999952316284,
-          1.0
+          255,
+          224,
+          224,
+          255
         ],
-        "closeBtnSize": 50.0,
+        "closeBtnSize": 100.0,
         "colorAll": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
+          255,
+          255,
+          255,
+          255
         ],
         "colorGlobal": [
-          1.0,
-          0.8500000238418579,
-          0.30000001192092896,
-          1.0
+          255,
+          217,
+          77,
+          255
         ],
         "colorGuild": [
-          0.699999988079071,
-          0.4000000059604645,
-          0.8999999761581421,
-          1.0
+          179,
+          102,
+          230,
+          255
         ],
         "colorMap": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
+          255,
+          255,
+          255,
+          255
         ],
         "colorParty": [
-          0.30000001192092896,
-          0.8500000238418579,
-          0.949999988079071,
-          1.0
+          77,
+          217,
+          242,
+          255
         ],
         "colorPrivate": [
-          0.949999988079071,
-          0.5,
-          0.699999988079071,
-          1.0
+          242,
+          128,
+          179,
+          255
+        ],
+        "colorSystemArena": [
+          255,
+          128,
+          77,
+          255
+        ],
+        "colorSystemBattlefield": [
+          255,
+          128,
+          77,
+          255
+        ],
+        "colorSystemBoss": [
+          255,
+          77,
+          77,
+          255
+        ],
+        "colorSystemBounty": [
+          77,
+          217,
+          255,
+          255
+        ],
+        "colorSystemCraft": [
+          217,
+          217,
+          140,
+          255
+        ],
+        "colorSystemDefault": [
+          217,
+          217,
+          140,
+          255
+        ],
+        "colorSystemEnchant": [
+          255,
+          217,
+          77,
+          255
+        ],
+        "colorSystemEvent": [
+          77,
+          217,
+          255,
+          255
+        ],
+        "colorSystemExtract": [
+          217,
+          217,
+          140,
+          255
+        ],
+        "colorSystemGauntlet": [
+          77,
+          217,
+          255,
+          255
+        ],
+        "colorSystemGuild": [
+          179,
+          102,
+          230,
+          255
+        ],
+        "colorSystemItem": [
+          217,
+          217,
+          140,
+          255
+        ],
+        "colorSystemLoot": [
+          255,
+          166,
+          0,
+          255
+        ],
+        "colorSystemMarket": [
+          217,
+          217,
+          140,
+          255
+        ],
+        "colorSystemParty": [
+          77,
+          217,
+          242,
+          255
+        ],
+        "colorSystemPet": [
+          217,
+          217,
+          140,
+          255
+        ],
+        "colorSystemQuest": [
+          77,
+          217,
+          77,
+          255
+        ],
+        "colorSystemRepair": [
+          217,
+          217,
+          140,
+          255
+        ],
+        "colorSystemSocial": [
+          242,
+          128,
+          179,
+          255
+        ],
+        "colorSystemSocket": [
+          217,
+          217,
+          140,
+          255
+        ],
+        "colorSystemTrade": [
+          217,
+          217,
+          140,
+          255
         ],
         "colorTrade": [
-          0.30000001192092896,
-          0.8999999761581421,
-          0.30000001192092896,
-          1.0
+          77,
+          230,
+          77,
+          255
         ],
         "factionFenorColor": [
-          0.25,
-          0.550000011920929,
-          0.8500000238418579,
-          1.0
+          64,
+          140,
+          217,
+          255
         ],
         "factionNoneColor": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
+          255,
+          255,
+          255,
+          255
         ],
         "factionSolisColor": [
-          0.949999988079071,
-          0.75,
-          0.20000000298023224,
-          1.0
+          242,
+          191,
+          51,
+          255
         ],
         "factionXyrosColor": [
-          0.8500000238418579,
-          0.25,
-          0.25,
-          1.0
+          217,
+          64,
+          64,
+          255
         ],
         "factionZethosColor": [
-          0.25,
-          0.800000011920929,
-          0.4000000059604645,
-          1.0
+          64,
+          204,
+          102,
+          255
         ],
-        "fullPanelHeight": 800.0,
+        "fontSizeSystemArena": 0.0,
+        "fontSizeSystemBattlefield": 0.0,
+        "fontSizeSystemBoss": 0.0,
+        "fontSizeSystemBounty": 0.0,
+        "fontSizeSystemCraft": 0.0,
+        "fontSizeSystemDefault": 0.0,
+        "fontSizeSystemEnchant": 0.0,
+        "fontSizeSystemEvent": 0.0,
+        "fontSizeSystemExtract": 0.0,
+        "fontSizeSystemGauntlet": 0.0,
+        "fontSizeSystemGuild": 0.0,
+        "fontSizeSystemItem": 0.0,
+        "fontSizeSystemLoot": 0.0,
+        "fontSizeSystemMarket": 0.0,
+        "fontSizeSystemParty": 0.0,
+        "fontSizeSystemPet": 0.0,
+        "fontSizeSystemQuest": 0.0,
+        "fontSizeSystemRepair": 0.0,
+        "fontSizeSystemSocial": 0.0,
+        "fontSizeSystemSocket": 0.0,
+        "fontSizeSystemTrade": 0.0,
+        "fullPanelHeight": 777.0,
         "fullPanelWidth": 1600.0,
         "id": "chat_panel",
-        "inputBarBgColor": [
-          0.10000000149011612,
-          0.10000000149011612,
-          0.14000000059604645,
-          0.8799999952316284
+        "idleBgColor": [
+          0,
+          0,
+          0,
+          100
         ],
-        "inputBarHeight": 60.0,
+        "idleDepthOffset": 0.0,
+        "idleFontSize": 40.0,
+        "idleLineSpacing": 40.0,
+        "idleOffset": [
+          200.0,
+          0.0
+        ],
+        "idlePadding": 4.0,
+        "idleShadowColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "idleShadowOffset": 0.0,
+        "idleTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "inputBarBgColor": [
+          26,
+          26,
+          36,
+          224
+        ],
+        "inputBarHeight": 100.0,
         "inputBarWidth": 0.0,
         "inputBorderColor": [
-          0.25,
-          0.25,
-          0.3499999940395355,
-          0.6000000238418579
+          64,
+          64,
+          89,
+          153
         ],
         "inputBorderFocusColor": [
-          0.4000000059604645,
-          0.6000000238418579,
-          0.8999999761581421,
-          0.8999999761581421
+          102,
+          153,
+          230,
+          230
         ],
         "inputFieldBgColor": [
-          0.03999999910593033,
-          0.03999999910593033,
-          0.07999999821186066,
-          0.949999988079071
+          10,
+          10,
+          20,
+          242
         ],
-        "inputFontSize": 30.0,
+        "inputFontSize": 35.0,
         "inputOffset": [
           0.0,
           0.0
@@ -176,23 +350,23 @@
           0.0
         ],
         "messageShadowColor": [
-          0.0,
-          0.0,
-          0.0,
-          1.0
+          0,
+          0,
+          0,
+          255
         ],
         "messageShadowOffset": 2.0,
         "messageTextColor": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
+          255,
+          255,
+          255,
+          255
         ],
         "placeholderColor": [
-          0.44999998807907104,
-          0.44999998807907104,
-          0.550000011920929,
-          0.699999988079071
+          115,
+          115,
+          140,
+          179
         ],
         "type": "chat_panel"
       },
@@ -208,13 +382,39 @@
             60.0
           ]
         },
+        "bgColor": [
+          31,
+          31,
+          46,
+          230
+        ],
+        "borderColor": [
+          89,
+          89,
+          128,
+          204
+        ],
+        "borderRadius": 8.0,
         "id": "emoticon_panel",
-        "type": "emoticon_panel",
-        "visible": false,
+        "scrollOffset": 0.0,
+        "slotBgColor": [
+          51,
+          51,
+          71,
+          255
+        ],
         "slotCount": 16,
-        "slotSize": 48.0,
+        "slotHoverColor": [
+          89,
+          89,
+          128,
+          255
+        ],
         "slotPadding": 8.0,
-        "stripHeight": 60.0
+        "slotSize": 48.0,
+        "stripHeight": 60.0,
+        "type": "emoticon_panel",
+        "visible": false
       },
       {
         "anchor": {
@@ -228,91 +428,91 @@
             170.0
           ]
         },
+        "barGap": 2.0,
         "barOffset": [
           0.0,
           0.0
         ],
-        "barGap": 2.0,
         "barOffsetY": 13.0,
         "borderWidth": 1.0,
-        "crownSize": 5.0,
         "cardBgColor": [
-          0.07999999821186066,
-          0.07999999821186066,
-          0.11999999731779099,
-          0.8500000238418579
+          20,
+          20,
+          31,
+          217
         ],
         "cardBorderColor": [
-          0.25,
-          0.25,
-          0.3499999940395355,
-          0.699999988079071
+          64,
+          64,
+          89,
+          179
         ],
         "cardHeight": 48.0,
         "cardSpacing": 4.0,
         "cardWidth": 170.0,
         "crownColor": [
-          1.0,
-          0.8199999928474426,
-          0.0,
-          1.0
+          255,
+          209,
+          0,
+          255
         ],
+        "crownSize": 5.0,
         "hpBarBgColor": [
-          0.15000000596046448,
-          0.07999999821186066,
-          0.07999999821186066,
-          0.8500000238418579
+          38,
+          20,
+          20,
+          217
         ],
         "hpBarHeight": 8.0,
         "hpFillColor": [
-          0.800000011920929,
-          0.18000000715255737,
-          0.18000000715255737,
-          1.0
+          204,
+          46,
+          46,
+          255
         ],
         "id": "party_frame",
         "levelColor": [
-          0.6499999761581421,
-          0.6499999761581421,
-          0.699999988079071,
-          0.8500000238418579
+          166,
+          166,
+          179,
+          217
         ],
         "levelFontSize": 10.0,
-        "levelPadRight": 5.0,
         "levelOffset": [
           0.0,
           0.0
         ],
+        "levelPadRight": 5.0,
         "mpBarBgColor": [
-          0.07999999821186066,
-          0.07999999821186066,
-          0.18000000715255737,
-          0.8500000238418579
+          20,
+          20,
+          46,
+          217
         ],
         "mpBarHeight": 6.0,
         "mpFillColor": [
-          0.18000000715255737,
-          0.4000000059604645,
-          0.8500000238418579,
-          1.0
+          46,
+          102,
+          217,
+          255
         ],
         "nameColor": [
-          1.0,
-          1.0,
-          1.0,
-          0.949999988079071
+          255,
+          255,
+          255,
+          242
         ],
         "nameFontSize": 11.0,
-        "namePadTop": 6.0,
         "nameOffset": [
           0.0,
           0.0
         ],
+        "namePadTop": 6.0,
         "portraitFillColor": [
-          0.20000000298023224,
-          0.2199999988079071,
-          0.30000001192092896,
-          0.949999988079071
+          51,
+          56,
+          77,
+          242
         ],
         "portraitOffset": [
           0.0,
@@ -321,10 +521,10 @@
         "portraitPadLeft": 6.0,
         "portraitRadius": 10.0,
         "portraitRimColor": [
-          0.44999998807907104,
-          0.44999998807907104,
-          0.6000000238418579,
-          0.800000011920929
+          115,
+          115,
+          153,
+          204
         ],
         "portraitRimWidth": 1.5,
         "textGapAfterPortrait": 6.0,
@@ -333,10 +533,10 @@
       },
       {
         "acceptBtnColor": [
-          0.25,
-          0.6800000071525574,
-          0.3499999940395355,
-          1.0
+          64,
+          173,
+          89,
+          255
         ],
         "anchor": {
           "offset": [
@@ -356,17 +556,17 @@
           242
         ],
         "bgColor": [
-          0.8500000238418579,
-          0.7799999713897705,
-          0.6499999761581421,
-          0.9700000286102295
+          217,
+          199,
+          166,
+          247
         ],
         "bodyFontSize": 11.0,
         "borderColor": [
-          102.0,
-          77.0,
-          51.0,
-          255.0
+          102,
+          77,
+          51,
+          255
         ],
         "borderWidth": 3.0,
         "buttonOffset": [
@@ -375,30 +575,30 @@
         ],
         "buttonRowHeight": 30.0,
         "cancelBtnColor": [
-          0.6499999761581421,
-          0.30000001192092896,
-          0.25,
-          0.949999988079071
+          166,
+          77,
+          64,
+          242
         ],
         "dividerColor": [
-          0.3799999952316284,
-          0.2800000011920929,
-          0.18000000715255737,
-          0.6000000238418579
+          97,
+          71,
+          46,
+          153
         ],
         "goldColor": [
-          0.6499999761581421,
-          0.5199999809265137,
-          0.0,
-          1.0
+          166,
+          133,
+          0,
+          255
         ],
         "headerHeight": 28.0,
         "id": "trade_window",
         "labelColor": [
-          0.25,
-          0.18000000715255737,
-          0.10000000149011612,
-          1.0
+          64,
+          46,
+          26,
+          255
         ],
         "labelFontSize": 12.0,
         "myOfferOffset": [
@@ -413,10 +613,10 @@
           0.0
         ],
         "titleColor": [
-          0.2800000011920929,
-          0.18000000715255737,
-          0.07999999821186066,
-          1.0
+          71,
+          46,
+          20,
+          255
         ],
         "titleFontSize": 15.0,
         "titleOffset": [
@@ -445,36 +645,36 @@
           242
         ],
         "bgColor": [
-          0.8700000047683716,
-          0.800000011920929,
-          0.6700000166893005,
-          0.9700000286102295
+          222,
+          204,
+          171,
+          247
         ],
         "borderColor": [
-          102.0,
-          77.0,
-          51.0,
-          255.0
+          102,
+          77,
+          51,
+          255
         ],
         "borderWidth": 3.0,
         "closeBgColor": [
-          0.550000011920929,
-          0.41999998688697815,
-          0.2800000011920929,
-          1.0
+          140,
+          107,
+          71,
+          255
         ],
         "closeBorderColor": [
-          0.30000001192092896,
-          0.20000000298023224,
-          0.10000000149011612,
-          1.0
+          77,
+          51,
+          26,
+          255
         ],
         "closeRadius": 11.0,
         "dividerColor": [
-          0.3799999952316284,
-          0.2800000011920929,
-          0.18000000715255737,
-          0.5
+          97,
+          71,
+          46,
+          128
         ],
         "emblemOffset": [
           0.0,
@@ -486,46 +686,46 @@
           0.0
         ],
         "guildNameColor": [
-          0.25,
-          0.15000000596046448,
-          0.05000000074505806,
-          1.0
+          64,
+          38,
+          13,
+          255
         ],
         "guildNameFontSize": 14.0,
         "headerHeight": 32.0,
         "id": "guild_panel",
         "infoColor": [
-          0.41999998688697815,
-          0.3199999928474426,
-          0.18000000715255737,
-          1.0
+          107,
+          82,
+          46,
+          255
         ],
         "infoFontSize": 11.0,
         "offlineColor": [
-          0.44999998807907104,
-          0.44999998807907104,
-          0.44999998807907104,
-          0.800000011920929
+          115,
+          115,
+          115,
+          204
         ],
         "onlineColor": [
-          0.20000000298023224,
-          0.8500000238418579,
-          0.30000001192092896,
-          1.0
+          51,
+          217,
+          77,
+          255
         ],
         "rosterHeaderBgColor": [
-          0.7200000286102295,
-          0.6399999856948853,
-          0.5,
-          0.800000011920929
+          184,
+          163,
+          128,
+          204
         ],
         "rosterHeaderFontSize": 9.5,
         "rosterHeaderHeight": 18.0,
         "rosterHeaderTextColor": [
-          0.25,
-          0.15000000596046448,
-          0.05000000074505806,
-          1.0
+          64,
+          38,
+          13,
+          255
         ],
         "rosterOffset": [
           0.0,
@@ -534,17 +734,17 @@
         "rosterRowFontSize": 10.0,
         "rosterRowHeight": 22.0,
         "rosterRowTextColor": [
-          0.2199999988079071,
-          0.14000000059604645,
-          0.05999999865889549,
-          1.0
+          56,
+          36,
+          15,
+          255
         ],
         "style": "panel_parchment",
         "titleColor": [
-          0.2800000011920929,
-          0.18000000715255737,
-          0.07999999821186066,
-          1.0
+          71,
+          46,
+          20,
+          255
         ],
         "titleFontSize": 16.0,
         "titleOffset": [

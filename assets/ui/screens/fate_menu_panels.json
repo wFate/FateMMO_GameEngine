@@ -37,7 +37,7 @@
           "preset": "Center",
           "size": [
             600.0,
-            810.0
+            790.0
           ]
         },
         "backgroundColor": [
@@ -65,6 +65,15 @@
           246,
           255
         ],
+        "charDisplayOffset": [
+          10.0,
+          200.0
+        ],
+        "charSpriteOffset": [
+          0.0,
+          0.0
+        ],
+        "characterScale": 5.0,
         "closeBtnBgColor": [
           27,
           26,
@@ -103,6 +112,10 @@
           255,
           0
         ],
+        "diamondOffset": [
+          0.0,
+          0.0
+        ],
         "diamondSegments": 0,
         "diamondSize": 0.0,
         "factionBannerBgColor": [
@@ -131,7 +144,7 @@
         "factionFontSize": 140.0,
         "factionOffset": [
           0.0,
-          100.0
+          -620.0
         ],
         "fontSize": 30.0,
         "id": "status_panel",
@@ -147,9 +160,9 @@
           0.0
         ],
         "nameColor": [
+          251,
           255,
-          255,
-          255,
+          212,
           255
         ],
         "nameFontSize": 80.0,
@@ -182,7 +195,7 @@
         ],
         "statLabelFontSize": 50.0,
         "statValueFontSize": 50.0,
-        "title": "Stats Page",
+        "title": "",
         "titleColor": [
           245,
           245,
@@ -192,10 +205,9 @@
         "titleFontSize": 50.0,
         "titleOffset": [
           220.0,
-          20.0
+          40.0
         ],
         "type": "status_panel",
-        "visible": false,
         "xpBarBgColor": [
           32,
           40,
@@ -1778,7 +1790,7 @@
         "zOrder": 115
       },
       {
-        "activeTab": 1,
+        "activeTab": 0,
         "activeTabBg": [
           253,
           160,
@@ -1871,13 +1883,11 @@
         ],
         "tabSize": 160.0,
         "type": "menu_tab_bar",
-        "visible": false,
         "zOrder": 10
       }
     ],
     "id": "menu_root",
-    "type": "panel",
-    "visible": false
+    "type": "panel"
   },
   "screen": "fate_menu_panels"
 }
