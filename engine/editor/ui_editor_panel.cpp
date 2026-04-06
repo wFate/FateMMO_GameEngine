@@ -654,6 +654,56 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat("SlotArc Start Angle", &arc->slotArcStartDeg, 1.0f, 0.0f, 360.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("SlotArc End Angle", &arc->slotArcEndDeg, 1.0f, 0.0f, 360.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat2("SlotArc Offset", &arc->slotArcOffset.x, 1.0f, -300.0f, 300.0f); checkUndoCapture(uiMgr);
+
+        // --- Font ---
+        ImGui::Separator();
+        ImGui::Text("Font");
+        {
+            auto names = FontRegistry::instance().fontNames();
+            int current = 0;
+            for (int i = 0; i < static_cast<int>(names.size()); ++i) {
+                if (names[i] == arc->fontName) { current = i + 1; break; }
+            }
+            auto getter = [](void* data, int idx, const char** out) -> bool {
+                auto* v = static_cast<std::vector<std::string>*>(data);
+                if (idx == 0) { *out = "(default)"; return true; }
+                if (idx - 1 < static_cast<int>(v->size())) { *out = (*v)[idx - 1].c_str(); return true; }
+                return false;
+            };
+            if (ImGui::Combo("Font Name##arc", &current, getter, &names, static_cast<int>(names.size()) + 1)) {
+                arc->fontName = (current == 0) ? "" : names[current - 1];
+            }
+        }
+        checkUndoCapture(uiMgr);
+
+        // --- Font Sizes ---
+        ImGui::Separator();
+        ImGui::Text("Font Sizes");
+        ImGui::DragFloat("LV Font Size", &arc->lvFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Cooldown Font Size", &arc->cooldownFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Action Font Size", &arc->actionFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("PickUp Font Size", &arc->pickUpFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Page Font Size", &arc->pageFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Page Dot Radius", &arc->pageDotRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+
+        // --- Text Colors ---
+        ImGui::SeparatorText("Text Colors");
+        ImGui::ColorEdit4("LV Text##arc", &arc->lvTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Cooldown Text##arc", &arc->cooldownTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Action Text##arc", &arc->actionTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("PickUp Text##arc", &arc->pickUpTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Page Active Text##arc", &arc->pageActiveTextColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Page Inactive Text##arc", &arc->pageInactiveTextColor.r); checkUndoCapture(uiMgr);
+
+        // --- Slot/Overlay Colors ---
+        ImGui::SeparatorText("Slot Colors");
+        ImGui::ColorEdit4("Filled Slot BG##arc", &arc->filledSlotBgColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Filled Slot Border##arc", &arc->filledSlotBorderColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Empty Slot BG##arc", &arc->emptySlotBgColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Empty Slot Border##arc", &arc->emptySlotBorderColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Empty Slot Plus##arc", &arc->emptySlotPlusColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Cooldown Overlay##arc", &arc->cooldownOverlayColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Page Inactive BG##arc", &arc->pageInactiveBgColor.r); checkUndoCapture(uiMgr);
     }
     else if (auto* dp = dynamic_cast<DPad*>(selectedNode_)) {
         ImGui::SeparatorText("DPad — Layout");
@@ -1798,6 +1848,33 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat("MP Number Font (0=shared)", &fsb->mpNumberFontSize, 0.5f, 0.0f, 50.0f); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("MP Number Color", &fsb->mpNumberColor.r); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Button Font", &fsb->buttonFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("Font Names");
+        {
+            auto names = FontRegistry::instance().fontNames();
+            auto fontCombo = [&](const char* label, std::string& fontName) {
+                int current = 0;
+                std::vector<const char*> items;
+                items.push_back("(default)");
+                for (int i = 0; i < (int)names.size(); ++i) {
+                    items.push_back(names[i].c_str());
+                    if (names[i] == fontName) current = i + 1;
+                }
+                if (ImGui::Combo(label, &current, items.data(), (int)items.size())) {
+                    fontName = (current == 0) ? "" : names[current - 1];
+                    checkUndoCapture(uiMgr);
+                }
+            };
+            fontCombo("Level Font##fsbfn",     fsb->levelFontName);
+            fontCombo("HP Label Font##fsbfn",  fsb->hpLabelFontName);
+            fontCombo("HP Number Font##fsbfn", fsb->hpNumberFontName);
+            fontCombo("MP Label Font##fsbfn",  fsb->mpLabelFontName);
+            fontCombo("MP Number Font##fsbfn", fsb->mpNumberFontName);
+            fontCombo("Coord Font##fsbfn",     fsb->coordFontName);
+            fontCombo("Menu Btn Font##fsbfn",  fsb->menuBtnFontName);
+            fontCombo("Chat Btn Font##fsbfn",  fsb->chatBtnFontName);
+            fontCombo("Menu Item Font##fsbfn", fsb->menuItemFontName);
+        }
     }
     else if (auto* dov = dynamic_cast<DeathOverlay*>(selectedNode_)) {
         ImGui::SeparatorText("DeathOverlay");
