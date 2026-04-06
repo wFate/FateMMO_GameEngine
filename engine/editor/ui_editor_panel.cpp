@@ -857,7 +857,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
 
         if (ImGui::TreeNodeEx("Close Button##inv", 0)) {
             ImGui::DragFloat("Radius##cb", &inv->closeBtnRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Offset##cb", &inv->closeBtnOffset, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Offset##cb", &inv->closeBtnOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Border Width##cb", &inv->closeBtnBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Font Size##cb", &inv->closeBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Bg Color##cb", &inv->closeBtnBgColor.r); checkUndoCapture(uiMgr);
@@ -955,6 +955,31 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     else if (auto* sp = dynamic_cast<StatusPanel*>(selectedNode_)) {
         ImGui::SeparatorText("StatusPanel");
 
+        char titleBuf[128];
+        snprintf(titleBuf, sizeof(titleBuf), "%s", sp->title.c_str());
+        if (ImGui::InputText("Title Text##sp", titleBuf, sizeof(titleBuf))) {
+            sp->title = titleBuf;
+            checkUndoCapture(uiMgr);
+        }
+
+        if (ImGui::TreeNodeEx("Panel Background##sp", 0)) {
+            ImGui::ColorEdit4("Background##spbg", &sp->backgroundColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##spbg", &sp->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##spbg", &sp->borderWidth, 0.25f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Close Button##sp", 0)) {
+            ImGui::DragFloat("Radius##spcb", &sp->closeBtnRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Offset##spcb", &sp->closeBtnOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##spcb", &sp->closeBtnBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##spcb", &sp->closeBtnFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg##spcb", &sp->closeBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##spcb", &sp->closeBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##spcb", &sp->closeBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
         if (ImGui::TreeNodeEx("Position Offsets##sp", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat2("Title##spo",    &sp->titleOffset.x,    0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Name##spo",     &sp->nameOffset.x,     0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
@@ -971,6 +996,55 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Stat Label", &sp->statLabelFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Stat Value", &sp->statValueFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Faction", &sp->factionFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        {
+            char factionBuf[128];
+            snprintf(factionBuf, sizeof(factionBuf), "%s", sp->noFactionText.c_str());
+            if (ImGui::InputText("No-Faction Text##sp", factionBuf, sizeof(factionBuf))) {
+                sp->noFactionText = factionBuf;
+                checkUndoCapture(uiMgr);
+            }
+        }
+
+        if (ImGui::TreeNodeEx("Faction Banner##sp", 0)) {
+            ImGui::DragFloat("Height##spfb", &sp->factionBannerHeight, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##spfb", &sp->factionBannerPadding, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Gap##spfb", &sp->factionBannerGap, 0.5f, -20.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##spfb", &sp->factionBannerBorderW, 0.25f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::DragInt("Border Segments##spfb", &sp->factionBannerBorderSegments, 0.1f, 3, 32); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##spfb", &sp->factionBannerBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##spfb", &sp->factionBannerBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Diamond Icon##sp", 0)) {
+            ImGui::DragFloat("Size##spd", &sp->diamondSize, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragInt("Segments##spd", &sp->diamondSegments, 0.1f, 3, 32); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##spd", &sp->diamondBorderWidth, 0.25f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Fill##spd", &sp->diamondFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##spd", &sp->diamondBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("XP Bar##sp", 0)) {
+            ImGui::DragFloat("Height##spxp", &sp->xpBarHeight, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##spxp", &sp->xpBarBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Fill##spxp", &sp->xpBarFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##spxp", &sp->xpBarBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Character Display##sp", 0)) {
+            ImGui::ColorEdit4("Background##spcd", &sp->charDisplayBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##spcd", &sp->charDisplayBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Stat Grid Background##sp", 0)) {
+            ImGui::ColorEdit4("Background##spsg", &sp->statGridBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##spsg", &sp->statGridBorderColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -1044,7 +1118,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
 
         if (ImGui::TreeNodeEx("Close Button##skp", 0)) {
             ImGui::DragFloat("Radius##skcb", &skp->closeBtnRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Offset##skcb", &skp->closeBtnOffset, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Offset##skcb", &skp->closeBtnOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Border Width##skcb", &skp->closeBtnBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Font Size##skcb", &skp->closeBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Bg Color##skcb", &skp->closeBtnBgColor.r); checkUndoCapture(uiMgr);
@@ -1292,11 +1366,21 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* bv = dynamic_cast<BagViewPanel*>(selectedNode_)) {
         ImGui::SeparatorText("BagViewPanel");
+        if (ImGui::TreeNodeEx("Panel##bvp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::ColorEdit4("Background##bvpp", &bv->panelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##bvpp", &bv->panelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##bvpp", &bv->panelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Text##bvpp", &bv->titleTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Layout##bvp", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Slot Size##bvp", &bv->slotSize, 1.0f, 16.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Slot Padding##bvp", &bv->slotPadding, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
             ImGui::DragInt("Grid Columns##bvp", &bv->gridColumns, 1, 1, 10); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Content Padding##bvp", &bv->contentPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Title Height##bvp", &bv->titleHeight, 0.5f, 0.0f, 64.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Title Pad Top##bvp", &bv->titlePadTop, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Border Width##bvp", &bv->slotBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Font Sizes##bvp", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1304,10 +1388,23 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Slot Text##bvpf", &bv->slotFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNodeEx("Colors##bvp", 0)) {
+        if (ImGui::TreeNodeEx("Slot Colors##bvp", 0)) {
             ImGui::ColorEdit4("Slot BG##bvpc", &bv->slotBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Slot Border##bvpc", &bv->slotBorderColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Empty Slot##bvpc", &bv->emptySlotColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Item Text##bvpc", &bv->itemTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Enchant Text##bvpc", &bv->enchantTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Quantity Text##bvpc", &bv->quantityTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Close Button##bvp", 0)) {
+            ImGui::DragFloat("Radius##bvpcb", &bv->closeBtnRadius, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Offset##bvpcb", &bv->closeBtnOffset, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##bvpcb", &bv->closeBtnFontSize, 0.5f, 6.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##bvpcb", &bv->closeBtnBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("BG Color##bvpcb", &bv->closeBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##bvpcb", &bv->closeBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Color##bvpcb", &bv->closeBtnTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
     }
@@ -2083,7 +2180,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
         if (ImGui::TreeNodeEx("Close Button##shp", 0)) {
             ImGui::DragFloat("Radius##shpcb", &sp2->closeBtnRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Offset##shpcb", &sp2->closeBtnOffset, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Offset##shpcb", &sp2->closeBtnOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Border Width##shpcb", &sp2->closeBtnBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Font Size##shpcb", &sp2->closeBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Bg Color##shpcb", &sp2->closeBtnBgColor.r); checkUndoCapture(uiMgr);

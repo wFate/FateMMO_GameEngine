@@ -19,222 +19,55 @@
     ],
     "children": [
       {
-        "activeTab": 1,
-        "activeTabBg": [
-          200,
-          168,
-          50,
-          255
-        ],
-        "activeTextColor": [
-          38,
-          26,
-          13,
-          255
-        ],
-        "anchor": {
-          "margin": [
-            20.0,
-            80.0,
-            0.0,
-            120.0
-          ],
-          "offset": [
-            0.0,
-            80.0
-          ],
-          "padding": [
-            3.0,
-            0.0,
-            0.0,
-            0.0
-          ],
-          "preset": "StretchX",
-          "size": [
-            0.0,
-            30.0
-          ]
-        },
-        "arrowBg": [
-          255,
-          255,
-          255,
-          255
-        ],
-        "arrowFontSize": 27.0,
-        "arrowSize": 40.0,
-        "arrowTextColor": [
-          255,
-          213,
-          0,
-          255
-        ],
-        "borderColor": [
-          89,
-          66,
-          36,
-          255
-        ],
-        "borderWidth": 0.0,
-        "fontSize": 22.0,
-        "highlightColor": [
-          242,
-          224,
-          115,
-          153
-        ],
-        "id": "tab_bar",
-        "inactiveTabBg": [
-          30,
-          22,
-          11,
-          255
-        ],
-        "inactiveTextColor": [
-          255,
-          255,
-          255,
-          255
-        ],
-        "opacity": 2222.0,
-        "tabFontSize": 14.0,
-        "tabLabels": [
-          "STS",
-          "INV",
-          "SKL",
-          "GLD",
-          "SOC",
-          "SET",
-          "SHP",
-          "PET",
-          "COL",
-          "COS"
-        ],
-        "tabSize": 110.0,
-        "type": "menu_tab_bar",
-        "zOrder": 10
-      },
-      {
         "anchor": {
           "margin": [
             108.0,
             80.0,
             20.0,
-            80.0
-          ],
-          "offset": [
-            0.0,
-            0.0
-          ],
-          "preset": "StretchAll",
-          "size": [
-            0.0,
-            0.0
-          ]
-        },
-        "factionColor": [
-          255,
-          235,
-          191,
-          255
-        ],
-        "factionFontSize": 9.0,
-        "factionOffset": [
-          0.0,
-          0.0
-        ],
-        "id": "status_panel",
-        "levelColor": [
-          102,
-          71,
-          41,
-          255
-        ],
-        "levelFontSize": 11.0,
-        "levelOffset": [
-          0.0,
-          0.0
-        ],
-        "nameColor": [
-          64,
-          41,
-          20,
-          255
-        ],
-        "nameFontSize": 15.0,
-        "nameOffset": [
-          0.0,
-          0.0
-        ],
-        "statGridOffset": [
-          0.0,
-          0.0
-        ],
-        "statLabelColor": [
-          128,
-          102,
-          77,
-          255
-        ],
-        "statLabelFontSize": 9.0,
-        "statValueFontSize": 11.0,
-        "titleColor": [
-          64,
-          41,
-          20,
-          255
-        ],
-        "titleFontSize": 16.0,
-        "titleOffset": [
-          0.0,
-          0.0
-        ],
-        "type": "status_panel",
-        "visible": false
-      },
-      {
-        "anchor": {
-          "margin": [
-            130.0,
-            1000.0,
-            120.0,
-            120.0
+            90.0
           ],
           "minSize": [
             1800.0,
             0.0
           ],
           "offset": [
-            -2630.0,
-            0.0
-          ],
-          "offsetPercent": [
-            3.0,
+            -570.0,
             0.0
           ],
           "preset": "Center",
           "size": [
             600.0,
-            800.0
+            810.0
           ]
         },
         "backgroundColor": [
-          26,
-          26,
-          38,
-          191
+          8,
+          7,
+          7,
+          4444
         ],
         "borderColor": [
-          77,
-          77,
-          102,
-          153
+          0,
+          0,
+          0,
+          444
         ],
-        "borderWidth": 1.0,
-        "characterScale": 5.0,
+        "borderWidth": 3.0,
+        "charDisplayBgColor": [
+          38,
+          38,
+          36,
+          230
+        ],
+        "charDisplayBorderColor": [
+          252,
+          250,
+          246,
+          255
+        ],
         "closeBtnBgColor": [
-          60,
-          25,
+          27,
+          26,
           25,
           255
         ],
@@ -244,10 +77,199 @@
           255,
           255
         ],
+        "closeBtnBorderW": 0.0,
+        "closeBtnFontSize": 40.0,
+        "closeBtnOffset": [
+          20.0,
+          30.0
+        ],
+        "closeBtnRadius": 40.0,
+        "closeBtnTextColor": [
+          255,
+          242,
+          224,
+          255
+        ],
+        "diamondBorderColor": [
+          47,
+          44,
+          39,
+          255
+        ],
+        "diamondBorderWidth": 0.0,
+        "diamondFillColor": [
+          255,
+          255,
+          255,
+          0
+        ],
+        "diamondSegments": 0,
+        "diamondSize": 0.0,
+        "factionBannerBgColor": [
+          36,
+          35,
+          34,
+          230
+        ],
+        "factionBannerBorderColor": [
+          255,
+          255,
+          255,
+          30
+        ],
+        "factionBannerBorderSegments": 3,
+        "factionBannerBorderW": -5.0,
+        "factionBannerGap": 30.0,
+        "factionBannerHeight": 0.0,
+        "factionBannerPadding": -450.0,
+        "factionColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "factionFontSize": 140.0,
+        "factionOffset": [
+          0.0,
+          100.0
+        ],
+        "fontSize": 30.0,
+        "id": "status_panel",
+        "levelColor": [
+          153,
+          141,
+          130,
+          255
+        ],
+        "levelFontSize": 50.0,
+        "levelOffset": [
+          0.0,
+          0.0
+        ],
+        "nameColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "nameFontSize": 80.0,
+        "nameOffset": [
+          0.0,
+          0.0
+        ],
+        "noFactionText": " ",
+        "statGridBgColor": [
+          29,
+          29,
+          29,
+          230
+        ],
+        "statGridBorderColor": [
+          54,
+          52,
+          50,
+          217
+        ],
+        "statGridOffset": [
+          -1.0,
+          -4.0
+        ],
+        "statLabelColor": [
+          234,
+          255,
+          0,
+          255
+        ],
+        "statLabelFontSize": 50.0,
+        "statValueFontSize": 50.0,
+        "title": "Stats Page",
+        "titleColor": [
+          245,
+          245,
+          245,
+          255
+        ],
+        "titleFontSize": 50.0,
+        "titleOffset": [
+          220.0,
+          0.0
+        ],
+        "type": "status_panel",
+        "xpBarBgColor": [
+          32,
+          40,
+          3,
+          230
+        ],
+        "xpBarBorderColor": [
+          56,
+          56,
+          56,
+          230
+        ],
+        "xpBarFillColor": [
+          255,
+          255,
+          255,
+          242
+        ],
+        "xpBarHeight": 20.0
+      },
+      {
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            90.0
+          ],
+          "minSize": [
+            1800.0,
+            0.0
+          ],
+          "offset": [
+            -570.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            600.0,
+            810.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          444
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "borderWidth": 2.0,
+        "characterScale": 5.0,
+        "closeBtnBgColor": [
+          47,
+          47,
+          47,
+          255
+        ],
+        "closeBtnBorderColor": [
+          255,
+          255,
+          255,
+          255
+        ],
         "closeBtnBorderW": 2.0,
-        "closeBtnFontSize": 30.0,
-        "closeBtnOffset": 20.0,
-        "closeBtnRadius": 30.0,
+        "closeBtnFontSize": 50.0,
+        "closeBtnOffset": [
+          30.0,
+          70.0
+        ],
+        "closeBtnRadius": 40.0,
         "closeBtnTextColor": [
           255,
           255,
@@ -373,6 +395,7 @@
           }
         ],
         "equipSlotSize": 70.0,
+        "fontSize": 30.0,
         "goldLabelColor": [
           253,
           255,
@@ -542,7 +565,8 @@
         ],
         "tooltipStatFontSize": 20.0,
         "tooltipWidth": 200.0,
-        "type": "inventory_panel"
+        "type": "inventory_panel",
+        "visible": false
       },
       {
         "activeSetPage": 0,
@@ -566,25 +590,28 @@
         "borderWidth": 6.0,
         "circleRadiusMul": 0.20000000298023224,
         "closeBtnBgColor": [
-          140,
-          107,
-          71,
+          47,
+          47,
+          47,
           255
         ],
         "closeBtnBorderColor": [
-          77,
-          51,
-          26,
+          255,
+          255,
+          255,
           255
         ],
-        "closeBtnBorderW": 1.5,
-        "closeBtnFontSize": 12.0,
-        "closeBtnOffset": 6.0,
-        "closeBtnRadius": 12.0,
+        "closeBtnBorderW": 2.0,
+        "closeBtnFontSize": 50.0,
+        "closeBtnOffset": [
+          6.0,
+          6.0
+        ],
+        "closeBtnRadius": 40.0,
         "closeBtnTextColor": [
           255,
-          242,
-          224,
+          255,
+          255,
           255
         ],
         "contentPadding": 33.0,
@@ -785,31 +812,31 @@
           ]
         },
         "bgColor": [
-          222,
-          204,
-          171,
-          247
+          0,
+          0,
+          0,
+          444
         ],
         "borderColor": [
-          102,
-          77,
-          51,
+          0,
+          0,
+          0,
           255
         ],
-        "borderWidth": 3.0,
+        "borderWidth": 2.0,
         "closeBgColor": [
-          140,
-          107,
-          71,
+          47,
+          47,
+          47,
           255
         ],
         "closeBorderColor": [
-          77,
-          51,
-          26,
+          255,
+          255,
+          255,
           255
         ],
-        "closeRadius": 11.0,
+        "closeRadius": 40.0,
         "dividerColor": [
           97,
           71,
@@ -1069,15 +1096,15 @@
           ]
         },
         "backgroundColor": [
-          20,
-          20,
-          31,
-          242
+          0,
+          0,
+          0,
+          444
         ],
         "borderColor": [
-          64,
-          64,
-          89,
+          0,
+          0,
+          0,
           255
         ],
         "buttonColor": [
@@ -1094,10 +1121,10 @@
           255
         ],
         "closeBtnColor": [
-          77,
-          38,
-          38,
-          230
+          47,
+          47,
+          47,
+          255
         ],
         "equippedColor": [
           77,
@@ -1136,15 +1163,15 @@
         ],
         "statFontSize": 12.0,
         "titleBarColor": [
-          31,
-          31,
-          46,
+          47,
+          47,
+          47,
           255
         ],
         "titleColor": [
-          230,
-          230,
-          217,
+          255,
+          255,
+          255,
           255
         ],
         "titleFontSize": 18.0,
@@ -1192,15 +1219,15 @@
           ]
         },
         "backgroundColor": [
-          20,
-          20,
-          31,
-          242
+          0,
+          0,
+          0,
+          444
         ],
         "borderColor": [
-          64,
-          64,
-          89,
+          0,
+          0,
+          0,
           255
         ],
         "buttonColor": [
@@ -1222,10 +1249,10 @@
           255
         ],
         "closeBtnColor": [
-          77,
-          38,
-          38,
-          230
+          47,
+          47,
+          47,
+          255
         ],
         "detailOffset": [
           0.0,
@@ -1293,15 +1320,15 @@
           0.0
         ],
         "titleBarColor": [
-          31,
-          31,
-          46,
+          47,
+          47,
+          47,
           255
         ],
         "titleColor": [
-          230,
-          230,
-          217,
+          255,
+          255,
+          255,
           255
         ],
         "titleFontSize": 18.0,
@@ -1331,24 +1358,24 @@
           ]
         },
         "backgroundColor": [
-          20,
-          20,
-          31,
-          242
+          0,
+          0,
+          0,
+          444
         ],
         "borderColor": [
-          64,
-          64,
-          89,
+          0,
+          0,
+          0,
           255
         ],
         "borderWidth": 2.0,
         "categoryTabHeight": 28.0,
         "closeBtnColor": [
-          77,
-          38,
-          38,
-          230
+          47,
+          47,
+          47,
+          255
         ],
         "completedColor": [
           51,
@@ -1412,15 +1439,15 @@
           0.0
         ],
         "titleBarColor": [
-          31,
-          31,
-          46,
+          47,
+          47,
+          47,
           255
         ],
         "titleColor": [
-          230,
-          230,
-          217,
+          255,
+          255,
+          255,
           255
         ],
         "titleFontSize": 18.0,
@@ -1450,16 +1477,16 @@
           ]
         },
         "backgroundColor": [
-          20,
-          20,
-          31,
-          242
+          0,
+          0,
+          0,
+          444
         ],
         "bodyFontSize": 13.0,
         "borderColor": [
-          64,
-          64,
-          89,
+          0,
+          0,
+          0,
           255
         ],
         "borderWidth": 2.0,
@@ -1473,10 +1500,10 @@
           255
         ],
         "closeBtnColor": [
-          77,
-          38,
-          38,
-          230
+          47,
+          47,
+          47,
+          255
         ],
         "equipBtnColor": [
           46,
@@ -1554,15 +1581,15 @@
           255
         ],
         "titleBarColor": [
-          31,
-          31,
-          46,
+          47,
+          47,
+          47,
           255
         ],
         "titleColor": [
-          230,
-          230,
-          217,
+          255,
+          255,
+          255,
           255
         ],
         "titleFontSize": 18.0,
@@ -1586,20 +1613,14 @@
       {
         "anchor": {
           "margin": [
-            29.0,
+            193.0,
             0.0,
             0.0,
-            100.0
+            160.0
           ],
           "offset": [
-            1500.0,
-            150.0
-          ],
-          "padding": [
-            2.0,
-            0.0,
-            0.0,
-            0.0
+            1460.0,
+            80.0
           ],
           "preset": "TopLeft",
           "size": [
@@ -1608,32 +1629,32 @@
           ]
         },
         "closeBtnBgColor": [
-          0.3499999940395355,
-          0.20000000298023224,
-          0.11999999731779099,
-          1.0
+          0.0,
+          0.0,
+          0.0,
+          255.0
         ],
         "closeBtnBorderColor": [
-          0.6000000238418579,
-          0.5,
-          0.25,
-          1.0
+          0.2362869381904602,
+          0.2362869381904602,
+          0.2362869381904602,
+          255.0
         ],
-        "closeBtnBorderWidth": 1.5,
-        "closeBtnFontSize": 11.0,
-        "closeBtnOffset": 1.0,
-        "closeBtnRadius": 10.0,
+        "closeBtnBorderWidth": 0.0,
+        "closeBtnFontSize": 40.0,
+        "closeBtnOffset": 4.0,
+        "closeBtnRadius": 18.0,
         "closeBtnTextColor": [
-          1.0,
-          1.0,
-          1.0,
-          1.0
+          0.8987341523170471,
+          0.0,
+          0.25028038024902344,
+          255.0
         ],
-        "contentPadding": 10.0,
+        "contentPadding": 1.0,
         "emptySlotColor": [
-          0.11999999731779099,
-          0.11999999731779099,
-          0.14000000059604645,
+          0.13922271132469177,
+          0.13922278583049774,
+          0.38818567991256714,
           0.6000000238418579
         ],
         "enchantTextColor": [
@@ -1658,25 +1679,26 @@
           1.0
         ],
         "slotBgColor": [
-          0.15000000596046448,
-          0.15000000596046448,
-          0.18000000715255737,
+          0.019441327080130577,
+          0.01944136619567871,
+          0.16455698013305664,
           0.8999999761581421
         ],
         "slotBorderColor": [
-          0.3499999940395355,
-          0.3499999940395355,
-          0.4000000059604645,
+          0.1971946656703949,
+          0.1532873958349228,
+          0.3459915518760681,
           1.0
         ],
-        "slotBorderWidth": 1.0,
-        "slotFontSize": 10.0,
-        "slotPadding": 20.0,
-        "slotSize": 100.0,
-        "titleFontSize": 22.0,
-        "titleHeight": 24.0,
-        "titlePadTop": 6.0,
+        "slotBorderWidth": 4.0,
+        "slotFontSize": 20.0,
+        "slotPadding": 30.0,
+        "slotSize": 128.0,
+        "titleFontSize": 28.0,
+        "titleHeight": 100.0,
+        "titlePadTop": 40.0,
         "type": "bag_view_panel",
+        "visible": false,
         "zOrder": 110
       },
       {
@@ -1728,6 +1750,102 @@
         "type": "quantity_selector",
         "visible": false,
         "zOrder": 115
+      },
+      {
+        "activeTab": 0,
+        "activeTabBg": [
+          253,
+          160,
+          0,
+          255
+        ],
+        "activeTextColor": [
+          131,
+          128,
+          124,
+          255
+        ],
+        "anchor": {
+          "margin": [
+            -20.0,
+            50.0,
+            0.0,
+            110.0
+          ],
+          "offset": [
+            0.0,
+            60.0
+          ],
+          "padding": [
+            3.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "preset": "StretchX",
+          "size": [
+            0.0,
+            50.0
+          ]
+        },
+        "arrowBg": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "arrowFontSize": 27.0,
+        "arrowSize": 100.0,
+        "arrowTextColor": [
+          255,
+          213,
+          0,
+          255
+        ],
+        "borderColor": [
+          89,
+          66,
+          36,
+          255
+        ],
+        "borderWidth": 0.0,
+        "fontSize": 40.0,
+        "highlightColor": [
+          255,
+          220,
+          6,
+          333
+        ],
+        "id": "tab_bar",
+        "inactiveTabBg": [
+          43,
+          27,
+          6,
+          255
+        ],
+        "inactiveTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "opacity": 2222.0,
+        "tabFontSize": 30.0,
+        "tabLabels": [
+          "STS",
+          "INV",
+          "SKL",
+          "GLD",
+          "SOC",
+          "SET",
+          "SHP",
+          "PET",
+          "COL",
+          "COS"
+        ],
+        "tabSize": 160.0,
+        "type": "menu_tab_bar",
+        "zOrder": 10
       }
     ],
     "id": "menu_root",
