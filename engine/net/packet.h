@@ -162,6 +162,7 @@ namespace PacketType {
     constexpr uint8_t SvCraftingRecipeList       = 0xC9;
     constexpr uint8_t SvBagContents              = 0xCA;
     constexpr uint8_t SvAdRewardResult           = 0xCB;
+    constexpr uint8_t SvKick                     = 0xCC;
 } // namespace PacketType
 
 // ============================================================================
