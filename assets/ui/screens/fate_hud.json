@@ -237,7 +237,7 @@
         "type": "fate_status_bar"
       },
       {
-        "abbrevFontSize": 7.0,
+        "abbrevFontSize": 14.0,
         "abbrevTextColor": [
           255,
           255,
@@ -251,8 +251,8 @@
           ],
           "preset": "TopLeft",
           "size": [
-            300.0,
-            28.0
+            500.0,
+            40.0
           ]
         },
         "cooldownOverlayColor": [
@@ -263,10 +263,10 @@
         ],
         "iconAtlasCols": 8,
         "iconAtlasRows": 4,
-        "iconSize": 24.0,
+        "iconSize": 40.0,
         "id": "buff_bar",
         "maxVisible": 12,
-        "spacing": 3.0,
+        "spacing": 5.0,
         "stackBadgeBgColor": [
           0,
           0,
@@ -277,7 +277,7 @@
           0.0,
           0.0
         ],
-        "stackFontSize": 8.0,
+        "stackFontSize": 14.0,
         "stackTextColor": [
           255,
           255,
@@ -296,7 +296,7 @@
           128,
           204
         ],
-        "tooltipFontSize": 9.0,
+        "tooltipFontSize": 14.0,
         "tooltipPadding": 6.0,
         "tooltipTextColor": [
           255,
@@ -350,7 +350,6 @@
           10.0
         ],
         "nameTopPad": 0.0,
-        "targetName": "Veylan",
         "type": "target_frame",
         "visible": false,
         "zOrder": -1

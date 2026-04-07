@@ -1177,6 +1177,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat2("Tabs##skpo", &skp->tabOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Points Badge##skpo", &skp->pointsBadgeOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Skills Header##skpo", &skp->skillsHeaderOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Skill Name##skpo", &skp->nameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -1233,6 +1234,14 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Pts Font Size", &skp->ptsFontSize, 0.5f, 4.0f, 20.0f); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Badge Ring", &skp->ptsBadgeRingColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Pts Text", &skp->ptsTextColor.r); checkUndoCapture(uiMgr);
+            {
+                char lblBuf[64] = {};
+                snprintf(lblBuf, sizeof(lblBuf), "%s", skp->ptsLabelText.c_str());
+                if (ImGui::InputText("Label Text", lblBuf, sizeof(lblBuf)))
+                    skp->ptsLabelText = lblBuf;
+                checkUndoCapture(uiMgr);
+            }
+            ImGui::ColorEdit4("Label Color", &skp->ptsLabelColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -1246,6 +1255,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
 
         if (ImGui::TreeNode("Skill Colors##skp")) {
+            ImGui::ColorEdit4("Panel BG", &skp->panelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Panel Border", &skp->panelBorderColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("BG Unlocked", &skp->skillBgUnlocked.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("BG Locked", &skp->skillBgLocked.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Ring Selected", &skp->ringSelected.r); checkUndoCapture(uiMgr);
@@ -1294,6 +1305,46 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
                 }
                 ImGui::EndTable();
             }
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Confirm Dialog##skp")) {
+            ImGui::DragFloat("Dialog W##skcd", &skp->confirmDialogW, 1.0f, 50.0f, 600.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Dialog H##skcd", &skp->confirmDialogH, 1.0f, 30.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button W##skcd", &skp->confirmBtnW, 1.0f, 20.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Button H##skcd", &skp->confirmBtnH, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##skcd", &skp->confirmFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Font Size##skcd", &skp->confirmBtnFontSz, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("BG##skcd", &skp->confirmBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##skcd", &skp->confirmBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##skcd", &skp->confirmTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Accept BG##skcd", &skp->confirmAcceptBg.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Decline BG##skcd", &skp->confirmDeclineBg.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Btn Text##skcd", &skp->confirmBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Tooltip##skp")) {
+            ImGui::DragFloat2("Offset##sktt", &skp->tooltipOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Width##sktt", &skp->tooltipW, 1.0f, 80.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##sktt", &skp->tooltipPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border W##sktt", &skp->tooltipBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Line Spacing##sktt", &skp->tooltipLineSpacing, 0.25f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Desc Gap##sktt", &skp->tooltipDescGap, 0.25f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::SeparatorText("Font Sizes");
+            ImGui::DragFloat("Title Font##sktt", &skp->tooltipTitleFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Body Font##sktt", &skp->tooltipBodyFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Rank Font##sktt", &skp->tooltipRankFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Req Font##sktt", &skp->tooltipReqFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Desc Font##sktt", &skp->tooltipDescFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::SeparatorText("Colors");
+            ImGui::ColorEdit4("BG##sktt", &skp->tooltipBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##sktt", &skp->tooltipBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##sktt", &skp->tooltipTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Rank##sktt", &skp->tooltipRankColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##sktt", &skp->tooltipTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Req Level##sktt", &skp->tooltipReqColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Desc##sktt", &skp->tooltipDescColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
     }

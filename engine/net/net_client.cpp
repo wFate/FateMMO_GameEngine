@@ -740,6 +740,13 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onBagContents) onBagContents(msg);
             break;
         }
+        case PacketType::SvAdRewardResult: {
+            ByteReader payload(payloadData, payloadLen);
+            uint8_t success = payload.readU8();
+            float remaining = payload.readFloat();
+            if (onAdRewardResult) onAdRewardResult(success, remaining);
+            break;
+        }
         default:
             break;
     }
@@ -1276,6 +1283,10 @@ void NetClient::sendBagRetrieve(uint8_t bagSlot, uint8_t bagSubSlot) {
     msg.bagSubSlot = bagSubSlot;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdBagRetrieve, w.data(), w.size());
+}
+
+void NetClient::sendClaimAdReward() {
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdClaimAdReward, nullptr, 0);
 }
 
 void NetClient::sendSocketItem(uint8_t equipSlot, const std::string& scrollItemId) {

@@ -208,6 +208,7 @@
           40.0
         ],
         "type": "status_panel",
+        "visible": false,
         "xpBarBgColor": [
           32,
           40,
@@ -599,8 +600,8 @@
             0.0
           ]
         },
-        "borderWidth": 6.0,
-        "circleRadiusMul": 0.20000000298023224,
+        "borderWidth": 0.0,
+        "circleRadiusMul": 0.25,
         "closeBtnBgColor": [
           47,
           47,
@@ -626,14 +627,56 @@
           255,
           255
         ],
-        "contentPadding": 33.0,
-        "dividerColor": [
-          102,
+        "confirmAcceptBg": [
           77,
-          51,
-          128
+          166,
+          77,
+          255
         ],
-        "dividerWidth": 1.5,
+        "confirmBgColor": [
+          64,
+          51,
+          38,
+          242
+        ],
+        "confirmBorderColor": [
+          128,
+          97,
+          56,
+          255
+        ],
+        "confirmBtnFontSz": 9.0,
+        "confirmBtnH": 22.0,
+        "confirmBtnTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "confirmBtnW": 60.0,
+        "confirmDeclineBg": [
+          166,
+          77,
+          77,
+          255
+        ],
+        "confirmDialogH": 80.0,
+        "confirmDialogW": 200.0,
+        "confirmFontSize": 10.0,
+        "confirmTextColor": [
+          255,
+          242,
+          217,
+          255
+        ],
+        "contentPadding": 28.0,
+        "dividerColor": [
+          187,
+          110,
+          29,
+          333
+        ],
+        "dividerWidth": 3.0,
         "dotActivated": [
           230,
           133,
@@ -641,17 +684,17 @@
           255
         ],
         "dotLocked": [
-          140,
-          128,
-          102,
+          225,
+          214,
+          214,
           179
         ],
         "dotOffset": [
-          0.0,
-          0.0
+          17.0,
+          -20.0
         ],
-        "dotSize": 20.0,
-        "dotSpacing": 30.0,
+        "dotSize": 22.0,
+        "dotSpacing": 34.0,
         "dotUnlocked": [
           217,
           191,
@@ -659,33 +702,49 @@
           217
         ],
         "gridColumns": 5,
-        "gridMargin": 200.0,
+        "gridMargin": 60.0,
         "headerColor": [
-          71,
-          46,
-          20,
+          255,
+          245,
+          0,
           255
         ],
-        "headerFontSize": 13.0,
-        "headerHeight": 40.0,
+        "headerFontSize": 40.0,
+        "headerHeight": 10.0,
         "id": "skill_panel",
-        "nameFontSize": 9.0,
+        "nameFontSize": 20.0,
         "nameLocked": [
-          128,
-          112,
-          89,
-          191
+          255,
+          209,
+          209,
+          222
+        ],
+        "nameOffset": [
+          2.0,
+          5.0
         ],
         "nameUnlocked": [
-          56,
-          38,
-          20,
+          170,
+          108,
+          11,
+          300
+        ],
+        "panelBgColor": [
+          0,
+          0,
+          0,
+          242
+        ],
+        "panelBorderColor": [
+          102,
+          77,
+          51,
           255
         ],
         "pointsBadge": [
-          224,
-          128,
-          26,
+          255,
+          131,
+          0,
           255
         ],
         "pointsBadgeOffset": [
@@ -693,58 +752,58 @@
           0.0
         ],
         "pointsEmpty": [
-          115,
-          97,
-          71,
-          217
+          255,
+          255,
+          255,
+          333
         ],
-        "pointsFontSize": 10.0,
-        "ptsBadgeRadius": 12.0,
+        "pointsFontSize": 100.0,
+        "ptsBadgeRadius": 0.0,
         "ptsBadgeRingColor": [
           77,
           56,
           26,
           255
         ],
-        "ptsFontSize": 8.0,
+        "ptsFontSize": 100.0,
         "ptsTextColor": [
           255,
           255,
-          230,
+          227,
           255
         ],
         "ringNormal": [
-          107,
-          82,
-          51,
-          217
+          255,
+          255,
+          255,
+          3333
         ],
         "ringSelected": [
           255,
-          209,
-          51,
+          255,
+          255,
           255
         ],
-        "ringWidthNormal": 1.5,
-        "ringWidthSelected": 2.5,
+        "ringWidthNormal": 0.0,
+        "ringWidthSelected": 3.0,
         "skillBgLocked": [
-          122,
-          110,
-          87,
-          179
+          165,
+          165,
+          165,
+          3333
         ],
         "skillBgUnlocked": [
-          153,
-          138,
-          107,
-          230
+          255,
+          245,
+          0,
+          333
         ],
         "skillsHeaderOffset": [
           0.0,
           0.0
         ],
-        "slotNameFontSize": 7.0,
-        "splitRatio": 0.20000000298023224,
+        "slotNameFontSize": 20.0,
+        "splitRatio": 0.30000001192092896,
         "tabBgActive": [
           77,
           133,
@@ -757,12 +816,12 @@
           107,
           217
         ],
-        "tabFontSize": 11.0,
+        "tabFontSize": 20.0,
         "tabOffset": [
-          0.0,
+          5.0,
           0.0
         ],
-        "tabRadius": 14.0,
+        "tabRadius": 30.0,
         "tabRingActive": [
           140,
           199,
@@ -775,7 +834,7 @@
           56,
           217
         ],
-        "tabSpacingMul": 2.5,
+        "tabSpacingMul": 3.0,
         "tabTextActive": [
           255,
           255,
@@ -789,18 +848,17 @@
           255
         ],
         "titleColor": [
-          102,
-          77,
-          51,
+          255,
+          255,
+          255,
           255
         ],
-        "titleFontSize": 16.0,
+        "titleFontSize": 0.0,
         "titleOffset": [
-          0.0,
+          100000.0,
           0.0
         ],
         "type": "skill_panel",
-        "visible": false,
         "wheelEndDeg": 330.0,
         "wheelSlotSizeMul": 0.4000000059604645,
         "wheelStartDeg": 210.0
@@ -1789,7 +1847,7 @@
         "zOrder": 115
       },
       {
-        "activeTab": 0,
+        "activeTab": 2,
         "activeTabBg": [
           253,
           160,
