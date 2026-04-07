@@ -2075,4 +2075,27 @@ struct SvBagContentsMsg {
     }
 };
 
+namespace KickCode {
+    constexpr uint8_t ServerShutdown = 0;
+    constexpr uint8_t Kicked         = 1;
+    constexpr uint8_t Banned         = 2;
+    constexpr uint8_t DuplicateLogin = 3;
+}
+
+struct SvKickMsg {
+    uint8_t kickCode = KickCode::Kicked;
+    std::string reason;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(kickCode);
+        w.writeString(reason);
+    }
+    static SvKickMsg read(ByteReader& r) {
+        SvKickMsg m;
+        m.kickCode = r.readU8();
+        m.reason = r.readString();
+        return m;
+    }
+};
+
 } // namespace fate
