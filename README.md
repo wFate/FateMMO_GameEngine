@@ -4,15 +4,28 @@
 
 [![CI](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue?style=flat-square&logo=cplusplus)
-![Lines of Code](https://img.shields.io/badge/LOC-152%2C000%2B-brightgreen?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-1%2C408-brightgreen?style=flat-square)
+![Lines of Code](https://img.shields.io/badge/LOC-153%2C000%2B-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-1%2C312-brightgreen?style=flat-square)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20iOS%20%7C%20Android%20%7C%20Linux%20%7C%20macOS-orange?style=flat-square)
 
-**Production-grade 2D MMORPG engine built entirely in C++23.** Engineered for mobile-first landscape gameplay with a fully integrated Unity-style editor, server-authoritative multiplayer architecture, and encrypted custom networking — all from a single codebase, zero middleware.
+**Production-grade 2D MMORPG engine built entirely in C++23.** Engineered for mobile-first landscape gameplay with a fully integrated Unity-style editor, server-authoritative multiplayer architecture, and Noise_NK encrypted custom networking — all from a single codebase, zero middleware, zero third-party game frameworks.
 
-> **152,000+ lines** across **738 files** — engine (70.2K), game (31.6K), server (26.6K), tests (23.1K)
+> **153,000+ lines** across **739 files** — engine (71.7K), game (31.8K), server (26.7K), tests (23.5K)
 
 </div>
+
+---
+
+## 💎 Key Highlights
+
+| 🏗️ | **153K+ LOC** of hand-written C++23 across engine, game, server, and tests — no code generation, no middleware |
+|:---:|:---|
+| 🔐 | **Noise_NK cryptography** with forward secrecy, symmetric rekeying, and zero plaintext game traffic |
+| 🎮 | **50+ server-authoritative game systems** — combat, skills, inventory, trade, guilds, arenas, dungeons, pets, costumes, collections |
+| 🖥️ | **Full Unity-style editor** with live inspector, undo/redo, animation editor, asset browser, and 29 device profiles |
+| 📱 | **5-platform support** from a single codebase — Windows, macOS (Metal), iOS, Android, Linux |
+| 🧪 | **1,312 automated tests** ensuring stability across every subsystem |
+| 🎨 | **60 custom UI widgets** with JSON-driven screens, viewport scaling, and zero-ImGui shipping builds |
 
 ---
 
@@ -43,13 +56,13 @@ The demo opens the full editor UI with a procedural tile grid — explore the do
 | Category | Technology & Innovation |
 |----------|-----------|
 | **Language** | Modern C++23 (MSVC, GCC 14, Clang 18). `std::expected`, structured bindings, fold expressions throughout |
-| **Graphics RHI** | `gfx::Device` abstraction with **OpenGL 3.3 Core** & native **Metal** backends (iOS + macOS). Pipeline State Objects, typed 32-bit handles, collision-free uniform cache. Zero-batch-break SpriteBatch (10K capacity, hash-based dirty-flag sort skip), palette swap shaders, nestable scissor clipping stack, nine-slice rendering |
-| **SDF Text** | True **MTSDF font rendering** — uber-shader with 4 styles (Normal/Outlined/Glow/Shadow), offline `msdf-atlas-gen` atlas (512x512, 177 glyphs), `median(r,g,b)` + `screenPxRange` for resolution-independent edges at any zoom. Multi-font rendering via zero-copy `activeGlyphs_` pointer swap. World-space and screen-space APIs, UTF-8 decoding |
+| **Graphics RHI** | `gfx::Device` abstraction with **OpenGL 3.3 Core** & native **Metal** backends (iOS + macOS). Pipeline State Objects, typed 32-bit handles, collision-free uniform cache. Zero-batch-break SpriteBatch (10K capacity, hash-based dirty-flag sort skip), palette swap shaders, nestable scissor clipping stack, nine-slice rendering. Metal: 9 MSL shader ports, CAMetalLayer, ProMotion 120fps triple-buffering |
+| **SDF Text** | True **MTSDF font rendering** — uber-shader with 4 styles (Normal/Outlined/Glow/Shadow), offline `msdf-atlas-gen` atlas (512x512, 177 glyphs), `median(r,g,b)` + `screenPxRange` for resolution-independent edges at any zoom. **4 registered fonts** (Inter-Regular, Inter-SemiBold, PressStart2P, PixelifySans) via `FontRegistry` singleton. Multi-font rendering via zero-copy `activeGlyphs_` pointer swap. World-space and screen-space APIs, UTF-8 decoding |
 | **Render Pipeline** | 11-pass RenderGraph: GroundTiles → Entities → Particles → **SkillVFX** → SDFText → DebugOverlays → Lighting → BloomExtract → BloomBlur → PostProcess → Blit |
 | **Editor** | Dear ImGui (docking) + ImGuizmo + ImPlot + imnodes. Custom dark theme (Inter font family, FreeType LightHinting). Property inspectors, visual node editors, Aseprite-first animation editor with layered paper-doll preview, sprite slicing, tile painting, play-in-editor, undo/redo (200 actions) |
-| **Networking** | Custom reliable UDP (`0xFA7E`), **X25519 Diffie-Hellman** + **XChaCha20-Poly1305 AEAD** encryption (key-derived 48-bit nonce prefix), IPv6 dual-stack, 3 channel types, 32-bit ACK bitfields, RTT-based retransmission, connection cookies, per-client token-bucket rate limiting |
-| **Database** | PostgreSQL (libpqxx), **16 repositories**, 10 startup caches, fiber-based async dispatch, connection pool (5-50) + circuit breaker, write-ahead log (WAL) with CRC32 per entry and priority-based 4-tier flushing |
-| **ECS** | Data-oriented archetype ECS, contiguous SoA memory, **54 registered components**, generational handles, prefab variants (JSON Patch), compile-time `CompId`, Hot/Warm/Cold tier classification, `FATE_REFLECT` macro with field-level metadata, `ComponentFlags` trait policies, RAII iteration depth guard |
+| **Networking** | Custom reliable UDP (`0xFA7E`), **Noise_NK handshake** (two X25519 DH ops) + **XChaCha20-Poly1305 AEAD** encryption (key-derived 48-bit nonce prefix, symmetric rekeying every 65K packets), IPv6 dual-stack, 3 channel types, 32-bit ACK bitfields, RTT-based retransmission, connection cookies, per-client token-bucket rate limiting (40+ packet types) |
+| **Database** | PostgreSQL (libpqxx), **16 repositories**, **10 startup caches**, fiber-based async dispatch, connection pool (5-50) + circuit breaker, write-ahead log (WAL) with CRC32 per entry and priority-based 4-tier flushing. `PlayerLockMap` for concurrent mutation serialization |
+| **ECS** | Data-oriented archetype ECS, contiguous SoA memory, **53 registered components**, generational handles, prefab variants (JSON Patch), compile-time `CompId`, Hot/Warm/Cold tier classification, `FATE_REFLECT` macro with field-level metadata, `ComponentFlags` trait policies, RAII iteration depth guard |
 | **Memory** | Zone arenas (256 MB, O(1) reset), double-buffered frame arenas (64 MB), thread-local scratch arenas (Fleury conflict-avoidance), lock-free pool allocators, debug occupancy bitmaps, ImPlot visualization panels |
 | **Audio** | SoLoud (SDL2 backend, 32 virtual voices, OGG streaming, 2D spatial audio, 3 buses, 10 game events wired) |
 | **Async & Jobs** | Win32 fibers / minicoro, 4 workers, 32-fiber pool, lock-free MPMC queues, counter-based suspend/resume with fiber-local scratch arenas. Fiber-based async scene & asset loading — zero frame stalls |
@@ -60,7 +73,7 @@ The demo opens the full editor UI with a procedural tile grid — explore the do
 
 ## 🗡️ Game Systems
 
-All gameplay logic is fully server-authoritative with priority-based DB persistence, dirty-flag tracking at 95 mutation sites, spanning **50+ robust systems** across 67 shared gameplay files (15,800 LOC of pure C++ game logic — zero engine dependencies).
+All gameplay logic is fully server-authoritative with priority-based DB persistence, dirty-flag tracking at 95 mutation sites, spanning **50+ robust systems** across 67 shared gameplay files (15,800 LOC of pure C++ game logic — zero engine dependencies). Every system is DB-wired with load-on-connect, save-on-disconnect, and async auto-save.
 
 <details>
 <summary><b>🔥 Combat, PvP & Classes</b></summary>
@@ -91,6 +104,7 @@ All gameplay logic is fully server-authoritative with priority-based DB persiste
 - **Crafting** — 4-tier recipe book system (Novice / Book I / II / III) with ingredient validation, level/class gating, gold costs. `RecipeCache` loaded at startup.
 - **Consumables Pipeline** — 8 subtypes fully wired: HP/MP Potions, SkillBooks (class/level validated), Stat Reset (Elixir of Forgetting), Town Recall (blocked in combat/instanced content), Fate Coins (3→level×50 XP), EXP Boost Scrolls (10%/20%, 1hr, stackable tiers), Beacon of Calling (cross-scene party teleport), Soul Anchor (auto-prevent XP loss on death).
 - **Costumes & Closet** — DB-driven cosmetic system. 5 rarity tiers (Common→Legendary), per-slot equipping, master show/hide toggle, paper-doll integration. 3 grant paths: mob drops (per-mob drop chance), collection rewards, shop purchase. Full replication via 32-bit delta field mask. `SvCostumeDefs`/`SvCostumeSync`/`SvCostumeUpdate` packets.
+- **Enchant Broadcasts** — Server-wide broadcast on successful enchant at +9 and above (first break-risk level). Party loot broadcasts to all members after pickup.
 
 </details>
 
@@ -117,9 +131,10 @@ All gameplay logic is fully server-authoritative with priority-based DB persiste
 - **Instanced Dungeons** — Per-party ECS worlds, 10-minute timers, boss rewards, daily tickets, invite system (30s timeout), celebration phase. Reconnect grace (180s). Event locks prevent double-enrollment. Per-minute chat timer.
 - **Aurora Gauntlet** — 6-zone PvP with hourly faction-rotation buff (+25% ATK/EXP), wall-clock `hour%4` rotation. Aether Stone + 50K gold entry. Aether world boss (Lv55, 150M HP, 36hr respawn) with 23-item loot table. Zone scaling Lv10→55. Death ejects to Town.
 - **Pet System** — Leveling, rarity-tiered stats, XP sharing (50%), server-authoritative auto-looting (0.5s ticks, 64px radius, ownership+party aware). `PetDefinitionCache` from DB.
-- **Loot Pipeline** — Server rolls → ground entities → spatial replication → pickup validation → 120s despawn. Per-player damage attribution, live party lookup at death, strict purge on DC/leave. Rare+ drop broadcast via system chat.
+- **Loot Pipeline** — Server rolls → ground entities → spatial replication → pickup validation → 120s despawn. Per-player damage attribution, live party lookup at death, strict purge on DC/leave. Epic/Legendary/Mythic server-wide broadcast; party loot broadcast to all members.
 - **NPC System** — 9 NPC types: Shop, Bank, Teleporter (with item/gold/level costs), Guild, Dungeon, Arena, Battlefield, Story (branching dialogue), QuestGiver. Proximity validation on all interactions. `EntityHandle`-based caching for zone-transition safety.
 - **Event Return Points** — Centralized system prevents players from being stranded after disconnecting from instanced content. Return point set on event entry, cleared on normal exit, re-set on grace rejoin.
+- **Trade Cleanup** — Active trades cancelled on disconnect, partner inventory trade-locks released via `unlockAllTradeSlots()`, preventing permanently locked slots.
 
 </details>
 
@@ -127,9 +142,9 @@ All gameplay logic is fully server-authoritative with priority-based DB persiste
 
 ## 🎨 Retained-Mode UI System
 
-Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeight / 900.0f`) for pixel-perfect consistency across all devices. Anchor-based layout (12 presets + percentage sizing), JSON screen definitions, 9-slice rendering, two-tier color theming, virtual `hitTest` overrides for mobile-optimized touch targets.
+Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeight / 900.0f`) for pixel-perfect consistency across all devices. Anchor-based layout (12 presets + percentage sizing), JSON screen definitions, 9-slice rendering, two-tier color theming, virtual `hitTest` overrides for mobile-optimized touch targets. 21 per-prefix system message color/font configurations.
 
-- **59 Widget Types:** 21 Engine-Generic (Panels, ScrollViews, ProgressBars, Checkboxes, ConfirmDialogs, NotificationToasts, LoginScreen) and **37 Game-Specific** (DPad, SkillArc with 4-page C-arc, FateStatusBar, InventoryPanel with paper doll, CostumePanel, CollectionPanel, ArenaPanel, BattlefieldPanel, PetPanel, CraftingPanel, MarketPanel with status lifecycle, BagViewPanel, EmoticonPanel, QuantitySelector, PlayerContextMenu, and more) + internal layout primitives.
+- **60 Widget Types:** 22 Engine-Generic (Panels, ScrollViews, ProgressBars, Checkboxes, ConfirmDialogs, NotificationToasts, LoginScreen, ImageBox) and **38 Game-Specific** (DPad, SkillArc with 4-page C-arc, FateStatusBar, InventoryPanel with paper doll, CostumePanel, CollectionPanel, ArenaPanel, BattlefieldPanel, PetPanel, CraftingPanel, MarketPanel with buy confirmation + status lifecycle, BagViewPanel, EmoticonPanel, QuantitySelector, PlayerContextMenu, ChatIdleOverlay, BossHPBar, and more) + internal layout primitives.
 - **10 JSON Screens & 28 Theme Styles:** Parchment, HUD dark, dialog, tab, scrollbar themes. Full serialization of layout properties, fonts, colors, and inline style overrides. Ctrl+S dual-save (build + source dir). Hot-reload with 0.5s polling + suppress-after-save guard.
 - **Paper Doll System:** `PaperDollCatalog` singleton with JSON-driven catalog (`assets/paper_doll.json`) — body/hairstyle/equipment sprites per gender with style name strings, direction-aware rendering with per-layer depth offsets and frame clamping, texture caching, editor preview panel with live composite + Browse-to-assign. Used in game HUD, character select, and character creation.
 - **Zero-ImGui Game Client:** All HUD, nameplates, and floating text render via SDFText + SpriteBatch. ImGui is compiled out of shipping builds entirely.
@@ -139,7 +154,7 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 
 ## 🔒 Server & Networking
 
-**Headless 20 Hz server** (`FateServer`) with max 2,000 concurrent connections. **39 handler files**, **16 DB repositories**, **10 startup caches**. Every game action is server-validated.
+**Headless 20 Hz server** (`FateServer`) with max 2,000 concurrent connections. **39 handler files**, **16 DB repositories**, **10 startup caches**, **15-min idle timeout**. Every game action is server-validated — zero trust client.
 
 <details>
 <summary><b>🔐 Transport & Encryption</b></summary>
@@ -147,7 +162,7 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 | Property | Value |
 |----------|-------|
 | Protocol | Custom reliable UDP (`0xFA7E`), Win32 + POSIX |
-| Encryption | **X25519 key exchange** + **XChaCha20-Poly1305 AEAD** (key-derived 48-bit session nonce prefix, 16-byte tag) |
+| Encryption | **Noise_NK handshake** — two X25519 DH ops (`es` + `ee`, BLAKE2b-512 derivation) + **XChaCha20-Poly1305 AEAD** (key-derived 48-bit session nonce prefix, 16-byte tag). Symmetric rekeying every 65K packets / 15 min |
 | IPv6 | Dual-stack with IPv4 fallback (DNS64/NAT64 — iOS App Store mandatory) |
 | Channels | Unreliable (movement), ReliableOrdered (critical), ReliableUnordered (reliable no ordering) |
 | Packets | 18-byte header, 32-bit ACK bitfield, RTT estimation (EWMA), retransmission delay `max(0.2s, 2*RTT)`, zero-copy retransmit |
@@ -155,6 +170,8 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 | Anti-Replay | Economic nonce system (trade/market), connection cookies (HMAC FNV-1a, 10s time-bucketed) |
 | Auth Security | Login rate limiting (5 attempts → 5-min lockout), client version check, TLS 1.2+ with AEAD-only ciphers |
 | Auto-Reconnect | `ReconnectPhase` state machine, exponential backoff (1s→30s cap), 60s total timeout |
+| Idle Timeout | 15-min inactivity auto-disconnect, per-client activity tracking, system chat warning before kick |
+| Event Return Points | Centralized scene/position restore on DC from instanced content (dungeon/arena/battlefield) |
 
 </details>
 
@@ -162,7 +179,7 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 <summary><b>📡 Replication & AOI</b></summary>
 
 - **Area of Interest** — Spatial-hash culling (128px cells), 640px activation / 768px deactivation (hysteresis). Scene-filtered. Optional `visibilityFilter` callback (GM invisibility).
-- **Delta Compression** — 32-bit field mask (17 fields: position, animFrame, flipX, HP/maxHP, moveState, animId, statusEffects, deathState, casting, target, level, faction, equipVisuals, pkStatus, honorRank, costumeVisuals). Only dirty fields serialized.
+- **Delta Compression** — 32-bit field mask (17 fields: position, animFrame, flipX, HP/maxHP, moveState, animId, statusEffects, deathState, casting, target, level, faction, equipVisuals, pkStatus, honorRank, costumeVisuals). Only dirty fields serialized. Expanded from 16-bit for costume support.
 - **Batched Updates** — Multiple entity deltas packed into single `SvEntityUpdateBatch` packets (~90% header overhead reduction vs per-entity packets).
 - **Tiered Frequency** — Near 20 Hz / Mid 7 Hz / Far 4 Hz / Edge 2 Hz. HP changes always sent regardless of tier.
 - **Ghost Lifecycle** — Robust enter/leave/destroy pipeline with `recentlyUnregistered_` bridge, `processDestroyQueue()`, full disconnect cleanup.
@@ -176,7 +193,7 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 |-------|--------|
 | **WAL** | Binary write-ahead log with CRC32 per entry, `fflush` after every append. Journals gold/item/XP mutations. Replay on crash recovery |
 | **Circuit Breaker** | 3-state (Closed → Open → HalfOpen), 5 failures → 30s cooldown, single-probe pattern. WAL queues writes during outage |
-| **Priority Flushing** | 4 tiers: IMMEDIATE (0s — gold/inventory/trades), HIGH (5s — level-ups/PK), NORMAL (60s — position), LOW (300s — pet/bank). 1s dedup, 10/tick drain, 5-min auto-save safety net |
+| **Priority Flushing** | 4 tiers: IMMEDIATE (0s — gold/inventory/trades), HIGH (5s — level-ups/PK/zone transitions), NORMAL (60s — position), LOW (300s — pet/bank). 1s dedup, 10/tick drain, 5-min staggered auto-save safety net |
 | **Dirty Flags** | `PlayerDirtyFlags` at **95 mutation sites**. Disconnect + auto-save bypass with `forceSaveAll=true`. Async error re-dirties for retry |
 | **Connection Pool** | Thread-safe (min 5, max 50, +10 overflow). Fiber-based async dispatch. `PlayerLockMap` with `shared_ptr<mutex>` for concurrent mutation serialization |
 
@@ -185,7 +202,7 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 <details>
 <summary><b>🛡️ GM Command System</b></summary>
 
-`GMCommandRegistry` with `AdminRole` enum (Player/GM/Admin). 23 commands across 6 categories: Player Management (kick/ban/permaban/unban/mute/unmute/whois/setrole), Teleportation (tp/tphere/goto), Spawning (spawnmob), Economy (additem/addgold/setlevel/addskillpoints), GM Tools (announce/dungeon/invisible/god), Help (admin). Ban/unban fully DB-wired with timed expiry. Invisibility uses replication visibility filter. God mode blocks damage at all 3 paths. Slow tick profiling (>50ms) with per-section breakdown.
+`GMCommandRegistry` with `AdminRole` enum (Player/GM/Admin). 23 commands across 6 categories: Player Management (kick/ban/permaban/unban/mute/unmute/whois/setrole), Teleportation (tp/tphere/goto), Spawning (spawnmob), Economy (additem/addgold/setlevel/addskillpoints), GM Tools (announce/dungeon/invisible/god), Help (admin). Ban/unban fully DB-wired with timed expiry. Invisibility uses replication visibility filter. God mode blocks damage at all 3 paths. Slow tick profiling (>50ms) with 7-section breakdown (net/world/ecs/despawn/repl/events/save).
 
 </details>
 
@@ -199,7 +216,7 @@ Custom polished dark theme — Inter font family (14px body, 16px SemiBold headi
 <summary><b>🎯 Core Editor Features</b></summary>
 
 - **Entity Hierarchy** — Grouped by name+tag, color-coded (player/ground/obstacle/mob/boss), error badges, tree indentation guides.
-- **Live Inspector** — Edit all 54 component types live with **full undo/redo**. Sprite preview thumbnails. Reflection-driven generic fallback via `FATE_REFLECT`. SemiBold headings, separator lines.
+- **Live Inspector** — Edit all 53 component types live with **full undo/redo**. Sprite preview thumbnails. Reflection-driven generic fallback via `FATE_REFLECT`. SemiBold headings, separator lines.
 - **Scene Interaction** — Click to select (depth-priority, closest-center), drag to move, sticky selection. Ground tiles locked (inspect-only). Entity selection auto-clears if destroyed by gameplay/network/undo.
 - **Create / Delete / Duplicate** — Menu + keyboard shortcuts, deep copy via JSON serialization, locked entity protection.
 - **8 Tile Tools** — Move (W), Resize (E), Rotate (R), Paint (B), Erase (X), Flood Fill (G), RectFill (U), LineTool (L). All tool-paused-only with compound undo.
@@ -217,9 +234,9 @@ Custom polished dark theme — Inter font family (14px body, 16px SemiBold headi
 - **Animation Editor** — Aseprite-first import pipeline with auto-sibling discovery, layered paper-doll preview (5-layer composite), variable frame duration, onion skinning, content pipeline conventions. Sprite Sheet Slicer (color-coded direction lanes, hit frame "H" badges, mousewheel zoom, frame info tooltips). 3-direction authoring → 4-direction runtime. See details below.
 - **Tile Palette** — Recursive subdirectory scan, scrollable grid, brush size (1-5), 4-layer dropdown (Ground/Detail/Fringe/Collision), layer visibility toggles.
 - **Dialogue Node Editor** — Visual node-based dialogue trees via imnodes. Speaker/text nodes, choice pins, JSON save/load, node position persistence.
-- **UI Editor** — Full WYSIWYG for all 59 widget types: colored type-badge hierarchy, property inspector for every widget, selection outline, viewport drag, undo/redo with full screen JSON snapshots. Ctrl+S dual-save + hot-reload safe pointer revalidation.
+- **UI Editor** — Full WYSIWYG for all 60 widget types: colored type-badge hierarchy, property inspector for every widget, selection outline, viewport drag, undo/redo with full screen JSON snapshots. Ctrl+S dual-save + hot-reload safe pointer revalidation.
 - **Paper Doll Panel** — Live composite preview with Browse-to-assign workflow for body/hair/equipment sprites.
-- **+ 7 more** — Log Viewer, Memory Panel (arena/pool/frame visualization), Command Console, Network Panel, Post-Process Panel, Project Browser, Scene Management.
+- **+ 7 more** — Log Viewer, Memory Panel (arena/pool/frame visualization via ImPlot), Command Console, Network Panel, Post-Process Panel, Project Browser, Scene Management.
 
 </details>
 
@@ -324,7 +341,7 @@ cmake --build --preset x64-Shipping
 | **FateDemo** | Minimal demo with editor UI | Open-source build |
 | **FateEngine** | Full game client | When `game/` sources present |
 | **FateServer** | Headless authoritative server | When `server/` + PostgreSQL present |
-| **fate_tests** | 1,408 unit tests (doctest) | When `tests/` sources present |
+| **fate_tests** | 1,312 unit tests (doctest) | When `tests/` sources present |
 
 ### Platform Matrix
 
@@ -340,7 +357,7 @@ cmake --build --preset x64-Shipping
 
 ## 🧪 Testing
 
-The engine maintains exceptional stability through **1,408 test cases** across **179 test files**, powered by `doctest`.
+The engine maintains exceptional stability through **1,312 test cases** across **180 test files**, powered by `doctest`.
 
 ```bash
 # Run all tests:
@@ -355,18 +372,18 @@ The engine maintains exceptional stability through **1,408 test cases** across *
 ./build/Debug/fate_tests.exe -tc="AsepriteImporter*"
 ```
 
-Coverage spans: combat formulas, encryption/decryption, entity replication, inventory operations, skill systems, quest progression, economic nonces, arena matchmaking, dungeon lifecycle, VFX pipeline, compressed textures, UI layout, collision grids, async asset loading, Aseprite import pipeline, animation frame durations, and more.
+Coverage spans: combat formulas, encryption/decryption, entity replication, inventory operations, skill systems, quest progression, economic nonces, arena matchmaking, dungeon lifecycle, VFX pipeline, compressed textures, UI layout, collision grids, async asset loading, Aseprite import pipeline, animation frame durations, costume system, collection system, and more.
 
 ---
 
 ## 📐 Architecture at a Glance
 
 ```
-engine/                    # 70,200 LOC — Core engine (20 subsystems)
+engine/                    # 71,700 LOC — Core engine (20 subsystems)
  render/                   #   Sprite batching, SDF text, lighting, bloom, paper doll, VFX
  net/                      #   Custom UDP, AEAD crypto, replication, AOI, interpolation
- ecs/                      #   Archetype ECS, 54 components, reflection, serialization
- ui/                       #   59 widgets, JSON screens, themes, viewport scaling
+ ecs/                      #   Archetype ECS, 53 components, reflection, serialization
+ ui/                       #   60 widgets, JSON screens, themes, viewport scaling
  editor/                   #   ImGui editor, undo/redo, Aseprite animation editor, asset browser
  tilemap/                  #   Chunk VBOs, texture arrays, Blob-47 autotile, 4-layer
  scene/                    #   Async loading, versioning, prefab variants
@@ -384,7 +401,7 @@ engine/                    # 70,200 LOC — Core engine (20 subsystems)
  vfs/                      #   PhysicsFS, ZIP mount, overlay priority
  telemetry/                #   Metric collection, JSON flush, HTTPS stub
 
-game/                      # 31,600 LOC — Game logic layer
+game/                      # 31,800 LOC — Game logic layer
  shared/                   #   67 files, 15,800 LOC of pure gameplay (zero engine deps)
    combat_system           #   Hit rate, armor, crits, class advantage, PvP balance
    skill_manager           #   60+ skills, cooldowns, cast times, resource types
@@ -399,14 +416,14 @@ game/                      # 31,600 LOC — Game logic layer
  systems/                  #   11 ECS systems (combat, render, movement, mob AI, spawn...)
  data/                     #   Paper doll catalog, NPC definitions, quest data
 
-server/                    # 26,600 LOC — Headless authoritative server
+server/                    # 26,700 LOC — Headless authoritative server
  handlers/                 #   39 packet handler files (split from monolith)
  db/                       #   16 repositories, 6 definition caches, WAL, pool, dispatcher
  cache/                    #   Item/loot/recipe/pet/costume/collection caches
  auth/                     #   TLS auth server (bcrypt, starter equipment, login rate limiting)
  *.h/.cpp                  #   ServerApp, SpawnCoordinator, DungeonManager, RateLimiter, GM commands
 
-tests/                     # 23,100 LOC — 1,408 test cases across 179 files
+tests/                     # 23,500 LOC — 1,312 test cases across 180 files
 ```
 
 ---
@@ -429,16 +446,16 @@ Apache License 2.0 — see [LICENSE](LICENSE) for details.
 
 <br>
 
-<sub>**Engine Architecture** | **Networking & Crypto** | **Server Systems** | **Editor Tooling** | **Cross-Platform** | **All Game Logic**</sub>
+<sub>**Engine Architecture** | **Networking & Crypto** | **Server Systems** | **Editor Tooling** | **Cross-Platform** | **All Game Logic** | **Solo Developer**</sub>
 
 <br><br>
 
-<img src="https://img.shields.io/badge/C%2B%2B-152%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
-<img src="https://img.shields.io/badge/files-738-2ea44f?style=flat-square" alt="Files" />
-<img src="https://img.shields.io/badge/tests-1%2C408_passing-2ea44f?style=flat-square" alt="Tests" />
+<img src="https://img.shields.io/badge/C%2B%2B-153%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
+<img src="https://img.shields.io/badge/files-739-2ea44f?style=flat-square" alt="Files" />
+<img src="https://img.shields.io/badge/tests-1%2C312_passing-2ea44f?style=flat-square" alt="Tests" />
 <img src="https://img.shields.io/badge/platforms-5-orange?style=flat-square" alt="Platforms" />
 <img src="https://img.shields.io/badge/game_systems-50%2B-blueviolet?style=flat-square" alt="Game Systems" />
-<img src="https://img.shields.io/badge/UI_widgets-59-ff69b4?style=flat-square" alt="UI Widgets" />
+<img src="https://img.shields.io/badge/UI_widgets-60-ff69b4?style=flat-square" alt="UI Widgets" />
 <img src="https://img.shields.io/badge/DB_repositories-16-informational?style=flat-square" alt="DB Repos" />
 <img src="https://img.shields.io/badge/handler_files-39-9cf?style=flat-square" alt="Handler Files" />
 

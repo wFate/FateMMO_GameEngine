@@ -738,7 +738,7 @@ void ContentBrowserPanel::drawItemsTab() {
 
             if (ImGui::CollapsingHeader("Requirements")) {
                 drawComboField("Class Req", editingItem_, "class_req",
-                    {"All", "Warrior", "Mage", "Ranger", "Healer"});
+                    {"All", "Warrior", "Mage", "Archer", "Healer"});
                 drawIntField("Level Req", editingItem_, "level_req", 1, 200);
             }
 

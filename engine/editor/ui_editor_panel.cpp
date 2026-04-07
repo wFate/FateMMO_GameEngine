@@ -783,6 +783,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         if (ImGui::TreeNodeEx("Background##idle", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("BG Width##idle", &idle->bgWidth, 1.0f, 0.0f, 2000.0f, "%.0f (0=widget)"); checkUndoCapture(uiMgr);
             ImGui::DragFloat("BG Height##idle", &idle->bgHeight, 1.0f, 0.0f, 500.0f, "%.0f (0=auto)"); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("BG Corner Radius##idle", &idle->bgCornerRadius, 0.5f, 0.0f, 50.0f, "%.1f"); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("BG Offset##idle", &idle->bgOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("BG Color##idle", &idle->bgColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
@@ -836,6 +837,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         if (ImGui::TreeNodeEx("Colors##tf", 0)) {
             ImGui::ColorEdit4("HP Bar BG##tfc", &tf->hpBarBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("HP Fill##tfc", &tf->hpFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Name BG##tfc", &tf->nameBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Name BG Pad##tfc", &tf->nameBgPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         ImGui::Text("Target: %s", tf->targetName.c_str());
@@ -1848,6 +1851,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat("HP Bar Height (0=shared)", &fsb->hpBarHeight, 1.0f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("MP Bar Width (0=auto)", &fsb->mpBarWidth, 1.0f, 0.0f, 400.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("MP Bar Height (0=shared)", &fsb->mpBarHeight, 1.0f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Bar Corner Radius", &fsb->barCornerRadius, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("HP Bar Color", &fsb->hpBarColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("HP Bar Track", &fsb->hpBarBgColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("MP Bar Color", &fsb->mpBarColor.r); checkUndoCapture(uiMgr);

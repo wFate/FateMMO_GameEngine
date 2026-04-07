@@ -28,6 +28,7 @@
             0.0
           ]
         },
+        "barCornerRadius": 25.0,
         "barHeight": 70.0,
         "buttonFontSize": 20.0,
         "chatBtnBgColor": [
@@ -36,6 +37,7 @@
           0,
           255
         ],
+        "chatBtnFontName": "inter_semibold",
         "chatBtnFontSize": 40.0,
         "chatBtnOffset": [
           0.0,
@@ -55,10 +57,11 @@
           255,
           333
         ],
-        "coordFontSize": 40.0,
+        "coordFontName": "inter_semibold",
+        "coordFontSize": 30.0,
         "coordFormat": "(%d, %d)",
         "coordOffset": [
-          220.0,
+          235.0,
           40.0
         ],
         "coordStyle": "Normal",
@@ -110,10 +113,11 @@
           165,
           255
         ],
+        "levelFontName": "inter_semibold",
         "levelFontSize": 50.0,
         "levelOffset": [
           895.0,
-          30.0
+          23.0
         ],
         "menuBtnBgColor": [
           42,
@@ -140,6 +144,7 @@
           102,
           153
         ],
+        "menuItemFontName": "inter_semibold",
         "menuItemFontSize": 20.0,
         "menuItemH": 50.0,
         "menuItemTextColor": [
@@ -241,8 +246,8 @@
         ],
         "anchor": {
           "offset": [
-            60.0,
-            50.0
+            257.0,
+            80.0
           ],
           "preset": "TopLeft",
           "size": [
@@ -305,22 +310,22 @@
       {
         "anchor": {
           "offset": [
-            -10.0,
-            66.0
+            0.0,
+            140.0
           ],
-          "preset": "TopRight",
+          "preset": "TopCenter",
           "size": [
-            180.0,
-            36.0
+            300.0,
+            50.0
           ]
         },
-        "barHeight": 12.0,
-        "barPadding": 6.0,
+        "barHeight": 0.0,
+        "barPadding": 20.0,
         "hpBarBgColor": [
-          26,
-          26,
-          26,
-          217
+          84,
+          82,
+          82,
+          0
         ],
         "hpBarOffset": [
           0.0,
@@ -332,19 +337,20 @@
           38,
           255
         ],
-        "hpFontSize": 9.0,
+        "hpFontSize": 0.0,
         "hpTextOffset": [
           0.0,
           0.0
         ],
         "id": "target_frame",
-        "nameFontSize": 11.0,
+        "nameBgPadding": 4.0,
+        "nameFontSize": 30.0,
         "nameOffset": [
-          0.0,
-          0.0
+          1.0,
+          10.0
         ],
-        "nameTopPad": 4.0,
-        "targetName": "test",
+        "nameTopPad": 0.0,
+        "targetName": "Veylan",
         "type": "target_frame",
         "visible": false,
         "zOrder": -1
@@ -378,19 +384,19 @@
         "armHeightRatio": 0.8500000238418579,
         "armWidthRatio": 0.3199999928474426,
         "arrowColor": [
-          0,
-          0,
+          56,
+          60,
           0,
           217
         ],
-        "arrowDistRatio": 0.4000000059604645,
+        "arrowDistRatio": 0.3499999940395355,
         "arrowHeightRatio": 0.019999999552965164,
         "arrowWidthRatio": 0.07000000029802322,
         "bgColor": [
+          45,
           33,
-          24,
-          0,
-          255
+          2,
+          290
         ],
         "centerColor": [
           159,
@@ -859,31 +865,32 @@
         "anchor": {
           "offset": [
             0.0,
-            -50.0
+            -40.0
           ],
-          "preset": "BottomLeft",
+          "preset": "BottomCenter",
           "size": [
-            400.0,
-            80.0
+            0.0,
+            100.0
           ]
         },
         "bgColor": [
           0,
           0,
           0,
-          222
+          130
         ],
-        "bgHeight": 500.0,
+        "bgCornerRadius": 30.0,
+        "bgHeight": 140.0,
         "bgOffset": [
-          700.0,
-          350.0
+          345.0,
+          0.0
         ],
-        "bgWidth": 800.0,
+        "bgWidth": 1265.0,
         "fontSize": 33.0,
         "id": "chat_idle_overlay",
         "lineSpacing": 10.0,
         "maxLines": 3,
-        "padding": 800.0,
+        "padding": 350.0,
         "shadowColor": [
           0,
           0,

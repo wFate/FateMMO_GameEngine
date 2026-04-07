@@ -290,6 +290,26 @@ void App::processEvents() {
     Editor::instance().beginFrame();
 #endif
 
+    // --- Centralized SDL text input management (once per frame) ---
+    // SDL_StartTextInput() must be active for SDL_TEXTINPUT events to fire.
+    // Enable it whenever ANY subsystem needs text: ImGui widgets or game UI.
+    {
+        bool needTextInput = false;
+#ifndef FATE_SHIPPING
+        // Editor widgets (DragFloat, InputText, ColorEdit, etc.)
+        if (ImGui::GetIO().WantTextInput)
+            needTextInput = true;
+#endif
+        // Game UI widget with text focus (chat, marketplace, login, etc.)
+        if (uiManager_.focusedNode() && uiManager_.focusedNode()->wantsTextInput())
+            needTextInput = true;
+
+        if (needTextInput)
+            SDL_StartTextInput();
+        else
+            SDL_StopTextInput();
+    }
+
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
 #ifndef FATE_SHIPPING

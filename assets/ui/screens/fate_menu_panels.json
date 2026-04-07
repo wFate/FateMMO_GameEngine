@@ -247,7 +247,7 @@
           "preset": "Center",
           "size": [
             600.0,
-            810.0
+            790.0
           ]
         },
         "backgroundColor": [
@@ -262,25 +262,24 @@
           0,
           255
         ],
-        "borderWidth": 2.0,
         "characterScale": 5.0,
         "closeBtnBgColor": [
-          47,
-          47,
-          47,
+          26,
+          25,
+          25,
           255
         ],
         "closeBtnBorderColor": [
           255,
           255,
           255,
-          255
+          0
         ],
         "closeBtnBorderW": 2.0,
-        "closeBtnFontSize": 50.0,
+        "closeBtnFontSize": 40.0,
         "closeBtnOffset": [
-          30.0,
-          70.0
+          20.0,
+          30.0
         ],
         "closeBtnRadius": 40.0,
         "closeBtnTextColor": [
