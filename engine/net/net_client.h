@@ -169,6 +169,7 @@ public:
     std::function<void(const SvBagContentsMsg&)> onBagContents;
     std::function<void(uint8_t success, float remaining)> onAdRewardResult;
     std::function<void(const std::string& reason)> onConnectRejected;
+    std::function<void(uint8_t kickCode, const std::string& reason)> onKicked;
 
     // Admin content pipeline callbacks
     std::function<void(const SvAdminResultMsg&)>      onAdminResult;

@@ -747,6 +747,15 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onAdRewardResult) onAdRewardResult(success, remaining);
             break;
         }
+        case PacketType::SvKick: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvKickMsg::read(payload);
+            LOG_INFO("NetClient", "Kicked by server: code=%d reason=%s", msg.kickCode, msg.reason.c_str());
+            // Prevent reconnection -- this is an intentional server-initiated disconnect
+            reconnectPhase_ = ReconnectPhase::Failed;
+            if (onKicked) onKicked(msg.kickCode, msg.reason);
+            break;
+        }
         default:
             break;
     }
