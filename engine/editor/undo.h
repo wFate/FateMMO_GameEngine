@@ -247,9 +247,8 @@ public:
     size_t undoCount() const { return undoStack_.size(); }
     size_t redoCount() const { return redoStack_.size(); }
 
-    const std::string& lastUndoDesc() const {
-        static std::string empty;
-        return undoStack_.empty() ? empty : undoStack_.back()->description();
+    std::string lastUndoDesc() const {
+        return undoStack_.empty() ? std::string{} : undoStack_.back()->description();
     }
 
 private:
