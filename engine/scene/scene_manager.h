@@ -7,8 +7,17 @@
 
 namespace fate {
 
-// Manages scene transitions (load, unload, switch)
-// Future: integrates with server for networked scene loading
+// Singleton that owns the current Scene.
+//
+// In practice this is a scene *holder*, not a loader.  The game client
+// (GameApp) drives scene loading through AsyncSceneLoader which does
+// fiber-based background parsing + batched main-thread finalization.
+// SceneManager just provides the canonical currentScene() accessor that
+// the engine (App, Editor, render loop) queries every frame.
+//
+// The synchronous loadScene()/switchScene() helpers and the factory
+// registry are only used by the examples/demo_app.  Real game scene
+// transitions go through AsyncSceneLoader -> SceneManager::currentScene_.
 class SceneManager {
 public:
     static SceneManager& instance() {
@@ -16,28 +25,36 @@ public:
         return s_instance;
     }
 
-    // Register a scene factory (for programmatic scene creation)
-    using SceneFactory = std::function<void(Scene&)>;
-    void registerScene(const std::string& name, SceneFactory factory);
+    // --- Scene ownership (used by engine + game) ---
 
-    // Load and activate a scene (from JSON file)
-    bool loadScene(const std::string& name, const std::string& jsonPath);
-
-    // Switch to a registered scene (calls factory)
-    bool switchScene(const std::string& name);
-
-    // Unload the current scene (destroys World and all entities)
-    void unloadScene();
-
-    // Get current active scene
+    // Get the active scene.  Returns nullptr before any scene is loaded.
     Scene* currentScene() { return currentScene_.get(); }
     const std::string& currentSceneName() const { return currentSceneName_; }
 
-    // Loading state — true while a scene transition is in progress
-    bool isLoading() const { return isLoading_; }
-    float loadProgress() const { return loadProgress_; }
+    // Replace the current scene with an already-constructed one.
+    // Calls onExit on the old scene if present.  The caller is responsible
+    // for calling onEnter on the new scene after any additional setup.
+    void setCurrentScene(std::unique_ptr<Scene> scene, const std::string& name);
 
-    // Callback when scene is loaded (game code hooks into this)
+    // Destroy the current scene (calls onExit, resets pointer).
+    // Called by App::shutdown() to ensure cleanup before static destructors.
+    void unloadScene();
+
+    // --- Synchronous helpers (demo/editor only) ---
+
+    // Register a scene factory for programmatic scene creation.
+    using SceneFactory = std::function<void(Scene&)>;
+    void registerScene(const std::string& name, SceneFactory factory);
+
+    // Synchronous load from JSON — blocks the main thread for the entire
+    // parse + entity creation.  Not used by the game client; prefer
+    // AsyncSceneLoader for real scene transitions.
+    bool loadScene(const std::string& name, const std::string& jsonPath);
+
+    // Switch to a registered factory scene (synchronous).
+    bool switchScene(const std::string& name);
+
+    // Callback fired after loadScene/switchScene complete.
     std::function<void(Scene&)> onSceneLoaded;
 
 private:
@@ -46,8 +63,6 @@ private:
     std::unique_ptr<Scene> currentScene_;
     std::string currentSceneName_;
     std::unordered_map<std::string, SceneFactory> factories_;
-    bool isLoading_ = false;
-    float loadProgress_ = 0.0f;
 };
 
 } // namespace fate
