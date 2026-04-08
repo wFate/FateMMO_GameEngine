@@ -16,6 +16,7 @@ class UINode {
 public:
     bool visible() const { return false; }
     bool onKeyInput(int, bool) { return false; }
+    bool wantsTextInput() const { return false; }
     void onFocusLost() {}
     void onFocusGained() {}
 };
