@@ -69,8 +69,11 @@ bool NetClient::connectWithToken(const std::string& host, uint16_t port, const A
     lastPacketReceived_ = 0.0f;
     lastHeartbeatSent_ = 0.0f;
     heartbeatCounter_ = 0;
-    reconnectPhase_ = ReconnectPhase::None;
-    reconnectAttempts_ = 0;
+    // Only reset reconnect state on fresh connections (not during auto-reconnect,
+    // where the reconnect state machine manages reconnectPhase_)
+    if (reconnectPhase_ == ReconnectPhase::None) {
+        reconnectAttempts_ = 0;
+    }
 
     // Generate DH keypair for secure key exchange (required)
     if (!PacketCrypto::isAvailable()) {
@@ -1292,6 +1295,16 @@ void NetClient::sendBagRetrieve(uint8_t bagSlot, uint8_t bagSubSlot) {
     msg.bagSubSlot = bagSubSlot;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdBagRetrieve, w.data(), w.size());
+}
+
+void NetClient::sendBagUseItem(uint8_t bagSlot, uint8_t bagSubSlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdBagUseItemMsg msg;
+    msg.bagSlot = bagSlot;
+    msg.bagSubSlot = bagSubSlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBagUseItem, w.data(), w.size());
 }
 
 void NetClient::sendClaimAdReward() {

@@ -57,6 +57,7 @@ public:
     void sendOpenBag(uint8_t inventorySlot);
     void sendBagStore(uint8_t srcSlot, uint8_t bagSlot, uint8_t bagSubSlot);
     void sendBagRetrieve(uint8_t bagSlot, uint8_t bagSubSlot);
+    void sendBagUseItem(uint8_t bagSlot, uint8_t bagSubSlot);
     void sendClaimAdReward();
     void sendSocketItem(uint8_t equipSlot, const std::string& scrollItemId);
     void sendArena(uint8_t action, uint8_t mode);

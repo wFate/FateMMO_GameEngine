@@ -383,6 +383,7 @@ struct SvPlayerStateMsg {
     float   evasion      = 0.0f;
     float   speed        = 1.0f;
     float   damageMult   = 1.0f;
+    int32_t currentShield = 0;  // active shield HP remaining
     uint8_t pkStatus     = 0; // PKStatus enum
     uint8_t honorRank    = 0; // HonorRank enum
 
@@ -413,6 +414,7 @@ struct SvPlayerStateMsg {
         w.writeFloat(evasion);
         w.writeFloat(speed);
         w.writeFloat(damageMult);
+        w.writeI32(currentShield);
         w.writeU8(pkStatus);
         w.writeU8(honorRank);
         w.writeU16(static_cast<uint16_t>(freeStatPoints));
@@ -443,6 +445,7 @@ struct SvPlayerStateMsg {
         m.evasion     = r.readFloat();
         m.speed       = r.readFloat();
         m.damageMult  = r.readFloat();
+        m.currentShield = r.readI32();
         m.pkStatus    = r.readU8();
         m.honorRank   = r.readU8();
         m.freeStatPoints = static_cast<int16_t>(r.readU16());

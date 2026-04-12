@@ -1,9 +1,210 @@
 {
-    "screen": "character_creation",
-    "root": {
-        "id": "char_create_root",
-        "type": "character_creation_screen",
-        "anchor": { "preset": "StretchAll" },
-        "visible": false
-    }
+  "root": {
+    "anchor": {
+      "offset": [
+        0.0,
+        0.0
+      ],
+      "preset": "StretchAll",
+      "size": [
+        0.0,
+        0.0
+      ]
+    },
+    "backBtnBorderColor": [
+      102,
+      166,
+      230,
+      255
+    ],
+    "backBtnColor": [
+      51,
+      115,
+      179,
+      255
+    ],
+    "backBtnFontSize": 30.0,
+    "backBtnOffsetX": 14.0,
+    "backBtnOffsetY": 14.0,
+    "backBtnRadius": 18.0,
+    "backBtnRingWidth": 1.5,
+    "backgroundColor": [
+      10,
+      10,
+      18,
+      255
+    ],
+    "buttonFontSize": 50.0,
+    "classBtnSize": 60.0,
+    "classDescGap": 3.0,
+    "classDescPadX": 30.0,
+    "classFontSize": 50.0,
+    "classGap": 50.0,
+    "classInitialFontSize": 30.0,
+    "classNameGap": 20.0,
+    "classRingWidth": 4.0,
+    "classRowY": 150.0,
+    "classSelRingWidth": 10.0,
+    "descColor": [
+      179,
+      179,
+      204,
+      255
+    ],
+    "descFontSize": 20.0,
+    "dividerWidth": 4.0,
+    "errorColor": [
+      255,
+      89,
+      89,
+      255
+    ],
+    "factionGap": 100.0,
+    "factionInitialFontSize": 40.0,
+    "factionNameFontSize": 40.0,
+    "factionNameGap": 20.0,
+    "factionRadius": 40.0,
+    "factionRowY": 330.0,
+    "factionSelRingWidth": 5.0,
+    "factionSelScale": 1.2000000476837158,
+    "genderBorderWidth": 1.0,
+    "genderBtnHeight": 100.0,
+    "genderBtnWidth": 200.0,
+    "genderGap": 400.0,
+    "genderRowY": 55.0,
+    "genderSelBorderWidth": 2.0,
+    "hairstyleBtnSize": 30.0,
+    "hairstyleGap": 10.0,
+    "hairstyleLabelGap": 2.0,
+    "hairstyleRingWidth": 1.5,
+    "hairstyleRowY": 90.0,
+    "hairstyleSelRingWidth": 2.5,
+    "headerColor": [
+      255,
+      235,
+      191,
+      255
+    ],
+    "headerFontSize": 30.0,
+    "headerY": 20.0,
+    "id": "char_create_root",
+    "labelColor": [
+      140,
+      140,
+      166,
+      255
+    ],
+    "labelFontSize": 40.0,
+    "leftPanelColor": [
+      18,
+      18,
+      26,
+      255
+    ],
+    "leftPanelRatio": 0.4000000059604645,
+    "nameFieldBgColor": [
+      26,
+      26,
+      38,
+      255
+    ],
+    "nameFieldBorderColor": [
+      89,
+      89,
+      128,
+      255
+    ],
+    "nameFieldBorderWidth": 1.5,
+    "nameFieldCursorPad": 8.0,
+    "nameFieldCursorWidth": 1.0,
+    "nameFieldFocusBgColor": [
+      38,
+      38,
+      56,
+      255
+    ],
+    "nameFieldFocusBorderColor": [
+      153,
+      128,
+      77,
+      255
+    ],
+    "nameFieldHeight": 100.0,
+    "nameFieldLabelGap": 2.0,
+    "nameFieldPadX": 200.0,
+    "nameFieldTextPad": 8.0,
+    "nameFieldY": 600.0,
+    "nameInputFontSize": 50.0,
+    "nameLabelColor": [
+      166,
+      166,
+      191,
+      255
+    ],
+    "nameLabelFontSize": 50.0,
+    "nextBtnBorderColor": [
+      128,
+      204,
+      255,
+      255
+    ],
+    "nextBtnBorderWidth": 4.0,
+    "nextBtnBottomMargin": 20.0,
+    "nextBtnColor": [
+      51,
+      153,
+      230,
+      255
+    ],
+    "nextBtnFontSize": 70.0,
+    "nextBtnHeight": 100.0,
+    "nextBtnPadX": 400.0,
+    "placeholderColor": [
+      102,
+      102,
+      128,
+      255
+    ],
+    "previewScale": 3.0,
+    "selectedBgColor": [
+      51,
+      46,
+      20,
+      255
+    ],
+    "selectedColor": [
+      242,
+      204,
+      51,
+      255
+    ],
+    "statusFontSize": 40.0,
+    "statusGap": 8.0,
+    "successColor": [
+      89,
+      242,
+      115,
+      255
+    ],
+    "type": "character_creation_screen",
+    "unselectedBgColor": [
+      31,
+      31,
+      46,
+      255
+    ],
+    "unselectedBorderColor": [
+      89,
+      89,
+      128,
+      255
+    ],
+    "unselectedTextColor": [
+      153,
+      153,
+      179,
+      255
+    ]
+  },
+  "screen": "character_creation"
 }

@@ -1,8 +1,195 @@
 {
-    "screen": "login",
-    "root": {
-        "id": "login_screen",
-        "type": "login_screen",
-        "anchor": { "preset": "StretchAll" }
-    }
+  "root": {
+    "anchor": {
+      "offset": [
+        0.0,
+        0.0
+      ],
+      "preset": "StretchAll",
+      "size": [
+        0.0,
+        0.0
+      ]
+    },
+    "buttonBgColor": [
+      0.350210964679718,
+      0.23347394168376923,
+      0.0,
+      1.0
+    ],
+    "buttonBgPressedColor": [
+      0.47257381677627563,
+      0.39513662457466125,
+      0.0019939839839935303,
+      1.0
+    ],
+    "buttonBorderColor": [
+      1.0,
+      0.9367088079452515,
+      0.0,
+      1.0
+    ],
+    "buttonFontSize": 30.0,
+    "buttonHeight": 36.0,
+    "buttonTextColor": [
+      1.0,
+      0.8860759735107422,
+      0.0,
+      1.0
+    ],
+    "checkboxBorderColor": [
+      0.44999998807907104,
+      0.44999998807907104,
+      0.550000011920929,
+      1.0
+    ],
+    "checkboxInnerInset": 3.0,
+    "checkboxLabelGap": 5.0,
+    "checkboxOffColor": [
+      0.10000000149011612,
+      0.10000000149011612,
+      0.15000000596046448,
+      1.0
+    ],
+    "checkboxOnColor": [
+      0.7637130618095398,
+      0.5692937970161438,
+      0.18045541644096375,
+      1.0
+    ],
+    "checkboxSize": 20.0,
+    "cursorInset": 8.0,
+    "cursorWidth": 1.0,
+    "fieldBgColor": [
+      0.10000000149011612,
+      0.10000000149011612,
+      0.15000000596046448,
+      1.0
+    ],
+    "fieldBgFocusedColor": [
+      0.15000000596046448,
+      0.15000000596046448,
+      0.2199999988079071,
+      1.0
+    ],
+    "fieldBorderColor": [
+      0.4999198913574219,
+      0.49991995096206665,
+      0.8227847814559937,
+      1.0
+    ],
+    "fieldBorderFocusColor": [
+      1.0,
+      0.7819970846176147,
+      0.3459915518760681,
+      1.0
+    ],
+    "fieldBorderWidth": 1.0,
+    "fieldFontSize": 30.0,
+    "fieldHeight": 50.0,
+    "fieldPadding": 8.0,
+    "fieldSpacing": 8.0,
+    "fieldTextColor": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "id": "login_screen",
+    "labelColor": [
+      0.550000011920929,
+      0.550000011920929,
+      0.6499999761581421,
+      1.0
+    ],
+    "labelFontSize": 30.0,
+    "maxScale": 2.5,
+    "padding": 20.0,
+    "panelBgColor": [
+      0.11392402648925781,
+      0.08117613196372986,
+      0.0014420774532482028,
+      0.949999988079071
+    ],
+    "panelBorderColor": [
+      1.0,
+      0.714285671710968,
+      0.0,
+      1.0
+    ],
+    "panelBorderWidth": 1.0,
+    "panelOffset": [
+      0.0,
+      0.0
+    ],
+    "panelWidth": 400.0,
+    "portFieldWidth": 70.0,
+    "portGap": 8.0,
+    "refHeight": 0.0,
+    "rememberFontSize": 23.0,
+    "rememberMe": true,
+    "rememberRowHeight": 70.0,
+    "rememberTextColor": [
+      0.6499999761581421,
+      0.6499999761581421,
+      0.75,
+      1.0
+    ],
+    "screenBgColor": [
+      0.0985952839255333,
+      0.09859529137611389,
+      0.10970461368560791,
+      1.0
+    ],
+    "serverHost": "127.0.0.1",
+    "serverPort": 7778,
+    "showServerFields": false,
+    "statusErrorColor": [
+      1.0,
+      0.3499999940395355,
+      0.3499999940395355,
+      1.0
+    ],
+    "statusFontSize": 20.0,
+    "statusRowHeight": 20.0,
+    "statusSuccessColor": [
+      0.3499999940395355,
+      0.949999988079071,
+      0.44999998807907104,
+      1.0
+    ],
+    "subtitleColor": [
+      0.6499999761581421,
+      0.6499999761581421,
+      0.75,
+      1.0
+    ],
+    "subtitleFontSize": 20.0,
+    "subtitleHeight": 24.0,
+    "titleColor": [
+      0.949999988079071,
+      0.800000011920929,
+      0.20000000298023224,
+      1.0
+    ],
+    "titleFontSize": 40.0,
+    "titleHeight": 40.0,
+    "titleText": "FateMMO",
+    "toggleFontSize": 40.0,
+    "toggleLinkColor": [
+      1.0,
+      0.7737007737159729,
+      0.05907171964645386,
+      1.0
+    ],
+    "toggleLinkPressedColor": [
+      0.949999988079071,
+      0.800000011920929,
+      0.20000000298023224,
+      1.0
+    ],
+    "toggleRowHeight": 25.0,
+    "type": "login_screen"
+  },
+  "screen": "login"
 }

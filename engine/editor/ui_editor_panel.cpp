@@ -620,6 +620,9 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Bar BG##pibc", &pib->barBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Bar Border##pibc", &pib->barBorderColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("HP Fill##pibc", &pib->hpFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shield T1 (0-100%)##pibc", &pib->shieldTier1Color.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shield T2 (100-200%)##pibc", &pib->shieldTier2Color.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shield T3 (200-300%)##pibc", &pib->shieldTier3Color.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("MP Fill##pibc", &pib->mpFillColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Text Shadow##pibc", &pib->textShadowColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Gold Text##pibc", &pib->goldTextColor.r); checkUndoCapture(uiMgr);
@@ -1503,6 +1506,20 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Arrow Hover##qsc", &qs->arrowHoverColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+        if (ImGui::TreeNodeEx("Max Button##qs", 0)) {
+            ImGui::DragFloat("Width##qsm", &qs->maxButtonWidth, 1.0f, 20.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##qsm", &qs->maxButtonFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Color##qsm", &qs->maxButtonColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Hover Color##qsm", &qs->maxButtonHoverColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Color##qsm", &qs->maxButtonTextColor.r); checkUndoCapture(uiMgr);
+            char maxBuf[128] = {};
+            snprintf(maxBuf, sizeof(maxBuf), "%s", qs->maxButtonText.c_str());
+            if (ImGui::InputText("Text##qsm", maxBuf, sizeof(maxBuf))) {
+                qs->maxButtonText = maxBuf;
+            }
+            checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         char confBuf[128] = {};
         snprintf(confBuf, sizeof(confBuf), "%s", qs->confirmText.c_str());
         if (ImGui::InputText("Confirm Text##qs", confBuf, sizeof(confBuf))) {
@@ -1644,21 +1661,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat("Box Size", &cb->boxSize, 1.0f, 8.0f, 40.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Spacing##cb", &cb->spacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
     }
-    else if (auto* ls = dynamic_cast<LoginScreen*>(selectedNode_)) {
-        ImGui::SeparatorText("LoginScreen");
-        char hostBuf[256] = {};
-        snprintf(hostBuf, sizeof(hostBuf), "%s", ls->serverHost.c_str());
-        if (ImGui::InputText("Server Host", hostBuf, sizeof(hostBuf))) {
-            ls->serverHost = hostBuf;
-        }
-        checkUndoCapture(uiMgr);
-        ImGui::DragInt("Server Port", &ls->serverPort, 1.0f, 1, 65535); checkUndoCapture(uiMgr);
-        ImGui::Checkbox("Remember Me (Default)", &ls->rememberMe); checkUndoCapture(uiMgr);
-        ImGui::Separator();
-        const char* modeNames[] = {"Login", "Register"};
-        ImGui::Text("Mode: %s", modeNames[static_cast<int>(ls->mode)]);
-        ImGui::Text("Status: %s", ls->statusMessage.c_str());
-    }
+    // login_screen: handled by reflectedProperties() auto-inspector above
     else if (auto* pf = dynamic_cast<PartyFrame*>(selectedNode_)) {
         ImGui::SeparatorText("PartyFrame");
         if (ImGui::TreeNodeEx("Position Offsets##pf", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1907,6 +1910,12 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::ColorEdit4("HP Bar Track", &fsb->hpBarBgColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("MP Bar Color", &fsb->mpBarColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("MP Bar Track", &fsb->mpBarBgColor.r); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Shield Overlay##fsb", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::ColorEdit4("Tier 1 (0-100% HP)##shld", &fsb->shieldTier1Color.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tier 2 (100-200% HP)##shld", &fsb->shieldTier2Color.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Tier 3 (200-300% HP)##shld", &fsb->shieldTier3Color.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::ColorEdit4("Strip Background", &fsb->stripBgColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Strip Border", &fsb->stripBorderColor.r); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Strip Border Width", &fsb->stripBorderWidth, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
@@ -2077,13 +2086,14 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Preview Scale##css", &css->previewScale, 0.1f, 1.0f, 8.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Preview Center Y##css", &css->previewCenterYRatio, 0.01f, 0.1f, 0.9f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Entry Btn Border##css", &css->entryBtnBorderWidth, 0.1f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Swap/Del Scale##css", &css->swapDeleteScale, 0.01f, 0.3f, 1.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Swap/Del Margin##css", &css->swapDeleteMargin, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Swap Ring Width##css", &css->swapBtnRingWidth, 0.1f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Delete Scale##css", &css->deleteScale, 0.01f, 0.3f, 1.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Delete Margin##css", &css->deleteMargin, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Delete Ring Width##css", &css->deleteBtnRingWidth, 0.1f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Dialog Layout##css", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Dialog Offset X##css", &css->dialogOffsetX, 0.5f, -300.0f, 300.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Dialog Offset Y##css", &css->dialogOffsetY, 0.5f, -300.0f, 300.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Dialog Width##css", &css->dialogWidth, 1.0f, 200.0f, 600.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Dialog Height##css", &css->dialogHeight, 1.0f, 150.0f, 400.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Dialog Border##css", &css->dialogBorderWidth, 0.1f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
@@ -2093,6 +2103,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Dialog Btn Width##css", &css->dialogBtnWidth, 1.0f, 50.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Dialog Btn Height##css", &css->dialogBtnHeight, 0.5f, 20.0f, 50.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Dialog Btn Margin##css", &css->dialogBtnMargin, 0.5f, 5.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Ref Name Offset X##css", &css->dialogRefNameOffsetX, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Ref Name Offset Y##css", &css->dialogRefNameOffsetY, 0.5f, 0.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Fonts##css", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -2103,7 +2115,6 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Plus Font##css", &css->plusFontSize, 0.5f, 10.0f, 36.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Slot Level Font##css", &css->slotLevelFontSize, 0.5f, 6.0f, 18.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Entry Font##css", &css->entryFontSize, 0.5f, 8.0f, 24.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Swap Font##css", &css->swapFontSize, 0.5f, 6.0f, 18.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Delete Font##css", &css->deleteFontSize, 0.5f, 6.0f, 18.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Dialog Title Font##css", &css->dialogTitleFontSize, 0.5f, 8.0f, 24.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Dialog Prompt Font##css", &css->dialogPromptFontSize, 0.5f, 6.0f, 20.0f); checkUndoCapture(uiMgr);
@@ -2129,8 +2140,6 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Slot Level##css", &css->slotLevelColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Entry Btn##css", &css->entryBtnColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Entry Btn Border##css", &css->entryBtnBorderColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Swap Btn##css", &css->swapBtnColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Swap Ring##css", &css->swapBtnRingColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Delete Btn##css", &css->deleteBtnColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Delete Ring##css", &css->deleteBtnRingColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
@@ -2148,6 +2157,25 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Confirm Disabled##css", &css->dialogConfirmDisabledColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Confirm Disabled Text##css", &css->dialogConfirmDisabledTextColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Cancel##css", &css->dialogCancelColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Back Button##css", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Width##backbtn", &css->backBtnWidth, 1.0f, 40.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Height##backbtn", &css->backBtnHeight, 0.5f, 20.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Margin X##backbtn", &css->backBtnMarginX, 0.5f, 0.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Margin Y##backbtn", &css->backBtnMarginY, 0.5f, 0.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##backbtn", &css->backBtnBorderWidth, 0.1f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##backbtn", &css->backBtnFontSize, 0.5f, 6.0f, 24.0f); checkUndoCapture(uiMgr);
+            char backTextBuf[64] = {};
+            snprintf(backTextBuf, sizeof(backTextBuf), "%s", css->backBtnText.c_str());
+            if (ImGui::InputText("Label##backbtn", backTextBuf, sizeof(backTextBuf))) {
+                css->backBtnText = backTextBuf;
+            }
+            checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Text Offset##backbtn", &css->backBtnTextOffset.x, 0.5f, -20.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button Color##backbtn", &css->backBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##backbtn", &css->backBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Color##backbtn", &css->backBtnTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
     }

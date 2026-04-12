@@ -2026,6 +2026,7 @@ struct SvBagContentsSlot {
     std::string itemId;
     std::string displayName;
     std::string rarity;
+    std::string itemType;     // e.g. "Consumable", "Weapon", "Armor"
     uint16_t quantity = 0;
     uint8_t enchantLevel = 0;
     void write(ByteWriter& w) const {
@@ -2034,6 +2035,7 @@ struct SvBagContentsSlot {
         w.writeString(itemId);
         w.writeString(displayName);
         w.writeString(rarity);
+        w.writeString(itemType);
         w.writeU16(quantity);
         w.writeU8(enchantLevel);
     }
@@ -2044,8 +2046,27 @@ struct SvBagContentsSlot {
         m.itemId = r.readString();
         m.displayName = r.readString();
         m.rarity = r.readString();
+        m.itemType = r.readString();
         m.quantity = r.readU16();
         m.enchantLevel = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: Use item directly from bag (retrieve + consume atomically)
+// ============================================================================
+struct CmdBagUseItemMsg {
+    uint8_t bagSlot = 0;
+    uint8_t bagSubSlot = 0;
+    void write(ByteWriter& w) const {
+        w.writeU8(bagSlot);
+        w.writeU8(bagSubSlot);
+    }
+    static CmdBagUseItemMsg read(ByteReader& r) {
+        CmdBagUseItemMsg m;
+        m.bagSlot = r.readU8();
+        m.bagSubSlot = r.readU8();
         return m;
     }
 };

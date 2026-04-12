@@ -94,6 +94,7 @@ enum class AuthMessageType : uint8_t {
     CharDeleteResponse    = 7,
     SelectCharRequest     = 8,
     SelectCharResponse    = 9,
+    Ping                  = 10,
 };
 
 // RegisterRequest and LoginRequest write a type byte first.

@@ -171,7 +171,12 @@ void AssetBrowser::scanDirectory(const std::string& relDir) {
 
     for (auto& dirEntry : fs::directory_iterator(absDir, ec)) {
         if (ec) break;
-        std::string name = dirEntry.path().filename().string();
+        std::string name;
+        try {
+            name = dirEntry.path().filename().string();
+        } catch (const std::exception&) {
+            continue; // skip entries with non-representable characters
+        }
 
         // Skip hidden directories/files and build artifacts at project root
         if (name.empty() || name[0] == '.') continue;
@@ -189,12 +194,20 @@ void AssetBrowser::scanDirectory(const std::string& relDir) {
 
         Entry e;
         e.name = name;
-        e.fullPath = dirEntry.path().string();
+        try {
+            e.fullPath = dirEntry.path().string();
+        } catch (const std::exception&) {
+            continue; // non-representable path
+        }
         std::replace(e.fullPath.begin(), e.fullPath.end(), '\\', '/');
 
         // Compute relative path from projectRoot
         auto relPath = fs::relative(dirEntry.path(), fs::path(projectRoot_), ec);
-        e.relativePath = ec ? name : relPath.string();
+        try {
+            e.relativePath = ec ? name : relPath.string();
+        } catch (const std::exception&) {
+            e.relativePath = name;
+        }
         std::replace(e.relativePath.begin(), e.relativePath.end(), '\\', '/');
 
         if (dirEntry.is_directory(ec)) {
@@ -202,7 +215,11 @@ void AssetBrowser::scanDirectory(const std::string& relDir) {
             e.type = AssetType::Other;
             currentEntries_.push_back(std::move(e));
         } else if (dirEntry.is_regular_file(ec)) {
-            e.extension = dirEntry.path().extension().string();
+            try {
+                e.extension = dirEntry.path().extension().string();
+            } catch (const std::exception&) {
+                continue;
+            }
             std::transform(e.extension.begin(), e.extension.end(), e.extension.begin(), ::tolower);
             e.type = classifyFile(e.name, e.extension);
             e.isDirectory = false;

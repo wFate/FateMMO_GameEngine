@@ -122,6 +122,7 @@ namespace PacketType {
     constexpr uint8_t CmdBagStore               = 0x45;
     constexpr uint8_t CmdBagRetrieve            = 0x46;
     constexpr uint8_t CmdClaimAdReward          = 0x47;
+    constexpr uint8_t CmdBagUseItem             = 0x48;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;

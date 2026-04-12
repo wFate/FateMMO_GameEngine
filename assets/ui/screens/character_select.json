@@ -12,244 +12,244 @@
       ]
     },
     "backgroundColor": [
-      0.0346098430454731,
-      0.15189874172210693,
-      0.11478198319673538,
-      1.0
+      9,
+      39,
+      29,
+      255
     ],
     "classColor": [
-      0.75,
-      0.75,
-      0.8999999761581421,
-      1.0
+      191,
+      191,
+      230,
+      255
     ],
     "classFontSize": 37.0,
     "classTextY": 373.0,
     "deleteBtnColor": [
-      0.5,
-      0.15000000596046448,
-      0.15000000596046448,
-      1.0
+      128,
+      38,
+      38,
+      255
     ],
     "deleteBtnRingColor": [
-      0.8500000238418579,
-      0.30000001192092896,
-      0.30000001192092896,
-      1.0
+      217,
+      77,
+      77,
+      255
     ],
     "deleteBtnRingWidth": 3.0,
-    "deleteFontSize": 10.0,
+    "deleteFontSize": 40.0,
     "dialogBgColor": [
-      0.11999999731779099,
-      0.10000000149011612,
-      0.14000000059604645,
-      0.9800000190734863
+      31,
+      26,
+      36,
+      250
     ],
     "dialogBorderColor": [
-      0.699999988079071,
-      0.30000001192092896,
-      0.30000001192092896,
-      0.8999999761581421
+      179,
+      77,
+      77,
+      230
     ],
-    "dialogBorderWidth": 1.5,
+    "dialogBorderWidth": 4.0,
     "dialogBtnFontSize": 10.0,
-    "dialogBtnHeight": 22.0,
+    "dialogBtnHeight": 70.0,
     "dialogBtnMargin": 11.0,
-    "dialogBtnWidth": 75.0,
+    "dialogBtnWidth": 230.0,
     "dialogCancelColor": [
-      0.25,
-      0.3499999940395355,
-      0.550000011920929,
-      1.0
+      64,
+      89,
+      140,
+      255
     ],
     "dialogConfirmColor": [
-      0.699999988079071,
-      0.20000000298023224,
-      0.20000000298023224,
-      1.0
+      179,
+      51,
+      51,
+      255
     ],
     "dialogConfirmDisabledColor": [
-      0.30000001192092896,
-      0.15000000596046448,
-      0.15000000596046448,
-      0.6000000238418579
+      77,
+      38,
+      38,
+      153
     ],
     "dialogConfirmDisabledTextColor": [
-      0.5,
-      0.5,
-      0.5,
-      0.699999988079071
+      128,
+      128,
+      128,
+      179
     ],
-    "dialogHeight": 187.0,
+    "dialogHeight": 500.0,
     "dialogInputBgColor": [
-      0.07999999821186066,
-      0.07999999821186066,
-      0.11999999731779099,
-      1.0
+      20,
+      20,
+      31,
+      255
     ],
     "dialogInputBorderColor": [
-      0.5,
-      0.5,
-      0.6000000238418579,
-      1.0
+      128,
+      128,
+      153,
+      255
     ],
-    "dialogInputBorderWidth": 0.75,
-    "dialogInputFontSize": 10.0,
-    "dialogInputHeight": 21.0,
-    "dialogInputPadding": 45.0,
+    "dialogInputBorderWidth": 2.0,
+    "dialogInputFontSize": 100.0,
+    "dialogInputHeight": 70.0,
+    "dialogInputPadding": 40.0,
     "dialogOverlayColor": [
-      0.0,
-      0.0,
-      0.0,
-      0.699999988079071
+      0,
+      0,
+      0,
+      179
     ],
     "dialogPromptColor": [
-      0.75,
-      0.75,
-      0.8500000238418579,
-      1.0
+      191,
+      191,
+      217,
+      255
     ],
-    "dialogPromptFontSize": 9.0,
+    "dialogPromptFontSize": 29.0,
     "dialogRefNameColor": [
-      1.0,
-      0.9200000166893005,
-      0.75,
-      1.0
+      255,
+      235,
+      191,
+      255
     ],
-    "dialogRefNameFontSize": 10.5,
+    "dialogRefNameFontSize": 140.0,
     "dialogTitleColor": [
-      0.949999988079071,
-      0.3499999940395355,
-      0.3499999940395355,
-      1.0
+      242,
+      89,
+      89,
+      255
     ],
-    "dialogTitleFontSize": 12.0,
-    "dialogWidth": 299.0,
+    "dialogTitleFontSize": 30.0,
+    "dialogWidth": 500.0,
     "displayBgColor": [
-      0.8588235378265381,
-      0.8588235378265381,
-      0.8588235378265381,
-      0.0784313753247261
+      219,
+      219,
+      219,
+      20
     ],
     "displayBorderColor": [
-      1.0,
-      1.0,
-      1.0,
-      0.6666666865348816
+      255,
+      255,
+      255,
+      170
     ],
     "displayBorderWidth": 1.5,
     "displayHeightRatio": 0.550000011920929,
     "displayTopRatio": 0.07999999821186066,
     "displayWidthRatio": 0.44999998807907104,
     "emptyPromptColor": [
-      0.44999998807907104,
-      0.44999998807907104,
-      0.550000011920929,
-      1.0
+      115,
+      115,
+      140,
+      255
     ],
     "emptyPromptFontSize": 10.5,
     "emptyRingColor": [
-      0.3799999952316284,
-      0.3799999952316284,
-      0.47999998927116394,
-      1.0
+      97,
+      97,
+      122,
+      255
     ],
     "emptySlotColor": [
-      0.2199999988079071,
-      0.2199999988079071,
-      0.2800000011920929,
-      1.0
+      56,
+      56,
+      71,
+      255
     ],
     "entryBtnBorderColor": [
-      0.5,
-      0.800000011920929,
-      1.0,
-      1.0
+      128,
+      204,
+      255,
+      255
     ],
     "entryBtnBorderWidth": 3.0,
     "entryBtnColor": [
-      0.20000000298023224,
-      0.6000000238418579,
-      0.8999999761581421,
-      1.0
+      51,
+      153,
+      230,
+      255
     ],
     "entryButtonWidth": 224.0,
     "entryFontSize": 52.0,
     "filledSlotColor": [
-      0.11999999731779099,
-      0.11999999731779099,
-      0.18000000715255737,
-      1.0
+      31,
+      31,
+      46,
+      255
     ],
     "id": "char_select_root",
     "levelColor": [
-      0.6000000238418579,
-      0.8999999761581421,
-      0.6000000238418579,
-      1.0
+      153,
+      230,
+      153,
+      255
     ],
     "levelFontSize": 37.0,
     "levelTextY": 425.0,
     "nameBgColor": [
-      0.06666667014360428,
-      0.06666667014360428,
-      0.07058823853731155,
-      0.0
+      17,
+      17,
+      18,
+      0
     ],
     "nameBgHeight": 224.0,
     "nameBgWidthRatio": 0.699999988079071,
     "nameColor": [
-      1.0,
-      1.0,
-      1.0,
-      1.0
+      255,
+      255,
+      255,
+      255
     ],
     "nameFontSize": 75.0,
     "nameTextY": 6.0,
     "normalRingWidth": 1.5,
     "plusColor": [
-      0.5,
-      0.5,
-      0.6000000238418579,
-      1.0
+      128,
+      128,
+      153,
+      255
     ],
     "plusFontSize": 22.0,
     "previewCenterYRatio": 0.550000011920929,
     "previewScale": 2.200000047683716,
     "selectedRingColor": [
-      0.949999988079071,
-      0.800000011920929,
-      0.20000000298023224,
-      1.0
+      242,
+      204,
+      51,
+      255
     ],
     "selectedRingWidth": 2.200000047683716,
-    "selectedSlot": 0,
+    "selectedSlot": 2,
     "slotBottomMargin": 149.0,
     "slotCircleSize": 112.0,
     "slotLevelColor": [
-      0.75,
-      0.75,
-      0.8500000238418579,
-      1.0
+      191,
+      191,
+      217,
+      255
     ],
     "slotLevelFontSize": 30.0,
     "slotSpacing": 149.0,
     "swapBtnColor": [
-      0.20000000298023224,
-      0.44999998807907104,
-      0.6499999761581421,
-      1.0
+      51,
+      115,
+      166,
+      255
     ],
     "swapBtnRingColor": [
-      0.4000000059604645,
-      0.6499999761581421,
-      0.8500000238418579,
-      1.0
+      102,
+      166,
+      217,
+      255
     ],
     "swapBtnRingWidth": 3.0,
     "swapDeleteMargin": 30.0,
     "swapDeleteScale": 1.0,
-    "swapFontSize": 10.0,
+    "swapFontSize": 0.0,
     "type": "character_select_screen"
   },
   "screen": "character_select"

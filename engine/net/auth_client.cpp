@@ -466,16 +466,28 @@ void AuthClient::workerLoop(const std::string& host, uint16_t port,
     // Command processing loop --waits for commands, sends/receives on the
     // persistent TLS connection
     // -----------------------------------------------------------------------
+    static constexpr int KEEPALIVE_SECONDS = 120;
+
     while (!shouldStop_.load()) {
         AuthCommand cmd;
         {
             std::unique_lock<std::mutex> lock(cmdMutex_);
-            cmdCv_.wait(lock, [this]() {
+            cmdCv_.wait_for(lock, std::chrono::seconds(KEEPALIVE_SECONDS), [this]() {
                 return !cmdQueue_.empty() || shouldStop_.load();
             });
 
             if (shouldStop_.load()) break;
-            if (cmdQueue_.empty()) continue;
+
+            if (cmdQueue_.empty()) {
+                // Timeout — send keepalive ping to reset server's SO_RCVTIMEO
+                lock.unlock();
+                uint8_t pingMsg[] = { static_cast<uint8_t>(AuthMessageType::Ping) };
+                if (!sslSendMessage(ssl, pingMsg, 1)) {
+                    LOG_WARN("AuthClient", "Keepalive ping failed — connection lost");
+                    break;
+                }
+                continue;
+            }
 
             cmd = std::move(cmdQueue_.front());
             cmdQueue_.pop();
