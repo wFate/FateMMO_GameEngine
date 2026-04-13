@@ -280,6 +280,11 @@ nlohmann::json PrefabLibrary::entityToJson(Entity* entity) {
 
         nlohmann::json compJson;
         meta->toJson(ptr, compJson);
+        // Persist the enabled flag (from FATE_COMPONENT macro, first non-static member
+        // at offset 0). Only write when false to keep JSON clean (default is true).
+        bool enabled = true;
+        std::memcpy(&enabled, ptr, sizeof(bool));
+        if (!enabled) compJson["_enabled"] = false;
         comps[meta->name] = compJson;
     });
 
@@ -313,6 +318,11 @@ Entity* PrefabLibrary::jsonToEntity(const nlohmann::json& data, World& world) {
         if (ptr) {
             if (meta->construct) meta->construct(ptr);
             meta->fromJson(compJson, ptr);
+            // Restore enabled flag (FATE_COMPONENT macro, offset 0)
+            if (compJson.contains("_enabled")) {
+                bool enabled = compJson["_enabled"].get<bool>();
+                std::memcpy(ptr, &enabled, sizeof(bool));
+            }
         }
     }
 

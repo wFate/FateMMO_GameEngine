@@ -412,6 +412,17 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
         }
         msg.mobDefId = enemyStats->stats.enemyId;  // enemyId stores the mob_def_id
         msg.isBoss   = enemyStats->stats.isBoss ? 1 : 0;
+
+        // Guard paper doll: if mob has AppearanceComponent, send equipment visuals
+        auto* mobAppearance = entity->getComponent<AppearanceComponent>();
+        if (mobAppearance) {
+            msg.hasAppearance = 1;
+            msg.mobGender     = mobAppearance->gender;
+            msg.mobHairstyle  = mobAppearance->hairstyle;
+            msg.mobArmorStyle  = mobAppearance->armorStyle;
+            msg.mobHatStyle    = mobAppearance->hatStyle;
+            msg.mobWeaponStyle = mobAppearance->weaponStyle;
+        }
     } else if (npcComp) {
         msg.entityType = 2; // npc
         msg.name = npcComp->displayName;

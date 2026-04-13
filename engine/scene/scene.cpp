@@ -69,9 +69,12 @@ bool Scene::loadFromFile(const std::string& path) {
             return false;
         }
 
-        // Scene name (optional override)
+        // Scene name (optional override — accept both "name" and "sceneName" for
+        // compatibility between Scene::saveToFile and Editor::saveScene save paths)
         if (root.contains("name")) {
             name_ = root["name"].get<std::string>();
+        } else if (root.contains("sceneName")) {
+            name_ = root["sceneName"].get<std::string>();
         }
 
         // Load metadata

@@ -2056,6 +2056,24 @@ struct SvBagContentsSlot {
 // ============================================================================
 // Client -> Server: Use item directly from bag (retrieve + consume atomically)
 // ============================================================================
+// ============================================================================
+// Client -> Server: Destroy item directly from bag (discard without retrieving)
+// ============================================================================
+struct CmdBagDestroyItemMsg {
+    uint8_t bagSlot = 0;
+    uint8_t bagSubSlot = 0;
+    void write(ByteWriter& w) const {
+        w.writeU8(bagSlot);
+        w.writeU8(bagSubSlot);
+    }
+    static CmdBagDestroyItemMsg read(ByteReader& r) {
+        CmdBagDestroyItemMsg m;
+        m.bagSlot = r.readU8();
+        m.bagSubSlot = r.readU8();
+        return m;
+    }
+};
+
 struct CmdBagUseItemMsg {
     uint8_t bagSlot = 0;
     uint8_t bagSubSlot = 0;
@@ -2115,6 +2133,45 @@ struct SvKickMsg {
         SvKickMsg m;
         m.kickCode = r.readU8();
         m.reason = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Innkeeper: Set Recall Point
+// ============================================================================
+
+struct CmdSetRecallMsg {
+    uint32_t npcId = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(npcId);
+    }
+    static CmdSetRecallMsg read(ByteReader& r) {
+        CmdSetRecallMsg m;
+        m.npcId = r.readU32();
+        return m;
+    }
+};
+
+struct SvRecallResultMsg {
+    uint8_t success = 0;
+    int64_t goldRemaining = 0;
+    std::string sceneName;
+    std::string message;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(success);
+        detail::writeI64(w, goldRemaining);
+        w.writeString(sceneName);
+        w.writeString(message);
+    }
+    static SvRecallResultMsg read(ByteReader& r) {
+        SvRecallResultMsg m;
+        m.success = r.readU8();
+        m.goldRemaining = detail::readI64(r);
+        m.sceneName = r.readString();
+        m.message = r.readString();
         return m;
     }
 };

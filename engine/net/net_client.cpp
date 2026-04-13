@@ -759,6 +759,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onKicked) onKicked(msg.kickCode, msg.reason);
             break;
         }
+        case PacketType::SvRecallResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvRecallResultMsg::read(payload);
+            if (onRecallResult) onRecallResult(msg);
+            break;
+        }
         default:
             break;
     }
@@ -1307,8 +1313,27 @@ void NetClient::sendBagUseItem(uint8_t bagSlot, uint8_t bagSubSlot) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdBagUseItem, w.data(), w.size());
 }
 
+void NetClient::sendBagDestroyItem(uint8_t bagSlot, uint8_t bagSubSlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdBagDestroyItemMsg msg;
+    msg.bagSlot = bagSlot;
+    msg.bagSubSlot = bagSubSlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBagDestroyItem, w.data(), w.size());
+}
+
 void NetClient::sendClaimAdReward() {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdClaimAdReward, nullptr, 0);
+}
+
+void NetClient::sendSetRecall(uint32_t npcId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdSetRecallMsg msg;
+    msg.npcId = npcId;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdSetRecall, w.data(), w.size());
 }
 
 void NetClient::sendSocketItem(uint8_t equipSlot, const std::string& scrollItemId) {

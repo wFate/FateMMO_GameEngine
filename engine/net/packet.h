@@ -123,6 +123,8 @@ namespace PacketType {
     constexpr uint8_t CmdBagRetrieve            = 0x46;
     constexpr uint8_t CmdClaimAdReward          = 0x47;
     constexpr uint8_t CmdBagUseItem             = 0x48;
+    constexpr uint8_t CmdBagDestroyItem         = 0x49;
+    constexpr uint8_t CmdSetRecall              = 0x4A;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
@@ -164,6 +166,7 @@ namespace PacketType {
     constexpr uint8_t SvBagContents              = 0xCA;
     constexpr uint8_t SvAdRewardResult           = 0xCB;
     constexpr uint8_t SvKick                     = 0xCC;
+    constexpr uint8_t SvRecallResult             = 0xCD;
 } // namespace PacketType
 
 // ============================================================================

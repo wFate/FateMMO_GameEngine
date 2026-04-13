@@ -121,6 +121,12 @@ struct SvEntityEnterMsg {
     // Mob fields (only serialized when entityType == 1)
     std::string mobDefId;
     uint8_t     isBoss = 0;
+    uint8_t     hasAppearance = 0;  // 1 if mob has paper doll appearance (guards)
+    uint8_t     mobGender = 0;
+    uint8_t     mobHairstyle = 0;
+    std::string mobArmorStyle;
+    std::string mobHatStyle;
+    std::string mobWeaponStyle;
 
     // Player fields (only serialized when entityType == 0)
     uint8_t pkStatus  = 0; // PKStatus enum (only for entityType == 0, player)
@@ -162,6 +168,14 @@ struct SvEntityEnterMsg {
         if (entityType == 1) {
             w.writeString(mobDefId);
             w.writeU8(isBoss);
+            w.writeU8(hasAppearance);
+            if (hasAppearance) {
+                w.writeU8(mobGender);
+                w.writeU8(mobHairstyle);
+                w.writeString(mobArmorStyle);
+                w.writeString(mobHatStyle);
+                w.writeString(mobWeaponStyle);
+            }
         }
     }
 
@@ -195,6 +209,14 @@ struct SvEntityEnterMsg {
         if (m.entityType == 1) {
             m.mobDefId = r.readString();
             m.isBoss   = r.readU8();
+            m.hasAppearance = r.readU8();
+            if (m.hasAppearance) {
+                m.mobGender    = r.readU8();
+                m.mobHairstyle = r.readU8();
+                m.mobArmorStyle  = r.readString();
+                m.mobHatStyle    = r.readString();
+                m.mobWeaponStyle = r.readString();
+            }
         }
         return m;
     }
@@ -567,6 +589,7 @@ struct QuestSyncEntry {
 struct SvQuestSyncMsg {
     std::vector<QuestSyncEntry> quests;
     std::vector<std::pair<std::string, int64_t>> repeatableCompletionTimes; // questId, epoch
+    std::vector<std::string> completedQuestIds; // IDs of quests already completed
 
     void write(ByteWriter& w) const {
         w.writeU16(static_cast<uint16_t>(quests.size()));
@@ -583,6 +606,10 @@ struct SvQuestSyncMsg {
         for (const auto& [qid, epoch] : repeatableCompletionTimes) {
             w.writeString(qid);
             w.writeI64(epoch);
+        }
+        w.writeU16(static_cast<uint16_t>(completedQuestIds.size()));
+        for (const auto& qid : completedQuestIds) {
+            w.writeString(qid);
         }
     }
 
@@ -605,6 +632,13 @@ struct SvQuestSyncMsg {
         for (uint16_t i = 0; i < repCount; ++i) {
             m.repeatableCompletionTimes[i].first = r.readString();
             m.repeatableCompletionTimes[i].second = r.readI64();
+        }
+        if (r.remaining() >= 2) { // backward compat: old servers won't send this
+            uint16_t compCount = r.readU16();
+            m.completedQuestIds.resize(compCount);
+            for (uint16_t i = 0; i < compCount; ++i) {
+                m.completedQuestIds[i] = r.readString();
+            }
         }
         return m;
     }

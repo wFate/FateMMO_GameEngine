@@ -58,7 +58,9 @@ public:
     void sendBagStore(uint8_t srcSlot, uint8_t bagSlot, uint8_t bagSubSlot);
     void sendBagRetrieve(uint8_t bagSlot, uint8_t bagSubSlot);
     void sendBagUseItem(uint8_t bagSlot, uint8_t bagSubSlot);
+    void sendBagDestroyItem(uint8_t bagSlot, uint8_t bagSubSlot);
     void sendClaimAdReward();
+    void sendSetRecall(uint32_t npcId);
     void sendSocketItem(uint8_t equipSlot, const std::string& scrollItemId);
     void sendArena(uint8_t action, uint8_t mode);
     void sendBattlefield(uint8_t action);
@@ -171,6 +173,7 @@ public:
     std::function<void(uint8_t success, float remaining)> onAdRewardResult;
     std::function<void(const std::string& reason)> onConnectRejected;
     std::function<void(uint8_t kickCode, const std::string& reason)> onKicked;
+    std::function<void(const SvRecallResultMsg&)> onRecallResult;
 
     // Admin content pipeline callbacks
     std::function<void(const SvAdminResultMsg&)>      onAdminResult;

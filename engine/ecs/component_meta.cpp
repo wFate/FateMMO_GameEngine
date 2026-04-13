@@ -72,12 +72,21 @@ void autoToJson(const void* data, nlohmann::json& j,
             case FieldType::Float:
                 j[f.name] = *static_cast<const float*>(ptr);
                 break;
-            case FieldType::Int:
-                j[f.name] = *static_cast<const int*>(ptr);
+            case FieldType::Int: {
+                // Size-aware read to avoid reading past small fields
+                if (f.size == 8)       j[f.name] = *static_cast<const int64_t*>(ptr);
+                else if (f.size == 2)  j[f.name] = static_cast<int>(*static_cast<const int16_t*>(ptr));
+                else if (f.size == 1)  j[f.name] = static_cast<int>(*static_cast<const int8_t*>(ptr));
+                else                   j[f.name] = *static_cast<const int32_t*>(ptr);
                 break;
-            case FieldType::UInt:
-                j[f.name] = *static_cast<const uint32_t*>(ptr);
+            }
+            case FieldType::UInt: {
+                if (f.size == 8)       j[f.name] = *static_cast<const uint64_t*>(ptr);
+                else if (f.size == 2)  j[f.name] = static_cast<uint32_t>(*static_cast<const uint16_t*>(ptr));
+                else if (f.size == 1)  j[f.name] = static_cast<uint32_t>(*static_cast<const uint8_t*>(ptr));
+                else                   j[f.name] = *static_cast<const uint32_t*>(ptr);
                 break;
+            }
             case FieldType::Bool:
                 j[f.name] = *static_cast<const bool*>(ptr);
                 break;
@@ -148,12 +157,20 @@ void autoFromJson(const nlohmann::json& j, void* data,
             case FieldType::Float:
                 *static_cast<float*>(ptr) = val.get<float>();
                 break;
-            case FieldType::Int:
-                *static_cast<int*>(ptr) = val.get<int>();
+            case FieldType::Int: {
+                if (f.size == 8)       *static_cast<int64_t*>(ptr) = val.get<int64_t>();
+                else if (f.size == 2)  *static_cast<int16_t*>(ptr) = static_cast<int16_t>(val.get<int>());
+                else if (f.size == 1)  *static_cast<int8_t*>(ptr) = static_cast<int8_t>(val.get<int>());
+                else                   *static_cast<int32_t*>(ptr) = val.get<int32_t>();
                 break;
-            case FieldType::UInt:
-                *static_cast<uint32_t*>(ptr) = val.get<uint32_t>();
+            }
+            case FieldType::UInt: {
+                if (f.size == 8)       *static_cast<uint64_t*>(ptr) = val.get<uint64_t>();
+                else if (f.size == 2)  *static_cast<uint16_t*>(ptr) = static_cast<uint16_t>(val.get<uint32_t>());
+                else if (f.size == 1)  *static_cast<uint8_t*>(ptr) = static_cast<uint8_t>(val.get<uint32_t>());
+                else                   *static_cast<uint32_t*>(ptr) = val.get<uint32_t>();
                 break;
+            }
             case FieldType::Bool:
                 *static_cast<bool*>(ptr) = val.get<bool>();
                 break;

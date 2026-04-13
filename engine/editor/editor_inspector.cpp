@@ -1047,6 +1047,14 @@ void Editor::drawInspector() {
                     if (ImGui::InputText("##pLabel", labelBuf, sizeof(labelBuf))) p->label = labelBuf;
                     captureInspectorUndo();
 
+                    INSPECTOR_ROW("Fade");
+                    ImGui::Checkbox("##pUseFade", &p->useFadeTransition);
+                    captureInspectorUndo();
+
+                    INSPECTOR_ROW("Fade Time");
+                    ImGui::DragFloat("##pFadeDur", &p->fadeDuration, 0.01f, 0.0f, 5.0f, "%.2f s");
+                    captureInspectorUndo();
+
                     ImGui::EndTable();
                 }
             }
@@ -2042,6 +2050,7 @@ void Editor::drawInspector() {
                 if (ImGui::InputTextMultiline("Lore Snippet##lb", loreBuf, sizeof(loreBuf))) {
                     lbNpc->loreSnippet = loreBuf;
                 }
+                captureInspectorUndo();
             }
         }
 
@@ -2058,6 +2067,7 @@ void Editor::drawInspector() {
                 if (ImGui::InputText("Crafter ID", crafterIdBuf, sizeof(crafterIdBuf))) {
                     craftNpc->crafterId = crafterIdBuf;
                 }
+                captureInspectorUndo();
                 ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
                     "Maps to crafting_recipes.crafter_id");
             }
@@ -2174,6 +2184,7 @@ void Editor::drawInspector() {
                 componentId<BattlefieldNPCComponent>(),
                 componentId<MarketplaceNPCComponent>(),
                 componentId<LeaderboardNPCComponent>(),
+                componentId<CraftingNPCComponent>(),
             };
 
             selectedEntity_->forEachComponent([&](void* data, CompId id) {
