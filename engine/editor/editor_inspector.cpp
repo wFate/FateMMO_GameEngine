@@ -1869,6 +1869,10 @@ void Editor::drawInspector() {
                 uint32_t nid = npc->npcId;
                 if (ImGui::DragScalar("NPC ID##npc", ImGuiDataType_U32, &nid, 1.0f)) npc->npcId = nid;
                 captureInspectorUndo();
+                char sidBuf[128];
+                strncpy(sidBuf, npc->npcStringId.c_str(), sizeof(sidBuf) - 1); sidBuf[sizeof(sidBuf) - 1] = 0;
+                if (ImGui::InputText("String ID##npc", sidBuf, sizeof(sidBuf))) npc->npcStringId = sidBuf;
+                captureInspectorUndo();
                 char buf[256];
                 strncpy(buf, npc->displayName.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
                 if (ImGui::InputText("Display Name##npc", buf, sizeof(buf))) npc->displayName = buf;
