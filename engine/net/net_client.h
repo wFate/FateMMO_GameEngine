@@ -50,8 +50,11 @@ public:
     void sendAssignSkillSlot(uint8_t action, const std::string& skillId, uint8_t slotA, uint8_t slotB = 0);
     void sendAllocateStat(uint8_t statType, int16_t amount);
     void sendEnchant(uint8_t inventorySlot, uint8_t useProtectionStone);
+    void sendBagEnchant(uint8_t bagSlot, uint8_t bagSubSlot, uint8_t useProtectionStone);
     void sendRepair(uint8_t inventorySlot);
+    void sendBagRepair(uint8_t bagSlot, uint8_t bagSubSlot);
     void sendExtractCore(uint8_t itemSlot, uint8_t scrollSlot);
+    void sendBagExtractCore(uint8_t bagSlot, uint8_t bagSubSlot, uint8_t scrollSlot);
     void sendCraft(const std::string& recipeId, uint32_t npcId);
     void sendOpenCrafting(uint32_t npcId);
     void sendOpenBag(uint8_t inventorySlot);
@@ -59,6 +62,7 @@ public:
     void sendBagRetrieve(uint8_t bagSlot, uint8_t bagSubSlot);
     void sendBagUseItem(uint8_t bagSlot, uint8_t bagSubSlot);
     void sendBagDestroyItem(uint8_t bagSlot, uint8_t bagSubSlot);
+    void sendBagMoveItem(uint8_t bagSlot, uint8_t fromSubSlot, uint8_t toSubSlot);
     void sendClaimAdReward();
     void sendSetRecall(uint32_t npcId);
     void sendSocketItem(uint8_t equipSlot, const std::string& scrollItemId);
@@ -70,6 +74,7 @@ public:
     void sendUnequipCostume(uint8_t slotType);
     void sendToggleCostumes(bool show);
     void sendEditorPause(bool paused);
+    void sendSpectateScene(const std::string& targetScene, bool active);
 
     // Admin content pipeline
     void sendAdminSaveContent(uint8_t contentType, bool isNew, const std::string& json);
@@ -103,6 +108,7 @@ public:
     void sendMarketClaim(int32_t listingId);
 
     bool isConnected() const { return connected_; }
+    bool isEncrypted() const { return connected_ && crypto_.hasKeys(); }
     bool isWaitingForConnection() const { return waitingForAccept_; }
     uint16_t clientId() const { return clientId_; }
 
@@ -174,6 +180,7 @@ public:
     std::function<void(const std::string& reason)> onConnectRejected;
     std::function<void(uint8_t kickCode, const std::string& reason)> onKicked;
     std::function<void(const SvRecallResultMsg&)> onRecallResult;
+    std::function<void()> onScenePopulated;
 
     // Admin content pipeline callbacks
     std::function<void(const SvAdminResultMsg&)>      onAdminResult;

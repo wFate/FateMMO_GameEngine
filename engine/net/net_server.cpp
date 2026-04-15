@@ -176,6 +176,12 @@ void NetServer::handleConnect(const NetAddress& from, const uint8_t* payload, si
     w.writeBytes(payloadBuf, pw.size());
     socket_.sendTo(buf, w.size(), from);
 
+    // Burn sequence 0 so the reliability layer starts at 1.  The raw
+    // ConnectAccept above used seq=0 in its header; without this, the
+    // first real ReliableOrdered packet would also get seq=0 and the
+    // client's duplicate filter would drop it.
+    client->reliability.nextLocalSequence();
+
     if (onClientConnected) onClientConnected(clientId);
 
     LOG_INFO("NetServer", "Client %d connected from %s", clientId, from.toString().c_str());
@@ -209,6 +215,13 @@ void NetServer::sendTo(uint16_t clientId, Channel channel, uint8_t packetType,
 
 void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t packetType,
                            const uint8_t* payload, size_t payloadSize) {
+    // Back-pressure: if the client's reliability queue is >75% full, the
+    // client is almost certainly dead or severely lagged. Drop new reliable
+    // packets to avoid filling the queue and spamming "Dropping oldest" warnings.
+    if (channel != Channel::Unreliable && client.reliability.isCongested()) {
+        return;
+    }
+
     // Use a larger buffer for payloads that exceed the standard MTU-safe size
     // (e.g. inventory sync with display names and rolled stats).
     constexpr size_t LARGE_PACKET_SIZE = 4096;

@@ -75,6 +75,7 @@ void drawCombatTextEditorWindow(bool* open) {
     drawStyleEditor("XP",       cfg.xp);
     drawStyleEditor("Level Up", cfg.levelUp);
     drawStyleEditor("Heal",     cfg.heal);
+    drawStyleEditor("Shield",   cfg.shield);
     drawStyleEditor("Block",    cfg.block);
     drawStyleEditor("Dodge",    cfg.dodge);
 

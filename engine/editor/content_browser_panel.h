@@ -20,6 +20,12 @@ public:
     void onAdminResult(uint8_t requestType, bool success, const std::string& message);
     void onValidationReport(const std::vector<std::pair<uint8_t, std::string>>& issues);
 
+    // Spawn zone overlay access (used by Editor viewport)
+    const nlohmann::json& spawnList() const { return spawnList_; }
+    nlohmann::json& spawnListMut() { return spawnList_; }
+    void saveSpawnZone(const nlohmann::json& zone);
+    void ensureSpawnListLoaded();
+
 private:
     bool open_ = false;
     NetClient* netClient_ = nullptr;

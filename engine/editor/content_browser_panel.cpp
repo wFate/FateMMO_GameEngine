@@ -47,6 +47,17 @@ void ContentBrowserPanel::deleteContent(uint8_t contentType, const std::string& 
     netClient_->sendAdminDeleteContent(contentType, id);
 }
 
+void ContentBrowserPanel::saveSpawnZone(const nlohmann::json& zone) {
+    saveContent(AdminContentType::SpawnZone, false, zone);
+}
+
+void ContentBrowserPanel::ensureSpawnListLoaded() {
+    if (spawnListDirty_ && netClient_) {
+        requestContentList(AdminContentType::SpawnZone);
+        spawnListDirty_ = false;
+    }
+}
+
 // ============================================================================
 // Server response handlers
 // ============================================================================

@@ -5,15 +5,15 @@
 [![CI](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/wFate/FateMMO_GameEngine?style=flat-square&label=🎮%20Release&color=gold)](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMO)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue?style=flat-square&logo=cplusplus)
-![Lines of Code](https://img.shields.io/badge/LOC-155%2C000%2B-brightgreen?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-1%2C408-brightgreen?style=flat-square)
+![Lines of Code](https://img.shields.io/badge/LOC-161%2C000%2B-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-1%2C450%2B-brightgreen?style=flat-square)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20iOS%20%7C%20Android%20%7C%20Linux%20%7C%20macOS-orange?style=flat-square)
 
 **Production-grade 2D MMORPG engine built entirely in C++23.** Engineered for mobile-first landscape gameplay with a fully integrated Unity-style editor, server-authoritative multiplayer architecture, and Noise_NK encrypted custom networking — all from a single codebase, zero middleware, zero third-party game frameworks.
 
-> **155,000+ lines** across **740+ files** — engine (73K), game (32K), server (28.5K), tests (24K)
+> **161,000+ lines** across **750+ files** — engine (74K), game (33K), server (30K), tests (24K)
 
-🌐 [**www.FateMMO.com**](https://www.FateMMO.com)
+🌐 [**www.FateMMO.com**](https://www.FateMMO.com) &nbsp;·&nbsp; 🎬 [**Watch the Showcase**](https://www.youtube.com/watch?v=9zS-RVbranE)
 
 </div>
 
@@ -23,21 +23,21 @@
 
 > **The first open-source release is live!** Fully customizable C++ game engine and editor — ready to power your 2D MMORPG.
 >
-> 📦 [**Download FateMMO_Demo_v1.zip**](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMO) &nbsp;·&nbsp; ⭐ [**Star the repo**](https://github.com/wFate/FateMMO_GameEngine) &nbsp;·&nbsp; 🌐 [**FateMMO.com**](https://www.FateMMO.com)
+> 📦 [**Download FateMMO_Demo_v1.zip**](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMO) &nbsp;·&nbsp; ⭐ [**Star the repo**](https://github.com/wFate/FateMMO_GameEngine) &nbsp;·&nbsp; 🌐 [**FateMMO.com**](https://www.FateMMO.com) &nbsp;·&nbsp; 🎬 [**YouTube Showcase**](https://www.youtube.com/watch?v=9zS-RVbranE)
 
 ---
 
 ## 💎 Key Highlights
 
-| 🏗️ | **155K+ LOC** of hand-written C++23 across engine, game, server, and tests — no code generation, no middleware |
+| 🏗️ | **161K+ LOC** of hand-written C++23 across engine, game, server, and tests — no code generation, no middleware |
 |:---:|:---|
 | 🔐 | **Noise_NK cryptography** with forward secrecy, symmetric rekeying, and zero plaintext game traffic |
 | 🎮 | **50+ server-authoritative game systems** — combat, skills, inventory, trade, guilds, arenas, dungeons, pets, costumes, collections |
 | 🖥️ | **Full Unity-style editor** with live inspector, undo/redo, animation editor, asset browser, and 29 device profiles |
 | 📱 | **5-platform support** from a single codebase — Windows, macOS (Metal), iOS, Android, Linux |
-| 🧪 | **1,408 automated tests** ensuring stability across every subsystem |
+| 🧪 | **1,450+ automated tests** ensuring stability across every subsystem |
 | 🎨 | **60 custom UI widgets** with JSON-driven screens, viewport scaling, and zero-ImGui shipping builds |
-| 🌍 | **33-scene handcrafted world** with 4 rival factions, faction guards, boss rotations, and 118 quests |
+| 🌍 | **33-scene handcrafted world** with 5 factions, faction guards, boss rotations, and 123 quests |
 
 ---
 
@@ -75,8 +75,8 @@ The demo opens the full editor UI with a procedural tile grid — explore the do
 | **Render Pipeline** | 11-pass RenderGraph: GroundTiles → Entities → Particles → **SkillVFX** → SDFText → DebugOverlays → Lighting → BloomExtract → BloomBlur → PostProcess → Blit |
 | **Editor** | Dear ImGui (docking) + ImGuizmo + ImPlot + imnodes. Custom dark theme (Inter font family, FreeType LightHinting). Property inspectors, visual node editors, Aseprite-first animation editor with layered paper-doll preview, sprite slicing, tile painting, play-in-editor, undo/redo (200 actions) |
 | **Networking** | Custom reliable UDP (`0xFA7E`), **Noise_NK handshake** (two X25519 DH ops) + **XChaCha20-Poly1305 AEAD** encryption (key-derived 48-bit nonce prefix, symmetric rekeying every 65K packets), IPv6 dual-stack, 3 channel types, 32-bit ACK bitfields, RTT-based retransmission, connection cookies, per-client token-bucket rate limiting (40+ packet types) |
-| **Database** | PostgreSQL (libpqxx), **16 repositories**, **10 startup caches**, fiber-based async dispatch, connection pool (5-50) + circuit breaker, write-ahead log (WAL) with CRC32 per entry and priority-based 4-tier flushing. `PlayerLockMap` for concurrent mutation serialization |
-| **ECS** | Data-oriented archetype ECS, contiguous SoA memory, **53 registered components**, generational handles, prefab variants (JSON Patch), compile-time `CompId`, Hot/Warm/Cold tier classification, `FATE_REFLECT` macro with field-level metadata, `ComponentFlags` trait policies, RAII iteration depth guard |
+| **Database** | PostgreSQL (libpqxx), **16 repositories**, **10 startup caches**, fiber-based async dispatch, connection pool (5-50) + circuit breaker, priority-based 4-tier dirty-flag flushing, 30s staggered auto-save, async disconnect saves. `PlayerLockMap` for concurrent mutation serialization |
+| **ECS** | Data-oriented archetype ECS, contiguous SoA memory, **56 registered components**, generational handles, prefab variants (JSON Patch), compile-time `CompId`, Hot/Warm/Cold tier classification, `FATE_REFLECT` macro with field-level metadata, `ComponentFlags` trait policies, RAII iteration depth guard |
 | **Memory** | Zone arenas (256 MB, O(1) reset), double-buffered frame arenas (64 MB), thread-local scratch arenas (Fleury conflict-avoidance), lock-free pool allocators, debug occupancy bitmaps, ImPlot visualization panels |
 | **Audio** | SoLoud (SDL2 backend, 32 virtual voices, OGG streaming, 2D spatial audio, 3 buses, 10 game events wired) |
 | **Async & Jobs** | Win32 fibers / minicoro, 4 workers, 32-fiber pool, lock-free MPMC queues, counter-based suspend/resume with fiber-local scratch arenas. Fiber-based async scene & asset loading — zero frame stalls |
@@ -87,7 +87,7 @@ The demo opens the full editor UI with a procedural tile grid — explore the do
 
 ## 🗡️ Game Systems
 
-Four rival factions clash across a **33-scene world** — the 🩸 **Xyros** and their omens of ruin, the 🛡️ **Fenor** weaving steadfast eternity, the 🔮 **Zethos** unraveling ancient mysteries, and the 👑 **Solis** forging a golden epoch. Each faction fields **3 tiers of named guards** — mage sentries, archer elites, and a boss-tier warden — that auto-aggro enemy faction players on sight. Bind at **Innkeeper NPCs**, battle through **118 quests**, and fight the **Fate Guardian** in the rotating boss arena.
+Five factions shape a **33-scene world** — the 🩸 **Xyros** severing the threads of fate, the 🛡️ **Fenor** weaving steadfast eternity, the 🔮 **Zethos** unraveling ancient mysteries, the 👑 **Solis** forging a golden epoch, and the 🕳️ **Umbra** — a secret non-playable faction born from the negative space of the tapestry itself, hostile to all who enter their domain. Each faction fields **3 tiers of named guards** — mage sentries, archer elites, and a boss-tier warden — that auto-aggro enemy faction players on sight. Bind at **Innkeeper NPCs**, battle through **123 quests**, and fight the **Fate Guardian** in the rotating boss arena.
 
 All gameplay logic is fully server-authoritative with priority-based DB persistence, dirty-flag tracking at 95 mutation sites, spanning **50+ robust systems** across 67 shared gameplay files (16,000 LOC of pure C++ game logic — zero engine dependencies). Every system is DB-wired with load-on-connect, save-on-disconnect, and async auto-save.
 
@@ -105,8 +105,8 @@ All gameplay logic is fully server-authoritative with priority-based DB persiste
 - **Arena & Battlefield** — 1v1/2v2/3v3 queue matchmaking, AFK detection (30s), 3-min matches, honor rewards. 4-faction PvP battlefields. `EventScheduler` FSM (2hr cycle, 10min signup). Reconnect grace (180s) for battlefield/dungeon, arena DC = forfeit.
 - **Two-Tick Death** — Alive → Dying (procs fire) → Dead (next tick), guaranteeing kill credit without race conditions. Replicated as 3-state `deathState`.
 - **Cast-Time System** — Server-ticked `CastingState`, interruptible by CC/movement, fizzles on dead targets. Replicated via delta compression.
-- **Faction Guards** — Each village is defended by 3 tiers of named guards (Xyros: Ruin/Fatal/Doom, Fenor: Weaver/Thread/Bastion, Zethos: Sage/Seeker/Prophecy, Solis: Treasure/Fortune/Heir). Stationary, paper-doll rendered with class-specific skills, aggro-on-sight for enemy faction players. Walk into enemy territory at your own risk.
-- **Combat Leash** — Boss/mini-boss mobs reset to full HP and clear threat table after 15s idle (no incoming damage). Regular mobs unaffected.
+- **Faction Guards** — Each village is defended by 3 tiers of named guards (Xyros: Ruin/Fatal/Doom, Fenor: Weaver/Thread/Bastion, Zethos: Sage/Seeker/Prophecy, Solis: Treasure/Fortune/Heir, Umbra: Whisper/Phantom/Erasure). Stationary, paper-doll rendered with class-specific skills, aggro-on-sight for enemy faction players. Umbra guards attack *everyone* — walk into The Scorched Hollow at your own risk.
+- **Combat Leash** — Boss/mini-boss mobs reset to full HP and clear threat table after 5s idle with no aggro target, or 60s while actively aggroed (allows kiting bosses to safe spots). Regular mobs unaffected.
 
 </details>
 
@@ -142,14 +142,21 @@ All gameplay logic is fully server-authoritative with priority-based DB persiste
 <details>
 <summary><b>🌍 World Architecture & Factions</b></summary>
 
-- **33 Handcrafted Scenes** — 4 faction starting villages, 7 overworld adventure zones, 3 contested PvP zones, 5 instanced dungeons, hidden secret areas, and the legendary **Fate's Domain** endgame arena.
-- **4 Rival Factions** — Each with unique identity, starting village, class affinities, and layered guard defense:
-  - 🩸 **Xyros** — *The Severed Tapestry.* Live for the fight. Raid enemy villages for glory, charge headfirst into PvP, measure worth in kill counts. Guards: **Ruin** (Mage) → **Fatal** (Archer) → **Doom** (Warrior Boss).
-  - 🛡️ **Fenor** — *The Enduring Loom.* Peace is the hardest thing to keep. Sanctuary village, open doors, fight only to protect. Guards: **Weaver** (Mage) → **Thread** (Archer) → **Bastion** (Warrior Boss).
-  - 🔮 **Zethos** — *The Unraveling Mystery.* Seekers chasing rumors at the edge of an ancient forest. Take every quest, explore every corner. Guards: **Sage** (Mage) → **Seeker** (Archer) → **Prophecy** (Warrior Boss).
-  - 👑 **Solis** — *The Golden Epoch.* Gold moves the world. Trade ruthlessly, grind efficiently, every quest has a payout. Guards: **Treasure** (Mage) → **Fortune** (Archer) → **Heir** (Warrior Boss).
-- **Faction Guard System** — 3-tier layered village defense: outer gate mage sentries (Lv30, 8-tile range), inner gate archer elites (Lv40, 6-tile range), village core warrior boss (Lv45, melee). All stationary, 30s respawn, paper-doll rendered with faction-specific skills. Zero XP/gold — guards don't reward, they punish.
-- **Fate Guardian** — Fate's Domain rotating world boss (Lv50, 500K HP) with server-wide event broadcasts. 12-hour rotation cycle with countdown announcements.
+- **33 Handcrafted Scenes** — 5 faction villages, 8 overworld adventure zones, 3 contested PvP zones, 5 instanced dungeons, hidden secret areas, and the legendary **Fate's Domain** endgame arena.
+- **5 Factions** — Four playable factions with competing philosophies about fate, plus the **Umbra** — a secret non-playable faction that exists in the gaps between the other four:
+  - 🩸 **Xyros** — *"The Severed Tapestry."* Fate is a weapon. Raid enemy villages for glory, charge headfirst into PvP, measure worth in kill counts. Guards: **Ruin** (Mage) → **Fatal** (Archer) → **Doom** (Warrior Boss).
+  - 🛡️ **Fenor** — *"The Enduring Loom."* Peace is the hardest thing to keep. Sanctuary village, open doors, fight only to protect. Guards: **Weaver** (Mage) → **Thread** (Archer) → **Bastion** (Warrior Boss).
+  - 🔮 **Zethos** — *"The Unraveling Mystery."* Seekers chasing rumors at the edge of an ancient forest. Take every quest, explore every corner. Guards: **Sage** (Mage) → **Seeker** (Archer) → **Prophecy** (Warrior Boss).
+  - 👑 **Solis** — *"The Golden Epoch."* Gold moves the world. Trade ruthlessly, grind efficiently, every quest has a payout. Guards: **Treasure** (Mage) → **Fortune** (Archer) → **Heir** (Warrior Boss).
+  - 🕳️ **Umbra** — *"The Hollow Loom."* The negative space in the tapestry of fate — what remains when threads are severed. Not evil, just absence. Every name they carry is incomplete, every word trails off. Their village, **The Scorched Hollow**, is the mid-game recall hub — players *need* it, but Umbra guards attack everyone on sight and PvP is enabled. Guards: **Whisper** (Mage Lv35) → **Phantom** (Archer Lv40) → **Erasure** (Warrior Boss Lv45).
+- **Umbra NPCs** — 7 fragment-named NPCs inhabit The Scorched Hollow: **Vess** (Innkeeper), **Faded** (Shopkeeper), **Ash** (Banker), **"The"** (Quest Giver), **One** (Blacksmith), **Mora** (Alchemist), **Absent** (Lore NPC). Helpful but unsettling — hollow voices, unfinished sentences.
+- **"The" Quest Chain** — An NPC whose name is literally all that remains of a title. His quests aren't generic kill tasks — they're a fragmented being searching for what was taken:
+  - *Crystal Caverns (Lv22-30):* "I heard something down there once. My name, maybe. Bring it back."
+  - *Scorched Wastes (Lv32-40):* "The fire took something from me. I can't remember what. Look in the ash."
+  - *Blighted Swamp (Lv42-50):* "There's a piece of me rotting in that swamp. I can feel it. I just can't reach it."
+  - Complete all three to trigger a hidden quest — **"..."** — where he almost remembers his name. Gets one more word. But it's wrong. The Umbra don't get to be whole.
+- **Faction Guard System** — 3-tier layered village defense: outer gate mage sentries (Lv30, 8-tile range), inner gate archer elites (Lv40, 6-tile range), village core warrior boss (Lv45, melee). All stationary, 30s respawn, paper-doll rendered with faction-specific skills. Guards also gate overworld adventure zones — enemy-faction guards block quest NPCs, portals, and scene transitions, creating organic faction territories.
+- **Fate Guardian** — Fate's Domain rotating world boss (Lv50, 500K HP) with server-wide event broadcasts. 5-minute respawn delay after death, avoids same-scene consecutive spawns.
 - **Innkeeper NPCs** — Bind your respawn point at any faction inn. `recallScene` persisted to DB. Town Recall scrolls teleport to last bound inn.
 
 </details>
@@ -157,14 +164,14 @@ All gameplay logic is fully server-authoritative with priority-based DB persiste
 <details>
 <summary><b>🏰 World, AI & Dungeons</b></summary>
 
-- **Mob AI** — Cardinal-only movement with L-shaped chase pathing, axis locking, wiggle unstuck, roam/idle phases, threat-based aggro tables, `shouldBlockDamage` callback (god mode). Wall collision is intentional — enables classic lure-and-farm positioning tactics.
+- **Mob AI** — Cardinal-only movement with L-shaped chase pathing, axis locking, wiggle unstuck, roam/idle phases, threat-based aggro tables, `shouldBlockDamage` callback (god mode). **Server-side DEAR** — mobs in empty scenes skipped entirely, distance-based tick scaling (full rate within 20 tiles, quadratic throttle beyond, 2s idle patrol beyond 48 tiles). Wall collision is intentional — enables classic lure-and-farm positioning tactics.
 - **Spawns & Zones** — `SceneSpawnCoordinator` per-scene lifecycle (activate on first player, teardown on last leave), `SpawnZoneCache` from DB (circle/square shapes), respawn timers, death persistence via `ZoneMobStateRepository` (prevents boss respawn exploit). `createMobEntity()` static factory. Collision-validated spawn positions (30 retries, 48px mob separation).
-- **Quest System** — 5 objective types (Kill/Collect/Deliver/TalkTo/PvP) with prerequisite chains, branching NPC dialogue trees (enum-based actions + conditions), max 10 active, **118 quests** across 4 tiers (Starter / Novice / Apprentice / Adept).
+- **Quest System** — 10 objective types (Kill/Collect/Deliver/TalkTo/PvP/Explore/KillInParty/CompleteArena/CompleteBattlefield/PvPKillByStatus) with prerequisite chains, branching NPC dialogue trees (enum-based actions + conditions), max 10 active, **123 quests** across 4 tiers (Starter / Novice / Apprentice / Adept) plus the Umbra chain.
 - **Instanced Dungeons** — Per-party ECS worlds, 10-minute timers, boss rewards, daily tickets, invite system (30s timeout), celebration phase. Reconnect grace (180s). Event locks prevent double-enrollment. Per-minute chat timer.
 - **Aurora Gauntlet** — 6-zone PvP with hourly faction-rotation buff (+25% ATK/EXP), wall-clock `hour%4` rotation. Aether Stone + 50K gold entry. Aether world boss (Lv55, 150M HP, 36hr respawn) with 23-item loot table. Zone scaling Lv10→55. Death ejects to Town.
 - **Pet System** — Leveling, rarity-tiered stats, XP sharing (50%), server-authoritative auto-looting (0.5s ticks, 64px radius, ownership+party aware). `PetDefinitionCache` from DB.
 - **Loot Pipeline** — Server rolls → ground entities → spatial replication → pickup validation → 120s despawn. Per-player damage attribution, live party lookup at death, strict purge on DC/leave. Epic/Legendary/Mythic server-wide broadcast; party loot broadcast to all members.
-- **NPC System** — 10 NPC types: Shop, Bank, Teleporter (with item/gold/level costs), Guild, Dungeon, Arena, Battlefield, Story (branching dialogue), QuestGiver, Innkeeper (respawn binding). Proximity validation on all interactions. `EntityHandle`-based caching for zone-transition safety.
+- **NPC System** — 10 NPC types: Shop, Bank, Teleporter (with item/gold/level costs), Guild, Dungeon, Arena, Battlefield, Story (branching dialogue), QuestGiver, Innkeeper (respawn binding). **47 NPCs** across 5 villages (10 per faction village + 7 Umbra NPCs). Proximity validation on all interactions. `EntityHandle`-based caching for zone-transition safety.
 - **Event Return Points** — Centralized system prevents players from being stranded after disconnecting from instanced content. Return point set on event entry, cleared on normal exit, re-set on grace rejoin.
 - **Trade Cleanup** — Active trades cancelled on disconnect, partner inventory trade-locks released via `unlockAllTradeSlots()`, preventing permanently locked slots.
 
@@ -186,7 +193,7 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 
 ## 🔒 Server & Networking
 
-**Headless 20 Hz server** (`FateServer`) with max 2,000 concurrent connections. **39 handler files**, **17 DB repositories**, **10 startup caches**, **15-min idle timeout**, graceful shutdown with player save flush. Every game action is server-validated — zero trust client.
+**Headless 20 Hz server** (`FateServer`) with max 2,000 concurrent connections. **39 handler files**, **16 DB repositories**, **10 startup caches**, **15-min idle timeout**, graceful shutdown with player save flush. Every game action is server-validated — zero trust client.
 
 <details>
 <summary><b>🔐 Transport & Encryption</b></summary>
@@ -213,7 +220,9 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 - **Area of Interest** — Spatial-hash culling (128px cells), 640px activation / 768px deactivation (hysteresis). Scene-filtered. Optional `visibilityFilter` callback (GM invisibility).
 - **Delta Compression** — 32-bit field mask (17 fields: position, animFrame, flipX, HP/maxHP, moveState, animId, statusEffects, deathState, casting, target, level, faction, equipVisuals, pkStatus, honorRank, costumeVisuals). Only dirty fields serialized. Expanded from 16-bit for costume support.
 - **Batched Updates** — Multiple entity deltas packed into single `SvEntityUpdateBatch` packets (~90% header overhead reduction vs per-entity packets).
-- **Tiered Frequency** — Near 20 Hz / Mid 7 Hz / Far 4 Hz / Edge 2 Hz. HP changes always sent regardless of tier.
+- **Tiered Frequency** — Near 20 Hz / Mid 7 Hz / Far 4 Hz / Edge 2 Hz. HP changes always sent regardless of tier. Near tier covers full viewport diagonal (40 tiles / 1280px) for smooth visible-mob updates.
+- **Scene-Scoped Broadcasts** — Combat packets (skill results, auto-attacks, DoT ticks, emoticons) are scene-filtered, not global. Players in other scenes never receive irrelevant combat traffic.
+- **Scene Population Sync** — `SvScenePopulated` handshake ensures loading screen stays up until all initial entity data arrives. Eliminates mob pop-in after zone transitions. 5s client-side safety timeout.
 - **Ghost Lifecycle** — Robust enter/leave/destroy pipeline with `recentlyUnregistered_` bridge, `processDestroyQueue()`, full disconnect cleanup.
 
 </details>
@@ -223,11 +232,12 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 
 | Layer | Detail |
 |-------|--------|
-| **WAL** | Binary write-ahead log with CRC32 per entry, `fflush` after every append. Journals gold/item/XP mutations. Replay on crash recovery |
-| **Circuit Breaker** | 3-state (Closed → Open → HalfOpen), 5 failures → 30s cooldown, single-probe pattern. WAL queues writes during outage |
-| **Priority Flushing** | 4 tiers: IMMEDIATE (0s — gold/inventory/trades), HIGH (5s — level-ups/PK/zone transitions), NORMAL (60s — position), LOW (300s — pet/bank). 1s dedup, 10/tick drain, 5-min staggered auto-save safety net |
-| **Dirty Flags** | `PlayerDirtyFlags` at **95 mutation sites**. Disconnect + auto-save bypass with `forceSaveAll=true`. Async error re-dirties for retry |
-| **Connection Pool** | Thread-safe (min 5, max 50, +10 overflow). Fiber-based async dispatch. `PlayerLockMap` with `shared_ptr<mutex>` for concurrent mutation serialization |
+| **Circuit Breaker** | 3-state (Closed → Open → HalfOpen), 5 failures → 30s cooldown, single-probe pattern |
+| **Priority Flushing** | 4 tiers: IMMEDIATE (0s — gold/inventory/trades), HIGH (5s — level-ups/PK/zone transitions), NORMAL (60s — position), LOW (300s — pet/bank). 1s dedup, 10/tick drain |
+| **Auto-Save** | 30s staggered per-player with `forceSaveAll=true`. Maximum 30s data loss window on crash. Event-triggered HIGH priority saves on zone transition and level up |
+| **Async Saves** | Disconnect saves snapshot all data instantly on game thread, dispatch single-transaction write to worker fiber — zero game-thread blocking. Epoch bumps invalidate stale in-flight periodic saves. Per-player lock serializes fast reconnects against in-flight disconnect saves |
+| **Dirty Flags** | `PlayerDirtyFlags` at **95 mutation sites**. Async error re-dirties for retry. Batched mob death persistence (single DB transaction per scene per tick regardless of kill count) |
+| **Connection Pool** | Thread-safe (min 5, max 50, +10 overflow). Fiber-based async dispatch with per-tick DB call diagnostics. `PlayerLockMap` with `shared_ptr<mutex>` for concurrent mutation serialization |
 | **Async Player Load** | Fiber-based non-blocking player data load on connect — zero tick stalls during login storms |
 
 </details>
@@ -235,7 +245,7 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 <details>
 <summary><b>🛡️ GM Command System</b></summary>
 
-`GMCommandRegistry` with `AdminRole` enum (Player/GM/Admin). 23 commands across 6 categories: Player Management (kick/ban/permaban/unban/mute/unmute/whois/setrole), Teleportation (tp/tphere/goto), Spawning (spawnmob), Economy (additem/addgold/setlevel/addskillpoints), GM Tools (announce/dungeon/invisible/god), Help (admin). Ban/unban fully DB-wired with timed expiry. Invisibility uses replication visibility filter. God mode blocks damage at all 3 paths. Slow tick profiling (>50ms) with 7-section breakdown (net/world/ecs/despawn/repl/events/save).
+`GMCommandRegistry` with `AdminRole` enum (Player/GM/Admin). 24 commands across 7 categories: Player Management (kick/ban/permaban/unban/mute/unmute/whois/setrole), Teleportation (tp/tphere/goto), Spawning (spawnmob), Economy (additem/addgold/setlevel/addskillpoints), GM Tools (announce/dungeon/invisible/god), Server (shutdown with configurable countdown + cancel), Help (admin). Ban/unban fully DB-wired with timed expiry. Invisibility uses replication visibility filter. God mode blocks damage at all 3 paths. Slow tick profiling with severity classification (`[minor]` >50ms through `[CRITICAL]` >10s), per-tick DB call diagnostics, and 7-section breakdown.
 
 </details>
 
@@ -249,7 +259,7 @@ Custom polished dark theme — Inter font family (14px body, 16px SemiBold headi
 <summary><b>🎯 Core Editor Features</b></summary>
 
 - **Entity Hierarchy** — Grouped by name+tag, color-coded (player/ground/obstacle/mob/boss), error badges, tree indentation guides.
-- **Live Inspector** — Edit all 53 component types live with **full undo/redo**. Sprite preview thumbnails. Reflection-driven generic fallback via `FATE_REFLECT`. SemiBold headings, separator lines.
+- **Live Inspector** — Edit all 56 component types live with **full undo/redo**. Sprite preview thumbnails. Reflection-driven generic fallback via `FATE_REFLECT`. SemiBold headings, separator lines.
 - **Scene Interaction** — Click to select (depth-priority, closest-center), drag to move, sticky selection. Ground tiles locked (inspect-only). Entity selection auto-clears if destroyed by gameplay/network/undo.
 - **Create / Delete / Duplicate** — Menu + keyboard shortcuts, deep copy via JSON serialization, locked entity protection.
 - **8 Tile Tools** — Move (W), Resize (E), Rotate (R), Paint (B), Erase (X), Flood Fill (G), RectFill (U), LineTool (L). All tool-paused-only with compound undo.
@@ -374,7 +384,7 @@ cmake --build --preset x64-Shipping
 | **FateDemo** | Minimal demo with editor UI | Open-source build |
 | **FateEngine** | Full game client | When `game/` sources present |
 | **FateServer** | Headless authoritative server | When `server/` + PostgreSQL present |
-| **fate_tests** | 1,408 unit tests (doctest) | When `tests/` sources present |
+| **fate_tests** | 1,450+ unit tests (doctest) | When `tests/` sources present |
 
 ### Platform Matrix
 
@@ -390,7 +400,7 @@ cmake --build --preset x64-Shipping
 
 ## 🧪 Testing
 
-The engine maintains exceptional stability through **1,408 test cases** across **180 test files**, powered by `doctest`.
+The engine maintains exceptional stability through **1,450+ test cases** across **180 test files**, powered by `doctest`.
 
 ```bash
 # Run all tests:
@@ -412,10 +422,10 @@ Coverage spans: combat formulas, encryption/decryption, entity replication, inve
 ## 📐 Architecture at a Glance
 
 ```
-engine/                    # 73,000 LOC — Core engine (20 subsystems)
+engine/                    # 74,000 LOC — Core engine (20 subsystems)
  render/                   #   Sprite batching, SDF text, lighting, bloom, paper doll, VFX
  net/                      #   Custom UDP, AEAD crypto, replication, AOI, interpolation
- ecs/                      #   Archetype ECS, 53 components, reflection, serialization
+ ecs/                      #   Archetype ECS, 56 components, reflection, serialization
  ui/                       #   60 widgets, JSON screens, themes, viewport scaling
  editor/                   #   ImGui editor, undo/redo, Aseprite animation editor, asset browser
  tilemap/                  #   Chunk VBOs, texture arrays, Blob-47 autotile, 4-layer
@@ -434,7 +444,7 @@ engine/                    # 73,000 LOC — Core engine (20 subsystems)
  vfs/                      #   PhysicsFS, ZIP mount, overlay priority
  telemetry/                #   Metric collection, JSON flush, HTTPS stub
 
-game/                      # 32,000 LOC — Game logic layer
+game/                      # 33,000 LOC — Game logic layer
  shared/                   #   67 files, 16,000 LOC of pure gameplay (zero engine deps)
    combat_system           #   Hit rate, armor, crits, class advantage, PvP balance
    skill_manager           #   60+ skills, cooldowns, cast times, resource types
@@ -444,20 +454,20 @@ game/                      # 32,000 LOC — Game logic layer
    trade_manager           #   2-step security, slot locking, atomic transfer
    arena_manager           #   1v1/2v2/3v3, matchmaking, AFK detection, honor
    gauntlet                #   Event scheduler, divisions, wave spawning, MVP
-   faction_system          #   4 factions, guards, innkeeper, faction-aware targeting
+   faction_system          #   5 factions, guards, innkeeper, faction-aware targeting
    ...                     #   +28 more systems (guild, party, pet, crafting, etc.)
  components/               #   ECS component wrappers for all shared systems
  systems/                  #   11 ECS systems (combat, render, movement, mob AI, spawn...)
  data/                     #   Paper doll catalog, NPC definitions, quest data
 
-server/                    # 28,500 LOC — Headless authoritative server
+server/                    # 30,000 LOC — Headless authoritative server
  handlers/                 #   39 packet handler files (split from monolith)
- db/                       #   17 repositories, 6 definition caches, WAL, pool, dispatcher
- cache/                    #   Item/loot/recipe/pet/costume/collection caches
+ db/                       #   16 repositories, 6 definition caches, pool, dispatcher
+ cache/                    #   Item/loot/recipe/pet/costume/collection/guard caches
  auth/                     #   TLS auth server (bcrypt, starter equipment, login rate limiting)
  *.h/.cpp                  #   ServerApp, SpawnCoordinator, DungeonManager, RateLimiter, GM commands
 
-tests/                     # 24,000 LOC — 1,408 test cases across 180 files
+tests/                     # 24,000 LOC — 1,450+ test cases across 180 files
 ```
 
 ---
@@ -484,15 +494,15 @@ Apache License 2.0 — see [LICENSE](LICENSE) for details.
 
 <br><br>
 
-<img src="https://img.shields.io/badge/C%2B%2B-155%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
-<img src="https://img.shields.io/badge/files-740%2B-2ea44f?style=flat-square" alt="Files" />
-<img src="https://img.shields.io/badge/tests-1%2C408_passing-2ea44f?style=flat-square" alt="Tests" />
+<img src="https://img.shields.io/badge/C%2B%2B-161%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
+<img src="https://img.shields.io/badge/files-750%2B-2ea44f?style=flat-square" alt="Files" />
+<img src="https://img.shields.io/badge/tests-1%2C450%2B_passing-2ea44f?style=flat-square" alt="Tests" />
 <img src="https://img.shields.io/badge/platforms-5-orange?style=flat-square" alt="Platforms" />
 <img src="https://img.shields.io/badge/game_systems-50%2B-blueviolet?style=flat-square" alt="Game Systems" />
 <img src="https://img.shields.io/badge/UI_widgets-60-ff69b4?style=flat-square" alt="UI Widgets" />
-<img src="https://img.shields.io/badge/quests-118-E040FB?style=flat-square" alt="Quests" />
-<img src="https://img.shields.io/badge/factions-4-red?style=flat-square" alt="Factions" />
-<img src="https://img.shields.io/badge/DB_repositories-17-informational?style=flat-square" alt="DB Repos" />
+<img src="https://img.shields.io/badge/quests-123-E040FB?style=flat-square" alt="Quests" />
+<img src="https://img.shields.io/badge/factions-5-red?style=flat-square" alt="Factions" />
+<img src="https://img.shields.io/badge/DB_repositories-16-informational?style=flat-square" alt="DB Repos" />
 <img src="https://img.shields.io/badge/handler_files-39-9cf?style=flat-square" alt="Handler Files" />
 
 <br><br>

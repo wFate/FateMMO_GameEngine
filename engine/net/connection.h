@@ -38,6 +38,7 @@ struct ClientConnection {
     VisibilitySet aoi;
     std::unordered_map<uint64_t, SvEntityUpdateMsg> lastSentState; // keyed by PersistentId value
     uint64_t playerEntityId = 0; // PersistentId of this client's player entity
+    std::string spectateScene;   // non-empty = replication uses this scene instead of player's
 
     int account_id = 0;
     std::string character_id;
@@ -58,6 +59,25 @@ struct ClientConnection {
         float x = 0.0f, y = 0.0f;
     };
     ReturnPoint eventReturnPoint;  // non-empty scene = active
+
+    // Scene population: set whenever AOI is cleared (zone transition, GM teleport,
+    // initial login, etc.). ReplicationManager sends SvScenePopulated after the
+    // first replication tick and clears the flag, so the client knows all initial
+    // entities have been sent before dropping its loading screen.
+    // Defaults to true so the very first replication tick sends the message.
+    bool pendingScenePopulated = true;
+
+    // Helper: clear all AOI/replication state and mark for SvScenePopulated.
+    // Call this instead of manually clearing aoi fields + lastSentState.
+    void resetReplication() {
+        aoi.previous.clear();
+        aoi.current.clear();
+        aoi.entered.clear();
+        aoi.left.clear();
+        aoi.stayed.clear();
+        lastSentState.clear();
+        pendingScenePopulated = true;
+    }
 
     // Invite prompt busy state — prevents concurrent invites
     bool hasActivePrompt = false;

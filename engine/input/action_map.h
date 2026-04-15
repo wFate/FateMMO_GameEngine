@@ -160,10 +160,10 @@ private:
         bind(ActionId::Interact,      SDL_SCANCODE_E);
         bind(ActionId::TargetNearest, SDL_SCANCODE_TAB);
 
-        // UI toggles
-        bind(ActionId::ToggleInventory, SDL_SCANCODE_I);
-        bind(ActionId::ToggleSkillBar,  SDL_SCANCODE_K);
-        bind(ActionId::ToggleQuestLog,  SDL_SCANCODE_L);
+        // UI toggles (no default keyboard bindings — touch/menu only)
+        // bind(ActionId::ToggleInventory, SDL_SCANCODE_I);
+        // bind(ActionId::ToggleSkillBar,  SDL_SCANCODE_K);
+        // bind(ActionId::ToggleQuestLog,  SDL_SCANCODE_L);
 
         // Chat / confirm / cancel
         bind(ActionId::OpenChat,   SDL_SCANCODE_RETURN);

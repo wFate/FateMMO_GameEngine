@@ -1,14 +1,110 @@
 {
   "root": {
-    "id": "loading_panel",
-    "type": "loading_panel",
     "anchor": {
+      "offset": [
+        0.0,
+        0.0
+      ],
       "preset": "StretchAll",
-      "offset": [0, 0],
-      "size": [0, 0]
+      "size": [
+        0.0,
+        0.0
+      ]
     },
-    "zOrder": 999,
-    "visible": false
+    "backgroundColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "barBgColor": [
+      0,
+      0,
+      0,
+      153
+    ],
+    "barBottomY": 50.0,
+    "barFillColor": [
+      217,
+      191,
+      102,
+      255
+    ],
+    "barHeight": 18.0,
+    "barPadX": 40.0,
+    "bgColor": [
+      26,
+      26,
+      46,
+      255
+    ],
+    "borderColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "disabledColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientBottom": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientTop": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "hoverColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "id": "loading_panel",
+    "nameColor": [
+      255,
+      255,
+      255,
+      255
+    ],
+    "nameFontSize": 26.0,
+    "pctColor": [
+      255,
+      255,
+      255,
+      255
+    ],
+    "pctFontSize": 12.0,
+    "pressedColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "shadowColor": [
+      0,
+      0,
+      0,
+      204
+    ],
+    "shadowOffset": 1.5,
+    "type": "loading_panel",
+    "uiShadowColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "visible": false,
+    "zOrder": 999
   },
   "screen": "loading_screen"
 }

@@ -924,6 +924,52 @@ void SpriteBatch::drawEllipseRing(const Vec2& center, float radiusX, float radiu
     }
 }
 
+void SpriteBatch::drawEllipseRingArc(const Vec2& center, float radiusX, float radiusY,
+                                      float thickness, float startAngle, float endAngle,
+                                      const Color& color, float depth, int segments) {
+    if (!drawing_ || radiusX <= 0 || radiusY <= 0 || segments < 1) return;
+    float scaleX = (radiusX - thickness) / radiusX;
+    float scaleY = (radiusY - thickness) / radiusY;
+    if (scaleX < 0.0f) scaleX = 0.0f;
+    if (scaleY < 0.0f) scaleY = 0.0f;
+    float midScaleX = (1.0f + scaleX) * 0.5f;
+    float midScaleY = (1.0f + scaleY) * 0.5f;
+
+    float totalAngle = endAngle - startAngle;
+    float angleStep = totalAngle / static_cast<float>(segments);
+
+    for (int i = 0; i < segments; i++) {
+        float a0 = startAngle + i * angleStep;
+        float a1 = startAngle + (i + 1) * angleStep;
+        float midAngle = (a0 + a1) * 0.5f;
+
+        float mx = std::cos(midAngle) * radiusX * midScaleX;
+        float my = std::sin(midAngle) * radiusY * midScaleY;
+
+        float x0 = std::cos(a0) * radiusX * midScaleX;
+        float y0 = std::sin(a0) * radiusY * midScaleY;
+        float x1 = std::cos(a1) * radiusX * midScaleX;
+        float y1 = std::sin(a1) * radiusY * midScaleY;
+        float chordLen = std::sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+        float chordAngle = std::atan2(y1 - y0, x1 - x0);
+
+        float outerR = std::sqrt(std::cos(midAngle) * radiusX * std::cos(midAngle) * radiusX +
+                                  std::sin(midAngle) * radiusY * std::sin(midAngle) * radiusY);
+        float innerR = outerR * ((scaleX + scaleY) * 0.5f);
+        float localThick = outerR - innerR;
+        if (localThick < thickness * 0.5f) localThick = thickness;
+
+        SpriteDrawParams params;
+        params.position = {center.x + mx, center.y + my};
+        params.size = {chordLen * 1.15f, localThick * 1.02f};
+        params.color = color;
+        params.depth = depth;
+        params.rotation = chordAngle - 1.5707963f;
+        params.sourceRect = {0, 0, 1, 1};
+        entries_.push_back({nullptr, 0, params});
+    }
+}
+
 void SpriteBatch::drawCircle(const Vec2& center, float radius, const Color& color,
                               float depth, int segments) {
     if (!drawing_ || radius <= 0) return;

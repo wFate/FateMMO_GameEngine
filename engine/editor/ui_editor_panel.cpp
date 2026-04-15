@@ -700,6 +700,19 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::ColorEdit4("Page Active Text##arc", &arc->pageActiveTextColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Page Inactive Text##arc", &arc->pageInactiveTextColor.r); checkUndoCapture(uiMgr);
 
+        // --- Button Background Colors ---
+        ImGui::SeparatorText("Button Background Colors");
+        ImGui::ColorEdit4("Attack BG##arc", &arc->attackBgColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("PickUp BG##arc", &arc->pickUpBgColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Page Active BG##arc", &arc->pageActiveBgColor.r); checkUndoCapture(uiMgr);
+        ImGui::SliderFloat("Metallic Opacity##arc", &arc->metallicOpacity, 0.0f, 1.0f, "%.2f"); checkUndoCapture(uiMgr);
+
+        // --- Text Position Offsets ---
+        ImGui::SeparatorText("Text Offsets");
+        ImGui::DragFloat2("Action Text Offset##arc", &arc->actionTextOffset.x, 0.5f, -50.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat2("PickUp Text Offset##arc", &arc->pickUpTextOffset.x, 0.5f, -50.0f, 50.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat2("LV Text Offset##arc", &arc->lvTextOffset.x, 0.5f, -50.0f, 50.0f); checkUndoCapture(uiMgr);
+
         // --- Slot/Overlay Colors ---
         ImGui::SeparatorText("Slot Colors");
         ImGui::ColorEdit4("Filled Slot BG##arc", &arc->filledSlotBgColor.r); checkUndoCapture(uiMgr);
@@ -719,6 +732,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
 
         ImGui::SeparatorText("DPad — Colors");
         ImGui::ColorEdit4("Background##dpad", &dp->bgColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Border Color##dpad", &dp->borderColor.r); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Border Width##dpad", &dp->borderWidth, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Arm Color##dpad", &dp->armColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Active Color##dpad", &dp->activeColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Center Color##dpad", &dp->centerColor.r); checkUndoCapture(uiMgr);
@@ -820,31 +835,47 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* tf = dynamic_cast<TargetFrame*>(selectedNode_)) {
         ImGui::SeparatorText("TargetFrame");
-        if (ImGui::TreeNodeEx("Position Offsets##tf", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat2("Name##tfo", &tf->nameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("HP Bar##tfo", &tf->hpBarOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("HP Text##tfo", &tf->hpTextOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Panel##tf", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::ColorEdit4("BG Color##tfp", &tf->panelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##tfp", &tf->panelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##tfp", &tf->panelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##tfp", &tf->panelCornerRadius, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNodeEx("Font Sizes##tf", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat("Name##tff", &tf->nameFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("HP##tff", &tf->hpFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Name##tf", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Offset##tfn", &tf->nameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##tfn", &tf->nameFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Color##tfn", &tf->nameTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("BG Color##tfn", &tf->nameBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("BG Padding##tfn", &tf->nameBgPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Top Pad##tfn", &tf->nameTopPad, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNodeEx("Layout##tf", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat("Bar Padding##tfl", &tf->barPadding, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Bar Height##tfl", &tf->barHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Name Pad##tfl", &tf->nameTopPad, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Level##tf", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Offset##tflv", &tf->levelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##tflv", &tf->levelFontSize, 0.5f, 0.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Color##tflv", &tf->levelTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
-        if (ImGui::TreeNodeEx("Colors##tf", 0)) {
-            ImGui::ColorEdit4("HP Bar BG##tfc", &tf->hpBarBgColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("HP Fill##tfc", &tf->hpFillColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Name BG##tfc", &tf->nameBgColor.r); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Name BG Pad##tfc", &tf->nameBgPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("HP Bar##tf", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Offset##tfhb", &tf->hpBarOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##tfhb", &tf->barPadding, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Height##tfhb", &tf->barHeight, 0.5f, 2.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##tfhb", &tf->barCornerRadius, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Track BG##tfhb", &tf->hpBarBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Fill##tfhb", &tf->hpFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##tfhb", &tf->barBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##tfhb", &tf->barBorderWidth, 0.25f, 0.0f, 4.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
-        ImGui::Text("Target: %s", tf->targetName.c_str());
+        if (ImGui::TreeNodeEx("HP Text##tf", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat2("Offset##tfht", &tf->hpTextOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##tfht", &tf->hpFontSize, 0.5f, 0.0f, 48.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text Color##tfht", &tf->hpTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
+        ImGui::Text("Target: %s  Lv.%d", tf->targetName.c_str(), tf->targetLevel);
         ImGui::Text("HP: %.0f / %.0f", tf->hp, tf->maxHp);
     }
     else if (auto* lsb = dynamic_cast<LeftSidebar*>(selectedNode_)) {
@@ -1042,6 +1073,16 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             checkUndoCapture(uiMgr);
             ImGui::DragInt("Atlas Cols##inv_icon", &inv->iconAtlasCols, 1.0f, 1, 32); checkUndoCapture(uiMgr);
             ImGui::DragInt("Atlas Rows##inv_icon", &inv->iconAtlasRows, 1.0f, 1, 32); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        // Bag overlay panel
+        if (ImGui::TreeNode("Bag Overlay Panel")) {
+            ImGui::ColorEdit4("BG Color##bagpanel",      &inv->bagPanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##bagpanel",  &inv->bagPanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##bagpanel",   &inv->bagPanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##bagpanel",        &inv->bagPanelPadding, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Title Height##bagpanel",   &inv->bagTitleHeight, 0.5f, 0.0f, 64.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 

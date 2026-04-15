@@ -313,6 +313,16 @@ void Editor::applyLayerVisibility(World* world) {
     );
 }
 
+std::string Editor::currentSceneId() const {
+    if (currentScenePath_.empty()) return {};
+    size_t slash = currentScenePath_.find_last_of("/\\");
+    size_t dot = currentScenePath_.rfind('.');
+    size_t start = (slash != std::string::npos) ? slash + 1 : 0;
+    if (dot != std::string::npos && dot > start)
+        return currentScenePath_.substr(start, dot - start);
+    return currentScenePath_.substr(start);
+}
+
 void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
     // Called while FBO is bound --draw in-viewport overlays via SpriteBatch
     if (!open_ || !batch || !camera) return;
@@ -356,6 +366,116 @@ void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
             : Color(0.3f, 1.0f, 0.3f, 0.3f);
 
         batch->drawRect(origin, {totalSize, totalSize}, previewColor);
+    }
+
+    // Draw DB-backed spawn zone circles when overlay is enabled
+    if (showSpawnDebug_ && paused_) {
+        std::string sceneId = currentSceneId();
+        if (!sceneId.empty()) {
+            contentBrowserPanel_.ensureSpawnListLoaded();
+            const auto& list = contentBrowserPanel_.spawnList();
+
+            Mat4 vp = camera->getViewProjection();
+            batch->begin(vp);
+
+            for (int i = 0; i < (int)list.size(); ++i) {
+                const auto& zone = list[i];
+                if (!zone.is_object()) continue;
+
+                std::string zoneScene;
+                if (zone.contains("scene_id") && zone["scene_id"].is_string())
+                    zoneScene = zone["scene_id"].get<std::string>();
+                if (zoneScene != sceneId) continue;
+
+                float cx = 0, cy = 0, r = 100;
+                if (zone.contains("center_x") && zone["center_x"].is_number()) cx = zone["center_x"].get<float>();
+                if (zone.contains("center_y") && zone["center_y"].is_number()) cy = zone["center_y"].get<float>();
+                if (zone.contains("radius") && zone["radius"].is_number()) r = zone["radius"].get<float>();
+
+                int targetCount = 3;
+                if (zone.contains("target_count") && zone["target_count"].is_number())
+                    targetCount = zone["target_count"].get<int>();
+
+                bool isSelected = (i == selectedSpawnZoneIdx_);
+                bool isUnpositioned = (cx == 0.0f && cy == 0.0f);
+
+                // Color scheme: boss (single target) = red, normal = green, unpositioned = orange
+                Color fillColor, outlineColor;
+                if (isUnpositioned) {
+                    fillColor = Color(0.9f, 0.5f, 0.1f, 0.08f);
+                    outlineColor = Color(0.9f, 0.5f, 0.1f, 0.4f);
+                } else if (targetCount <= 1) {
+                    fillColor = Color(0.8f, 0.2f, 0.2f, 0.10f);
+                    outlineColor = Color(0.9f, 0.3f, 0.3f, 0.5f);
+                } else {
+                    fillColor = Color(0.2f, 0.7f, 0.3f, 0.10f);
+                    outlineColor = Color(0.3f, 0.9f, 0.4f, 0.5f);
+                }
+
+                if (isSelected) {
+                    outlineColor = Color(1.0f, 0.9f, 0.2f, 0.8f);
+                    fillColor.a = 0.15f;
+                }
+
+                Vec2 center = {cx, cy};
+                batch->drawCircle(center, r, fillColor, 93.0f, 32);
+                batch->drawRing(center, r, isSelected ? 2.5f : 1.5f, outlineColor, 93.5f, 32);
+            }
+
+            batch->end();
+
+            // Draw labels via ImGui overlay (screen-space text on top of viewport)
+            ImDrawList* fg = ImGui::GetForegroundDrawList();
+            for (int i = 0; i < (int)list.size(); ++i) {
+                const auto& zone = list[i];
+                if (!zone.is_object()) continue;
+
+                std::string zoneScene;
+                if (zone.contains("scene_id") && zone["scene_id"].is_string())
+                    zoneScene = zone["scene_id"].get<std::string>();
+                if (zoneScene != sceneId) continue;
+
+                float cx = 0, cy = 0;
+                if (zone.contains("center_x") && zone["center_x"].is_number()) cx = zone["center_x"].get<float>();
+                if (zone.contains("center_y") && zone["center_y"].is_number()) cy = zone["center_y"].get<float>();
+
+                std::string mobId;
+                if (zone.contains("mob_def_id") && zone["mob_def_id"].is_string())
+                    mobId = zone["mob_def_id"].get<std::string>();
+
+                int targetCount = 3;
+                if (zone.contains("target_count") && zone["target_count"].is_number())
+                    targetCount = zone["target_count"].get<int>();
+
+                // Convert world pos to screen pos
+                Vec2 screenPos = camera->worldToScreen({cx, cy},
+                    (int)viewportSize_.x, (int)viewportSize_.y);
+                float sx = viewportPos_.x + screenPos.x;
+                float sy = viewportPos_.y + screenPos.y;
+
+                // Check if on-screen
+                if (sx < viewportPos_.x || sx > viewportPos_.x + viewportSize_.x) continue;
+                if (sy < viewportPos_.y || sy > viewportPos_.y + viewportSize_.y) continue;
+
+                char label[128];
+                std::snprintf(label, sizeof(label), "%s x%d", mobId.c_str(), targetCount);
+
+                ImVec2 textSize = ImGui::CalcTextSize(label);
+                bool isSelected = (i == selectedSpawnZoneIdx_);
+                ImU32 textCol = isSelected ? IM_COL32(255, 230, 50, 220)
+                                           : IM_COL32(200, 255, 200, 180);
+                ImU32 bgCol = IM_COL32(0, 0, 0, 140);
+
+                // Background rect behind text
+                fg->AddRectFilled(
+                    ImVec2(sx - textSize.x * 0.5f - 2, sy - textSize.y * 0.5f - 1),
+                    ImVec2(sx + textSize.x * 0.5f + 2, sy + textSize.y * 0.5f + 1),
+                    bgCol, 2.0f);
+                fg->AddText(
+                    ImVec2(sx - textSize.x * 0.5f, sy - textSize.y * 0.5f),
+                    textCol, label);
+            }
+        }
     }
 }
 
@@ -536,7 +656,7 @@ void Editor::drawDockSpace() {
                 }
             }
             ImGui::Separator();
-            if (ImGui::BeginMenu("Open Scene", !inPlayMode_)) {
+            if (ImGui::BeginMenu("Open Scene", !inPlayMode_ || paused_ || isObserving_)) {
                 std::string scenesDir = "assets/scenes";
                 if (fs::exists(scenesDir)) {
                     for (auto& entry : fs::directory_iterator(scenesDir)) {
@@ -835,6 +955,28 @@ void Editor::drawSceneViewport() {
             }
 
             ImGui::SameLine();
+
+            // Admin Observer toggle (available when not in play mode)
+            if (isObserving_) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.20f, 0.20f, 1.00f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.30f, 0.30f, 1.00f));
+                if (ImGui::Button("Stop Obs", ImVec2(60.0f, btnH))) {
+                    if (onObserveStop) onObserveStop();
+                    isObserving_ = false;
+                }
+                ImGui::PopStyleColor(2);
+                ImGui::SameLine();
+            } else if (!inPlayMode_) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.35f, 0.55f, 1.00f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.45f, 0.65f, 1.00f));
+                if (ImGui::Button("Observe", ImVec2(60.0f, btnH))) {
+                    if (onObserveRequested) onObserveRequested();
+                    isObserving_ = true;
+                }
+                ImGui::PopStyleColor(2);
+                ImGui::SameLine();
+            }
+
             ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
             ImGui::SameLine();
 
@@ -889,6 +1031,41 @@ void Editor::drawSceneViewport() {
 
             ImGui::SameLine();
 
+            // Scene dropdown (quick scene switcher)
+            {
+                // Extract current scene name from path
+                std::string sceneName = "(none)";
+                if (!currentScenePath_.empty()) {
+                    size_t slash = currentScenePath_.find_last_of("/\\");
+                    size_t dot = currentScenePath_.rfind('.');
+                    size_t start = (slash != std::string::npos) ? slash + 1 : 0;
+                    if (dot != std::string::npos && dot > start)
+                        sceneName = currentScenePath_.substr(start, dot - start);
+                    else
+                        sceneName = currentScenePath_.substr(start);
+                }
+
+                bool canSwitch = !inPlayMode_ || paused_ || isObserving_;
+                if (!canSwitch) ImGui::BeginDisabled();
+                ImGui::SetNextItemWidth(140.0f);
+                if (ImGui::BeginCombo("##Scene", sceneName.c_str(), ImGuiComboFlags_HeightLarge)) {
+                    std::string scenesDir = "assets/scenes";
+                    if (fs::exists(scenesDir)) {
+                        for (auto& entry : fs::directory_iterator(scenesDir)) {
+                            if (!entry.is_regular_file() || entry.path().extension() != ".json") continue;
+                            std::string name = entry.path().stem().string();
+                            bool selected = (name == sceneName);
+                            if (ImGui::Selectable(name.c_str(), selected)) {
+                                loadScene(dockWorld_, entry.path().string());
+                            }
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+                if (!canSwitch) ImGui::EndDisabled();
+                ImGui::SameLine();
+            }
+
             // Right-aligned: FPS stats in muted gray
             {
                 ImGuiIO& io = ImGui::GetIO();
@@ -898,8 +1075,8 @@ void Editor::drawSceneViewport() {
                 if (fontSmall_) ImGui::PushFont(fontSmall_);
                 float textW = ImGui::CalcTextSize(stats).x;
                 float regionW = ImGui::GetContentRegionAvail().x;
-                if (regionW > textW + 4.0f) {
-                    ImGui::SameLine(ImGui::GetCursorPosX() + regionW - textW);
+                if (regionW > textW + 8.0f) {
+                    ImGui::SameLine(ImGui::GetCursorPosX() + regionW - textW - 4.0f);
                     ImGui::TextColored(ImVec4(0.45f, 0.45f, 0.50f, 1.0f), "%s", stats);
                 }
                 if (fontSmall_) ImGui::PopFont();
@@ -1183,6 +1360,62 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
         return;
     }
 
+    // Flush pending spawn zone radius change on any new click
+    if (spawnRadiusDirty_) {
+        spawnRadiusDirty_ = false;
+        auto& spawnList = contentBrowserPanel_.spawnListMut();
+        if (selectedSpawnZoneIdx_ >= 0 && selectedSpawnZoneIdx_ < (int)spawnList.size()) {
+            contentBrowserPanel_.saveSpawnZone(spawnList[selectedSpawnZoneIdx_]);
+        }
+    }
+
+    // Spawn zone overlay: click to select/drag a DB spawn zone circle
+    if (showSpawnDebug_ && currentTool_ == EditorTool::Move) {
+        std::string sceneId = currentSceneId();
+        auto& list = contentBrowserPanel_.spawnListMut();
+        int hitIdx = -1;
+        float hitDist = 99999.0f;
+
+        for (int i = 0; i < (int)list.size(); ++i) {
+            const auto& zone = list[i];
+            if (!zone.is_object()) continue;
+            std::string zs;
+            if (zone.contains("scene_id") && zone["scene_id"].is_string())
+                zs = zone["scene_id"].get<std::string>();
+            if (zs != sceneId) continue;
+
+            float cx = 0, cy = 0, r = 100;
+            if (zone.contains("center_x") && zone["center_x"].is_number()) cx = zone["center_x"].get<float>();
+            if (zone.contains("center_y") && zone["center_y"].is_number()) cy = zone["center_y"].get<float>();
+            if (zone.contains("radius") && zone["radius"].is_number()) r = zone["radius"].get<float>();
+
+            float dx = worldPos.x - cx;
+            float dy = worldPos.y - cy;
+            float dist = std::sqrt(dx * dx + dy * dy);
+            if (dist <= r && dist < hitDist) {
+                hitIdx = i;
+                hitDist = dist;
+            }
+        }
+
+        if (hitIdx >= 0) {
+            selectedSpawnZoneIdx_ = hitIdx;
+            isDraggingSpawnZone_ = true;
+            spawnDragStartWorld_ = worldPos;
+            auto& zone = list[hitIdx];
+            spawnDragStartCx_ = zone.contains("center_x") && zone["center_x"].is_number() ? zone["center_x"].get<float>() : 0.0f;
+            spawnDragStartCy_ = zone.contains("center_y") && zone["center_y"].is_number() ? zone["center_y"].get<float>() : 0.0f;
+            spawnRadiusBeforeResize_ = zone.contains("radius") && zone["radius"].is_number() ? zone["radius"].get<float>() : 100.0f;
+            // Clear entity selection when selecting a spawn zone
+            selectedEntity_ = nullptr;
+            selectedHandle_ = {};
+            isDraggingEntity_ = false;
+            return;
+        } else {
+            selectedSpawnZoneIdx_ = -1;
+        }
+    }
+
     // Entity selection: highest depth first, then closest center to click
     Entity* best = nullptr;
     float bestDepth = -99999.0f;
@@ -1310,6 +1543,19 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
 
 void Editor::handleSceneDrag(Camera* camera, const Vec2& screenPos,
                              int windowWidth, int windowHeight) {
+    // Spawn zone dragging (DB-backed circles)
+    if (isDraggingSpawnZone_ && camera) {
+        Vec2 worldPos = camera->screenToWorld(screenPos, windowWidth, windowHeight);
+        Vec2 delta = worldPos - spawnDragStartWorld_;
+        auto& list = contentBrowserPanel_.spawnListMut();
+        if (selectedSpawnZoneIdx_ >= 0 && selectedSpawnZoneIdx_ < (int)list.size()) {
+            auto& zone = list[selectedSpawnZoneIdx_];
+            zone["center_x"] = spawnDragStartCx_ + delta.x;
+            zone["center_y"] = spawnDragStartCy_ + delta.y;
+        }
+        return;
+    }
+
     if (!selectedEntity_ || !camera) return;
 
     Vec2 worldPos = camera->screenToWorld(screenPos, windowWidth, windowHeight);
@@ -1376,6 +1622,31 @@ static std::unique_ptr<UndoCommand> paintOneTile(World* world,
 static Vec2 tileToWorldCenter(int col, int row, float gridSize);
 
 void Editor::handleMouseUp() {
+    // Save spawn zone position after drag
+    if (isDraggingSpawnZone_) {
+        isDraggingSpawnZone_ = false;
+        auto& list = contentBrowserPanel_.spawnListMut();
+        if (selectedSpawnZoneIdx_ >= 0 && selectedSpawnZoneIdx_ < (int)list.size()) {
+            auto& zone = list[selectedSpawnZoneIdx_];
+            float cx = zone.contains("center_x") && zone["center_x"].is_number() ? zone["center_x"].get<float>() : 0.0f;
+            float cy = zone.contains("center_y") && zone["center_y"].is_number() ? zone["center_y"].get<float>() : 0.0f;
+            // Only save if position actually changed
+            if (cx != spawnDragStartCx_ || cy != spawnDragStartCy_) {
+                contentBrowserPanel_.saveSpawnZone(zone);
+            }
+        }
+        return;
+    }
+
+    // Save spawn zone radius after scroll-wheel resize
+    if (spawnRadiusDirty_) {
+        spawnRadiusDirty_ = false;
+        auto& list = contentBrowserPanel_.spawnListMut();
+        if (selectedSpawnZoneIdx_ >= 0 && selectedSpawnZoneIdx_ < (int)list.size()) {
+            contentBrowserPanel_.saveSpawnZone(list[selectedSpawnZoneIdx_]);
+        }
+    }
+
     // Record undo for completed drag/resize
     if (selectedEntity_) {
         if (isDraggingEntity_) {
@@ -1449,6 +1720,27 @@ void Editor::handleMouseUp() {
         UndoSystem::instance().push(std::move(pendingBrushStroke_));
     }
     pendingBrushStroke_.reset();
+}
+
+bool Editor::handleSpawnZoneScroll(float scrollY) {
+    if (!showSpawnDebug_ || selectedSpawnZoneIdx_ < 0) return false;
+
+    auto& list = contentBrowserPanel_.spawnListMut();
+    if (selectedSpawnZoneIdx_ >= (int)list.size()) return false;
+
+    auto& zone = list[selectedSpawnZoneIdx_];
+    float radius = zone.contains("radius") && zone["radius"].is_number()
+        ? zone["radius"].get<float>() : 100.0f;
+
+    float step = 8.0f;
+    if (scrollY > 0) radius += step;
+    else if (scrollY < 0) radius -= step;
+    if (radius < 16.0f) radius = 16.0f;
+    if (radius > 2000.0f) radius = 2000.0f;
+
+    zone["radius"] = radius;
+    spawnRadiusDirty_ = true;
+    return true;
 }
 
 // ============================================================================
@@ -2603,8 +2895,15 @@ void Editor::loadScene(World* world, const std::string& path) {
         return;
     }
 
-    // Clear existing entities
+    // Clear existing entities (in play mode, keep runtime entities for spectator)
     world->forEachEntity([&](Entity* entity) {
+#ifdef FATE_HAS_GAME
+        if (inPlayMode_) {
+            std::string tag = entity->tag();
+            if (tag == "mob" || tag == "boss" || tag == "player" ||
+                tag == "ghost" || tag == "dropped_item") return;
+        }
+#endif
         world->destroyEntity(entity->handle());
     });
     world->processDestroyQueue();
@@ -2620,7 +2919,19 @@ void Editor::loadScene(World* world, const std::string& path) {
         sceneMetadata_ = nlohmann::json::object();
     }
 
-    if (!root.contains("entities")) return;
+    if (!root.contains("entities")) {
+        // Still notify spectator even for empty scenes
+#ifdef FATE_HAS_GAME
+        if ((inPlayMode_ || isObserving_) && onSceneLoadedInPlayMode) {
+            size_t slash = path.find_last_of("/\\");
+            size_t dot = path.rfind('.');
+            size_t start = (slash != std::string::npos) ? slash + 1 : 0;
+            std::string sceneName = (dot > start) ? path.substr(start, dot - start) : path.substr(start);
+            onSceneLoadedInPlayMode(sceneName);
+        }
+#endif
+        return;
+    }
 
     // Registry-based deserialization --all registered components are handled
     size_t loadedCount = 0;
@@ -2630,6 +2941,18 @@ void Editor::loadScene(World* world, const std::string& path) {
     }
     selectedEntity_ = nullptr;
     selectedHandle_ = {};
+
+#ifdef FATE_HAS_GAME
+    // Notify game app for spectator mode (sends CmdSpectateScene to server)
+    if ((inPlayMode_ || isObserving_) && onSceneLoadedInPlayMode) {
+        size_t slash = path.find_last_of("/\\");
+        size_t dot = path.rfind('.');
+        size_t start = (slash != std::string::npos) ? slash + 1 : 0;
+        std::string sceneName = (dot > start) ? path.substr(start, dot - start) : path.substr(start);
+        onSceneLoadedInPlayMode(sceneName);
+    }
+#endif
+
     LOG_INFO("Editor", "Scene loaded v%d from %s (%zu entities)",
              version, path.c_str(), world->entityCount());
 }
@@ -3399,6 +3722,8 @@ void Editor::drawSceneGridShader(Camera*) {}
 void Editor::handleSceneClick(World*, Camera*, const Vec2&, int, int) {}
 void Editor::handleSceneDrag(Camera*, const Vec2&, int, int) {}
 void Editor::handleMouseUp() {}
+bool Editor::handleSpawnZoneScroll(float) { return false; }
+std::string Editor::currentSceneId() const { return {}; }
 void Editor::paintTileAt(World*, Camera*, const Vec2&, int, int) {}
 void Editor::eraseTileAt(World*, Camera*, const Vec2&, int, int) {}
 void Editor::scanAssets() {}

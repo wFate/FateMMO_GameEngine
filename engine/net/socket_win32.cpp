@@ -1,6 +1,7 @@
 #include "engine/net/socket.h"
 #pragma comment(lib, "ws2_32.lib")
 #include "engine/core/logger.h"
+#include <MSWSock.h>  // SIO_UDP_CONNRESET
 
 namespace fate {
 
@@ -29,6 +30,14 @@ bool NetSocket::open(uint16_t port) {
         // Disable IPv6-only to allow IPv4-mapped addresses (dual-stack)
         int v6only = 0;
         setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&v6only, sizeof(v6only));
+
+        // Prevent ICMP Port Unreachable from poisoning the UDP socket.
+        // Without this, sending to a closed port causes the NEXT recvfrom()
+        // to fail with WSAECONNRESET, blocking reception of real datagrams.
+        DWORD bNewBehavior = FALSE;
+        DWORD dwBytesReturned = 0;
+        WSAIoctl(s, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior),
+                 NULL, 0, &dwBytesReturned, NULL, NULL);
 
         // Set non-blocking
         u_long nonBlocking = 1;
@@ -69,6 +78,14 @@ bool NetSocket::open(uint16_t port) {
     if (s == INVALID_SOCKET) {
         LOG_ERROR("Net", "socket() failed: %d", WSAGetLastError());
         return false;
+    }
+
+    // Prevent ICMP Port Unreachable from poisoning the UDP socket (same as IPv6 path)
+    {
+        DWORD bNewBehavior = FALSE;
+        DWORD dwBytesReturned = 0;
+        WSAIoctl(s, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior),
+                 NULL, 0, &dwBytesReturned, NULL, NULL);
     }
 
     // Set non-blocking
@@ -178,6 +195,16 @@ int NetSocket::recvFrom(uint8_t* buffer, size_t bufferSize, NetAddress& from) {
     if (result == SOCKET_ERROR) {
         int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK) {
+            return 0;
+        }
+        // WSAECONNRESET (10054) on a UDP socket means a previous sendto()
+        // targeted a port that is now closed and the OS received an ICMP
+        // "Port Unreachable" response.  This is harmless for connectionless
+        // UDP — the error relates to a PAST send, not this recv — so treat
+        // it as "no data right now" and let the caller retry on the next poll.
+        // Without this, the error breaks the recv loop and blocks reception
+        // of real datagrams (e.g. new client Connect packets after a logout).
+        if (err == WSAECONNRESET) {
             return 0;
         }
         return -1;

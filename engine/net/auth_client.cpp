@@ -438,17 +438,12 @@ void AuthClient::workerLoop(const std::string& host, uint16_t port,
         return;
     }
 
-    // Push the login result
-    {
+    if (!authResp.success) {
         AuthClientResult res;
         res.type = AuthResultType::Login;
-        res.success = authResp.success;
+        res.success = false;
         res.errorMessage = authResp.errorReason;
-        res.characters = std::move(authResp.characters);
         pushResult(std::move(res));
-    }
-
-    if (!authResp.success) {
         LOG_WARN("AuthClient", "Auth failed: %s", authResp.errorReason.c_str());
         SSL_shutdown(ssl);
         SSL_free(ssl);
@@ -459,8 +454,19 @@ void AuthClient::workerLoop(const std::string& host, uint16_t port,
     }
 
     LOG_INFO("AuthClient", "Auth succeeded, persistent connection established");
+    // Set connected BEFORE pushing result — the main thread may call
+    // selectCharacterAsync immediately after consuming the result
     connected_.store(true);
     busy_.store(false);
+
+    // Push the login result (main thread can now safely call selectCharacterAsync)
+    {
+        AuthClientResult res;
+        res.type = AuthResultType::Login;
+        res.success = true;
+        res.characters = std::move(authResp.characters);
+        pushResult(std::move(res));
+    }
 
     // -----------------------------------------------------------------------
     // Command processing loop --waits for commands, sends/receives on the

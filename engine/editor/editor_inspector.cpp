@@ -1583,6 +1583,46 @@ void Editor::drawInspector() {
                     ImGui::TreePop();
                 }
 
+                // Spin & Dashes
+                if (ImGui::TreeNode("Spin & Dashes##tgt")) {
+                    ImGui::DragFloat("Spin Speed##tgts", &tgt->spinSpeed, 0.1f, 0.0f, 20.0f);
+                    captureInspectorUndo();
+                    int dc = tgt->dashCount;
+                    if (ImGui::DragInt("Dash Count##tgts", &dc, 1, 0, 32)) tgt->dashCount = dc;
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Dash Ratio##tgts", &tgt->dashRatio, 0.01f, 0.1f, 1.0f);
+                    captureInspectorUndo();
+                    ImGui::TreePop();
+                }
+
+                // Decorators
+                if (ImGui::TreeNode("Decorators##tgt")) {
+                    const char* shapeNames[] = {"None", "Diamond", "Heart", "Arrow", "Dot", "Star"};
+                    int shapeIdx = static_cast<int>(tgt->decoratorShape);
+                    if (ImGui::Combo("Shape##tgtd", &shapeIdx, shapeNames, IM_ARRAYSIZE(shapeNames)))
+                        tgt->decoratorShape = static_cast<DecoratorShape>(shapeIdx);
+                    captureInspectorUndo();
+                    int dcount = tgt->decoratorCount;
+                    if (ImGui::DragInt("Count##tgtd", &dcount, 1, 0, 12)) tgt->decoratorCount = dcount;
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Size##tgtd", &tgt->decoratorSize, 0.5f, 1.0f, 20.0f);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Orbit Scale##tgtd", &tgt->decoratorOrbitScale, 0.01f, 0.5f, 3.0f);
+                    captureInspectorUndo();
+                    ImGui::ColorEdit4("Color##tgtd", &tgt->decoratorColor.r);
+                    captureInspectorUndo();
+                    ImGui::TreePop();
+                }
+
+                // Select Animation
+                if (ImGui::TreeNode("Select Animation##tgt")) {
+                    ImGui::DragFloat("Pop Scale##tgta", &tgt->selectPopScale, 0.05f, 1.0f, 2.0f);
+                    captureInspectorUndo();
+                    ImGui::DragFloat("Pop Speed##tgta", &tgt->selectPopSpeed, 0.5f, 1.0f, 30.0f);
+                    captureInspectorUndo();
+                    ImGui::TreePop();
+                }
+
                 // Per-target-type configs
                 if (ImGui::TreeNode("Per-Type Overrides##tgt")) {
                     ImGui::TextDisabled("(0 = use global default)");

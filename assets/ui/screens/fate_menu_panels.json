@@ -17,6 +17,12 @@
       0,
       3
     ],
+    "borderColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "children": [
       {
         "anchor": {
@@ -118,6 +124,12 @@
         ],
         "diamondSegments": 0,
         "diamondSize": 0.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "factionBannerBgColor": [
           36,
           35,
@@ -147,6 +159,24 @@
           -620.0
         ],
         "fontSize": 30.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "status_panel",
         "levelColor": [
           153,
@@ -171,6 +201,12 @@
           0.0
         ],
         "noFactionText": " ",
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "statGridBgColor": [
           29,
           29,
@@ -208,6 +244,12 @@
           40.0
         ],
         "type": "status_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false,
         "xpBarBgColor": [
           32,
@@ -252,16 +294,31 @@
           ]
         },
         "backgroundColor": [
-          0,
-          0,
-          0,
-          444
+          255,
+          255,
+          255,
+          0
         ],
-        "borderColor": [
-          0,
-          0,
-          0,
+        "bagPanelBgColor": [
+          42,
+          32,
+          19,
+          242
+        ],
+        "bagPanelBorderColor": [
+          255,
+          252,
+          3,
           255
+        ],
+        "bagPanelBorderWidth": 2.0,
+        "bagPanelPadding": 6.0,
+        "bagTitleHeight": 20.0,
+        "borderColor": [
+          255,
+          255,
+          255,
+          0
         ],
         "characterScale": 5.0,
         "closeBtnBgColor": [
@@ -326,6 +383,12 @@
         "currencyOffset": [
           0.0,
           0.0
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "dollAreaOffset": [
           0.0,
@@ -421,6 +484,18 @@
           128,
           255
         ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "gridAreaOffset": [
           0.0,
           0.0
@@ -429,6 +504,12 @@
         "gridColumns": 4,
         "gridPadding": 40.0,
         "gridRows": 4,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "iconAtlasCols": 8,
         "iconAtlasRows": 4,
         "id": "inventory_panel",
@@ -465,6 +546,12 @@
           217,
           255,
           255
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "quantityColor": [
           232,
@@ -579,10 +666,16 @@
         "tooltipStatFontSize": 20.0,
         "tooltipWidth": 200.0,
         "type": "inventory_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
-        "activeSetPage": 0,
+        "activeSetPage": 1,
         "anchor": {
           "margin": [
             108.0,
@@ -600,6 +693,18 @@
             0.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "borderWidth": 0.0,
         "circleRadiusMul": 0.25,
         "closeBtnBgColor": [
@@ -670,6 +775,12 @@
           255
         ],
         "contentPadding": 28.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "dividerColor": [
           187,
           110,
@@ -701,6 +812,18 @@
           64,
           217
         ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "gridColumns": 5,
         "gridMargin": 60.0,
         "headerColor": [
@@ -711,6 +834,12 @@
         ],
         "headerFontSize": 40.0,
         "headerHeight": 10.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "skill_panel",
         "nameFontSize": 20.0,
         "nameLocked": [
@@ -758,6 +887,12 @@
           333
         ],
         "pointsFontSize": 100.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "ptsBadgeRadius": 0.0,
         "ptsBadgeRingColor": [
           77,
@@ -766,6 +901,13 @@
           255
         ],
         "ptsFontSize": 100.0,
+        "ptsLabelColor": [
+          128,
+          112,
+          89,
+          191
+        ],
+        "ptsLabelText": "pts",
         "ptsTextColor": [
           255,
           255,
@@ -805,16 +947,16 @@
         "slotNameFontSize": 20.0,
         "splitRatio": 0.30000001192092896,
         "tabBgActive": [
-          77,
-          133,
-          217,
+          255,
+          168,
+          0,
           255
         ],
         "tabBgInactive": [
-          153,
-          138,
-          107,
-          217
+          88,
+          59,
+          0,
+          280
         ],
         "tabFontSize": 20.0,
         "tabOffset": [
@@ -842,9 +984,9 @@
           255
         ],
         "tabTextInactive": [
-          217,
-          204,
-          184,
+          255,
+          255,
+          255,
           255
         ],
         "titleColor": [
@@ -858,7 +1000,69 @@
           100000.0,
           0.0
         ],
+        "tooltipBgColor": [
+          51,
+          41,
+          31,
+          242
+        ],
+        "tooltipBodyFontSize": 9.0,
+        "tooltipBorderColor": [
+          128,
+          97,
+          56,
+          255
+        ],
+        "tooltipBorderW": 1.5,
+        "tooltipDescColor": [
+          204,
+          194,
+          173,
+          255
+        ],
+        "tooltipDescFontSize": 8.0,
+        "tooltipDescGap": 4.0,
+        "tooltipLineSpacing": 3.0,
+        "tooltipOffset": [
+          0.0,
+          0.0
+        ],
+        "tooltipPadding": 8.0,
+        "tooltipRankColor": [
+          235,
+          224,
+          204,
+          255
+        ],
+        "tooltipRankFontSize": 9.0,
+        "tooltipReqColor": [
+          179,
+          140,
+          102,
+          255
+        ],
+        "tooltipReqFontSize": 9.0,
+        "tooltipTextColor": [
+          235,
+          224,
+          204,
+          255
+        ],
+        "tooltipTitleColor": [
+          255,
+          209,
+          51,
+          255
+        ],
+        "tooltipTitleFontSize": 11.0,
+        "tooltipW": 180.0,
         "type": "skill_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "wheelEndDeg": 330.0,
         "wheelSlotSizeMul": 0.4000000059604645,
         "wheelStartDeg": 210.0
@@ -881,6 +1085,12 @@
             0.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "bgColor": [
           0,
           0,
@@ -907,6 +1117,12 @@
           255
         ],
         "closeRadius": 40.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "dividerColor": [
           97,
           71,
@@ -918,6 +1134,18 @@
           0.0
         ],
         "emblemSize": 64.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "guildInfoOffset": [
           0.0,
           0.0
@@ -930,6 +1158,12 @@
         ],
         "guildNameFontSize": 14.0,
         "headerHeight": 32.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "guild_panel",
         "infoColor": [
           107,
@@ -949,6 +1183,12 @@
           217,
           77,
           255
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "rosterHeaderBgColor": [
           184,
@@ -988,6 +1228,12 @@
           0.0
         ],
         "type": "guild_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -1008,9 +1254,57 @@
             0.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "social_panel",
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "title": "Social",
         "type": "panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -1031,6 +1325,18 @@
             0.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "borderWidth": 2.0,
         "buttonCornerRadius": 4.0,
         "buttonFontSize": 13.0,
@@ -1041,6 +1347,12 @@
           255
         ],
         "checkboxSize": 14.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "displayOffset": [
           0.0,
           0.0
@@ -1050,6 +1362,24 @@
           153,
           102,
           102
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "id": "settings_panel",
         "itemSpacing": 8.0,
@@ -1083,6 +1413,12 @@
           242,
           230,
           255
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "sectionColor": [
           89,
@@ -1118,6 +1454,12 @@
           230
         ],
         "type": "settings_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -1138,9 +1480,57 @@
             0.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "shop_panel",
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "title": "Shop",
         "type": "panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -1196,11 +1586,35 @@
           47,
           255
         ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "equippedColor": [
           77,
           204,
           77,
           255
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "id": "pet_panel",
         "labelColor": [
@@ -1225,6 +1639,12 @@
           230
         ],
         "portraitSize": 64.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "selectedBgColor": [
           51,
           64,
@@ -1250,6 +1670,12 @@
           0.0
         ],
         "type": "pet_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "unequipBtnColor": [
           89,
           38,
@@ -1328,17 +1754,41 @@
           0.0,
           0.0
         ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "goldColor": [
           255,
           224,
           77,
           255
         ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hasColor": [
           77,
           204,
           77,
           255
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "id": "crafting_panel",
         "ingredientColumns": 4,
@@ -1353,6 +1803,12 @@
           77,
           77,
           255
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "recipeFontSize": 13.0,
         "recipeListOffset": [
@@ -1407,6 +1863,12 @@
           0.0
         ],
         "type": "crafting_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -1453,19 +1915,49 @@
           51,
           255
         ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "entryFontSize": 13.0,
         "entryHeight": 40.0,
         "entryOffset": [
           0.0,
           0.0
         ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "headerHeight": 28.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "collection_panel",
         "incompleteColor": [
           128,
           128,
           128,
           255
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "progressColor": [
           255,
@@ -1526,6 +2018,12 @@
           0.0
         ],
         "type": "collection_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -1575,6 +2073,12 @@
           47,
           255
         ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "equipBtnColor": [
           46,
           56,
@@ -1588,6 +2092,18 @@
           255
         ],
         "filterTabHeight": 24.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "gridCols": 4,
         "gridOffset": [
           0.0,
@@ -1600,6 +2116,12 @@
           115,
           204
         ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "costume_panel",
         "infoFontSize": 11.0,
         "infoOffset": [
@@ -1611,6 +2133,12 @@
           217,
           204,
           255
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "slotColor": [
           31,
@@ -1672,6 +2200,12 @@
           0.0
         ],
         "type": "costume_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "unequipBtnColor": [
           89,
           38,
@@ -1698,12 +2232,24 @@
             620.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "bgHeight": 0.0,
         "bgOffset": [
           0.0,
           0.0
         ],
         "bgWidth": 0.0,
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "closeBtnBgColor": [
           0.0,
           0.0,
@@ -1727,6 +2273,12 @@
           255.0
         ],
         "contentPadding": 1.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "emptySlotColor": [
           0.13922271132469177,
           0.13922278583049774,
@@ -1740,7 +2292,25 @@
           1.0
         ],
         "fontSize": 2.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "gridColumns": 2,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "bag_view_panel",
         "itemTextColor": [
           1.0,
@@ -1761,6 +2331,12 @@
           1.0
         ],
         "panelBorderWidth": 2.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "quantityTextColor": [
           1.0,
           1.0,
@@ -1793,6 +2369,12 @@
           1.0
         ],
         "type": "bag_view_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false,
         "zOrder": 110
       },
@@ -1821,6 +2403,18 @@
           71,
           255
         ],
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "buttonColor": [
           140,
           115,
@@ -1839,10 +2433,67 @@
         "buttonWidth": 90.0,
         "cancelText": "Cancel",
         "confirmText": "Confirm",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "quantity_selector",
+        "maxButtonColor": [
+          102,
+          89,
+          51,
+          255
+        ],
+        "maxButtonFontSize": 13.0,
+        "maxButtonHoverColor": [
+          140,
+          122,
+          71,
+          255
+        ],
+        "maxButtonText": "Max",
+        "maxButtonTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "maxButtonWidth": 44.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "quantityFontSize": 16.0,
         "titleFontSize": 14.0,
         "type": "quantity_selector",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false,
         "zOrder": 115
       },
@@ -1897,6 +2548,12 @@
           0,
           255
         ],
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "borderColor": [
           89,
           66,
@@ -1904,12 +2561,36 @@
           255
         ],
         "borderWidth": 0.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "fontSize": 40.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "highlightColor": [
           255,
           220,
           6,
           333
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "id": "tab_bar",
         "inactiveTabBg": [
@@ -1925,6 +2606,12 @@
           255
         ],
         "opacity": 2222.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "tabFontSize": 40.0,
         "tabLabels": [
           "STS",
@@ -1940,11 +2627,53 @@
         ],
         "tabSize": 160.0,
         "type": "menu_tab_bar",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "zOrder": 10
       }
     ],
+    "disabledColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientBottom": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientTop": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "hoverColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "id": "menu_root",
-    "type": "panel"
+    "pressedColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "type": "panel",
+    "uiShadowColor": [
+      0,
+      0,
+      0,
+      0
+    ]
   },
   "screen": "fate_menu_panels"
 }

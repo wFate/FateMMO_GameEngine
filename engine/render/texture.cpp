@@ -393,6 +393,11 @@ void TextureCache::ensurePlaceholder() {
     placeholderTexture_->loadFromMemory(magenta, 1, 1, 4);
 }
 
+std::shared_ptr<Texture> TextureCache::placeholder() {
+    ensurePlaceholder();
+    return placeholderTexture_;
+}
+
 void TextureCache::requestAsyncLoad(const std::string& path) {
     // If already cached, nothing to do
     auto it = cache_.find(path);

@@ -89,6 +89,11 @@ public:
     void drawEllipseRing(const Vec2& center, float radiusX, float radiusY, float thickness,
                          const Color& color, float depth = 0.0f, int segments = 24);
 
+    // Draw a portion of an ellipse ring between startAngle and endAngle (radians)
+    void drawEllipseRingArc(const Vec2& center, float radiusX, float radiusY,
+                            float thickness, float startAngle, float endAngle,
+                            const Color& color, float depth = 0.0f, int segments = 12);
+
     // Draw a filled arc (pie slice) from startAngle to endAngle (radians, 0=right, CCW)
     void drawArc(const Vec2& center, float radius, float startAngle, float endAngle,
                  const Color& color, float depth = 0.0f, int segments = 24);

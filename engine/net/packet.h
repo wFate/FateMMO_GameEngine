@@ -124,7 +124,9 @@ namespace PacketType {
     constexpr uint8_t CmdClaimAdReward          = 0x47;
     constexpr uint8_t CmdBagUseItem             = 0x48;
     constexpr uint8_t CmdBagDestroyItem         = 0x49;
+    constexpr uint8_t CmdBagMoveItem            = 0x4C;
     constexpr uint8_t CmdSetRecall              = 0x4A;
+    constexpr uint8_t CmdSpectateScene          = 0x4B;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
@@ -167,6 +169,7 @@ namespace PacketType {
     constexpr uint8_t SvAdRewardResult           = 0xCB;
     constexpr uint8_t SvKick                     = 0xCC;
     constexpr uint8_t SvRecallResult             = 0xCD;
+    constexpr uint8_t SvScenePopulated           = 0xCE; // Server finished initial entity replication for scene
 } // namespace PacketType
 
 // ============================================================================

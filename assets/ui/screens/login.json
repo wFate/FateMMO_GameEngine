@@ -11,6 +11,18 @@
         0.0
       ]
     },
+    "backgroundColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "borderColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "buttonBgColor": [
       0.350210964679718,
       0.23347394168376923,
@@ -37,12 +49,17 @@
       0.0,
       1.0
     ],
+    "buttonTextOffset": [
+      0.0,
+      0.0
+    ],
     "checkboxBorderColor": [
       0.44999998807907104,
       0.44999998807907104,
       0.550000011920929,
       1.0
     ],
+    "checkboxBorderWidth": 1.0,
     "checkboxInnerInset": 3.0,
     "checkboxLabelGap": 5.0,
     "checkboxOffColor": [
@@ -60,6 +77,12 @@
     "checkboxSize": 20.0,
     "cursorInset": 8.0,
     "cursorWidth": 1.0,
+    "disabledColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "fieldBgColor": [
       0.10000000149011612,
       0.10000000149011612,
@@ -95,6 +118,24 @@
       1.0,
       1.0
     ],
+    "gradientBottom": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientTop": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "hoverColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "id": "login_screen",
     "labelColor": [
       0.550000011920929,
@@ -125,6 +166,12 @@
     "panelWidth": 400.0,
     "portFieldWidth": 70.0,
     "portGap": 8.0,
+    "pressedColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "refHeight": 0.0,
     "rememberFontSize": 23.0,
     "rememberMe": true,
@@ -150,8 +197,12 @@
       0.3499999940395355,
       1.0
     ],
-    "statusFontSize": 20.0,
-    "statusRowHeight": 20.0,
+    "statusFontSize": 22.0,
+    "statusOffset": [
+      0.0,
+      0.0
+    ],
+    "statusRowHeight": 25.0,
     "statusSuccessColor": [
       0.3499999940395355,
       0.949999988079071,
@@ -189,7 +240,13 @@
       1.0
     ],
     "toggleRowHeight": 25.0,
-    "type": "login_screen"
+    "type": "login_screen",
+    "uiShadowColor": [
+      0,
+      0,
+      0,
+      0
+    ]
   },
   "screen": "login"
 }

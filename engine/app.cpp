@@ -345,6 +345,14 @@ void App::processEvents() {
                 // when cursor leaves viewport while a key is held)
                 if (event.type == SDL_KEYUP)
                     Input::instance().processEvent(event);
+                // Let Ctrl+key shortcuts through to the editor handler
+                // (Ctrl+S save, Ctrl+Z undo, etc.) even when ImGui has focus
+                if (event.type == SDL_KEYDOWN &&
+                    (event.key.keysym.mod & KMOD_CTRL)) {
+                    auto* scene = SceneManager::instance().currentScene();
+                    if (scene)
+                        Editor::instance().handleKeyShortcuts(&scene->world(), event);
+                }
                 continue;
             }
 
@@ -440,15 +448,17 @@ void App::processEvents() {
                 break;
 
             case SDL_MOUSEWHEEL:
-                // Scroll wheel zoom (works when editor is open)
+                // Scroll wheel: spawn zone radius resize takes priority, then camera zoom
                 if (Editor::instance().isViewportHovered()) {
-                    float zoom = camera_.zoom();
-                    if (event.wheel.y > 0) zoom *= 1.15f;  // scroll up = zoom in
-                    else if (event.wheel.y < 0) zoom *= 0.87f; // scroll down = zoom out
-                    // Clamp zoom range
-                    if (zoom < 0.05f) zoom = 0.05f;  // can see ~19,200x10,800px = 600x337 tiles
-                    if (zoom > 8.0f) zoom = 8.0f;    // zoomed in to ~120x67px view
-                    camera_.setZoom(zoom);
+                    if (!Editor::instance().handleSpawnZoneScroll((float)event.wheel.y)) {
+                        float zoom = camera_.zoom();
+                        if (event.wheel.y > 0) zoom *= 1.15f;  // scroll up = zoom in
+                        else if (event.wheel.y < 0) zoom *= 0.87f; // scroll down = zoom out
+                        // Clamp zoom range
+                        if (zoom < 0.05f) zoom = 0.05f;  // can see ~19,200x10,800px = 600x337 tiles
+                        if (zoom > 8.0f) zoom = 8.0f;    // zoomed in to ~120x67px view
+                        camera_.setZoom(zoom);
+                    }
                 }
                 break;
 

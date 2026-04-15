@@ -27,6 +27,15 @@ void ReplicationManager::update(World& world, NetServer& server) {
         if (client.playerEntityId == 0) return; // not spawned yet
         buildVisibility(world, client);
         sendDiffs(world, server, client);
+
+        // After the first replication tick following a scene change (or initial
+        // login), notify the client that all initial entities have been sent.
+        // The client holds its loading screen until this arrives.
+        if (client.pendingScenePopulated) {
+            client.pendingScenePopulated = false;
+            server.sendTo(client.clientId, Channel::ReliableOrdered,
+                          PacketType::SvScenePopulated, nullptr, 0);
+        }
     });
 
     // Clear after all diffs are sent — unregisterEntity() populates this during the tick
@@ -90,8 +99,11 @@ void ReplicationManager::buildVisibility(World& world, ClientConnection& client)
     client.aoi.current.clear();
 
     // Determine the client's current scene from their player entity
+    // (spectateScene overrides: replication shows the spectated scene instead)
     std::string clientScene;
-    if (client.playerEntityId != 0) {
+    if (!client.spectateScene.empty()) {
+        clientScene = client.spectateScene;
+    } else if (client.playerEntityId != 0) {
         auto pit = pidToHandle_.find(client.playerEntityId);
         if (pit != pidToHandle_.end()) {
             Entity* playerEntity = world.getEntity(pit->second);
@@ -110,23 +122,25 @@ void ReplicationManager::buildVisibility(World& world, ClientConnection& client)
         Entity* entity = world.getEntity(EntityHandle(handleValue));
         if (!entity || !entity->isActive()) continue;
 
-        // Scene filter: only include entities in the same scene as the client
+        // Scene filter: only include entities in the same scene as the client.
+        // Every entity MUST have a scene — empty sceneId means it was never
+        // placed in a scene and must NOT leak to any client.
         if (!clientScene.empty()) {
             // Check mob scene (EnemyStatsComponent::sceneId)
             auto* es = entity->getComponent<EnemyStatsComponent>();
-            if (es && !es->stats.sceneId.empty() && es->stats.sceneId != clientScene) continue;
+            if (es && es->stats.sceneId != clientScene) continue;
 
             // Check player scene (CharacterStatsComponent::currentScene)
             auto* otherCs = entity->getComponent<CharacterStatsComponent>();
-            if (otherCs && !otherCs->stats.currentScene.empty() && otherCs->stats.currentScene != clientScene) continue;
+            if (otherCs && otherCs->stats.currentScene != clientScene) continue;
 
             // Check NPC scene (NPCComponent::sceneId)
             auto* npc = entity->getComponent<NPCComponent>();
-            if (npc && !npc->sceneId.empty() && npc->sceneId != clientScene) continue;
+            if (npc && npc->sceneId != clientScene) continue;
 
             // Check dropped item scene (DroppedItemComponent::sceneId)
             auto* drop = entity->getComponent<DroppedItemComponent>();
-            if (drop && !drop->sceneId.empty() && drop->sceneId != clientScene) continue;
+            if (drop && drop->sceneId != clientScene) continue;
         }
 
         // Custom visibility filter (e.g. GM invisibility)

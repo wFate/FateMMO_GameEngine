@@ -30,6 +30,11 @@ public:
     size_t pendingReliableCount() const { return pending_.size(); }
     float rtt() const { return rtt_; }
 
+    // True when the pending queue is >75% full — client is likely dead or
+    // severely lagged. Callers should skip sending new reliable packets
+    // to avoid filling the queue and spamming drop warnings.
+    bool isCongested() const { return pending_.size() >= MAX_PENDING_PACKETS * 3 / 4; }
+
     void reset() {
         localSequence_ = 0;
         remoteSequence_ = 0;

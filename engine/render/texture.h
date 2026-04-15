@@ -80,6 +80,9 @@ public:
     size_t entryCount() const { return cache_.size(); }
     void advanceFrame() { ++frameCounter_; }
 
+    // 1x1 magenta fallback for missing textures (created on first use)
+    std::shared_ptr<Texture> placeholder();
+
     // Async loading: decode on fiber job, GPU upload on main thread via AssetRegistry
     void requestAsyncLoad(const std::string& path);
     void processUploads(int maxPerFrame = 2);

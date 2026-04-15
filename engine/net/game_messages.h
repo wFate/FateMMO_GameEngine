@@ -607,15 +607,24 @@ struct SvLevelUpMsg {
 struct CmdEnchantMsg {
     uint8_t inventorySlot = 0;
     uint8_t useProtectionStone = 0;
+    uint8_t isBagItem = 0;    // 1 = target is inside a bag
+    uint8_t bagSlot = 0;      // main inventory slot of the bag
+    uint8_t bagSubSlot = 0;   // sub-slot within the bag
 
     void write(ByteWriter& w) const {
         w.writeU8(inventorySlot);
         w.writeU8(useProtectionStone);
+        w.writeU8(isBagItem);
+        w.writeU8(bagSlot);
+        w.writeU8(bagSubSlot);
     }
     static CmdEnchantMsg read(ByteReader& r) {
         CmdEnchantMsg m;
         m.inventorySlot = r.readU8();
         m.useProtectionStone = r.readU8();
+        m.isBagItem = r.readU8();
+        m.bagSlot = r.readU8();
+        m.bagSubSlot = r.readU8();
         return m;
     }
 };
@@ -647,11 +656,22 @@ struct SvEnchantResultMsg {
 // ============================================================================
 struct CmdRepairMsg {
     uint8_t inventorySlot = 0;
+    uint8_t isBagItem = 0;
+    uint8_t bagSlot = 0;
+    uint8_t bagSubSlot = 0;
 
-    void write(ByteWriter& w) const { w.writeU8(inventorySlot); }
+    void write(ByteWriter& w) const {
+        w.writeU8(inventorySlot);
+        w.writeU8(isBagItem);
+        w.writeU8(bagSlot);
+        w.writeU8(bagSubSlot);
+    }
     static CmdRepairMsg read(ByteReader& r) {
         CmdRepairMsg m;
         m.inventorySlot = r.readU8();
+        m.isBagItem = r.readU8();
+        m.bagSlot = r.readU8();
+        m.bagSubSlot = r.readU8();
         return m;
     }
 };
@@ -681,15 +701,24 @@ struct SvRepairResultMsg {
 struct CmdExtractCoreMsg {
     uint8_t itemSlot = 0;
     uint8_t scrollSlot = 0;
+    uint8_t isBagItem = 0;
+    uint8_t bagSlot = 0;
+    uint8_t bagSubSlot = 0;
 
     void write(ByteWriter& w) const {
         w.writeU8(itemSlot);
         w.writeU8(scrollSlot);
+        w.writeU8(isBagItem);
+        w.writeU8(bagSlot);
+        w.writeU8(bagSubSlot);
     }
     static CmdExtractCoreMsg read(ByteReader& r) {
         CmdExtractCoreMsg m;
         m.itemSlot = r.readU8();
         m.scrollSlot = r.readU8();
+        m.isBagItem = r.readU8();
+        m.bagSlot = r.readU8();
+        m.bagSubSlot = r.readU8();
         return m;
     }
 };
@@ -1748,6 +1777,25 @@ struct CmdEditorPauseMsg {
 };
 
 // ============================================================================
+// Client -> Server: CmdSpectateScene
+// ============================================================================
+struct CmdSpectateSceneMsg {
+    std::string targetScene;
+    uint8_t active = 1;
+
+    void write(ByteWriter& w) const {
+        w.writeString(targetScene);
+        w.writeU8(active);
+    }
+    static CmdSpectateSceneMsg read(ByteReader& r) {
+        CmdSpectateSceneMsg m;
+        m.targetScene = r.readString();
+        m.active = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
 // Server -> Client: SvCostumeDefs (all costume definitions)
 // ============================================================================
 struct CostumeDefEntry {
@@ -2029,6 +2077,13 @@ struct SvBagContentsSlot {
     std::string itemType;     // e.g. "Consumable", "Weapon", "Armor"
     uint16_t quantity = 0;
     uint8_t enchantLevel = 0;
+    int32_t levelReq = 0;
+    int32_t damageMin = 0;
+    int32_t damageMax = 0;
+    int32_t armor = 0;
+    std::string rolledStats;  // JSON string
+    std::string socketStat;
+    int32_t socketValue = 0;
     void write(ByteWriter& w) const {
         w.writeU8(subSlot);
         w.writeString(instanceId);
@@ -2038,6 +2093,13 @@ struct SvBagContentsSlot {
         w.writeString(itemType);
         w.writeU16(quantity);
         w.writeU8(enchantLevel);
+        w.writeI32(levelReq);
+        w.writeI32(damageMin);
+        w.writeI32(damageMax);
+        w.writeI32(armor);
+        w.writeString(rolledStats);
+        w.writeString(socketStat);
+        w.writeI32(socketValue);
     }
     static SvBagContentsSlot read(ByteReader& r) {
         SvBagContentsSlot m;
@@ -2049,6 +2111,13 @@ struct SvBagContentsSlot {
         m.itemType = r.readString();
         m.quantity = r.readU16();
         m.enchantLevel = r.readU8();
+        m.levelReq = r.readI32();
+        m.damageMin = r.readI32();
+        m.damageMax = r.readI32();
+        m.armor = r.readI32();
+        m.rolledStats = r.readString();
+        m.socketStat = r.readString();
+        m.socketValue = r.readI32();
         return m;
     }
 };
@@ -2070,6 +2139,27 @@ struct CmdBagDestroyItemMsg {
         CmdBagDestroyItemMsg m;
         m.bagSlot = r.readU8();
         m.bagSubSlot = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: Move/swap an item within the same bag
+// ============================================================================
+struct CmdBagMoveItemMsg {
+    uint8_t bagSlot = 0;
+    uint8_t fromSubSlot = 0;
+    uint8_t toSubSlot = 0;
+    void write(ByteWriter& w) const {
+        w.writeU8(bagSlot);
+        w.writeU8(fromSubSlot);
+        w.writeU8(toSubSlot);
+    }
+    static CmdBagMoveItemMsg read(ByteReader& r) {
+        CmdBagMoveItemMsg m;
+        m.bagSlot = r.readU8();
+        m.fromSubSlot = r.readU8();
+        m.toSubSlot = r.readU8();
         return m;
     }
 };

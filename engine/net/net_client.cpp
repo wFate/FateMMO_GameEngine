@@ -765,6 +765,10 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onRecallResult) onRecallResult(msg);
             break;
         }
+        case PacketType::SvScenePopulated: {
+            if (onScenePopulated) onScenePopulated();
+            break;
+        }
         default:
             break;
     }
@@ -1235,6 +1239,18 @@ void NetClient::sendEnchant(uint8_t inventorySlot, uint8_t useProtectionStone) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdEnchant, w.data(), w.size());
 }
 
+void NetClient::sendBagEnchant(uint8_t bagSlot, uint8_t bagSubSlot, uint8_t useProtectionStone) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdEnchantMsg msg;
+    msg.isBagItem = 1;
+    msg.bagSlot = bagSlot;
+    msg.bagSubSlot = bagSubSlot;
+    msg.useProtectionStone = useProtectionStone;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdEnchant, w.data(), w.size());
+}
+
 void NetClient::sendRepair(uint8_t inventorySlot) {
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
@@ -1244,11 +1260,34 @@ void NetClient::sendRepair(uint8_t inventorySlot) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdRepair, w.data(), w.size());
 }
 
+void NetClient::sendBagRepair(uint8_t bagSlot, uint8_t bagSubSlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdRepairMsg msg;
+    msg.isBagItem = 1;
+    msg.bagSlot = bagSlot;
+    msg.bagSubSlot = bagSubSlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdRepair, w.data(), w.size());
+}
+
 void NetClient::sendExtractCore(uint8_t itemSlot, uint8_t scrollSlot) {
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
     CmdExtractCoreMsg msg;
     msg.itemSlot = itemSlot;
+    msg.scrollSlot = scrollSlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdExtractCore, w.data(), w.size());
+}
+
+void NetClient::sendBagExtractCore(uint8_t bagSlot, uint8_t bagSubSlot, uint8_t scrollSlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdExtractCoreMsg msg;
+    msg.isBagItem = 1;
+    msg.bagSlot = bagSlot;
+    msg.bagSubSlot = bagSubSlot;
     msg.scrollSlot = scrollSlot;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdExtractCore, w.data(), w.size());
@@ -1321,6 +1360,17 @@ void NetClient::sendBagDestroyItem(uint8_t bagSlot, uint8_t bagSubSlot) {
     msg.bagSubSlot = bagSubSlot;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdBagDestroyItem, w.data(), w.size());
+}
+
+void NetClient::sendBagMoveItem(uint8_t bagSlot, uint8_t fromSubSlot, uint8_t toSubSlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdBagMoveItemMsg msg;
+    msg.bagSlot = bagSlot;
+    msg.fromSubSlot = fromSubSlot;
+    msg.toSubSlot = toSubSlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBagMoveItem, w.data(), w.size());
 }
 
 void NetClient::sendClaimAdReward() {
@@ -1416,6 +1466,16 @@ void NetClient::sendEditorPause(bool paused) {
     msg.paused = paused ? 1 : 0;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdEditorPause, w.data(), w.size());
+}
+
+void NetClient::sendSpectateScene(const std::string& targetScene, bool active) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdSpectateSceneMsg msg;
+    msg.targetScene = targetScene;
+    msg.active = active ? 1 : 0;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdSpectateScene, w.data(), w.size());
 }
 
 void NetClient::sendAdminSaveContent(uint8_t contentType, bool isNew, const std::string& json) {

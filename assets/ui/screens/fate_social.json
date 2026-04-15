@@ -11,8 +11,41 @@
         0.0
       ]
     },
+    "backgroundColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "borderColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "children": [
       {
+        "adBannerActiveBorderColor": [
+          77,
+          204,
+          77,
+          255
+        ],
+        "adBannerBgColor": [
+          38,
+          31,
+          20,
+          230
+        ],
+        "adBannerBorderColor": [
+          217,
+          179,
+          77,
+          255
+        ],
+        "adBannerFontSize": 12.0,
+        "adBannerHeight": 28.0,
+        "adBannerText": "Tap for 20% EXP Bonus",
         "anchor": {
           "offset": [
             0.0,
@@ -30,6 +63,12 @@
           0,
           180
         ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "channelBtnBgColor": [
           46,
           46,
@@ -43,23 +82,22 @@
           0.0,
           0.0
         ],
-        "chatIdleLines": 3,
         "closeBtnBgColor": [
-          38,
-          31,
-          31,
-          191
-        ],
-        "closeBtnBorderColor": [
           26,
           24,
           24,
-          255
+          0
+        ],
+        "closeBtnBorderColor": [
+          30,
+          28,
+          28,
+          0
         ],
         "closeBtnIconColor": [
           255,
-          224,
-          224,
+          255,
+          255,
           255
         ],
         "closeBtnSize": 100.0,
@@ -231,6 +269,12 @@
           77,
           255
         ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "factionFenorColor": [
           64,
           140,
@@ -284,34 +328,25 @@
         "fontSizeSystemTrade": 0.0,
         "fullPanelHeight": 777.0,
         "fullPanelWidth": 1600.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "chat_panel",
-        "idleBgColor": [
-          0,
-          0,
-          0,
-          100
-        ],
-        "idleDepthOffset": 0.0,
-        "idleFontSize": 40.0,
-        "idleLineSpacing": 40.0,
-        "idleOffset": [
-          200.0,
-          0.0
-        ],
-        "idlePadding": 4.0,
-        "idleShadowColor": [
-          0,
-          0,
-          0,
-          255
-        ],
-        "idleShadowOffset": 0.0,
-        "idleTextColor": [
-          255,
-          255,
-          255,
-          255
-        ],
         "inputBarBgColor": [
           26,
           26,
@@ -368,7 +403,19 @@
           140,
           179
         ],
-        "type": "chat_panel"
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "chat_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ]
       },
       {
         "anchor": {
@@ -382,6 +429,12 @@
             60.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "bgColor": [
           31,
           31,
@@ -395,7 +448,37 @@
           204
         ],
         "borderRadius": 8.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "emoticon_panel",
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "scrollOffset": 0.0,
         "slotBgColor": [
           51,
@@ -414,6 +497,12 @@
         "slotSize": 48.0,
         "stripHeight": 60.0,
         "type": "emoticon_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -428,12 +517,24 @@
             170.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "barGap": 2.0,
         "barOffset": [
           0.0,
           0.0
         ],
         "barOffsetY": 13.0,
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "borderWidth": 1.0,
         "cardBgColor": [
           20,
@@ -457,6 +558,30 @@
           255
         ],
         "crownSize": 5.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hpBarBgColor": [
           38,
           20,
@@ -527,9 +652,21 @@
           204
         ],
         "portraitRimWidth": 1.5,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "textGapAfterPortrait": 6.0,
         "textPadRight": 4.0,
-        "type": "party_frame"
+        "type": "party_frame",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ]
       },
       {
         "acceptBtnColor": [
@@ -580,6 +717,12 @@
           64,
           242
         ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "dividerColor": [
           97,
           71,
@@ -592,7 +735,25 @@
           0,
           255
         ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "headerHeight": 28.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "trade_window",
         "labelColor": [
           64,
@@ -606,6 +767,12 @@
           0.0
         ],
         "padding": 6.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "smallFontSize": 9.0,
         "style": "panel_parchment",
         "theirOfferOffset": [
@@ -624,6 +791,12 @@
           0.0
         ],
         "type": "trade_window",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -670,6 +843,12 @@
           255
         ],
         "closeRadius": 11.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "dividerColor": [
           97,
           71,
@@ -681,6 +860,18 @@
           0.0
         ],
         "emblemSize": 64.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "guildInfoOffset": [
           0.0,
           0.0
@@ -693,6 +884,12 @@
         ],
         "guildNameFontSize": 14.0,
         "headerHeight": 32.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "guild_panel",
         "infoColor": [
           107,
@@ -712,6 +909,12 @@
           217,
           77,
           255
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "rosterHeaderBgColor": [
           184,
@@ -752,11 +955,53 @@
           0.0
         ],
         "type": "guild_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       }
     ],
+    "disabledColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientBottom": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientTop": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "hoverColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "id": "social_root",
-    "type": "panel"
+    "pressedColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "type": "panel",
+    "uiShadowColor": [
+      0,
+      0,
+      0,
+      0
+    ]
   },
   "screen": "fate_social"
 }

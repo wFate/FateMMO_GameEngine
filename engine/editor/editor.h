@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include "engine/ecs/world.h"
 #include "engine/ecs/entity.h"
 #include "engine/ecs/entity_handle.h"
@@ -146,6 +147,7 @@ public:
     bool showCollisionDebug() const { return showCollisionDebug_; }
     bool showSpawnDebug() const { return showSpawnDebug_; }
     bool showGrid() const { return showGrid_; }
+    std::string currentSceneId() const;
     bool showGameUI() const { return showGameUI_; }
 
     // FBO management
@@ -156,6 +158,8 @@ public:
     void handleSceneDrag(Camera* camera, const Vec2& screenPos,
                          int windowWidth, int windowHeight);
     void handleMouseUp();
+    // Returns true if scroll was consumed by spawn zone resize (caller should skip camera zoom)
+    bool handleSpawnZoneScroll(float scrollY);
     void paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
                      int windowWidth, int windowHeight);
 
@@ -165,6 +169,14 @@ public:
     void setPaused(bool p) { paused_ = p; }
     const std::string& currentScenePath() const { return currentScenePath_; }
     void setCurrentScenePath(const std::string& p) { currentScenePath_ = p; }
+
+    // Called when a scene is loaded during play mode (for spectator integration)
+    std::function<void(const std::string& sceneName)> onSceneLoadedInPlayMode;
+
+    // Admin observer mode callbacks
+    std::function<void()> onObserveRequested;
+    std::function<void()> onObserveStop;
+    bool isObserving_ = false;
 
     bool wantsInput() const { return open_ && (wantsKeyboard_ || wantsMouse_); }
     bool wantsKeyboard() const { return open_ && wantsKeyboard_; }
@@ -335,6 +347,14 @@ private:
     Vec2 dragStartWorldPos_;
     Vec2 dragStartEntityPos_;
     Vec2 dragStartEntitySize_;
+
+    // Spawn zone overlay (DB-backed circles)
+    int selectedSpawnZoneIdx_ = -1;       // index into contentBrowserPanel_.spawnList()
+    bool isDraggingSpawnZone_ = false;
+    Vec2 spawnDragStartWorld_;
+    float spawnDragStartCx_ = 0, spawnDragStartCy_ = 0;
+    float spawnRadiusBeforeResize_ = 0;
+    bool spawnRadiusDirty_ = false;       // true when scroll-wheel changed radius
 
     // Tile layer visibility (ground, detail, fringe, collision)
     bool showLayer_[4] = {true, true, true, true};

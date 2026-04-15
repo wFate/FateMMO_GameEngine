@@ -11,6 +11,18 @@
         0.0
       ]
     },
+    "backgroundColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "borderColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "children": [
       {
         "anchor": {
@@ -28,8 +40,20 @@
             0.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "barCornerRadius": 25.0,
         "barHeight": 70.0,
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "buttonFontSize": 20.0,
         "chatBtnBgColor": [
           40,
@@ -65,6 +89,30 @@
           40.0
         ],
         "coordStyle": "Normal",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hpBarBgColor": [
           26,
           26,
@@ -85,7 +133,7 @@
         "hpBarWidth": 500.0,
         "hpLabelColor": [
           255,
-          0,
+          6,
           0,
           255
         ],
@@ -96,7 +144,7 @@
         ],
         "hpNumberColor": [
           255,
-          71,
+          0,
           0,
           255
         ],
@@ -224,6 +272,30 @@
           0.0
         ],
         "portraitRadius": 0.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "shieldTier1Color": [
+          51,
+          115,
+          191,
+          217
+        ],
+        "shieldTier2Color": [
+          89,
+          153,
+          230,
+          217
+        ],
+        "shieldTier3Color": [
+          140,
+          204,
+          255,
+          217
+        ],
         "showPortrait": false,
         "stripBgColor": [
           60,
@@ -231,10 +303,22 @@
           58,
           3
         ],
+        "stripBorderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "stripBorderWidth": 0.0,
         "stripCornerRadius": 0.0,
         "topBarHeight": 40.0,
-        "type": "fate_status_bar"
+        "type": "fate_status_bar",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ]
       },
       {
         "abbrevFontSize": 14.0,
@@ -255,17 +339,59 @@
             40.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "cooldownOverlayColor": [
           0,
           0,
           0,
           140
         ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "iconAtlasCols": 8,
         "iconAtlasRows": 4,
         "iconSize": 40.0,
         "id": "buff_bar",
         "maxVisible": 12,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "spacing": 5.0,
         "stackBadgeBgColor": [
           0,
@@ -305,27 +431,77 @@
           255
         ],
         "tooltipWidth": 140.0,
-        "type": "buff_bar"
+        "type": "buff_bar",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ]
       },
       {
         "anchor": {
           "offset": [
             0.0,
-            140.0
+            120.0
           ],
           "preset": "TopCenter",
           "size": [
-            300.0,
-            50.0
+            320.0,
+            60.0
           ]
         },
-        "barHeight": 0.0,
-        "barPadding": 20.0,
-        "hpBarBgColor": [
-          84,
-          82,
-          82,
+        "backgroundColor": [
+          0,
+          0,
+          0,
           0
+        ],
+        "barBorderColor": [
+          77,
+          77,
+          77,
+          153
+        ],
+        "barBorderWidth": 1.0,
+        "barCornerRadius": 3.0,
+        "barHeight": 22.0,
+        "barPadding": 30.0,
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hpBarBgColor": [
+          26,
+          26,
+          26,
+          217
         ],
         "hpBarOffset": [
           0.0,
@@ -337,28 +513,84 @@
           38,
           255
         ],
-        "hpFontSize": 0.0,
+        "hpFontSize": 20.0,
+        "hpTextColor": [
+          255,
+          255,
+          255,
+          242
+        ],
         "hpTextOffset": [
           0.0,
           0.0
         ],
         "id": "target_frame",
+        "levelFontSize": 0.0,
+        "levelOffset": [
+          0.0,
+          0.0
+        ],
+        "levelTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "nameBgColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "nameBgPadding": 4.0,
         "nameFontSize": 30.0,
         "nameOffset": [
-          1.0,
-          10.0
+          0.0,
+          0.0
         ],
-        "nameTopPad": 0.0,
+        "nameTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "nameTopPad": 6.0,
+        "panelBgColor": [
+          54,
+          37,
+          0,
+          234
+        ],
+        "panelBorderColor": [
+          0,
+          0,
+          0,
+          230
+        ],
+        "panelBorderWidth": 1.5,
+        "panelCornerRadius": 6.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "targetName": "Timber Wolf",
         "type": "target_frame",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false,
         "zOrder": -1
       },
       {
         "activeColor": [
-          251,
-          251,
-          251,
+          255,
+          255,
+          255,
           217
         ],
         "activeLenRatio": 0.2800000011920929,
@@ -376,48 +608,101 @@
         },
         "armColor": [
           255,
-          239,
+          168,
           0,
           217
         ],
         "armHeightRatio": 0.8500000238418579,
         "armWidthRatio": 0.3199999928474426,
         "arrowColor": [
-          56,
-          60,
-          0,
+          39,
+          42,
+          4,
           217
         ],
         "arrowDistRatio": 0.3499999940395355,
         "arrowHeightRatio": 0.019999999552965164,
         "arrowWidthRatio": 0.07000000029802322,
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "bgColor": [
-          45,
-          33,
-          2,
+          42,
+          30,
+          0,
           290
         ],
+        "borderColor": [
+          86,
+          59,
+          59,
+          333
+        ],
+        "borderWidth": 7.0,
         "centerColor": [
-          159,
-          154,
-          77,
+          153,
+          146,
+          48,
           49
         ],
         "centerSizeRatio": 0.20000000298023224,
         "deadZoneRadius": 40.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "dpadSize": 250.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "dpad",
         "opacity": 0.8500000238418579,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "showBounds": true,
-        "type": "dpad"
+        "type": "dpad",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ]
       },
       {
-        "actionFontSize": 10.0,
+        "actionFontSize": 30.0,
         "actionTextColor": [
-          77,
-          51,
-          26,
+          255,
+          168,
+          0,
           242
+        ],
+        "actionTextOffset": [
+          0.0,
+          -24.0
         ],
         "anchor": {
           "offset": [
@@ -430,13 +715,31 @@
             380.0
           ]
         },
-        "arcRadius": 180.0,
-        "attackButtonSize": 80.0,
+        "arcRadius": 220.0,
+        "attackBgColor": [
+          65,
+          40,
+          7,
+          3333
+        ],
+        "attackButtonSize": 120.0,
         "attackOffset": [
           0.0,
-          120.0
+          100.0
         ],
-        "cooldownFontSize": 11.0,
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "cooldownFontSize": 30.0,
         "cooldownOverlayColor": [
           0,
           0,
@@ -448,6 +751,12 @@
           255,
           255,
           230
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "emptySlotBgColor": [
           38,
@@ -469,38 +778,67 @@
         ],
         "endAngleDeg": 280.0,
         "filledSlotBgColor": [
-          46,
-          41,
-          56,
-          224
+          42,
+          29,
+          0,
+          255
         ],
         "filledSlotBorderColor": [
-          153,
-          140,
-          184,
+          96,
+          58,
+          0,
           242
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "id": "skill_arc",
-        "lvFontSize": 8.0,
+        "lvFontSize": 22.0,
         "lvTextColor": [
-          255,
-          230,
-          153,
+          254,
+          254,
+          254,
           230
         ],
-        "pageActiveTextColor": [
-          77,
+        "lvTextOffset": [
+          0.0,
+          0.0
+        ],
+        "metallicOpacity": 0.07000000029802322,
+        "pageActiveBgColor": [
           51,
-          26,
+          33,
+          0,
+          3333
+        ],
+        "pageActiveTextColor": [
+          255,
+          161,
+          0,
           242
         ],
-        "pageDotRadius": 12.0,
-        "pageFontSize": 11.0,
+        "pageDotRadius": 14.0,
+        "pageFontSize": 20.0,
         "pageInactiveBgColor": [
-          115,
-          115,
-          128,
-          179
+          54,
+          37,
+          0,
+          100
         ],
         "pageInactiveTextColor": [
           255,
@@ -508,33 +846,55 @@
           255,
           204
         ],
-        "pickUpButtonSize": 60.0,
-        "pickUpFontSize": 9.0,
+        "pickUpBgColor": [
+          65,
+          40,
+          7,
+          3333
+        ],
+        "pickUpButtonSize": 80.0,
+        "pickUpFontSize": 18.0,
         "pickUpOffset": [
-          -50.0,
-          40.0
+          -100.0,
+          20.0
         ],
         "pickUpTextColor": [
-          77,
-          51,
-          26,
+          255,
+          155,
+          0,
           242
+        ],
+        "pickUpTextOffset": [
+          0.0,
+          0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "skillArcOffset": [
           0.0,
           0.0
         ],
-        "slotArcEndDeg": 280.0,
+        "slotArcEndDeg": 310.0,
         "slotArcOffset": [
-          0.0,
-          -70.0
+          -2.0,
+          -80.0
         ],
-        "slotArcRadius": 50.0,
-        "slotArcStartDeg": 140.0,
+        "slotArcRadius": 70.0,
+        "slotArcStartDeg": 190.0,
         "slotCount": 5,
-        "slotSize": 70.0,
+        "slotSize": 90.0,
         "startAngleDeg": 170.0,
-        "type": "skill_arc"
+        "type": "skill_arc",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ]
       },
       {
         "anchor": {
@@ -565,6 +925,12 @@
           230
         ],
         "borderWidth": 1.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "fillColor": [
           255,
           236,
@@ -572,7 +938,31 @@
           255
         ],
         "fontSize": 30.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "exp_bar",
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "shadowColor": [
           107,
           57,
@@ -585,6 +975,12 @@
           0.0
         ],
         "type": "exp_bar",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "xp": 264.0,
         "xpToLevel": 161739120.0
       },
@@ -600,6 +996,18 @@
             160.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "buttonColor": [
           140,
           115,
@@ -622,6 +1030,30 @@
         "buttonWidth": 100.0,
         "cancelText": "Cancel",
         "confirmText": "Confirm",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "dungeon_invite_dialog",
         "message": "Are you sure?",
         "messageFontSize": 13.0,
@@ -629,7 +1061,19 @@
           0.0,
           0.0
         ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "type": "confirm_dialog",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false,
         "zOrder": 100
       },
@@ -645,6 +1089,18 @@
             140.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "buttonColor": [
           140,
           115,
@@ -667,29 +1123,71 @@
         "buttonWidth": 100.0,
         "cancelText": "Cancel",
         "confirmText": "Destroy",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "destroy_item_dialog",
-        "message": "Destroy this item?",
+        "message": "Destroy Leather Moccasins?",
         "messageFontSize": 13.0,
         "messageOffset": [
           0.0,
           0.0
         ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "type": "confirm_dialog",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false,
         "zOrder": 110
       },
       {
         "anchor": {
           "offset": [
-            1280.0,
-            664.5
+            1538.40234375,
+            747.7272338867188
           ],
           "preset": "TopLeft",
           "size": [
-            187.60000610351563,
-            178.05999755859375
+            140.0,
+            165.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "bgColor": [
           20,
           20,
@@ -703,6 +1201,12 @@
           230
         ],
         "borderWidth": 1.5,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "disabledTextColor": [
           115,
           110,
@@ -714,6 +1218,18 @@
           230,
           217,
           255
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
         ],
         "headerPadding": 12.0,
         "hoverColor": [
@@ -756,6 +1272,12 @@
         "separatorHeight": 1.0,
         "separatorMargin": 8.0,
         "type": "player_context_menu",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false,
         "zOrder": 120
       },
@@ -789,6 +1311,12 @@
             140.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "bgColor": [
           20,
           20,
@@ -829,6 +1357,30 @@
           255,
           255
         ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "invite_prompt",
         "messageColor": [
           235,
@@ -844,6 +1396,12 @@
         "messagePadTop": 8.0,
         "panelHeight": 120.0,
         "panelWidth": 260.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "titleColor": [
           242,
           209,
@@ -857,6 +1415,12 @@
         ],
         "titlePadTop": 10.0,
         "type": "invite_prompt",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false,
         "zOrder": 130
       },
@@ -872,11 +1436,17 @@
             100.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "bgColor": [
           0,
           0,
           0,
-          130
+          170
         ],
         "bgCornerRadius": 30.0,
         "bgHeight": 140.0,
@@ -884,12 +1454,48 @@
           345.0,
           0.0
         ],
-        "bgWidth": 1265.0,
+        "bgWidth": 1220.0,
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "fontSize": 33.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "chat_idle_overlay",
         "lineSpacing": 10.0,
         "maxLines": 3,
         "padding": 350.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "shadowColor": [
           0,
           0,
@@ -904,11 +1510,53 @@
           255
         ],
         "type": "chat_idle_overlay",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "zOrder": 50
       }
     ],
+    "disabledColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientBottom": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientTop": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "hoverColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "id": "hud_root",
-    "type": "panel"
+    "pressedColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "type": "panel",
+    "uiShadowColor": [
+      0,
+      0,
+      0,
+      0
+    ]
   },
   "screen": "fate_hud"
 }
