@@ -25,6 +25,8 @@ public:
     nlohmann::json& spawnListMut() { return spawnList_; }
     void saveSpawnZone(const nlohmann::json& zone);
     void ensureSpawnListLoaded();
+    int selectedSpawnIndex() const { return selectedSpawnIndex_; }
+    const std::string& selectedSpawnScene() const { return selectedSpawnScene_; }
 
 private:
     bool open_ = false;
@@ -54,6 +56,7 @@ private:
 
     nlohmann::json spawnList_ = nlohmann::json::array();
     int selectedSpawnIndex_ = -1;
+    std::string selectedSpawnScene_;
     nlohmann::json editingSpawn_;
     bool spawnListDirty_ = true;
 

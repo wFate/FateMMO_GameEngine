@@ -114,6 +114,15 @@ void ReplicationManager::buildVisibility(World& world, ClientConnection& client)
         }
     }
 
+    // Safety: if we have a player entity but couldn't resolve its scene,
+    // something went wrong (entity destroyed, PID evicted). Send nothing
+    // rather than bypassing the scene filter and flooding all entities.
+    if (clientScene.empty() && client.playerEntityId != 0 && client.spectateScene.empty()) {
+        client.aoi.computeDiff();
+        client.aoi.advance();
+        return;
+    }
+
     for (const auto& [handleValue, pid] : handleToPid_) {
         // Exclude the client's own player entity
         if (pid.value() == client.playerEntityId) continue;

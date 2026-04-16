@@ -544,6 +544,34 @@ void ContentBrowserPanel::drawMobsTab() {
                 drawIntField("Spawn Weight", editingMob_, "spawn_weight", 0, 1000);
             }
 
+            // Show linked spawn zones (read-only summary — edit in Spawn Zones tab)
+            if (ImGui::CollapsingHeader("Spawn Zones (read-only)")) {
+                std::string mobId = jstr(editingMob_, "mob_def_id");
+                int zoneCount = 0;
+                for (int zi = 0; zi < (int)spawnList_.size(); ++zi) {
+                    const auto& zone = spawnList_[zi];
+                    if (jstr(zone, "mob_def_id") != mobId) continue;
+                    zoneCount++;
+
+                    std::string scene = jstr(zone, "scene_id", "???");
+                    std::string zname = jstr(zone, "zone_name", "");
+                    float cx = zone.value("center_x", 0.0f);
+                    float cy = zone.value("center_y", 0.0f);
+                    float rad = zone.value("radius", 0.0f);
+                    int count = zone.value("target_count", 1);
+                    std::string shape = jstr(zone, "zone_shape", "circle");
+
+                    ImGui::BulletText("%s — %s", scene.c_str(), zname.c_str());
+                    ImGui::Text("   Pos: (%.0f, %.0f)  Radius: %.0f  %s  x%d",
+                                cx, cy, rad, shape.c_str(), count);
+                }
+                if (zoneCount == 0) {
+                    ImGui::TextDisabled("No spawn zones for this mob");
+                } else {
+                    ImGui::TextDisabled("Edit zones in the Spawn Zones tab");
+                }
+            }
+
             ImGui::Separator();
 
             // Action buttons
@@ -1009,22 +1037,49 @@ void ContentBrowserPanel::drawSpawnsTab() {
             if (zone.contains("target_count") && zone["target_count"].is_number())
                 count = zone["target_count"].get<int>();
 
-            // Scene group header
+            // Scene group header (clickable — selects all zones for this scene)
             if (scene != lastScene) {
                 if (!lastScene.empty()) ImGui::Spacing();
-                ImGui::TextColored({0.6f,0.8f,1.0f,1.0f}, "%s", scene.c_str());
+                bool sceneSelected = (selectedSpawnScene_ == scene && selectedSpawnIndex_ < 0);
+                if (sceneSelected) ImGui::PushStyleColor(ImGuiCol_Text, {1.0f, 0.9f, 0.2f, 1.0f});
+                else               ImGui::PushStyleColor(ImGuiCol_Text, {0.6f, 0.8f, 1.0f, 1.0f});
+                std::string sceneLabel = scene + "##scene_hdr_" + scene;
+                if (ImGui::Selectable(sceneLabel.c_str(), sceneSelected)) {
+                    selectedSpawnScene_ = scene;
+                    selectedSpawnIndex_ = -1;
+                    editingSpawn_ = nlohmann::json();
+                }
+                ImGui::PopStyleColor();
                 ImGui::Separator();
                 lastScene = scene;
             }
 
+            // Look up mob level range
+            const nlohmann::json* listMob = nullptr;
+            for (const auto& m : mobList_) {
+                if (jstr(m, "mob_def_id") == mobId) { listMob = &m; break; }
+            }
+            int minLvl = listMob ? listMob->value("min_spawn_level", 0) : 0;
+            int maxLvl = listMob ? listMob->value("max_spawn_level", 0) : 0;
+            std::string lvl = (minLvl == maxLvl)
+                ? "Lv" + std::to_string(minLvl)
+                : "Lv" + std::to_string(minLvl) + "-" + std::to_string(maxLvl);
+
             bool selected = (i == selectedSpawnIndex_);
-            std::string label = "  " + mobId + " x" + std::to_string(count) + "##spawn" + std::to_string(i);
+            std::string label = "  " + lvl + " " + mobId + " x" + std::to_string(count);
+            if (!zoneName.empty()) label += "  [" + zoneName + "]";
+            label += "##spawn" + std::to_string(i);
             if (ImGui::Selectable(label.c_str(), selected)) {
                 selectedSpawnIndex_ = i;
+                selectedSpawnScene_.clear();
                 editingSpawn_ = zone;
             }
-            if (ImGui::IsItemHovered() && !zoneName.empty()) {
-                ImGui::SetTooltip("Zone: %s", zoneName.c_str());
+            if (ImGui::IsItemHovered()) {
+                float cx = zone.value("center_x", 0.0f);
+                float cy = zone.value("center_y", 0.0f);
+                float rad = zone.value("radius", 0.0f);
+                std::string dispName = listMob ? jstr(*listMob, "display_name", mobId) : mobId;
+                ImGui::SetTooltip("%s — %s\nPos: (%.0f, %.0f)  Radius: %.0f", dispName.c_str(), zoneName.c_str(), cx, cy, rad);
             }
         }
     }
@@ -1038,12 +1093,42 @@ void ContentBrowserPanel::drawSpawnsTab() {
         } else {
             bool isNewSpawn = editingSpawn_.contains("_isNew");
 
+            // Look up mob definition for display info
+            std::string spawnMobId = jstr(editingSpawn_, "mob_def_id");
+            const nlohmann::json* linkedMob = nullptr;
+            for (const auto& mob : mobList_) {
+                if (jstr(mob, "mob_def_id") == spawnMobId) { linkedMob = &mob; break; }
+            }
+
+            // Mob info header (read-only context from mob definition)
+            if (linkedMob) {
+                std::string dispName = jstr(*linkedMob, "display_name", spawnMobId);
+                int minLvl = linkedMob->value("min_spawn_level", 0);
+                int maxLvl = linkedMob->value("max_spawn_level", 0);
+                int hp = linkedMob->value("base_hp", 0);
+                std::string atkStyle = jstr(*linkedMob, "attack_style", "Melee");
+                bool isBoss = linkedMob->value("is_boss", false);
+                bool isElite = linkedMob->value("is_elite", false);
+
+                std::string tag = isBoss ? " [BOSS]" : (isElite ? " [ELITE]" : "");
+                std::string lvlStr = (minLvl == maxLvl)
+                    ? "Lv " + std::to_string(minLvl)
+                    : "Lv " + std::to_string(minLvl) + "-" + std::to_string(maxLvl);
+
+                ImGui::TextColored({1.0f, 0.9f, 0.4f, 1.0f}, "%s%s", dispName.c_str(), tag.c_str());
+                ImGui::Text("%s  |  HP: %d  |  %s", lvlStr.c_str(), hp, atkStyle.c_str());
+                ImGui::Separator();
+            }
+
             drawStringField("Scene ID", editingSpawn_, "scene_id");
             drawStringField("Zone Name", editingSpawn_, "zone_name");
             drawStringField("Mob Def ID", editingSpawn_, "mob_def_id");
             drawFloatField("Center X", editingSpawn_, "center_x", -999999.0f, 999999.0f);
             drawFloatField("Center Y", editingSpawn_, "center_y", -999999.0f, 999999.0f);
-            drawFloatField("Radius", editingSpawn_, "radius", 0.0f, 999999.0f);
+            drawFloatField("Width (radius)", editingSpawn_, "radius", 0.0f, 999999.0f);
+            drawFloatField("Height", editingSpawn_, "height", 0.0f, 999999.0f);
+            ImGui::SameLine();
+            ImGui::TextDisabled("(0 = same as width)");
             drawComboField("Zone Shape", editingSpawn_, "zone_shape", {"circle", "rectangle"});
             drawIntField("Target Count", editingSpawn_, "target_count", 0, 1000);
             drawIntField("Respawn Override (sec)", editingSpawn_, "respawn_override_seconds", -1, 86400);

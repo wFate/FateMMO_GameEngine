@@ -1051,7 +1051,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Shadow##ttc", &inv->tooltipShadowColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Stat Text##ttc", &inv->tooltipStatColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Separator##ttc", &inv->tooltipSepColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Level Req##ttc", &inv->tooltipLevelColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Level Req (Unmet)##ttc", &inv->tooltipLevelColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Level Req (Met)##ttc", &inv->tooltipLevelMetColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 

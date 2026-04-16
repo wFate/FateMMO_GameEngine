@@ -375,6 +375,17 @@ void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
             contentBrowserPanel_.ensureSpawnListLoaded();
             const auto& list = contentBrowserPanel_.spawnList();
 
+            // Sync viewport selection with content browser panel selection
+            int cbSelection = contentBrowserPanel_.selectedSpawnIndex();
+            const std::string& selectedScene = contentBrowserPanel_.selectedSpawnScene();
+            bool hasSceneSelection = !selectedScene.empty();
+            if (cbSelection >= 0) {
+                selectedSpawnZoneIdx_ = cbSelection;
+            } else if (hasSceneSelection) {
+                selectedSpawnZoneIdx_ = -1;  // clear single-zone when scene is selected
+            }
+            bool hasSelection = (selectedSpawnZoneIdx_ >= 0) || hasSceneSelection;
+
             Mat4 vp = camera->getViewProjection();
             batch->begin(vp);
 
@@ -387,39 +398,62 @@ void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
                     zoneScene = zone["scene_id"].get<std::string>();
                 if (zoneScene != sceneId) continue;
 
-                float cx = 0, cy = 0, r = 100;
+                float cx = 0, cy = 0, r = 100, h = 0;
                 if (zone.contains("center_x") && zone["center_x"].is_number()) cx = zone["center_x"].get<float>();
                 if (zone.contains("center_y") && zone["center_y"].is_number()) cy = zone["center_y"].get<float>();
                 if (zone.contains("radius") && zone["radius"].is_number()) r = zone["radius"].get<float>();
+                if (zone.contains("height") && zone["height"].is_number()) h = zone["height"].get<float>();
+                float halfW = r;
+                float halfH = (h > 0) ? h : r;
 
                 int targetCount = 3;
                 if (zone.contains("target_count") && zone["target_count"].is_number())
                     targetCount = zone["target_count"].get<int>();
 
-                bool isSelected = (i == selectedSpawnZoneIdx_);
+                bool isSelected = (i == selectedSpawnZoneIdx_) ||
+                                   (hasSceneSelection && zoneScene == selectedScene);
                 bool isUnpositioned = (cx == 0.0f && cy == 0.0f);
 
-                // Color scheme: boss (single target) = red, normal = green, unpositioned = orange
-                Color fillColor, outlineColor;
-                if (isUnpositioned) {
-                    fillColor = Color(0.9f, 0.5f, 0.1f, 0.08f);
-                    outlineColor = Color(0.9f, 0.5f, 0.1f, 0.4f);
-                } else if (targetCount <= 1) {
-                    fillColor = Color(0.8f, 0.2f, 0.2f, 0.10f);
-                    outlineColor = Color(0.9f, 0.3f, 0.3f, 0.5f);
-                } else {
-                    fillColor = Color(0.2f, 0.7f, 0.3f, 0.10f);
-                    outlineColor = Color(0.3f, 0.9f, 0.4f, 0.5f);
-                }
+                // When a zone is selected, dim everything else heavily
+                float dimFactor = (hasSelection && !isSelected) ? 0.15f : 1.0f;
 
+                Color outlineColor;
                 if (isSelected) {
-                    outlineColor = Color(1.0f, 0.9f, 0.2f, 0.8f);
-                    fillColor.a = 0.15f;
+                    outlineColor = Color(1.0f, 0.9f, 0.2f, 0.9f);
+                } else if (isUnpositioned) {
+                    outlineColor = Color(0.9f, 0.5f, 0.1f, 0.35f * dimFactor);
+                } else if (targetCount <= 1) {
+                    outlineColor = Color(0.9f, 0.3f, 0.3f, 0.45f * dimFactor);
+                } else {
+                    outlineColor = Color(0.3f, 0.8f, 0.9f, 0.4f * dimFactor);
                 }
 
                 Vec2 center = {cx, cy};
-                batch->drawCircle(center, r, fillColor, 93.0f, 32);
-                batch->drawRing(center, r, isSelected ? 2.5f : 1.5f, outlineColor, 93.5f, 32);
+                std::string shape = "circle";
+                if (zone.contains("zone_shape") && zone["zone_shape"].is_string())
+                    shape = zone["zone_shape"].get<std::string>();
+
+                float thickness = isSelected ? 2.5f : 1.0f;
+
+                if (shape == "rectangle") {
+                    if (isSelected) {
+                        Color fillColor = outlineColor;
+                        fillColor.a = 0.12f;
+                        batch->drawRect(center, {halfW * 2.0f, halfH * 2.0f}, fillColor, 93.0f);
+                    }
+                    batch->drawRect({cx, cy - halfH}, {halfW * 2.0f, thickness}, outlineColor, 93.5f);
+                    batch->drawRect({cx, cy + halfH}, {halfW * 2.0f, thickness}, outlineColor, 93.5f);
+                    batch->drawRect({cx - halfW, cy}, {thickness, halfH * 2.0f}, outlineColor, 93.5f);
+                    batch->drawRect({cx + halfW, cy}, {thickness, halfH * 2.0f}, outlineColor, 93.5f);
+                } else {
+                    // Circle/ellipse
+                    if (isSelected) {
+                        Color fillColor = outlineColor;
+                        fillColor.a = 0.12f;
+                        batch->drawCircle(center, r, fillColor, 93.0f, 32);
+                    }
+                    batch->drawRing(center, r, thickness, outlineColor, 93.5f, 32);
+                }
             }
 
             batch->end();
@@ -461,10 +495,14 @@ void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
                 std::snprintf(label, sizeof(label), "%s x%d", mobId.c_str(), targetCount);
 
                 ImVec2 textSize = ImGui::CalcTextSize(label);
-                bool isSelected = (i == selectedSpawnZoneIdx_);
+                bool isSelected = (i == selectedSpawnZoneIdx_) ||
+                                   (hasSceneSelection && zoneScene == selectedScene);
+                // Dim unselected labels when something is selected
+                uint8_t labelAlpha = (hasSelection && !isSelected) ? 40 : 180;
                 ImU32 textCol = isSelected ? IM_COL32(255, 230, 50, 220)
-                                           : IM_COL32(200, 255, 200, 180);
-                ImU32 bgCol = IM_COL32(0, 0, 0, 140);
+                                           : IM_COL32(200, 255, 200, labelAlpha);
+                ImU32 bgCol = isSelected ? IM_COL32(0, 0, 0, 160)
+                                          : IM_COL32(0, 0, 0, (hasSelection ? 30 : 140));
 
                 // Background rect behind text
                 fg->AddRectFilled(
@@ -1724,6 +1762,9 @@ void Editor::handleMouseUp() {
 
 bool Editor::handleSpawnZoneScroll(float scrollY) {
     if (!showSpawnDebug_ || selectedSpawnZoneIdx_ < 0) return false;
+
+    // Only resize radius when holding Shift — otherwise let camera zoom normally
+    if (!(ImGui::GetIO().KeyShift)) return false;
 
     auto& list = contentBrowserPanel_.spawnListMut();
     if (selectedSpawnZoneIdx_ >= (int)list.size()) return false;
