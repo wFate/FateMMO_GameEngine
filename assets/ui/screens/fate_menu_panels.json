@@ -43,7 +43,7 @@
           "preset": "Center",
           "size": [
             600.0,
-            790.0
+            800.0
           ]
         },
         "backgroundColor": [
@@ -60,16 +60,16 @@
         ],
         "borderWidth": 0.0,
         "charDisplayBgColor": [
-          38,
-          38,
-          36,
+          15,
+          1,
+          34,
           230
         ],
         "charDisplayBorderColor": [
-          252,
-          250,
-          246,
-          255
+          255,
+          52,
+          0,
+          50
         ],
         "charDisplayOffset": [
           10.0,
@@ -208,15 +208,15 @@
           0
         ],
         "statGridBgColor": [
-          29,
-          29,
-          29,
+          26,
+          16,
+          37,
           230
         ],
         "statGridBorderColor": [
-          54,
-          52,
-          50,
+          41,
+          41,
+          40,
           217
         ],
         "statGridOffset": [
@@ -252,15 +252,15 @@
         ],
         "visible": false,
         "xpBarBgColor": [
-          32,
-          40,
+          28,
           3,
+          40,
           230
         ],
         "xpBarBorderColor": [
-          56,
-          56,
-          56,
+          40,
+          39,
+          39,
           230
         ],
         "xpBarFillColor": [
@@ -269,7 +269,7 @@
           255,
           242
         ],
-        "xpBarHeight": 20.0
+        "xpBarHeight": 200.0
       },
       {
         "anchor": {
@@ -290,7 +290,7 @@
           "preset": "Center",
           "size": [
             600.0,
-            790.0
+            800.0
           ]
         },
         "backgroundColor": [
@@ -300,20 +300,20 @@
           0
         ],
         "bagPanelBgColor": [
-          42,
-          32,
-          19,
+          57,
+          28,
+          4,
           242
         ],
         "bagPanelBorderColor": [
-          255,
-          252,
-          3,
+          104,
+          51,
+          36,
           255
         ],
         "bagPanelBorderWidth": 2.0,
-        "bagPanelPadding": 6.0,
-        "bagTitleHeight": 20.0,
+        "bagPanelPadding": 40.0,
+        "bagTitleHeight": 0.0,
         "borderColor": [
           255,
           255,
@@ -348,35 +348,35 @@
         ],
         "contentPadding": 30.0,
         "ctxMenuBgColor": [
-          20,
-          20,
-          28,
+          41,
+          6,
+          21,
           235
         ],
         "ctxMenuBorderColor": [
           255,
-          255,
-          255,
-          230
+          133,
+          8,
+          220
         ],
-        "ctxMenuBorderW": 2.0,
+        "ctxMenuBorderW": 3.0,
         "ctxMenuDisabledColor": [
           13,
           13,
           12,
           173
         ],
-        "ctxMenuFontSize": 20.0,
-        "ctxMenuItemHeight": 40.0,
+        "ctxMenuFontSize": 34.0,
+        "ctxMenuItemHeight": 50.0,
         "ctxMenuPadding": 5.0,
         "ctxMenuTextColor": [
           255,
-          255,
-          255,
+          142,
+          0,
           255
         ],
         "ctxMenuTextPadX": 14.0,
-        "ctxMenuWidth": 200.0,
+        "ctxMenuWidth": 243.0,
         "currencyFontSize": 50.0,
         "currencyHeight": 30.0,
         "currencyLabelFontSize": 50.0,
@@ -416,7 +416,7 @@
           34,
           0
         ],
-        "equipLabelFontSize": 10.0,
+        "equipLabelFontSize": 12.0,
         "equipLabelGap": 1.0,
         "equipLayout": [
           {
@@ -473,9 +473,9 @@
         "equipSlotSize": 70.0,
         "fontSize": 30.0,
         "goldLabelColor": [
-          253,
           255,
-          86,
+          250,
+          128,
           255
         ],
         "goldValueColor": [
@@ -513,17 +513,31 @@
         "iconAtlasCols": 8,
         "iconAtlasRows": 4,
         "id": "inventory_panel",
-        "itemFontSize": 40.0,
+        "itemFontSize": 50.0,
         "itemTextColor": [
           255,
           255,
           255,
           255
         ],
+        "opalLabelColor": [
+          140,
+          184,
+          235,
+          255
+        ],
+        "opalOffsetX": 370.0,
+        "opalOffsetY": 0.0,
+        "opalValueColor": [
+          179,
+          217,
+          255,
+          255
+        ],
         "panelBgColor": [
-          0,
-          0,
-          0,
+          34,
+          2,
+          16,
           444
         ],
         "panelBorderColor": [
@@ -533,20 +547,6 @@
           255
         ],
         "panelBorderWidth": 2.0,
-        "platLabelColor": [
-          140,
-          184,
-          235,
-          255
-        ],
-        "platOffsetX": 300.0,
-        "platOffsetY": 0.0,
-        "platValueColor": [
-          179,
-          217,
-          255,
-          255
-        ],
         "pressedColor": [
           0,
           0,
@@ -554,12 +554,12 @@
           0
         ],
         "quantityColor": [
-          232,
-          224,
-          250,
+          189,
+          34,
+          105,
           255
         ],
-        "quantityFontSize": 20.0,
+        "quantityFontSize": 32.0,
         "rarityCommonColor": [
           0,
           0,
@@ -574,7 +574,7 @@
         ],
         "rarityLegendaryColor": [
           255,
-          0,
+          103,
           0,
           255
         ],
@@ -632,16 +632,22 @@
         ],
         "tooltipBorderWidth": 2.0,
         "tooltipLevelColor": [
-          166,
-          56,
-          46,
+          255,
+          21,
+          0,
           255
         ],
-        "tooltipLevelFontSize": 18.0,
-        "tooltipLineSpacing": 10.0,
-        "tooltipMaxWidth": 400.0,
-        "tooltipNameFontSize": 20.0,
-        "tooltipOffset": 40.0,
+        "tooltipLevelFontSize": 27.0,
+        "tooltipLevelMetColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "tooltipLineSpacing": 15.0,
+        "tooltipMaxWidth": 700.0,
+        "tooltipNameFontSize": 27.0,
+        "tooltipOffset": 10.0,
         "tooltipPadding": 20.0,
         "tooltipSepColor": [
           0,
@@ -649,7 +655,7 @@
           0,
           222
         ],
-        "tooltipSepHeight": 5.0,
+        "tooltipSepHeight": 2.0,
         "tooltipShadowColor": [
           38,
           31,
@@ -663,7 +669,7 @@
           42,
           255
         ],
-        "tooltipStatFontSize": 20.0,
+        "tooltipStatFontSize": 27.0,
         "tooltipWidth": 200.0,
         "type": "inventory_panel",
         "uiShadowColor": [
@@ -671,11 +677,10 @@
           0,
           0,
           0
-        ],
-        "visible": false
+        ]
       },
       {
-        "activeSetPage": 1,
+        "activeSetPage": 0,
         "anchor": {
           "margin": [
             108.0,
@@ -684,13 +689,13 @@
             80.0
           ],
           "offset": [
-            0.0,
+            30.0,
             0.0
           ],
-          "preset": "StretchAll",
+          "preset": "Center",
           "size": [
-            0.0,
-            0.0
+            1800.0,
+            800.0
           ]
         },
         "backgroundColor": [
@@ -739,9 +744,9 @@
           255
         ],
         "confirmBgColor": [
-          64,
-          51,
-          38,
+          54,
+          44,
+          34,
           242
         ],
         "confirmBorderColor": [
@@ -825,7 +830,7 @@
           0
         ],
         "gridColumns": 5,
-        "gridMargin": 60.0,
+        "gridMargin": 70.0,
         "headerColor": [
           255,
           245,
@@ -841,7 +846,7 @@
           0
         ],
         "id": "skill_panel",
-        "nameFontSize": 20.0,
+        "nameFontSize": 23.0,
         "nameLocked": [
           255,
           209,
@@ -859,10 +864,10 @@
           300
         ],
         "panelBgColor": [
-          0,
-          0,
-          0,
-          242
+          34,
+          2,
+          16,
+          444
         ],
         "panelBorderColor": [
           102,
@@ -886,7 +891,7 @@
           255,
           333
         ],
-        "pointsFontSize": 100.0,
+        "pointsFontSize": 200.0,
         "pressedColor": [
           0,
           0,
@@ -900,7 +905,7 @@
           26,
           255
         ],
-        "ptsFontSize": 100.0,
+        "ptsFontSize": 0.0,
         "ptsLabelColor": [
           128,
           112,
@@ -910,8 +915,8 @@
         "ptsLabelText": "pts",
         "ptsTextColor": [
           255,
-          255,
-          227,
+          148,
+          0,
           255
         ],
         "ringNormal": [
@@ -927,24 +932,24 @@
           255
         ],
         "ringWidthNormal": 0.0,
-        "ringWidthSelected": 3.0,
+        "ringWidthSelected": 4.0,
         "skillBgLocked": [
-          165,
-          165,
-          165,
+          113,
+          98,
+          98,
           3333
         ],
         "skillBgUnlocked": [
-          255,
-          245,
+          224,
+          108,
           0,
           333
         ],
         "skillsHeaderOffset": [
-          0.0,
-          0.0
+          470.0,
+          10.0
         ],
-        "slotNameFontSize": 20.0,
+        "slotNameFontSize": 35.0,
         "splitRatio": 0.30000001192092896,
         "tabBgActive": [
           255,
@@ -958,7 +963,7 @@
           0,
           280
         ],
-        "tabFontSize": 20.0,
+        "tabFontSize": 30.0,
         "tabOffset": [
           5.0,
           0.0
@@ -1001,51 +1006,51 @@
           0.0
         ],
         "tooltipBgColor": [
-          51,
-          41,
-          31,
+          28,
+          17,
+          5,
           242
         ],
-        "tooltipBodyFontSize": 9.0,
+        "tooltipBodyFontSize": 22.0,
         "tooltipBorderColor": [
-          128,
-          97,
-          56,
+          255,
+          168,
+          0,
           255
         ],
-        "tooltipBorderW": 1.5,
+        "tooltipBorderW": 3.0,
         "tooltipDescColor": [
-          204,
-          194,
-          173,
+          251,
+          170,
+          0,
           255
         ],
-        "tooltipDescFontSize": 8.0,
+        "tooltipDescFontSize": 30.0,
         "tooltipDescGap": 4.0,
-        "tooltipLineSpacing": 3.0,
+        "tooltipLineSpacing": 18.0,
         "tooltipOffset": [
           0.0,
           0.0
         ],
-        "tooltipPadding": 8.0,
+        "tooltipPadding": 40.0,
         "tooltipRankColor": [
-          235,
-          224,
-          204,
+          255,
+          255,
+          255,
           255
         ],
-        "tooltipRankFontSize": 9.0,
+        "tooltipRankFontSize": 30.0,
         "tooltipReqColor": [
-          179,
-          140,
-          102,
+          144,
+          111,
+          78,
           255
         ],
-        "tooltipReqFontSize": 9.0,
+        "tooltipReqFontSize": 30.0,
         "tooltipTextColor": [
-          235,
-          224,
-          204,
+          196,
+          180,
+          152,
           255
         ],
         "tooltipTitleColor": [
@@ -1054,8 +1059,8 @@
           51,
           255
         ],
-        "tooltipTitleFontSize": 11.0,
-        "tooltipW": 180.0,
+        "tooltipTitleFontSize": 50.0,
+        "tooltipW": 450.0,
         "type": "skill_panel",
         "uiShadowColor": [
           0,
@@ -1063,9 +1068,10 @@
           0,
           0
         ],
-        "wheelEndDeg": 330.0,
-        "wheelSlotSizeMul": 0.4000000059604645,
-        "wheelStartDeg": 210.0
+        "visible": false,
+        "wheelEndDeg": 370.0,
+        "wheelSlotSizeMul": 0.6000000238418579,
+        "wheelStartDeg": 170.0
       },
       {
         "anchor": {
@@ -1076,13 +1082,13 @@
             80.0
           ],
           "offset": [
-            0.0,
+            30.0,
             0.0
           ],
-          "preset": "StretchAll",
+          "preset": "Center",
           "size": [
-            0.0,
-            0.0
+            1800.0,
+            800.0
           ]
         },
         "backgroundColor": [
@@ -1092,31 +1098,31 @@
           0
         ],
         "bgColor": [
-          0,
-          0,
-          0,
+          34,
+          3,
+          44,
           444
         ],
         "borderColor": [
-          0,
-          0,
-          0,
+          15,
+          3,
+          32,
           255
         ],
-        "borderWidth": 2.0,
+        "borderWidth": 5.0,
         "closeBgColor": [
-          47,
-          47,
-          47,
+          41,
+          11,
+          11,
           255
         ],
         "closeBorderColor": [
           255,
           255,
           255,
-          255
+          140
         ],
-        "closeRadius": 40.0,
+        "closeRadius": 45.0,
         "disabledColor": [
           0,
           0,
@@ -1124,16 +1130,16 @@
           0
         ],
         "dividerColor": [
-          97,
-          71,
-          46,
+          255,
+          5,
+          5,
           128
         ],
         "emblemOffset": [
           0.0,
           0.0
         ],
-        "emblemSize": 64.0,
+        "emblemSize": 200.0,
         "gradientBottom": [
           0,
           0,
@@ -1147,17 +1153,17 @@
           0
         ],
         "guildInfoOffset": [
-          0.0,
-          0.0
+          600.0,
+          50.0
         ],
         "guildNameColor": [
-          64,
-          38,
-          13,
+          255,
+          97,
+          0,
           255
         ],
-        "guildNameFontSize": 14.0,
-        "headerHeight": 32.0,
+        "guildNameFontSize": 30.0,
+        "headerHeight": 70.0,
         "hoverColor": [
           0,
           0,
@@ -1166,12 +1172,12 @@
         ],
         "id": "guild_panel",
         "infoColor": [
-          107,
-          82,
-          46,
+          255,
+          150,
+          0,
           255
         ],
-        "infoFontSize": 11.0,
+        "infoFontSize": 30.0,
         "offlineColor": [
           115,
           115,
@@ -1191,25 +1197,25 @@
           0
         ],
         "rosterHeaderBgColor": [
-          184,
-          163,
-          128,
+          61,
+          0,
+          77,
           204
         ],
-        "rosterHeaderFontSize": 9.5,
-        "rosterHeaderHeight": 18.0,
+        "rosterHeaderFontSize": 30.0,
+        "rosterHeaderHeight": 50.0,
         "rosterHeaderTextColor": [
-          64,
-          38,
-          13,
+          255,
+          253,
+          252,
           255
         ],
         "rosterOffset": [
-          0.0,
+          2.0,
           0.0
         ],
-        "rosterRowFontSize": 10.0,
-        "rosterRowHeight": 22.0,
+        "rosterRowFontSize": 3.0,
+        "rosterRowHeight": 30.0,
         "rosterRowTextColor": [
           56,
           36,
@@ -1217,15 +1223,15 @@
           255
         ],
         "titleColor": [
-          71,
-          46,
-          20,
+          255,
+          110,
+          0,
           255
         ],
-        "titleFontSize": 16.0,
+        "titleFontSize": 30.0,
         "titleOffset": [
           0.0,
-          0.0
+          15.0
         ],
         "type": "guild_panel",
         "uiShadowColor": [
@@ -1337,16 +1343,16 @@
           0,
           0
         ],
-        "borderWidth": 2.0,
+        "borderWidth": 5.0,
         "buttonCornerRadius": 4.0,
-        "buttonFontSize": 13.0,
+        "buttonFontSize": 100.0,
         "checkOnColor": [
           204,
           179,
           77,
           255
         ],
-        "checkboxSize": 14.0,
+        "checkboxSize": 40.0,
         "disabledColor": [
           0,
           0,
@@ -1382,36 +1388,36 @@
           0
         ],
         "id": "settings_panel",
-        "itemSpacing": 8.0,
+        "itemSpacing": 30.0,
         "labelColor": [
-          128,
-          102,
-          77,
+          137,
+          67,
+          0,
           255
         ],
-        "labelFontSize": 11.0,
+        "labelFontSize": 30.0,
         "logoutBtnColor": [
-          140,
-          38,
-          38,
+          255,
+          0,
+          0,
           230
         ],
         "logoutBtnHoverColor": [
-          179,
-          51,
-          51,
+          117,
+          0,
+          0,
           242
         ],
-        "logoutButtonHeight": 36.0,
-        "logoutButtonWidth": 120.0,
+        "logoutButtonHeight": 100.0,
+        "logoutButtonWidth": 350.0,
         "logoutOffset": [
           0.0,
           0.0
         ],
         "logoutTextColor": [
           255,
-          242,
-          230,
+          255,
+          255,
           255
         ],
         "pressedColor": [
@@ -1421,25 +1427,25 @@
           0
         ],
         "sectionColor": [
-          89,
-          64,
-          31,
+          224,
+          105,
+          15,
           255
         ],
-        "sectionFontSize": 13.0,
-        "sectionSpacing": 20.0,
+        "sectionFontSize": 80.0,
+        "sectionSpacing": 0.0,
         "titleColor": [
-          64,
-          41,
-          20,
+          67,
+          35,
+          5,
           255
         ],
-        "titleFontSize": 16.0,
+        "titleFontSize": 40.0,
         "titleOffset": [
           0.0,
           0.0
         ],
-        "toggleBtnHeight": 22.0,
+        "toggleBtnHeight": 30.0,
         "toggleBtnWidth": 50.0,
         "toggleOffColor": [
           115,
@@ -2498,17 +2504,17 @@
         "zOrder": 115
       },
       {
-        "activeTab": 2,
+        "activeTab": 1,
         "activeTabBg": [
-          253,
-          160,
-          0,
-          255
+          34,
+          2,
+          16,
+          444
         ],
         "activeTextColor": [
-          131,
-          128,
-          124,
+          255,
+          207,
+          0,
           255
         ],
         "anchor": {
@@ -2594,10 +2600,10 @@
         ],
         "id": "tab_bar",
         "inactiveTabBg": [
-          43,
-          27,
-          6,
-          255
+          34,
+          2,
+          16,
+          444
         ],
         "inactiveTextColor": [
           255,

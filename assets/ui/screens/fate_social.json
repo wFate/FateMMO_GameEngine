@@ -602,7 +602,7 @@
           179,
           217
         ],
-        "levelFontSize": 10.0,
+        "levelFontSize": 28.0,
         "levelOffset": [
           0.0,
           0.0
@@ -627,7 +627,7 @@
           255,
           242
         ],
-        "nameFontSize": 11.0,
+        "nameFontSize": 30.0,
         "nameOffset": [
           0.0,
           0.0
@@ -698,7 +698,7 @@
           166,
           247
         ],
-        "bodyFontSize": 11.0,
+        "bodyFontSize": 24.0,
         "borderColor": [
           102,
           77,
@@ -761,7 +761,7 @@
           26,
           255
         ],
-        "labelFontSize": 12.0,
+        "labelFontSize": 24.0,
         "myOfferOffset": [
           0.0,
           0.0
@@ -785,7 +785,7 @@
           20,
           255
         ],
-        "titleFontSize": 15.0,
+        "titleFontSize": 30.0,
         "titleOffset": [
           0.0,
           0.0

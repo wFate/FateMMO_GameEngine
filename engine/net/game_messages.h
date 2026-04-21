@@ -521,6 +521,78 @@ struct CmdEquipMsg {
 };
 
 // ============================================================================
+// Client -> Server: CmdUnequipToBag (atomic unequip + insert into bag sub-slot)
+// Added Phase C Batch 3 WU14a — PROTOCOL_VERSION 3
+// ============================================================================
+struct CmdUnequipToBagMsg {
+    uint8_t  equipSlot = 0;          // EquipmentSlot enum cast
+    int32_t  bagInventorySlot = -1;  // main inventory slot holding the bag item
+    int32_t  bagSlotIndex = -1;      // sub-slot within the bag
+
+    void write(ByteWriter& w) const {
+        w.writeU8(equipSlot);
+        w.writeI32(bagInventorySlot);
+        w.writeI32(bagSlotIndex);
+    }
+    static CmdUnequipToBagMsg read(ByteReader& r) {
+        CmdUnequipToBagMsg m;
+        m.equipSlot        = r.readU8();
+        m.bagInventorySlot = r.readI32();
+        m.bagSlotIndex     = r.readI32();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdEquipFromBag (atomic equip from bag sub-slot)
+// Added Phase C Batch 3 WU14b — PROTOCOL_VERSION 3
+// ============================================================================
+struct CmdEquipFromBagMsg {
+    int32_t bagInventorySlot = -1;   // main inventory slot holding the bag item
+    int32_t bagSlotIndex     = -1;   // sub-slot within the bag
+    uint8_t targetEquipSlot  = 0;    // EquipmentSlot enum cast
+
+    void write(ByteWriter& w) const {
+        w.writeI32(bagInventorySlot);
+        w.writeI32(bagSlotIndex);
+        w.writeU8(targetEquipSlot);
+    }
+    static CmdEquipFromBagMsg read(ByteReader& r) {
+        CmdEquipFromBagMsg m;
+        m.bagInventorySlot = r.readI32();
+        m.bagSlotIndex     = r.readI32();
+        m.targetEquipSlot  = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvMoveReject (generic reject reason for pickup/equip/bag moves)
+// Added Phase C Batch 3 WU14c — reuses PROTOCOL_VERSION 3 from WU14a
+// ============================================================================
+enum class MoveRejectReason : uint8_t {
+    None             = 0,
+    InventoryFull    = 1,
+    BagFull          = 2,
+    BagSlotOccupied  = 3,
+    NoRoomForSwap    = 4,
+    ItemInvalid      = 5,
+};
+
+struct SvMoveRejectMsg {
+    uint8_t reason = 0; // MoveRejectReason cast
+
+    void write(ByteWriter& w) const {
+        w.writeU8(reason);
+    }
+    static SvMoveRejectMsg read(ByteReader& r) {
+        SvMoveRejectMsg m;
+        m.reason = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
 // Client -> Server: CmdMoveItem (swap/stack inventory slots)
 // ============================================================================
 struct CmdMoveItemMsg {
@@ -1051,20 +1123,23 @@ struct SvShopResultMsg {
     uint8_t action = 0;
     uint8_t success = 0;
     int64_t updatedGold = 0;
+    int32_t updatedHonor = 0;  // post-transaction honor balance (for honor-currency buys)
     std::string reason;
 
     void write(ByteWriter& w) const {
         w.writeU8(action);
         w.writeU8(success);
         detail::writeI64(w, updatedGold);
+        w.writeI32(updatedHonor);
         w.writeString(reason);
     }
     static SvShopResultMsg read(ByteReader& r) {
         SvShopResultMsg m;
-        m.action      = r.readU8();
-        m.success     = r.readU8();
-        m.updatedGold = detail::readI64(r);
-        m.reason      = r.readString();
+        m.action       = r.readU8();
+        m.success      = r.readU8();
+        m.updatedGold  = detail::readI64(r);
+        m.updatedHonor = r.readI32();
+        m.reason       = r.readString();
         return m;
     }
 };

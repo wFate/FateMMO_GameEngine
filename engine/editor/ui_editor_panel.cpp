@@ -68,6 +68,7 @@
 #endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <cstdio>
+#include <algorithm>
 
 namespace fate {
 
@@ -895,8 +896,10 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Doll Width Ratio", &inv->dollWidthRatio, 0.01f, 0.1f, 0.9f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Content Padding", &inv->contentPadding, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Currency Height", &inv->currencyHeight, 0.5f, 10.0f, 80.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Plat Offset X", &inv->platOffsetX, 0.5f, -200.0f, 400.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Plat Offset Y", &inv->platOffsetY, 0.5f, -50.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Gold Offset X", &inv->goldOffsetX, 0.5f, -200.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Gold Offset Y", &inv->goldOffsetY, 0.5f, -50.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Opal Offset X", &inv->opalOffsetX, 0.5f, -200.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Opal Offset Y", &inv->opalOffsetY, 0.5f, -50.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Grid Padding", &inv->gridPadding, 0.5f, 0.0f, 16.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Doll Area Offset", &inv->dollAreaOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Grid Area Offset", &inv->gridAreaOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
@@ -936,6 +939,11 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         if (ImGui::TreeNodeEx("Equipment Slots", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Equip Slot Size", &inv->equipSlotSize, 0.5f, 16.0f, 128.0f); checkUndoCapture(uiMgr);
             for (int i = 0; i < InventoryPanel::NUM_EQUIP_SLOTS; ++i) {
+                // Guard: if anything earlier in this frame triggered an undo/redo
+                // screen reload (destroying the widget tree), `inv` and
+                // `selectedNode_` now point to freed memory.  Stop reading
+                // equipSlots[i] before we touch heap-freed std::string.
+                if (selectedNode_ != inv) break;
                 // Show equipped item name in the tree label
                 char label[128];
                 if (!inv->equipSlots[i].displayName.empty()) {
@@ -948,8 +956,11 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
                 }
                 if (ImGui::TreeNode(label)) {
                     ImGui::DragFloat("Offset X", &inv->equipLayout[i].offsetX, 0.05f, -5.0f, 5.0f); checkUndoCapture(uiMgr);
+                    if (selectedNode_ != inv) { ImGui::TreePop(); break; }
                     ImGui::DragFloat("Offset Y", &inv->equipLayout[i].offsetY, 0.05f, -5.0f, 5.0f); checkUndoCapture(uiMgr);
+                    if (selectedNode_ != inv) { ImGui::TreePop(); break; }
                     ImGui::DragFloat("Size Mul", &inv->equipLayout[i].sizeMul, 0.05f, 0.5f, 3.0f); checkUndoCapture(uiMgr);
+                    if (selectedNode_ != inv) { ImGui::TreePop(); break; }
                     if (!inv->equipSlots[i].itemId.empty()) {
                         ImGui::Separator();
                         ImGui::Text("Item: %s", inv->equipSlots[i].displayName.c_str());
@@ -981,8 +992,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Equip Label##c", &inv->equipLabelColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Gold Label##c", &inv->goldLabelColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Gold Value##c", &inv->goldValueColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Plat Label##c", &inv->platLabelColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Plat Value##c", &inv->platValueColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Opal Label##c", &inv->opalLabelColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Opal Value##c", &inv->opalValueColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -1088,8 +1099,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
 
         ImGui::Separator();
-        ImGui::Text("Gold: %d", inv->gold);
-        ImGui::Text("Platinum: %d", inv->platinum);
+        ImGui::Text("Gold: %lld", (long long)inv->gold);
+        ImGui::Text("Opals: %lld", (long long)inv->opals);
         ImGui::Text("Armor: %d", inv->armorValue);
         ImGui::Separator();
         ImGui::Text("Context Menu: %s (Slot: %d)", inv->contextMenuOpen ? "Open" : "Closed", inv->contextMenuSlot);
@@ -1371,8 +1382,16 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
 
         if (ImGui::TreeNode("Tooltip##skp")) {
             ImGui::DragFloat2("Offset##sktt", &skp->tooltipOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Width##sktt", &skp->tooltipW, 1.0f, 80.0f, 400.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Padding##sktt", &skp->tooltipPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            if (ImGui::DragFloat("Width##sktt", &skp->tooltipW, 1.0f, 80.0f, 400.0f)) {
+                skp->tooltipW = (std::max)(skp->tooltipW, 80.0f);
+            }
+            checkUndoCapture(uiMgr);
+            if (ImGui::DragFloat("Padding##sktt", &skp->tooltipPadding, 0.5f, 0.0f, 30.0f)) {
+                skp->tooltipPadding = (std::max)(skp->tooltipPadding, 0.0f);
+                float minTooltipWidth = (std::max)(80.0f, skp->tooltipPadding * 2.0f + 8.0f);
+                skp->tooltipW = (std::max)(skp->tooltipW, minTooltipWidth);
+            }
+            checkUndoCapture(uiMgr);
             ImGui::DragFloat("Border W##sktt", &skp->tooltipBorderW, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Line Spacing##sktt", &skp->tooltipLineSpacing, 0.25f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Desc Gap##sktt", &skp->tooltipDescGap, 0.25f, 0.0f, 20.0f); checkUndoCapture(uiMgr);

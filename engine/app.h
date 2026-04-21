@@ -114,6 +114,19 @@ private:
     bool sdlInitialized_ = false;
     float deltaTime_ = 0.0f;
     float fps_ = 0.0f;
+
+    // Rolling frame-time stats. Logs max/avg over every 5s window if any
+    // frame exceeded 25ms (i.e. drops below 40 FPS equivalent). Catches
+    // periodic hitches without spamming per-frame logs.
+    float frameStatsFlushTimer_ = 0.0f;
+    float frameStatsMaxMs_ = 0.0f;
+    float frameStatsSumMs_ = 0.0f;
+    int   frameStatsCount_ = 0;
+    int   frameStatsOver25msCount_ = 0;
+    // Per-phase max within window (update/render) so we can tell whether
+    // hitches come from game logic vs GL rendering.
+    float frameStatsMaxUpdateMs_ = 0.0f;
+    float frameStatsMaxRenderMs_ = 0.0f;
     float fixedTimeAccumulator_ = 0.0f;
     FrameArena frameArena_;
     UIManager uiManager_;

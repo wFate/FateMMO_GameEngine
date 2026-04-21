@@ -128,6 +128,11 @@ struct SvEntityEnterMsg {
     std::string mobHatStyle;
     std::string mobWeaponStyle;
 
+    // NPC fields (only serialized when entityType == 2). WU11 Phase B Session 62.
+    uint32_t    npcId = 0;
+    std::string npcStringId;
+    std::vector<uint8_t> targetFactions; // empty = own faction only
+
     // Player fields (only serialized when entityType == 0)
     uint8_t pkStatus  = 0; // PKStatus enum (only for entityType == 0, player)
     uint8_t honorRank = 0; // HonorRank enum (only for entityType == 0, player)
@@ -177,6 +182,13 @@ struct SvEntityEnterMsg {
                 w.writeString(mobWeaponStyle);
             }
         }
+        if (entityType == 2) {
+            // WU11 Phase B Session 62 — NPC identity + faction-target list
+            w.writeU32(npcId);
+            w.writeString(npcStringId);
+            w.writeU8(static_cast<uint8_t>(targetFactions.size()));
+            for (auto v : targetFactions) w.writeU8(v);
+        }
     }
 
     static SvEntityEnterMsg read(ByteReader& r) {
@@ -217,6 +229,14 @@ struct SvEntityEnterMsg {
                 m.mobHatStyle    = r.readString();
                 m.mobWeaponStyle = r.readString();
             }
+        }
+        if (m.entityType == 2) {
+            // WU11 Phase B Session 62 — NPC identity + faction-target list
+            m.npcId = r.readU32();
+            m.npcStringId = r.readString();
+            uint8_t tfCount = r.readU8();
+            m.targetFactions.reserve(tfCount);
+            for (uint8_t i = 0; i < tfCount; ++i) m.targetFactions.push_back(r.readU8());
         }
         return m;
     }
@@ -337,6 +357,8 @@ struct SvCombatEventMsg {
     uint8_t  isCrit     = 0; // bool as u8
     uint8_t  isKill     = 0; // bool as u8
     uint8_t  isMiss     = 0; // bool as u8 (miss/resist)
+    uint32_t absorbedAmount = 0; // amount absorbed by shield
+    uint8_t  isShielded = 0; // 0=no shield hit, 1=partial (HP damage + absorb), 2=fully absorbed
 
     void write(ByteWriter& w) const {
         detail::writeU64(w, attackerId);
@@ -346,6 +368,8 @@ struct SvCombatEventMsg {
         w.writeU8(isCrit);
         w.writeU8(isKill);
         w.writeU8(isMiss);
+        w.writeU32(absorbedAmount);
+        w.writeU8(isShielded);
     }
 
     static SvCombatEventMsg read(ByteReader& r) {
@@ -357,6 +381,8 @@ struct SvCombatEventMsg {
         m.isCrit     = r.readU8();
         m.isKill     = r.readU8();
         m.isMiss     = r.readU8();
+        m.absorbedAmount = r.readU32();
+        m.isShielded = r.readU8();
         return m;
     }
 };
@@ -392,6 +418,7 @@ struct SvPlayerStateMsg {
     float   currentFury = 0.0f;
     int64_t currentXP   = 0;
     int64_t gold        = 0;
+    int64_t opals       = 0;
     int32_t level       = 0;
     int32_t honor       = 0;
     int32_t pvpKills    = 0;
@@ -425,6 +452,7 @@ struct SvPlayerStateMsg {
         w.writeFloat(currentFury);
         detail::writeI64(w, currentXP);
         detail::writeI64(w, gold);
+        detail::writeI64(w, opals);
         w.writeI32(level);
         w.writeI32(honor);
         w.writeI32(pvpKills);
@@ -456,6 +484,7 @@ struct SvPlayerStateMsg {
         m.currentFury = r.readFloat();
         m.currentXP   = detail::readI64(r);
         m.gold        = detail::readI64(r);
+        m.opals       = detail::readI64(r);
         m.level       = r.readI32();
         m.honor       = r.readI32();
         m.pvpKills    = r.readI32();

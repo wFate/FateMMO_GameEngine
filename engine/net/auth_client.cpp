@@ -168,6 +168,7 @@ void AuthClient::loginAsync(const std::string& host, uint16_t port,
     // Tear down any previous connection (its teardown may clear busy_)
     cleanup();
 
+    pendingRequestType_ = AuthResultType::Login;
     busy_.store(true);
     worker_ = std::thread(&AuthClient::workerLoop, this, host, port, requestData);
 }
@@ -213,6 +214,7 @@ void AuthClient::registerAsync(const std::string& host, uint16_t port,
     // Tear down any previous connection (its teardown may clear busy_)
     cleanup();
 
+    pendingRequestType_ = AuthResultType::Register;
     busy_.store(true);
     worker_ = std::thread(&AuthClient::workerLoop, this, host, port, requestData);
 }
@@ -303,7 +305,7 @@ void AuthClient::workerLoop(const std::string& host, uint16_t port,
                             const std::vector<uint8_t>& initialData) {
     auto fail = [this](const std::string& reason) {
         AuthClientResult res;
-        res.type = AuthResultType::Login;
+        res.type = pendingRequestType_;
         res.success = false;
         res.errorMessage = reason;
         pushResult(std::move(res));
@@ -440,7 +442,7 @@ void AuthClient::workerLoop(const std::string& host, uint16_t port,
 
     if (!authResp.success) {
         AuthClientResult res;
-        res.type = AuthResultType::Login;
+        res.type = pendingRequestType_;
         res.success = false;
         res.errorMessage = authResp.errorReason;
         pushResult(std::move(res));
@@ -459,10 +461,12 @@ void AuthClient::workerLoop(const std::string& host, uint16_t port,
     connected_.store(true);
     busy_.store(false);
 
-    // Push the login result (main thread can now safely call selectCharacterAsync)
+    // Push the initial auth result tagged with the pending request kind so the
+    // main thread can route Register failures back to the char-create screen
+    // and Login failures to the login screen.
     {
         AuthClientResult res;
-        res.type = AuthResultType::Login;
+        res.type = pendingRequestType_;
         res.success = true;
         res.characters = std::move(authResp.characters);
         pushResult(std::move(res));

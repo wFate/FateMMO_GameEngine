@@ -686,7 +686,7 @@ void Editor::drawDockSpace() {
                     dockWorld_->forEachEntity([&](Entity* e) {
                         dockWorld_->destroyEntity(e->handle());
                     });
-                    dockWorld_->processDestroyQueue();
+                    dockWorld_->processDestroyQueue("editor_new_scene");
                     selectedEntity_ = nullptr;
                     selectedHandle_ = {};
                     currentScenePath_.clear();
@@ -710,11 +710,12 @@ void Editor::drawDockSpace() {
             }
             ImGui::Separator();
             // Save --enabled when a scene path is set (from Open Scene or async load)
-            if (ImGui::MenuItem("Save", "Ctrl+S", false, !inPlayMode_ && !currentScenePath_.empty())) {
+            const bool canSaveScene = !currentScenePath_.empty() && (!inPlayMode_ || paused_);
+            if (ImGui::MenuItem("Save", "Ctrl+S", false, canSaveScene)) {
                 saveScene(dockWorld_, currentScenePath_);
             }
             // Save As --always prompts for a new name
-            if (ImGui::BeginMenu("Save As...", !inPlayMode_)) {
+            if (ImGui::BeginMenu("Save As...", !inPlayMode_ || paused_)) {
                 static char saveNameBuf[64] = "WhisperingWoods";
                 ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
                 if (ImGui::Button("Save")) {
@@ -734,8 +735,20 @@ void Editor::drawDockSpace() {
         if (ImGui::BeginMenu("Edit")) {
             bool canUndo = UndoSystem::instance().canUndo();
             bool canRedo = UndoSystem::instance().canRedo();
-            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo)) { UndoSystem::instance().undo(dockWorld_); refreshSelection(dockWorld_); }
-            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo)) { UndoSystem::instance().redo(dockWorld_); refreshSelection(dockWorld_); }
+            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, canUndo)) {
+                UndoSystem::instance().undo(dockWorld_);
+                refreshSelection(dockWorld_);
+#ifdef FATE_HAS_GAME
+                if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
+#endif
+            }
+            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, canRedo)) {
+                UndoSystem::instance().redo(dockWorld_);
+                refreshSelection(dockWorld_);
+#ifdef FATE_HAS_GAME
+                if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
+#endif
+            }
             ImGui::EndMenu();
         }
 
@@ -2823,7 +2836,7 @@ void Editor::exitPlayMode(World* world) {
     for (auto h : toDestroy) {
         world->destroyEntity(h);
     }
-    world->processDestroyQueue();
+    world->processDestroyQueue("editor_playmode_restore");
 
     // Restore from snapshot
     for (auto& entityJson : playModeSnapshot_) {
@@ -2867,6 +2880,10 @@ void Editor::saveScene(World* world, const std::string& path) {
     });
 
     root["entities"] = entitiesJson;
+
+    if (inPlayMode_) {
+        playModeSnapshot_ = entitiesJson;
+    }
 
     std::string jsonStr = root.dump(2);
 
@@ -2947,7 +2964,7 @@ void Editor::loadScene(World* world, const std::string& path) {
 #endif
         world->destroyEntity(entity->handle());
     });
-    world->processDestroyQueue();
+    world->processDestroyQueue("editor_scene_load");
 
     if (root.contains("gridSize")) {
         gridSize_ = root["gridSize"].get<float>();
@@ -3500,7 +3517,7 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
 #endif
     }
     // Ctrl+S = Save current scene
-    if (ctrl && scancode == SDL_SCANCODE_S && !inPlayMode_) {
+    if (ctrl && scancode == SDL_SCANCODE_S && (!inPlayMode_ || paused_)) {
         if (!currentScenePath_.empty()) {
             saveScene(world, currentScenePath_);
             LOG_INFO("Editor", "Ctrl+S: saved scene to %s", currentScenePath_.c_str());

@@ -31,7 +31,7 @@ void PropertyCommand::undo(World* w) {
     if (!e) return;
     EntityHandle oldH = entityHandle;
     w->destroyEntity(entityHandle);
-    w->processDestroyQueue();
+    w->processDestroyQueue("editor_undo_property");
     auto* restored = PrefabLibrary::jsonToEntity(oldState, *w);
     if (restored) {
         entityHandle = restored->handle();
@@ -45,7 +45,7 @@ void PropertyCommand::redo(World* w) {
     if (!e) return;
     EntityHandle oldH = entityHandle;
     w->destroyEntity(entityHandle);
-    w->processDestroyQueue();
+    w->processDestroyQueue("editor_redo_property");
     auto* restored = PrefabLibrary::jsonToEntity(newState, *w);
     if (restored) {
         entityHandle = restored->handle();

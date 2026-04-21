@@ -5,6 +5,7 @@
 #include <imgui.h>
 #include <algorithm>
 #include <cstring>
+#include <cmath>
 #include <set>
 #include <unordered_map>
 
@@ -345,6 +346,11 @@ void ContentBrowserPanel::draw() {
         }
         if (ImGui::BeginTabItem("Spawn Zones")) {
             if (spawnListDirty_) { requestContentList(AdminContentType::SpawnZone); spawnListDirty_ = false; }
+            // Spawn Zones rows look up mob level range from mobList_ (min_spawn_level /
+            // max_spawn_level only live on mob_definitions, not on spawn_zones). Without
+            // this, opening Spawn Zones before Mobs leaves mobList_ empty and every row
+            // renders "Lv 0" until the user visits the Mobs tab.
+            if (mobListDirty_) { requestContentList(AdminContentType::Mob); mobListDirty_ = false; }
             drawSpawnsTab();
             ImGui::EndTabItem();
         }
@@ -410,7 +416,8 @@ void ContentBrowserPanel::drawMobsTab() {
             {"aggro_range", 160.0f}, {"attack_range", 32.0f}, {"leash_radius", 320.0f},
             {"is_aggressive", true}, {"attack_style", "Melee"}, {"monster_type", "Normal"},
             {"is_boss", false}, {"is_elite", false},
-            {"respawn_seconds", 60}, {"min_spawn_level", 1}, {"max_spawn_level", 5}, {"spawn_weight", 10}
+            {"respawn_seconds", 60}, {"min_spawn_level", 1}, {"max_spawn_level", 5}, {"spawn_weight", 10},
+            {"hp_regen_per_sec", 0}
         };
     }
     ImGui::SameLine();
@@ -508,6 +515,9 @@ void ContentBrowserPanel::drawMobsTab() {
                 drawIntField("Magic Resist", editingMob_, "magic_resist", 0, 999999);
                 drawBoolField("Deals Magic Damage", editingMob_, "deals_magic_damage");
                 drawIntField("Mob Hit Rate", editingMob_, "mob_hit_rate", 0, 100);
+                // WU7: HP regen per second when out of combat (Idle/Roam/ReturnHome
+                // AND no damage in last 5s). 0 = no regen (default for all existing mobs).
+                drawIntField("HP Regen / sec", editingMob_, "hp_regen_per_sec", 0, 9999999);
             }
 
             if (ImGui::CollapsingHeader("Scaling")) {
@@ -1010,6 +1020,19 @@ void ContentBrowserPanel::drawLootTab() {
 // Spawn Zones Tab
 // ============================================================================
 
+// Count hand-placed instances on a zone JSON entry (0 if none / field missing).
+static int instanceCount(const nlohmann::json& zone) {
+    if (!zone.contains("instances") || !zone["instances"].is_array()) return 0;
+    return (int)zone["instances"].size();
+}
+
+// Count candidate spawn points on a zone JSON entry (WU6 — 1-of-N bosses).
+// 0 if missing / not an array.
+static int candidatePointCount(const nlohmann::json& zone) {
+    if (!zone.contains("candidate_points") || !zone["candidate_points"].is_array()) return 0;
+    return (int)zone["candidate_points"].size();
+}
+
 void ContentBrowserPanel::drawSpawnsTab() {
     if (ImGui::Button("New Spawn Zone")) {
         selectedSpawnIndex_ = -1;
@@ -1036,6 +1059,7 @@ void ContentBrowserPanel::drawSpawnsTab() {
             int count = 0;
             if (zone.contains("target_count") && zone["target_count"].is_number())
                 count = zone["target_count"].get<int>();
+            int ninst = instanceCount(zone);
 
             // Scene group header (clickable — selects all zones for this scene)
             if (scene != lastScene) {
@@ -1054,20 +1078,33 @@ void ContentBrowserPanel::drawSpawnsTab() {
                 lastScene = scene;
             }
 
-            // Look up mob level range
+            // Look up mob level range from mob_definitions (spawn_zones itself
+            // doesn't carry min/max level — those fields live on mob_def only).
             const nlohmann::json* listMob = nullptr;
             for (const auto& m : mobList_) {
                 if (jstr(m, "mob_def_id") == mobId) { listMob = &m; break; }
             }
-            int minLvl = listMob ? listMob->value("min_spawn_level", 0) : 0;
-            int maxLvl = listMob ? listMob->value("max_spawn_level", 0) : 0;
-            std::string lvl = (minLvl == maxLvl)
-                ? "Lv" + std::to_string(minLvl)
-                : "Lv" + std::to_string(minLvl) + "-" + std::to_string(maxLvl);
+            std::string lvl;
+            if (!listMob) {
+                // Mob list not loaded yet, OR zone references a deleted mob_def_id.
+                // Show "Lv ?" rather than a confusing "Lv 0".
+                lvl = "Lv?";
+            } else {
+                int minLvl = listMob->value("min_spawn_level", 0);
+                int maxLvl = listMob->value("max_spawn_level", 0);
+                lvl = (minLvl == maxLvl)
+                    ? "Lv" + std::to_string(minLvl)
+                    : "Lv" + std::to_string(minLvl) + "-" + std::to_string(maxLvl);
+            }
 
             bool selected = (i == selectedSpawnIndex_);
-            std::string label = "  " + lvl + " " + mobId + " x" + std::to_string(count);
+            // Show spawn-count as either "xN" random or "N inst" hand-placed
+            std::string countStr = (ninst > 0)
+                ? std::to_string(ninst) + " inst"
+                : "x" + std::to_string(count);
+            std::string label = "  " + lvl + " " + mobId + " " + countStr;
             if (!zoneName.empty()) label += "  [" + zoneName + "]";
+            if (ninst > 0) label += " *"; // marker that zone has per-instance data
             label += "##spawn" + std::to_string(i);
             if (ImGui::Selectable(label.c_str(), selected)) {
                 selectedSpawnIndex_ = i;
@@ -1079,7 +1116,9 @@ void ContentBrowserPanel::drawSpawnsTab() {
                 float cy = zone.value("center_y", 0.0f);
                 float rad = zone.value("radius", 0.0f);
                 std::string dispName = listMob ? jstr(*listMob, "display_name", mobId) : mobId;
-                ImGui::SetTooltip("%s — %s\nPos: (%.0f, %.0f)  Radius: %.0f", dispName.c_str(), zoneName.c_str(), cx, cy, rad);
+                ImGui::SetTooltip("%s — %s\nPos: (%.0f, %.0f)  Radius: %.0f\n%s",
+                                  dispName.c_str(), zoneName.c_str(), cx, cy, rad,
+                                  ninst > 0 ? "Hand-placed per-instance" : "Random-radius spawn");
             }
         }
     }
@@ -1130,8 +1169,234 @@ void ContentBrowserPanel::drawSpawnsTab() {
             ImGui::SameLine();
             ImGui::TextDisabled("(0 = same as width)");
             drawComboField("Zone Shape", editingSpawn_, "zone_shape", {"circle", "rectangle"});
-            drawIntField("Target Count", editingSpawn_, "target_count", 0, 1000);
+
+            // Random-radius controls are hidden when per-instance mode is active
+            int currentCount = editingSpawn_.value("target_count", 0);
+            int currentInst = instanceCount(editingSpawn_);
+            if (currentInst > 0) {
+                ImGui::TextDisabled("Target Count: %d (one mob per instance)", currentInst);
+            } else {
+                drawIntField("Target Count", editingSpawn_, "target_count", 0, 1000);
+            }
             drawIntField("Respawn Override (sec)", editingSpawn_, "respawn_override_seconds", -1, 86400);
+
+            // ========================================================
+            // Per-instance editor (WU5)
+            // ========================================================
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::TextColored({0.6f, 0.85f, 1.0f, 1.0f}, "Per-Instance Spawn Points");
+
+            if (currentInst == 0) {
+                ImGui::TextDisabled("No hand-placed instances. Zone uses random-radius spawning.");
+                ImGui::TextDisabled("Convert to per-instance to position each guard/miniboss individually");
+                ImGui::TextDisabled("and set overrides (HP, damage, attack_range, leash_radius, respawn).");
+
+                if (ImGui::Button("Convert to Per-Instance")) {
+                    // Seed instances[] from target_count using zone center + a ring.
+                    float cx = editingSpawn_.value("center_x", 0.0f);
+                    float cy = editingSpawn_.value("center_y", 0.0f);
+                    float rad = editingSpawn_.value("radius", 100.0f);
+                    float h = editingSpawn_.value("height", 0.0f);
+                    if (h <= 0.0f) h = rad;
+
+                    int n = (std::max)(1, currentCount);
+                    auto arr = nlohmann::json::array();
+                    for (int k = 0; k < n; ++k) {
+                        float px = cx, py = cy;
+                        if (n > 1) {
+                            float ang = (float)k / (float)n * 6.2831853f;
+                            float r = (std::min)(rad, h) * 0.6f;
+                            px = cx + std::cos(ang) * r;
+                            py = cy + std::sin(ang) * r;
+                        }
+                        nlohmann::json inst = {
+                            {"position", {{"x", px}, {"y", py}}},
+                            {"overrides", nlohmann::json::object()}
+                        };
+                        arr.push_back(std::move(inst));
+                    }
+                    editingSpawn_["instances"] = std::move(arr);
+                }
+            } else {
+                auto& instArr = editingSpawn_["instances"];
+
+                int removeInst = -1;
+                for (int ii = 0; ii < (int)instArr.size(); ++ii) {
+                    auto& inst = instArr[ii];
+                    ImGui::PushID(ii);
+
+                    char label[64];
+                    std::snprintf(label, sizeof(label), "Instance %d", ii);
+                    bool open = ImGui::TreeNodeEx(label, ImGuiTreeNodeFlags_DefaultOpen);
+
+                    if (open) {
+                        // ---- Position drag ----
+                        float px = 0.0f, py = 0.0f;
+                        if (inst.contains("position")) {
+                            const auto& p = inst["position"];
+                            if (p.is_object()) {
+                                if (p.contains("x") && p["x"].is_number()) px = p["x"].get<float>();
+                                if (p.contains("y") && p["y"].is_number()) py = p["y"].get<float>();
+                            }
+                        }
+                        float pos[2] = { px, py };
+                        if (ImGui::DragFloat2("Position##inst_pos", pos, 1.0f, -999999.0f, 999999.0f)) {
+                            inst["position"] = { {"x", pos[0]}, {"y", pos[1]} };
+                        }
+
+                        // ---- Overrides (each with checkbox to enable) ----
+                        if (!inst.contains("overrides") || !inst["overrides"].is_object()) {
+                            inst["overrides"] = nlohmann::json::object();
+                        }
+                        auto& ov = inst["overrides"];
+
+                        auto intOverride = [&](const char* label, const char* key,
+                                               int defVal, int lo, int hi) {
+                            bool enabled = ov.contains(key) && ov[key].is_number_integer();
+                            char id[64]; std::snprintf(id, sizeof(id), "##en_%s", key);
+                            if (ImGui::Checkbox(id, &enabled)) {
+                                if (enabled) ov[key] = defVal; else ov.erase(key);
+                            }
+                            ImGui::SameLine();
+                            if (enabled) {
+                                int v = ov.value(key, defVal);
+                                char id2[96]; std::snprintf(id2, sizeof(id2), "%s##ov_%s", label, key);
+                                if (ImGui::DragInt(id2, &v, 1.0f, lo, hi)) ov[key] = v;
+                            } else {
+                                ImGui::TextDisabled("%s (use mob default)", label);
+                            }
+                        };
+                        auto floatOverride = [&](const char* label, const char* key,
+                                                 float defVal, float lo, float hi) {
+                            bool enabled = ov.contains(key) && ov[key].is_number();
+                            char id[64]; std::snprintf(id, sizeof(id), "##en_%s", key);
+                            if (ImGui::Checkbox(id, &enabled)) {
+                                if (enabled) ov[key] = defVal; else ov.erase(key);
+                            }
+                            ImGui::SameLine();
+                            if (enabled) {
+                                float v = ov.value(key, defVal);
+                                char id2[96]; std::snprintf(id2, sizeof(id2), "%s##ov_%s", label, key);
+                                if (ImGui::DragFloat(id2, &v, 0.5f, lo, hi, "%.2f")) ov[key] = v;
+                            } else {
+                                ImGui::TextDisabled("%s (use mob default)", label);
+                            }
+                        };
+
+                        int mobHP = linkedMob ? linkedMob->value("base_hp", 100) : 100;
+                        int mobDmg = linkedMob ? linkedMob->value("base_damage", 10) : 10;
+                        float mobAtkRange = linkedMob ? linkedMob->value("attack_range", 1.0f) : 1.0f;
+                        float mobLeash = linkedMob ? linkedMob->value("leash_radius", 6.0f) : 6.0f;
+                        int mobRespawn = linkedMob ? linkedMob->value("respawn_seconds", 60) : 60;
+                        int mobRegen = linkedMob ? linkedMob->value("hp_regen_per_sec", 0) : 0;  // WU7
+
+                        intOverride  ("HP",             "hp",              mobHP,       1, 99999999);
+                        intOverride  ("Damage",         "damage",          mobDmg,      0, 99999999);
+                        floatOverride("Attack Range",   "attack_range",    mobAtkRange, 0.0f, 999.0f);
+                        floatOverride("Leash Radius",   "leash_radius",    mobLeash,    0.0f, 9999.0f);
+                        floatOverride("Respawn Seconds","respawn_seconds", (float)mobRespawn, 1.0f, 86400.0f);
+                        intOverride  ("HP Regen",       "hp_regen_per_sec", mobRegen,   0, 9999999);  // WU7
+
+                        if (ImGui::SmallButton("Remove Instance")) removeInst = ii;
+                        ImGui::TreePop();
+                    }
+
+                    ImGui::PopID();
+                }
+
+                if (removeInst >= 0 && removeInst < (int)instArr.size()) {
+                    instArr.erase(instArr.begin() + removeInst);
+                    if (instArr.empty()) editingSpawn_.erase("instances");
+                }
+
+                if (ImGui::Button("+ Add Instance")) {
+                    float cx = editingSpawn_.value("center_x", 0.0f);
+                    float cy = editingSpawn_.value("center_y", 0.0f);
+                    nlohmann::json inst = {
+                        {"position", {{"x", cx}, {"y", cy}}},
+                        {"overrides", nlohmann::json::object()}
+                    };
+                    editingSpawn_["instances"].push_back(std::move(inst));
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Revert to Random-Radius")) {
+                    editingSpawn_.erase("instances");
+                }
+            }
+
+            // ========================================================
+            // Candidate Spawn Points (WU6 — TWOM 1-of-N bosses)
+            // ========================================================
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::TextColored({1.0f, 0.7f, 0.4f, 1.0f}, "Candidate Spawn Points (1-of-N Boss)");
+
+            int candCount = candidatePointCount(editingSpawn_);
+            int curInstForCand = instanceCount(editingSpawn_);
+
+            if (curInstForCand > 1) {
+                ImGui::TextDisabled("Disabled: zone has %d instances. Candidate points only", curInstForCand);
+                ImGui::TextDisabled("apply to single-instance / boss zones (each instance");
+                ImGui::TextDisabled("already defines its own fixed position).");
+                if (candCount > 0) {
+                    ImGui::Spacing();
+                    ImGui::TextColored({1.0f, 0.5f, 0.3f, 1.0f},
+                        "Warning: %d candidate point(s) defined but ignored.", candCount);
+                }
+            } else if (candCount == 0) {
+                ImGui::TextDisabled("No candidate points. Boss spawns at instance position");
+                ImGui::TextDisabled("(or scene default for boss-rotation bosses).");
+                ImGui::TextDisabled("Define N points to enable TWOM 1-of-N spawn picking.");
+                if (ImGui::Button("+ Add First Candidate Point")) {
+                    float cx = editingSpawn_.value("center_x", 0.0f);
+                    float cy = editingSpawn_.value("center_y", 0.0f);
+                    auto arr = nlohmann::json::array();
+                    arr.push_back({{"x", cx}, {"y", cy}});
+                    editingSpawn_["candidate_points"] = std::move(arr);
+                }
+            } else {
+                ImGui::TextDisabled("On each spawn cycle, the server picks one of these");
+                ImGui::TextDisabled("%d points uniformly at random.", candCount);
+
+                auto& cpArr = editingSpawn_["candidate_points"];
+                int removeCp = -1;
+                for (int ci = 0; ci < (int)cpArr.size(); ++ci) {
+                    auto& cp = cpArr[ci];
+                    ImGui::PushID(1000 + ci); // offset to not collide with instance IDs
+
+                    float xv = 0.0f, yv = 0.0f;
+                    if (cp.is_object()) {
+                        if (cp.contains("x") && cp["x"].is_number()) xv = cp["x"].get<float>();
+                        if (cp.contains("y") && cp["y"].is_number()) yv = cp["y"].get<float>();
+                    }
+                    char label[32];
+                    std::snprintf(label, sizeof(label), "Point %d##cp", ci);
+                    float pos[2] = { xv, yv };
+                    if (ImGui::DragFloat2(label, pos, 1.0f, -999999.0f, 999999.0f)) {
+                        cp = { {"x", pos[0]}, {"y", pos[1]} };
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("X##cprm")) removeCp = ci;
+
+                    ImGui::PopID();
+                }
+
+                if (removeCp >= 0 && removeCp < (int)cpArr.size()) {
+                    cpArr.erase(cpArr.begin() + removeCp);
+                    if (cpArr.empty()) editingSpawn_.erase("candidate_points");
+                }
+
+                if (ImGui::Button("+ Add Candidate Point")) {
+                    float cx = editingSpawn_.value("center_x", 0.0f);
+                    float cy = editingSpawn_.value("center_y", 0.0f);
+                    editingSpawn_["candidate_points"].push_back({{"x", cx}, {"y", cy}});
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Clear All Candidates")) {
+                    editingSpawn_.erase("candidate_points");
+                }
+            }
 
             ImGui::Separator();
 

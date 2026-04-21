@@ -186,8 +186,10 @@ void NetClient::poll(float currentTime) {
         }
     }
 
-    // Drain incoming packets (4K buffer for large payloads like inventory sync)
-    constexpr size_t RECV_BUF_SIZE = 4096;
+    // Drain incoming packets (16K buffer for large payloads like inventory sync;
+    // must match server's LARGE_PACKET_SIZE, raised from 4K after observing
+    // SvInventorySync drops when real inventories hit ~4080 bytes.)
+    constexpr size_t RECV_BUF_SIZE = 16384;
     uint8_t buf[RECV_BUF_SIZE];
     NetAddress from;
     int received;
@@ -279,8 +281,9 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         return;
     }
 
-    // Decrypt incoming payload for non-system packets
-    uint8_t decryptedBuf[4096];
+    // Decrypt incoming payload for non-system packets. Must match RECV_BUF_SIZE
+    // / server LARGE_PACKET_SIZE so inventory syncs don't get dropped.
+    uint8_t decryptedBuf[16384];
     const uint8_t* payloadData = data + r.position();
     size_t payloadLen = hdr.payloadSize;
 
@@ -393,6 +396,21 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             break;
         }
         case PacketType::SvEntityUpdateBatch: {
+            // Gap detection for stutter diagnosis. SvEntityUpdateBatch carries
+            // per-tick mob position deltas — at 20Hz server tick it should
+            // arrive every ~50ms. A gap >150ms means the client went 3+ ticks
+            // without position updates, which shows on screen as "all mobs
+            // freeze briefly then resume".
+            if (lastBatchReceivedTime_ > 0.0f) {
+                float gapMs = (lastPollTime_ - lastBatchReceivedTime_) * 1000.0f;
+                if (gapMs > 150.0f) {
+                    LOG_WARN("NetClient",
+                             "SvEntityUpdateBatch gap: %.0fms (previous at t=%.3f, now=%.3f)",
+                             gapMs, lastBatchReceivedTime_, lastPollTime_);
+                }
+            }
+            lastBatchReceivedTime_ = lastPollTime_;
+
             ByteReader payload(payloadData, payloadLen);
             uint8_t count = payload.readU8();
             for (uint8_t i = 0; i < count && payload.remaining() > 0; ++i) {
@@ -769,6 +787,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onScenePopulated) onScenePopulated();
             break;
         }
+        case PacketType::SvMoveReject: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvMoveRejectMsg::read(payload);
+            if (onMoveReject) onMoveReject(static_cast<MoveRejectReason>(msg.reason));
+            break;
+        }
         default:
             break;
     }
@@ -925,6 +949,28 @@ void NetClient::sendEquip(uint8_t action, int32_t inventorySlot, uint8_t equipSl
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdEquip, buf, w.size());
+}
+
+void NetClient::sendUnequipToBag(uint8_t equipSlot, int32_t bagInventorySlot, int32_t bagSlotIndex) {
+    CmdUnequipToBagMsg msg;
+    msg.equipSlot = equipSlot;
+    msg.bagInventorySlot = bagInventorySlot;
+    msg.bagSlotIndex = bagSlotIndex;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdUnequipToBag, buf, w.size());
+}
+
+void NetClient::sendEquipFromBag(int32_t bagInventorySlot, int32_t bagSlotIndex, uint8_t targetEquipSlot) {
+    CmdEquipFromBagMsg msg;
+    msg.bagInventorySlot = bagInventorySlot;
+    msg.bagSlotIndex = bagSlotIndex;
+    msg.targetEquipSlot = targetEquipSlot;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdEquipFromBag, buf, w.size());
 }
 
 void NetClient::sendMove(const Vec2& position, const Vec2& velocity, float timestamp) {

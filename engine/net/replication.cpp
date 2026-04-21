@@ -266,9 +266,14 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
             float dist = std::sqrt(dx * dx + dy * dy);
             UpdateTier tier = getUpdateTier(dist);
 
-            // Always send HP changes regardless of tier
-            bool hasHPChange = (current.currentHP != last.currentHP);
-            if (!hasHPChange && !shouldSendUpdate(tier, tickCounter_)) {
+            // Always send critical state changes regardless of tier. HP is
+            // already covered; deathState is added because player lifeState
+            // transitions (dying→dead at game_app.cpp ~524) can fire without
+            // an HP delta, and missing a death update leaves a stuck sprite
+            // on clients viewing the entity from Mid/Far/Edge tiers.
+            bool hasHPChange    = (current.currentHP  != last.currentHP);
+            bool hasDeathChange = (current.deathState != last.deathState);
+            if (!hasHPChange && !hasDeathChange && !shouldSendUpdate(tier, tickCounter_)) {
                 continue;
             }
         }
@@ -449,6 +454,11 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
     } else if (npcComp) {
         msg.entityType = 2; // npc
         msg.name = npcComp->displayName;
+        // WU11 Phase B Session 62 — replicate NPC identity + faction-target allow-list
+        // so the client can enforce same-faction click rules without a DB roundtrip.
+        msg.npcId = npcComp->npcId;
+        msg.npcStringId = npcComp->npcStringId;
+        msg.targetFactions = npcComp->targetFactions;
     } else if (droppedItem) {
         msg.entityType = 3; // dropped item
         msg.name = droppedItem->isGold ? "Gold" : droppedItem->itemId;

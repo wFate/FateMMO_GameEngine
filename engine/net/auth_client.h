@@ -32,7 +32,7 @@ struct AuthCommand {
 // ---------------------------------------------------------------------------
 // Result types — worker pushes results, main thread polls
 // ---------------------------------------------------------------------------
-enum class AuthResultType { Login, Create, Delete, Select };
+enum class AuthResultType { Login, Register, Create, Delete, Select };
 
 struct AuthClientResult {
     AuthResultType type;
@@ -74,6 +74,10 @@ private:
     std::atomic<bool> busy_{false};
     std::atomic<bool> connected_{false};
     std::atomic<bool> shouldStop_{false};
+
+    // Tags the initial-auth result with the kind of request that triggered it so
+    // main-thread routing can distinguish Login-failures from Register-failures.
+    AuthResultType pendingRequestType_ = AuthResultType::Login;
 
     mutable std::mutex resultMutex_;
     std::optional<AuthClientResult> result_;

@@ -64,7 +64,7 @@ struct CreateCommand : UndoCommand {
     EntityHandle createdHandle;
 
     void undo(World* w) override {
-        if (createdHandle) { w->destroyEntity(createdHandle); w->processDestroyQueue(); }
+        if (createdHandle) { w->destroyEntity(createdHandle); w->processDestroyQueue("editor_undo_create"); }
     }
     void redo(World* w) override {
         auto* e = PrefabLibrary::jsonToEntity(entityData, *w);
@@ -86,7 +86,7 @@ struct DeleteCommand : UndoCommand {
         if (e) deletedHandle = e->handle();
     }
     void redo(World* w) override {
-        if (deletedHandle) { w->destroyEntity(deletedHandle); w->processDestroyQueue(); }
+        if (deletedHandle) { w->destroyEntity(deletedHandle); w->processDestroyQueue("editor_redo_delete"); }
     }
     std::string description() const override { return "Delete"; }
     void remapEntityHandle(EntityHandle oldH, EntityHandle newH) override {

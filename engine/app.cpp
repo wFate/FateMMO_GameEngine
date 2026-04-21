@@ -263,10 +263,47 @@ void App::run() {
         }
 
         processEvents();
+        Uint64 updateStart = SDL_GetPerformanceCounter();
         update();
+        Uint64 updateEnd = SDL_GetPerformanceCounter();
         render();
+        Uint64 renderEnd = SDL_GetPerformanceCounter();
 
         FATE_FRAME_MARK;
+
+        // Rolling frame-time stats — diagnostic for stutter complaints.
+        // Fires every 5s with max/avg if any frame in the window exceeded 25ms.
+        {
+            float frameMs  = static_cast<float>(renderEnd - frameStartTick) * 1000.0f / static_cast<float>(freq);
+            float updateMs = static_cast<float>(updateEnd - updateStart) * 1000.0f / static_cast<float>(freq);
+            float renderMs = static_cast<float>(renderEnd - updateEnd)   * 1000.0f / static_cast<float>(freq);
+            frameStatsMaxMs_       = (std::max)(frameStatsMaxMs_, frameMs);
+            frameStatsMaxUpdateMs_ = (std::max)(frameStatsMaxUpdateMs_, updateMs);
+            frameStatsMaxRenderMs_ = (std::max)(frameStatsMaxRenderMs_, renderMs);
+            frameStatsSumMs_ += frameMs;
+            ++frameStatsCount_;
+            // Threshold lowered 25ms→12ms to catch sub-threshold hiccups the
+            // user can perceive as a stutter. 12ms = ~80 FPS cap; any frame
+            // that slow on this hardware is notable.
+            if (frameMs > 12.0f) ++frameStatsOver25msCount_;
+            frameStatsFlushTimer_ += deltaTime_;
+            if (frameStatsFlushTimer_ >= 5.0f) {
+                float avgMs = frameStatsCount_ > 0 ? frameStatsSumMs_ / frameStatsCount_ : 0.0f;
+                if (frameStatsMaxMs_ >= 12.0f) {
+                    LOG_INFO("App",
+                             "Frame stats (last 5s): max=%.1fms avg=%.1fms frames_over_12ms=%d/%d | max_update=%.1fms max_render=%.1fms",
+                             frameStatsMaxMs_, avgMs, frameStatsOver25msCount_, frameStatsCount_,
+                             frameStatsMaxUpdateMs_, frameStatsMaxRenderMs_);
+                }
+                frameStatsMaxMs_ = 0.0f;
+                frameStatsMaxUpdateMs_ = 0.0f;
+                frameStatsMaxRenderMs_ = 0.0f;
+                frameStatsSumMs_ = 0.0f;
+                frameStatsCount_ = 0;
+                frameStatsOver25msCount_ = 0;
+                frameStatsFlushTimer_ = 0.0f;
+            }
+        }
 
         // Frame pacing when VSync is off — cap to targetFPS to avoid burning CPU
         if (!config_.vsync && targetFrameTime > 0.0) {
@@ -619,7 +656,11 @@ void App::update() {
     // Always process destroy queue (so editor delete works while paused)
     auto* activeScene = SceneManager::instance().currentScene();
     if (activeScene) {
-        activeScene->world().processDestroyQueue();
+        // Scope: client-side early-frame flush (runs even when editor is paused
+        // so Delete-in-editor is responsive). Affects the locally simulated
+        // scene world — on the client this is a single-player view, so it is
+        // never shared across players.
+        activeScene->world().processDestroyQueue("client_frame_early");
     }
 
 #ifndef FATE_SHIPPING
@@ -650,7 +691,9 @@ void App::update() {
     if (scene) {
         scene->world().update(deltaTime_);
         scene->world().lateUpdate(deltaTime_);
-        scene->world().processDestroyQueue();
+        // Scope: client-side end-of-frame flush after update + lateUpdate.
+        // Same locally-simulated-scene caveat as client_frame_early.
+        scene->world().processDestroyQueue("client_frame_late");
     }
 }
 

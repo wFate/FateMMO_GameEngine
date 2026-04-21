@@ -218,13 +218,41 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
     // Back-pressure: if the client's reliability queue is >75% full, the
     // client is almost certainly dead or severely lagged. Drop new reliable
     // packets to avoid filling the queue and spamming "Dropping oldest" warnings.
+    //
+    // Session 71 WU1 — critical-lane bypass. A handful of packet types are
+    // load-bearing for playability (entity visibility, death overlay, zone
+    // transition, scene-ready) and MUST survive backpressure. Dropping them
+    // strands the client in a desynced state (invisible mobs attacking,
+    // no death panel on death, stuck on loading screen). Pass them through
+    // and let the reliability queue grow past the soft cap if needed; the
+    // hard cap at MAX_PENDING_PACKETS still protects the server.
     if (channel != Channel::Unreliable && client.reliability.isCongested()) {
-        return;
+        if (!isCriticalLane(packetType)) {
+            client.reliability.noteNonCriticalDrop();
+            constexpr float kBackpressureLogIntervalSec = 30.0f;
+            if (lastPollTime_ - client.lastBackpressureLogTime >= kBackpressureLogIntervalSec) {
+                size_t pending = client.reliability.pendingReliableCount();
+                LOG_WARN("Reliability",
+                         "Client %d queue congestion %zu/%zu (%zu%%) — dropped %u non-critical, preserved %u critical over last %.0fs",
+                         client.clientId, pending, ReliabilityLayer::MAX_PENDING_PACKETS,
+                         pending * 100 / ReliabilityLayer::MAX_PENDING_PACKETS,
+                         client.reliability.droppedNonCritical(),
+                         client.reliability.preservedCritical(),
+                         kBackpressureLogIntervalSec);
+                client.reliability.resetBackpressureCounters();
+                client.lastBackpressureLogTime = lastPollTime_;
+            }
+            return;
+        }
+        client.reliability.noteCriticalPreserve();
     }
 
     // Use a larger buffer for payloads that exceed the standard MTU-safe size
-    // (e.g. inventory sync with display names and rolled stats).
-    constexpr size_t LARGE_PACKET_SIZE = 4096;
+    // (e.g. inventory sync with display names and rolled stats). Raised from
+    // 4K to 16K after observing SvInventorySync hit ~4080 bytes and silently
+    // drop: encrypted payload + header exceeded 4K, overflow check returned
+    // early, client never received the update.
+    constexpr size_t LARGE_PACKET_SIZE = 16384;
     size_t bufSize = (payloadSize + PACKET_HEADER_SIZE + PacketCrypto::TAG_SIZE > MAX_PACKET_SIZE)
                      ? LARGE_PACKET_SIZE : MAX_PACKET_SIZE;
     uint8_t stackBuf[LARGE_PACKET_SIZE];

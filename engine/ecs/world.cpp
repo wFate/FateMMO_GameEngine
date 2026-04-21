@@ -2,18 +2,31 @@
 #include "engine/core/logger.h"
 #include <algorithm>
 #include <cassert>
+#include <string>
+
+#ifdef FATE_HAS_GAME
+#include "game/components/game_components.h"        // EnemyStatsComponent, NPCComponent
+#include "game/components/dropped_item_component.h" // DroppedItemComponent
+#include "game/components/player_controller.h"      // PlayerController
+#endif // FATE_HAS_GAME
 
 namespace fate {
 
-World::World()
-    : arena_(64 * 1024 * 1024),  // 64 MB arena for archetype columns
-      archetypes_(arena_)
+World::World(size_t slotReserve, size_t archetypeReserve)
+    // 256 MB arena. As of the Session 67 fix, archetype columns are heap-
+    // allocated via operator new[] rather than bumped from this arena, so
+    // it's currently unused. Kept at a generous reserve so any future arena
+    // consumer (e.g. per-world scratch, command buffers) has room without
+    // another round of OOM debugging. Virtual reserve on Win/Linux is free —
+    // only pages we actually touch get physically committed.
+    : arena_(256 * 1024 * 1024),
+      archetypes_(arena_, archetypeReserve)
 {
     // Reserve slot 0 as null sentinel
     slots_.resize(1);
     slots_[0].generation = 0;
     slots_[0].alive = false;
-    slots_.reserve(1024);
+    slots_.reserve(slotReserve);
 
     // Create the empty archetype (no components) for newly created entities
     emptyArchetypeId_ = archetypes_.findOrCreateArchetype({});
@@ -235,7 +248,42 @@ void World::forEachComponentOfEntity(Entity* entity, const std::function<void(vo
 
 // --- Cleanup ---
 
-void World::processDestroyQueue() {
+void World::processDestroyQueue(const char* scope) {
+    // First pass: classify pending destroys by component type so the log line
+    // can show a breakdown (e.g. "30 mobs, 5 loot, 2 other"). Without this,
+    // batched destroys after a zone transition look like a scene teardown
+    // when they are really a per-tick flush of dead mobs + expired loot.
+    // We must tally BEFORE destroying — component storage is invalidated once
+    // an entity is removed from its archetype below.
+#ifdef FATE_HAS_GAME
+    int mobCount = 0;
+    int lootCount = 0;
+    int playerCount = 0;
+    int npcCount = 0;
+    int otherCount = 0;
+    for (auto handle : destroyQueue_) {
+        uint32_t idx = handle.index();
+        if (idx >= static_cast<uint32_t>(slots_.size())) { otherCount++; continue; }
+        auto& slot = slots_[idx];
+        if (!slot.alive || slot.generation != handle.generation()) continue;
+        Entity* entity = slot.entity;
+        if (!entity) { otherCount++; continue; }
+        // Mutually-exclusive classification: pick the most specific role.
+        // Mob check first — mobs are the noisiest category after zone transitions.
+        if (entity->hasComponent<EnemyStatsComponent>()) {
+            mobCount++;
+        } else if (entity->hasComponent<DroppedItemComponent>()) {
+            lootCount++;
+        } else if (entity->hasComponent<PlayerController>()) {
+            playerCount++;
+        } else if (entity->hasComponent<NPCComponent>()) {
+            npcCount++;
+        } else {
+            otherCount++;
+        }
+    }
+#endif // FATE_HAS_GAME
+
     size_t destroyedCount = 0;
     for (auto handle : destroyQueue_) {
         uint32_t idx = handle.index();
@@ -279,7 +327,35 @@ void World::processDestroyQueue() {
         freeSlots_.push_back(idx);
     }
     if (destroyedCount > 0) {
-        LOG_DEBUG("World", "Destroyed %zu entities", destroyedCount);
+        // scope tag lets the reader know the intent of the destroy batch
+        // (e.g. "tick_shared_world", "client_disconnect", "dungeon_tick",
+        // "editor", "shutdown"). When no scope is supplied we log "unknown"
+        // so any forgotten call site sticks out in the logs.
+#ifdef FATE_HAS_GAME
+        // Build "N mobs, N loot, N players, N npcs, N other" omitting zero
+        // categories so the reader only sees relevant types.
+        std::string breakdown;
+        auto append = [&](const char* label, int n) {
+            if (n <= 0) return;
+            if (!breakdown.empty()) breakdown += ", ";
+            breakdown += std::to_string(n);
+            breakdown += ' ';
+            breakdown += label;
+        };
+        append("mobs", mobCount);
+        append("loot", lootCount);
+        append("players", playerCount);
+        append("npcs", npcCount);
+        append("other", otherCount);
+        LOG_DEBUG("World", "Destroyed %zu entities (scope=%s: %s)",
+                  destroyedCount,
+                  scope ? scope : "unknown",
+                  breakdown.empty() ? "empty" : breakdown.c_str());
+#else
+        // Editor-only build (no game components linked) — plain count.
+        LOG_DEBUG("World", "Destroyed %zu entities (scope=%s)",
+                  destroyedCount, scope ? scope : "unknown");
+#endif // FATE_HAS_GAME
     }
     destroyQueue_.clear();
 }

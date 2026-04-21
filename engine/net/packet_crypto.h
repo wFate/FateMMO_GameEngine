@@ -150,4 +150,23 @@ inline bool isSystemPacket(uint8_t packetType) {
            packetType == 0x83;
 }
 
+// Critical-lane packets MUST bypass the reliability-queue congestion drop.
+// If these are dropped under backpressure the client enters an unrecoverable
+// desynced state (invisible mobs that keep attacking, no death overlay on
+// death, stuck at loading screen on zone change). Everything else can tolerate
+// a drop + eventual retransmit or a later full-state catch-up.
+inline bool isCriticalLane(uint8_t packetType) {
+    // 0x90 SvEntityEnter       — without it, mob is invisible but still hits
+    // 0x91 SvEntityLeave       — without it, dead mob stays as a ghost
+    // 0x95 SvPlayerState       — authoritative self-state (HP/XP/level/stats)
+    // 0x97 SvZoneTransition    — without it, client stuck on old scene
+    // 0xA0 SvDeathNotify       — without it, no death overlay on player death
+    // 0xA1 SvRespawn           — without it, respawn never completes
+    // 0xCC SvKick              — disciplinary/shutdown message must arrive
+    // 0xCE SvScenePopulated    — without it, client never exits loading
+    return packetType == 0x90 || packetType == 0x91 || packetType == 0x95 ||
+           packetType == 0x97 || packetType == 0xA0 || packetType == 0xA1 ||
+           packetType == 0xCC || packetType == 0xCE;
+}
+
 } // namespace fate

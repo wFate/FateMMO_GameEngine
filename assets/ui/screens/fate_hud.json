@@ -46,7 +46,7 @@
           0,
           0
         ],
-        "barCornerRadius": 25.0,
+        "barCornerRadius": 14.0,
         "barHeight": 70.0,
         "borderColor": [
           0,
@@ -59,7 +59,7 @@
           40,
           28,
           0,
-          255
+          350
         ],
         "chatBtnFontName": "inter_semibold",
         "chatBtnFontSize": 40.0,
@@ -144,8 +144,8 @@
         ],
         "hpNumberColor": [
           255,
-          0,
-          0,
+          255,
+          255,
           255
         ],
         "hpNumberFontSize": 0.0,
@@ -168,10 +168,10 @@
           23.0
         ],
         "menuBtnBgColor": [
-          42,
-          30,
+          40,
+          28,
           0,
-          255
+          350
         ],
         "menuBtnFontSize": 40.0,
         "menuBtnGap": 40.0,
@@ -187,9 +187,9 @@
           255
         ],
         "menuDividerColor": [
-          179,
-          153,
-          102,
+          255,
+          170,
+          3,
           153
         ],
         "menuItemFontName": "inter_semibold",
@@ -208,9 +208,9 @@
           242
         ],
         "menuOverlayBorderColor": [
-          57,
-          47,
-          26,
+          38,
+          31,
+          17,
           255
         ],
         "menuOverlayW": 200.0,
@@ -244,8 +244,8 @@
           30.0
         ],
         "mpNumberColor": [
-          0,
-          71,
+          255,
+          255,
           255,
           255
         ],
@@ -279,21 +279,21 @@
           0
         ],
         "shieldTier1Color": [
-          51,
-          115,
-          191,
-          217
+          255,
+          255,
+          255,
+          210
         ],
         "shieldTier2Color": [
-          89,
-          153,
-          230,
+          6,
+          0,
+          255,
           217
         ],
         "shieldTier3Color": [
-          140,
-          204,
-          255,
+          21,
+          11,
+          67,
           217
         ],
         "showPortrait": false,
@@ -321,7 +321,7 @@
         ]
       },
       {
-        "abbrevFontSize": 14.0,
+        "abbrevFontSize": 27.0,
         "abbrevTextColor": [
           255,
           255,
@@ -383,7 +383,7 @@
         ],
         "iconAtlasCols": 8,
         "iconAtlasRows": 4,
-        "iconSize": 40.0,
+        "iconSize": 50.0,
         "id": "buff_bar",
         "maxVisible": 12,
         "pressedColor": [
@@ -403,7 +403,7 @@
           0.0,
           0.0
         ],
-        "stackFontSize": 14.0,
+        "stackFontSize": 20.0,
         "stackTextColor": [
           255,
           255,
@@ -422,7 +422,7 @@
           128,
           204
         ],
-        "tooltipFontSize": 14.0,
+        "tooltipFontSize": 25.0,
         "tooltipPadding": 6.0,
         "tooltipTextColor": [
           255,
@@ -575,7 +575,7 @@
           0,
           0
         ],
-        "targetName": "Timber Wolf",
+        "targetName": "Living Root",
         "type": "target_frame",
         "uiShadowColor": [
           0,
@@ -630,8 +630,8 @@
           0
         ],
         "bgColor": [
-          42,
-          30,
+          40,
+          28,
           0,
           290
         ],
@@ -693,7 +693,7 @@
         ]
       },
       {
-        "actionFontSize": 30.0,
+        "actionFontSize": 32.0,
         "actionTextColor": [
           255,
           168,
@@ -702,7 +702,7 @@
         ],
         "actionTextOffset": [
           0.0,
-          -24.0
+          -29.0
         ],
         "anchor": {
           "offset": [
@@ -717,9 +717,9 @@
         },
         "arcRadius": 220.0,
         "attackBgColor": [
-          65,
-          40,
-          7,
+          52,
+          31,
+          5,
           3333
         ],
         "attackButtonSize": 120.0,
@@ -778,15 +778,15 @@
         ],
         "endAngleDeg": 280.0,
         "filledSlotBgColor": [
-          42,
-          29,
+          30,
+          21,
           0,
           255
         ],
         "filledSlotBorderColor": [
-          96,
-          58,
-          0,
+          175,
+          115,
+          24,
           242
         ],
         "gradientBottom": [
@@ -821,9 +821,9 @@
         ],
         "metallicOpacity": 0.07000000029802322,
         "pageActiveBgColor": [
-          51,
-          33,
-          0,
+          44,
+          30,
+          3,
           3333
         ],
         "pageActiveTextColor": [
@@ -832,8 +832,8 @@
           0,
           242
         ],
-        "pageDotRadius": 14.0,
-        "pageFontSize": 20.0,
+        "pageDotRadius": 15.0,
+        "pageFontSize": 35.0,
         "pageInactiveBgColor": [
           54,
           37,
@@ -847,13 +847,13 @@
           204
         ],
         "pickUpBgColor": [
-          65,
-          40,
-          7,
+          52,
+          31,
+          5,
           3333
         ],
         "pickUpButtonSize": 80.0,
-        "pickUpFontSize": 18.0,
+        "pickUpFontSize": 22.0,
         "pickUpOffset": [
           -100.0,
           20.0
@@ -878,13 +878,13 @@
           0.0,
           0.0
         ],
-        "slotArcEndDeg": 310.0,
+        "slotArcEndDeg": 290.0,
         "slotArcOffset": [
-          -2.0,
-          -80.0
+          -10.0,
+          -30.0
         ],
-        "slotArcRadius": 70.0,
-        "slotArcStartDeg": 190.0,
+        "slotArcRadius": 100.0,
+        "slotArcStartDeg": 200.0,
         "slotCount": 5,
         "slotSize": 90.0,
         "startAngleDeg": 170.0,
@@ -1148,7 +1148,7 @@
           0
         ],
         "id": "destroy_item_dialog",
-        "message": "Destroy Leather Moccasins?",
+        "message": "Destroy Nut?",
         "messageFontSize": 13.0,
         "messageOffset": [
           0.0,

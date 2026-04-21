@@ -11,6 +11,18 @@
         0.0
       ]
     },
+    "backgroundColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "borderColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "children": [
       {
         "anchor": {
@@ -24,6 +36,12 @@
             350.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "bgColor": [
           222,
           204,
@@ -31,6 +49,12 @@
           247
         ],
         "bodyFontSize": 11.0,
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "borderWidth": 2.0,
         "buttonBgColor": [
           140,
@@ -60,6 +84,12 @@
         ],
         "closeCircleRadius": 10.0,
         "closeFontSize": 10.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "dividerColor": [
           97,
           71,
@@ -72,7 +102,31 @@
           64,
           255
         ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "npc_dialogue_panel",
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "questNameFontSize": 11.0,
         "questRowHeight": 30.0,
         "questStatusFontSize": 9.0,
@@ -100,6 +154,12 @@
           0.0
         ],
         "type": "npc_dialogue_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -114,6 +174,12 @@
             500.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "bgColor": [
           20,
           20,
@@ -186,7 +252,10 @@
         ],
         "closeBtnBorderW": 1.0,
         "closeBtnFontSize": 10.0,
-        "closeBtnOffset": 5.0,
+        "closeBtnOffset": [
+          5.0,
+          5.0
+        ],
         "closeBtnRadius": 10.0,
         "closeBtnTextColor": [
           255,
@@ -225,6 +294,12 @@
         "confirmQtyFontSize": 14.0,
         "confirmTitleFontSize": 11.0,
         "contentPadding": 0.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "dividerColor": [
           77,
           77,
@@ -236,6 +311,12 @@
           51,
           51,
           255
+        ],
+        "goldBarBgColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "goldBarHeight": 40.0,
         "goldColor": [
@@ -250,6 +331,18 @@
           0.0,
           0.0
         ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "headerBgColor": [
           31,
           31,
@@ -258,6 +351,12 @@
         ],
         "headerFontSize": 40.0,
         "headerHeight": 0.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "shop_panel",
         "itemFontSize": 30.0,
         "itemNameOffset": [
@@ -265,6 +364,12 @@
           0.0
         ],
         "panelBorderWidth": 2.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "priceColor": [
           255,
           214,
@@ -281,6 +386,12 @@
           0,
           0,
           38
+        ],
+        "rowBgColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "rowHeight": 50.0,
         "shopListOffset": [
@@ -326,6 +437,12 @@
           -50.0
         ],
         "type": "shop_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -340,6 +457,12 @@
             480.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "bankListOffset": [
           0.0,
           0.0
@@ -371,6 +494,12 @@
           38,
           204
         ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "dividerColorVal": [
           64,
           64,
@@ -387,12 +516,36 @@
           0.0,
           0.0
         ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "headerFontSize": 12.0,
         "headerHeight": 28.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "bank_panel",
         "inventoryOffset": [
           0.0,
           0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "rowHeight": 36.0,
         "slotBgColor": [
@@ -422,6 +575,12 @@
           0.0
         ],
         "type": "bank_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false,
         "withdrawBtnColor": [
           77,
@@ -484,6 +643,24 @@
           0.0,
           0.0
         ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "teleporter_panel",
         "labelColor": [
           179,
@@ -497,6 +674,12 @@
           0.0
         ],
         "nameFontSize": 12.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "rowHeight": 40.0,
         "rowOffset": [
           0.0,
@@ -527,6 +710,12 @@
           0.0
         ],
         "type": "teleporter_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -588,12 +777,42 @@
           0.0,
           0.0
         ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "arena_panel",
         "labelColor": [
           179,
           179,
           166,
           255
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "registeredColor": [
           77,
@@ -630,6 +849,12 @@
           0.0
         ],
         "type": "arena_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -690,12 +915,42 @@
           0.0,
           0.0
         ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "battlefield_panel",
         "labelColor": [
           179,
           179,
           166,
           255
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "registeredColor": [
           77,
@@ -738,6 +993,12 @@
           0.0
         ],
         "type": "battlefield_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -758,6 +1019,12 @@
             500.0
           ]
         },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "bgColor": [
           20,
           20,
@@ -803,6 +1070,12 @@
           0.0
         ],
         "contentPadding": 6.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "dividerColor": [
           77,
           77,
@@ -817,6 +1090,18 @@
           0,
           255
         ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
         "headerBgColor": [
           31,
           31,
@@ -825,6 +1110,12 @@
         ],
         "headerFontSize": 9.0,
         "headerRowHeight": 20.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "id": "leaderboard_panel",
         "listOffset": [
           0.0,
@@ -836,6 +1127,12 @@
         "pageInfoOffset": [
           0.0,
           0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "rankBronzeColor": [
           204,
@@ -890,6 +1187,12 @@
           0.0
         ],
         "type": "leaderboard_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       },
       {
@@ -917,6 +1220,81 @@
           255
         ],
         "borderWidth": 2.0,
+        "buyConfirmBgColor": [
+          222,
+          204,
+          171,
+          247
+        ],
+        "buyConfirmBodyFontSize": 11.0,
+        "buyConfirmBorderColor": [
+          102,
+          77,
+          51,
+          255
+        ],
+        "buyConfirmBtnBottomMargin": 30.0,
+        "buyConfirmBtnHeight": 22.0,
+        "buyConfirmBtnSpacing": 6.0,
+        "buyConfirmBtnTextColor": [
+          64,
+          38,
+          13,
+          255
+        ],
+        "buyConfirmBtnWidthRatio": 0.30000001192092896,
+        "buyConfirmDimColor": [
+          0,
+          0,
+          0,
+          102
+        ],
+        "buyConfirmHeightRatio": 0.30000001192092896,
+        "buyConfirmItemNameColor": [
+          38,
+          26,
+          13,
+          255
+        ],
+        "buyConfirmItemNameOffset": [
+          0.0,
+          28.0
+        ],
+        "buyConfirmNoBtnColor": [
+          166,
+          115,
+          115,
+          255
+        ],
+        "buyConfirmOffset": [
+          0.0,
+          0.0
+        ],
+        "buyConfirmPromptColor": [
+          64,
+          38,
+          20,
+          255
+        ],
+        "buyConfirmPromptYRatio": 0.44999998807907104,
+        "buyConfirmTitleColor": [
+          64,
+          38,
+          13,
+          255
+        ],
+        "buyConfirmTitleFontSize": 13.0,
+        "buyConfirmTitleOffset": [
+          0.0,
+          8.0
+        ],
+        "buyConfirmWidthRatio": 0.550000011920929,
+        "buyConfirmYesBtnColor": [
+          115,
+          140,
+          115,
+          255
+        ],
         "cancelConfirmBgColor": [
           222,
           204,
@@ -1031,6 +1409,12 @@
           255
         ],
         "contentPadding": 4.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "enchantBadgeOffset": [
           0.0,
           0.0
@@ -1042,6 +1426,30 @@
           179,
           51,
           255
+        ],
+        "expiredBadgeColor": [
+          179,
+          77,
+          77,
+          255
+        ],
+        "expiredBadgeTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
         ],
         "headerBgColor": [
           184,
@@ -1057,6 +1465,12 @@
           13,
           255
         ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "iconOffset": [
           0.0,
           0.0
@@ -1069,10 +1483,22 @@
           13,
           255
         ],
+        "itemNameExpiredColor": [
+          153,
+          64,
+          64,
+          255
+        ],
         "itemNameFontSize": 30.0,
         "itemNameOffset": [
           0.0,
           0.0
+        ],
+        "itemNameSoldColor": [
+          64,
+          140,
+          64,
+          255
         ],
         "listingAreaOffset": [
           0.0,
@@ -1102,16 +1528,34 @@
           13,
           255
         ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "priceColor": [
           12,
           12,
           11,
           255
         ],
+        "priceExpiredColor": [
+          153,
+          64,
+          64,
+          255
+        ],
         "priceFontSize": 30.0,
         "priceOffset": [
           0.0,
           0.0
+        ],
+        "priceSoldColor": [
+          64,
+          140,
+          64,
+          255
         ],
         "refreshBtnColor": [
           140,
@@ -1181,6 +1625,31 @@
           20,
           255
         ],
+        "sellerNameExpiredColor": [
+          153,
+          64,
+          64,
+          204
+        ],
+        "sellerNameSoldColor": [
+          64,
+          140,
+          64,
+          204
+        ],
+        "soldBadgeColor": [
+          77,
+          153,
+          77,
+          255
+        ],
+        "soldBadgeTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "statusBadgeFontSize": 10.0,
         "titleBarColor": [
           109,
           91,
@@ -1248,11 +1717,53 @@
         "tooltipStatFontSize": 11.0,
         "tooltipWidth": 200.0,
         "type": "market_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "visible": false
       }
     ],
+    "disabledColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientBottom": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientTop": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "hoverColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "id": "npc_root",
-    "type": "panel"
+    "pressedColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "type": "panel",
+    "uiShadowColor": [
+      0,
+      0,
+      0,
+      0
+    ]
   },
   "screen": "npc_panels"
 }

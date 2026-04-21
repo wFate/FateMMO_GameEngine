@@ -190,7 +190,7 @@ Color FloatingTextManager::colorForType(FloatingTextType type) {
         case FloatingTextType::Miss:       return Color(0.6f, 0.6f, 0.6f);
         case FloatingTextType::Dodge:      return Color(0.6f, 0.6f, 0.6f);
         case FloatingTextType::Block:      return Color(0.5f, 0.6f, 0.8f);
-        case FloatingTextType::Absorb:     return Color(0.3f, 0.8f, 1.0f);
+        case FloatingTextType::Absorb:     return Color(0.4f, 0.6f, 1.0f);
         case FloatingTextType::XPGain:     return Color(0.7f, 0.5f, 1.0f);
         case FloatingTextType::GoldGain:   return Color(1.0f, 0.85f, 0.3f);
         case FloatingTextType::LevelUp:    return Color(1.0f, 0.9f, 0.4f);

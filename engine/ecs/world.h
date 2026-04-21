@@ -43,7 +43,15 @@ protected:
 // Backed by archetype storage for cache-friendly component iteration
 class World {
 public:
-    World();
+    // Reserve sizes control initial std::vector capacity for slots_ and
+    // archetypes_. The client (AOI-bounded, a few thousand entities at peak)
+    // is fine with the defaults. The server (flat world, all players + mobs
+    // across all scenes, cumulative index growth over days) should pass
+    // larger values so slots_ doesn't resize-copy repeatedly and
+    // archetypes_ never reallocates mid-migration. Memory cost is ~16 B per
+    // slot reserved and ~sizeof(Archetype) per archetype slot, so even 65K
+    // slots is only ~1 MB.
+    explicit World(size_t slotReserve = 2048, size_t archetypeReserve = 4096);
     ~World();
 
     // Non-copyable, non-movable (owns Arena + ArchetypeStorage)
@@ -240,8 +248,12 @@ public:
     size_t entityCount() const;
     size_t systemCount() const { return systems_.size(); }
 
-    // Cleanup destroyed entities (called at end of frame)
-    void processDestroyQueue();
+    // Cleanup destroyed entities (called at end of frame).
+    // scope is an optional context tag emitted into the destroy log so we can
+    // tell at a glance whether a batch came from the main tick, a disconnect
+    // cleanup, a dungeon flush, etc. Must be a string literal or other
+    // pointer with process-lifetime storage (not copied / not owned).
+    void processDestroyQueue(const char* scope = nullptr);
 
     // Access to archetype storage (for advanced iteration)
     ArchetypeStorage& archetypes() { return archetypes_; }

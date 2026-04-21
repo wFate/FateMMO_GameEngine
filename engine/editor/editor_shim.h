@@ -50,7 +50,7 @@ public:
         std::vector<EntityHandle> toDestroy;
         world->forEachEntity([&](Entity* e) { toDestroy.push_back(e->handle()); });
         for (auto h : toDestroy) world->destroyEntity(h);
-        world->processDestroyQueue();
+        world->processDestroyQueue("editor_scene_load");
 
         // Load from JSON
         std::ifstream file(path);

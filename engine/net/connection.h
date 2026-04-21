@@ -84,6 +84,14 @@ struct ClientConnection {
     float guildInviteExpiresAt = 0.0f;      // gameTime when invite auto-expires
     int pendingGuildInviteId = 0;           // guild ID of pending invite
     std::string pendingGuildInviteFromCharId; // who sent the guild invite
+
+    // WU4: Periodic SvPlayerState push — ensures client HUD stays current even
+    // without damage/heal events (e.g., passive regen while idle).
+    double timeSinceLastStatePush = 0.0;
+
+    // Session 71 WU1 — periodic backpressure log throttle. Reset with the
+    // reliability counters every time we emit a summary line.
+    float lastBackpressureLogTime = 0.0f;
 };
 
 class ConnectionManager {

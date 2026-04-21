@@ -31,9 +31,12 @@
 #include "game/systems/combat_text_config.h"
 #include "game/systems/npc_nameplate_config.h"
 #endif // FATE_HAS_GAME
+#include <algorithm>
 #include <unordered_set>
 #include <string>
 #include <cstring>
+#include <cmath>
+#include <optional>
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -74,6 +77,7 @@ static bool inspectTextStyle(const char* prefix,
     }
 
     // Text effects (collapsible)
+    // TODO this needs tuned, modernized, prettied up, sleeker.. have me test out different properties and combinations
     std::snprintf(label, sizeof(label), "Text Effects##%s", prefix);
     if (ImGui::TreeNode(label)) {
         std::snprintf(label, sizeof(label), "Outline Color##%s", prefix);
@@ -271,6 +275,9 @@ static bool inspectTeleportDestList(std::vector<fate::TeleportDestination>& dest
             if (ImGui::InputText("Required Item", buf, sizeof(buf))) { dests[i].requiredItem = buf; changed = true; }
             int reqQty = dests[i].requiredItemQty;
             if (ImGui::DragInt("Required Qty", &reqQty, 1.0f, 0, 65535)) { dests[i].requiredItemQty = (uint16_t)reqQty; changed = true; }
+            strncpy(buf, dests[i].zoneName.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
+            if (ImGui::InputText("Zone Name", buf, sizeof(buf))) { dests[i].zoneName = buf; changed = true; }
+            if (!dests[i].zoneName.empty()) ImGui::TextDisabled("Position resolved from spawn_zones(%s, %s)", dests[i].sceneId.c_str(), dests[i].zoneName.c_str());
             ImGui::TreePop();
         }
         ImGui::PopID();
@@ -1405,7 +1412,15 @@ void Editor::drawInspector() {
             }
             if (open && selectedEntity_->hasComponent<NameplateComponent>()) {
                 char npName[64]; strncpy(npName, np->displayName.c_str(), sizeof(npName)-1); npName[sizeof(npName)-1]=0;
-                if (ImGui::InputText("Name##np", npName, sizeof(npName))) np->displayName = npName;
+                if (ImGui::InputText("Name##np", npName, sizeof(npName))) {
+                    np->displayName = npName;
+                    if (auto* npc = selectedEntity_->getComponent<NPCComponent>()) {
+                        npc->displayName = npName;
+                    }
+                    if (selectedEntity_->tag() == "npc") {
+                        selectedEntity_->setName(npName);
+                    }
+                }
                 captureInspectorUndo();
                 ImGui::DragInt("Level##np", &np->displayLevel, 0.1f, 1, 70);
                 captureInspectorUndo();
@@ -1763,14 +1778,26 @@ void Editor::drawInspector() {
                     auto& rule = cfg.rules[ri];
                     ImGui::PushID(ri);
 
-                    char ruleLabel[64]; std::snprintf(ruleLabel, sizeof(ruleLabel), "Rule %d: %s", ri, rule.enemyId.c_str());
+                    char ruleLabel[64];
+                    if (rule.instances.empty()) {
+                        std::snprintf(ruleLabel, sizeof(ruleLabel), "Rule %d: %s (x%d random)",
+                                      ri, rule.enemyId.c_str(), rule.targetCount);
+                    } else {
+                        std::snprintf(ruleLabel, sizeof(ruleLabel), "Rule %d: %s (%d instances)",
+                                      ri, rule.enemyId.c_str(), (int)rule.instances.size());
+                    }
                     if (ImGui::TreeNode(ruleLabel)) {
                         char eidBuf[64]; strncpy(eidBuf, rule.enemyId.c_str(), sizeof(eidBuf)-1); eidBuf[sizeof(eidBuf)-1]=0;
                         if (ImGui::InputText("Enemy ID##r", eidBuf, sizeof(eidBuf))) rule.enemyId = eidBuf;
                         captureInspectorUndo();
 
-                        ImGui::DragInt("Target Count##r", &rule.targetCount, 0.1f, 0, 100);
-                        captureInspectorUndo();
+                        // Random-radius mode controls only relevant when instances is empty
+                        if (rule.instances.empty()) {
+                            ImGui::DragInt("Target Count##r", &rule.targetCount, 0.1f, 0, 100);
+                            captureInspectorUndo();
+                        } else {
+                            ImGui::TextDisabled("Target Count: %d (one per instance)", (int)rule.instances.size());
+                        }
                         ImGui::DragInt("Min Level##r", &rule.minLevel, 0.1f, 1, 70);
                         captureInspectorUndo();
                         ImGui::DragInt("Max Level##r", &rule.maxLevel, 0.1f, 1, 70);
@@ -1778,6 +1805,9 @@ void Editor::drawInspector() {
                         ImGui::DragInt("Base HP##r", &rule.baseHP, 1.0f, 1, 999999);
                         captureInspectorUndo();
                         ImGui::DragInt("Base Damage##r", &rule.baseDamage, 1.0f, 0, 99999);
+                        captureInspectorUndo();
+                        // WU7: rule-level default HP regen (per-instance can still override)
+                        ImGui::DragInt("HP Regen / sec##r", &rule.hpRegenPerSec, 1.0f, 0, 999999);
                         captureInspectorUndo();
                         ImGui::DragFloat("Respawn Time##r", &rule.respawnSeconds, 0.5f, 1.0f, 600.0f, "%.1fs");
                         captureInspectorUndo();
@@ -1787,6 +1817,183 @@ void Editor::drawInspector() {
                         ImGui::Checkbox("Boss##r", &rule.isBoss);
                         captureInspectorUndo();
 
+                        // ----- Per-instance editor (WU5) -----
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::TextColored(ImVec4(0.6f, 0.85f, 1.0f, 1.0f), "Per-Instance Spawn Points");
+                        if (rule.instances.empty()) {
+                            ImGui::TextDisabled("(empty: random-radius spawn using Target Count)");
+                            // Convert button — seeds instances from targetCount with positions inside zone
+                            if (ImGui::Button("Convert to Per-Instance##r")) {
+                                rule.instances.clear();
+                                rule.instances.reserve(std::max(1, rule.targetCount));
+                                // Sample positions inside zone bounds (entity Transform position is zone center)
+                                Vec2 center = cfg.position;
+                                float halfW = cfg.size.x * 0.5f;
+                                float halfH = cfg.size.y * 0.5f;
+                                int n = std::max(1, rule.targetCount);
+                                for (int k = 0; k < n; ++k) {
+                                    SpawnInstance inst;
+                                    if (n == 1) {
+                                        inst.position = center;
+                                    } else {
+                                        // Distribute evenly on a ring inside the zone
+                                        float ang = (float)k / (float)n * 6.2831853f;
+                                        float r = std::min(halfW, halfH) * 0.6f;
+                                        inst.position = { center.x + std::cos(ang) * r,
+                                                          center.y + std::sin(ang) * r };
+                                    }
+                                    rule.instances.push_back(inst);
+                                }
+                                captureInspectorUndo();
+                            }
+                        } else {
+                            // Show each instance with position drag + override fields
+                            int instRemoveIdx = -1;
+                            for (int ii = 0; ii < (int)rule.instances.size(); ++ii) {
+                                auto& inst = rule.instances[ii];
+                                ImGui::PushID(ii);
+
+                                char instLabel[64];
+                                std::snprintf(instLabel, sizeof(instLabel), "Instance %d", ii);
+                                bool instOpen = ImGui::TreeNodeEx(instLabel,
+                                    ImGuiTreeNodeFlags_DefaultOpen);
+                                if (instOpen) {
+                                    float pos[2] = { inst.position.x, inst.position.y };
+                                    if (ImGui::DragFloat2("Position##inst", pos, 1.0f,
+                                                          -1000000.0f, 1000000.0f)) {
+                                        inst.position.x = pos[0];
+                                        inst.position.y = pos[1];
+                                    }
+                                    captureInspectorUndo();
+
+                                    // ---- Overrides (each with checkbox to enable) ----
+                                    auto drawIntOv = [&](const char* lbl, std::optional<int>& ov,
+                                                         int defVal, int lo, int hi) {
+                                        bool en = ov.has_value();
+                                        char chkId[64]; std::snprintf(chkId, sizeof(chkId), "##en%s", lbl);
+                                        if (ImGui::Checkbox(chkId, &en)) {
+                                            if (en) ov = defVal; else ov.reset();
+                                        }
+                                        ImGui::SameLine();
+                                        if (en) {
+                                            int v = *ov;
+                                            char id[64]; std::snprintf(id, sizeof(id), "%s##ov", lbl);
+                                            if (ImGui::DragInt(id, &v, 1.0f, lo, hi)) ov = v;
+                                        } else {
+                                            ImGui::TextDisabled("%s (use mob default)", lbl);
+                                        }
+                                        captureInspectorUndo();
+                                    };
+                                    auto drawFloatOv = [&](const char* lbl, std::optional<float>& ov,
+                                                           float defVal, float lo, float hi) {
+                                        bool en = ov.has_value();
+                                        char chkId[64]; std::snprintf(chkId, sizeof(chkId), "##en%s", lbl);
+                                        if (ImGui::Checkbox(chkId, &en)) {
+                                            if (en) ov = defVal; else ov.reset();
+                                        }
+                                        ImGui::SameLine();
+                                        if (en) {
+                                            float v = *ov;
+                                            char id[64]; std::snprintf(id, sizeof(id), "%s##ov", lbl);
+                                            if (ImGui::DragFloat(id, &v, 0.5f, lo, hi)) ov = v;
+                                        } else {
+                                            ImGui::TextDisabled("%s (use mob default)", lbl);
+                                        }
+                                        captureInspectorUndo();
+                                    };
+
+                                    drawIntOv("HP",            inst.overrides.hp,             rule.baseHP,     1, 999999);
+                                    drawIntOv("Damage",        inst.overrides.damage,         rule.baseDamage, 0, 99999);
+                                    drawFloatOv("Atk Range",   inst.overrides.attackRange,    1.0f,    0.0f, 999.0f);
+                                    drawFloatOv("Leash",       inst.overrides.leashRadius,    6.0f,    0.0f, 9999.0f);
+                                    drawFloatOv("Respawn (s)", inst.overrides.respawnSeconds, rule.respawnSeconds, 1.0f, 86400.0f);
+                                    drawIntOv("HP Regen",      inst.overrides.hpRegenPerSec,  rule.hpRegenPerSec, 0, 999999);  // WU7
+
+                                    if (ImGui::SmallButton("Remove Instance##inst")) {
+                                        instRemoveIdx = ii;
+                                    }
+
+                                    ImGui::TreePop();
+                                }
+                                ImGui::PopID();
+                            }
+
+                            if (instRemoveIdx >= 0 && instRemoveIdx < (int)rule.instances.size()) {
+                                rule.instances.erase(rule.instances.begin() + instRemoveIdx);
+                                captureInspectorUndo();
+                            }
+
+                            if (ImGui::Button("+ Add Instance##r")) {
+                                SpawnInstance inst;
+                                inst.position = cfg.position; // default to zone center
+                                rule.instances.push_back(inst);
+                                captureInspectorUndo();
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Revert to Random-Radius##r")) {
+                                rule.instances.clear();
+                                captureInspectorUndo();
+                            }
+                        }
+
+                        // ----- Candidate Spawn Points (WU6 — TWOM 1-of-N bosses) -----
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.4f, 1.0f),
+                            "Candidate Spawn Points (1-of-N Boss)");
+
+                        if (rule.instances.size() > 1) {
+                            ImGui::TextDisabled("Disabled: rule has %d instances. Candidate points",
+                                                (int)rule.instances.size());
+                            ImGui::TextDisabled("only apply to single-instance / boss rules.");
+                            if (!rule.candidatePoints.empty()) {
+                                ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f),
+                                    "Warning: %d candidate(s) defined but ignored.",
+                                    (int)rule.candidatePoints.size());
+                            }
+                        } else if (rule.candidatePoints.empty()) {
+                            ImGui::TextDisabled("(no candidates: spawn at instance pos / random radius)");
+                            if (ImGui::Button("+ Add First Candidate##cp")) {
+                                rule.candidatePoints.push_back(cfg.position);
+                                captureInspectorUndo();
+                            }
+                        } else {
+                            ImGui::TextDisabled("Spawn cycle picks 1 of %d candidates uniformly at random.",
+                                                (int)rule.candidatePoints.size());
+                            int cpRemoveIdx = -1;
+                            for (int ci = 0; ci < (int)rule.candidatePoints.size(); ++ci) {
+                                ImGui::PushID(2000 + ci); // separate ID space from instances
+                                auto& p = rule.candidatePoints[ci];
+                                float pos[2] = { p.x, p.y };
+                                char label[32];
+                                std::snprintf(label, sizeof(label), "Point %d##cp", ci);
+                                if (ImGui::DragFloat2(label, pos, 1.0f,
+                                                      -1000000.0f, 1000000.0f)) {
+                                    p.x = pos[0];
+                                    p.y = pos[1];
+                                }
+                                captureInspectorUndo();
+                                ImGui::SameLine();
+                                if (ImGui::SmallButton("X##cprm")) cpRemoveIdx = ci;
+                                ImGui::PopID();
+                            }
+                            if (cpRemoveIdx >= 0 && cpRemoveIdx < (int)rule.candidatePoints.size()) {
+                                rule.candidatePoints.erase(rule.candidatePoints.begin() + cpRemoveIdx);
+                                captureInspectorUndo();
+                            }
+                            if (ImGui::Button("+ Add Candidate##cp")) {
+                                rule.candidatePoints.push_back(cfg.position);
+                                captureInspectorUndo();
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Clear All##cp")) {
+                                rule.candidatePoints.clear();
+                                captureInspectorUndo();
+                            }
+                        }
+
+                        ImGui::Spacing();
                         if (ImGui::Button("Remove Rule##r")) removeIdx = ri;
 
                         ImGui::TreePop();
@@ -1875,7 +2082,15 @@ void Editor::drawInspector() {
                 captureInspectorUndo();
                 char buf[256];
                 strncpy(buf, npc->displayName.c_str(), sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
-                if (ImGui::InputText("Display Name##npc", buf, sizeof(buf))) npc->displayName = buf;
+                if (ImGui::InputText("Display Name##npc", buf, sizeof(buf))) {
+                    npc->displayName = buf;
+                    if (auto* np = selectedEntity_->getComponent<NameplateComponent>()) {
+                        np->displayName = buf;
+                    }
+                    if (selectedEntity_->tag() == "npc") {
+                        selectedEntity_->setName(buf);
+                    }
+                }
                 captureInspectorUndo();
                 char greetBuf[512];
                 strncpy(greetBuf, npc->dialogueGreeting.c_str(), sizeof(greetBuf) - 1); greetBuf[sizeof(greetBuf) - 1] = 0;
@@ -1892,6 +2107,41 @@ void Editor::drawInspector() {
                 if (ImGui::Combo("Face Direction##npc", &faceIdx, faceNames, 4))
                     npc->faceDirection = static_cast<FaceDirection>(faceIdx);
                 captureInspectorUndo();
+
+                // WU11 Phase B Session 62 — Target Factions (faction IDs that may click this NPC)
+                // Empty list = own faction only; cross-faction NPCs (Veylan, zone breadcrumbs)
+                // should set Xyros, Fenor, Zethos, Solis. Umbra (5) is hostile-only.
+                ImGui::Separator();
+                ImGui::TextUnformatted("Target Factions (allowed clickers)");
+                ImGui::SameLine();
+                ImGui::TextDisabled("(?)");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Faction IDs that may click and interact with this NPC.\n"
+                                      "Empty = own faction only.\n"
+                                      "1=Xyros, 2=Fenor, 3=Zethos, 4=Solis, 5=Umbra.\n"
+                                      "Cross-faction NPCs (Veylan, breadcrumb NPCs) should\n"
+                                      "include all 4 player factions.");
+                }
+                static const char* factionNames[] = { "Xyros (1)", "Fenor (2)", "Zethos (3)", "Solis (4)", "Umbra (5)" };
+                bool tfChanged = false;
+                for (int fid = 1; fid <= 5; ++fid) {
+                    bool inList = std::find(npc->targetFactions.begin(),
+                                            npc->targetFactions.end(),
+                                            static_cast<uint8_t>(fid)) != npc->targetFactions.end();
+                    char lbl[64]; std::snprintf(lbl, sizeof(lbl), "%s##npctf%d", factionNames[fid - 1], fid);
+                    if (ImGui::Checkbox(lbl, &inList)) {
+                        if (inList) {
+                            npc->targetFactions.push_back(static_cast<uint8_t>(fid));
+                        } else {
+                            npc->targetFactions.erase(std::remove(npc->targetFactions.begin(),
+                                                                   npc->targetFactions.end(),
+                                                                   static_cast<uint8_t>(fid)),
+                                                       npc->targetFactions.end());
+                        }
+                        tfChanged = true;
+                    }
+                }
+                if (tfChanged) captureInspectorUndo();
             }
         }
 

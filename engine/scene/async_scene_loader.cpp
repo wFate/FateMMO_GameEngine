@@ -122,7 +122,10 @@ bool AsyncSceneLoader::tickFinalization(World& world) {
             toDestroy.push_back(e->handle());
         });
         for (auto h : toDestroy) world.destroyEntity(h);
-        world.processDestroyQueue();
+        // Scope: async scene loader wipes the old scene's world wholesale
+        // before populating the new one. Client-side scene swap only —
+        // never runs on the authoritative server.
+        world.processDestroyQueue("scene_unload");
         pending_->worldCleared = true;
     }
 

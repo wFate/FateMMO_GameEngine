@@ -46,6 +46,8 @@ public:
     void sendMoveItem(int32_t sourceSlot, int32_t destSlot, int32_t quantity = 0);
     void sendDestroyItem(int32_t slot, const std::string& expectedItemId);
     void sendEquip(uint8_t action, int32_t inventorySlot, uint8_t equipSlot);
+    void sendUnequipToBag(uint8_t equipSlot, int32_t bagInventorySlot, int32_t bagSlotIndex);
+    void sendEquipFromBag(int32_t bagInventorySlot, int32_t bagSlotIndex, uint8_t targetEquipSlot);
     void sendActivateSkillRank(const std::string& skillId);
     void sendAssignSkillSlot(uint8_t action, const std::string& skillId, uint8_t slotA, uint8_t slotB = 0);
     void sendAllocateStat(uint8_t statType, int16_t amount);
@@ -181,6 +183,7 @@ public:
     std::function<void(uint8_t kickCode, const std::string& reason)> onKicked;
     std::function<void(const SvRecallResultMsg&)> onRecallResult;
     std::function<void()> onScenePopulated;
+    std::function<void(MoveRejectReason reason)> onMoveReject; // Phase C Batch 3 WU14c
 
     // Admin content pipeline callbacks
     std::function<void(const SvAdminResultMsg&)>      onAdminResult;
@@ -200,6 +203,10 @@ private:
     float lastHeartbeatSent_ = 0.0f;
     float lastPacketReceived_ = 0.0f;
     float lastPollTime_ = 0.0f;  // cached from poll() for RTT tracking
+    // Diagnostic for "all mobs hiccup" — tracks the last time a mob-position
+    // batch arrived. Gaps >150ms get logged so we can tell whether the stutter
+    // is network loss/delay vs server-side pause.
+    float lastBatchReceivedTime_ = 0.0f;
     AuthToken authToken_ = {};
     PacketCrypto crypto_;
     PacketCrypto::Keypair clientKeypair_ = {};

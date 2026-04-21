@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
+#include <new>
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
@@ -119,9 +120,33 @@ struct TypeInfo {
 // ==========================================================================
 class ArchetypeStorage {
 public:
-    explicit ArchetypeStorage(Arena& arena) : arena_(arena) {
-        archetypes_.reserve(256); // Prevent reallocation during entity migration
+    // Reserve must be large enough that archetypes_.emplace_back() never
+    // reallocates — otherwise any Archetype& held across the call (e.g.
+    // fromArch in migrateEntity before the Session 67 rewrite) dangles,
+    // corrupting the next addEntity with a junk toArchId / null column
+    // data. The client hit archetype #759 on relogin; 256 was never realistic.
+    // Server passes a larger value to account for its richer component mix.
+    explicit ArchetypeStorage(Arena& arena, size_t reserve = 4096) : arena_(arena) {
+        archetypes_.reserve(reserve);
     }
+
+    ~ArchetypeStorage() {
+        // Free column data owned by this storage. Components themselves were
+        // already destroyed by World::~World() via destroyAll() — here we
+        // only release the raw backing blocks that allocateColumn() handed out.
+        for (auto& arch : archetypes_) {
+            for (auto& col : arch.columns) {
+                auto infoIt = typeInfos_.find(col.typeId);
+                size_t alignment = (infoIt != typeInfos_.end())
+                                       ? infoIt->second.alignment : 16;
+                freeColumn(col.data, alignment);
+                col.data = nullptr;
+            }
+        }
+    }
+
+    ArchetypeStorage(const ArchetypeStorage&) = delete;
+    ArchetypeStorage& operator=(const ArchetypeStorage&) = delete;
 
     // -- Type registration --------------------------------------------------
 
@@ -261,10 +286,11 @@ public:
     // Returns the new archetype ID
     ArchetypeId migrateEntity(ArchetypeId fromArchId, RowIndex fromRow,
                               EntityHandle handle, CompId typeId, bool adding) {
-        Archetype& fromArch = archetypes_[fromArchId];
-
-        // Build new type set
-        std::vector<CompId> newTypes = fromArch.typeIds;
+        // Build new type set. We COPY typeIds into a local before calling
+        // findOrCreateArchetype because that call may emplace_back a new
+        // archetype and reallocate archetypes_, invalidating any Archetype&
+        // held across the call. This is why we don't keep a fromArch& here.
+        std::vector<CompId> newTypes = archetypes_[fromArchId].typeIds;
         if (adding) {
             if (std::find(newTypes.begin(), newTypes.end(), typeId) == newTypes.end()) {
                 newTypes.push_back(typeId);
@@ -387,17 +413,37 @@ private:
 
     // -- Helpers ------------------------------------------------------------
 
+    // Column memory is heap-allocated (aligned new/delete) rather than arena-
+    // allocated. Arenas are bump-only and cannot free individual blocks, so
+    // every growArchetype() leaked the old column allocation forever. On a
+    // long-running server that never resets the arena, this fills 64 MB fast
+    // and the next allocation returns nullptr, which crashed in
+    // ArchetypeColumn::zeroRow with `data=null, elemSize=256` (observed on
+    // client relogin). Heap allocation pairs naturally with our grow/destroy
+    // paths — old data gets freed in growArchetype and in ~ArchetypeStorage.
     uint8_t* allocateColumn(size_t elemSize, size_t alignment, uint32_t capacity) {
         size_t totalBytes = elemSize * capacity;
-        void* mem = arena_.push(totalBytes, alignment);
-        if (mem) std::memset(mem, 0, totalBytes);
+        if (totalBytes == 0) return nullptr;
+        // Alignment must be >= sizeof(void*) and a power of 2 for
+        // operator new[] with std::align_val_t.
+        size_t alignReq = alignment < alignof(std::max_align_t)
+                              ? alignof(std::max_align_t) : alignment;
+        void* mem = ::operator new[](totalBytes, std::align_val_t{alignReq});
+        std::memset(mem, 0, totalBytes);
         return static_cast<uint8_t*>(mem);
+    }
+
+    void freeColumn(uint8_t* data, size_t alignment) {
+        if (!data) return;
+        size_t alignReq = alignment < alignof(std::max_align_t)
+                              ? alignof(std::max_align_t) : alignment;
+        ::operator delete[](data, std::align_val_t{alignReq});
     }
 
     void growArchetype(Archetype& arch) {
         uint32_t newCap = arch.capacity * 2;
 
-        // Grow each column: allocate new array from arena, relocate old data
+        // Grow each column: allocate new array, relocate old data, free old
         for (size_t i = 0; i < arch.columns.size(); ++i) {
             auto& col = arch.columns[i];
             auto infoIt = typeInfos_.find(col.typeId);
@@ -414,7 +460,8 @@ private:
             } else {
                 std::memcpy(newData, col.data, col.elemSize * static_cast<size_t>(arch.count));
             }
-            // Old data is abandoned — reclaimed on arena reset
+            // Free the old column block — arena previously leaked this.
+            freeColumn(col.data, alignment);
             col.data = newData;
         }
 

@@ -2,8 +2,26 @@
 #pragma comment(lib, "ws2_32.lib")
 #include "engine/core/logger.h"
 #include <MSWSock.h>  // SIO_UDP_CONNRESET
+#include <atomic>
 
 namespace fate {
+
+// Rate-limited log of UDP send-buffer-full drops. Called from every sendto()
+// path on WSAEWOULDBLOCK. Aggregates counts across all send sites and prints
+// at most once per second so the log stays readable under burst conditions.
+static void logSendBufferFull(size_t packetSize) {
+    static std::atomic<int>      totalDrops{0};
+    static std::atomic<int64_t>  lastLogMs{0};
+    int n = totalDrops.fetch_add(1, std::memory_order_relaxed) + 1;
+    int64_t nowMs = static_cast<int64_t>(GetTickCount64());
+    int64_t last = lastLogMs.load(std::memory_order_relaxed);
+    if (nowMs - last >= 1000) {
+        if (lastLogMs.compare_exchange_strong(last, nowMs)) {
+            LOG_WARN("Net", "UDP sendto WOULDBLOCK (kernel send buffer full) — total drops=%d (latest size=%zu)",
+                     n, packetSize);
+        }
+    }
+}
 
 bool NetSocket::initPlatform() {
     WSADATA wsaData;
@@ -30,6 +48,31 @@ bool NetSocket::open(uint16_t port) {
         // Disable IPv6-only to allow IPv4-mapped addresses (dual-stack)
         int v6only = 0;
         setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&v6only, sizeof(v6only));
+
+        // Bump UDP socket buffers to 1 MB each. Default Windows UDP receive
+        // buffer is 64 KB; with 231 mob-delta updates per server tick plus
+        // occasional SvEntityEnter/Leave bursts (leashing, AOE kills), bursts
+        // exceed 64 KB and the OS silently drops packets. The client's poll()
+        // drains into a 16 KB app buffer per call, but if the kernel buffer
+        // overflows before poll runs, packets are already gone. A 1 MB cap
+        // covers ~20 tick intervals of worst-case traffic.
+        // NOTE: Windows can silently clamp the requested buffer size (group
+        // policy, driver limits). We verify with getsockopt and log so that
+        // it's obvious when the OS rejected our request.
+        int bufSize = 1024 * 1024;
+        int actualRcv = 0, actualSnd = 0;
+        int optLen = sizeof(actualRcv);
+        if (setsockopt(s, SOL_SOCKET, SO_RCVBUF, (const char*)&bufSize, sizeof(bufSize)) == SOCKET_ERROR) {
+            LOG_WARN("Net", "setsockopt(SO_RCVBUF, %d) failed: %d", bufSize, WSAGetLastError());
+        }
+        if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, (const char*)&bufSize, sizeof(bufSize)) == SOCKET_ERROR) {
+            LOG_WARN("Net", "setsockopt(SO_SNDBUF, %d) failed: %d", bufSize, WSAGetLastError());
+        }
+        getsockopt(s, SOL_SOCKET, SO_RCVBUF, (char*)&actualRcv, &optLen);
+        optLen = sizeof(actualSnd);
+        getsockopt(s, SOL_SOCKET, SO_SNDBUF, (char*)&actualSnd, &optLen);
+        LOG_INFO("Net", "UDP socket buffers: RCVBUF=%d bytes (%d KB), SNDBUF=%d bytes (%d KB)",
+                 actualRcv, actualRcv / 1024, actualSnd, actualSnd / 1024);
 
         // Prevent ICMP Port Unreachable from poisoning the UDP socket.
         // Without this, sending to a closed port causes the NEXT recvfrom()
@@ -86,6 +129,24 @@ bool NetSocket::open(uint16_t port) {
         DWORD dwBytesReturned = 0;
         WSAIoctl(s, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior),
                  NULL, 0, &dwBytesReturned, NULL, NULL);
+    }
+
+    // Bump UDP socket buffers (see IPv6 path above for rationale).
+    {
+        int bufSize = 1024 * 1024;
+        int actualRcv = 0, actualSnd = 0;
+        int optLen = sizeof(actualRcv);
+        if (setsockopt(s, SOL_SOCKET, SO_RCVBUF, (const char*)&bufSize, sizeof(bufSize)) == SOCKET_ERROR) {
+            LOG_WARN("Net", "setsockopt(SO_RCVBUF, %d) failed: %d", bufSize, WSAGetLastError());
+        }
+        if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, (const char*)&bufSize, sizeof(bufSize)) == SOCKET_ERROR) {
+            LOG_WARN("Net", "setsockopt(SO_SNDBUF, %d) failed: %d", bufSize, WSAGetLastError());
+        }
+        getsockopt(s, SOL_SOCKET, SO_RCVBUF, (char*)&actualRcv, &optLen);
+        optLen = sizeof(actualSnd);
+        getsockopt(s, SOL_SOCKET, SO_SNDBUF, (char*)&actualSnd, &optLen);
+        LOG_INFO("Net", "UDP socket buffers: RCVBUF=%d bytes (%d KB), SNDBUF=%d bytes (%d KB)",
+                 actualRcv, actualRcv / 1024, actualSnd, actualSnd / 1024);
     }
 
     // Set non-blocking
@@ -155,7 +216,15 @@ int NetSocket::sendTo(const uint8_t* data, size_t size, const NetAddress& to) {
         );
         if (result == SOCKET_ERROR) {
             int err = WSAGetLastError();
-            if (err == WSAEWOULDBLOCK) return 0;
+            if (err == WSAEWOULDBLOCK) {
+                // WSAEWOULDBLOCK on UDP sendto = kernel send buffer is FULL.
+                // The packet never leaves this machine. Rate-limit log to once
+                // per second (~20 ticks worth) so we see the issue without
+                // flooding. Counter is aggregated across all send sites.
+                logSendBufferFull(size);
+                return 0;
+            }
+            LOG_WARN("Net", "UDP sendto (IPv4-mapped) failed: err=%d size=%zu", err, size);
             return -1;
         }
         return result;
@@ -173,8 +242,10 @@ int NetSocket::sendTo(const uint8_t* data, size_t size, const NetAddress& to) {
     if (result == SOCKET_ERROR) {
         int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK) {
+            logSendBufferFull(size);
             return 0;
         }
+        LOG_WARN("Net", "UDP sendto failed: err=%d size=%zu", err, size);
         return -1;
     }
     return result;
