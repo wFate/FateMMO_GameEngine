@@ -41,15 +41,17 @@ jobs:
             libxinerama-dev libxss-dev libwayland-dev libxkbcommon-dev \
             libasound2-dev libpulse-dev libdbus-1-dev libudev-dev
 
-      - name: Cache build
-        uses: actions/cache@v4
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
-          path: build
-          key: linux-gcc14-${{ hashFiles('CMakeLists.txt') }}
-          restore-keys: linux-gcc14-
+          key: linux-gcc14
+          max-size: 500M
 
       - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=g++-14 -DCMAKE_C_COMPILER=gcc-14
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug
+             -DCMAKE_CXX_COMPILER=g++-14 -DCMAKE_C_COMPILER=gcc-14
+             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+             -DCMAKE_C_COMPILER_LAUNCHER=ccache
 
       - name: Build
         run: cmake --build build -j$(nproc)
@@ -67,15 +69,17 @@ jobs:
             libxinerama-dev libxss-dev libwayland-dev libxkbcommon-dev \
             libasound2-dev libpulse-dev libdbus-1-dev libudev-dev
 
-      - name: Cache build
-        uses: actions/cache@v4
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
-          path: build
-          key: linux-clang18-${{ hashFiles('CMakeLists.txt') }}
-          restore-keys: linux-clang18-
+          key: linux-clang18
+          max-size: 500M
 
       - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_C_COMPILER=clang-18
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug
+             -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_C_COMPILER=clang-18
+             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+             -DCMAKE_C_COMPILER_LAUNCHER=ccache
 
       - name: Build
         run: cmake --build build -j$(nproc)
