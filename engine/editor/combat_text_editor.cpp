@@ -31,7 +31,7 @@ static void drawStyleEditor(const char* label, CombatTextStyle& s) {
     ImGui::DragFloat("Lifetime (s)", &s.lifetime, 0.05f, 0.1f, 10.0f);
     ImGui::DragFloat("Float Speed (px/s)", &s.floatSpeed, 1.0f, 0.0f, 200.0f);
     ImGui::DragFloat("Float Angle (deg)", &s.floatAngle, 1.0f, 0.0f, 360.0f);
-    ImGui::DragFloat("Start Offset Y (px)", &s.startOffsetY, 1.0f, -100.0f, 100.0f);
+    ImGui::DragFloat("Start Offset Y (px)", &s.startOffsetY, 1.0f, -300.0f, 300.0f);
     ImGui::DragFloat("Random Spread X (px)", &s.randomSpreadX, 1.0f, 0.0f, 100.0f);
 
     ImGui::Separator();

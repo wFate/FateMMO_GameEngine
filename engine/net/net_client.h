@@ -30,12 +30,14 @@ public:
     void sendEmoticon(uint8_t emoticonId);
     void sendZoneTransition(const std::string& targetScene);
     void sendRespawn(uint8_t respawnType);
+    void sendUseFatesGrace();  // Phase 71: revive-in-place consumable
     void sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId);
     void sendUseConsumable(uint8_t inventorySlot);
     void sendUseConsumableWithTarget(uint8_t slot, uint32_t targetEntityId);
     void sendStatEnchant(uint8_t targetSlot, const std::string& scrollItemId);
     void sendShopBuy(uint32_t npcId, const std::string& itemId, uint16_t quantity);
     void sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t quantity);
+    void sendOpalsShopPurchase(const std::string& itemId, uint16_t quantity);  // Phase 71
     void sendBankDepositItem(uint32_t npcId, uint8_t inventorySlot);
     void sendBankWithdrawItem(uint32_t npcId, uint16_t itemIndex);
     void sendBankDepositGold(uint32_t npcId, int64_t amount);
@@ -71,6 +73,14 @@ public:
     void sendArena(uint8_t action, uint8_t mode);
     void sendBattlefield(uint8_t action);
     void sendPetCommand(uint8_t action, int32_t petDbId);
+    // Phase 71 Task 13: opals-shop pet commands (replaces sendPetCommand when wired).
+    void sendEquipPet(uint32_t petInstanceId);
+    void sendUnequipPet();
+    void sendTogglePetAutoLoot(uint32_t petInstanceId, bool enabled);
+    // Phase 71 Task 15: pet-initiated loot pickup. `lootPid` is the
+    // PersistentId of the ground drop (same convention as sendAction's
+    // actionType=3 click-pickup path).
+    void sendPetPickupLoot(uint64_t lootPid);
     void sendRankingQuery(const CmdRankingQueryMsg& msg);
     void sendEquipCostume(const std::string& costumeDefId);
     void sendUnequipCostume(uint8_t slotType);
@@ -160,6 +170,8 @@ public:
     std::function<void(const SvSocketResultMsg&)> onSocketResult;
     std::function<void(const SvStatEnchantResultMsg&)> onStatEnchantResult;
     std::function<void(const SvShopResultMsg&)> onShopResult;
+    std::function<void(const SvPetStateMsg&)>   onPetState;
+    std::function<void(const SvPetGrantedMsg&)> onPetGranted;
     std::function<void(const SvTeleportResultMsg&)> onTeleportResult;
     std::function<void(const SvAuroraStatusMsg&)> onAuroraStatus;
     std::function<void(const SvConsumeResultMsg&)> onConsumeResult;

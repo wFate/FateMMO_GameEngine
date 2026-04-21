@@ -895,4 +895,138 @@ struct SvEmoticonMsg {
     }
 };
 
+// ============================================================================
+// Opals shop (Phase 71)
+// ============================================================================
+
+struct CmdOpalsShopPurchaseMsg {
+    std::string itemId;
+    uint16_t    quantity = 1;
+
+    void write(ByteWriter& w) const {
+        w.writeString(itemId);
+        w.writeU16(quantity);
+    }
+    static CmdOpalsShopPurchaseMsg read(ByteReader& r) {
+        CmdOpalsShopPurchaseMsg m;
+        m.itemId   = r.readString();
+        m.quantity = r.readU16();
+        return m;
+    }
+};
+
+// ============================================================================
+// Fate's Grace revive (Phase 71)
+// ============================================================================
+
+struct CmdUseFatesGraceMsg {
+    void write(ByteWriter& w) const { (void)w; }
+    static CmdUseFatesGraceMsg read(ByteReader& r) { (void)r; return {}; }
+};
+
+// ============================================================================
+// Pet messages (Phase 71)
+// ============================================================================
+
+struct CmdEquipPetMsg {
+    uint32_t petInstanceId = 0;
+    void write(ByteWriter& w) const { w.writeU32(petInstanceId); }
+    static CmdEquipPetMsg read(ByteReader& r) {
+        CmdEquipPetMsg m; m.petInstanceId = r.readU32(); return m;
+    }
+};
+
+struct CmdUnequipPetMsg {
+    void write(ByteWriter& w) const { (void)w; }
+    static CmdUnequipPetMsg read(ByteReader& r) { (void)r; return {}; }
+};
+
+struct CmdTogglePetAutoLootMsg {
+    uint32_t petInstanceId = 0;
+    uint8_t  enabled = 0;
+    void write(ByteWriter& w) const {
+        w.writeU32(petInstanceId);
+        w.writeU8(enabled);
+    }
+    static CmdTogglePetAutoLootMsg read(ByteReader& r) {
+        CmdTogglePetAutoLootMsg m;
+        m.petInstanceId = r.readU32();
+        m.enabled       = r.readU8();
+        return m;
+    }
+};
+
+struct CmdPetPickupLootMsg {
+    uint64_t lootEntityId = 0;
+    void write(ByteWriter& w) const { detail::writeU64(w, lootEntityId); }
+    static CmdPetPickupLootMsg read(ByteReader& r) {
+        CmdPetPickupLootMsg m; m.lootEntityId = detail::readU64(r); return m;
+    }
+};
+
+struct SvPetStateMsg {
+    uint32_t    petInstanceId = 0;
+    std::string petDefId;
+    std::string petName;
+    int32_t     level = 1;
+    int64_t     currentXp = 0;
+    int64_t     xpToNext = 100;
+    int32_t     hpBonus = 0;
+    float       critRateBonus = 0.0f;
+    float       expBonusPct = 0.0f;
+    uint8_t     autoLootEnabled = 0; // Phase 71 Task 13: reflect DB auto_loot_enabled
+
+    void write(ByteWriter& w) const {
+        w.writeU32(petInstanceId);
+        w.writeString(petDefId);
+        w.writeString(petName);
+        w.writeI32(level);
+        detail::writeI64(w, currentXp);
+        detail::writeI64(w, xpToNext);
+        w.writeI32(hpBonus);
+        w.writeFloat(critRateBonus);
+        w.writeFloat(expBonusPct);
+        w.writeU8(autoLootEnabled);
+    }
+    static SvPetStateMsg read(ByteReader& r) {
+        SvPetStateMsg m;
+        m.petInstanceId  = r.readU32();
+        m.petDefId       = r.readString();
+        m.petName        = r.readString();
+        m.level          = r.readI32();
+        m.currentXp      = detail::readI64(r);
+        m.xpToNext       = detail::readI64(r);
+        m.hpBonus        = r.readI32();
+        m.critRateBonus  = r.readFloat();
+        m.expBonusPct    = r.readFloat();
+        m.autoLootEnabled = r.readU8();
+        return m;
+    }
+};
+
+// IMPORTANT: petInstanceId included so client can immediately equip the new
+// pet without refetching. (Late amendment from Task 13 in the plan, folded
+// into Task 2 per implementation notes.)
+struct SvPetGrantedMsg {
+    uint32_t    petInstanceId = 0;
+    std::string petId;
+    std::string displayName;
+    int32_t     level = 1;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(petInstanceId);
+        w.writeString(petId);
+        w.writeString(displayName);
+        w.writeI32(level);
+    }
+    static SvPetGrantedMsg read(ByteReader& r) {
+        SvPetGrantedMsg m;
+        m.petInstanceId = r.readU32();
+        m.petId         = r.readString();
+        m.displayName   = r.readString();
+        m.level         = r.readI32();
+        return m;
+    }
+};
+
 } // namespace fate

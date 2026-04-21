@@ -417,7 +417,9 @@ void ContentBrowserPanel::drawMobsTab() {
             {"is_aggressive", true}, {"attack_style", "Melee"}, {"monster_type", "Normal"},
             {"is_boss", false}, {"is_elite", false},
             {"respawn_seconds", 60}, {"min_spawn_level", 1}, {"max_spawn_level", 5}, {"spawn_weight", 10},
-            {"hp_regen_per_sec", 0}
+            {"hp_regen_per_sec", 0},
+            {"min_opal_drop", 0}, {"max_opal_drop", 0}, {"opal_drop_chance", 0.0f},
+            {"equipped_weapon_id", ""}, {"equipped_armor_id", ""}, {"equipped_hat_id", ""}
         };
     }
     ImGui::SameLine();
@@ -532,6 +534,9 @@ void ContentBrowserPanel::drawMobsTab() {
                 drawIntField("Min Gold Drop", editingMob_, "min_gold_drop");
                 drawIntField("Max Gold Drop", editingMob_, "max_gold_drop");
                 drawFloatField("Gold Drop Chance", editingMob_, "gold_drop_chance", 0.0f, 1.0f);
+                drawIntField("Min Opal Drop", editingMob_, "min_opal_drop", 0, 999999);
+                drawIntField("Max Opal Drop", editingMob_, "max_opal_drop", 0, 999999);
+                drawFloatField("Opal Drop Chance", editingMob_, "opal_drop_chance", 0.0f, 1.0f);
                 drawIntField("Honor Reward", editingMob_, "honor_reward");
                 drawStringField("Loot Table ID", editingMob_, "loot_table_id");
             }
@@ -545,6 +550,12 @@ void ContentBrowserPanel::drawMobsTab() {
                 drawComboField("Monster Type", editingMob_, "monster_type", {"Normal", "Boss", "Elite", "Miniboss"});
                 drawBoolField("Is Boss", editingMob_, "is_boss");
                 drawBoolField("Is Elite", editingMob_, "is_elite");
+            }
+
+            if (ImGui::CollapsingHeader("Equipment (Paper-Doll)")) {
+                drawStringField("Equipped Weapon ID", editingMob_, "equipped_weapon_id");
+                drawStringField("Equipped Armor ID",  editingMob_, "equipped_armor_id");
+                drawStringField("Equipped Hat ID",    editingMob_, "equipped_hat_id");
             }
 
             if (ImGui::CollapsingHeader("Spawning")) {

@@ -133,7 +133,7 @@ static void inspectCombatTextStyle(const char* name, fate::CombatTextStyle& s) {
         std::snprintf(label, sizeof(label), "Float Angle##%s", name);
         ImGui::DragFloat(label, &s.floatAngle, 1.0f, 0.0f, 360.0f, "%.0f deg");
         std::snprintf(label, sizeof(label), "Start Offset Y##%s", name);
-        ImGui::DragFloat(label, &s.startOffsetY, 0.5f, -50.0f, 50.0f, "%.1f");
+        ImGui::DragFloat(label, &s.startOffsetY, 0.5f, -300.0f, 300.0f, "%.1f");
         std::snprintf(label, sizeof(label), "Random Spread X##%s", name);
         ImGui::DragFloat(label, &s.randomSpreadX, 0.5f, 0.0f, 50.0f, "%.1f");
         ImGui::TreePop();
@@ -164,7 +164,7 @@ static void inspectCombatTextStyle(const char* name, fate::CombatTextStyle& s) {
         std::snprintf(label, sizeof(label), "Label Color##%s", name);
         ImGui::ColorEdit4(label, &s.labelColor.r);
         std::snprintf(label, sizeof(label), "Label Offset Y##%s", name);
-        ImGui::DragFloat(label, &s.labelOffsetY, 0.5f, -50.0f, 50.0f, "%.1f");
+        ImGui::DragFloat(label, &s.labelOffsetY, 0.5f, -300.0f, 300.0f, "%.1f");
         std::snprintf(label, sizeof(label), "ctLabelFont_%s", name);
         inspectTextStyle(label, s.labelFontName, s.labelTextStyle, s.labelTextEffects);
         ImGui::TreePop();

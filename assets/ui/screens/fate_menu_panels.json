@@ -478,6 +478,8 @@
           128,
           255
         ],
+        "goldOffsetX": 0.0,
+        "goldOffsetY": 0.0,
         "goldValueColor": [
           255,
           250,
@@ -677,7 +679,8 @@
           0,
           0,
           0
-        ]
+        ],
+        "visible": false
       },
       {
         "activeSetPage": 0,
@@ -1492,17 +1495,156 @@
           0,
           0
         ],
+        "bgColor": [
+          40,
+          28,
+          5,
+          247
+        ],
         "borderColor": [
           0,
           0,
           0,
           0
         ],
+        "buyBtnBorderColor": [
+          77,
+          128,
+          77,
+          204
+        ],
+        "buyBtnColor": [
+          38,
+          77,
+          38,
+          204
+        ],
+        "buyBtnDisabledBorderColor": [
+          77,
+          77,
+          77,
+          128
+        ],
+        "buyBtnDisabledColor": [
+          51,
+          51,
+          51,
+          128
+        ],
+        "buyBtnDisabledTextColor": [
+          128,
+          128,
+          128,
+          179
+        ],
+        "buyBtnHeight": 50.0,
+        "buyBtnLabel": "Buy",
+        "buyBtnTextColor": [
+          217,
+          242,
+          217,
+          255
+        ],
+        "buyBtnWidth": 50.0,
+        "cancelBtnColor": [
+          89,
+          38,
+          38,
+          217
+        ],
+        "cancelBtnLabel": "Cancel",
+        "closeBtnBgColor": [
+          37,
+          21,
+          5,
+          255
+        ],
+        "closeBtnBorderColor": [
+          77,
+          51,
+          26,
+          255
+        ],
+        "closeBtnBorderW": 1.0,
+        "closeBtnFontSize": 10.0,
+        "closeBtnOffset": [
+          5.0,
+          5.0
+        ],
+        "closeBtnRadius": 30.0,
+        "closeBtnTextColor": [
+          255,
+          242,
+          224,
+          255
+        ],
+        "confirmBgColor": [
+          26,
+          26,
+          41,
+          247
+        ],
+        "confirmBorderColor": [
+          102,
+          102,
+          140,
+          230
+        ],
+        "confirmBorderW": 1.5,
+        "confirmBtnColor": [
+          38,
+          64,
+          115,
+          217
+        ],
+        "confirmBtnFontSize": 10.0,
+        "confirmBtnH": 24.0,
+        "confirmBtnLabel": "Confirm",
+        "confirmBtnW": 70.0,
+        "confirmPopupH": 120.0,
+        "confirmPopupW": 220.0,
+        "confirmPriceFontSize": 10.0,
+        "confirmQtyBtnFontSize": 12.0,
+        "confirmQtyBtnSize": 20.0,
+        "confirmQtyFontSize": 14.0,
+        "confirmTitleFontSize": 11.0,
+        "contentPadding": 20.0,
         "disabledColor": [
           0,
           0,
           0,
           0
+        ],
+        "dividerColor": [
+          77,
+          77,
+          102,
+          153
+        ],
+        "errorColor": [
+          204,
+          51,
+          51,
+          255
+        ],
+        "goldBarBgColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "goldBarHeight": 50.0,
+        "goldColor": [
+          45,
+          64,
+          141,
+          255
+        ],
+        "goldFontSize": 40.0,
+        "goldLabelPrefix": "Gold: ",
+        "goldOffset": [
+          0.0,
+          0.0
         ],
         "gradientBottom": [
           0,
@@ -1516,6 +1658,14 @@
           0,
           0
         ],
+        "headerBgColor": [
+          5,
+          5,
+          53,
+          230
+        ],
+        "headerFontSize": 11.0,
+        "headerHeight": 80.0,
         "hoverColor": [
           0,
           0,
@@ -1523,21 +1673,90 @@
           0
         ],
         "id": "shop_panel",
+        "itemFontSize": 40.0,
+        "itemNameOffset": [
+          0.0,
+          0.0
+        ],
+        "panelBorderWidth": 3.0,
         "pressedColor": [
           0,
           0,
           0,
           0
         ],
-        "title": "Shop",
-        "type": "panel",
-        "uiShadowColor": [
+        "priceColor": [
+          52,
+          68,
+          142,
+          255
+        ],
+        "priceFontSize": 40.0,
+        "priceOffset": [
+          0.0,
+          0.0
+        ],
+        "rowAltBgColor": [
+          0,
+          0,
+          0,
+          38
+        ],
+        "rowBgColor": [
           0,
           0,
           0,
           0
         ],
-        "visible": false
+        "rowHeight": 60.0,
+        "shopListOffset": [
+          0.0,
+          0.0
+        ],
+        "stockColor": [
+          153,
+          153,
+          179,
+          0
+        ],
+        "stockFontSize": 40.0,
+        "stockOffset": [
+          0.0,
+          0.0
+        ],
+        "subHeaderColor": [
+          230,
+          230,
+          217,
+          255
+        ],
+        "subHeaderFontSize": 40.0,
+        "subHeaderHeight": 0.0,
+        "subHeaderLabel": "",
+        "textColor": [
+          230,
+          230,
+          217,
+          255
+        ],
+        "titleColor": [
+          255,
+          116,
+          0,
+          255
+        ],
+        "titleFontSize": 40.0,
+        "titleOffset": [
+          0.0,
+          0.0
+        ],
+        "type": "shop_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ]
       },
       {
         "activeLabelOffset": [
@@ -2504,7 +2723,7 @@
         "zOrder": 115
       },
       {
-        "activeTab": 1,
+        "activeTab": 6,
         "activeTabBg": [
           34,
           2,

@@ -253,6 +253,12 @@ void NetClient::sendRespawn(uint8_t respawnType) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdRespawn, w.data(), w.size());
 }
 
+// Phase 71: Fate's Grace revive-in-place. Payload-less; server validates
+// inventory contains item_fates_grace, consumes one, and revives in place.
+void NetClient::sendUseFatesGrace() {
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdUseFatesGrace);
+}
+
 void NetClient::sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId) {
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
@@ -423,6 +429,18 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvCombatEventMsg::read(payload);
             if (onCombatEvent) onCombatEvent(msg);
+            break;
+        }
+        case PacketType::SvPetState: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvPetStateMsg::read(payload);
+            if (onPetState) onPetState(msg);
+            break;
+        }
+        case PacketType::SvPetGranted: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvPetGrantedMsg::read(payload);
+            if (onPetGranted) onPetGranted(msg);
             break;
         }
         case PacketType::SvChatMessage: {
@@ -849,6 +867,19 @@ void NetClient::sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t qua
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdShopSell, buf, w.size());
+}
+
+// Phase 71: Opals shop (in-game SHP menu tab). No NPC — the catalog is loaded
+// from assets/data/opals_shop.json and the purchase is validated server-side
+// against the same catalog. Server returns SvShopResult with updatedOpals set.
+void NetClient::sendOpalsShopPurchase(const std::string& itemId, uint16_t quantity) {
+    CmdOpalsShopPurchaseMsg msg;
+    msg.itemId = itemId;
+    msg.quantity = quantity;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdOpalsShopPurchase, buf, w.size());
 }
 
 void NetClient::sendBankDepositItem(uint32_t npcId, uint8_t inventorySlot) {
@@ -1469,6 +1500,46 @@ void NetClient::sendPetCommand(uint8_t action, int32_t petDbId) {
     msg.petDbId = petDbId;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdPet, w.data(), w.size());
+}
+
+// Phase 71 Task 13: Task-2 pet messages (opals-shop pipeline).
+void NetClient::sendEquipPet(uint32_t petInstanceId) {
+    uint8_t buf[16];
+    ByteWriter w(buf, sizeof(buf));
+    CmdEquipPetMsg msg;
+    msg.petInstanceId = petInstanceId;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdEquipPet, w.data(), w.size());
+}
+
+void NetClient::sendUnequipPet() {
+    uint8_t buf[4];
+    ByteWriter w(buf, sizeof(buf));
+    CmdUnequipPetMsg msg;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdUnequipPet, w.data(), w.size());
+}
+
+void NetClient::sendTogglePetAutoLoot(uint32_t petInstanceId, bool enabled) {
+    uint8_t buf[16];
+    ByteWriter w(buf, sizeof(buf));
+    CmdTogglePetAutoLootMsg msg;
+    msg.petInstanceId = petInstanceId;
+    msg.enabled = enabled ? 1 : 0;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdTogglePetAutoLoot, w.data(), w.size());
+}
+
+// Phase 71 Task 15: pet-initiated loot pickup. Reliable so we don't lose the
+// pickup request to packet loss — the server is idempotent via
+// DroppedItemComponent::tryClaim.
+void NetClient::sendPetPickupLoot(uint64_t lootPid) {
+    uint8_t buf[16];
+    ByteWriter w(buf, sizeof(buf));
+    CmdPetPickupLootMsg msg;
+    msg.lootEntityId = lootPid;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdPetPickupLoot, w.data(), w.size());
 }
 
 void NetClient::sendRankingQuery(const CmdRankingQueryMsg& msg) {

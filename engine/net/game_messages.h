@@ -1124,6 +1124,7 @@ struct SvShopResultMsg {
     uint8_t success = 0;
     int64_t updatedGold = 0;
     int32_t updatedHonor = 0;  // post-transaction honor balance (for honor-currency buys)
+    int64_t updatedOpals = 0;  // Phase 71: for opals-shop purchases
     std::string reason;
 
     void write(ByteWriter& w) const {
@@ -1131,6 +1132,7 @@ struct SvShopResultMsg {
         w.writeU8(success);
         detail::writeI64(w, updatedGold);
         w.writeI32(updatedHonor);
+        detail::writeI64(w, updatedOpals);
         w.writeString(reason);
     }
     static SvShopResultMsg read(ByteReader& r) {
@@ -1139,6 +1141,7 @@ struct SvShopResultMsg {
         m.success      = r.readU8();
         m.updatedGold  = detail::readI64(r);
         m.updatedHonor = r.readI32();
+        m.updatedOpals = detail::readI64(r);
         m.reason       = r.readString();
         return m;
     }

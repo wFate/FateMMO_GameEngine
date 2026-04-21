@@ -8,7 +8,7 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 3;  // bumped for CmdUnequipToBag (Phase C Batch 3 WU14a)
+constexpr uint8_t  PROTOCOL_VERSION  = 4;  // Phase 71: opals shop + pets + Fate's Grace
 constexpr size_t   PACKET_HEADER_SIZE = 18;
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
@@ -173,6 +173,16 @@ namespace PacketType {
     constexpr uint8_t SvRecallResult             = 0xCD;
     constexpr uint8_t SvScenePopulated           = 0xCE; // Server finished initial entity replication for scene
     constexpr uint8_t SvMoveReject               = 0xCF; // Phase C Batch 3 WU14c — generic reject reason for pickup/equip/bag moves
+
+    // Phase 71 — Opals shop + pets
+    constexpr uint8_t CmdOpalsShopPurchase  = 0xD0;
+    constexpr uint8_t CmdUseFatesGrace      = 0xD1;
+    constexpr uint8_t CmdEquipPet           = 0xD2;
+    constexpr uint8_t CmdUnequipPet         = 0xD3;
+    constexpr uint8_t CmdTogglePetAutoLoot  = 0xD4;
+    constexpr uint8_t CmdPetPickupLoot      = 0xD5;
+    constexpr uint8_t SvPetState            = 0xD6;
+    constexpr uint8_t SvPetGranted          = 0xD7;
 } // namespace PacketType
 
 // ============================================================================
