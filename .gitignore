@@ -113,11 +113,9 @@ imgui.ini
 ios/Info.plist.in
 ios/Podfile
 
-# Ad service platform integration (proprietary)
-engine/platform/ad_service.h
+# Ad service platform integration (mobile bridges are proprietary; header + desktop stub are safe to commit)
 engine/platform/ad_service_android.cpp
 engine/platform/ad_service_ios.mm
-engine/platform/ad_service_stub.cpp
 
 # Android platform files (proprietary)
 android/app/src/main/AndroidManifest.xml
