@@ -47,3 +47,12 @@ android {
         }
     }
 }
+
+dependencies {
+    // Google Mobile Ads SDK (AdMob) for rewarded video.
+    // Version pinned; bump deliberately and re-test consent flow.
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
+    // User Messaging Platform — required for GDPR/CCPA consent collection
+    // before initializing the ads SDK in EU/UK/California regions.
+    implementation("com.google.android.ump:user-messaging-platform:3.0.0")
+}

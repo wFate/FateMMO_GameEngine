@@ -167,7 +167,7 @@ bool Shader::loadFromSource(const std::string& vertSrc, const std::string& fragS
     gfxHandle_ = handle;
     programId_ = device.resolveGLShader(handle);
 
-    LOG_INFO("Shader", "Shader program %u linked successfully", programId_);
+    LOG_DEBUG("Shader", "Shader program %u linked successfully", programId_);
     return true;
 #endif
 }

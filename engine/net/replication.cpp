@@ -24,7 +24,10 @@ void ReplicationManager::update(World& world, NetServer& server) {
     // rebuildSpatialIndex(world);
 
     server.connections().forEach([&](ClientConnection& client) {
-        if (client.playerEntityId == 0) return; // not spawned yet
+        // Admin observers authenticate without selecting a character, so
+        // playerEntityId stays 0 but spectateScene drives what they see.
+        // Skip only when neither path applies.
+        if (client.playerEntityId == 0 && client.spectateScene.empty()) return;
         buildVisibility(world, client);
         sendDiffs(world, server, client);
 
@@ -222,6 +225,11 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
             if (ct) clientPos = ct->position;
         }
     }
+    // Admin observers have no player entity, so clientPos defaults to (0,0).
+    // That would put every distant mob in the Edge tier and choke update rate.
+    // Treat observed-scene entities as Near so spectators see smooth motion.
+    const bool isObserverClient =
+        client.playerEntityId == 0 && !client.spectateScene.empty();
 
     // Batch buffer: accumulate multiple entity deltas into one packet
     uint8_t batchBuf[MAX_PAYLOAD_SIZE];
@@ -260,7 +268,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
 
         // Tiered update frequency — skip if not this entity's turn
         auto* entityTransform = entity->getComponent<Transform>();
-        if (entityTransform) {
+        if (entityTransform && !isObserverClient) {
             float dx = entityTransform->position.x - clientPos.x;
             float dy = entityTransform->position.y - clientPos.y;
             float dist = std::sqrt(dx * dx + dy * dy);

@@ -66,6 +66,10 @@ public:
     // Securely wipe sensitive memory (e.g. secret keys after use).
     static void secureWipe(void* data, size_t size);
 
+    // CSPRNG — fills `out` with `n` cryptographically secure random bytes.
+    // Fatal if libsodium is unavailable; never returns predictable output.
+    static void randomBytes(void* out, size_t n);
+
     // Set the encrypt/decrypt keys for this session (also resets nonce counters).
     void setKeys(const Key& encryptKey, const Key& decryptKey);
     bool hasKeys() const { return keysSet_; }

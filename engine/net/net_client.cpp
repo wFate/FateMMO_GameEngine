@@ -82,17 +82,19 @@ bool NetClient::connectWithToken(const std::string& host, uint16_t port, const A
     }
     clientKeypair_ = PacketCrypto::generateKeypair();
     keypairGenerated_ = true;
+    authProofSent_ = false;
 
-    // Connect payload: version + auth token + DH public key
-    uint8_t connectPayload[49]; // 1 byte version + 16 byte token + 32 byte pk
+    // Connect payload: version + client DH ephemeral public key ONLY.
+    // C4: the auth token is NOT sent here — it's sent encrypted via CmdAuthProof
+    // after Noise_NK handshake completes, so a passive sniffer can't steal it.
+    uint8_t connectPayload[33]; // 1 byte version + 32 byte pk
     connectPayload[0] = PROTOCOL_VERSION;
-    std::memcpy(connectPayload + 1, token.data(), 16);
-    std::memcpy(connectPayload + 17, clientKeypair_.pk.data(), 32);
-    sendPacket(Channel::ReliableOrdered, PacketType::Connect, connectPayload, 49);
+    std::memcpy(connectPayload + 1, clientKeypair_.pk.data(), 32);
+    sendPacket(Channel::ReliableOrdered, PacketType::Connect, connectPayload, 33);
     waitingForAccept_ = true;
     connectStartTime_ = 0.0f;
 
-    LOG_INFO("NetClient", "Connecting to %s:%d with auth token...", host.c_str(), port);
+    LOG_INFO("NetClient", "Connecting to %s:%d (encrypted auth pending)...", host.c_str(), port);
     return true;
 }
 
@@ -109,6 +111,7 @@ void NetClient::disconnect() {
     waitingForAccept_ = false;
     clientId_ = 0;
     sessionToken_ = 0;
+    authProofSent_ = false;
     authToken_ = {};
     reliability_.reset();
     crypto_.clearKeys();
@@ -229,14 +232,17 @@ void NetClient::poll(float currentTime) {
         float retransmitDelay = (std::max)(0.2f, reliability_.rtt() * 2.0f);
         auto retransmits = reliability_.getRetransmits(currentTime, retransmitDelay);
         for (auto& pkt : retransmits) {
-            // Patch stale ack/ackBits in stored buffer with fresh values
-            // Header layout: protocolId(2) + sessionToken(4) + sequence(2) + ack(2) + ackBits(4)
+            // Patch stale ack/ackBits in stored buffer with fresh values.
+            // Header v5 layout: protocolId(2) + sessionToken(8) + sequence(2) + ack(2) + ackBits(4)
+            //                   = ack at offset 12, ackBits at offset 14.
+            // Getting these offsets wrong corrupts channel(18) and packetType(19),
+            // causing retransmits to arrive as "Unknown packet type 0x00" at the server.
             if (pkt->data.size() >= PACKET_HEADER_SIZE) {
                 uint16_t freshAck;
                 uint32_t freshAckBits;
                 reliability_.buildAckFields(freshAck, freshAckBits);
-                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 8, &freshAck, sizeof(freshAck));
-                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 10, &freshAckBits, sizeof(freshAckBits));
+                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 12, &freshAck, sizeof(freshAck));
+                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 14, &freshAckBits, sizeof(freshAckBits));
             }
             socket_.sendTo(pkt->data.data(), pkt->data.size(), serverAddress_);
             reliability_.markRetransmitted(pkt->sequence, currentTime);
@@ -316,7 +322,9 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         case PacketType::ConnectAccept: {
             ByteReader payload(payloadData, payloadLen);
             clientId_ = payload.readU16();
-            sessionToken_ = payload.readU32();
+            uint32_t tokLo = payload.readU32();
+            uint32_t tokHi = payload.readU32();
+            sessionToken_ = (static_cast<uint64_t>(tokHi) << 32) | tokLo;
             connected_ = true;
             waitingForAccept_ = false;
             crypto_.clearKeys(); // clear stale keys on reconnect
@@ -335,26 +343,39 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         case PacketType::KeyExchange: {
             ByteReader payload(payloadData, payloadLen);
             if (payloadLen == PacketCrypto::PUBLIC_KEY_SIZE && keypairGenerated_) {
-                // Server sent its ephemeral public key — derive session keys
+                // Server sent its ephemeral public key — derive session keys.
+                // C5: server static pubkey is REQUIRED. No anonymous DH fallback.
+                if (!hasServerStaticPk_) {
+                    LOG_ERROR("NetClient", "Refusing connect: server static pubkey not loaded. "
+                              "Anonymous DH (MITM-vulnerable) is disabled.");
+                    socket_.close();
+                    connected_ = false;
+                    waitingForAccept_ = false;
+                    authToken_ = {};
+                    reconnectPhase_ = ReconnectPhase::Failed;
+                    if (onConnectRejected) onConnectRejected("Missing server identity key");
+                    break;
+                }
                 PacketCrypto::PublicKey serverEphPk{};
                 payload.readBytes(serverEphPk.data(), PacketCrypto::PUBLIC_KEY_SIZE);
                 if (payload.ok()) {
-                    PacketCrypto::SessionKeys keys;
-                    if (hasServerStaticPk_) {
-                        // Noise_NK: two DH ops (es + ee) — server-authenticated, MITM-resistant
-                        keys = PacketCrypto::deriveNoiseNKClientKeys(
-                            clientKeypair_.sk, serverStaticPk_, serverEphPk);
-                        LOG_INFO("NetClient", "Noise_NK session keys derived --encryption active (MITM-protected)");
-                    } else {
-                        // Legacy single-DH fallback (no server authentication)
-                        keys = PacketCrypto::deriveClientSessionKeys(
-                            clientKeypair_.pk, clientKeypair_.sk, serverEphPk);
-                        LOG_WARN("NetClient", "Legacy DH session keys derived --encryption active (no MITM protection)");
-                    }
+                    // Noise_NK: two DH ops (es + ee) — server-authenticated, MITM-resistant
+                    PacketCrypto::SessionKeys keys = PacketCrypto::deriveNoiseNKClientKeys(
+                        clientKeypair_.sk, serverStaticPk_, serverEphPk);
                     crypto_.setKeys(keys.txKey, keys.rxKey);
-                    // Wipe secret key --no longer needed
                     PacketCrypto::secureWipe(clientKeypair_.sk.data(), clientKeypair_.sk.size());
                     keypairGenerated_ = false;
+                    LOG_INFO("NetClient", "Noise_NK session keys derived — encryption active (MITM-protected)");
+
+                    // C4: With keys active, send the encrypted AuthProof containing the
+                    // auth token we received from the TCP auth server.  Server will reject
+                    // the session if the token is unknown or expired.
+                    if (!authProofSent_) {
+                        uint8_t proofBuf[16];
+                        std::memcpy(proofBuf, authToken_.data(), 16);
+                        sendPacket(Channel::ReliableOrdered, PacketType::CmdAuthProof, proofBuf, 16);
+                        authProofSent_ = true;
+                    }
                 }
             } else {
                 LOG_ERROR("NetClient", "Invalid KeyExchange payload (%d bytes), expected %d-byte DH public key",
@@ -793,6 +814,20 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             // Prevent reconnection -- this is an intentional server-initiated disconnect
             reconnectPhase_ = ReconnectPhase::Failed;
             if (onKicked) onKicked(msg.kickCode, msg.reason);
+            break;
+        }
+        case PacketType::SvSpectateAck: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvSpectateAckMsg::read(payload);
+            if (msg.status == 0) {
+                LOG_INFO("NetClient", "Spectate accepted for scene '%s'", msg.scene.c_str());
+            } else if (msg.status == 3) {
+                LOG_INFO("NetClient", "Spectate stopped");
+            } else {
+                LOG_WARN("NetClient", "Spectate rejected (status=%d) scene='%s' reason='%s'",
+                         msg.status, msg.scene.c_str(), msg.reason.c_str());
+            }
+            if (onSpectateAck) onSpectateAck(msg);
             break;
         }
         case PacketType::SvRecallResult: {

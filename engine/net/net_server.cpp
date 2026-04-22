@@ -100,6 +100,35 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
             payloadLen = decryptedSize;
         }
 
+        // C4: CmdAuthProof carries the 16-byte auth token, encrypted under the
+        // Noise_NK session key.  It MUST arrive before any game packets are
+        // dispatched — otherwise an attacker could send commands without ever
+        // proving they hold a valid auth token.
+        if (hdr.packetType == PacketType::CmdAuthProof) {
+            if (client->hasCompletedAuthProof) {
+                LOG_WARN("NetServer", "Client %d sent duplicate AuthProof", client->clientId);
+                return;
+            }
+            if (payloadLen != 16) {
+                LOG_WARN("NetServer", "Client %d sent malformed AuthProof (%zu bytes)", client->clientId, payloadLen);
+                return;
+            }
+            AuthToken tok{};
+            std::memcpy(tok.data(), payloadData, 16);
+            client->authToken = tok;
+            client->hasCompletedAuthProof = true;
+            if (onAuthProofReceived) onAuthProofReceived(client->clientId, tok);
+            return;
+        }
+
+        // Any non-system game packet before AuthProof completes is rejected —
+        // prevents unauthenticated commands from hitting game handlers.
+        if (!isSystemPacket(hdr.packetType) && !client->hasCompletedAuthProof) {
+            LOG_WARN("NetServer", "Client %d sent game packet 0x%02X before AuthProof — dropped",
+                     client->clientId, hdr.packetType);
+            return;
+        }
+
         ByteReader payload(payloadData, payloadLen);
         onPacketReceived(client->clientId, hdr.packetType, payload);
     }
@@ -110,10 +139,11 @@ void NetServer::handleConnect(const NetAddress& from, const uint8_t* payload, si
     ClientConnection* existing = connections_.findByAddress(from);
     if (existing) {
         // Re-send ConnectAccept
-        uint8_t payloadBuf[8];
+        uint8_t payloadBuf[16];
         ByteWriter pw(payloadBuf, sizeof(payloadBuf));
         pw.writeU16(existing->clientId);
-        pw.writeU32(existing->sessionToken);
+        pw.writeU32(static_cast<uint32_t>(existing->sessionToken & 0xFFFFFFFFULL));
+        pw.writeU32(static_cast<uint32_t>(existing->sessionToken >> 32));
 
         uint8_t buf[MAX_PACKET_SIZE];
         ByteWriter w(buf, sizeof(buf));
@@ -147,24 +177,20 @@ void NetServer::handleConnect(const NetAddress& from, const uint8_t* payload, si
     ClientConnection* client = connections_.findById(clientId);
     if (!client) return;
 
-    // Read auth token from Connect payload (16 bytes)
-    if (payloadSize >= 16 && payload) {
-        std::memcpy(client->authToken.data(), payload, 16);
-        payload += 16;
-        payloadSize -= 16;
-    }
-
-    // Read client DH public key if present (32 bytes appended after auth token)
+    // C4: no auth token in plaintext Connect anymore.  Payload is just the DH
+    // ephemeral public key.  The auth token arrives encrypted via CmdAuthProof
+    // after the Noise_NK handshake completes.
     if (payloadSize >= PacketCrypto::PUBLIC_KEY_SIZE && payload) {
         std::memcpy(client->clientPublicKey.data(), payload, PacketCrypto::PUBLIC_KEY_SIZE);
         client->hasClientPublicKey = true;
     }
 
     // Build and send ConnectAccept
-    uint8_t payloadBuf[8];
+    uint8_t payloadBuf[16];
     ByteWriter pw(payloadBuf, sizeof(payloadBuf));
     pw.writeU16(clientId);
-    pw.writeU32(client->sessionToken);
+    pw.writeU32(static_cast<uint32_t>(client->sessionToken & 0xFFFFFFFFULL));
+    pw.writeU32(static_cast<uint32_t>(client->sessionToken >> 32));
 
     uint8_t buf[MAX_PACKET_SIZE];
     ByteWriter w(buf, sizeof(buf));
@@ -316,14 +342,17 @@ void NetServer::processRetransmits(float currentTime) {
         float retransmitDelay = (std::max)(0.2f, client.reliability.rtt() * 2.0f);
         auto retransmits = client.reliability.getRetransmits(currentTime, retransmitDelay);
         for (auto& pkt : retransmits) {
-            // Patch stale ack/ackBits in stored buffer with fresh values
-            // Header layout: protocolId(2) + sessionToken(4) + sequence(2) + ack(2) + ackBits(4)
+            // Patch stale ack/ackBits in stored buffer with fresh values.
+            // Header v5 layout: protocolId(2) + sessionToken(8) + sequence(2) + ack(2) + ackBits(4)
+            //                   = ack at offset 12, ackBits at offset 14.
+            // Getting these offsets wrong corrupts channel(18) and packetType(19),
+            // causing retransmits to arrive as "Unknown packet type 0x00" at the peer.
             if (pkt->data.size() >= PACKET_HEADER_SIZE) {
                 uint16_t freshAck;
                 uint32_t freshAckBits;
                 client.reliability.buildAckFields(freshAck, freshAckBits);
-                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 8, &freshAck, sizeof(freshAck));
-                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 10, &freshAckBits, sizeof(freshAckBits));
+                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 12, &freshAck, sizeof(freshAck));
+                std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 14, &freshAckBits, sizeof(freshAckBits));
             }
             socket_.sendTo(pkt->data.data(), pkt->data.size(), client.address);
             client.reliability.markRetransmitted(pkt->sequence, currentTime);

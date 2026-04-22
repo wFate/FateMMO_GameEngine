@@ -1874,6 +1874,30 @@ struct CmdSpectateSceneMsg {
 };
 
 // ============================================================================
+// Server -> Client: SvSpectateAck
+// status: 0 = accepted, 1 = rejected (not admin), 2 = rejected (unknown scene),
+//         3 = stopped (client sent active=0)
+// ============================================================================
+struct SvSpectateAckMsg {
+    std::string scene;    // scene that was requested (echo)
+    uint8_t     status = 0;
+    std::string reason;   // human-readable, only populated on reject
+
+    void write(ByteWriter& w) const {
+        w.writeString(scene);
+        w.writeU8(status);
+        w.writeString(reason);
+    }
+    static SvSpectateAckMsg read(ByteReader& r) {
+        SvSpectateAckMsg m;
+        m.scene  = r.readString();
+        m.status = r.readU8();
+        m.reason = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
 // Server -> Client: SvCostumeDefs (all costume definitions)
 // ============================================================================
 struct CostumeDefEntry {

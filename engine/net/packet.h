@@ -8,8 +8,8 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 4;  // Phase 71: opals shop + pets + Fate's Grace
-constexpr size_t   PACKET_HEADER_SIZE = 18;
+constexpr uint8_t  PROTOCOL_VERSION  = 5;  // Security pass: 64-bit sessionToken, AuthProof, CSPRNG
+constexpr size_t   PACKET_HEADER_SIZE = 22;
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
 
@@ -183,6 +183,15 @@ namespace PacketType {
     constexpr uint8_t CmdPetPickupLoot      = 0xD5;
     constexpr uint8_t SvPetState            = 0xD6;
     constexpr uint8_t SvPetGranted          = 0xD7;
+
+    // Security pass v5 — encrypted auth proof sent after Noise_NK handshake.
+    // Replaces the old plaintext authToken in the Connect payload (C4).
+    constexpr uint8_t CmdAuthProof          = 0xD8;
+
+    // Observe/spectate ACK — server confirms CmdSpectateScene was accepted
+    // (or rejected with a reason). Lets the editor surface failures instead
+    // of silently showing an empty scene.
+    constexpr uint8_t SvSpectateAck         = 0xD9;
 } // namespace PacketType
 
 // ============================================================================
@@ -190,7 +199,7 @@ namespace PacketType {
 // ============================================================================
 struct PacketHeader {
     uint16_t protocolId   = PROTOCOL_ID;
-    uint32_t sessionToken = 0;
+    uint64_t sessionToken = 0;  // 64-bit CSPRNG — security pass v5
     uint16_t sequence     = 0;
     uint16_t ack          = 0;
     uint32_t ackBits      = 0;
@@ -200,7 +209,8 @@ struct PacketHeader {
 
     void write(ByteWriter& w) const {
         w.writeU16(protocolId);
-        w.writeU32(sessionToken);
+        w.writeU32(static_cast<uint32_t>(sessionToken & 0xFFFFFFFFULL));
+        w.writeU32(static_cast<uint32_t>(sessionToken >> 32));
         w.writeU16(sequence);
         w.writeU16(ack);
         w.writeU32(ackBits);
@@ -212,7 +222,9 @@ struct PacketHeader {
     static PacketHeader read(ByteReader& r) {
         PacketHeader h;
         h.protocolId   = r.readU16();
-        h.sessionToken = r.readU32();
+        uint32_t lo    = r.readU32();
+        uint32_t hi    = r.readU32();
+        h.sessionToken = (static_cast<uint64_t>(hi) << 32) | lo;
         h.sequence     = r.readU16();
         h.ack          = r.readU16();
         h.ackBits      = r.readU32();

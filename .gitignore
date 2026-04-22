@@ -101,9 +101,24 @@ docs/superpowers/
 
 # Scripts with credentials (backup scripts, deploy, etc.)
 scripts/
+run_server.ps1
 
 # ImGui layout (per-developer)
 imgui.ini
 
 # Claude memory & tooling
 .claude/
+
+# iOS platform files (proprietary)
+ios/Info.plist.in
+ios/Podfile
+
+# Ad service platform integration (proprietary)
+engine/platform/ad_service.h
+engine/platform/ad_service_android.cpp
+engine/platform/ad_service_ios.mm
+engine/platform/ad_service_stub.cpp
+
+# Android platform files (proprietary)
+android/app/src/main/AndroidManifest.xml
+android/app/src/main/java/com/fatemmo/game/AdBridge.java

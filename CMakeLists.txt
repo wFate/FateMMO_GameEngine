@@ -379,6 +379,25 @@ else()
     list(FILTER ENGINE_SOURCES EXCLUDE REGEX "engine/render/gfx/backend/gl/.*")
 endif()
 
+# ── Ad service platform selection ─────────────────────────────────────────────
+# Rewarded video ads only live on Android / iOS.  Desktop dev builds link a
+# stub that makes isAvailable() return false so the chat "Watch Ad" button is
+# simply hidden.  GLOB picked up ad_service_stub.cpp + ad_service_android.cpp —
+# exclude whichever doesn't match the current platform, and add the Apple .mm
+# explicitly because it's not a .cpp.
+if(APPLE AND IOS)
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "ad_service_stub\\.cpp$")
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "ad_service_android\\.cpp$")
+    list(APPEND GFX_BACKEND_SOURCES engine/platform/ad_service_ios.mm)
+elseif(ANDROID)
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "ad_service_stub\\.cpp$")
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "ad_service_ios\\.mm$")
+else()
+    # Desktop / other — stub only.
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "ad_service_android\\.cpp$")
+    list(FILTER ENGINE_SOURCES EXCLUDE REGEX "ad_service_ios\\.mm$")
+endif()
+
 # Files with #ifdef FATEMMO_METAL ObjC syntax blocks must compile as ObjC++
 if(APPLE)
     set_source_files_properties(
@@ -440,6 +459,12 @@ endif()
 
 if(FATE_SHIPPING)
     target_compile_definitions(fate_engine PUBLIC FATE_SHIPPING=1)
+else()
+    # Dev-only: auth_client.cpp skips TLS cert verification so the client can
+    # connect to a self-signed localhost cert.  Must live on `fate_engine`
+    # (not `FateEngine`) because auth_client.cpp compiles into the library.
+    # MUST NOT be defined for shipping — allows silent MITM.
+    target_compile_definitions(fate_engine PUBLIC FATE_DEV_TLS)
 endif()
 
 # Precompiled headers — stable, frequently-included headers
@@ -481,9 +506,16 @@ if(GAME_SOURCES)
     # Pass source directory to code so saves go to the right place
     target_compile_definitions(FateEngine PRIVATE
         FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-        FATE_DEV_TLS
-        EDITOR_BUILD
     )
+    # Dev-only: compile editor code paths.  FATE_DEV_TLS is applied to the
+    # `fate_engine` library target instead (see above) because auth_client.cpp
+    # lives there — a PRIVATE define on this executable does not reach already-
+    # compiled library sources.  Shipping builds MUST NOT set EDITOR_BUILD
+    # (dead symbols / unintended code paths).  CI must build with FATE_SHIPPING=ON
+    # to verify the production path compiles.
+    if(NOT FATE_SHIPPING)
+        target_compile_definitions(FateEngine PRIVATE EDITOR_BUILD)
+    endif()
 
     if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         set_target_properties(FateEngine PROPERTIES
@@ -527,8 +559,10 @@ if(NOT GAME_SOURCES AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/demo_app.cp
     )
     target_compile_definitions(FateDemo PRIVATE
         FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-        EDITOR_BUILD
     )
+    if(NOT FATE_SHIPPING)
+        target_compile_definitions(FateDemo PRIVATE EDITOR_BUILD)
+    endif()
     if(APPLE)
         target_link_libraries(FateDemo PRIVATE ${METAL_LIBS})
     endif()
@@ -580,6 +614,9 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     # Server Executable (headless, no SDL window)
     # =============================================================================
     file(GLOB_RECURSE SERVER_SOURCES server/*.cpp server/*.h)
+    # ads_ssv_server.cpp has its own main() — link as a separate target, exclude
+    # it from FateServer's source list.
+    list(FILTER SERVER_SOURCES EXCLUDE REGEX "ads_ssv_server\\.cpp$")
     file(GLOB_RECURSE SERVER_SHARED_SOURCES game/shared/*.cpp)
     # entity_factory.cpp is used by both game and server targets
     set(SERVER_GAME_SOURCES game/entity_factory.cpp)
@@ -596,6 +633,25 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
         if(MSVC)
             target_compile_definitions(FateServer PRIVATE _CRT_SECURE_NO_WARNINGS)
             target_compile_options(FateServer PRIVATE /W4 /wd4100 /wd4201 /wd4458 /MP)
+        endif()
+    endif()
+
+    # =============================================================================
+    # AdMob SSV HTTP service (Linux-only at runtime; compiles as a stub on Windows).
+    # Deploy alongside FateServer; nginx terminates TLS and proxies to :7779.
+    # =============================================================================
+    if(EXISTS "${CMAKE_SOURCE_DIR}/server/ads_ssv_server.cpp" AND PostgreSQL_FOUND AND OpenSSL_FOUND)
+        add_executable(ads_ssv_server server/ads_ssv_server.cpp)
+        target_link_libraries(ads_ssv_server PRIVATE pqxx PostgreSQL::PostgreSQL OpenSSL::SSL OpenSSL::Crypto)
+        target_include_directories(ads_ssv_server PRIVATE ${CMAKE_SOURCE_DIR})
+        if(UNIX AND NOT APPLE)
+            # libcurl on Linux for fetching AdMob verifier keys.
+            find_package(CURL REQUIRED)
+            target_link_libraries(ads_ssv_server PRIVATE CURL::libcurl)
+        endif()
+        if(WIN32)
+            target_link_libraries(ads_ssv_server PRIVATE Ws2_32)
+            target_compile_definitions(ads_ssv_server PRIVATE _CRT_SECURE_NO_WARNINGS)
         endif()
     endif()
 

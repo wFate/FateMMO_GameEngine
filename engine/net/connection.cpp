@@ -1,5 +1,6 @@
 #include "engine/net/connection.h"
 #include "engine/core/logger.h"
+#include "engine/net/packet_crypto.h"
 
 namespace fate {
 
@@ -102,7 +103,7 @@ ClientConnection* ConnectionManager::findByAddress(const NetAddress& address) {
     return findById(it->second);
 }
 
-bool ConnectionManager::validateToken(const NetAddress& address, uint32_t token) {
+bool ConnectionManager::validateToken(const NetAddress& address, uint64_t token) {
     auto* client = findByAddress(address);
     if (!client) return false;
     return client->sessionToken == token;
@@ -125,9 +126,13 @@ std::vector<uint16_t> ConnectionManager::getTimedOutClients(float currentTime, f
     return result;
 }
 
-uint32_t ConnectionManager::generateToken() {
-    std::uniform_int_distribution<uint32_t> dist(1, UINT32_MAX);
-    return dist(rng_);
+uint64_t ConnectionManager::generateToken() {
+    uint64_t token = 0;
+    // Loop vanishingly-small chance of zero (reserved as "no token")
+    do {
+        PacketCrypto::randomBytes(&token, sizeof(token));
+    } while (token == 0);
+    return token;
 }
 
 } // namespace fate

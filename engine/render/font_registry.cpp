@@ -61,8 +61,8 @@ bool FontRegistry::parseManifest(const std::string& jsonPath) {
         atlasPaths_[name] = atlasPath;
         fonts_[name] = std::move(font);
 
-        LOG_INFO("FontRegistry", "Registered font '%s' (type=%s)",
-                 name.c_str(), typeStr.c_str());
+        LOG_DEBUG("FontRegistry", "Registered font '%s' (type=%s)",
+                  name.c_str(), typeStr.c_str());
     }
 
     LOG_INFO("FontRegistry", "Parsed manifest: %zu font(s)", fonts_.size());
@@ -171,8 +171,8 @@ void FontRegistry::loadAtlases() {
         if (tex->loadFromMemory(data, w, h, 4)) {
             tex->setFilter(true); // linear filtering for SDF text
             font->atlas = tex;
-            LOG_INFO("FontRegistry", "Loaded atlas for '%s': %s",
-                     name.c_str(), it->second.c_str());
+            LOG_DEBUG("FontRegistry", "Loaded atlas for '%s': %s",
+                      name.c_str(), it->second.c_str());
         } else {
             LOG_ERROR("FontRegistry", "Failed to create texture for '%s'",
                       name.c_str());

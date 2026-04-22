@@ -9,6 +9,12 @@
         android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
         android:hasCode="true">
 
+        <!-- AdMob App ID (Android) — real production ID for FateMMO.
+             Without this meta-data tag the app crashes on SDK initialization. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-6148095289128674~1425786018" />
+
         <activity
             android:name=".FateMMOActivity"
             android:exported="true"

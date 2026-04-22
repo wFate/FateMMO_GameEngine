@@ -22,5 +22,27 @@
     </array>
     <key>ITSAppUsesNonExemptEncryption</key> <false/>
     <key>CADisableMinimumFrameDurationOnPhone</key> <true/>
+
+    <!-- AdMob application ID (iOS) — real production ID for FateMMO.
+         App is in "Requires review" state in AdMob until linked to App Store. -->
+    <key>GADApplicationIdentifier</key>
+    <string>ca-app-pub-6148095289128674~6843657867</string>
+
+    <!-- SKAdNetwork identifiers required by iOS 14.5+ for ad attribution.
+         AdMob publishes an up-to-date list; add all 100+ entries before
+         shipping or eCPM craters.  See:
+         https://developers.google.com/admob/ios/ios14#skadnetwork -->
+    <key>SKAdNetworkItems</key>
+    <array>
+        <dict>
+            <key>SKAdNetworkIdentifier</key>
+            <string>cstr6suwn9.skadnetwork</string>
+        </dict>
+        <!-- TODO: append all ~100 AdMob partner SKAdNetwork IDs before release. -->
+    </array>
+
+    <!-- App Tracking Transparency prompt copy (shown once per user). -->
+    <key>NSUserTrackingUsageDescription</key>
+    <string>Your data is used to deliver personalized ads to you.</string>
 </dict>
 </plist>

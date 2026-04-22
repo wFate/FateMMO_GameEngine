@@ -13,7 +13,10 @@
 #include "engine/render/gfx/device.h"
 #include "engine/render/shader.h"
 #include "engine/core/logger.h"
+#include <cstdlib>
+#include <cstring>
 #include "engine/platform/device_info.h"
+#include "engine/platform/ad_service.h"
 #ifndef FATE_SHIPPING
 #include "engine/editor/undo.h"
 #include "engine/editor/log_viewer.h"
@@ -45,6 +48,13 @@ bool App::init(const AppConfig& config) {
     config_ = config;
 
     Logger::instance().init("fate_engine.log");
+    // Default to Info so per-frame/per-packet diagnostics stay quiet.
+    // Set FATE_LOG_DEBUG=1 to re-enable debug output.
+    {
+        const char* dbg = std::getenv("FATE_LOG_DEBUG");
+        Logger::instance().setMinLevel(
+            (dbg && std::strcmp(dbg, "1") == 0) ? LogLevel::Debug : LogLevel::Info);
+    }
     LOG_INFO("App", "=== FateEngine v%d.%d.%d starting ===", 0, 1, 0);
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0) {
@@ -52,6 +62,12 @@ bool App::init(const AppConfig& config) {
         return false;
     }
     sdlInitialized_ = true;
+
+    // Rewarded-ad SDK bootstrap.  No-op on desktop (stub).  On Android this
+    // calls AdBridge.initializeAds() which in turn calls MobileAds.initialize()
+    // asynchronously and preloads the first rewarded video; on iOS the
+    // GADMobileAds equivalent.  Safe to call unconditionally.
+    AdService::initialize();
 
     // Resolve auto-detect target FPS from display refresh rate
     if (config_.targetFPS <= 0) {
@@ -289,11 +305,18 @@ void App::run() {
             frameStatsFlushTimer_ += deltaTime_;
             if (frameStatsFlushTimer_ >= 5.0f) {
                 float avgMs = frameStatsCount_ > 0 ? frameStatsSumMs_ / frameStatsCount_ : 0.0f;
-                if (frameStatsMaxMs_ >= 12.0f) {
+                // Only surface as INFO when a frame genuinely stuttered (>25ms ≈ <40fps).
+                // Sub-threshold hiccups stay at DEBUG so they're reachable but don't spam.
+                if (frameStatsMaxMs_ >= 25.0f) {
                     LOG_INFO("App",
                              "Frame stats (last 5s): max=%.1fms avg=%.1fms frames_over_12ms=%d/%d | max_update=%.1fms max_render=%.1fms",
                              frameStatsMaxMs_, avgMs, frameStatsOver25msCount_, frameStatsCount_,
                              frameStatsMaxUpdateMs_, frameStatsMaxRenderMs_);
+                } else if (frameStatsMaxMs_ >= 12.0f) {
+                    LOG_DEBUG("App",
+                              "Frame stats (last 5s): max=%.1fms avg=%.1fms frames_over_12ms=%d/%d | max_update=%.1fms max_render=%.1fms",
+                              frameStatsMaxMs_, avgMs, frameStatsOver25msCount_, frameStatsCount_,
+                              frameStatsMaxUpdateMs_, frameStatsMaxRenderMs_);
                 }
                 frameStatsMaxMs_ = 0.0f;
                 frameStatsMaxUpdateMs_ = 0.0f;

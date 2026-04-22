@@ -1109,7 +1109,7 @@ void Editor::drawInspector() {
                                 cd.baseMaxHP = 50; cd.baseMaxMP = 150;
                                 cd.baseStrength = 4; cd.baseVitality = 6;
                                 cd.baseIntelligence = 16; cd.baseDexterity = 6; cd.baseWisdom = 14;
-                                cd.baseHitRate = 0.0f; cd.attackRange = 7.0f;
+                                cd.baseHitRate = 0.0f; cd.attackRange = 5.0f;
                                 cd.primaryResource = ResourceType::Mana;
                                 cd.hpPerLevel = 5.0f; cd.mpPerLevel = 10.0f;
                                 cd.strPerLevel = 0.0f; cd.vitPerLevel = 0.25f;
@@ -1120,7 +1120,7 @@ void Editor::drawInspector() {
                                 cd.baseMaxHP = 50; cd.baseMaxMP = 40;
                                 cd.baseStrength = 8; cd.baseVitality = 9;
                                 cd.baseIntelligence = 7; cd.baseDexterity = 18; cd.baseWisdom = 8;
-                                cd.baseHitRate = 4.0f; cd.attackRange = 7.0f;
+                                cd.baseHitRate = 4.0f; cd.attackRange = 5.0f;
                                 cd.primaryResource = ResourceType::Fury;
                                 cd.hpPerLevel = 5.0f; cd.mpPerLevel = 2.0f;
                                 cd.strPerLevel = 0.0f; cd.vitPerLevel = 0.25f;

@@ -39,9 +39,12 @@ public:
     void sendConnectReject(const NetAddress& to, const std::string& reason);
 
     // Callbacks
-    std::function<void(uint16_t clientId)> onClientConnected;
+    std::function<void(uint16_t clientId)> onClientConnected;      // handshake prep (crypto only)
     std::function<void(uint16_t clientId)> onClientDisconnected;
     std::function<void(uint16_t clientId, uint8_t packetType, ByteReader& payload)> onPacketReceived;
+    // C4: fired after client sends an encrypted CmdAuthProof containing a valid auth token.
+    // This is the point where the session is bound to an account + full DB load begins.
+    std::function<void(uint16_t clientId, const AuthToken& token)> onAuthProofReceived;
 
 private:
     NetSocket socket_;

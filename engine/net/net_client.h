@@ -196,6 +196,7 @@ public:
     std::function<void(const SvRecallResultMsg&)> onRecallResult;
     std::function<void()> onScenePopulated;
     std::function<void(MoveRejectReason reason)> onMoveReject; // Phase C Batch 3 WU14c
+    std::function<void(const SvSpectateAckMsg&)> onSpectateAck;
 
     // Admin content pipeline callbacks
     std::function<void(const SvAdminResultMsg&)>      onAdminResult;
@@ -207,7 +208,7 @@ private:
     ReliabilityLayer reliability_;
     NetAddress serverAddress_;
     uint16_t clientId_ = 0;
-    uint32_t sessionToken_ = 0;
+    uint64_t sessionToken_ = 0;
     bool connected_ = false;
     float connectTimeout_ = 15.0f;  // remote DB can take 10s+ to load character
     float connectStartTime_ = 0.0f;
@@ -223,6 +224,8 @@ private:
     PacketCrypto crypto_;
     PacketCrypto::Keypair clientKeypair_ = {};
     bool keypairGenerated_ = false;
+    // C4: auth token is sent encrypted AFTER Noise_NK handshake, not in plaintext Connect.
+    bool authProofSent_ = false;
 
     // Server's static identity public key for Noise_NK (MITM prevention).
     // Loaded from server_identity.key.pub or compiled-in.

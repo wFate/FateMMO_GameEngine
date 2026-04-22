@@ -3,10 +3,10 @@
 #include <string>
 #include <cstdint>
 #include <cstring>
-#include <random>
 #include <vector>
 #include "engine/net/byte_stream.h"
 #include "engine/net/protocol.h"
+#include "engine/net/packet_crypto.h"
 #ifdef FATE_HAS_GAME
 #include "game/shared/game_types.h"
 #else
@@ -26,11 +26,7 @@ using AuthToken = std::array<uint8_t, 16>;
 
 inline AuthToken generateAuthToken() {
     AuthToken token;
-    static thread_local std::mt19937_64 gen{std::random_device{}()};
-    std::uniform_int_distribution<uint64_t> dist;
-    uint64_t a = dist(gen), b = dist(gen);
-    std::memcpy(token.data(), &a, 8);
-    std::memcpy(token.data() + 8, &b, 8);
+    PacketCrypto::randomBytes(token.data(), token.size());
     return token;
 }
 

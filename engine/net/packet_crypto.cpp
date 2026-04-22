@@ -1,6 +1,7 @@
 #include "engine/net/packet_crypto.h"
 #include "engine/core/logger.h"
 #include <cstring>
+#include <cstdlib>
 
 #if FATE_HAS_SODIUM
 #include <sodium.h>
@@ -198,6 +199,15 @@ void PacketCrypto::secureWipe(void* data, size_t size) {
 #else
     volatile uint8_t* p = static_cast<volatile uint8_t*>(data);
     while (size--) *p++ = 0;
+#endif
+}
+
+void PacketCrypto::randomBytes(void* out, size_t n) {
+#if FATE_HAS_SODIUM
+    randombytes_buf(out, n);
+#else
+    LOG_ERROR("PacketCrypto", "randomBytes called without libsodium — no CSPRNG available. Aborting.");
+    std::abort();
 #endif
 }
 
