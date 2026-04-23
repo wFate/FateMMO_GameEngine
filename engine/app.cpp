@@ -31,6 +31,9 @@
 #endif
 #endif // !FATE_SHIPPING
 #include "engine/render/sdf_text.h"
+#ifdef FATE_HAS_GAME
+#include "engine/ui/ui_theme_global.h"
+#endif
 #include "engine/profiling/tracy_zones.h"
 #include "engine/job/job_system.h"
 #if defined(ENGINE_MEMORY_DEBUG)
@@ -223,6 +226,29 @@ bool App::init(const AppConfig& config) {
 
     // Load default UI theme (non-fatal — screens work without a theme)
     uiManager_.loadTheme("assets/ui/themes/default.json");
+
+    // Load process-wide UI chrome theme + per-screen overrides (non-fatal).
+#ifdef FATE_HAS_GAME
+    {
+        auto& theme = fate::globalUITheme();
+        if (!theme.loadFromFile("assets/themes/ui_theme.json")) {
+            LOG_ERROR("UI", "Failed to load base theme; chrome will use defaults");
+        }
+        static constexpr const char* kThemeOverrides[] = {
+            "assets/themes/overrides/npc_dialog.json",
+            "assets/themes/overrides/npc_shop.json",
+            "assets/themes/overrides/marketplace.json",
+            "assets/themes/overrides/inventory.json",
+            "assets/themes/overrides/bank.json",
+            "assets/themes/overrides/menu.json",
+            "assets/themes/overrides/tooltip.json",
+            "assets/themes/overrides/arena_honor_shop.json",
+        };
+        for (const char* path : kThemeOverrides) {
+            theme.loadOverride(path);  // logs warning if missing; not fatal
+        }
+    }
+#endif
 
     // Register engine render passes AFTER game passes, so the graph order is:
     // [game scene passes] -> Lighting -> BloomExtract -> BloomBlur -> PostProcess

@@ -544,6 +544,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onQuestUpdate) onQuestUpdate(msg);
             break;
         }
+        case PacketType::SvDialogueActionResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvDialogueActionResultMsg::read(payload);
+            if (onDialogueActionResult) onDialogueActionResult(msg);
+            break;
+        }
         case PacketType::SvZoneTransition: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvZoneTransitionMsg::read(payload);
@@ -891,6 +897,55 @@ void NetClient::sendShopBuy(uint32_t npcId, const std::string& itemId, uint16_t 
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdShopBuy, buf, w.size());
+}
+
+void NetClient::sendQuestAction(uint8_t subAction, uint32_t questId) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(subAction);
+    w.writeString(std::to_string(questId));
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdQuestAction, buf, w.size());
+}
+
+void NetClient::sendDialogueGiveItem(uint64_t npcPid, const std::string& itemId, uint16_t qty) {
+    CmdDialogueGiveItemMsg msg;
+    msg.npcEntityId = npcPid;
+    msg.itemId      = itemId;
+    msg.quantity    = qty;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdDialogueGiveItem, buf, w.size());
+}
+
+void NetClient::sendDialogueGiveGold(uint64_t npcPid, int64_t amount) {
+    CmdDialogueGiveGoldMsg msg;
+    msg.npcEntityId = npcPid;
+    msg.amount      = amount;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdDialogueGiveGold, buf, w.size());
+}
+
+void NetClient::sendDialogueSetFlag(uint64_t npcPid, const std::string& flagId) {
+    CmdDialogueSetFlagMsg msg;
+    msg.npcEntityId = npcPid;
+    msg.flagId      = flagId;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdDialogueSetFlag, buf, w.size());
+}
+
+void NetClient::sendDialogueHeal(uint64_t npcPid, int32_t amount) {
+    CmdDialogueHealMsg msg;
+    msg.npcEntityId = npcPid;
+    msg.amount      = amount;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdDialogueHeal, buf, w.size());
 }
 
 void NetClient::sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t quantity) {

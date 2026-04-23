@@ -2267,7 +2267,15 @@ void Editor::drawInspector() {
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<StoryNPCComponent>()) {
-                ImGui::Text("Dialogue Tree (%d nodes)", (int)story->dialogueTree.size());
+                char idBuf[128];
+                std::snprintf(idBuf, sizeof(idBuf), "%s", story->dialogueTreeId.c_str());
+                if (ImGui::InputText("Dialogue Tree ID", idBuf, sizeof(idBuf))) {
+                    story->dialogueTreeId = idBuf;
+                    captureInspectorUndo();
+                }
+                ImGui::TextDisabled("Tree authored in assets/dialogue/npcs/<faction>/<id>.json");
+                ImGui::Text("Loaded tree: %d nodes (root=%u)",
+                            (int)story->dialogueTree.size(), story->rootNodeId);
                 if (inspectDialogueTree(story->dialogueTree, story->rootNodeId))
                     captureInspectorUndo();
             }

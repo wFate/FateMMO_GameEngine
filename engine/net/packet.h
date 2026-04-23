@@ -8,7 +8,7 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 5;  // Security pass: 64-bit sessionToken, AuthProof, CSPRNG
+constexpr uint8_t  PROTOCOL_VERSION  = 6;  // Dialogue-tree framework: Cmd/Sv Dialogue* packets
 constexpr size_t   PACKET_HEADER_SIZE = 22;
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
@@ -192,6 +192,15 @@ namespace PacketType {
     // (or rejected with a reason). Lets the editor surface failures instead
     // of silently showing an empty scene.
     constexpr uint8_t SvSpectateAck         = 0xD9;
+
+    // Dialogue-tree framework (Session 80, PROTOCOL_VERSION 6).
+    // NPC is the source of authority on these actions; packets carry
+    // npcEntityId so the server can re-verify proximity + faction gate.
+    constexpr uint8_t CmdDialogueGiveItem    = 0xDA;
+    constexpr uint8_t CmdDialogueGiveGold    = 0xDB;
+    constexpr uint8_t CmdDialogueSetFlag     = 0xDC;
+    constexpr uint8_t CmdDialogueHeal        = 0xDD;
+    constexpr uint8_t SvDialogueActionResult = 0xDE;
 } // namespace PacketType
 
 // ============================================================================

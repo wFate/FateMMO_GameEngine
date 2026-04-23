@@ -609,6 +609,24 @@ if(APPLE AND FATE_SHIPPING AND TARGET FateEngine)
     endif()
 endif()
 
+# =============================================================================
+# Migration tool: generate assets/dialogue/quests/*.json from QuestData registry.
+# Links quest_data.o and dialogue_registry.o directly to avoid pulling in SDL/etc.
+# =============================================================================
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/migrate_quest_dialogue.cpp"
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/game/shared/quest_data.h"
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/game/shared/dialogue_registry.cpp")
+    add_executable(migrate_quest_dialogue
+        tools/migrate_quest_dialogue.cpp
+        game/shared/dialogue_registry.cpp
+    )
+    target_link_libraries(migrate_quest_dialogue PRIVATE fate_engine)
+    target_include_directories(migrate_quest_dialogue PRIVATE ${CMAKE_SOURCE_DIR})
+    if(MSVC)
+        target_compile_options(migrate_quest_dialogue PRIVATE /EHsc /wd4100 /wd4458 /MP)
+    endif()
+endif()
+
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     # =============================================================================
     # Server Executable (headless, no SDL window)
@@ -618,8 +636,17 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     # it from FateServer's source list.
     list(FILTER SERVER_SOURCES EXCLUDE REGEX "ads_ssv_server\\.cpp$")
     file(GLOB_RECURSE SERVER_SHARED_SOURCES game/shared/*.cpp)
-    # entity_factory.cpp is used by both game and server targets
-    set(SERVER_GAME_SOURCES game/entity_factory.cpp)
+    # entity_factory.cpp is used by both game and server targets.
+    # paper_doll_catalog / combat_text_config / npc_nameplate_config /
+    # animation_loader are pulled in to satisfy fate_engine.lib references
+    # from editor + widget code linked into FateServer.
+    set(SERVER_GAME_SOURCES
+        game/entity_factory.cpp
+        game/data/paper_doll_catalog.cpp
+        game/systems/combat_text_config.cpp
+        game/systems/npc_nameplate_config.cpp
+        game/animation_loader.cpp
+    )
     if(SERVER_SOURCES AND PostgreSQL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/game/entity_factory.cpp")
         add_executable(FateServer ${SERVER_SOURCES} ${SERVER_SHARED_SOURCES} ${SERVER_GAME_SOURCES})
         target_link_libraries(FateServer PRIVATE fate_engine pqxx PostgreSQL::PostgreSQL bcrypt_lib spdlog::spdlog)

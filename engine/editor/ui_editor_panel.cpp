@@ -2479,6 +2479,9 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             checkUndoCapture(uiMgr);
         }
         ImGui::Separator();
+        ImGui::Checkbox("Use Chrome (Checkpoint 1)##ndp", &ndp->useChrome_);
+        checkUndoCapture(uiMgr);
+        ImGui::Separator();
         ImGui::Text("Quests: %zu", ndp->quests.size());
     }
     else if (auto* sp2 = dynamic_cast<ShopPanel*>(selectedNode_)) {

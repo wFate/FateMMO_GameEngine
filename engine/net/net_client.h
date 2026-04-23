@@ -6,6 +6,7 @@
 #include "engine/net/protocol.h"
 #include "engine/net/auth_protocol.h"
 #include "engine/net/game_messages.h"
+#include "engine/net/dialogue_messages.h"
 #include "engine/net/admin_messages.h"
 #include "engine/net/packet_crypto.h"
 #include <functional>
@@ -37,6 +38,15 @@ public:
     void sendStatEnchant(uint8_t targetSlot, const std::string& scrollItemId);
     void sendShopBuy(uint32_t npcId, const std::string& itemId, uint16_t quantity);
     void sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t quantity);
+
+    // Quest accept/abandon/complete (subAction per engine/net/game_messages.h QuestAction).
+    void sendQuestAction(uint8_t subAction, uint32_t questId);
+
+    // Dialogue-tree framework (Session 80 Option C).
+    void sendDialogueGiveItem(uint64_t npcPid, const std::string& itemId, uint16_t qty);
+    void sendDialogueGiveGold(uint64_t npcPid, int64_t amount);
+    void sendDialogueSetFlag (uint64_t npcPid, const std::string& flagId);
+    void sendDialogueHeal    (uint64_t npcPid, int32_t amount);
     void sendOpalsShopPurchase(const std::string& itemId, uint16_t quantity);  // Phase 71
     void sendBankDepositItem(uint32_t npcId, uint8_t inventorySlot);
     void sendBankWithdrawItem(uint32_t npcId, uint16_t itemIndex);
@@ -149,6 +159,7 @@ public:
     std::function<void(const SvGuildUpdateMsg&)> onGuildUpdate;
     std::function<void(const SvSocialUpdateMsg&)> onSocialUpdate;
     std::function<void(const SvQuestUpdateMsg&)> onQuestUpdate;
+    std::function<void(const SvDialogueActionResultMsg&)> onDialogueActionResult;
     std::function<void(const SvZoneTransitionMsg&)> onZoneTransition;
     std::function<void(const SvDeathNotifyMsg&)> onDeathNotify;
     std::function<void(const SvRespawnMsg&)> onRespawn;
