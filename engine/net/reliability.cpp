@@ -29,12 +29,17 @@ bool ReliabilityLayer::onReceive(uint16_t remoteSequence) {
     }
 
     if (sequenceGreaterThan(remoteSequence, remoteSequence_)) {
-        // New sequence is more recent — shift bits left by the difference
+        // New sequence is more recent. Guard the shift: shifting a uint32_t
+        // by >=32 is undefined behavior in C++, so zero the window when the
+        // gap meets or exceeds its width instead of falling through to a
+        // compiler-dependent result.
         int16_t diff = static_cast<int16_t>(remoteSequence - remoteSequence_);
         if (diff > 0) {
-            receivedBits_ <<= diff;
-            // Set bit for the old remoteSequence_ (now at offset diff-1)
-            if (diff <= 32) {
+            constexpr int kWindowBits = 32;
+            if (diff >= kWindowBits) {
+                receivedBits_ = 0;
+            } else {
+                receivedBits_ <<= diff;
                 receivedBits_ |= (1u << (diff - 1));
             }
         }

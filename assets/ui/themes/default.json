@@ -96,15 +96,6 @@
             "pressedColor": [0.15, 0.15, 0.22, 0.9],
             "fontSize": 13
         },
-        "button_death_phoenix": {
-            "backgroundColor": [0.6, 0.4, 0.1, 1.0],
-            "borderColor": [0.7, 0.5, 0.15, 1.0],
-            "borderWidth": 1,
-            "textColor": [1, 1, 1, 1],
-            "hoverColor": [0.7, 0.5, 0.15, 1.0],
-            "pressedColor": [0.5, 0.35, 0.08, 1.0],
-            "fontSize": 13
-        },
         "panel_parchment": {
             "backgroundColor": [0.85, 0.78, 0.65, 0.95],
             "borderColor": [0.4, 0.3, 0.2, 1.0],

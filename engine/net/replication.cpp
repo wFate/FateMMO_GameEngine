@@ -215,21 +215,31 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
 
     // Process stayed entities (delta updates) — batched into single packets
 
-    // Compute client player position once for tier checks
+    // Compute client player position once for tier checks.  Also detect dead
+    // players so we can treat them like observers (camera frozen at the
+    // corpse — without this fallthrough, mobs that wander >40 tiles from the
+    // death point drop to Mid/Far/Edge tiers and the death view becomes
+    // choppy at 2-7Hz instead of the normal 20Hz).
     Vec2 clientPos{};
+    bool clientIsDead = false;
     {
         auto clientHandle = getEntityHandle(PersistentId(client.playerEntityId));
         Entity* clientEntity = world.getEntity(clientHandle);
         if (clientEntity) {
             auto* ct = clientEntity->getComponent<Transform>();
             if (ct) clientPos = ct->position;
+            auto* cs = clientEntity->getComponent<CharacterStatsComponent>();
+            if (cs && cs->stats.isDead) clientIsDead = true;
         }
     }
     // Admin observers have no player entity, so clientPos defaults to (0,0).
     // That would put every distant mob in the Edge tier and choke update rate.
     // Treat observed-scene entities as Near so spectators see smooth motion.
+    // Dead players get the same fallthrough -- their camera is frozen at the
+    // death spot so they're effectively spectating until respawn.
     const bool isObserverClient =
-        client.playerEntityId == 0 && !client.spectateScene.empty();
+        (client.playerEntityId == 0 && !client.spectateScene.empty())
+        || clientIsDead;
 
     // Batch buffer: accumulate multiple entity deltas into one packet
     uint8_t batchBuf[MAX_PAYLOAD_SIZE];

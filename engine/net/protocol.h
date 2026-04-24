@@ -896,6 +896,24 @@ struct SvEmoticonMsg {
 };
 
 // ============================================================================
+// Pickup routing preference (client-side opt-in setting)
+// ============================================================================
+
+struct CmdSetPickupPreferenceMsg {
+    uint8_t mode = 0; // 0 = InventoryFirst, 1 = BagFirst
+
+    void write(ByteWriter& w) const {
+        w.writeU8(mode);
+    }
+
+    static CmdSetPickupPreferenceMsg read(ByteReader& r) {
+        CmdSetPickupPreferenceMsg m;
+        m.mode = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
 // Opals shop (Phase 71)
 // ============================================================================
 
@@ -976,6 +994,14 @@ struct SvPetStateMsg {
     float       expBonusPct = 0.0f;
     uint8_t     autoLootEnabled = 0; // Phase 71 Task 13: reflect DB auto_loot_enabled
 
+    // Premium tier fields (session 85): encodes the auto-loot cadence for
+    // the equipped pet so PetPanel can show the tier benefit. Rarity drives
+    // the label color.
+    uint8_t  rarity = 0;               // ItemRarity enum value
+    float    autoLootInterval = 0.5f;
+    uint8_t  autoLootItemsPerTick = 1;
+    float    autoLootRadius = 64.0f;
+
     void write(ByteWriter& w) const {
         w.writeU32(petInstanceId);
         w.writeString(petDefId);
@@ -987,6 +1013,10 @@ struct SvPetStateMsg {
         w.writeFloat(critRateBonus);
         w.writeFloat(expBonusPct);
         w.writeU8(autoLootEnabled);
+        w.writeU8(rarity);
+        w.writeFloat(autoLootInterval);
+        w.writeU8(autoLootItemsPerTick);
+        w.writeFloat(autoLootRadius);
     }
     static SvPetStateMsg read(ByteReader& r) {
         SvPetStateMsg m;
@@ -1000,6 +1030,10 @@ struct SvPetStateMsg {
         m.critRateBonus  = r.readFloat();
         m.expBonusPct    = r.readFloat();
         m.autoLootEnabled = r.readU8();
+        m.rarity              = r.readU8();
+        m.autoLootInterval    = r.readFloat();
+        m.autoLootItemsPerTick = r.readU8();
+        m.autoLootRadius      = r.readFloat();
         return m;
     }
 };
@@ -1025,6 +1059,42 @@ struct SvPetGrantedMsg {
         m.petId         = r.readString();
         m.displayName   = r.readString();
         m.level         = r.readI32();
+        return m;
+    }
+};
+
+// Silent seed of the pet panel on login. Separate from SvPetGranted so the
+// client can skip the "Hatched: X" chat toast that is appropriate only for
+// a genuine mid-session hatch.
+struct SvPetOwnedListEntry {
+    uint32_t    petInstanceId = 0;
+    std::string petId;
+    std::string displayName;
+    int32_t     level = 1;
+};
+
+struct SvPetOwnedListMsg {
+    std::vector<SvPetOwnedListEntry> entries;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(entries.size()));
+        for (const auto& e : entries) {
+            w.writeU32(e.petInstanceId);
+            w.writeString(e.petId);
+            w.writeString(e.displayName);
+            w.writeI32(e.level);
+        }
+    }
+    static SvPetOwnedListMsg read(ByteReader& r) {
+        SvPetOwnedListMsg m;
+        uint16_t count = r.readU16();
+        m.entries.resize(count);
+        for (uint16_t i = 0; i < count; ++i) {
+            m.entries[i].petInstanceId = r.readU32();
+            m.entries[i].petId         = r.readString();
+            m.entries[i].displayName   = r.readString();
+            m.entries[i].level         = r.readI32();
+        }
         return m;
     }
 };

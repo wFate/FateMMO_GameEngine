@@ -402,7 +402,7 @@ struct SvDeathNotifyMsg {
 };
 
 struct CmdRespawnMsg {
-    uint8_t respawnType = 0;  // 0=town, 1=map spawn, 2=here (Phoenix Down)
+    uint8_t respawnType = 0;  // 0=village recall, 1=map spawn (revive-in-place uses CmdUseFatesGrace)
 
     void write(ByteWriter& w) const {
         w.writeU8(respawnType);

@@ -56,6 +56,13 @@ jobs:
       - name: Build
         run: cmake --build build -j$(nproc)
 
+      - name: Build unit tests
+        run: cmake --build build --target fate_tests -j$(nproc)
+
+      - name: Run unit tests
+        working-directory: build
+        run: ./fate_tests --no-colors --duration=true
+
   linux-clang:
     runs-on: ubuntu-24.04
     steps:

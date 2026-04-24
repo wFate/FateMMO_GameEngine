@@ -71,7 +71,6 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
         uint16_t id = client->clientId;
         if (onClientDisconnected) onClientDisconnected(id);
         connections_.removeClient(id);
-        LOG_INFO("NetServer", "Client %d disconnected", id);
         return;
     }
 

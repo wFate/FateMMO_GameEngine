@@ -229,25 +229,7 @@ bool App::init(const AppConfig& config) {
 
     // Load process-wide UI chrome theme + per-screen overrides (non-fatal).
 #ifdef FATE_HAS_GAME
-    {
-        auto& theme = fate::globalUITheme();
-        if (!theme.loadFromFile("assets/themes/ui_theme.json")) {
-            LOG_ERROR("UI", "Failed to load base theme; chrome will use defaults");
-        }
-        static constexpr const char* kThemeOverrides[] = {
-            "assets/themes/overrides/npc_dialog.json",
-            "assets/themes/overrides/npc_shop.json",
-            "assets/themes/overrides/marketplace.json",
-            "assets/themes/overrides/inventory.json",
-            "assets/themes/overrides/bank.json",
-            "assets/themes/overrides/menu.json",
-            "assets/themes/overrides/tooltip.json",
-            "assets/themes/overrides/arena_honor_shop.json",
-        };
-        for (const char* path : kThemeOverrides) {
-            theme.loadOverride(path);  // logs warning if missing; not fatal
-        }
-    }
+    reloadGameTheme_();
 #endif
 
     // Register engine render passes AFTER game passes, so the graph order is:
@@ -259,6 +241,12 @@ bool App::init(const AppConfig& config) {
     if (!assetsDir_.empty()) {
         fileWatcher_.start(assetsDir_, [this](const std::string& relativePath) {
             try {
+                if (relativePath.rfind("themes/", 0) == 0) {
+                    // Defer actual reload to main thread; update() drains after debounce.
+                    themeReloadPending_.store(true, std::memory_order_release);
+                    themeReloadRequestedAt_ = elapsedTime_;
+                    return;
+                }
                 std::string fullPath = assetsDir_ + "/" + relativePath;
                 AssetRegistry::instance().queueReload(fullPath);
             } catch (const std::exception& e) {
@@ -533,20 +521,27 @@ void App::processEvents() {
                 }
                 break;
 
-            case SDL_MOUSEWHEEL:
-                // Scroll wheel: spawn zone radius resize takes priority, then camera zoom
+            case SDL_MOUSEWHEEL: {
+                // Session 90: UI panels get first crack at scroll when pointer
+                // isn't over the editor viewport. Inside the viewport, existing
+                // spawn-zone / camera-zoom controls retain priority.
+                int mx = 0, my = 0;
+                SDL_GetMouseState(&mx, &my);
                 if (Editor::instance().isViewportHovered()) {
                     if (!Editor::instance().handleSpawnZoneScroll((float)event.wheel.y)) {
                         float zoom = camera_.zoom();
                         if (event.wheel.y > 0) zoom *= 1.15f;  // scroll up = zoom in
                         else if (event.wheel.y < 0) zoom *= 0.87f; // scroll down = zoom out
-                        // Clamp zoom range
-                        if (zoom < 0.05f) zoom = 0.05f;  // can see ~19,200x10,800px = 600x337 tiles
-                        if (zoom > 8.0f) zoom = 8.0f;    // zoomed in to ~120x67px view
+                        if (zoom < 0.05f) zoom = 0.05f;
+                        if (zoom > 8.0f) zoom = 8.0f;
                         camera_.setZoom(zoom);
                     }
+                } else {
+                    uiManager_.handleWheel({static_cast<float>(mx), static_cast<float>(my)},
+                                           static_cast<float>(event.wheel.y));
                 }
                 break;
+            }
 
             case SDL_MOUSEBUTTONDOWN:
                 if (event.button.button == SDL_BUTTON_LEFT &&
@@ -657,6 +652,17 @@ void App::update() {
     // Process asset reloads unconditionally (hot-reload works while editing)
     elapsedTime_ += deltaTime_;
     AssetRegistry::instance().processReloads(elapsedTime_);
+
+#ifdef FATE_HAS_GAME
+    // Debounced UI theme reload — watcher only raises a flag; we drain here
+    // on the main thread after 0.5s of quiescence so editor save bursts are
+    // collapsed into a single reload.
+    if (themeReloadPending_.load(std::memory_order_acquire)
+        && elapsedTime_ - themeReloadRequestedAt_ >= 0.5f) {
+        themeReloadPending_.store(false, std::memory_order_release);
+        reloadGameTheme_();
+    }
+#endif
     AssetRegistry::instance().processAsyncLoads();
 
     // Update retained-mode UI system (data binding resolution, hot-reload checks)
@@ -1183,5 +1189,28 @@ void App::handleLifecycleEvent(const SDL_Event& event) {
             break;
     }
 }
+
+#ifdef FATE_HAS_GAME
+void App::reloadGameTheme_() {
+    auto& theme = fate::globalUITheme();
+    theme.clear();  // drop prior styles so deletions in the JSON take effect
+    if (!theme.loadFromFile("assets/themes/ui_theme.json")) {
+        LOG_ERROR("UI", "Failed to load base theme; chrome will use defaults");
+    }
+    static constexpr const char* kThemeOverrides[] = {
+        "assets/themes/overrides/npc_dialog.json",
+        "assets/themes/overrides/npc_shop.json",
+        "assets/themes/overrides/marketplace.json",
+        "assets/themes/overrides/inventory.json",
+        "assets/themes/overrides/bank.json",
+        "assets/themes/overrides/menu.json",
+        "assets/themes/overrides/tooltip.json",
+        "assets/themes/overrides/arena_honor_shop.json",
+    };
+    for (const char* path : kThemeOverrides) {
+        theme.loadOverride(path);  // logs warning if missing; not fatal
+    }
+}
+#endif
 
 } // namespace fate

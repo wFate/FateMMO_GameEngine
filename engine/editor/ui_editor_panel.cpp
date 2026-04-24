@@ -2418,6 +2418,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat2("Title##ndpo", &ndp->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Text##ndpo", &ndp->textOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Buttons##ndpo", &ndp->buttonOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Close##ndpo", &ndp->closeOffset.x, 0.5f, -1000.0f, 1000.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Font Sizes##ndp", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -2486,6 +2487,18 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* sp2 = dynamic_cast<ShopPanel*>(selectedNode_)) {
         ImGui::SeparatorText("ShopPanel");
+        ImGui::Checkbox("Use Chrome (Session 90)##sp", &sp2->useChrome_); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Category Tab Rail##shpct", 0)) {
+            ImGui::DragFloat("Bar Height##shpct", &sp2->categoryTabBarHeight, 0.5f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Font Size##shpct", &sp2->categoryTabFontSize, 0.5f, 8.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding X##shpct", &sp2->categoryTabPaddingX, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Gap##shpct", &sp2->categoryTabGap, 0.5f, 0.0f, 24.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("BG##shpct",          &sp2->categoryTabBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Active BG##shpct",    &sp2->categoryTabActiveColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##shpct",         &sp2->categoryTabTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Active Text##shpct",  &sp2->categoryTabActiveTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Position Offsets##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat2("Title##shpo", &sp2->titleOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Sub-Header##shpo", &sp2->shopListOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);

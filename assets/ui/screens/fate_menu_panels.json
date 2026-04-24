@@ -1640,7 +1640,7 @@
           141,
           255
         ],
-        "goldFontSize": 40.0,
+        "goldFontSize": 18.0,
         "goldLabelPrefix": "Gold: ",
         "goldOffset": [
           0.0,
@@ -1665,7 +1665,7 @@
           230
         ],
         "headerFontSize": 11.0,
-        "headerHeight": 80.0,
+        "headerHeight": 56.0,
         "hoverColor": [
           0,
           0,
@@ -1673,7 +1673,16 @@
           0
         ],
         "id": "shop_panel",
-        "itemFontSize": 40.0,
+        "useChrome": true,
+        "categoryTabBarHeight": 32.0,
+        "categoryTabFontSize": 14.0,
+        "categoryTabPaddingX": 14.0,
+        "categoryTabGap": 6.0,
+        "categoryTabBgColor": [51, 46, 71, 217],
+        "categoryTabActiveColor": [77, 115, 204, 242],
+        "categoryTabTextColor": [191, 191, 204, 255],
+        "categoryTabActiveTextColor": [255, 255, 255, 255],
+        "itemFontSize": 20.0,
         "itemNameOffset": [
           0.0,
           0.0
@@ -1691,7 +1700,7 @@
           142,
           255
         ],
-        "priceFontSize": 40.0,
+        "priceFontSize": 14.0,
         "priceOffset": [
           0.0,
           0.0
@@ -1708,7 +1717,7 @@
           0,
           0
         ],
-        "rowHeight": 60.0,
+        "rowHeight": 44.0,
         "shopListOffset": [
           0.0,
           0.0
@@ -1717,9 +1726,9 @@
           153,
           153,
           179,
-          0
+          230
         ],
-        "stockFontSize": 40.0,
+        "stockFontSize": 12.0,
         "stockOffset": [
           0.0,
           0.0
@@ -1730,7 +1739,7 @@
           217,
           255
         ],
-        "subHeaderFontSize": 40.0,
+        "subHeaderFontSize": 14.0,
         "subHeaderHeight": 0.0,
         "subHeaderLabel": "",
         "textColor": [
@@ -1745,7 +1754,7 @@
           0,
           255
         ],
-        "titleFontSize": 40.0,
+        "titleFontSize": 20.0,
         "titleOffset": [
           0.0,
           0.0

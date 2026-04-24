@@ -353,6 +353,9 @@
           115,
           153
         ],
+        "bind": {
+          "text": "{death.respawnButtonLabel}"
+        },
         "borderWidth": 1.0,
         "disabledColor": [
           0,
@@ -379,7 +382,7 @@
           0,
           0
         ],
-        "id": "btn_respawn_town",
+        "id": "btn_respawn_village",
         "pressedColor": [
           0,
           0,
@@ -387,7 +390,7 @@
           0
         ],
         "style": "button_death",
-        "text": "Respawn in Town",
+        "text": "Respawn in Village",
         "type": "button",
         "uiShadowColor": [
           0,
@@ -470,74 +473,6 @@
           "offset": [
             0.0,
             174.0
-          ],
-          "preset": "TopCenter",
-          "size": [
-            260.0,
-            28.0
-          ]
-        },
-        "backgroundColor": [
-          153,
-          102,
-          26,
-          255
-        ],
-        "borderColor": [
-          179,
-          128,
-          38,
-          255
-        ],
-        "borderWidth": 1.0,
-        "disabledColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "fontSize": 13.0,
-        "gradientBottom": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "gradientTop": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "hoverColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "id": "btn_respawn_phoenix",
-        "pressedColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "style": "button_death_phoenix",
-        "text": "Respawn Here (Phoenix Down)",
-        "type": "button",
-        "uiShadowColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "visible": true
-      },
-      {
-        "anchor": {
-          "offset": [
-            0.0,
-            206.0
           ],
           "preset": "TopCenter",
           "size": [

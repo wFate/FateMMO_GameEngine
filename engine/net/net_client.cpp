@@ -464,6 +464,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onPetGranted) onPetGranted(msg);
             break;
         }
+        case PacketType::SvPetOwnedList: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvPetOwnedListMsg::read(payload);
+            if (onPetOwnedList) onPetOwnedList(msg);
+            break;
+        }
         case PacketType::SvChatMessage: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvChatMessageMsg::read(payload);
@@ -1363,6 +1369,15 @@ void NetClient::sendPartySetLootMode(uint8_t mode) {
     w.writeU8(PartyAction::SetLootMode);
     w.writeU8(mode);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdParty, w.data(), w.size());
+}
+
+void NetClient::sendPickupPreference(uint8_t mode) {
+    CmdSetPickupPreferenceMsg msg;
+    msg.mode = (mode == 0) ? 0 : 1;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdSetPickupPreference, w.data(), w.size());
 }
 
 void NetClient::sendActivateSkillRank(const std::string& skillId) {

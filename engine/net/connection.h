@@ -62,6 +62,10 @@ struct ClientConnection {
     };
     ReturnPoint eventReturnPoint;  // non-empty scene = active
 
+    // Client-side pickup-routing preference. 0 = InventoryFirst (default), 1 = BagFirst.
+    // Set by CmdSetPickupPreference; defaults to 0 so old clients behave like today.
+    uint8_t pickupPreference = 0;
+
     // Scene population: set whenever AOI is cleared (zone transition, GM teleport,
     // initial login, etc.). ReplicationManager sends SvScenePopulated after the
     // first replication tick and clears the flag, so the client knows all initial

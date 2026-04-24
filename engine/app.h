@@ -21,6 +21,7 @@
 #endif
 #include "engine/memory/arena.h"
 #include <SDL.h>
+#include <atomic>
 #include <string>
 
 namespace fate {
@@ -131,6 +132,8 @@ private:
     FrameArena frameArena_;
     UIManager uiManager_;
     FileWatcher fileWatcher_;
+    std::atomic<bool> themeReloadPending_{false};
+    float themeReloadRequestedAt_ = 0.0f;  // elapsedTime when pending was flipped on (debounce)
     float elapsedTime_ = 0.0f;  // for reload debounce timestamps
     std::string assetsDir_;     // cached from config
     AppLifecycleState lifecycleState_ = AppLifecycleState::Active;
@@ -143,6 +146,9 @@ private:
     void update();
     void render();
     void shutdown();
+#ifdef FATE_HAS_GAME
+    void reloadGameTheme_();
+#endif
 };
 
 } // namespace fate

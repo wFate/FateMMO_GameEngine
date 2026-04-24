@@ -116,6 +116,7 @@ public:
     void sendPartyAction(uint8_t action, const std::string& targetCharId);
     void sendPartyAction(uint8_t action);
     void sendPartySetLootMode(uint8_t mode);
+    void sendPickupPreference(uint8_t mode);
 
     void sendTradeAction(uint8_t action);
     void sendTradeAction(uint8_t action, const std::string& data);
@@ -183,6 +184,7 @@ public:
     std::function<void(const SvShopResultMsg&)> onShopResult;
     std::function<void(const SvPetStateMsg&)>   onPetState;
     std::function<void(const SvPetGrantedMsg&)> onPetGranted;
+    std::function<void(const SvPetOwnedListMsg&)> onPetOwnedList;
     std::function<void(const SvTeleportResultMsg&)> onTeleportResult;
     std::function<void(const SvAuroraStatusMsg&)> onAuroraStatus;
     std::function<void(const SvConsumeResultMsg&)> onConsumeResult;

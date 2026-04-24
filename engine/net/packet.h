@@ -8,8 +8,8 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 6;  // Dialogue-tree framework: Cmd/Sv Dialogue* packets
-constexpr size_t   PACKET_HEADER_SIZE = 22;
+constexpr uint8_t  PROTOCOL_VERSION  = 9;  // v9: ackBits widened uint32→uint64, SvEntityEnterBatch, CmdAckExtended, epoch-gated Rekey
+constexpr size_t   PACKET_HEADER_SIZE = 26;  // v9: ackBits widened 4→8 bytes (32→64 bit ACK window)
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
 
@@ -129,6 +129,7 @@ namespace PacketType {
     constexpr uint8_t CmdSpectateScene          = 0x4B;
     constexpr uint8_t CmdUnequipToBag           = 0x4D; // Phase C Batch 3 WU14a — atomic unequip into bag sub-slot
     constexpr uint8_t CmdEquipFromBag           = 0x4E; // Phase C Batch 3 WU14b — atomic equip from bag sub-slot
+    constexpr uint8_t CmdSetPickupPreference    = 0x4F; // Client-side pickup routing preference (0=InvFirst, 1=BagFirst)
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
@@ -201,6 +202,10 @@ namespace PacketType {
     constexpr uint8_t CmdDialogueSetFlag     = 0xDC;
     constexpr uint8_t CmdDialogueHeal        = 0xDD;
     constexpr uint8_t SvDialogueActionResult = 0xDE;
+
+    // Pet panel seed on login (silent). Distinct from SvPetGranted which
+    // fires on mid-session hatch and shows a "Hatched: X" chat toast.
+    constexpr uint8_t SvPetOwnedList         = 0xDF;
 } // namespace PacketType
 
 // ============================================================================

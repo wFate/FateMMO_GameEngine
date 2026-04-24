@@ -30,10 +30,10 @@
             0.0,
             0.0
           ],
-          "preset": "Center",
+          "preset": "StretchAll",
           "size": [
-            400.0,
-            350.0
+            0.0,
+            0.0
           ]
         },
         "backgroundColor": [
@@ -48,14 +48,14 @@
           171,
           247
         ],
-        "bodyFontSize": 11.0,
+        "bodyFontSize": 24.0,
         "borderColor": [
           0,
           0,
           0,
           0
         ],
-        "borderWidth": 2.0,
+        "borderWidth": 3.0,
         "buttonBgColor": [
           140,
           107,
@@ -68,13 +68,13 @@
           51,
           255
         ],
-        "buttonFontSize": 12.0,
-        "buttonGap": 4.0,
-        "buttonHeight": 36.0,
-        "buttonMargin": 4.0,
+        "buttonFontSize": 30.0,
+        "buttonGap": 10.0,
+        "buttonHeight": 50.0,
+        "buttonMargin": 5.0,
         "buttonOffset": [
           0.0,
-          0.0
+          30.0
         ],
         "closeBgColor": [
           140,
@@ -82,8 +82,8 @@
           71,
           255
         ],
-        "closeCircleRadius": 10.0,
-        "closeFontSize": 10.0,
+        "closeCircleRadius": 20.0,
+        "closeFontSize": 30.0,
         "disabledColor": [
           0,
           0,
@@ -127,9 +127,9 @@
           0,
           0
         ],
-        "questNameFontSize": 11.0,
-        "questRowHeight": 30.0,
-        "questStatusFontSize": 9.0,
+        "questNameFontSize": 30.0,
+        "questRowHeight": 40.0,
+        "questStatusFontSize": 20.0,
         "style": "panel_parchment",
         "textColor": [
           56,
@@ -139,19 +139,19 @@
         ],
         "textOffset": [
           0.0,
-          0.0
+          20.0
         ],
-        "titleBarHeight": 28.0,
+        "titleBarHeight": 50.0,
         "titleColor": [
           71,
           46,
           20,
           255
         ],
-        "titleFontSize": 14.0,
+        "titleFontSize": 40.0,
         "titleOffset": [
           0.0,
-          0.0
+          -20.0
         ],
         "type": "npc_dialogue_panel",
         "uiShadowColor": [
