@@ -166,7 +166,32 @@ void ReplicationManager::buildVisibility(World& world, ClientConnection& client)
 }
 
 void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnection& client) {
-    // Process entered entities
+    // v9: coalesce entity-enter bursts into MAX_PAYLOAD_SIZE-budgeted
+    // SvEntityEnterBatch packets. Scene entry with 231 WhisperingWoods mobs
+    // used to emit 231 individual ReliableOrdered packets in one tick, which
+    // even with a 64-bit ACK window + CmdAckExtended would still generate
+    // wasted retransmit bandwidth. Pattern mirrors the SvEntityUpdateBatch
+    // flush at sendDiffs() below: fill until the next entity won't fit,
+    // flush, start a new batch. ~231 × ~100 B → ~20 batch packets, a ~12×
+    // reduction that fits comfortably inside the widened ACK window.
+    uint8_t batchBuf[MAX_PAYLOAD_SIZE];
+    ByteWriter batchWriter(batchBuf, sizeof(batchBuf));
+    batchWriter.writeU16(0); // count — patched at flush time
+    uint16_t batchCount = 0;
+
+    auto flushEnterBatch = [&]() {
+        if (batchCount == 0) return;
+        // Patch the count (first 2 bytes) little-endian.
+        batchBuf[0] = static_cast<uint8_t>(batchCount & 0xFF);
+        batchBuf[1] = static_cast<uint8_t>((batchCount >> 8) & 0xFF);
+        server.sendTo(client.clientId, Channel::ReliableOrdered,
+                      PacketType::SvEntityEnterBatch,
+                      batchWriter.data(), batchWriter.size());
+        batchWriter = ByteWriter(batchBuf, sizeof(batchBuf));
+        batchWriter.writeU16(0);
+        batchCount = 0;
+    };
+
     for (const auto& handle : client.aoi.entered) {
         PersistentId pid = getPersistentId(handle);
         if (pid.isNull()) continue;
@@ -176,19 +201,34 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
 
         SvEntityEnterMsg enterMsg = buildEnterMessage(world, entity, pid);
 
-        // Serialize and send reliable
-        uint8_t buf[MAX_PAYLOAD_SIZE];
-        ByteWriter writer(buf, sizeof(buf));
-        enterMsg.write(writer);
-        server.sendTo(client.clientId, Channel::ReliableOrdered,
-                      PacketType::SvEntityEnter,
-                      writer.data(), writer.size());
+        // Serialize into a scratch buffer to measure the encoded size.
+        // SvEntityEnterMsg has variable length (strings, per-type branches),
+        // so we can't size-check a priori — we have to encode once to know.
+        uint8_t scratch[MAX_PAYLOAD_SIZE];
+        ByteWriter scratchWriter(scratch, sizeof(scratch));
+        enterMsg.write(scratchWriter);
+        if (scratchWriter.overflowed()) {
+            // Single entity exceeds MAX_PAYLOAD_SIZE — shouldn't happen with
+            // current schema (largest realistic payload is ~300 bytes) but
+            // bail gracefully rather than corrupt the batch.
+            continue;
+        }
+        size_t entrySize = scratchWriter.size();
+
+        // Flush if appending this entry would overflow the batch. +0 because
+        // the count prefix was reserved up front.
+        if (batchWriter.size() + entrySize > sizeof(batchBuf)) {
+            flushEnterBatch();
+        }
+        batchWriter.writeBytes(scratch, entrySize);
+        batchCount++;
 
         // Initialize last sent state
         auto state = buildCurrentState(world, entity, pid);
         state.updateSeq = entitySeqCounters_[handle.value];
         client.lastSentState[pid.value()] = state;
     }
+    flushEnterBatch();
 
     // Process left entities
     for (const auto& handle : client.aoi.left) {
@@ -241,24 +281,26 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         (client.playerEntityId == 0 && !client.spectateScene.empty())
         || clientIsDead;
 
-    // Batch buffer: accumulate multiple entity deltas into one packet
-    uint8_t batchBuf[MAX_PAYLOAD_SIZE];
-    ByteWriter batchWriter(batchBuf, sizeof(batchBuf));
+    // Batch buffer: accumulate multiple entity deltas into one packet.
+    // Renamed (deltaBuf/deltaWriter/deltaCount) to not collide with the
+    // v9 enter-batch declared at the top of this function.
+    uint8_t deltaBuf[MAX_PAYLOAD_SIZE];
+    ByteWriter deltaWriter(deltaBuf, sizeof(deltaBuf));
     // Reserve 1 byte for entity count at the start
-    batchWriter.writeU8(0);
-    uint8_t batchCount = 0;
+    deltaWriter.writeU8(0);
+    uint8_t deltaCount = 0;
 
     auto flushBatch = [&]() {
-        if (batchCount == 0) return;
+        if (deltaCount == 0) return;
         // Patch the count byte at position 0
-        batchBuf[0] = batchCount;
+        deltaBuf[0] = deltaCount;
         server.sendTo(client.clientId, Channel::Unreliable,
                       PacketType::SvEntityUpdateBatch,
-                      batchWriter.data(), batchWriter.size());
+                      deltaWriter.data(), deltaWriter.size());
         // Reset for next batch
-        batchWriter = ByteWriter(batchBuf, sizeof(batchBuf));
-        batchWriter.writeU8(0);
-        batchCount = 0;
+        deltaWriter = ByteWriter(deltaBuf, sizeof(deltaBuf));
+        deltaWriter.writeU8(0);
+        deltaCount = 0;
     };
 
     for (const auto& handle : client.aoi.stayed) {
@@ -370,13 +412,13 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         deltaMsg.write(tmpWriter);
 
         // If this delta won't fit in the current batch, flush first
-        if (batchWriter.size() + tmpWriter.size() > MAX_PAYLOAD_SIZE) {
+        if (deltaWriter.size() + tmpWriter.size() > MAX_PAYLOAD_SIZE) {
             flushBatch();
         }
 
         // Write delta into batch buffer
-        deltaMsg.write(batchWriter);
-        batchCount++;
+        deltaMsg.write(deltaWriter);
+        deltaCount++;
 
         // Update last sent state
         lastIt->second = current;

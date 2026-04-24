@@ -521,27 +521,20 @@ void App::processEvents() {
                 }
                 break;
 
-            case SDL_MOUSEWHEEL: {
-                // Session 90: UI panels get first crack at scroll when pointer
-                // isn't over the editor viewport. Inside the viewport, existing
-                // spawn-zone / camera-zoom controls retain priority.
-                int mx = 0, my = 0;
-                SDL_GetMouseState(&mx, &my);
+            case SDL_MOUSEWHEEL:
+                // Scroll wheel: spawn zone radius resize takes priority, then camera zoom
                 if (Editor::instance().isViewportHovered()) {
                     if (!Editor::instance().handleSpawnZoneScroll((float)event.wheel.y)) {
                         float zoom = camera_.zoom();
                         if (event.wheel.y > 0) zoom *= 1.15f;  // scroll up = zoom in
                         else if (event.wheel.y < 0) zoom *= 0.87f; // scroll down = zoom out
-                        if (zoom < 0.05f) zoom = 0.05f;
-                        if (zoom > 8.0f) zoom = 8.0f;
+                        // Clamp zoom range
+                        if (zoom < 0.05f) zoom = 0.05f;  // can see ~19,200x10,800px = 600x337 tiles
+                        if (zoom > 8.0f) zoom = 8.0f;    // zoomed in to ~120x67px view
                         camera_.setZoom(zoom);
                     }
-                } else {
-                    uiManager_.handleWheel({static_cast<float>(mx), static_cast<float>(my)},
-                                           static_cast<float>(event.wheel.y));
                 }
                 break;
-            }
 
             case SDL_MOUSEBUTTONDOWN:
                 if (event.button.button == SDL_BUTTON_LEFT &&

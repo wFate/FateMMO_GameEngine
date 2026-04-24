@@ -206,17 +206,35 @@ namespace PacketType {
     // Pet panel seed on login (silent). Distinct from SvPetGranted which
     // fires on mid-session hatch and shows a "Hatched: X" chat toast.
     constexpr uint8_t SvPetOwnedList         = 0xDF;
+
+    // ── v9 reliability layer upgrades (PROTOCOL_VERSION 9) ─────────────────
+    // SvEntityEnterBatch: coalesces many SvEntityEnter payloads into one
+    // MAX_PAYLOAD_SIZE-bounded packet so scene entry with 230+ entities
+    // doesn't flood the reliability queue with 230+ individual reliables.
+    // Format: u16 count, then `count` SvEntityEnterMsg payloads back-to-back.
+    constexpr uint8_t SvEntityEnterBatch     = 0xE0;
+
+    // CmdAckExtended (client → server, unreliable): carries a list of
+    // explicit sequence numbers the client has received but that fall
+    // outside the 64-bit inline ackBits window. Without this, any packet
+    // stranded past the window stays in the server's pending queue forever
+    // and contributes to long-session queue accumulation.
+    // Format: u16 count, then `count` u16 sequence numbers.
+    constexpr uint8_t CmdAckExtended         = 0xE1;
 } // namespace PacketType
 
 // ============================================================================
-// PacketHeader (18 bytes)
+// PacketHeader (26 bytes — v9: ackBits widened 4→8 bytes for 64-bit ACK window)
+// Layout: protocolId(2) + sessionToken(8) + sequence(2) + ack(2) + ackBits(8)
+//       + channel(1) + packetType(1) + payloadSize(2)
+// Critical offsets for retransmit ack-patching: ack=+12, ackBits=+14 (8 bytes).
 // ============================================================================
 struct PacketHeader {
     uint16_t protocolId   = PROTOCOL_ID;
     uint64_t sessionToken = 0;  // 64-bit CSPRNG — security pass v5
     uint16_t sequence     = 0;
     uint16_t ack          = 0;
-    uint32_t ackBits      = 0;
+    uint64_t ackBits      = 0;  // v9: widened 32→64 bits to cover larger bursts
     Channel  channel      = Channel::Unreliable;
     uint8_t  packetType   = 0;
     uint16_t payloadSize  = 0;
@@ -227,7 +245,8 @@ struct PacketHeader {
         w.writeU32(static_cast<uint32_t>(sessionToken >> 32));
         w.writeU16(sequence);
         w.writeU16(ack);
-        w.writeU32(ackBits);
+        w.writeU32(static_cast<uint32_t>(ackBits & 0xFFFFFFFFULL));
+        w.writeU32(static_cast<uint32_t>(ackBits >> 32));
         w.writeU8(static_cast<uint8_t>(channel));
         w.writeU8(packetType);
         w.writeU16(payloadSize);
@@ -236,12 +255,14 @@ struct PacketHeader {
     static PacketHeader read(ByteReader& r) {
         PacketHeader h;
         h.protocolId   = r.readU16();
-        uint32_t lo    = r.readU32();
-        uint32_t hi    = r.readU32();
-        h.sessionToken = (static_cast<uint64_t>(hi) << 32) | lo;
+        uint32_t sTokLo = r.readU32();
+        uint32_t sTokHi = r.readU32();
+        h.sessionToken = (static_cast<uint64_t>(sTokHi) << 32) | sTokLo;
         h.sequence     = r.readU16();
         h.ack          = r.readU16();
-        h.ackBits      = r.readU32();
+        uint32_t abLo  = r.readU32();
+        uint32_t abHi  = r.readU32();
+        h.ackBits      = (static_cast<uint64_t>(abHi) << 32) | abLo;
         uint8_t rawChannel = r.readU8();
         if (rawChannel > static_cast<uint8_t>(Channel::ReliableUnordered)) {
             h.channel = Channel::Unreliable; // invalid channel, default to Unreliable

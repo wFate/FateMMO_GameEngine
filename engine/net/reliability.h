@@ -16,17 +16,19 @@ struct PendingPacket {
 
 class ReliabilityLayer {
 public:
-    // Queue size must accommodate initial-replication bursts: on scene entry
-    // the server sends one SvEntityEnter per AOI entity as ReliableOrdered in
-    // a single tick. A busy scene (WhisperingWoods = 231 mobs + NPCs) can push
-    // 230+ reliables before any ACK comes back (~100ms RTT), plus inventory/
-    // skill/costume sync. At 256 cap with 75% congestion threshold (~192),
-    // excess enters were silently dropped → invisible mobs + stuck dead sprites
-    // (SvEntityLeave also dropped). At 2048 the congestion threshold sits at
-    // ~1536, which covers current scenes ~6× over and leaves headroom for
-    // future zone density growth. Memory cost: ~1MB per client at typical
-    // ~500-byte packets — fine for target 2000 max clients.
+    // Queue size must accommodate initial-replication bursts. v9 coalesces
+    // SvEntityEnter into SvEntityEnterBatch (~12× reduction) and widens the
+    // ACK window to 64 bits, but we keep the 2048 cap for headroom against
+    // future bursts (raid mechanics, zone-wide broadcasts, etc.). Memory
+    // cost: ~1MB per client at typical ~500-byte packets — fine for 2000 CCU.
     static constexpr size_t MAX_PENDING_PACKETS = 2048;
+
+    // v9: ACK window widened from 32 → 64. Still not enough to cover a full
+    // 231-entity scene-entry burst on its own, which is why v9 also adds
+    // SvEntityEnterBatch (coalesce) and CmdAckExtended (explicit stranded-seq
+    // ACK). These three together are what actually prevent permanent
+    // stranding in the pending queue.
+    static constexpr int WINDOW_BITS = 64;
 
     uint16_t nextLocalSequence() { return localSequence_++; }
     uint16_t currentLocalSequence() const { return localSequence_; }
@@ -34,10 +36,19 @@ public:
     void trackReliable(uint16_t sequence, const uint8_t* data, size_t size, float currentTime = 0.0f);
     /// Returns true if this is a NEW packet, false if duplicate.
     bool onReceive(uint16_t remoteSequence);
-    void buildAckFields(uint16_t& ack, uint32_t& ackBits) const;
-    void processAck(uint16_t ack, uint32_t ackBits, float currentTime = 0.0f);
+    void buildAckFields(uint16_t& ack, uint64_t& ackBits) const;
+    void processAck(uint16_t ack, uint64_t ackBits, float currentTime = 0.0f);
+    // v9: process explicit seqs from CmdAckExtended — removes matching
+    // pending entries even if they fall outside the 64-bit inline window.
+    void processExtendedAck(const uint16_t* seqs, size_t count, float currentTime = 0.0f);
     std::vector<const PendingPacket*> getRetransmits(float currentTime, float retransmitDelay = 0.2f);
     void markRetransmitted(uint16_t sequence, float currentTime);
+
+    // v9: client-side accumulator for retransmits that arrive outside the
+    // 64-bit ACK window. onReceive() appends to this list when it hits the
+    // "too old to track" branch. Callers flush this via CmdAckExtended.
+    const std::vector<uint16_t>& drainPendingExtendedAcks() const { return pendingExtendedAcks_; }
+    void clearPendingExtendedAcks() { pendingExtendedAcks_.clear(); }
 
     size_t pendingReliableCount() const { return pending_.size(); }
     float rtt() const { return rtt_; }
@@ -64,6 +75,7 @@ public:
         receivedAny_ = false;
         receivedBits_ = 0;
         pending_.clear();
+        pendingExtendedAcks_.clear();
         rtt_ = 0.1f;
         droppedNonCritical_ = 0;
         preservedCritical_ = 0;
@@ -73,8 +85,9 @@ private:
     uint16_t localSequence_ = 0;
     uint16_t remoteSequence_ = 0;
     bool receivedAny_ = false;
-    uint32_t receivedBits_ = 0;
+    uint64_t receivedBits_ = 0; // v9: widened 32→64 bit ACK window
     std::deque<PendingPacket> pending_;
+    std::vector<uint16_t> pendingExtendedAcks_; // v9: stranded-seq receipts to flush
     float rtt_ = 0.1f;
     uint32_t droppedNonCritical_ = 0;
     uint32_t preservedCritical_ = 0;

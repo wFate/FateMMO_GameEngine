@@ -115,6 +115,18 @@ public:
     void symmetricRekey();
     uint64_t packetsEncrypted() const { return packetsEncrypted_; }
 
+    // v9: client-side epoch gate for server-initiated rekeys. Server increments
+    // this counter per rekey and sends the new value as the Rekey payload.
+    // Client only applies symmetricRekey() if the incoming epoch is strictly
+    // greater than the last-applied epoch. Protects against duplicate Rekey
+    // retransmits desyncing client keys from server keys.
+    uint32_t serverRekeyEpoch() const { return serverRekeyEpoch_; }
+    bool tryAdvanceRekeyEpoch(uint32_t incomingEpoch) {
+        if (incomingEpoch <= serverRekeyEpoch_) return false;
+        serverRekeyEpoch_ = incomingEpoch;
+        return true;
+    }
+
 private:
     Key encryptKey_{};
     Key decryptKey_{};
@@ -125,6 +137,7 @@ private:
     // Rekey state
     uint64_t packetsEncrypted_ = 0;
     std::chrono::steady_clock::time_point lastRekeyTime_{};
+    uint32_t serverRekeyEpoch_ = 0; // v9: last-applied server rekey epoch
 
     // Previous keys for grace period during rekey transition
     Key prevEncryptKey_{};
@@ -168,9 +181,10 @@ inline bool isCriticalLane(uint8_t packetType) {
     // 0xA1 SvRespawn           — without it, respawn never completes
     // 0xCC SvKick              — disciplinary/shutdown message must arrive
     // 0xCE SvScenePopulated    — without it, client never exits loading
+    // 0xE0 SvEntityEnterBatch  — v9 coalesced entity-enters; same semantics as 0x90
     return packetType == 0x90 || packetType == 0x91 || packetType == 0x95 ||
            packetType == 0x97 || packetType == 0xA0 || packetType == 0xA1 ||
-           packetType == 0xCC || packetType == 0xCE;
+           packetType == 0xCC || packetType == 0xCE || packetType == 0xE0;
 }
 
 } // namespace fate

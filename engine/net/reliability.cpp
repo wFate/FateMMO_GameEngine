@@ -29,18 +29,16 @@ bool ReliabilityLayer::onReceive(uint16_t remoteSequence) {
     }
 
     if (sequenceGreaterThan(remoteSequence, remoteSequence_)) {
-        // New sequence is more recent. Guard the shift: shifting a uint32_t
-        // by >=32 is undefined behavior in C++, so zero the window when the
-        // gap meets or exceeds its width instead of falling through to a
-        // compiler-dependent result.
+        // New sequence is more recent. Guard the shift: shifting a uint64_t
+        // by >=64 is undefined behavior in C++, so zero the window when the
+        // gap meets or exceeds its width.
         int16_t diff = static_cast<int16_t>(remoteSequence - remoteSequence_);
         if (diff > 0) {
-            constexpr int kWindowBits = 32;
-            if (diff >= kWindowBits) {
+            if (diff >= WINDOW_BITS) {
                 receivedBits_ = 0;
             } else {
                 receivedBits_ <<= diff;
-                receivedBits_ |= (1u << (diff - 1));
+                receivedBits_ |= (1ULL << (diff - 1));
             }
         }
         remoteSequence_ = remoteSequence;
@@ -51,25 +49,29 @@ bool ReliabilityLayer::onReceive(uint16_t remoteSequence) {
     } else {
         // Older sequence — check if we already received it
         int16_t diff = static_cast<int16_t>(remoteSequence_ - remoteSequence);
-        if (diff > 0 && diff <= 32) {
-            uint32_t bit = (1u << (diff - 1));
+        if (diff > 0 && diff <= WINDOW_BITS) {
+            uint64_t bit = (1ULL << (diff - 1));
             if (receivedBits_ & bit) {
                 return false; // already received this sequence
             }
             receivedBits_ |= bit;
             return true; // old but not yet received
         }
-        // Too old to track — assume duplicate
-        return false;
+        // v9: retransmit of a packet older than the ACK window. Without this,
+        // the peer's pending queue would hold this seq forever because our
+        // inline ackBits can't cover it. Queue it for a CmdAckExtended so the
+        // sender can drain it.
+        pendingExtendedAcks_.push_back(remoteSequence);
+        return false; // still considered a duplicate by caller — don't reprocess
     }
 }
 
-void ReliabilityLayer::buildAckFields(uint16_t& ack, uint32_t& ackBits) const {
+void ReliabilityLayer::buildAckFields(uint16_t& ack, uint64_t& ackBits) const {
     ack = remoteSequence_;
     ackBits = receivedBits_;
 }
 
-void ReliabilityLayer::processAck(uint16_t ack, uint32_t ackBits, float currentTime) {
+void ReliabilityLayer::processAck(uint16_t ack, uint64_t ackBits, float currentTime) {
     pending_.erase(
         std::remove_if(pending_.begin(), pending_.end(),
             [&](const PendingPacket& pkt) {
@@ -78,8 +80,8 @@ void ReliabilityLayer::processAck(uint16_t ack, uint32_t ackBits, float currentT
                     acked = true;
                 } else {
                     int16_t diff = static_cast<int16_t>(ack - pkt.sequence);
-                    if (diff > 0 && diff <= 32) {
-                        if (ackBits & (1u << (diff - 1))) {
+                    if (diff > 0 && diff <= WINDOW_BITS) {
+                        if (ackBits & (1ULL << (diff - 1))) {
                             acked = true;
                         }
                     }
@@ -91,6 +93,24 @@ void ReliabilityLayer::processAck(uint16_t ack, uint32_t ackBits, float currentT
                 return acked;
             }),
         pending_.end());
+}
+
+void ReliabilityLayer::processExtendedAck(const uint16_t* seqs, size_t count, float currentTime) {
+    if (count == 0 || !seqs) return;
+    // Small counts (typical: 1-20 stranded seqs per CmdAckExtended), so a
+    // linear scan per seq is fine. O(count × pending_.size()) worst case.
+    for (size_t i = 0; i < count; ++i) {
+        uint16_t target = seqs[i];
+        auto it = std::find_if(pending_.begin(), pending_.end(),
+            [target](const PendingPacket& pkt) { return pkt.sequence == target; });
+        if (it != pending_.end()) {
+            if (it->retransmitCount == 0 && currentTime > 0.0f) {
+                float sample = currentTime - it->timeSent;
+                rtt_ = rtt_ * 0.875f + sample * 0.125f;
+            }
+            pending_.erase(it);
+        }
+    }
 }
 
 std::vector<const PendingPacket*> ReliabilityLayer::getRetransmits(float currentTime, float retransmitDelay) {

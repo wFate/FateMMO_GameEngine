@@ -661,6 +661,15 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat("SlotArc End Angle", &arc->slotArcEndDeg, 1.0f, 0.0f, 360.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat2("SlotArc Offset", &arc->slotArcOffset.x, 1.0f, -300.0f, 300.0f); checkUndoCapture(uiMgr);
 
+        // --- Scroll Gesture ---
+        ImGui::Separator();
+        ImGui::Text("Scroll Gesture");
+        ImGui::Checkbox("Scroll Enabled##arc", &arc->scrollEnabled); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Tap Deadzone (deg)##arc",       &arc->tapAngleDeadzoneDeg,           0.1f, 0.0f, 30.0f);   checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Page Commit Angle (deg)##arc",  &arc->pageCommitAngleDeg,            0.5f, 5.0f, 60.0f);   checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Flick Velocity (deg/s)##arc",   &arc->flickAngularVelocityDegPerSec, 1.0f, 10.0f, 500.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Snap Duration (ms)##arc",       &arc->snapAnimationMs,               1.0f, 0.0f, 1000.0f); checkUndoCapture(uiMgr);
+
         // --- Font ---
         ImGui::Separator();
         ImGui::Text("Font");

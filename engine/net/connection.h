@@ -98,6 +98,13 @@ struct ClientConnection {
     // Session 71 WU1 — periodic backpressure log throttle. Reset with the
     // reliability counters every time we emit a summary line.
     float lastBackpressureLogTime = 0.0f;
+
+    // v9: epoch counter for server-initiated rekeys. Incremented each time
+    // the server calls symmetricRekey() for this client. Sent as the Rekey
+    // payload so the client can dedup retransmits — without this, 5
+    // retransmits of the same Rekey packet would desync keys V1 → V5 on
+    // the client while the server stayed at V1.
+    uint32_t serverRekeyEpoch = 0;
 };
 
 class ConnectionManager {

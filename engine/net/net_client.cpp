@@ -204,6 +204,29 @@ void NetClient::poll(float currentTime) {
         }
     }
 
+    // v9: flush CmdAckExtended if onReceive accumulated any stranded-seq
+    // receipts this tick. These are retransmits that arrived outside the
+    // 64-bit inline ack window — without telling the server explicitly
+    // they got through, the server's pending queue holds them forever.
+    // Chunked at 512 seqs per packet to stay well inside MAX_PAYLOAD_SIZE
+    // (512 × 2 bytes + 2 bytes count = 1026 bytes, leaves headroom).
+    if (connected_) {
+        const auto& strandedAcks = reliability_.drainPendingExtendedAcks();
+        if (!strandedAcks.empty()) {
+            constexpr size_t kMaxPerPacket = 512;
+            for (size_t offset = 0; offset < strandedAcks.size(); offset += kMaxPerPacket) {
+                size_t chunk = (std::min)(kMaxPerPacket, strandedAcks.size() - offset);
+                uint8_t ackBuf[2 + kMaxPerPacket * 2];
+                ByteWriter aw(ackBuf, sizeof(ackBuf));
+                aw.writeU16(static_cast<uint16_t>(chunk));
+                for (size_t i = 0; i < chunk; ++i) aw.writeU16(strandedAcks[offset + i]);
+                sendPacket(Channel::Unreliable, PacketType::CmdAckExtended,
+                           aw.data(), aw.size());
+            }
+            reliability_.clearPendingExtendedAcks();
+        }
+    }
+
     // Heartbeat timeout detection --start reconnect if no packets for 5+ seconds
     // Only auto-reconnect if we have a stored auth token (non-zero)
     static constexpr AuthToken EMPTY_TOKEN = {};
@@ -233,13 +256,13 @@ void NetClient::poll(float currentTime) {
         auto retransmits = reliability_.getRetransmits(currentTime, retransmitDelay);
         for (auto& pkt : retransmits) {
             // Patch stale ack/ackBits in stored buffer with fresh values.
-            // Header v5 layout: protocolId(2) + sessionToken(8) + sequence(2) + ack(2) + ackBits(4)
-            //                   = ack at offset 12, ackBits at offset 14.
-            // Getting these offsets wrong corrupts channel(18) and packetType(19),
+            // Header v9 layout: protocolId(2) + sessionToken(8) + sequence(2) + ack(2) + ackBits(8)
+            //                   = ack at offset 12, ackBits at offset 14 (8 bytes).
+            // Getting these offsets wrong corrupts channel(22) and packetType(23),
             // causing retransmits to arrive as "Unknown packet type 0x00" at the server.
             if (pkt->data.size() >= PACKET_HEADER_SIZE) {
                 uint16_t freshAck;
-                uint32_t freshAckBits;
+                uint64_t freshAckBits;
                 reliability_.buildAckFields(freshAck, freshAckBits);
                 std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 12, &freshAck, sizeof(freshAck));
                 std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 14, &freshAckBits, sizeof(freshAckBits));
@@ -384,9 +407,27 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             break;
         }
         case PacketType::Rekey: {
-            if (crypto_.hasKeys()) {
+            // v9: Rekey payload is a 4-byte server epoch. Client dedups via
+            // tryAdvanceRekeyEpoch so retransmits of the same Rekey don't
+            // cause multiple symmetricRekey() calls that would desync keys
+            // from the server's single rekey.
+            if (!crypto_.hasKeys()) break;
+            if (payloadLen < 4) {
+                LOG_WARN("NetClient", "Rekey packet with short payload (%zu bytes, need 4) — ignored",
+                         payloadLen);
+                break;
+            }
+            uint32_t incomingEpoch = static_cast<uint32_t>(payloadData[0])
+                                   | (static_cast<uint32_t>(payloadData[1]) << 8)
+                                   | (static_cast<uint32_t>(payloadData[2]) << 16)
+                                   | (static_cast<uint32_t>(payloadData[3]) << 24);
+            if (crypto_.tryAdvanceRekeyEpoch(incomingEpoch)) {
                 crypto_.symmetricRekey();
-                LOG_INFO("NetClient", "Session keys rekeyed (server-initiated)");
+                LOG_INFO("NetClient", "Session keys rekeyed (server-initiated, epoch=%u)",
+                         incomingEpoch);
+            } else {
+                LOG_INFO("NetClient", "Rekey retransmit dedup'd (epoch=%u, current=%u)",
+                         incomingEpoch, crypto_.serverRekeyEpoch());
             }
             break;
         }
@@ -408,6 +449,18 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvEntityEnterMsg::read(payload);
             if (onEntityEnter) onEntityEnter(msg);
+            break;
+        }
+        case PacketType::SvEntityEnterBatch: {
+            // v9: coalesced entity-enter burst. Format: u16 count, then `count`
+            // SvEntityEnterMsg payloads back-to-back. Fires the same onEntityEnter
+            // callback as the single-entity path.
+            ByteReader payload(payloadData, payloadLen);
+            uint16_t count = payload.readU16();
+            for (uint16_t i = 0; i < count && payload.ok(); ++i) {
+                auto msg = SvEntityEnterMsg::read(payload);
+                if (onEntityEnter) onEntityEnter(msg);
+            }
             break;
         }
         case PacketType::SvEntityLeave: {
@@ -1193,7 +1246,7 @@ void NetClient::sendPacket(Channel channel, uint8_t packetType,
     ByteWriter w(buf, sizeof(buf));
 
     uint16_t ack;
-    uint32_t ackBits;
+    uint64_t ackBits; // v9: widened 32→64 bit ACK window
     reliability_.buildAckFields(ack, ackBits);
 
     PacketHeader hdr;

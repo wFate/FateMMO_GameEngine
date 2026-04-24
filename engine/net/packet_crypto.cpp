@@ -248,6 +248,7 @@ void PacketCrypto::clearKeys() {
         prevEncNoncePrefix_ = 0;
         prevDecNoncePrefix_ = 0;
     }
+    serverRekeyEpoch_ = 0; // v9: reset rekey epoch on full key clear (reconnect)
 }
 
 // ── Symmetric rekeying ───────────────────────────────────────────────────

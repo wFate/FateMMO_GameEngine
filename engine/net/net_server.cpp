@@ -74,6 +74,30 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
         return;
     }
 
+    // v9: CmdAckExtended carries seqs that fell outside the inline 64-bit
+    // ackBits window. Handled inline because it's unencrypted control data
+    // (no payload secrets — just seq numbers) and needs to drain the pending
+    // queue before any other ACK-aware processing runs this tick.
+    if (hdr.packetType == PacketType::CmdAckExtended) {
+        const uint8_t* payloadData = data + r.position();
+        size_t payloadLen = hdr.payloadSize;
+        size_t actualRemaining = static_cast<size_t>(size) - r.position();
+        if (payloadLen > actualRemaining) return;
+        if (payloadLen < 2) return; // need at least the u16 count
+        ByteReader payload(payloadData, payloadLen);
+        uint16_t count = payload.readU16();
+        // Bound to the maximum that fits in a 64-bit ackBits window worth of
+        // stranded seqs — prevents a malformed/hostile packet from triggering
+        // an O(N × pending) scan with huge N.
+        constexpr uint16_t kMaxExtendedAcks = 512;
+        if (count > kMaxExtendedAcks) return;
+        if (payload.remaining() < static_cast<size_t>(count) * sizeof(uint16_t)) return;
+        std::vector<uint16_t> seqs(count);
+        for (uint16_t i = 0; i < count; ++i) seqs[i] = payload.readU16();
+        client->reliability.processExtendedAck(seqs.data(), seqs.size(), currentTime);
+        return;
+    }
+
     // Game packet — decrypt if crypto is active, then forward to callback
     if (onPacketReceived) {
         const uint8_t* payloadData = data + r.position();
@@ -284,7 +308,7 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
     ByteWriter w(stackBuf, bufSize);
 
     uint16_t ack;
-    uint32_t ackBits;
+    uint64_t ackBits; // v9: widened 32→64 bit ACK window
     client.reliability.buildAckFields(ack, ackBits);
 
     PacketHeader hdr;
@@ -342,13 +366,13 @@ void NetServer::processRetransmits(float currentTime) {
         auto retransmits = client.reliability.getRetransmits(currentTime, retransmitDelay);
         for (auto& pkt : retransmits) {
             // Patch stale ack/ackBits in stored buffer with fresh values.
-            // Header v5 layout: protocolId(2) + sessionToken(8) + sequence(2) + ack(2) + ackBits(4)
-            //                   = ack at offset 12, ackBits at offset 14.
-            // Getting these offsets wrong corrupts channel(18) and packetType(19),
+            // Header v9 layout: protocolId(2) + sessionToken(8) + sequence(2) + ack(2) + ackBits(8)
+            //                   = ack at offset 12, ackBits at offset 14 (8 bytes).
+            // Getting these offsets wrong corrupts channel(22) and packetType(23),
             // causing retransmits to arrive as "Unknown packet type 0x00" at the peer.
             if (pkt->data.size() >= PACKET_HEADER_SIZE) {
                 uint16_t freshAck;
-                uint32_t freshAckBits;
+                uint64_t freshAckBits;
                 client.reliability.buildAckFields(freshAck, freshAckBits);
                 std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 12, &freshAck, sizeof(freshAck));
                 std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 14, &freshAckBits, sizeof(freshAckBits));
