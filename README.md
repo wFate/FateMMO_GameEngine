@@ -3,7 +3,7 @@
 # ⚔️ FateMMO Game Engine
 
 [![CI](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/wFate/FateMMO_GameEngine?style=flat-square&label=🎮%20Release&color=gold)](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMO)
+[![Release](https://img.shields.io/github/v/release/wFate/FateMMO_GameEngine?style=flat-square&label=🎮%20Release&color=gold)](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMOv2)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue?style=flat-square&logo=cplusplus)
 ![Lines of Code](https://img.shields.io/badge/LOC-187%2C000%2B-brightgreen?style=flat-square)
 ![Tests](https://img.shields.io/badge/tests-1%2C546-brightgreen?style=flat-square)
@@ -30,7 +30,7 @@
 > - 🗺️ **Scene Dropdown** — pick any `assets/scenes/*.json` from the viewport toolbar; transitions are gated against in-flight Play state.
 > - 📁 **File Menu + Ctrl+S** — New / Open / Save / Save As wired through atomic-write JSON serialization (`.tmp` + rename, parent-dir auto-create, cross-volume copy fallback).
 >
-> 📦 [**Download FateMMO_Demo_v2.zip**](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMO) &nbsp;·&nbsp; ⭐ [**Star the repo**](https://github.com/wFate/FateMMO_GameEngine) &nbsp;·&nbsp; 🌐 [**FateMMO.com**](https://www.FateMMO.com) &nbsp;·&nbsp; 🎬 [**YouTube Showcase**](https://www.youtube.com/watch?v=9zS-RVbranE)
+> 📦 [**Download FateMMO_Demo_v2.zip**](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMOv2) &nbsp;·&nbsp; ⭐ [**Star the repo**](https://github.com/wFate/FateMMO_GameEngine) &nbsp;·&nbsp; 🌐 [**FateMMO.com**](https://www.FateMMO.com) &nbsp;·&nbsp; 🎬 [**YouTube Showcase**](https://www.youtube.com/watch?v=9zS-RVbranE)
 
 ---
 
@@ -74,7 +74,7 @@ build\Debug\FateDemo.exe  # Windows
 
 The demo opens the full editor UI with a procedural tile grid. Use the new **▶️ Play** button in the Scene viewport to enter a snapshot-protected play session, **👁️ Observe** to live-preview a scene with chrome hidden, or pick a scene from the dropdown to load it.
 
-> 💡 **Prefer a pre-built binary?** Grab [**FateMMO_Demo_v2.zip**](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMO) from the releases page — no build required.
+> 💡 **Prefer a pre-built binary?** Grab [**FateMMO_Demo_v2.zip**](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMOv2) from the releases page — no build required.
 
 > **Full game build:** The proprietary game client, server, and tests build automatically when their source directories are present. The open-source release includes the complete engine library and editor.
 
