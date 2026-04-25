@@ -35,7 +35,7 @@ public:
         camera().setPosition({0.0f, 0.0f});
         camera().setZoom(1.0f);
 
-        LOG_INFO("Demo", "FateEngine demo initialized — explore the editor!");
+        LOG_INFO("Demo", "FateEngine demo initialized -- explore the editor!");
     }
 
     void onRender(SpriteBatch& batch, Camera& cam) override {

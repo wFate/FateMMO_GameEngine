@@ -23,6 +23,7 @@
 #include <SDL.h>
 #include <atomic>
 #include <string>
+#include <functional>
 
 namespace fate {
 
@@ -35,6 +36,12 @@ struct AppConfig {
     int targetFPS = 0; // 0 = auto-detect from display refresh rate
     float fixedTimestep = 1.0f / 30.0f; // 30Hz fixed update
     std::string assetsDir;  // absolute path to assets/ directory (set by game)
+
+    // Optional Observer hooks. Leave unset for the default local-preview
+    // behavior (run systems live, hide editor chrome). Set both to wire
+    // your own implementation (e.g., network spectate).
+    std::function<void()> onObserveStart;
+    std::function<void()> onObserveStop;
 };
 
 enum class AppLifecycleState {

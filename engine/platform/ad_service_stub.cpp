@@ -10,7 +10,7 @@ namespace fate {
 static AdService::ConsentStatus s_consent = AdService::ConsentStatus::NotRequired;
 
 void AdService::initialize() {
-    LOG_INFO("AdService", "Desktop stub — rewarded ads disabled (mobile-only feature)");
+    // Desktop is dev-only; real ads only run on Android/iOS.
 }
 bool AdService::isAvailable()      { return false; }
 void AdService::loadRewardedAd()   { /* no-op */ }

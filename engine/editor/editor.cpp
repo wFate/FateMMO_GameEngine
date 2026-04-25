@@ -299,6 +299,230 @@ void Editor::beginFrame() {
     frameStarted_ = true;
 }
 
+// ============================================================================
+// Scene Identity / Save / Load (engine-layer; available in all builds)
+// ============================================================================
+
+std::string Editor::currentSceneId() const {
+    if (currentScenePath_.empty()) return {};
+    size_t slash = currentScenePath_.find_last_of("/\\");
+    size_t dot = currentScenePath_.rfind('.');
+    size_t start = (slash != std::string::npos) ? slash + 1 : 0;
+    if (dot != std::string::npos && dot > start)
+        return currentScenePath_.substr(start, dot - start);
+    return currentScenePath_.substr(start);
+}
+
+bool Editor::saveScene(World* world, const std::string& path) {
+    if (!world) {
+        lastSaveStatus_ = "Scene save FAILED: no world";
+        lastSaveSucceeded_ = false;
+        return false;
+    }
+    currentScenePath_ = path;
+
+    nlohmann::json root;
+    root["version"]   = SCENE_FORMAT_VERSION;
+    root["gridSize"]  = gridSize_;
+    root["sceneName"] = SceneManager::instance().currentSceneName();
+    root["metadata"]  = sceneMetadata_;
+
+    nlohmann::json entitiesJson = nlohmann::json::array();
+
+    world->forEachEntity([&](Entity* entity) {
+        // Skip transient runtime entities --these are not part of the scene:
+        // mob/boss: spawned by SpawnSystem, player: created on server connect,
+        // ghost: networked other-player entities, dropped_item: runtime loot
+        std::string tag = entity->tag();
+        if (tag == "mob" || tag == "boss" || tag == "player" ||
+            tag == "ghost" || tag == "dropped_item") return;
+
+        // Registry-based serialization --all registered components are handled
+        entitiesJson.push_back(PrefabLibrary::entityToJson(entity));
+    });
+
+    root["entities"] = entitiesJson;
+
+    if (inPlayMode_) {
+        playModeSnapshot_ = entitiesJson;
+    }
+
+    std::string jsonStr = root.dump(2);
+
+    // Editor save deliberately bypasses IAssetSource and writes loose-files
+    // directly via writeFileAtomic. This is intentional and load-bearing:
+    //   1. The editor is stripped from FATE_SHIPPING builds (see CMakeLists.txt),
+    //      so it only ever runs against loose-files on a developer machine.
+    //   2. Atomic .tmp+rename has no PhysFS analogue — packed `.pak` archives
+    //      don't support partial-overwrite, so an IAssetWriter wrapper would
+    //      either be a no-op for archives or have radically different semantics
+    //      from the disk path callers depend on (.tmp survival, source-dir
+    //      dual-save, hot-reload suppression).
+    // To enable saving into a packaged build, introduce a `IAssetWriter`
+    // interface with `writeBytes(key, content) → Result` semantics, route
+    // every authored-asset writer (this function, UISerializer::saveToFile,
+    // DialogueNodeEditor::saveToFile, AnimationEditor::saveTemplate /
+    // saveFrameSet / saveMetaJson, the packed-meta writer in packFrameSet,
+    // and the prefab save path) through it, and provide both a DirectFs
+    // writer (preserves today's behavior) and a `.pak` overlay writer.
+    // Until that interface lands, the loose-file assumption is a hard
+    // contract — do NOT add a new authored-asset writer that calls
+    // std::ofstream / fwrite / IAssetSource directly.
+    std::string writeErr;
+    if (!writeFileAtomic(path, jsonStr, &writeErr)) {
+        LOG_ERROR("Editor", "Scene save FAILED: %s (%s) — runtime path not updated on disk",
+                  path.c_str(), writeErr.c_str());
+        lastSaveStatus_ = "Scene save FAILED: " + path + " (" + writeErr + ")";
+        lastSaveSucceeded_ = false;
+        return false;
+    }
+
+    // Also save to source dir (persists across rebuilds)
+    if (!sourceDir_.empty()) {
+        std::string srcPath = sourceDir_ + "/" + fs::path(path).filename().string();
+        if (!writeFileAtomic(srcPath, jsonStr, &writeErr)) {
+            LOG_ERROR("Editor", "Scene save to source FAILED: %s (%s) — runtime copy ok, source copy stale",
+                      srcPath.c_str(), writeErr.c_str());
+            lastSaveStatus_ = "Source save FAILED: " + srcPath + " (" + writeErr + ")";
+            lastSaveSucceeded_ = false;
+            return false;
+        }
+        LOG_INFO("Editor", "Scene also saved to source: %s", srcPath.c_str());
+    }
+
+    LOG_INFO("Editor", "Scene saved to %s (%zu entities)", path.c_str(), entitiesJson.size());
+    lastSaveStatus_ = "Scene saved: " + path;
+    lastSaveSucceeded_ = true;
+    return true;
+}
+
+void Editor::loadScene(World* world, const std::string& path) {
+    if (!world) return;
+
+    // Helper: surface a load failure both in the log and the HUD strip. Reuses
+    // the save status channel — designers don't distinguish save vs load
+    // failures, they just need to know the scene didn't come up. Note that
+    // currentScenePath_ is NOT updated until the load actually succeeds, so
+    // a Ctrl+S immediately after a failed load won't quietly overwrite the
+    // good source file with whatever's in the world right now.
+    auto reportLoadFailure = [this, &path](const std::string& detail) {
+        LOG_ERROR("Editor", "Scene load FAILED (%s): %s", detail.c_str(), path.c_str());
+        lastSaveStatus_ = "Scene load FAILED: " + path + " (" + detail + ")";
+        lastSaveSucceeded_ = false;
+    };
+
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        reportLoadFailure("cannot open file");
+        return;
+    }
+
+    nlohmann::json root;
+    try {
+        root = nlohmann::json::parse(file);
+    } catch (const nlohmann::json::exception& e) {
+        reportLoadFailure(std::string("parse error: ") + e.what());
+        return;
+    }
+
+    // Read version (default to 1 for backward compat with pre-header files)
+    int version = root.value("version", 1);
+    if (version > SCENE_FORMAT_VERSION) {
+        reportLoadFailure("file version " + std::to_string(version) +
+                          " is newer than supported " + std::to_string(SCENE_FORMAT_VERSION));
+        return;
+    }
+
+    // Validate shape BEFORE destroying anything — otherwise a scene file with
+    // valid JSON but a malformed entities/gridSize/metadata field would wipe
+    // the current world and leave the editor empty.
+    if (root.contains("gridSize") && !root["gridSize"].is_number()) {
+        reportLoadFailure(std::string("gridSize must be a number (got ") +
+                          root["gridSize"].type_name() + ")");
+        return;
+    }
+    if (root.contains("metadata") && !root["metadata"].is_object()) {
+        reportLoadFailure(std::string("metadata must be an object (got ") +
+                          root["metadata"].type_name() + ")");
+        return;
+    }
+    if (root.contains("entities") && !root["entities"].is_array()) {
+        reportLoadFailure(std::string("entities must be an array (got ") +
+                          root["entities"].type_name() + ")");
+        return;
+    }
+
+    // Validation passed — committing to the load. Adopt the path now so that
+    // a follow-up Ctrl+S targets this scene, and clear any stale failure
+    // status from a prior load attempt.
+    currentScenePath_ = path;
+    if (!lastSaveSucceeded_ && lastSaveStatus_.find("load FAILED") != std::string::npos) {
+        lastSaveStatus_.clear();
+        lastSaveSucceeded_ = true;
+    }
+
+    // Clear existing entities (in play mode, keep runtime entities for spectator)
+    world->forEachEntity([&](Entity* entity) {
+#ifdef FATE_HAS_GAME
+        if (inPlayMode_) {
+            std::string tag = entity->tag();
+            if (tag == "mob" || tag == "boss" || tag == "player" ||
+                tag == "ghost" || tag == "dropped_item") return;
+        }
+#endif
+        world->destroyEntity(entity->handle());
+    });
+    world->processDestroyQueue();
+
+    if (root.contains("gridSize")) {
+        gridSize_ = root["gridSize"].get<float>();
+    }
+
+    // Preserve scene metadata for round-trip (sceneType, minLevel, pvpEnabled, etc.)
+    if (root.contains("metadata")) {
+        sceneMetadata_ = root["metadata"];
+    } else {
+        sceneMetadata_ = nlohmann::json::object();
+    }
+
+    if (!root.contains("entities")) {
+        // Still notify spectator even for empty scenes
+#ifdef FATE_HAS_GAME
+        if ((inPlayMode_ || isObserving_) && onSceneLoadedInPlayMode) {
+            size_t slash = path.find_last_of("/\\");
+            size_t dot = path.rfind('.');
+            size_t start = (slash != std::string::npos) ? slash + 1 : 0;
+            std::string sceneName = (dot > start) ? path.substr(start, dot - start) : path.substr(start);
+            onSceneLoadedInPlayMode(sceneName);
+        }
+#endif
+        return;
+    }
+
+    // Registry-based deserialization --all registered components are handled
+    size_t loadedCount = 0;
+    for (auto& ej : root["entities"]) {
+        PrefabLibrary::jsonToEntity(ej, *world);
+        ++loadedCount;
+    }
+    selectedEntity_ = nullptr;
+    selectedHandle_ = {};
+
+#ifdef FATE_HAS_GAME
+    // Notify game app for spectator mode (sends CmdSpectateScene to server)
+    if ((inPlayMode_ || isObserving_) && onSceneLoadedInPlayMode) {
+        size_t slash = path.find_last_of("/\\");
+        size_t dot = path.rfind('.');
+        size_t start = (slash != std::string::npos) ? slash + 1 : 0;
+        std::string sceneName = (dot > start) ? path.substr(start, dot - start) : path.substr(start);
+        onSceneLoadedInPlayMode(sceneName);
+    }
+#endif
+
+    LOG_INFO("Editor", "Scene loaded v%d from %s (%zu entities)",
+             version, path.c_str(), world->entityCount());
+}
+
 #ifdef FATE_HAS_GAME
 // ============================================================================
 // Render
@@ -312,16 +536,6 @@ void Editor::applyLayerVisibility(World* world) {
             s->enabled = showLayer_[idx];
         }
     );
-}
-
-std::string Editor::currentSceneId() const {
-    if (currentScenePath_.empty()) return {};
-    size_t slash = currentScenePath_.find_last_of("/\\");
-    size_t dot = currentScenePath_.rfind('.');
-    size_t start = (slash != std::string::npos) ? slash + 1 : 0;
-    if (dot != std::string::npos && dot > start)
-        return currentScenePath_.substr(start, dot - start);
-    return currentScenePath_.substr(start);
 }
 
 void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
@@ -2873,276 +3087,6 @@ void Editor::drawImGuizmo(Camera* camera) {
 }
 
 // ============================================================================
-// Play-in-Editor: Snapshot / Restore
-// ============================================================================
-
-void Editor::enterPlayMode(World* world) {
-    if (inPlayMode_ || !world) return;
-#ifdef FATE_HAS_GAME
-    playModeSnapshot_ = nlohmann::json::array();
-    world->forEachEntity([&](Entity* e) {
-        // Skip transient runtime entities --same filter as saveScene
-        std::string tag = e->tag();
-        if (tag == "mob" || tag == "boss" || tag == "player" ||
-            tag == "ghost" || tag == "dropped_item") return;
-        playModeSnapshot_.push_back(PrefabLibrary::entityToJson(e));
-    });
-    // Auto-load animation metadata for scene-placed entities (NPCs, objects)
-    world->forEachEntity([](Entity* e) {
-        auto* sprite = e->getComponent<SpriteComponent>();
-        auto* animator = e->getComponent<Animator>();
-        if (sprite && animator && !sprite->texturePath.empty()) {
-            AnimationLoader::tryAutoLoad(*sprite, *animator);
-        }
-    });
-#endif // FATE_HAS_GAME
-
-    paused_ = false;
-    inPlayMode_ = true;
-}
-
-
-void Editor::exitPlayMode(World* world) {
-    if (!inPlayMode_ || !world) return;
-#ifdef FATE_HAS_GAME
-    // Destroy all current entities
-    std::vector<EntityHandle> toDestroy;
-    world->forEachEntity([&](Entity* e) {
-        toDestroy.push_back(e->handle());
-    });
-    for (auto h : toDestroy) {
-        world->destroyEntity(h);
-    }
-    world->processDestroyQueue("editor_playmode_restore");
-
-    // Restore from snapshot
-    for (auto& entityJson : playModeSnapshot_) {
-        PrefabLibrary::jsonToEntity(entityJson, *world);
-    }
-    playModeSnapshot_ = nlohmann::json();
-#endif // FATE_HAS_GAME
-    paused_ = true;
-    inPlayMode_ = false;
-
-    // Clear selection (entities were recreated with new handles)
-    clearSelection();
-}
-
-// ============================================================================
-// Scene Save / Load
-// ============================================================================
-
-bool Editor::saveScene(World* world, const std::string& path) {
-    if (!world) {
-        lastSaveStatus_ = "Scene save FAILED: no world";
-        lastSaveSucceeded_ = false;
-        return false;
-    }
-    currentScenePath_ = path;
-
-    nlohmann::json root;
-    root["version"]   = SCENE_FORMAT_VERSION;
-    root["gridSize"]  = gridSize_;
-    root["sceneName"] = SceneManager::instance().currentSceneName();
-    root["metadata"]  = sceneMetadata_;
-
-    nlohmann::json entitiesJson = nlohmann::json::array();
-
-    world->forEachEntity([&](Entity* entity) {
-        // Skip transient runtime entities --these are not part of the scene:
-        // mob/boss: spawned by SpawnSystem, player: created on server connect,
-        // ghost: networked other-player entities, dropped_item: runtime loot
-        std::string tag = entity->tag();
-        if (tag == "mob" || tag == "boss" || tag == "player" ||
-            tag == "ghost" || tag == "dropped_item") return;
-
-        // Registry-based serialization --all registered components are handled
-        entitiesJson.push_back(PrefabLibrary::entityToJson(entity));
-    });
-
-    root["entities"] = entitiesJson;
-
-    if (inPlayMode_) {
-        playModeSnapshot_ = entitiesJson;
-    }
-
-    std::string jsonStr = root.dump(2);
-
-    // Editor save deliberately bypasses IAssetSource and writes loose-files
-    // directly via writeFileAtomic. This is intentional and load-bearing:
-    //   1. The editor is stripped from FATE_SHIPPING builds (see CMakeLists.txt),
-    //      so it only ever runs against loose-files on a developer machine.
-    //   2. Atomic .tmp+rename has no PhysFS analogue — packed `.pak` archives
-    //      don't support partial-overwrite, so an IAssetWriter wrapper would
-    //      either be a no-op for archives or have radically different semantics
-    //      from the disk path callers depend on (.tmp survival, source-dir
-    //      dual-save, hot-reload suppression).
-    // To enable saving into a packaged build, introduce a `IAssetWriter`
-    // interface with `writeBytes(key, content) → Result` semantics, route
-    // every authored-asset writer (this function, UISerializer::saveToFile,
-    // DialogueNodeEditor::saveToFile, AnimationEditor::saveTemplate /
-    // saveFrameSet / saveMetaJson, the packed-meta writer in packFrameSet,
-    // and the prefab save path) through it, and provide both a DirectFs
-    // writer (preserves today's behavior) and a `.pak` overlay writer.
-    // Until that interface lands, the loose-file assumption is a hard
-    // contract — do NOT add a new authored-asset writer that calls
-    // std::ofstream / fwrite / IAssetSource directly.
-    std::string writeErr;
-    if (!writeFileAtomic(path, jsonStr, &writeErr)) {
-        LOG_ERROR("Editor", "Scene save FAILED: %s (%s) — runtime path not updated on disk",
-                  path.c_str(), writeErr.c_str());
-        lastSaveStatus_ = "Scene save FAILED: " + path + " (" + writeErr + ")";
-        lastSaveSucceeded_ = false;
-        return false;
-    }
-
-    // Also save to source dir (persists across rebuilds)
-    if (!sourceDir_.empty()) {
-        std::string srcPath = sourceDir_ + "/" + fs::path(path).filename().string();
-        if (!writeFileAtomic(srcPath, jsonStr, &writeErr)) {
-            LOG_ERROR("Editor", "Scene save to source FAILED: %s (%s) — runtime copy ok, source copy stale",
-                      srcPath.c_str(), writeErr.c_str());
-            lastSaveStatus_ = "Source save FAILED: " + srcPath + " (" + writeErr + ")";
-            lastSaveSucceeded_ = false;
-            return false;
-        }
-        LOG_INFO("Editor", "Scene also saved to source: %s", srcPath.c_str());
-    }
-
-    LOG_INFO("Editor", "Scene saved to %s (%zu entities)", path.c_str(), entitiesJson.size());
-    lastSaveStatus_ = "Scene saved: " + path;
-    lastSaveSucceeded_ = true;
-    return true;
-}
-
-void Editor::loadScene(World* world, const std::string& path) {
-    if (!world) return;
-
-    // Helper: surface a load failure both in the log and the HUD strip. Reuses
-    // the save status channel — designers don't distinguish save vs load
-    // failures, they just need to know the scene didn't come up. Note that
-    // currentScenePath_ is NOT updated until the load actually succeeds, so
-    // a Ctrl+S immediately after a failed load won't quietly overwrite the
-    // good source file with whatever's in the world right now.
-    auto reportLoadFailure = [this, &path](const std::string& detail) {
-        LOG_ERROR("Editor", "Scene load FAILED (%s): %s", detail.c_str(), path.c_str());
-        lastSaveStatus_ = "Scene load FAILED: " + path + " (" + detail + ")";
-        lastSaveSucceeded_ = false;
-    };
-
-    std::ifstream file(path);
-    if (!file.is_open()) {
-        reportLoadFailure("cannot open file");
-        return;
-    }
-
-    nlohmann::json root;
-    try {
-        root = nlohmann::json::parse(file);
-    } catch (const nlohmann::json::exception& e) {
-        reportLoadFailure(std::string("parse error: ") + e.what());
-        return;
-    }
-
-    // Read version (default to 1 for backward compat with pre-header files)
-    int version = root.value("version", 1);
-    if (version > SCENE_FORMAT_VERSION) {
-        reportLoadFailure("file version " + std::to_string(version) +
-                          " is newer than supported " + std::to_string(SCENE_FORMAT_VERSION));
-        return;
-    }
-
-    // Validate shape BEFORE destroying anything — otherwise a scene file with
-    // valid JSON but a malformed entities/gridSize/metadata field would wipe
-    // the current world and leave the editor empty.
-    if (root.contains("gridSize") && !root["gridSize"].is_number()) {
-        reportLoadFailure(std::string("gridSize must be a number (got ") +
-                          root["gridSize"].type_name() + ")");
-        return;
-    }
-    if (root.contains("metadata") && !root["metadata"].is_object()) {
-        reportLoadFailure(std::string("metadata must be an object (got ") +
-                          root["metadata"].type_name() + ")");
-        return;
-    }
-    if (root.contains("entities") && !root["entities"].is_array()) {
-        reportLoadFailure(std::string("entities must be an array (got ") +
-                          root["entities"].type_name() + ")");
-        return;
-    }
-
-    // Validation passed — committing to the load. Adopt the path now so that
-    // a follow-up Ctrl+S targets this scene, and clear any stale failure
-    // status from a prior load attempt.
-    currentScenePath_ = path;
-    if (!lastSaveSucceeded_ && lastSaveStatus_.find("load FAILED") != std::string::npos) {
-        lastSaveStatus_.clear();
-        lastSaveSucceeded_ = true;
-    }
-
-    // Clear existing entities (in play mode, keep runtime entities for spectator)
-    world->forEachEntity([&](Entity* entity) {
-#ifdef FATE_HAS_GAME
-        if (inPlayMode_) {
-            std::string tag = entity->tag();
-            if (tag == "mob" || tag == "boss" || tag == "player" ||
-                tag == "ghost" || tag == "dropped_item") return;
-        }
-#endif
-        world->destroyEntity(entity->handle());
-    });
-    world->processDestroyQueue("editor_scene_load");
-
-    if (root.contains("gridSize")) {
-        gridSize_ = root["gridSize"].get<float>();
-    }
-
-    // Preserve scene metadata for round-trip (sceneType, minLevel, pvpEnabled, etc.)
-    if (root.contains("metadata")) {
-        sceneMetadata_ = root["metadata"];
-    } else {
-        sceneMetadata_ = nlohmann::json::object();
-    }
-
-    if (!root.contains("entities")) {
-        // Still notify spectator even for empty scenes
-#ifdef FATE_HAS_GAME
-        if ((inPlayMode_ || isObserving_) && onSceneLoadedInPlayMode) {
-            size_t slash = path.find_last_of("/\\");
-            size_t dot = path.rfind('.');
-            size_t start = (slash != std::string::npos) ? slash + 1 : 0;
-            std::string sceneName = (dot > start) ? path.substr(start, dot - start) : path.substr(start);
-            onSceneLoadedInPlayMode(sceneName);
-        }
-#endif
-        return;
-    }
-
-    // Registry-based deserialization --all registered components are handled
-    size_t loadedCount = 0;
-    for (auto& ej : root["entities"]) {
-        PrefabLibrary::jsonToEntity(ej, *world);
-        ++loadedCount;
-    }
-    selectedEntity_ = nullptr;
-    selectedHandle_ = {};
-
-#ifdef FATE_HAS_GAME
-    // Notify game app for spectator mode (sends CmdSpectateScene to server)
-    if ((inPlayMode_ || isObserving_) && onSceneLoadedInPlayMode) {
-        size_t slash = path.find_last_of("/\\");
-        size_t dot = path.rfind('.');
-        size_t start = (slash != std::string::npos) ? slash + 1 : 0;
-        std::string sceneName = (dot > start) ? path.substr(start, dot - start) : path.substr(start);
-        onSceneLoadedInPlayMode(sceneName);
-    }
-#endif
-
-    LOG_INFO("Editor", "Scene loaded v%d from %s (%zu entities)",
-             version, path.c_str(), world->entityCount());
-}
-
-// ============================================================================
 // HUD (always visible)
 // ============================================================================
 
@@ -3814,23 +3758,29 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
 
 void Editor::applyLayerVisibility(World*) {}
 void Editor::renderScene(SpriteBatch*, Camera*) {}
-void Editor::renderUI(World* world, Camera*, SpriteBatch*, FrameArena* frameArena) {
+void Editor::renderUI(World* world, Camera* camera, SpriteBatch*, FrameArena* frameArena) {
     if (!frameStarted_) return;
+
+    dockWorld_ = world;
+    dockCamera_ = camera;
 
     drawDockSpace();
     drawMenuBar(world);
-    drawSceneViewport();
-    drawHierarchy(world);
-    drawDebugInfoPanel(world);
-    LogViewer::instance().draw();
-    drawAssetBrowser(world, nullptr);
-    dialogueEditor_.draw();
+    drawSceneViewport();   // always render — this is "what we observe"
+    if (!editorChromeHidden_) {
+        drawHierarchy(world);
+        drawInspector();
+        drawDebugInfoPanel(world);
+        LogViewer::instance().draw();
+        drawAssetBrowser(world, nullptr);
+        dialogueEditor_.draw();
 
 #ifdef FATE_HAS_GAME
-    if (uiManager_) {
-        uiEditorPanel_.draw(*uiManager_);
-    }
+        if (uiManager_) {
+            uiEditorPanel_.draw(*uiManager_);
+        }
 #endif
+    }
 
 #if defined(ENGINE_MEMORY_DEBUG)
     if (showMemoryPanel_) {
@@ -3877,13 +3827,110 @@ void Editor::renderUI(World* world, Camera*, SpriteBatch*, FrameArena* frameAren
     wantsMouse_ = io.WantCaptureMouse;
 }
 void Editor::drawDockSpace() {
-    ImGuiDockNodeFlags flags = ImGuiDockNodeFlags_PassthruCentralNode;
-    ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), flags);
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImGui::SetNextWindowViewport(viewport->ID);
+
+    ImGuiWindowFlags hostFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+                                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+                                  ImGuiWindowFlags_NoBackground;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
+    ImGui::Begin("##DockSpaceHost", nullptr, hostFlags);
+    ImGui::PopStyleVar(3);
+
+    ImGuiID dockspaceId = ImGui::GetID("EditorDockSpace");
+
+    if (resetLayout_ || ImGui::DockBuilderGetNode(dockspaceId) == nullptr) {
+        resetLayout_ = false;
+        ImGui::DockBuilderRemoveNode(dockspaceId);
+        ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_None);
+        ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->WorkSize);
+
+        ImGuiID dockMain = dockspaceId;
+        ImGuiID dockLeft   = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.15f, nullptr, &dockMain);
+        ImGuiID dockRight  = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.22f, nullptr, &dockMain);
+        ImGuiID dockBottom = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.22f, nullptr, &dockMain);
+
+        ImGui::DockBuilderDockWindow("Hierarchy",  dockLeft);
+        ImGui::DockBuilderDockWindow("Scene",      dockMain);
+        ImGui::DockBuilderDockWindow("Inspector",  dockRight);
+        ImGui::DockBuilderDockWindow("Project",    dockBottom);
+        ImGui::DockBuilderDockWindow("Log",        dockBottom);
+        ImGui::DockBuilderDockWindow("Debug Info", dockBottom);
+
+        ImGui::DockBuilderFinish(dockspaceId);
+    }
+
+    ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::End();
 }
 void Editor::drawMenuBar(World*) {
     if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("New Scene", nullptr, false, !inPlayMode_)) {
+                if (dockWorld_) {
+                    dockWorld_->forEachEntity([&](Entity* e) {
+                        dockWorld_->destroyEntity(e->handle());
+                    });
+                    dockWorld_->processDestroyQueue("editor_new_scene");
+                    selectedEntity_ = nullptr;
+                    selectedHandle_ = {};
+                    currentScenePath_.clear();
+                    LOG_INFO("Editor", "New scene");
+                }
+            }
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Open Scene", !inPlayMode_ || paused_ || isObserving_)) {
+                std::string scenesDir = "assets/scenes";
+                if (fs::exists(scenesDir)) {
+                    for (auto& entry : fs::directory_iterator(scenesDir)) {
+                        if (!entry.is_regular_file()) continue;
+                        if (entry.path().extension() != ".json") continue;
+                        std::string name = entry.path().stem().string();
+                        if (ImGui::MenuItem(name.c_str())) {
+                            loadScene(dockWorld_, entry.path().string());
+                        }
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::Separator();
+            // Save -- enabled when a scene path is set (from Open Scene or async load)
+            const bool canSaveScene = !currentScenePath_.empty() && (!inPlayMode_ || paused_);
+            if (ImGui::MenuItem("Save", "Ctrl+S", false, canSaveScene)) {
+                if (!saveScene(dockWorld_, currentScenePath_)) {
+                    LOG_WARN("Editor", "Menu save did not complete: %s", lastSaveStatus_.c_str());
+                }
+            }
+            // Save As -- always prompts for a new name
+            if (ImGui::BeginMenu("Save As...", !inPlayMode_ || paused_)) {
+                static char saveNameBuf[64] = "NewScene";
+                ImGui::InputText("Name", saveNameBuf, sizeof(saveNameBuf));
+                if (ImGui::Button("Save")) {
+                    if (isValidAssetName(saveNameBuf)) {
+                        std::string path = std::string("assets/scenes/") + saveNameBuf + ".json";
+                        if (!saveScene(dockWorld_, path)) {
+                            LOG_WARN("Editor", "Save As did not complete: %s", lastSaveStatus_.c_str());
+                        }
+                        ImGui::CloseCurrentPopup();
+                    } else {
+                        LOG_WARN("Editor", "Invalid scene name: %s", saveNameBuf);
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
         if (ImGui::BeginMenu("View")) {
             ImGui::MenuItem("Post Process", nullptr, &showPostProcessPanel_);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Reset Layout")) { resetLayout_ = true; }
             ImGui::Separator();
             ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow_);
 #if defined(ENGINE_MEMORY_DEBUG)
@@ -3892,7 +3939,7 @@ void Editor::drawMenuBar(World*) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("About")) {
-            ImGui::Text("FateMMO Engine v0.1.0");
+            ImGui::Text("FateMMO Engine v2.0");
             ImGui::Separator();
             ImGui::Text("C++23 | OpenGL 3.3 | Custom UDP");
             ImGui::Text("github.com/wFate/FateMMO_GameEngine");
@@ -3902,8 +3949,149 @@ void Editor::drawMenuBar(World*) {
     }
 }
 void Editor::drawSceneViewport() {
+    namespace fs = std::filesystem;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     if (ImGui::Begin("Scene")) {
+        // ---- Toolbar ----
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 3.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 2.0f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.145f, 0.145f, 0.157f, 1.00f));
+
+            float toolbarHeight = ImGui::GetFrameHeight() + 6.0f;
+            ImGui::BeginChild("##ViewportToolbar", ImVec2(0, toolbarHeight), false,
+                              ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+            float btnH = ImGui::GetFrameHeight();
+            float btnW = 60.0f;
+
+            // Play / Resume / Pause / Stop
+            if (!inPlayMode_) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
+                if (ImGui::Button("Play", ImVec2(btnW, btnH))) {
+                    if (dockCamera_) {
+                        savedCamPos_ = dockCamera_->position();
+                        savedCamZoom_ = dockCamera_->zoom();
+                        dockCamera_->setZoom(1.0f);
+                    }
+                    enterPlayMode(dockWorld_);
+                }
+                ImGui::PopStyleColor();
+            } else {
+                if (paused_) {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
+                    if (ImGui::Button("Resume", ImVec2(btnW, btnH))) {
+                        if (dockCamera_) {
+                            dockCamera_->setPosition(pausedCamPos_);
+                            dockCamera_->setZoom(pausedCamZoom_);
+                        }
+                        paused_ = false;
+                    }
+                    ImGui::PopStyleColor();
+                } else {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.50f, 0.20f, 1.00f));
+                    if (ImGui::Button("Pause", ImVec2(btnW, btnH))) {
+                        if (dockCamera_) {
+                            pausedCamPos_ = dockCamera_->position();
+                            pausedCamZoom_ = dockCamera_->zoom();
+                        }
+                        paused_ = true;
+                    }
+                    ImGui::PopStyleColor();
+                }
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.20f, 0.20f, 1.00f));
+                if (ImGui::Button("Stop", ImVec2(btnW, btnH))) {
+                    if (dockCamera_) {
+                        dockCamera_->setPosition(savedCamPos_);
+                        dockCamera_->setZoom(savedCamZoom_);
+                    }
+                    exitPlayMode(dockWorld_);
+                }
+                ImGui::PopStyleColor();
+            }
+
+            ImGui::SameLine();
+            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            ImGui::SameLine();
+
+            // Observe / Stop Obs
+            if (isObserving_) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.20f, 0.20f, 1.00f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.30f, 0.30f, 1.00f));
+                if (ImGui::Button("Stop Obs", ImVec2(70.0f, btnH))) {
+                    if (onObserveStop) onObserveStop();
+                    isObserving_ = false;
+                }
+                ImGui::PopStyleColor(2);
+            } else if (!inPlayMode_) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.35f, 0.55f, 1.00f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.45f, 0.65f, 1.00f));
+                if (ImGui::Button("Observe", ImVec2(70.0f, btnH))) {
+                    if (onObserveRequested) onObserveRequested();
+                    isObserving_ = true;
+                }
+                ImGui::PopStyleColor(2);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Run scene live without snapshot. Override via AppConfig::onObserveStart.");
+                }
+            }
+
+            ImGui::SameLine();
+            ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            ImGui::SameLine();
+
+            // Scene dropdown
+            {
+                std::string sceneName = "(none)";
+                if (!currentScenePath_.empty()) {
+                    size_t slash = currentScenePath_.find_last_of("/\\");
+                    size_t dot = currentScenePath_.rfind('.');
+                    size_t start = (slash != std::string::npos) ? slash + 1 : 0;
+                    if (dot != std::string::npos && dot > start)
+                        sceneName = currentScenePath_.substr(start, dot - start);
+                    else
+                        sceneName = currentScenePath_.substr(start);
+                }
+                bool canSwitch = !inPlayMode_ || paused_ || isObserving_;
+                if (!canSwitch) ImGui::BeginDisabled();
+                ImGui::SetNextItemWidth(160.0f);
+                if (ImGui::BeginCombo("##Scene", sceneName.c_str(), ImGuiComboFlags_HeightLarge)) {
+                    std::string scenesDir = "assets/scenes";
+                    if (fs::exists(scenesDir)) {
+                        for (auto& entry : fs::directory_iterator(scenesDir)) {
+                            if (!entry.is_regular_file() || entry.path().extension() != ".json") continue;
+                            std::string name = entry.path().stem().string();
+                            bool selected = (name == sceneName);
+                            if (ImGui::Selectable(name.c_str(), selected)) {
+                                loadScene(dockWorld_, entry.path().string());
+                            }
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+                if (!canSwitch) ImGui::EndDisabled();
+            }
+
+            // Right-aligned FPS readout
+            {
+                ImGuiIO& io = ImGui::GetIO();
+                char stats[64];
+                snprintf(stats, sizeof(stats), "%.0f FPS", io.Framerate);
+                float textW = ImGui::CalcTextSize(stats).x;
+                float regionW = ImGui::GetContentRegionAvail().x;
+                if (regionW > textW + 8.0f) {
+                    ImGui::SameLine(ImGui::GetCursorPosX() + regionW - textW - 4.0f);
+                    ImGui::TextColored(ImVec4(0.45f, 0.45f, 0.50f, 1.0f), "%s", stats);
+                }
+            }
+
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+            ImGui::PopStyleVar(2);
+        }
+
+        // ---- FBO viewport image ----
         ImVec2 pos = ImGui::GetCursorScreenPos();
         ImVec2 size = ImGui::GetContentRegionAvail();
         viewportPos_ = {pos.x, pos.y};
@@ -3926,8 +4114,6 @@ void Editor::drawHierarchy(World* world) {
     if (ImGui::Begin("Hierarchy")) {
         if (world) {
             ImGui::Text("Entities: %zu", world->entityCount());
-            ImGui::Separator();
-            ImGui::TextDisabled("(Full game build shows entity tree)");
         } else {
             ImGui::TextDisabled("No world loaded");
         }
@@ -3955,7 +4141,6 @@ void Editor::handleSceneClick(World*, Camera*, const Vec2&, int, int) {}
 void Editor::handleSceneDrag(Camera*, const Vec2&, int, int) {}
 void Editor::handleMouseUp() {}
 bool Editor::handleSpawnZoneScroll(float) { return false; }
-std::string Editor::currentSceneId() const { return {}; }
 void Editor::paintTileAt(World*, Camera*, const Vec2&, int, int) {}
 void Editor::eraseTileAt(World*, Camera*, const Vec2&, int, int) {}
 void Editor::scanAssets() {}
@@ -3969,18 +4154,116 @@ void Editor::drawTilePalette(World*, Camera*) {}
 void Editor::drawSceneGrid(SpriteBatch*, Camera*) {}
 void Editor::drawSelectionOutlines(SpriteBatch*, Camera*) {}
 void Editor::drawImGuizmo(Camera*) {}
-bool Editor::saveScene(World*, const std::string&) { return false; }
-void Editor::loadScene(World*, const std::string&) {}
-void Editor::enterPlayMode(World*) {}
-void Editor::exitPlayMode(World*) {}
 void Editor::drawHUD(World*) {}
 void Editor::drawToolbar(World*) {}
 void Editor::drawConsole(World*) {}
 void Editor::executeCommand(World*, const std::string&) {}
 void Editor::loadTileset(const std::string&, int) {}
-void Editor::handleKeyShortcuts(World*, const SDL_Event&) {}
-void Editor::captureInspectorUndo() {}
+void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
+    if (!world) return;
+    if (event.type != SDL_KEYDOWN) return;
+
+    auto scancode = event.key.keysym.scancode;
+    bool ctrl = (event.key.keysym.mod & KMOD_CTRL) != 0;
+
+    // Ctrl+S = Save current scene
+    if (ctrl && scancode == SDL_SCANCODE_S && !inPlayMode_ && !currentScenePath_.empty()) {
+        if (!saveScene(world, currentScenePath_)) {
+            LOG_WARN("Editor", "Ctrl+S: save did not complete -- %s", lastSaveStatus_.c_str());
+        }
+    }
+}
 
 #endif // FATE_HAS_GAME
+
+// ============================================================================
+// Play-in-Editor: Snapshot / Restore (compiled in BOTH demo and game builds)
+// ============================================================================
+
+void Editor::enterPlayMode(World* world) {
+    if (inPlayMode_ || !world) return;
+
+    try {
+        playModeSnapshot_ = nlohmann::json::array();
+        world->forEachEntity([&](Entity* e) {
+            // Skip transient runtime entities -- same filter as saveScene
+            std::string tag = e->tag();
+            if (tag == "mob" || tag == "boss" || tag == "player" ||
+                tag == "ghost" || tag == "dropped_item") return;
+            playModeSnapshot_.push_back(PrefabLibrary::entityToJson(e));
+        });
+    } catch (const std::exception& ex) {
+        LOG_ERROR("Editor", "enterPlayMode snapshot failed: %s", ex.what());
+        playModeSnapshot_ = nlohmann::json();
+        return;
+    }
+
+#ifdef FATE_HAS_GAME
+    // Auto-load animation metadata for scene-placed entities (NPCs, objects)
+    world->forEachEntity([](Entity* e) {
+        auto* sprite = e->getComponent<SpriteComponent>();
+        auto* animator = e->getComponent<Animator>();
+        if (sprite && animator && !sprite->texturePath.empty()) {
+            AnimationLoader::tryAutoLoad(*sprite, *animator);
+        }
+    });
+#endif // FATE_HAS_GAME
+
+    paused_ = false;
+    inPlayMode_ = true;
+}
+
+
+void Editor::exitPlayMode(World* world) {
+    if (!inPlayMode_ || !world) return;
+
+    // Destroy all current entities
+    std::vector<EntityHandle> toDestroy;
+    world->forEachEntity([&](Entity* e) {
+        toDestroy.push_back(e->handle());
+    });
+    for (auto h : toDestroy) {
+        world->destroyEntity(h);
+    }
+    world->processDestroyQueue();
+
+    // Restore from snapshot
+    try {
+        for (auto& entityJson : playModeSnapshot_) {
+            PrefabLibrary::jsonToEntity(entityJson, *world);
+        }
+    } catch (const std::exception& ex) {
+        LOG_ERROR("Editor", "exitPlayMode restore failed: %s", ex.what());
+    }
+    playModeSnapshot_ = nlohmann::json();
+
+    paused_ = true;
+    inPlayMode_ = false;
+
+    // Clear selection (entities were recreated with new handles)
+    clearSelection();
+}
+
+// ============================================================================
+// Observer mode default implementation (compiled in BOTH demo and game builds)
+// ============================================================================
+
+void Editor::beginLocalObserve() {
+    if (dockCamera_) {
+        savedCamPos_ = dockCamera_->position();
+        savedCamZoom_ = dockCamera_->zoom();
+    }
+    paused_ = false;
+    editorChromeHidden_ = true;
+}
+
+void Editor::endLocalObserve() {
+    if (dockCamera_) {
+        dockCamera_->setPosition(savedCamPos_);
+        dockCamera_->setZoom(savedCamZoom_);
+    }
+    paused_ = true;
+    editorChromeHidden_ = false;
+}
 
 } // namespace fate

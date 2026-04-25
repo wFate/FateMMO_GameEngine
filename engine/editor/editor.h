@@ -244,6 +244,11 @@ public:
     void exitPlayMode(World* world);
     bool inPlayMode() const { return inPlayMode_; }
 
+    // Default Observer behavior — paused off, hide editor chrome.
+    // Called by AppConfig default when user hasn't overridden onObserveStart/Stop.
+    void beginLocalObserve();
+    void endLocalObserve();
+
     void setPostProcessConfig(PostProcessConfig* cfg) { postProcessConfig_ = cfg; }
     void setUIManager(UIManager* mgr) {
         uiManager_ = mgr;
@@ -297,6 +302,7 @@ private:
     nlohmann::json playModeSnapshot_;  // ECS state before entering play mode
     nlohmann::json sceneMetadata_;  // preserved across editor save/load for round-trip
     bool inPlayMode_ = false;
+    bool editorChromeHidden_ = false;  // true while Observer mode hides editor panels
     bool frameStarted_ = false;
     bool wantsKeyboard_ = false;
     bool wantsMouse_ = false;

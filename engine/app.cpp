@@ -61,7 +61,7 @@ bool App::init(const AppConfig& config) {
         Logger::instance().setMinLevel(
             (dbg && std::strcmp(dbg, "1") == 0) ? LogLevel::Debug : LogLevel::Info);
     }
-    LOG_INFO("App", "=== FateEngine v%d.%d.%d starting ===", 0, 1, 0);
+    LOG_INFO("App", "=== FateEngine v%d.%d starting ===", 2, 0);
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0) {
         LOG_FATAL("App", "SDL_Init failed: %s", SDL_GetError());
@@ -268,6 +268,22 @@ bool App::init(const AppConfig& config) {
     Editor::instance().init(window_, glContext_);
     Editor::instance().setPostProcessConfig(&postProcessConfig_);
     Editor::instance().setUIManager(&uiManager_);
+
+    // Wire Observer callbacks: use config-provided overrides, else default to local preview.
+    if (config.onObserveStart) {
+        Editor::instance().onObserveRequested = config.onObserveStart;
+    } else {
+        Editor::instance().onObserveRequested = []() {
+            Editor::instance().beginLocalObserve();
+        };
+    }
+    if (config.onObserveStop) {
+        Editor::instance().onObserveStop = config.onObserveStop;
+    } else {
+        Editor::instance().onObserveStop = []() {
+            Editor::instance().endLocalObserve();
+        };
+    }
 
     // Hook log viewer into logger
     Logger::instance().setLogCallback([](const std::string& msg, int level) {
