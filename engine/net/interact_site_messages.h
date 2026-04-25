@@ -2,11 +2,16 @@
 #include <cstdint>
 #include <string>
 #include "engine/net/byte_stream.h"
-#include "engine/net/protocol.h"  // detail::writeU64 / readU64
 
 namespace fate {
 
-// PROTOCOL 10 — Interact-site framework
+// PROTOCOL 11 — Interact-site framework
+//
+// Sites are static scene entities loaded from JSON on both client and server;
+// they are not replicated as ghosts, so the client has no server-issued
+// PersistentId for them. Both sides agree on `siteStringId` (the same id used
+// by the dialogue registry, the flag name, and the quest Interact target),
+// so the wire packet keys off that string instead.
 //
 // Result codes intentionally exclude QuestNotActive: per spec §4.4, sites with
 // requiredQuestId but no active quest still return Ok with flagWasSet=false
@@ -23,14 +28,14 @@ enum class InteractSiteResult : uint8_t {
 // pedestal, etc.). The server re-verifies entity existence + proximity +
 // player liveness, then emits SvInteractSiteResult.
 struct CmdInteractSiteMsg {
-    uint64_t siteEntityId = 0;  // PersistentId raw value of the InteractSite entity
+    std::string siteStringId;  // stable identifier from the scene JSON
 
     void write(ByteWriter& w) const {
-        detail::writeU64(w, siteEntityId);
+        w.writeString(siteStringId);
     }
     static CmdInteractSiteMsg read(ByteReader& r) {
         CmdInteractSiteMsg m;
-        m.siteEntityId = detail::readU64(r);
+        m.siteStringId = r.readString();
         return m;
     }
 };
@@ -40,14 +45,14 @@ struct CmdInteractSiteMsg {
 // quest progress flag was actually toggled this visit (false on revisit or
 // when no requiredQuestId is active).
 struct SvInteractSiteResultMsg {
-    uint64_t    siteEntityId   = 0;     // echoes CmdInteractSite.siteEntityId
+    std::string siteStringId;            // echoes CmdInteractSite.siteStringId
     uint8_t     result         = 0;     // InteractSiteResult cast to u8
     std::string dialogueTreeId;          // empty on non-Ok results
     uint32_t    nodeId         = 0;      // first node to open (0 default)
     bool        flagWasSet     = false;  // true iff quest flag toggled this visit
 
     void write(ByteWriter& w) const {
-        detail::writeU64(w, siteEntityId);
+        w.writeString(siteStringId);
         w.writeU8(result);
         w.writeString(dialogueTreeId);
         w.writeU32(nodeId);
@@ -55,7 +60,7 @@ struct SvInteractSiteResultMsg {
     }
     static SvInteractSiteResultMsg read(ByteReader& r) {
         SvInteractSiteResultMsg m;
-        m.siteEntityId   = detail::readU64(r);
+        m.siteStringId   = r.readString();
         m.result         = r.readU8();
         m.dialogueTreeId = r.readString();
         m.nodeId         = r.readU32();

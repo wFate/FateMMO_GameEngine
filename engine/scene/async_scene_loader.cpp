@@ -16,8 +16,11 @@ float PendingSceneLoad::progress() const {
     if (totalEntities == 0 && totalTextures == 0) return 1.0f;
     float entityProg = (totalEntities > 0)
         ? static_cast<float>(createdEntities) / totalEntities : 1.0f;
+    // Failed textures count toward "resolved" so a single missing asset can't
+    // pin the bar below 100%. Entities still spawn; missing-texture sprites
+    // render with the loader's placeholder.
     float texProg = (totalTextures > 0)
-        ? static_cast<float>(loadedTextures) / totalTextures : 1.0f;
+        ? static_cast<float>(loadedTextures + failedTextures) / totalTextures : 1.0f;
     return 0.4f + entityProg * 0.3f + texProg * 0.3f;
 }
 
@@ -151,20 +154,36 @@ bool AsyncSceneLoader::tickFinalization(World& world) {
         }
     }
 
-    // Count loaded textures
+    // Count textures by terminal state. A failed async load frees its slot and
+    // bumps generation past the held handle — isResolved() returns true for
+    // both success and failure, so a missing asset can't permanently hang the
+    // load. Entities referencing a failed texture still spawn (placeholder).
     int loaded = 0;
+    int failed = 0;
     for (auto h : pending_->textureHandles) {
-        if (AssetRegistry::instance().isReady(h)) loaded++;
+        auto& reg = AssetRegistry::instance();
+        if (reg.isReady(h)) {
+            loaded++;
+        } else if (reg.isResolved(h)) {
+            failed++;
+        }
     }
     pending_->loadedTextures = loaded;
+    pending_->failedTextures = failed;
 
     bool allDone = (pending_->createdEntities >= pending_->totalEntities) &&
-                   (pending_->loadedTextures >= pending_->totalTextures);
+                   (pending_->loadedTextures + pending_->failedTextures >= pending_->totalTextures);
 
     if (allDone) {
         active_ = false;
-        LOG_INFO("AsyncLoader", "Scene '%s' fully loaded (%d entities, %d textures)",
-                 pending_->sceneName.c_str(), pending_->totalEntities, pending_->totalTextures);
+        if (pending_->failedTextures > 0) {
+            LOG_WARN("AsyncLoader", "Scene '%s' loaded with %d entities, %d textures (%d failed)",
+                     pending_->sceneName.c_str(), pending_->totalEntities,
+                     pending_->totalTextures, pending_->failedTextures);
+        } else {
+            LOG_INFO("AsyncLoader", "Scene '%s' fully loaded (%d entities, %d textures)",
+                     pending_->sceneName.c_str(), pending_->totalEntities, pending_->totalTextures);
+        }
     }
     return allDone;
 }

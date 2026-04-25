@@ -62,6 +62,12 @@ public:
     // True once an async-loaded asset has been finalized
     bool isReady(AssetHandle handle) const;
 
+    // True once an async load has either succeeded (isReady) OR failed (slot freed
+    // and generation bumped past the handle's). Lets schedulers wait on a fixed
+    // set of handles without hanging when a single asset fails. Returns true for
+    // an invalid handle (treated as "no work to wait for").
+    bool isResolved(AssetHandle handle) const;
+
     // Number of async loads currently in flight
     size_t pendingAsyncCount() const;
 

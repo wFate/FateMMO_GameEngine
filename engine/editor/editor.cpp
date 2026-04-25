@@ -778,6 +778,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     dockCamera_ = camera;
     refreshSelection(world);
     drawDockSpace();
+    if (onDrawDockedGamePanels) onDrawDockedGamePanels();
     drawMenuBar(world);
     drawSceneViewport();
     // drawViewportHUD removed --coordinates now shown by FateStatusBar in the game HUD
@@ -983,6 +984,9 @@ void Editor::drawDockSpace() {
             ImGui::Separator();
             ImGui::MenuItem("UI Hierarchy", nullptr, &uiEditorPanel_.showHierarchy);
             ImGui::MenuItem("UI Inspector", nullptr, &uiEditorPanel_.showInspector);
+            if (netPanelOpen_) {
+                ImGui::MenuItem("Network", nullptr, netPanelOpen_);
+            }
             ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout")) { resetLayout_ = true; }
             ImGui::Separator();

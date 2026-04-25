@@ -1,6 +1,7 @@
 #include "engine/net/net_client.h"
 #include "engine/net/game_messages.h"
 #include "engine/net/admin_messages.h"
+#include "engine/net/character_flag_messages.h"
 #include "engine/net/packet_crypto.h"
 #include "engine/core/logger.h"
 #include <cstring>
@@ -209,9 +210,14 @@ void NetClient::poll(float currentTime) {
         // Only accept packets from the server address
         if (from == serverAddress_) {
             lastPacketReceived_ = currentTime;
+            noteBytesIn(static_cast<size_t>(received));
             handlePacket(buf, received);
         }
     }
+
+    // Phase 104: roll up per-second buckets for the editor Network panel
+    // (RTT/queue/gap/frame/kbps). Cheap — bounded ring writes only.
+    tickInstrumentation(currentTime);
 
     // v9: flush CmdAckExtended if onReceive accumulated any stranded-seq
     // receipts this tick. These are retransmits that arrived outside the
@@ -277,6 +283,7 @@ void NetClient::poll(float currentTime) {
                 std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 14, &freshAckBits, sizeof(freshAckBits));
             }
             socket_.sendTo(pkt->data.data(), pkt->data.size(), serverAddress_);
+            noteBytesOut(pkt->data.size());
             reliability_.markRetransmitted(pkt->sequence, currentTime);
         }
     }
@@ -457,6 +464,7 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         case PacketType::SvEntityEnter: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvEntityEnterMsg::read(payload);
+            ++pendingEntered_;
             if (onEntityEnter) onEntityEnter(msg);
             break;
         }
@@ -466,6 +474,7 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             // callback as the single-entity path.
             ByteReader payload(payloadData, payloadLen);
             uint16_t count = payload.readU16();
+            pendingEntered_ += count;
             for (uint16_t i = 0; i < count && payload.ok(); ++i) {
                 auto msg = SvEntityEnterMsg::read(payload);
                 if (onEntityEnter) onEntityEnter(msg);
@@ -475,6 +484,7 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         case PacketType::SvEntityLeave: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvEntityLeaveMsg::read(payload);
+            ++pendingLeft_;
             if (onEntityLeave) onEntityLeave(msg);
             break;
         }
@@ -490,18 +500,42 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             // arrive every ~50ms. A gap >150ms means the client went 3+ ticks
             // without position updates, which shows on screen as "all mobs
             // freeze briefly then resume".
+            float gapMs = 0.0f;
             if (lastBatchReceivedTime_ > 0.0f) {
-                float gapMs = (lastPollTime_ - lastBatchReceivedTime_) * 1000.0f;
-                if (gapMs > 150.0f) {
+                gapMs = (lastPollTime_ - lastBatchReceivedTime_) * 1000.0f;
+                if (gapMs > GAP_CLASSIFY_THRESHOLD_MS) {
+                    GapClass kind = classifyGap(gapMs);
+                    lastGapClass_ = kind;
+                    pushGapEvent(gapMs, kind);
                     LOG_WARN("NetClient",
-                             "SvEntityUpdateBatch gap: %.0fms (previous at t=%.3f, now=%.3f)",
-                             gapMs, lastBatchReceivedTime_, lastPollTime_);
+                             "SvEntityUpdateBatch gap: %.0fms (%s; previous at t=%.3f, now=%.3f)",
+                             gapMs, gapClassLabel(kind),
+                             lastBatchReceivedTime_, lastPollTime_);
+                } else {
+                    lastGapClass_ = GapClass::Healthy;
+                }
+                // Track per-bucket worst gap for the sample ring.
+                uint16_t gapClamped = (gapMs > 65535.0f) ? 65535 : static_cast<uint16_t>(gapMs);
+                if (gapClamped > currentBucket_.gapMs) currentBucket_.gapMs = gapClamped;
+            }
+            // Replication batch-rate EMA (Hz). Smoothed so brief gaps don't
+            // collapse it to ~0; recovers quickly once cadence resumes.
+            if (lastBatchArrival_ > 0.0f) {
+                float dt = lastPollTime_ - lastBatchArrival_;
+                if (dt > 0.0f) {
+                    float instantHz = 1.0f / dt;
+                    replicationStats_.batchRateHz =
+                        replicationStats_.batchRateHz * 0.8f + instantHz * 0.2f;
                 }
             }
+            lastBatchArrival_ = lastPollTime_;
             lastBatchReceivedTime_ = lastPollTime_;
 
             ByteReader payload(payloadData, payloadLen);
             uint8_t count = payload.readU8();
+            replicationStats_.lastBatchEntities = count;
+            replicationStats_.lastBatchBytes    = static_cast<uint32_t>(payloadLen);
+            pendingStayed_ += count;
             for (uint8_t i = 0; i < count && payload.remaining() > 0; ++i) {
                 auto msg = SvEntityUpdateMsg::read(payload);
                 if (onEntityUpdate) onEntityUpdate(msg);
@@ -634,6 +668,18 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvDialogueActionResultMsg::read(payload);
             if (onDialogueActionResult) onDialogueActionResult(msg);
+            break;
+        }
+        case PacketType::SvCharacterFlagsSnapshot: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCharacterFlagsSnapshotMsg::read(payload);
+            if (onCharacterFlagsSnapshot) onCharacterFlagsSnapshot(msg);
+            break;
+        }
+        case PacketType::SvCharacterFlagDelta: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCharacterFlagDeltaMsg::read(payload);
+            if (onCharacterFlagDelta) onCharacterFlagDelta(msg);
             break;
         }
         case PacketType::SvInteractSiteResult: {
@@ -1040,9 +1086,9 @@ void NetClient::sendDialogueHeal(uint64_t npcPid, int32_t amount) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdDialogueHeal, buf, w.size());
 }
 
-void NetClient::sendInteractSite(uint64_t siteEntityId) {
+void NetClient::sendInteractSite(const std::string& siteStringId) {
     CmdInteractSiteMsg msg;
-    msg.siteEntityId = siteEntityId;
+    msg.siteStringId = siteStringId;
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
@@ -1337,6 +1383,7 @@ void NetClient::sendPacket(Channel channel, uint8_t packetType,
     }
 
     socket_.sendTo(stackBuf, w.size(), serverAddress_);
+    noteBytesOut(w.size());
 
     if (channel != Channel::Unreliable) {
         reliability_.trackReliable(hdr.sequence, stackBuf, w.size(), lastPollTime_);
@@ -1888,6 +1935,123 @@ void NetClient::sendAdminRequestContentList(uint8_t contentType) {
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdAdminRequestContentList, w.data(), w.size());
+}
+
+// ============================================================================
+// Phase 104 — Network panel instrumentation (Batches A + B)
+// ============================================================================
+
+void NetClient::noteFrameTime(float frameMs) {
+    lastFrameMs_ = frameMs;
+    if (frameMs > frameMaxMs1s_) frameMaxMs1s_ = frameMs;
+    uint16_t fmClamped = (frameMs > 65535.0f) ? 65535 : static_cast<uint16_t>(frameMs);
+    if (fmClamped > currentBucket_.frameMaxMs) currentBucket_.frameMaxMs = fmClamped;
+}
+
+void NetClient::noteScenePopulated(uint32_t bufferedEnters) {
+    replicationStats_.scenePopulated = true;
+    replicationStats_.bufferedReplay = bufferedEnters;
+}
+
+const char* NetClient::gapClassLabel(GapClass k) {
+    switch (k) {
+        case GapClass::Healthy:                return "Healthy";
+        case GapClass::ServerStallLikely:      return "ServerStallLikely";
+        case GapClass::ClientFrameHitchLikely: return "ClientFrameHitchLikely";
+        case GapClass::PacketLossLikely:       return "PacketLossLikely";
+        case GapClass::Unknown:                return "Unknown";
+    }
+    return "?";
+}
+
+float NetClient::lastBatchAgeMs() const {
+    if (lastBatchReceivedTime_ <= 0.0f) return -1.0f;
+    return (lastPollTime_ - lastBatchReceivedTime_) * 1000.0f;
+}
+
+NetClient::GapClass NetClient::classifyGap(float gapMs) const {
+    // Three signals at the moment the batch arrived:
+    //   - frameMaxMs1s_ : worst client frame in last ~1s
+    //   - recvAnyAgeMs  : how long since ANY packet from server arrived
+    //   - gapMs         : the inter-batch delay we're classifying
+    //
+    // Heuristic (matches the user's logs where slow ticks ≈ gap warnings):
+    //   client hitch covers gap → frameMax >= ~0.6 * gap
+    //   pure server stall → other packets also silent (recvAnyAge >= ~0.5 * gap)
+    //   neither           → likely transport loss (or server sent batches but
+    //                        they didn't arrive while heartbeats did)
+    float recvAnyAgeMs = (lastPacketReceived_ > 0.0f && lastPollTime_ > 0.0f)
+        ? (lastPollTime_ - lastPacketReceived_) * 1000.0f
+        : 0.0f;
+    if (gapMs < GAP_CLASSIFY_THRESHOLD_MS) return GapClass::Healthy;
+    if (frameMaxMs1s_ * 1.5f >= gapMs)     return GapClass::ClientFrameHitchLikely;
+    if (recvAnyAgeMs * 2.0f >= gapMs)      return GapClass::ServerStallLikely;
+    if (recvAnyAgeMs * 4.0f <  gapMs)      return GapClass::PacketLossLikely;
+    return GapClass::Unknown;
+}
+
+void NetClient::pushGapEvent(float gapMs, GapClass kind) {
+    GapEvent& ev = gapEvents_[gapEventHead_];
+    ev.timestamp    = lastPollTime_;
+    ev.tSecondsAgo  = 0.0f; // resolved at read-time by caller
+    ev.gapMs        = (gapMs > 65535.0f) ? 65535 : static_cast<uint16_t>(gapMs);
+    ev.frameMaxMs   = (frameMaxMs1s_ > 65535.0f) ? 65535 : static_cast<uint16_t>(frameMaxMs1s_);
+    float recvAge   = (lastPacketReceived_ > 0.0f)
+        ? (lastPollTime_ - lastPacketReceived_) * 1000.0f
+        : 0.0f;
+    ev.recvAnyAgeMs = (recvAge > 65535.0f) ? 65535 : static_cast<uint16_t>(recvAge);
+    ev.kind         = kind;
+    gapEventHead_   = (gapEventHead_ + 1) % GAP_EVENT_COUNT;
+    if (gapEventCount_ < GAP_EVENT_COUNT) ++gapEventCount_;
+}
+
+void NetClient::tickInstrumentation(float currentTime) {
+    // 1Hz buckets for the time-series ring.
+    if (sampleBucketStart_ == 0.0f) sampleBucketStart_ = currentTime;
+    if (currentTime - sampleBucketStart_ >= 1.0f) {
+        // Snapshot live values into the bucket-in-progress (these are smoothed
+        // already; gap/frame fields are bucket-max accumulators).
+        currentBucket_.rttMs      = rttMs();
+        currentBucket_.queueDepth = static_cast<uint16_t>(
+            (reliableQueueDepth() > 65535) ? 65535 : reliableQueueDepth());
+        // Bandwidth: bytes accumulated this bucket / dt
+        float dt = currentTime - sampleBucketStart_;
+        if (dt < 0.001f) dt = 0.001f;
+        kbpsInLast_  = (static_cast<float>(bytesInBucket_)  * 8.0f / 1000.0f) / dt;
+        kbpsOutLast_ = (static_cast<float>(bytesOutBucket_) * 8.0f / 1000.0f) / dt;
+        currentBucket_.kbpsIn  = (kbpsInLast_  > 65535.0f) ? 65535 : static_cast<uint16_t>(kbpsInLast_);
+        currentBucket_.kbpsOut = (kbpsOutLast_ > 65535.0f) ? 65535 : static_cast<uint16_t>(kbpsOutLast_);
+
+        netSamples_[netSampleHead_] = currentBucket_;
+        netSampleHead_  = (netSampleHead_ + 1) % NET_SAMPLE_COUNT;
+        if (netSampleCount_ < NET_SAMPLE_COUNT) ++netSampleCount_;
+
+        // Roll over.
+        bytesInBucket_  = 0;
+        bytesOutBucket_ = 0;
+        currentBucket_  = {};
+        sampleBucketStart_ = currentTime;
+    }
+
+    // Decay the rolling 1s frame-max so brief hitches age out instead of
+    // permanently labeling all gaps as "client hitch".
+    if (frameMaxBucketStart_ == 0.0f) frameMaxBucketStart_ = currentTime;
+    if (currentTime - frameMaxBucketStart_ >= 1.0f) {
+        frameMaxMs1s_ = lastFrameMs_; // seed with most recent frame, not 0
+        frameMaxBucketStart_ = currentTime;
+    }
+
+    // Replication churn is reported as "events in the last second".
+    if (replicationBucketStart_ == 0.0f) replicationBucketStart_ = currentTime;
+    if (currentTime - replicationBucketStart_ >= 1.0f) {
+        replicationStats_.entered1s = pendingEntered_;
+        replicationStats_.left1s    = pendingLeft_;
+        replicationStats_.stayed1s  = pendingStayed_;
+        pendingEntered_ = 0;
+        pendingLeft_    = 0;
+        pendingStayed_  = 0;
+        replicationBucketStart_ = currentTime;
+    }
 }
 
 } // namespace fate

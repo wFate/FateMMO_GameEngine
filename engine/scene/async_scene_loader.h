@@ -28,6 +28,7 @@ struct PendingSceneLoad {
     int createdEntities = 0;
     int totalTextures = 0;
     int loadedTextures = 0;
+    int failedTextures = 0;
     bool worldCleared = false;
     bool texturesKicked = false;
 

@@ -178,6 +178,15 @@ public:
     std::function<void()> onObserveStop;
     bool isObserving_ = false;
 
+    // Game-side ImGui panels that need to dock into the editor dockspace must
+    // draw AFTER drawDockSpace() so DockBuilder targets resolve on first Begin.
+    // GameApp registers its drawNetworkPanel here.
+    std::function<void()> onDrawDockedGamePanels;
+
+    // GameApp registers &showNetPanel_ here so View > Network can toggle the
+    // panel even when no game-side bool is reachable from the editor menu.
+    bool* netPanelOpen_ = nullptr;
+
     bool wantsInput() const { return open_ && (wantsKeyboard_ || wantsMouse_); }
     bool wantsKeyboard() const { return open_ && wantsKeyboard_; }
     bool wantsMouse() const { return open_ && wantsMouse_; }

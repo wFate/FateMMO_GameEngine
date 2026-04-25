@@ -8,7 +8,7 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 10;  // v10: interact-site framework — CmdInteractSite, SvInteractSiteResult
+constexpr uint8_t  PROTOCOL_VERSION  = 12;  // v12: SvCharacterFlagsSnapshot/SvCharacterFlagDelta — client mirrors CharacterFlagsComponent.flags so dialogue HasFlag conditions evaluate locally
 constexpr size_t   PACKET_HEADER_SIZE = 26;  // v9: ackBits widened 4→8 bytes (32→64 bit ACK window)
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
@@ -211,6 +211,13 @@ namespace PacketType {
     constexpr uint8_t SvBountyBoard        = 0xE4;
     constexpr uint8_t SvFriendsList        = 0xE5;
     constexpr uint8_t SvGauntletScoreboard = 0xE6;
+
+    // Character flags sync (PROTOCOL 12) — server pushes the player's set of
+    // CharacterFlagsComponent.flags to its owning client so dialogue trees can
+    // evaluate HasFlag conditions client-side. Snapshot on spawn + delta on
+    // every mutation. See dialogue_messages.h for the parallel pattern.
+    constexpr uint8_t SvCharacterFlagsSnapshot = 0xE7;
+    constexpr uint8_t SvCharacterFlagDelta     = 0xE8;
 
     // Pet panel seed on login (silent). Distinct from SvPetGranted which
     // fires on mid-session hatch and shows a "Hatched: X" chat toast.

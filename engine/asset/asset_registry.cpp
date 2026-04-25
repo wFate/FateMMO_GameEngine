@@ -363,6 +363,15 @@ bool AssetRegistry::isReady(AssetHandle handle) const {
     return slot.state == AssetState::Ready && slot.generation == handle.generation();
 }
 
+bool AssetRegistry::isResolved(AssetHandle handle) const {
+    if (!handle.valid()) return true;
+    uint32_t idx = handle.index();
+    if (idx >= slots_.size()) return true;
+    auto& slot = slots_[idx];
+    if (slot.generation != handle.generation()) return true;
+    return slot.state == AssetState::Ready;
+}
+
 size_t AssetRegistry::pendingAsyncCount() const {
     return activeDecodes_.size();
 }

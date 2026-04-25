@@ -49,10 +49,11 @@ public:
     void sendDialogueSetFlag (uint64_t npcPid, const std::string& flagId);
     void sendDialogueHeal    (uint64_t npcPid, int32_t amount);
 
-    // Interact-site framework (PROTOCOL 10). Player presses Action on a
+    // Interact-site framework (PROTOCOL 11). Player presses Action on a
     // targeted InteractSite entity; client fires CmdInteractSite with the
-    // site's PersistentId raw value. Server replies via SvInteractSiteResult.
-    void sendInteractSite(uint64_t siteEntityId);
+    // site's stable string id (sites are not replicated, so no PID is
+    // available). Server replies via SvInteractSiteResult.
+    void sendInteractSite(const std::string& siteStringId);
     void sendOpalsShopPurchase(const std::string& itemId, uint16_t quantity);  // Phase 71
     void sendBankDepositItem(uint32_t npcId, uint8_t inventorySlot);
     void sendBankWithdrawItem(uint32_t npcId, uint16_t itemIndex);
@@ -154,6 +155,74 @@ public:
     const std::string& lastHost() const { return lastHost_; }
     uint16_t lastPort() const { return lastPort_; }
 
+    // ---- Phase 104 Network panel instrumentation (Batches A + B) ----
+    // GameApp pushes per-frame wall time so the gap classifier can tell apart
+    // server stalls (gap large, frameMs small) from client hitches (gap large,
+    // frameMs also large). Called every frame from GameApp::update.
+    void noteFrameTime(float frameMs);
+
+    // Time-series sample (1Hz, last NET_SAMPLE_COUNT seconds). Stored as a
+    // ring; readers index modulo NET_SAMPLE_COUNT. Indices that are still
+    // zero-initialized (sampleCount_ < NET_SAMPLE_COUNT) should be treated as
+    // "no data yet".
+    static constexpr int NET_SAMPLE_COUNT = 120; // 120s @ 1Hz
+    struct NetSample {
+        float    rttMs       = 0.0f;
+        uint16_t queueDepth  = 0;
+        uint16_t gapMs       = 0; // last batch gap observed during this 1s bucket (max)
+        uint16_t frameMaxMs  = 0; // max client frame ms observed during this 1s bucket
+        uint16_t kbpsIn      = 0;
+        uint16_t kbpsOut     = 0;
+    };
+    const NetSample* netSamples() const { return netSamples_; }
+    int  netSampleHead() const { return netSampleHead_; } // index just past the newest sample
+    int  netSampleCount() const { return netSampleCount_; } // # valid samples (capped at NET_SAMPLE_COUNT)
+
+    // Classified snapshot-gap events (last 32). The classifier fires whenever
+    // SvEntityUpdateBatch arrives with gapMs > GAP_CLASSIFY_THRESHOLD_MS.
+    enum class GapClass : uint8_t {
+        Healthy = 0,
+        ServerStallLikely,
+        ClientFrameHitchLikely,
+        PacketLossLikely,
+        Unknown,
+    };
+    struct GapEvent {
+        float    tSecondsAgo = 0.0f; // resolved at read time vs. clock
+        float    timestamp   = 0.0f; // raw lastPollTime_ at fire
+        uint16_t gapMs       = 0;
+        uint16_t frameMaxMs  = 0; // max frame ms over last ~1s before the event
+        uint16_t recvAnyAgeMs= 0; // time since any packet was received
+        GapClass kind        = GapClass::Unknown;
+    };
+    static constexpr int GAP_EVENT_COUNT = 32;
+    const GapEvent* gapEvents() const { return gapEvents_; }
+    int  gapEventHead() const { return gapEventHead_; }
+    int  gapEventCount() const { return gapEventCount_; }
+    static const char* gapClassLabel(GapClass k);
+    GapClass lastGapClass() const { return lastGapClass_; }
+    float    lastBatchAgeMs() const; // time since most recent batch (live)
+
+    // Replication / AOI health (last-1s sliding window, decayed every second).
+    struct ReplicationStats {
+        uint32_t entered1s        = 0;
+        uint32_t left1s           = 0;
+        uint32_t stayed1s         = 0;
+        uint32_t lastBatchEntities= 0;
+        uint32_t lastBatchBytes   = 0;
+        float    batchRateHz      = 0.0f;
+        bool     scenePopulated   = false;
+        uint32_t bufferedReplay   = 0; // last replay count seen by GameApp; settable via setBufferedReplay
+    };
+    const ReplicationStats& replicationStats() const { return replicationStats_; }
+    void noteScenePopulated(uint32_t bufferedEnters);
+
+    // Bandwidth (live, smoothed).
+    float kbpsIn()  const { return kbpsInLast_; }
+    float kbpsOut() const { return kbpsOutLast_; }
+    uint64_t bytesInTotal()  const { return bytesInTotal_; }
+    uint64_t bytesOutTotal() const { return bytesOutTotal_; }
+
     // Reconnect state queries
     bool isReconnecting() const;
     bool reconnectFailed() const;
@@ -183,6 +252,8 @@ public:
     std::function<void(const SvFriendsListMsg&)>        onFriendsList;
     std::function<void(const SvQuestUpdateMsg&)> onQuestUpdate;
     std::function<void(const SvDialogueActionResultMsg&)> onDialogueActionResult;
+    std::function<void(const struct SvCharacterFlagsSnapshotMsg&)> onCharacterFlagsSnapshot;
+    std::function<void(const struct SvCharacterFlagDeltaMsg&)>     onCharacterFlagDelta;
     std::function<void(const SvInteractSiteResultMsg&)> onInteractSiteResult;
     std::function<void(const SvZoneTransitionMsg&)> onZoneTransition;
     std::function<void(const SvDeathNotifyMsg&)> onDeathNotify;
@@ -285,6 +356,43 @@ private:
 
     uint64_t tradeNonce_ = 0;
     uint64_t marketNonce_ = 0;
+
+    // ---- Phase 104 instrumentation state ----
+    NetSample netSamples_[NET_SAMPLE_COUNT] = {};
+    int       netSampleHead_  = 0;
+    int       netSampleCount_ = 0;
+    float     sampleBucketStart_ = 0.0f; // wall time of the current 1s sample bucket
+    NetSample currentBucket_ = {};       // accumulator for the bucket-in-progress
+
+    GapEvent gapEvents_[GAP_EVENT_COUNT] = {};
+    int      gapEventHead_  = 0;
+    int      gapEventCount_ = 0;
+    GapClass lastGapClass_  = GapClass::Healthy;
+    float    lastFrameMs_   = 0.0f;       // most recent frame from noteFrameTime
+    float    frameMaxMs1s_  = 0.0f;       // rolling max frame ms over last ~1s
+    float    frameMaxBucketStart_ = 0.0f;
+
+    ReplicationStats replicationStats_ = {};
+    float    replicationBucketStart_ = 0.0f;
+    uint32_t pendingEntered_ = 0;
+    uint32_t pendingLeft_    = 0;
+    uint32_t pendingStayed_  = 0;
+    float    lastBatchArrival_ = 0.0f;     // for batchRateHz EMA
+
+    uint64_t bytesInTotal_  = 0;
+    uint64_t bytesOutTotal_ = 0;
+    uint64_t bytesInBucket_  = 0;
+    uint64_t bytesOutBucket_ = 0;
+    float    kbpsInLast_  = 0.0f;
+    float    kbpsOutLast_ = 0.0f;
+
+    static constexpr float GAP_CLASSIFY_THRESHOLD_MS = 150.0f;
+
+    void   tickInstrumentation(float currentTime);
+    void   noteBytesIn(size_t bytes)  { bytesInTotal_  += bytes; bytesInBucket_  += bytes; }
+    void   noteBytesOut(size_t bytes) { bytesOutTotal_ += bytes; bytesOutBucket_ += bytes; }
+    GapClass classifyGap(float gapMs) const;
+    void     pushGapEvent(float gapMs, GapClass kind);
 
     void startReconnect();
 
