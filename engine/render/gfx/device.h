@@ -13,6 +13,11 @@ public:
     bool initMetal(void* metalLayer);
     bool compileMetalShaderSource(const std::string& source, const std::string& label = "");
     bool loadMetalShaderLibrary(const std::string& path);
+    // VFS-aware: load a pre-compiled metallib from memory (bytes already read
+    // via IAssetSource). Required for FATE_USE_VFS=ON on macOS/iOS, where the
+    // metallib may live inside an assets.pak archive.
+    bool loadMetalShaderLibraryFromBytes(const void* data, size_t size,
+                                         const std::string& label = "");
 #endif
     void shutdown();
     static bool isAlive();

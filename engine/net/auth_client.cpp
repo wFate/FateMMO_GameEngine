@@ -16,10 +16,12 @@
 #endif
 #include <WinSock2.h>
 #include <WS2tcpip.h>
+#include <ws2ipdef.h>
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <unistd.h>
 #endif
 
@@ -387,67 +389,60 @@ namespace fate
         }
 #endif
 
-        // --- TCP connect ---
+        // --- TCP connect via getaddrinfo (IPv4 + IPv6, DNS or literal) ---
+        // Prior implementation required a dotted-quad IPv4 string, which
+        // broke cert hostname verification (SNI/X509 match against an IP)
+        // and prevented real DNS-based production deployments.
+        uintptr_t sockFd = INVALID_SOCK_HANDLE;
+        {
+            addrinfo hints{};
+            hints.ai_family   = AF_UNSPEC;     // IPv4 or IPv6
+            hints.ai_socktype = SOCK_STREAM;
+            hints.ai_protocol = IPPROTO_TCP;
+
+            char portStr[16];
+            std::snprintf(portStr, sizeof(portStr), "%u", static_cast<unsigned>(port));
+
+            addrinfo* resolved = nullptr;
+            int gai = ::getaddrinfo(host.c_str(), portStr, &hints, &resolved);
+            if (gai != 0 || !resolved)
+            {
+                SSL_CTX_free(ctx);
+                fail("Failed to resolve host: " + host);
+                return;
+            }
+
+            for (addrinfo* ai = resolved; ai != nullptr; ai = ai->ai_next)
+            {
 #ifdef _WIN32
-        SOCKET sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (sock == INVALID_SOCKET)
-        {
-            SSL_CTX_free(ctx);
-            fail("Failed to create TCP socket");
-            return;
-        }
-        uintptr_t sockFd = static_cast<uintptr_t>(sock);
+                SOCKET s = ::socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+                if (s == INVALID_SOCKET) continue;
+                if (::connect(s, ai->ai_addr, static_cast<int>(ai->ai_addrlen)) == 0)
+                {
+                    sockFd = static_cast<uintptr_t>(s);
+                    break;
+                }
+                ::closesocket(s);
 #else
-        int sock = ::socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0)
-        {
-            SSL_CTX_free(ctx);
-            fail("Failed to create TCP socket");
-            return;
-        }
-        uintptr_t sockFd = static_cast<uintptr_t>(sock);
+                int s = ::socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+                if (s < 0) continue;
+                if (::connect(s, ai->ai_addr, ai->ai_addrlen) == 0)
+                {
+                    sockFd = static_cast<uintptr_t>(s);
+                    break;
+                }
+                ::close(s);
 #endif
+            }
+            ::freeaddrinfo(resolved);
 
-        sockaddr_in addr{};
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(port);
-
-        // Parse dotted-quad IP
-        unsigned a = 0, b = 0, c = 0, d = 0;
-        if (sscanf(host.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d) == 4)
-        {
-            uint32_t ip = (a << 24) | (b << 16) | (c << 8) | d;
-            ip = htonl(ip);
-            std::memcpy(&addr.sin_addr, &ip, 4);
+            if (sockFd == INVALID_SOCK_HANDLE)
+            {
+                SSL_CTX_free(ctx);
+                fail("SERVER DOWN FOR MAINTENANCE");
+                return;
+            }
         }
-        else
-        {
-            closeSocket(sockFd);
-            SSL_CTX_free(ctx);
-            fail("Invalid host address: " + host);
-            return;
-        }
-
-#ifdef _WIN32
-        if (::connect(static_cast<SOCKET>(sockFd), reinterpret_cast<sockaddr *>(&addr),
-                      sizeof(addr)) == SOCKET_ERROR)
-        {
-            int err = WSAGetLastError();
-            closeSocket(sockFd);
-            SSL_CTX_free(ctx);
-            fail("SERVER DOWN FOR MAINTENANCE");
-            return;
-        }
-#else
-        if (::connect(static_cast<int>(sockFd), reinterpret_cast<sockaddr *>(&addr),
-                      sizeof(addr)) < 0)
-        {
-            closeSocket(sockFd);
-            SSL_CTX_free(ctx);
-            fail("TCP connect failed");
-            return;
-        }
-#endif
 
         // --- TLS handshake ---
         SSL *ssl = SSL_new(ctx);

@@ -128,7 +128,7 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
         // dispatched — otherwise an attacker could send commands without ever
         // proving they hold a valid auth token.
         if (hdr.packetType == PacketType::CmdAuthProof) {
-            if (client->hasCompletedAuthProof) {
+            if (client->authPhase != ClientConnection::AuthPhase::HandshakePending) {
                 LOG_WARN("NetServer", "Client %d sent duplicate AuthProof", client->clientId);
                 return;
             }
@@ -139,16 +139,25 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
             AuthToken tok{};
             std::memcpy(tok.data(), payloadData, 16);
             client->authToken = tok;
+            // Move to ProofReceived BEFORE calling the verifier; the verifier
+            // (ServerApp::onAuthProofReceived) either advances to Authenticated
+            // on success or removes the client on failure.
+            client->authPhase = ClientConnection::AuthPhase::ProofReceived;
             client->hasCompletedAuthProof = true;
             if (onAuthProofReceived) onAuthProofReceived(client->clientId, tok);
             return;
         }
 
-        // Any non-system game packet before AuthProof completes is rejected —
-        // prevents unauthenticated commands from hitting game handlers.
-        if (!isSystemPacket(hdr.packetType) && !client->hasCompletedAuthProof) {
-            LOG_WARN("NetServer", "Client %d sent game packet 0x%02X before AuthProof — dropped",
-                     client->clientId, hdr.packetType);
+        // Any non-system game packet before auth finishes is rejected. Prior
+        // to the state-machine split this gated on hasCompletedAuthProof, which
+        // flipped true as soon as the 16-byte proof arrived — BEFORE the
+        // app-level verifier validated the token. We now require the full
+        // Authenticated state, which the verifier sets only after token
+        // lookup + (async) DB load kicks off successfully.
+        if (!isSystemPacket(hdr.packetType) &&
+            client->authPhase != ClientConnection::AuthPhase::Authenticated) {
+            LOG_WARN("NetServer", "Client %d sent game packet 0x%02X in auth phase %u — dropped",
+                     client->clientId, hdr.packetType, static_cast<unsigned>(client->authPhase));
             return;
         }
 
@@ -319,18 +328,25 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
     hdr.channel = channel;
     hdr.packetType = packetType;
 
-    // Encrypt payload for non-system packets when keys are available
+    // Encrypt payload for non-system packets when keys are available.
+    // Fail closed if encryption can't be performed on an encrypted session —
+    // otherwise we would silently send plaintext to a client expecting AEAD,
+    // which the client would reject and the server would treat as lost.
+    // Mirrors NetClient::sendPacket.
     uint8_t encryptedBuf[LARGE_PACKET_SIZE];
     const uint8_t* sendPayload = payload;
     size_t sendPayloadSize = payloadSize;
 
     if (client.crypto.hasKeys() && !isSystemPacket(packetType) && payload && payloadSize > 0) {
         size_t encSize = payloadSize + PacketCrypto::TAG_SIZE;
-        if (encSize <= sizeof(encryptedBuf) &&
-            client.crypto.encrypt(payload, payloadSize, client.crypto.buildEncryptNonce(hdr.sequence), encryptedBuf, sizeof(encryptedBuf))) {
-            sendPayload = encryptedBuf;
-            sendPayloadSize = encSize;
+        if (encSize > sizeof(encryptedBuf) ||
+            !client.crypto.encrypt(payload, payloadSize, client.crypto.buildEncryptNonce(hdr.sequence), encryptedBuf, sizeof(encryptedBuf))) {
+            LOG_ERROR("NetServer", "Encryption failed: type=0x%02X payloadSize=%zu client=%d — dropped (fail-closed)",
+                      packetType, payloadSize, client.clientId);
+            return;
         }
+        sendPayload = encryptedBuf;
+        sendPayloadSize = encSize;
     }
 
     hdr.payloadSize = static_cast<uint16_t>(sendPayloadSize);

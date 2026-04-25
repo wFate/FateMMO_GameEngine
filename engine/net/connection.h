@@ -45,9 +45,21 @@ struct ClientConnection {
     PacketCrypto crypto;       // AEAD encrypt/decrypt for this session
     PacketCrypto::PublicKey clientPublicKey = {};  // DH public key from Connect payload
     bool hasClientPublicKey = false;
-    // C4: only true once client has sent a valid CmdAuthProof post-handshake.
-    // Game packets are rejected until this is true.
-    bool hasCompletedAuthProof = false;
+    // Auth phase gate for game packets. The state progresses:
+    //   HandshakePending   — Connect + key exchange done, waiting for CmdAuthProof
+    //   ProofReceived      — AuthProof bytes arrived; validation pending
+    //   Authenticated      — app-level verifier accepted the token (see
+    //                        ServerApp::onAuthProofReceived); only this
+    //                        state allows non-system packets through.
+    // hasCompletedAuthProof is retained as an alias for `state != HandshakePending`
+    // so existing rate-limit / logging call sites keep compiling.
+    enum class AuthPhase : uint8_t {
+        HandshakePending = 0,
+        ProofReceived    = 1,
+        Authenticated    = 2,
+    };
+    AuthPhase authPhase = AuthPhase::HandshakePending;
+    bool hasCompletedAuthProof = false;  // true once ProofReceived (for backward compat)
 
     // In-memory trade state (avoids DB round-trip for guard checks)
     int activeTradeSessionId = 0;       // 0 = not in trade

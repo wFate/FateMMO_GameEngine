@@ -1427,6 +1427,70 @@
       {
         "anchor": {
           "offset": [
+            -20.0,
+            20.0
+          ],
+          "preset": "TopRight",
+          "size": [
+            240.0,
+            100.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "gauntlet_hud",
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "gauntlet_hud",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false
+      },
+      {
+        "anchor": {
+          "offset": [
             0.0,
             -40.0
           ],

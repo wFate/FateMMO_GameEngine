@@ -13,6 +13,14 @@ void NetClient::setServerStaticKey(const PacketCrypto::PublicKey& pk) {
 }
 
 bool NetClient::connect(const std::string& host, uint16_t port) {
+    // Legacy no-token connect path. Retained for tools / demo scenes only.
+    // Shipping builds must go through connectWithToken() so the session is
+    // authenticated and encrypted end-to-end.
+#ifdef FATE_SHIPPING
+    (void)host; (void)port;
+    LOG_ERROR("NetClient", "Legacy connect() is disabled in shipping builds — use connectWithToken()");
+    return false;
+#else
     if (connected_ || waitingForAccept_) return false;
 
     if (!socket_.isOpen()) {
@@ -41,6 +49,7 @@ bool NetClient::connect(const std::string& host, uint16_t port) {
 
     LOG_INFO("NetClient", "Connecting to %s:%d...", host.c_str(), port);
     return true;
+#endif // FATE_SHIPPING
 }
 
 bool NetClient::connectWithToken(const std::string& host, uint16_t port, const AuthToken& token) {
@@ -579,10 +588,22 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onBountyUpdate) onBountyUpdate(msg);
             break;
         }
+        case PacketType::SvBountyBoard: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvBountyBoardMsg::read(payload);
+            if (onBountyBoard) onBountyBoard(msg);
+            break;
+        }
         case PacketType::SvGauntletUpdate: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvGauntletUpdateMsg::read(payload);
             if (onGauntletUpdate) onGauntletUpdate(msg);
+            break;
+        }
+        case PacketType::SvGauntletScoreboard: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvGauntletScoreboardMsg::read(payload);
+            if (onGauntletScoreboard) onGauntletScoreboard(msg);
             break;
         }
         case PacketType::SvGuildUpdate: {
@@ -597,6 +618,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onSocialUpdate) onSocialUpdate(msg);
             break;
         }
+        case PacketType::SvFriendsList: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvFriendsListMsg::read(payload);
+            if (onFriendsList) onFriendsList(msg);
+            break;
+        }
         case PacketType::SvQuestUpdate: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvQuestUpdateMsg::read(payload);
@@ -607,6 +634,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvDialogueActionResultMsg::read(payload);
             if (onDialogueActionResult) onDialogueActionResult(msg);
+            break;
+        }
+        case PacketType::SvInteractSiteResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvInteractSiteResultMsg::read(payload);
+            if (onInteractSiteResult) onInteractSiteResult(msg);
             break;
         }
         case PacketType::SvZoneTransition: {
@@ -1007,6 +1040,15 @@ void NetClient::sendDialogueHeal(uint64_t npcPid, int32_t amount) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdDialogueHeal, buf, w.size());
 }
 
+void NetClient::sendInteractSite(uint64_t siteEntityId) {
+    CmdInteractSiteMsg msg;
+    msg.siteEntityId = siteEntityId;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdInteractSite, buf, w.size());
+}
+
 void NetClient::sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t quantity) {
     CmdShopSellMsg msg;
     msg.npcId = npcId;
@@ -1242,8 +1284,15 @@ int NetClient::reconnectAttempts() const {
 
 void NetClient::sendPacket(Channel channel, uint8_t packetType,
                            const uint8_t* payload, size_t payloadSize) {
-    uint8_t buf[MAX_PACKET_SIZE];
-    ByteWriter w(buf, sizeof(buf));
+    // Mirrors NetServer::sendPacket: pick a buffer large enough for payload +
+    // header + AEAD tag, fail closed on encryption failure, and check
+    // w.overflowed() before dispatch. Prevents silently undersized reliable
+    // commands (trade/market/guild growth, future admin payloads).
+    constexpr size_t LARGE_PACKET_SIZE = 16384;
+    size_t bufSize = (payloadSize + PACKET_HEADER_SIZE + PacketCrypto::TAG_SIZE > MAX_PACKET_SIZE)
+                     ? LARGE_PACKET_SIZE : MAX_PACKET_SIZE;
+    uint8_t stackBuf[LARGE_PACKET_SIZE];
+    ByteWriter w(stackBuf, bufSize);
 
     uint16_t ack;
     uint64_t ackBits; // v9: widened 32→64 bit ACK window
@@ -1258,17 +1307,20 @@ void NetClient::sendPacket(Channel channel, uint8_t packetType,
     hdr.packetType = packetType;
 
     // Encrypt payload for non-system packets when keys are available
-    uint8_t encryptedBuf[MAX_PACKET_SIZE];
+    uint8_t encryptedBuf[LARGE_PACKET_SIZE];
     const uint8_t* sendPayload = payload;
     size_t sendPayloadSize = payloadSize;
 
     if (crypto_.hasKeys() && !isSystemPacket(packetType) && payload && payloadSize > 0) {
         size_t encSize = payloadSize + PacketCrypto::TAG_SIZE;
-        if (encSize <= sizeof(encryptedBuf) &&
-            crypto_.encrypt(payload, payloadSize, crypto_.buildEncryptNonce(hdr.sequence), encryptedBuf, sizeof(encryptedBuf))) {
-            sendPayload = encryptedBuf;
-            sendPayloadSize = encSize;
+        if (encSize > sizeof(encryptedBuf) ||
+            !crypto_.encrypt(payload, payloadSize, crypto_.buildEncryptNonce(hdr.sequence), encryptedBuf, sizeof(encryptedBuf))) {
+            LOG_ERROR("NetClient", "Encryption failed: type=0x%02X payloadSize=%zu — dropped (fail-closed)",
+                      packetType, payloadSize);
+            return;
         }
+        sendPayload = encryptedBuf;
+        sendPayloadSize = encSize;
     }
 
     hdr.payloadSize = static_cast<uint16_t>(sendPayloadSize);
@@ -1278,10 +1330,16 @@ void NetClient::sendPacket(Channel channel, uint8_t packetType,
         w.writeBytes(sendPayload, sendPayloadSize);
     }
 
-    socket_.sendTo(buf, w.size(), serverAddress_);
+    if (w.overflowed()) {
+        LOG_ERROR("NetClient", "Packet overflow: type=0x%02X payloadSize=%zu capacity=%zu — dropped",
+                  packetType, payloadSize, bufSize);
+        return;
+    }
+
+    socket_.sendTo(stackBuf, w.size(), serverAddress_);
 
     if (channel != Channel::Unreliable) {
-        reliability_.trackReliable(hdr.sequence, buf, w.size(), lastPollTime_);
+        reliability_.trackReliable(hdr.sequence, stackBuf, w.size(), lastPollTime_);
     }
 }
 
@@ -1378,6 +1436,30 @@ void NetClient::sendMarketClaim(int32_t listingId) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdMarket, w.data(), w.size());
 }
 
+void NetClient::sendBountyGetBoard() {
+    uint8_t buf[8];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(BountyAction::GetBoard);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBounty, w.data(), w.size());
+}
+
+void NetClient::sendBountyPlace(const std::string& target, int64_t amount) {
+    uint8_t buf[256];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(BountyAction::PlaceBounty);
+    w.writeString(target);
+    w.writeI64(amount);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBounty, w.data(), w.size());
+}
+
+void NetClient::sendBountyCancel(const std::string& targetCharId) {
+    uint8_t buf[256];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(BountyAction::CancelBounty);
+    w.writeString(targetCharId);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdBounty, w.data(), w.size());
+}
+
 void NetClient::sendGuildAction(uint8_t action, const std::string& data) {
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
@@ -1391,6 +1473,13 @@ void NetClient::sendGuildAction(uint8_t action) {
     ByteWriter w(buf, sizeof(buf));
     w.writeU8(action);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdGuild, w.data(), w.size());
+}
+
+void NetClient::sendSocialAction(uint8_t action) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(action);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdSocial, w.data(), w.size());
 }
 
 void NetClient::sendSocialAction(uint8_t action, const std::string& targetCharId) {

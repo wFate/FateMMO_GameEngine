@@ -1299,6 +1299,30 @@
           0,
           0
         ],
+        "children": [
+          {
+            "anchor": {
+              "margin": [
+                16.0,
+                16.0,
+                16.0,
+                16.0
+              ],
+              "offset": [
+                0.0,
+                0.0
+              ],
+              "preset": "StretchAll",
+              "size": [
+                0.0,
+                0.0
+              ]
+            },
+            "id": "friends_panel_inner",
+            "type": "friends_panel",
+            "visible": true
+          }
+        ],
         "id": "social_panel",
         "pressedColor": [
           0,
@@ -1348,14 +1372,14 @@
         ],
         "borderWidth": 5.0,
         "buttonCornerRadius": 4.0,
-        "buttonFontSize": 100.0,
+        "buttonFontSize": 60.0,
         "checkOnColor": [
           204,
           179,
           77,
           255
         ],
-        "checkboxSize": 40.0,
+        "checkboxSize": 44.0,
         "disabledColor": [
           0,
           0,
@@ -1411,8 +1435,8 @@
           0,
           242
         ],
-        "logoutButtonHeight": 100.0,
-        "logoutButtonWidth": 350.0,
+        "logoutButtonHeight": 40.0,
+        "logoutButtonWidth": 320.0,
         "logoutOffset": [
           0.0,
           0.0
@@ -1435,7 +1459,7 @@
           15,
           255
         ],
-        "sectionFontSize": 80.0,
+        "sectionFontSize": 40.0,
         "sectionSpacing": 0.0,
         "titleColor": [
           67,
@@ -1443,13 +1467,13 @@
           5,
           255
         ],
-        "titleFontSize": 40.0,
+        "titleFontSize": 20.0,
         "titleOffset": [
           0.0,
           0.0
         ],
-        "toggleBtnHeight": 30.0,
-        "toggleBtnWidth": 50.0,
+        "toggleBtnHeight": 35.0,
+        "toggleBtnWidth": 60.0,
         "toggleOffColor": [
           115,
           89,
@@ -1546,6 +1570,8 @@
           255
         ],
         "buyBtnWidth": 50.0,
+        "buyCancelBtnLabel": "Cancel",
+        "buyConfirmBtnLabel": "Confirm",
         "cancelBtnColor": [
           89,
           38,
@@ -1553,6 +1579,34 @@
           217
         ],
         "cancelBtnLabel": "Cancel",
+        "categoryTabActiveColor": [
+          77,
+          115,
+          204,
+          242
+        ],
+        "categoryTabActiveTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "categoryTabBarHeight": 32.0,
+        "categoryTabBgColor": [
+          51,
+          46,
+          71,
+          217
+        ],
+        "categoryTabFontSize": 14.0,
+        "categoryTabGap": 6.0,
+        "categoryTabPaddingX": 14.0,
+        "categoryTabTextColor": [
+          191,
+          191,
+          204,
+          255
+        ],
         "closeBtnBgColor": [
           37,
           21,
@@ -1673,15 +1727,6 @@
           0
         ],
         "id": "shop_panel",
-        "useChrome": true,
-        "categoryTabBarHeight": 32.0,
-        "categoryTabFontSize": 14.0,
-        "categoryTabPaddingX": 14.0,
-        "categoryTabGap": 6.0,
-        "categoryTabBgColor": [51, 46, 71, 217],
-        "categoryTabActiveColor": [77, 115, 204, 242],
-        "categoryTabTextColor": [191, 191, 204, 255],
-        "categoryTabActiveTextColor": [255, 255, 255, 255],
         "itemFontSize": 20.0,
         "itemNameOffset": [
           0.0,
@@ -1765,7 +1810,9 @@
           0,
           0,
           0
-        ]
+        ],
+        "useChrome": true,
+        "visible": false
       },
       {
         "activeLabelOffset": [
@@ -2732,7 +2779,7 @@
         "zOrder": 115
       },
       {
-        "activeTab": 6,
+        "activeTab": 5,
         "activeTabBg": [
           34,
           2,
@@ -2867,6 +2914,7 @@
           0,
           0
         ],
+        "visible": false,
         "zOrder": 10
       }
     ],
@@ -2907,7 +2955,8 @@
       0,
       0,
       0
-    ]
+    ],
+    "visible": false
   },
   "screen": "fate_menu_panels"
 }

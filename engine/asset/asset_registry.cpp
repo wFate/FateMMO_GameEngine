@@ -1,11 +1,34 @@
 #include "engine/asset/asset_registry.h"
+#include "engine/asset/asset_source.h"
 #include "engine/job/job_system.h"
 #include "engine/core/logger.h"
 #include <algorithm>
 #include <filesystem>
 #include <thread>
+#include <deque>
+#include <mutex>
 
 namespace fate {
+
+namespace {
+// Ring of most-recent reads, across all threads. Capped to avoid unbounded
+// growth; /vfs_status only needs the last ~N. Lock-guarded because readBytes/
+// readText run on fiber-job workers (see IAssetSource doc).
+constexpr size_t kReadLogCapacity = 32;
+std::mutex g_readLogMutex;
+std::deque<AssetRegistry::ReadLogEntry> g_readLog;
+
+void pushReadLog(std::string_view key, const std::optional<std::vector<uint8_t>>* bytes,
+                 const std::optional<std::string>* text) {
+    AssetRegistry::ReadLogEntry e;
+    e.key.assign(key.data(), key.size());
+    if (bytes && *bytes) { e.ok = true; e.bytes = (*bytes)->size(); }
+    else if (text && *text) { e.ok = true; e.bytes = (*text)->size(); }
+    std::lock_guard lock(g_readLogMutex);
+    if (g_readLog.size() >= kReadLogCapacity) g_readLog.pop_front();
+    g_readLog.push_back(std::move(e));
+}
+} // namespace
 
 AssetRegistry& AssetRegistry::instance() {
     static AssetRegistry s_instance;
@@ -21,19 +44,43 @@ void AssetRegistry::registerLoader(AssetLoader loader) {
     loaders_.push_back(std::move(loader));
 }
 
-// Canonicalize path for consistent lookups (forward slashes, absolute)
+// Logical asset key. Forward-slash, no filesystem resolution, no symlink
+// walk, no absolute-path conversion. Stable across loose-files (DirectFs)
+// and packaged .pak (Vfs). All registry callers and the FileWatcher
+// callback go through this — they MUST produce matching strings or hot
+// reload silently no-ops. Phase 2 (2026-04-24) replaced the prior
+// weakly_canonical-based identity with this; canonicalizePath() is now
+// just an alias kept for grep continuity.
+std::string AssetRegistry::toAssetKey(std::string_view path) {
+    std::string s(path);
+    std::replace(s.begin(), s.end(), '\\', '/');
+    return s;
+}
+
 static std::string canonicalizePath(const std::string& path) {
-    namespace fs = std::filesystem;
-    try {
-        auto canon = fs::weakly_canonical(fs::path(path)).string();
-        std::replace(canon.begin(), canon.end(), '\\', '/');
-        return canon;
-    } catch (const fs::filesystem_error&) {
-        // Fallback: just normalize slashes without resolving symlinks
-        std::string result = path;
-        std::replace(result.begin(), result.end(), '\\', '/');
-        return result;
-    }
+    return AssetRegistry::toAssetKey(path);
+}
+
+std::optional<std::vector<uint8_t>> AssetRegistry::readBytes(std::string_view assetKey) {
+    auto* src = instance().source();
+    if (!src) { pushReadLog(assetKey, nullptr, nullptr); return std::nullopt; }
+    auto result = src->readBytes(assetKey);
+    pushReadLog(assetKey, &result, nullptr);
+    return result;
+}
+
+std::optional<std::string> AssetRegistry::readText(std::string_view assetKey) {
+    auto* src = instance().source();
+    if (!src) { pushReadLog(assetKey, nullptr, nullptr); return std::nullopt; }
+    auto result = src->readText(assetKey);
+    pushReadLog(assetKey, nullptr, &result);
+    return result;
+}
+
+std::vector<AssetRegistry::ReadLogEntry> AssetRegistry::recentReads() {
+    std::lock_guard lock(g_readLogMutex);
+    // Return newest-first so /vfs_status output reads top-down naturally.
+    return {g_readLog.rbegin(), g_readLog.rend()};
 }
 
 AssetHandle AssetRegistry::load(const std::string& path) {
@@ -49,8 +96,10 @@ AssetHandle AssetRegistry::load(const std::string& path) {
         // If an async load is in progress, wait for it and finalize so the
         // caller gets a Ready handle (sync load contract).
         if (slot.state == AssetState::Loading) {
+            bool foundDecode = false;
             for (auto dit = activeDecodes_.begin(); dit != activeDecodes_.end(); ++dit) {
                 if ((*dit)->slotIndex == it->second) {
+                    foundDecode = true;
                     while (!(*dit)->complete.load(std::memory_order_acquire))
                         std::this_thread::yield();
                     // Finalize on this (main) thread
@@ -81,6 +130,20 @@ AssetHandle AssetRegistry::load(const std::string& path) {
                     activeDecodes_.erase(dit);
                     break;
                 }
+            }
+            // Invariant violation: Loading slot without a matching active
+            // decode request. Treat as load failure — otherwise callers
+            // get a "Ready"-looking handle backed by a never-populated slot.
+            if (!foundDecode) {
+                LOG_ERROR("AssetRegistry", "Loading slot %u (%s) has no active decode — marking failed",
+                          it->second, canon.c_str());
+                pathToIndex_.erase(slot.path);
+                failedPaths_.insert(canon);
+                slot.state = AssetState::Empty;
+                slot.path.clear();
+                slot.generation++;
+                freeList_.push_back(it->second);
+                return AssetHandle{};
             }
         }
         return AssetHandle::make(it->second, slot.generation);
@@ -347,6 +410,30 @@ void AssetRegistry::clear() {
         std::lock_guard lock(reloadQueueMutex_);
         pendingReloads_.clear();
     }
+    // Tear down the asset source while the logger is still alive — VfsSource's
+    // PhysFS deinit logs on failure. Static singleton destruction order would
+    // otherwise be undefined.
+    source_.reset();
+}
+
+void AssetRegistry::setSource(std::unique_ptr<IAssetSource> source) {
+    source_ = std::move(source);
+}
+
+IAssetSource* AssetRegistry::source() {
+    // Lazy default: tests, tools, and any caller that didn't go through
+    // App::init / ServerApp::init still get a working DirectFsSource.
+    // Callers that need VFS install explicitly via setSource at startup
+    // before any asset reads happen — that always wins because it runs
+    // first.
+    if (!source_) {
+        source_ = std::make_unique<DirectFsSource>();
+    }
+    return source_.get();
+}
+
+const IAssetSource* AssetRegistry::source() const {
+    return source_.get();
 }
 
 size_t AssetRegistry::assetCount() const {

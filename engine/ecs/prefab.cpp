@@ -298,12 +298,26 @@ nlohmann::json PrefabLibrary::entityToJson(Entity* entity) {
 }
 
 Entity* PrefabLibrary::jsonToEntity(const nlohmann::json& data, World& world) {
+    // Validate before constructing — if components is present but isn't an
+    // object (and isn't null, which entityToJson emits for component-less
+    // entities), reject with nullptr rather than leaving a half-constructed
+    // entity in the world.
+    const bool hasComponents = data.contains("components");
+    const bool componentsValid = !hasComponents
+                                 || data["components"].is_null()
+                                 || data["components"].is_object();
+    if (!componentsValid) {
+        LOG_ERROR("Prefab", "jsonToEntity: 'components' must be an object (got %s)",
+                  data["components"].type_name());
+        return nullptr;
+    }
+
     std::string name = data.value("name", std::string("Entity"));
     Entity* entity = world.createEntity(name);
     entity->setTag(data.value("tag", std::string("")));
     entity->setActive(data.value("active", true));
 
-    if (!data.contains("components")) return entity;
+    if (!hasComponents || data["components"].is_null()) return entity;
 
     for (auto& [typeName, compJson] : data["components"].items()) {
         auto* meta = ComponentMetaRegistry::instance().findByName(typeName);

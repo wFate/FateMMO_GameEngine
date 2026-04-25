@@ -152,6 +152,11 @@ option(TRACY_ENABLE "Enable Tracy profiler" ON)
 option(TRACY_ON_DEMAND "Enable Tracy on-demand mode" ON)
 option(ENGINE_MEMORY_DEBUG "Enable allocator debug visualization panels" ON)
 option(FATE_SHIPPING "Strip editor UI for production/shipping builds" OFF)
+# Phase 1 of VFS integration: install VfsSource (PhysicsFS-backed) at startup
+# instead of DirectFsSource. Default OFF — flip on per-platform once Phase 2
+# (loader migration), Phase 3 (scene loader), and Phase 4 (audio) have landed
+# and been verified. While OFF, behavior is identical to the pre-VFS engine.
+option(FATE_USE_VFS "Use PhysicsFS-backed asset source (experimental)" OFF)
 FetchContent_MakeAvailable(tracy)
 
 # PhysicsFS (virtual filesystem with ZIP/archive mount support)
@@ -426,6 +431,10 @@ target_link_libraries(fate_engine PUBLIC
     physfs-static
     soloud_lib
 )
+if(FATE_USE_VFS)
+    target_compile_definitions(fate_engine PUBLIC FATE_USE_VFS=1)
+    message(STATUS "FATE_USE_VFS=ON — VfsSource will be installed at startup")
+endif()
 if(NOT FATE_SHIPPING)
     target_link_libraries(fate_engine PUBLIC imgui_lib)
 endif()
@@ -449,6 +458,26 @@ else()
     message(STATUS "libsodium NOT found — AEAD encryption disabled (plaintext fallback)")
 endif()
 
+# -----------------------------------------------------------------------------
+# Shipping build gate — refuse to ship without crypto.
+# A FATE_SHIPPING=ON artifact must have TLS (OpenSSL) and AEAD UDP
+# (libsodium). Missing either means the client/server would silently fall
+# back to plaintext auth / unencrypted packets — unacceptable for release.
+# -----------------------------------------------------------------------------
+if(FATE_SHIPPING)
+    if(NOT OpenSSL_FOUND AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
+        message(FATAL_ERROR
+            "FATE_SHIPPING=ON requires OpenSSL. "
+            "Install via vcpkg: 'vcpkg install openssl' and re-run CMake.")
+    endif()
+    if(NOT unofficial-sodium_FOUND)
+        message(FATAL_ERROR
+            "FATE_SHIPPING=ON requires libsodium. "
+            "Install via vcpkg: 'vcpkg install libsodium' and re-run CMake.")
+    endif()
+    message(STATUS "FATE_SHIPPING=ON — crypto dependency gates OK (OpenSSL + libsodium)")
+endif()
+
 if(WIN32)
     target_link_libraries(fate_engine PUBLIC ws2_32)
 endif()
@@ -459,6 +488,16 @@ endif()
 
 if(FATE_SHIPPING)
     target_compile_definitions(fate_engine PUBLIC FATE_SHIPPING=1)
+    # Extra belt-and-suspenders: assert FATE_DEV_TLS was not injected by
+    # something upstream (env var, preset, cache). If it leaks into a
+    # shipping build, auth_client.cpp silently disables cert verification.
+    get_target_property(_fate_engine_defs fate_engine COMPILE_DEFINITIONS)
+    if(_fate_engine_defs MATCHES "FATE_DEV_TLS")
+        message(FATAL_ERROR
+            "FATE_SHIPPING=ON but FATE_DEV_TLS is defined on fate_engine. "
+            "FATE_DEV_TLS disables TLS certificate verification and must NEVER "
+            "ship. Remove the definition from your preset/env and re-run CMake.")
+    endif()
 else()
     # Dev-only: auth_client.cpp skips TLS cert verification so the client can
     # connect to a self-signed localhost cert.  Must live on `fate_engine`
@@ -718,6 +757,37 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     if(EXISTS "${CMAKE_SOURCE_DIR}/server/wal/write_ahead_log.cpp")
         list(APPEND SERVER_TEST_SOURCES server/wal/write_ahead_log.cpp)
     endif()
+    # Pure validator (no DB / server_app deps) used by test_interact_site_validator.cpp
+    if(EXISTS "${CMAKE_SOURCE_DIR}/server/handlers/interact_site_handler.cpp")
+        list(APPEND SERVER_TEST_SOURCES server/handlers/interact_site_handler.cpp)
+    endif()
+    # F2 contract test (test_persistence_contract.cpp) needs the DB repos and libpqxx.
+    # Pull these in only when PostgreSQL is available; otherwise the test file is
+    # excluded from the build (the test itself also skips at runtime when env vars
+    # are unset, but the build needs the symbols regardless).
+    set(FATE_TESTS_USES_DB OFF)
+    if(PostgreSQL_FOUND AND TARGET pqxx)
+        list(APPEND SERVER_TEST_SOURCES
+            server/db/db_connection.cpp
+            server/db/db_pool.cpp
+            server/db/account_repository.cpp
+            server/db/character_repository.cpp
+            server/db/inventory_repository.cpp
+            server/db/bank_repository.cpp
+            server/db/pet_repository.cpp
+            server/db/costume_repository.cpp
+            server/db/quest_repository.cpp
+            server/db/skill_repository.cpp
+            server/db/session_repository.cpp
+            server/db/session_listener.cpp
+        )
+        set(FATE_TESTS_USES_DB ON)
+    else()
+        # Strip DB-dependent tests from the build when libpqxx is unavailable.
+        list(FILTER TEST_SOURCES EXCLUDE REGEX "test_persistence_contract")
+        list(FILTER TEST_SOURCES EXCLUDE REGEX "test_session_repository")
+        list(FILTER TEST_SOURCES EXCLUDE REGEX "test_session_listener")
+    endif()
     if(TEST_SOURCES)
         add_executable(fate_tests ${TEST_SOURCES} ${GAME_SHARED_SOURCES} ${GAME_ANIM_TEST_SOURCES} ${SERVER_TEST_SOURCES})
         target_link_libraries(fate_tests PRIVATE fate_engine doctest::doctest spdlog::spdlog)
@@ -726,6 +796,10 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
             FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
             EDITOR_BUILD
         )
+        if(FATE_TESTS_USES_DB)
+            target_link_libraries(fate_tests PRIVATE pqxx PostgreSQL::PostgreSQL)
+            target_compile_definitions(fate_tests PRIVATE FATE_TESTS_HAS_DB=1)
+        endif()
         if(MSVC)
             target_compile_options(fate_tests PRIVATE /EHsc /W4 /wd4100 /wd4201 /wd4458 /MP)
         endif()

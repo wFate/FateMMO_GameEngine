@@ -20,6 +20,10 @@ public:
     // Load pre-compiled .metallib file (FATE_SHIPPING)
     bool loadMetallib(const std::string& path);
 
+    // VFS-aware variant: load pre-compiled .metallib bytes already read into
+    // memory by IAssetSource. Equivalent to loadMetallib but without a disk read.
+    bool loadMetallibFromBytes(const void* data, size_t size, const std::string& label = "");
+
     // Get a named function from the library
     void* getFunction(const std::string& name);  // returns id<MTLFunction>
 

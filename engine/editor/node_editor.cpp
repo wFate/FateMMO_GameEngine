@@ -1,5 +1,6 @@
 #include "engine/editor/node_editor.h"
 #include "engine/core/logger.h"
+#include "engine/core/atomic_write.h"
 
 #include "imgui.h"
 #include "imnodes.h"
@@ -274,8 +275,10 @@ void DialogueNodeEditor::drawMenuBar() {
                 static char pathBuf[256] = "assets/dialogues/untitled.json";
                 ImGui::InputText("Path", pathBuf, sizeof(pathBuf));
                 if (ImGui::Button("Save")) {
+                    // saveToFile updates currentFilePath_ on success; don't
+                    // overwrite it on failure (the existing path is still the
+                    // last good save target).
                     saveToFile(pathBuf);
-                    currentFilePath_ = pathBuf;
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::EndMenu();
@@ -410,16 +413,19 @@ void DialogueNodeEditor::loadFromFile(const std::string& path) {
     LOG_INFO("DialogueEditor", "Loaded dialogue from %s", path.c_str());
 }
 
-void DialogueNodeEditor::saveToFile(const std::string& path) {
+bool DialogueNodeEditor::saveToFile(const std::string& path) {
     auto data = saveToJson();
-    std::ofstream f(path);
-    if (!f.is_open()) {
-        LOG_WARN("DialogueEditor", "Failed to write: %s", path.c_str());
-        return;
+    std::string serialized = data.dump(2);
+    std::string err;
+    if (!writeFileAtomic(path, serialized, &err)) {
+        // Don't update currentFilePath_ — the destination is unchanged, so
+        // the user's last good save (if any) is still the source of truth.
+        LOG_WARN("DialogueEditor", "Failed to write %s: %s", path.c_str(), err.c_str());
+        return false;
     }
-    f << data.dump(2);
     currentFilePath_ = path;
     LOG_INFO("DialogueEditor", "Saved dialogue to %s", path.c_str());
+    return true;
 }
 
 } // namespace fate

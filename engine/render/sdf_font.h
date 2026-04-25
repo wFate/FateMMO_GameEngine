@@ -20,6 +20,8 @@ struct SDFFont {
 
     Type type = Type::MSDF;
     std::string name;
+    std::string family;  // e.g. "inter" — explicit from manifest or auto-derived from name
+    std::string weight;  // e.g. "Regular"/"SemiBold"/"Bold" — explicit or auto-derived
     std::shared_ptr<Texture> atlas;
 
     // MSDF-specific (populated from metrics JSON)

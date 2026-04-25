@@ -1,0 +1,30 @@
+{
+  "screen": "bounty_board",
+  "root": {
+    "id": "bounty_root",
+    "type": "bounty_panel",
+    "anchor": {
+      "preset": "Center",
+      "offset": [0.0, 0.0],
+      "size": [800.0, 600.0]
+    },
+    "tabHeight": 36.0,
+    "rowHeight": 28.0,
+    "headerHeight": 48.0,
+    "visible": false,
+    "children": [
+      {
+        "id": "bounty_target_input",
+        "type": "text_input",
+        "visible": false,
+        "placeholder": "Target character name",
+        "maxLength": 32,
+        "anchor": {
+          "preset": "Center",
+          "offset": [0.0, -30.0],
+          "size": [280.0, 28.0]
+        }
+      }
+    ]
+  }
+}

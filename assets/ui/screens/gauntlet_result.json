@@ -1,0 +1,13 @@
+{
+  "screen": "gauntlet_result",
+  "root": {
+    "id": "gauntlet_result_root",
+    "type": "gauntlet_result_modal",
+    "anchor": {
+      "preset": "Center",
+      "offset": [0.0, 0.0],
+      "size": [640.0, 520.0]
+    },
+    "visible": false
+  }
+}

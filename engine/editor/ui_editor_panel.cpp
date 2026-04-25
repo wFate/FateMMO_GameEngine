@@ -34,6 +34,7 @@
 #include "engine/ui/widgets/confirm_dialog.h"
 #include "engine/ui/widgets/notification_toast.h"
 #include "engine/ui/widgets/checkbox.h"
+#include "engine/ui/widgets/divider.h"
 #include "engine/ui/widgets/login_screen.h"
 #include "engine/ui/widgets/party_frame.h"
 #include "engine/ui/widgets/chat_panel.h"
@@ -65,6 +66,10 @@
 #include "engine/ui/widgets/loading_panel.h"
 #include "engine/ui/widgets/tooltip.h"
 #include "engine/ui/widgets/chat_idle_overlay.h"
+#include "engine/ui/widgets/bounty_panel.h"
+#include "engine/ui/widgets/friends_panel.h"
+#include "engine/ui/widgets/gauntlet_hud.h"
+#include "engine/ui/widgets/gauntlet_result_modal.h"
 #endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <cstdio>
@@ -198,6 +203,7 @@ TypeBadge badgeForType(const std::string& type) {
     if (type == "window")             return {{0.40f, 0.60f, 0.80f, 1.0f}, "WIN"};
     if (type == "tab_container")      return {{0.55f, 0.55f, 0.70f, 1.0f}, "TAB"};
     if (type == "checkbox")           return {{0.50f, 0.70f, 0.55f, 1.0f}, "CHK"};
+    if (type == "divider")            return {{0.55f, 0.55f, 0.55f, 1.0f}, "DIV"};
     if (type == "skill_arc")          return {{0.75f, 0.55f, 0.40f, 1.0f}, "ARC"};
     if (type == "dpad")               return {{0.65f, 0.55f, 0.35f, 1.0f}, "PAD"};
     if (type == "player_info_block")  return {{0.40f, 0.65f, 0.65f, 1.0f}, "PLR"};
@@ -378,6 +384,52 @@ void UIEditorPanel::drawNodeTree(UINode* node, const std::string& screenId) {
         if (ImGui::MenuItem("Add Button Child")) {
             std::string childId = "new_button_" + std::to_string(nextChildId_++);
             node->addChild(std::make_unique<Button>(childId));
+        }
+        // Divider presets — one-click insert of a pre-configured separator.
+        // Each branch mutates a fresh Divider before handing it to the parent.
+        if (ImGui::BeginMenu("Add Divider Preset")) {
+            auto spawn = [&](const char* label, auto configure) {
+                if (ImGui::MenuItem(label)) {
+                    std::string childId = "new_divider_" + std::to_string(nextChildId_++);
+                    auto d = std::make_unique<Divider>(childId);
+                    configure(*d);
+                    node->addChild(std::move(d));
+                }
+            };
+
+            spawn("Thin Line", [](Divider& d) {
+                d.thickness = 1.0f;
+                d.color = Color{0.55f, 0.55f, 0.55f, 1.0f};
+            });
+            spawn("Double Line", [](Divider& d) {
+                d.thickness    = 1.0f;
+                d.doubleStroke = true;
+                d.strokeGap    = 3.0f;
+                d.color        = Color{0.60f, 0.55f, 0.45f, 1.0f};
+            });
+            spawn("Gradient Fade", [](Divider& d) {
+                d.thickness = 2.0f;
+                d.fadeEnds  = 0.30f;
+                d.color     = Color{0.75f, 0.70f, 0.55f, 1.0f};
+            });
+            spawn("Scroll (Ornament)", [](Divider& d) {
+                d.thickness    = 1.0f;
+                d.doubleStroke = true;
+                d.strokeGap    = 4.0f;
+                d.fadeEnds     = 0.20f;
+                d.ornamentSize = 24.0f;
+                // ornamentImage left blank — user assigns their own sprite.
+                d.color        = Color{0.70f, 0.60f, 0.40f, 1.0f};
+            });
+            spawn("Zebra Band", [](Divider& d) {
+                d.thickness = 20.0f;
+                d.color     = Color{0.60f, 0.45f, 0.40f, 0.35f};
+            });
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Add Divider Child")) {
+            std::string childId = "new_divider_" + std::to_string(nextChildId_++);
+            node->addChild(std::make_unique<Divider>(childId));
         }
 #endif // FATE_HAS_GAME
         ImGui::Separator();
@@ -1528,6 +1580,10 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Colors##cd", 0)) {
+            ImGui::ColorEdit4("Background##cfm", &cd->bgColor.r);     checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##cfm",     &cd->borderColor.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##cfm", &cd->borderWidth, 0.1f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::Separator();
             ImGui::ColorEdit4("Button##cdc", &cd->buttonColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Button Hover##cdc", &cd->buttonHoverColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
@@ -1730,6 +1786,49 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::Checkbox("Checked##cb", &cb->checked); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Box Size", &cb->boxSize, 1.0f, 8.0f, 40.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Spacing##cb", &cb->spacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+    }
+    else if (auto* div = dynamic_cast<Divider*>(selectedNode_)) {
+        ImGui::SeparatorText("Divider");
+        const char* orientNames[] = {"Horizontal", "Vertical"};
+        int oIdx = static_cast<int>(div->orientation);
+        if (ImGui::Combo("Orientation##div", &oIdx, orientNames, 2)) {
+            div->orientation = static_cast<DividerOrientation>(oIdx);
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Color##div", &div->color.r); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Thickness##div", &div->thickness, 0.1f, 0.0f, 40.0f, "%.1f px");
+        checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Length (px)##div", &div->length, 0.5f, 0.0f, 4000.0f, "%.0f");
+        checkUndoCapture(uiMgr);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Absolute length. 0 = stretch to parent. Overridden when Length %% > 0.");
+        ImGui::DragFloat("Length %##div", &div->lengthPercent, 0.005f, 0.0f, 1.0f, "%.2f");
+        checkUndoCapture(uiMgr);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Fraction of parent extent (0-1). Overrides Length when > 0.");
+        ImGui::DragFloat("Edge Padding##div", &div->padding, 0.5f, 0.0f, 200.0f, "%.1f px");
+        checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Fade Ends##div", &div->fadeEnds, 0.005f, 0.0f, 0.5f, "%.2f");
+        checkUndoCapture(uiMgr);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Alpha fade fraction at each end. 0 = crisp, 0.2 = soft, 0.5 = all-fade.");
+
+        char ornBuf[192] = {};
+        snprintf(ornBuf, sizeof(ornBuf), "%s", div->ornamentImage.c_str());
+        if (ImGui::InputText("Ornament Image##div", ornBuf, sizeof(ornBuf))) {
+            div->ornamentImage = ornBuf;
+        }
+        checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Ornament Size##div", &div->ornamentSize, 0.5f, 0.0f, 256.0f, "%.1f px");
+        checkUndoCapture(uiMgr);
+
+        ImGui::Checkbox("Double Stroke##div", &div->doubleStroke); checkUndoCapture(uiMgr);
+        if (div->doubleStroke) {
+            ImGui::DragFloat("Stroke Gap##div", &div->strokeGap, 0.1f, 0.0f, 40.0f, "%.1f px");
+            checkUndoCapture(uiMgr);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Space between the two parallel strokes (px).");
+        }
     }
     // login_screen: handled by reflectedProperties() auto-inspector above
     else if (auto* pf = dynamic_cast<PartyFrame*>(selectedNode_)) {
@@ -3371,6 +3470,54 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         checkUndoCapture(uiMgr);
         ImGui::DragFloat("Max Width", &tt->maxWidth, 1.0f, 50.0f, 800.0f); checkUndoCapture(uiMgr);
     }
+    else if (auto* p = dynamic_cast<BountyPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("BountyPanel");
+        ImGui::DragFloat("Tab Height##bp",    &p->tabHeight,    0.5f, 16.0f, 80.0f);   checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Row Height##bp",    &p->rowHeight,    0.5f, 16.0f, 80.0f);   checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Header Height##bp", &p->headerHeight, 0.5f, 24.0f, 120.0f);  checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Background##bp",   &p->bgColor.r);     checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Border##bp",       &p->borderColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Row Even##bp",     &p->rowBgEven.r);   checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Row Odd##bp",      &p->rowBgOdd.r);    checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Text##bp",         &p->textColor.r);   checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Gold##bp",         &p->goldColor.r);   checkUndoCapture(uiMgr);
+    }
+    else if (auto* p = dynamic_cast<FriendsPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("FriendsPanel");
+        ImGui::DragFloat("Tab Height##fp",    &p->tabHeight,    0.5f, 16.0f, 80.0f);   checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Row Height##fp",    &p->rowHeight,    0.5f, 16.0f, 80.0f);   checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Header Height##fp", &p->headerHeight, 0.5f, 24.0f, 120.0f);  checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Background##fp",   &p->bgColor.r);      checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Border##fp",       &p->borderColor.r);  checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Row Even##fp",     &p->rowBgEven.r);    checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Row Odd##fp",      &p->rowBgOdd.r);     checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Text##fp",         &p->textColor.r);    checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Online##fp",       &p->onlineColor.r);  checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Offline##fp",      &p->offlineColor.r); checkUndoCapture(uiMgr);
+    }
+    else if (auto* w = dynamic_cast<GauntletHUD*>(selectedNode_)) {
+        ImGui::SeparatorText("GauntletHUD");
+        ImGui::DragFloat("Font Size##gh", &w->fontSize, 0.5f, 8.0f, 32.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Background##gh", &w->bgColor.r);     checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Border##gh",     &w->borderColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Text##gh",       &w->textColor.r);   checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Gold##gh",       &w->goldColor.r);   checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Active (test)##gh", &w->active);
+    }
+    else if (auto* w = dynamic_cast<GauntletResultModal*>(selectedNode_)) {
+        ImGui::SeparatorText("GauntletResultModal");
+        ImGui::DragFloat("Title Font Size##grm", &w->titleFontSize, 0.5f, 12.0f, 48.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Row Font Size##grm",   &w->rowFontSize,   0.5f, 8.0f,  32.0f); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Row Height##grm",      &w->rowHeight,     0.5f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Background##grm",    &w->bgColor.r);        checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Border##grm",        &w->borderColor.r);    checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Row Even##grm",      &w->rowBgEven.r);      checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Row Odd##grm",       &w->rowBgOdd.r);       checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Text##grm",          &w->textColor.r);      checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Gold##grm",          &w->goldColor.r);      checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Highlight##grm",     &w->highlightColor.r); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Visible (test)##grm",  &w->visible);
+    }
     else {
         ImGui::TextDisabled("(no widget-specific properties)");
     }
@@ -3542,6 +3689,34 @@ void UIEditorPanel::drawAnchorEditor(UINode* node, UIManager& uiMgr) {
 
     ImGui::DragFloat("Max Aspect Ratio", &anchor.maxAspectRatio, 0.01f, 0.0f, 4.0f);
     checkUndoCapture(uiMgr);
+
+    // ------------------------------------------------------------------
+    // Child Layout — auto-divider between siblings + flow hint.
+    // Does NOT reposition children; it only paints separators along the
+    // chosen axis. Use with children whose anchors already lay them out
+    // horizontally or vertically.
+    // ------------------------------------------------------------------
+    ImGui::SeparatorText("Child Layout");
+    ChildLayout& cl = node->childLayout();
+    const char* flowNames[] = {"None", "Horizontal", "Vertical"};
+    int flowIdx = static_cast<int>(cl.flowDirection);
+    if (ImGui::Combo("Flow Direction##cl", &flowIdx, flowNames, 3)) {
+        cl.flowDirection = static_cast<ChildFlow>(flowIdx);
+    }
+    checkUndoCapture(uiMgr);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Tells the renderer which axis to scan when drawing auto-dividers between siblings.");
+
+    ImGui::Checkbox("Draw Divider Between Children##cl", &cl.drawDivider); checkUndoCapture(uiMgr);
+    if (cl.drawDivider) {
+        ImGui::ColorEdit4("Divider Color##cl", &cl.dividerColor.r); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Divider Thickness##cl", &cl.dividerThickness, 0.1f, 0.0f, 20.0f, "%.1f px");
+        checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Divider Padding##cl", &cl.dividerPadding, 0.5f, 0.0f, 200.0f, "%.1f px");
+        checkUndoCapture(uiMgr);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Inset from the parent's cross-axis edges (top/bottom for horizontal flow, left/right for vertical flow).");
+    }
 }
 
 // ============================================================================
@@ -3581,29 +3756,107 @@ void UIEditorPanel::drawStyleEditor(UINode* node, UIManager& uiMgr) {
     ImGui::ColorEdit4("Background Color", &style.backgroundColor.r); checkUndoCapture(uiMgr);
     ImGui::ColorEdit4("Border Color", &style.borderColor.r); checkUndoCapture(uiMgr);
     ImGui::DragFloat("Border Width", &style.borderWidth, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+
+    // Border style (Solid/Double active; Dashed/Inset fall back to Solid until
+    // a line-style renderer lands).
+    {
+        const char* borderStyleNames[] = {"Solid", "Double", "Dashed (TBD)", "Inset (TBD)"};
+        int idx = static_cast<int>(style.borderStyle);
+        if (ImGui::Combo("Border Style", &idx, borderStyleNames, IM_ARRAYSIZE(borderStyleNames))) {
+            style.borderStyle = static_cast<BorderStyle>(idx);
+        }
+        checkUndoCapture(uiMgr);
+    }
+
     ImGui::ColorEdit4("Text Color", &style.textColor.r); checkUndoCapture(uiMgr);
     ImGui::DragFloat("Font Size", &style.fontSize, 0.5f, 6.0f, 72.0f); checkUndoCapture(uiMgr);
     ImGui::DragFloat("Opacity", &style.opacity, 0.01f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
+    ImGui::DragFloat("BG Tint Opacity", &style.backgroundTintOpacity, 0.01f, 0.0f, 1.0f,
+                     "%.2f"); checkUndoCapture(uiMgr);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Fades only the background fill — border/gradient/shadow stay at full alpha.");
 
-    // --- Font Name (dropdown) ---
+    // --- Font: Family + Weight ---
+    // Family dropdown lists unique families across the FontRegistry. Weight
+    // dropdown narrows to variants actually registered for that family. When
+    // the selected family has only one weight, the Weight combo is a single
+    // entry (cosmetically still useful — shows what's baked). Falls back to
+    // a flat Font Name combo below for any legacy name that doesn't map.
     {
-        auto names = FontRegistry::instance().fontNames();
-        // Find current selection index (0 = "(default)")
-        int current = 0;
-        for (int i = 0; i < static_cast<int>(names.size()); ++i) {
-            if (names[i] == style.fontName) { current = i + 1; break; }
+        auto& reg = FontRegistry::instance();
+        auto families = reg.families();
+
+        // Resolve current selection from style.fontName — look up its SDFFont
+        // and read back family/weight.
+        std::string currentFamily, currentWeight;
+        if (!style.fontName.empty()) {
+            if (auto* f = reg.getFont(style.fontName)) {
+                currentFamily = f->family;
+                currentWeight = f->weight;
+            }
         }
-        auto getter = [](void* data, int idx, const char** out) -> bool {
+
+        // Family combo (index 0 = "(default)").
+        int famIdx = 0;
+        for (int i = 0; i < static_cast<int>(families.size()); ++i) {
+            if (families[i] == currentFamily) { famIdx = i + 1; break; }
+        }
+        auto famGetter = [](void* data, int idx, const char** out) -> bool {
             auto* v = static_cast<std::vector<std::string>*>(data);
             if (idx == 0) { *out = "(default)"; return true; }
             if (idx - 1 < static_cast<int>(v->size())) { *out = (*v)[idx - 1].c_str(); return true; }
             return false;
         };
-        if (ImGui::Combo("Font Name", &current, getter, &names, static_cast<int>(names.size()) + 1)) {
-            style.fontName = (current == 0) ? "" : names[current - 1];
+        if (ImGui::Combo("Font Family", &famIdx, famGetter, &families,
+                         static_cast<int>(families.size()) + 1)) {
+            if (famIdx == 0) {
+                style.fontName = "";
+                currentFamily.clear();
+                currentWeight.clear();
+            } else {
+                currentFamily = families[famIdx - 1];
+                auto weights = reg.weightsForFamily(currentFamily);
+                std::string pick = weights.empty() ? std::string() : weights.front();
+                if (auto* f = reg.getByFamilyWeight(currentFamily, pick)) {
+                    style.fontName = f->name;
+                    currentWeight = f->weight;
+                } else if (auto* f2 = reg.getFont(currentFamily)) {
+                    style.fontName = f2->name;
+                    currentWeight = f2->weight;
+                }
+            }
         }
+        checkUndoCapture(uiMgr);
+
+        // Weight combo — disabled when no family selected.
+        std::vector<std::string> weights;
+        if (!currentFamily.empty()) weights = reg.weightsForFamily(currentFamily);
+        int wIdx = 0;
+        for (int i = 0; i < static_cast<int>(weights.size()); ++i) {
+            if (weights[i] == currentWeight) { wIdx = i; break; }
+        }
+        auto wGetter = [](void* data, int idx, const char** out) -> bool {
+            auto* v = static_cast<std::vector<std::string>*>(data);
+            if (idx < static_cast<int>(v->size())) { *out = (*v)[idx].c_str(); return true; }
+            return false;
+        };
+        ImGui::BeginDisabled(weights.empty());
+        if (ImGui::Combo("Font Weight", &wIdx, wGetter, &weights,
+                         static_cast<int>(weights.size()))) {
+            if (!weights.empty()) {
+                if (auto* f = reg.getByFamilyWeight(currentFamily, weights[wIdx])) {
+                    style.fontName = f->name;
+                }
+            }
+        }
+        ImGui::EndDisabled();
+        checkUndoCapture(uiMgr);
+
+        // Fallback: raw Font Name input for edge cases (custom names outside the
+        // family/weight system). Shown read-only as a small hint.
+        ImGui::TextDisabled("fontName: %s",
+            style.fontName.empty() ? "(default)" : style.fontName.c_str());
     }
-    checkUndoCapture(uiMgr);
 
     // --- Background Texture / Nine-Slice ---
     if (ImGui::TreeNode("Background Texture")) {
@@ -3629,6 +3882,29 @@ void UIEditorPanel::drawStyleEditor(UINode* node, UIManager& uiMgr) {
         ImGui::DragFloat2("Shadow Offset", &style.shadowOffset.x, 0.5f, -20.0f, 20.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Shadow Blur", &style.shadowBlur, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Shadow Color", &style.shadowColor.r); checkUndoCapture(uiMgr);
+        ImGui::TreePop();
+    }
+
+    // --- Header Strip ---
+    if (ImGui::TreeNode("Header Strip")) {
+        ImGui::ColorEdit4("Header Color", &style.headerColor.r); checkUndoCapture(uiMgr);
+        ImGui::DragFloat("Header Height", &style.headerHeight, 0.5f, 0.0f, 200.0f, "%.1f px");
+        checkUndoCapture(uiMgr);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Colored bar at the top edge. Disable with height = 0 or fully transparent color.");
+        ImGui::TreePop();
+    }
+
+    // --- Typography ---
+    if (ImGui::TreeNode("Typography")) {
+        ImGui::DragFloat("Line Height", &style.lineHeight, 0.01f, 0.5f, 3.0f, "%.2f\xc3\x97");
+        checkUndoCapture(uiMgr);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Multiplier on the font's native line height. 1.0 = default.");
+        ImGui::DragFloat("Letter Spacing", &style.letterSpacing, 0.1f, -5.0f, 20.0f, "%.1f px");
+        checkUndoCapture(uiMgr);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Extra pixels added between each glyph.");
         ImGui::TreePop();
     }
 

@@ -17,6 +17,15 @@ public:
     const std::string& fragPath() const { return fragPath_; }
     bool loadFromSource(const std::string& vertSrc, const std::string& fragSrc);
 
+    // Set the asset keys associated with this shader. Used by VFS-aware
+    // loaders that read shader sources via AssetRegistry::readText() and
+    // call loadFromSource directly — the keys are stored only for hot-
+    // reload bookkeeping.
+    void setPaths(const std::string& vertPath, const std::string& fragPath) {
+        vertPath_ = vertPath;
+        fragPath_ = fragPath;
+    }
+
     void bind() const;
     void unbind() const;
 

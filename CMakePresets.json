@@ -37,6 +37,19 @@
                 "CMAKE_C_COMPILER": "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe",
                 "CMAKE_CXX_COMPILER": "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
             }
+        },
+        {
+            "name": "x64-Release-VFS",
+            "displayName": "x64 Release + VFS (FATE_USE_VFS=ON smoke)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "FATE_USE_VFS": "ON",
+                "CMAKE_TOOLCHAIN_FILE": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "CMAKE_C_COMPILER": "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe",
+                "CMAKE_CXX_COMPILER": "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe"
+            }
         }
     ]
 }

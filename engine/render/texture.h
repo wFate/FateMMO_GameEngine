@@ -31,6 +31,14 @@ public:
                                   int width, int height, gfx::TextureFormat fmt);
     bool loadFromKTX(const std::string& path);
 
+    // Reload variants for VFS-aware loaders: destroy the old GPU handle and
+    // recreate from already-decoded pixels (RGBA/RGB) or a still-compressed
+    // KTX blob. Sources hand the loader bytes in memory; these are the
+    // upload-side counterparts.
+    bool reloadFromDecodedMemory(const unsigned char* data, int width, int height, int channels);
+    bool reloadFromCompressedMemory(const unsigned char* data, size_t dataSize,
+                                    int width, int height, gfx::TextureFormat fmt);
+
     void bind(unsigned int slot = 0) const;
     void unbind() const;
     void setFilter(bool linear);

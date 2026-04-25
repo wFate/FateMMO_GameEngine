@@ -30,6 +30,15 @@ public:
     // Return a list of all registered font names.
     std::vector<std::string> fontNames() const;
 
+    // Return unique family names across all registered fonts.
+    std::vector<std::string> families() const;
+
+    // Return weight variants available for a given family (empty if unknown).
+    std::vector<std::string> weightsForFamily(const std::string& family) const;
+
+    // Lookup by family + weight. Returns nullptr if no match.
+    SDFFont* getByFamilyWeight(const std::string& family, const std::string& weight);
+
     // Clear all registered fonts.
     void clear();
 

@@ -1,11 +1,11 @@
 #include "engine/scene/async_scene_loader.h"
 #include "engine/asset/asset_registry.h"
+#include "engine/asset/asset_source.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/prefab.h"
 #include "engine/job/job_system.h"
 #include "engine/core/logger.h"
 #include <nlohmann/json.hpp>
-#include <fstream>
 #include <unordered_set>
 #include <chrono>
 
@@ -25,8 +25,11 @@ static void asyncSceneLoadJob(void* param) {
     auto* pending = static_cast<PendingSceneLoad*>(param);
 
     pending->workerProgress.store(0.0f, std::memory_order_relaxed);
-    std::ifstream file(pending->jsonPath);
-    if (!file.is_open()) {
+    // Phase 3 of VFS migration: read scene JSON via the installed
+    // IAssetSource so packaged .pak builds work. Source readText is
+    // documented thread-safe; this runs on a fiber-job worker.
+    auto sceneText = AssetRegistry::readText(pending->jsonPath);
+    if (!sceneText) {
         pending->errorMessage = "Cannot open scene: " + pending->jsonPath;
         pending->workerFailed.store(true, std::memory_order_relaxed);
         pending->workerDone.store(true, std::memory_order_release);
@@ -35,14 +38,13 @@ static void asyncSceneLoadJob(void* param) {
 
     nlohmann::json root;
     try {
-        root = nlohmann::json::parse(file);
+        root = nlohmann::json::parse(*sceneText);
     } catch (const nlohmann::json::exception& e) {
         pending->errorMessage = std::string("JSON parse error: ") + e.what();
         pending->workerFailed.store(true, std::memory_order_relaxed);
         pending->workerDone.store(true, std::memory_order_release);
         return;
     }
-    file.close();
 
     if (root.contains("metadata")) {
         pending->sceneMetadata = root["metadata"];
@@ -86,7 +88,9 @@ static void asyncSceneLoadJob(void* param) {
 
 void AsyncSceneLoader::startLoad(const std::string& sceneName, const std::string& jsonPath) {
     if (active_) {
-        LOG_WARN("AsyncLoader", "startLoad called while already active -- ignoring");
+        LOG_WARN("AsyncLoader", "startLoad('%s') called while '%s' is already active -- ignoring",
+                 sceneName.c_str(),
+                 (pending_ ? pending_->sceneName.c_str() : "<unknown>"));
         return;
     }
     pending_ = std::make_unique<PendingSceneLoad>();
@@ -104,7 +108,7 @@ void AsyncSceneLoader::startLoad(const std::string& sceneName, const std::string
 
 bool AsyncSceneLoader::tickFinalization(World& world) {
     if (!active_ || !pending_ || !pending_->workerDone.load(std::memory_order_acquire)) return false;
-    if (pending_->workerFailed.load(std::memory_order_relaxed)) return true;  // Already acquired via workerDone
+    if (pending_->workerFailed.load(std::memory_order_relaxed)) return true; // caller must call reset() after handling error
 
     // First frame: kick off texture async loads on main thread
     if (!pending_->texturesKicked) {
@@ -163,6 +167,11 @@ bool AsyncSceneLoader::tickFinalization(World& world) {
                  pending_->sceneName.c_str(), pending_->totalEntities, pending_->totalTextures);
     }
     return allDone;
+}
+
+void AsyncSceneLoader::reset() {
+    active_ = false;
+    pending_.reset();
 }
 
 bool AsyncSceneLoader::isWorkerDone() const {

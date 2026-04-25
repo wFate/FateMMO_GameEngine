@@ -1,4 +1,5 @@
 #include "engine/editor/undo.h"
+#include "engine/core/logger.h"
 #ifdef FATE_HAS_GAME
 #include "engine/ui/ui_manager.h"
 #include "game/components/transform.h"
@@ -30,28 +31,36 @@ void PropertyCommand::undo(World* w) {
     auto* e = w->getEntity(entityHandle);
     if (!e) return;
     EntityHandle oldH = entityHandle;
+    // Two-phase: build the replacement FIRST, then destroy the old entity.
+    // If jsonToEntity fails we leave the original entity alone instead of
+    // losing it entirely (prior to this fix, a malformed snapshot would
+    // silently delete the entity with no rollback).
+    auto* restored = PrefabLibrary::jsonToEntity(oldState, *w);
+    if (!restored) {
+        LOG_ERROR("Undo", "PropertyCommand::undo: failed to rebuild entity — keeping current state");
+        return;
+    }
     w->destroyEntity(entityHandle);
     w->processDestroyQueue("editor_undo_property");
-    auto* restored = PrefabLibrary::jsonToEntity(oldState, *w);
-    if (restored) {
-        entityHandle = restored->handle();
-        if (entityHandle != oldH)
-            UndoSystem::instance().remapHandle(oldH, entityHandle);
-    }
+    entityHandle = restored->handle();
+    if (entityHandle != oldH)
+        UndoSystem::instance().remapHandle(oldH, entityHandle);
 }
 
 void PropertyCommand::redo(World* w) {
     auto* e = w->getEntity(entityHandle);
     if (!e) return;
     EntityHandle oldH = entityHandle;
+    auto* restored = PrefabLibrary::jsonToEntity(newState, *w);
+    if (!restored) {
+        LOG_ERROR("Undo", "PropertyCommand::redo: failed to rebuild entity — keeping current state");
+        return;
+    }
     w->destroyEntity(entityHandle);
     w->processDestroyQueue("editor_redo_property");
-    auto* restored = PrefabLibrary::jsonToEntity(newState, *w);
-    if (restored) {
-        entityHandle = restored->handle();
-        if (entityHandle != oldH)
-            UndoSystem::instance().remapHandle(oldH, entityHandle);
-    }
+    entityHandle = restored->handle();
+    if (entityHandle != oldH)
+        UndoSystem::instance().remapHandle(oldH, entityHandle);
 }
 
 #ifdef FATE_HAS_GAME

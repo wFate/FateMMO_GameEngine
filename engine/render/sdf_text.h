@@ -13,6 +13,15 @@ namespace fate {
 // GlyphMetrics is defined in sdf_font.h
 #include "engine/render/sdf_font.h"
 
+// Layout modifiers for glyph placement. `lineHeight` multiplies the font's
+// native line-height (1.0 = default). `letterSpacing` adds pixels between each
+// glyph's advance (0 = default, negative to tighten). The identity-default
+// keeps every existing call site behaving exactly as before.
+struct TextLayout {
+    float lineHeight    = 1.0f;
+    float letterSpacing = 0.0f;
+};
+
 class SDFText {
 public:
     static SDFText& instance();
@@ -22,28 +31,34 @@ public:
 
     void drawWorld(SpriteBatch& batch, const std::string& text, Vec2 position,
                    float fontSize, Color color = Color::white(), float depth = 50.0f,
-                   TextStyle style = TextStyle::Normal);
+                   TextStyle style = TextStyle::Normal,
+                   const TextLayout& layout = {});
 
     void drawScreen(SpriteBatch& batch, const std::string& text, Vec2 position,
                     float fontSize, Color color = Color::white(), float depth = 50.0f,
-                    TextStyle style = TextStyle::Normal);
+                    TextStyle style = TextStyle::Normal,
+                    const TextLayout& layout = {});
 
-    Vec2 measure(const std::string& text, float fontSize) const;
+    Vec2 measure(const std::string& text, float fontSize,
+                 const TextLayout& layout = {}) const;
 
     void setFontRegistry(FontRegistry* registry);
 
     void drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 position,
                       float fontSize, Color color = Color::white(), float depth = 50.0f,
                       TextStyle style = TextStyle::Normal,
-                      const std::string& fontName = "default");
+                      const std::string& fontName = "default",
+                      const TextLayout& layout = {});
 
     void drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 position,
                      float fontSize, Color color = Color::white(), float depth = 50.0f,
                      TextStyle style = TextStyle::Normal,
-                     const std::string& fontName = "default");
+                     const std::string& fontName = "default",
+                     const TextLayout& layout = {});
 
     Vec2 measureEx(const std::string& text, float fontSize,
-                   const std::string& fontName = "default") const;
+                   const std::string& fontName = "default",
+                   const TextLayout& layout = {}) const;
 
     unsigned int atlasTextureId() const;
     gfx::TextureHandle atlasGfxHandle() const { return atlasGfxHandle_; }
@@ -69,10 +84,13 @@ private:
 
     void loadMetrics(const std::string& jsonPath);
     void drawInternal(SpriteBatch& batch, const std::string& text, Vec2 position,
-                      float fontSize, Color color, float depth, TextStyle style, bool yDown);
+                      float fontSize, Color color, float depth, TextStyle style, bool yDown,
+                      const TextLayout& layout = {});
     void drawBitmap(SpriteBatch& batch, const SDFFont& font, const std::string& text,
-                    Vec2 position, float fontSize, Color color, float depth, bool yDown);
-    Vec2 measureBitmap(const SDFFont& font, const std::string& text, float fontSize) const;
+                    Vec2 position, float fontSize, Color color, float depth, bool yDown,
+                    const TextLayout& layout = {});
+    Vec2 measureBitmap(const SDFFont& font, const std::string& text, float fontSize,
+                       const TextLayout& layout = {}) const;
 };
 
 } // namespace fate

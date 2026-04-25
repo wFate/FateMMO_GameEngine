@@ -15,6 +15,8 @@
 #include "engine/core/logger.h"
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <system_error>
 #include "engine/platform/device_info.h"
 #include "engine/platform/ad_service.h"
 #ifndef FATE_SHIPPING
@@ -36,6 +38,7 @@
 #endif
 #include "engine/profiling/tracy_zones.h"
 #include "engine/job/job_system.h"
+#include "engine/asset/asset_source.h"
 #if defined(ENGINE_MEMORY_DEBUG)
 #include "engine/memory/allocator_registry.h"
 #endif
@@ -117,6 +120,55 @@ bool App::init(const AppConfig& config) {
         return false;
     }
 
+    // ---- Asset source bootstrap (must precede Metal/GL init so the ----------
+    // shipping metallib + dev .metal source files are read via VFS when
+    // FATE_USE_VFS=ON. Order also lets onInit() and any pre-loop asset reads
+    // see the installed source.
+    //
+    // Write-side scope: IAssetSource is READ ONLY by design. Save files, user
+    // prefs, logs, and WAL continue to go through direct fs (fopen/ofstream)
+    // and do NOT go through this source. Rationale: (1) PhysFS writable dirs
+    // would duplicate OS save-dir conventions for no gain; (2) keeps packaged
+    // .pak immutable at runtime; (3) matches the editor-save carve-out
+    // documented in engine/editor/editor.cpp. If editor save is ever needed
+    // inside a packaged build, add an IAssetWriter mirror of IAssetSource.
+    assetsDir_ = config.assetsDir;
+#if defined(FATE_USE_VFS) && FATE_USE_VFS
+    {
+        LOG_INFO("App", "VFS enabled (FATE_USE_VFS=1)");
+        auto vfs = std::make_unique<VfsSource>(config.title.c_str());
+        if (!vfs->initialized()) {
+            LOG_ERROR("App", "VFS init failed — falling back to DirectFS");
+            AssetRegistry::instance().setSource(std::make_unique<DirectFsSource>());
+            LOG_INFO("App", "Asset source: DirectFS (CWD-relative)");
+        } else {
+            std::string looseRoot = assetsDir_.empty() ? std::string("assets") : assetsDir_;
+            std::string mountName = std::filesystem::path(looseRoot).filename().string();
+            if (mountName.empty()) mountName = "assets";
+            if (vfs->mount(looseRoot, mountName, /*appendToSearch=*/true)) {
+                LOG_INFO("App", "Mounted loose assets root: %s -> /%s",
+                         looseRoot.c_str(), mountName.c_str());
+            } else {
+                LOG_WARN("App", "Failed to mount loose assets root: %s", looseRoot.c_str());
+            }
+            const std::string pakPath = (assetsDir_.empty() ? std::string(".") : assetsDir_) + "/assets.pak";
+            std::error_code pakEc;
+            if (std::filesystem::exists(pakPath, pakEc)) {
+                if (vfs->mount(pakPath, "", /*appendToSearch=*/false)) {
+                    LOG_INFO("App", "Mounted package: %s", pakPath.c_str());
+                } else {
+                    LOG_WARN("App", "Found assets.pak but mount failed: %s", pakPath.c_str());
+                }
+            }
+            AssetRegistry::instance().setSource(std::move(vfs));
+            LOG_INFO("App", "Asset source: VfsSource");
+        }
+    }
+#else
+    AssetRegistry::instance().setSource(std::make_unique<DirectFsSource>());
+    LOG_INFO("App", "Asset source: DirectFS (FATE_USE_VFS=0, CWD-relative)");
+#endif
+
 #ifdef FATEMMO_METAL
     metalView_ = SDL_Metal_CreateView(window_);
     metalLayer_ = (__bridge void*)(__bridge CAMetalLayer*)SDL_Metal_GetLayer((SDL_MetalView)metalView_);
@@ -129,22 +181,31 @@ bool App::init(const AppConfig& config) {
     gfx::Device::instance().initMetal(metalLayer_);
 
     // Populate the Metal shader library — every shader creation depends on this.
+    // VFS-aware: bytes / source come via AssetRegistry so the metallib or .metal
+    // files can live in a packaged assets.pak under FATE_USE_VFS=ON.
 #ifdef FATE_SHIPPING
-    if (!gfx::Device::instance().loadMetalShaderLibrary("assets/shaders/metal/default.metallib")) {
-        LOG_FATAL("App", "Metal: failed to load default.metallib");
-        return false;
+    {
+        const char* metallibKey = "assets/shaders/metal/default.metallib";
+        auto bytes = AssetRegistry::readBytes(metallibKey);
+        if (!bytes || bytes->empty()) {
+            LOG_FATAL("App", "Metal: cannot read %s", metallibKey);
+            return false;
+        }
+        if (!gfx::Device::instance().loadMetalShaderLibraryFromBytes(
+                bytes->data(), bytes->size(), metallibKey)) {
+            LOG_FATAL("App", "Metal: failed to load default.metallib from bytes");
+            return false;
+        }
     }
 #else
     {
-        auto compileShader = [](const std::string& path) {
-            std::ifstream f(path);
-            if (!f.is_open()) {
-                LOG_WARN("App", "Metal: shader source not found: %s", path.c_str());
+        auto compileShader = [](const char* key) {
+            auto src = AssetRegistry::readText(key);
+            if (!src) {
+                LOG_WARN("App", "Metal: shader source not found: %s", key);
                 return;
             }
-            std::ostringstream ss;
-            ss << f.rdbuf();
-            gfx::Device::instance().compileMetalShaderSource(ss.str(), path);
+            gfx::Device::instance().compileMetalShaderSource(*src, key);
         };
         compileShader("assets/shaders/metal/sprite.metal");
         compileShader("assets/shaders/metal/tile_chunk.metal");
@@ -214,9 +275,8 @@ bool App::init(const AppConfig& config) {
     });
 #endif
 
-    assetsDir_ = config.assetsDir;
-
-    // Register asset loaders BEFORE onInit() — game creates entities that load textures
+    // Register asset loaders BEFORE onInit() — game creates entities that load textures.
+    // Source was already installed before Metal/GL init above.
     AssetRegistry::instance().registerLoader(makeTextureLoader());
     AssetRegistry::instance().registerLoader(makeJsonLoader());
     AssetRegistry::instance().registerLoader(makeShaderLoader());
@@ -237,18 +297,61 @@ bool App::init(const AppConfig& config) {
     registerLightingPass(renderGraph_, lightingConfig_);
     registerPostProcessPasses(renderGraph_, postProcessConfig_);
 
-    // Start file watcher on assets directory
+    // Start file watcher on assets directory.
+    //
+    // Scope note: the watcher watches the LOOSE assetsDir_ only, even when
+    // FATE_USE_VFS=ON with an assets.pak mounted. Hot-reload inside an archive
+    // is intentionally out of scope — the editor is a dev-only tool and is
+    // stripped from shipping builds (FATE_SHIPPING), so it never sees a .pak
+    // overlay in practice. If a future contributor wants .pak hot-reload, they
+    // would need archive-timestamp polling + re-mount semantics, which PhysFS
+    // does not provide natively.
     if (!assetsDir_.empty()) {
         fileWatcher_.start(assetsDir_, [this](const std::string& relativePath) {
             try {
+                // Defense in depth: ReadDirectoryChangesW already returns
+                // directory-relative paths, but reject anything that tries
+                // to escape the asset root. Prevents a malicious/corrupted
+                // notification name from triggering an out-of-tree reload.
+                if (relativePath.find("..") != std::string::npos ||
+                    (!relativePath.empty() && (relativePath[0] == '/' || relativePath[0] == '\\'))) {
+                    LOG_WARN("FileWatcher", "Rejecting reload path outside asset root: %s",
+                             relativePath.c_str());
+                    return;
+                }
                 if (relativePath.rfind("themes/", 0) == 0) {
                     // Defer actual reload to main thread; update() drains after debounce.
                     themeReloadPending_.store(true, std::memory_order_release);
                     themeReloadRequestedAt_ = elapsedTime_;
                     return;
                 }
+                // Containment check via filesystem canonicalization, but the
+                // key sent to the registry is the LOGICAL path (assets/...)
+                // so it matches whatever load(...) callers used. Phase 2 of
+                // the VFS migration flipped registry identity to logical
+                // keys; absolute disk paths no longer match registry slots.
                 std::string fullPath = assetsDir_ + "/" + relativePath;
-                AssetRegistry::instance().queueReload(fullPath);
+                std::error_code ec;
+                auto canon = std::filesystem::weakly_canonical(fullPath, ec);
+                auto rootCanon = std::filesystem::weakly_canonical(assetsDir_, ec);
+                if (!ec && !rootCanon.empty()) {
+                    auto canonStr = canon.string();
+                    auto rootStr = rootCanon.string();
+                    if (canonStr.rfind(rootStr, 0) != 0) {
+                        LOG_WARN("FileWatcher", "Canonical path %s escapes root %s — dropped",
+                                 canonStr.c_str(), rootStr.c_str());
+                        return;
+                    }
+                }
+                // The watcher's relativePath strips the assets root prefix
+                // (e.g. "textures/foo.png"). Callers load with the prefix
+                // included ("assets/textures/foo.png"). Reattach the basename
+                // of the watch dir so the keys match.
+                std::string assetRootName = std::filesystem::path(assetsDir_).filename().string();
+                std::string assetKey = assetRootName.empty()
+                    ? relativePath
+                    : (assetRootName + "/" + relativePath);
+                AssetRegistry::instance().queueReload(assetKey);
             } catch (const std::exception& e) {
                 LOG_WARN("FileWatcher", "Reload queue failed for %s: %s", relativePath.c_str(), e.what());
             }
@@ -529,7 +632,7 @@ void App::processEvents() {
                         if (event.wheel.y > 0) zoom *= 1.15f;  // scroll up = zoom in
                         else if (event.wheel.y < 0) zoom *= 0.87f; // scroll down = zoom out
                         // Clamp zoom range
-                        if (zoom < 0.05f) zoom = 0.05f;  // can see ~19,200x10,800px = 600x337 tiles
+                        if (zoom < 0.025f) zoom = 0.025f; // can see ~38,400x21,600px = 1200x675 tiles
                         if (zoom > 8.0f) zoom = 8.0f;    // zoomed in to ~120x67px view
                         camera_.setZoom(zoom);
                     }

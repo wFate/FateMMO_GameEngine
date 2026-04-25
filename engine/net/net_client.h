@@ -7,6 +7,7 @@
 #include "engine/net/auth_protocol.h"
 #include "engine/net/game_messages.h"
 #include "engine/net/dialogue_messages.h"
+#include "engine/net/interact_site_messages.h"
 #include "engine/net/admin_messages.h"
 #include "engine/net/packet_crypto.h"
 #include <functional>
@@ -47,6 +48,11 @@ public:
     void sendDialogueGiveGold(uint64_t npcPid, int64_t amount);
     void sendDialogueSetFlag (uint64_t npcPid, const std::string& flagId);
     void sendDialogueHeal    (uint64_t npcPid, int32_t amount);
+
+    // Interact-site framework (PROTOCOL 10). Player presses Action on a
+    // targeted InteractSite entity; client fires CmdInteractSite with the
+    // site's PersistentId raw value. Server replies via SvInteractSiteResult.
+    void sendInteractSite(uint64_t siteEntityId);
     void sendOpalsShopPurchase(const std::string& itemId, uint16_t quantity);  // Phase 71
     void sendBankDepositItem(uint32_t npcId, uint8_t inventorySlot);
     void sendBankWithdrawItem(uint32_t npcId, uint16_t itemIndex);
@@ -105,11 +111,17 @@ public:
     void sendAdminValidate();
     void sendAdminRequestContentList(uint8_t contentType);
 
+    // Bounty actions
+    void sendBountyGetBoard();
+    void sendBountyPlace(const std::string& target, int64_t amount);
+    void sendBountyCancel(const std::string& targetCharId);
+
     // Guild actions
     void sendGuildAction(uint8_t action, const std::string& data);
     void sendGuildAction(uint8_t action);
 
     // Social actions (friend requests, block, etc.)
+    void sendSocialAction(uint8_t action);
     void sendSocialAction(uint8_t action, const std::string& targetCharId);
 
     // Party actions
@@ -135,6 +147,13 @@ public:
     bool isWaitingForConnection() const { return waitingForAccept_; }
     uint16_t clientId() const { return clientId_; }
 
+    // Network diagnostics (editor Network panel)
+    float rttMs() const { return reliability_.rtt() * 1000.0f; }
+    size_t reliableQueueDepth() const { return reliability_.pendingReliableCount(); }
+    uint32_t droppedNonCritical() const { return reliability_.droppedNonCritical(); }
+    const std::string& lastHost() const { return lastHost_; }
+    uint16_t lastPort() const { return lastPort_; }
+
     // Reconnect state queries
     bool isReconnecting() const;
     bool reconnectFailed() const;
@@ -156,11 +175,15 @@ public:
     std::function<void(const SvTradeUpdateMsg&)> onTradeUpdate;
     std::function<void(const SvMarketResultMsg&)> onMarketResult;
     std::function<void(const SvBountyUpdateMsg&)> onBountyUpdate;
+    std::function<void(const SvBountyBoardMsg&)>        onBountyBoard;
     std::function<void(const SvGauntletUpdateMsg&)> onGauntletUpdate;
+    std::function<void(const SvGauntletScoreboardMsg&)> onGauntletScoreboard;
     std::function<void(const SvGuildUpdateMsg&)> onGuildUpdate;
     std::function<void(const SvSocialUpdateMsg&)> onSocialUpdate;
+    std::function<void(const SvFriendsListMsg&)>        onFriendsList;
     std::function<void(const SvQuestUpdateMsg&)> onQuestUpdate;
     std::function<void(const SvDialogueActionResultMsg&)> onDialogueActionResult;
+    std::function<void(const SvInteractSiteResultMsg&)> onInteractSiteResult;
     std::function<void(const SvZoneTransitionMsg&)> onZoneTransition;
     std::function<void(const SvDeathNotifyMsg&)> onDeathNotify;
     std::function<void(const SvRespawnMsg&)> onRespawn;

@@ -8,7 +8,7 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 9;  // v9: ackBits widened uint32→uint64, SvEntityEnterBatch, CmdAckExtended, epoch-gated Rekey
+constexpr uint8_t  PROTOCOL_VERSION  = 10;  // v10: interact-site framework — CmdInteractSite, SvInteractSiteResult
 constexpr size_t   PACKET_HEADER_SIZE = 26;  // v9: ackBits widened 4→8 bytes (32→64 bit ACK window)
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
@@ -202,6 +202,15 @@ namespace PacketType {
     constexpr uint8_t CmdDialogueSetFlag     = 0xDC;
     constexpr uint8_t CmdDialogueHeal        = 0xDD;
     constexpr uint8_t SvDialogueActionResult = 0xDE;
+
+    // Interact-site framework (PROTOCOL 10)
+    constexpr uint8_t CmdInteractSite        = 0xE2;
+    constexpr uint8_t SvInteractSiteResult   = 0xE3;
+
+    // Batch 4 list payloads (PROTOCOL 10 — no version bump, riding v10)
+    constexpr uint8_t SvBountyBoard        = 0xE4;
+    constexpr uint8_t SvFriendsList        = 0xE5;
+    constexpr uint8_t SvGauntletScoreboard = 0xE6;
 
     // Pet panel seed on login (silent). Distinct from SvPetGranted which
     // fires on mid-session hatch and shows a "Hatched: X" chat toast.

@@ -7,7 +7,7 @@
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue?style=flat-square&logo=cplusplus)
 ![Lines of Code](https://img.shields.io/badge/LOC-172%2C000%2B-brightgreen?style=flat-square)
 ![Tests](https://img.shields.io/badge/tests-1%2C400%2B-brightgreen?style=flat-square)
-![Protocol](https://img.shields.io/badge/protocol-v5-blueviolet?style=flat-square)
+![Protocol](https://img.shields.io/badge/protocol-v9-blueviolet?style=flat-square)
 ![Security](https://img.shields.io/badge/security-Noise__NK%20%2B%20AuthProof-critical?style=flat-square)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20iOS%20%7C%20Android%20%7C%20Linux%20%7C%20macOS-orange?style=flat-square)
 
@@ -34,14 +34,14 @@
 | 🏗️ | **172K+ LOC** of hand-written C++23 across engine, game, server, and tests — no code generation, no middleware |
 |:---:|:---|
 | 🔐 | **Noise_NK cryptography** with forward secrecy, symmetric rekeying, zero plaintext game traffic — and **encrypted AuthProof** so auth tokens never leave the client in the clear |
-| 🛡️ | **Hardened v5 protocol** — 64-bit CSPRNG session tokens, timing-safe auth comparisons, anti-replay nonces, and per-account login lockout |
+| 🛡️ | **Hardened v9 protocol** — 64-bit CSPRNG session tokens, timing-safe auth comparisons, anti-replay nonces, per-account login lockout, 64-bit ACK window, epoch-gated rekey |
 | 🎮 | **50+ server-authoritative game systems** — combat, skills, inventory, trade, guilds, arenas, dungeons, pets, costumes, collections, opals economy |
 | 🖥️ | **Full Unity-style editor** with live inspector, undo/redo, Aseprite animation editor, asset browser, and 29 device profiles |
 | 📱 | **5-platform support** from a single codebase — Windows, **macOS (native Metal)**, iOS, Android, Linux |
 | 🧪 | **1,400+ automated tests** across 180 test files ensuring stability across every subsystem |
 | 🎨 | **60 custom UI widgets** with JSON-driven screens, viewport scaling, and zero-ImGui shipping builds |
 | 🌍 | **33-scene handcrafted world** with 5 factions, faction guards, boss rotations, and 123 quests |
-| 📡 | **Protocol v5** custom UDP with critical-lane bypass, 32-bit delta compression, and fiber-based async DB dispatch |
+| 📡 | **Protocol v9** custom UDP with critical-lane bypass, 32-bit delta compression, SvEntityEnterBatch coalesce, and fiber-based async DB dispatch |
 | 👁️ | **Admin observer/spectate mode** — log in without a character and roam any live scene with full replication |
 | 🐾 | **Active pet system** — equip one pet, share 50% XP, gain stat bonuses, auto-loot within radius |
 | 💰 | **Opals economy + AdMob rewarded video** with ECDSA-signed server-side verification |
@@ -81,7 +81,7 @@ The demo opens the full editor UI with a procedural tile grid — explore the do
 | **SDF Text** | True **MTSDF font rendering** — uber-shader with 4 styles (Normal/Outlined/Glow/Shadow), offline `msdf-atlas-gen` atlas (512x512, 177 glyphs, 4px distance range), `median(r,g,b)` + `screenPxRange` for resolution-independent edges at any zoom. **4 registered fonts** (Inter-Regular, Inter-SemiBold, PressStart2P, PixelifySans) via `FontRegistry` singleton. Multi-font rendering via zero-copy `activeGlyphs_` pointer swap. World-space and screen-space APIs, UTF-8 decoding |
 | **Render Pipeline** | 11-pass RenderGraph: GroundTiles → Entities → Particles → **SkillVFX** → SDFText → DebugOverlays → Lighting → BloomExtract → BloomBlur → PostProcess → Blit |
 | **Editor** | Dear ImGui (docking) + ImGuizmo + ImPlot + imnodes. Custom dark theme (Inter font family, FreeType LightHinting). Property inspectors, visual node editors, **Aseprite-first animation editor** with layered paper-doll preview (5-layer composite), sprite slicing, tile painting, play-in-editor, undo/redo (200 actions) |
-| **Networking** | Custom reliable UDP (`0xFA7E`, **PROTOCOL_VERSION 5**), **Noise_NK handshake** (two X25519 DH ops) + **XChaCha20-Poly1305 AEAD** encryption (key-derived 48-bit nonce prefix, symmetric rekeying every 65K packets / 15 min). **Security pass v5**: 64-bit CSPRNG session tokens (libsodium, zero `mt19937`), encrypted `CmdAuthProof` (0xD8) so the auth token never rides in plaintext, timing-safe token comparisons, per-account login lockout with exponential backoff, parameterized ranking SQL. IPv6 dual-stack, 3 channel types, 22-byte header with 32-bit ACK bitfield, RTT-based retransmission, connection cookies, per-client token-bucket rate limiting (55+ packet types), 1 MB kernel socket buffers, 2048-slot pending-packet queue with **critical-lane bypass** for 8 load-bearing opcodes |
+| **Networking** | Custom reliable UDP (`0xFA7E`, **PROTOCOL_VERSION 9**), **Noise_NK handshake** (two X25519 DH ops) + **XChaCha20-Poly1305 AEAD** encryption (key-derived 48-bit nonce prefix, symmetric rekeying every 65K packets / 15 min, epoch-gated). **Security pass v5+**: 64-bit CSPRNG session tokens (libsodium, zero `mt19937`), encrypted `CmdAuthProof` (0xD8) so the auth token never rides in plaintext, timing-safe token comparisons, per-account login lockout with exponential backoff, parameterized ranking SQL. IPv6 dual-stack, 3 channel types, 26-byte header with **64-bit ACK bitfield** (v9), RTT-based retransmission, connection cookies, per-client token-bucket rate limiting (55+ packet types), 1 MB kernel socket buffers, 2048-slot pending-packet queue with **critical-lane bypass** for 8 load-bearing opcodes, **SvEntityEnterBatch** coalesce, **CmdAckExtended** reliability |
 | **Database** | PostgreSQL (libpqxx), **16 repositories**, **10 startup caches**, **fiber-based `DbDispatcher`** (async player load, disconnect saves, metrics, maintenance — zero game-thread blocking), connection pool (5-50) + circuit breaker, priority-based 4-tier dirty-flag flushing, 30s staggered auto-save. `PlayerLockMap` for concurrent mutation serialization. WAL removed — 30s window bounds crash loss |
 | **ECS** | Data-oriented archetype ECS, contiguous SoA memory, **56 registered components**, generational handles, prefab variants (JSON Patch), compile-time `CompId`, Hot/Warm/Cold tier classification, `FATE_REFLECT` macro with field-level metadata, `ComponentFlags` trait policies, RAII iteration depth guard, 4096-archetype reserve capacity |
 | **Memory** | Zone arenas (256 MB, O(1) reset), double-buffered frame arenas (64 MB), thread-local scratch arenas (Fleury conflict-avoidance), lock-free pool allocators, debug occupancy bitmaps, ImPlot visualization panels |
@@ -204,25 +204,25 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 
 ## 🔒 Server & Networking
 
-**Headless 20 Hz server** (`FateServer`) with max **2,000 concurrent connections**. **43 handler files**, **16 DB repositories**, **10 startup caches**, **15-min idle timeout**, graceful shutdown with player save flush. Every game action is server-validated — zero trust client. **PROTOCOL_VERSION 5** — full security pass: 64-bit CSPRNG session tokens, encrypted `AuthProof`, admin observer/spectate, and tightened anti-replay on trade/market/auth.
+**Headless 20 Hz server** (`FateServer`) with max **2,000 concurrent connections**. **43 handler files**, **16 DB repositories**, **10 startup caches**, **15-min idle timeout**, graceful shutdown with player save flush. Every game action is server-validated — zero trust client. **PROTOCOL_VERSION 9** — full security pass: 64-bit CSPRNG session tokens, encrypted `AuthProof`, admin observer/spectate, and tightened anti-replay on trade/market/auth.
 
 <details>
 <summary><b>🔐 Transport & Encryption</b></summary>
 
 | Property | Value |
 |----------|-------|
-| Protocol | Custom reliable UDP (`0xFA7E`, **v5**), Win32 + POSIX |
+| Protocol | Custom reliable UDP (`0xFA7E`, **v9**), Win32 + POSIX |
 | Encryption | **Noise_NK handshake** — two X25519 DH ops (`es` + `ee`, BLAKE2b-512 derivation, protocol-name domain separator) + **XChaCha20-Poly1305 AEAD** (key-derived 48-bit session nonce prefix OR'd with 16-bit packet sequence, 16-byte tag, separate tx/rx keys). Symmetric rekey every 65K packets / 15 min (5s grace for in-flight UDP). Anonymous-DH fallback removed — every session is authenticated against the server's static identity key |
 | Server Identity | Long-term X25519 static key (`config/server_identity.key`); public key distributed with client for MITM prevention |
-| Auth Hardening (v5) | **64-bit session tokens** generated via libsodium CSPRNG (`PacketCrypto::randomBytes`) — zero `std::mt19937`. **`CmdAuthProof` (0xD8)**: auth token is encrypted under the Noise session key *after* handshake — never traverses the wire in plaintext. Timing-safe comparisons via `sodium_memcmp`. Per-account login rate-limit with exponential backoff, auth-token TTL |
+| Auth Hardening (v5+) | **64-bit session tokens** generated via libsodium CSPRNG (`PacketCrypto::randomBytes`) — zero `std::mt19937`. **`CmdAuthProof` (0xD8)**: auth token is encrypted under the Noise session key *after* handshake — never traverses the wire in plaintext. Timing-safe comparisons via `sodium_memcmp`. Per-account login rate-limit with exponential backoff, auth-token TTL |
 | IPv6 | Dual-stack with IPv4 fallback (DNS64/NAT64 — iOS App Store mandatory) |
 | Channels | Unreliable (movement, combat events), ReliableOrdered (critical), ReliableUnordered |
-| Packets | 22-byte header (widened for 64-bit sessionToken), 32-bit ACK bitfield, RTT estimation (EWMA 0.875/0.125), retransmission delay `max(0.2s, 2*RTT)`, zero-copy retransmit. Pending-packet queue 2048 slots, 75% congestion threshold |
+| Packets | 26-byte header (v9: ackBits widened 32→64-bit), RTT estimation (EWMA 0.875/0.125), retransmission delay `max(0.2s, 2*RTT)`, zero-copy retransmit. Pending-packet queue 2048 slots, 75% congestion threshold. SvEntityEnterBatch coalesce, CmdAckExtended, epoch-gated Rekey |
 | Socket Buffers | 1 MB kernel send/recv (`SO_SNDBUF`/`SO_RCVBUF`) — prevents silent drops during burst replication |
 | Payload | 1200 B UDP standard (`MAX_PAYLOAD_SIZE=1178` after header); large reliables up to 16 KB (handler buffers bumped 4K→16K) |
 | Critical-Lane Bypass | 8 load-bearing opcodes (`SvEntityEnter`, `SvEntityLeave`, `SvPlayerState`, `SvZoneTransition`, `SvDeathNotify`, `SvRespawn`, `SvKick`, `SvScenePopulated`) bypass reliable-queue congestion check — eliminates "invisible mob" + "death overlay never fires" symptoms under load |
 | Rate Limiting | Per-client, per-packet-type token buckets (**55+ packet types** across 14 categories), violation decay, auto-disconnect at 100 violations |
-| Anti-Replay | Economic nonce system (trade/market, single-use uint64, 60s expiry, cleaned on disconnect), connection cookies (HMAC FNV-1a, 10s time-bucketed), atomic dungeon-ticket claim |
+| Anti-Replay | Economic nonce system (trade/market, single-use uint64, 60s expiry, cleaned on disconnect), connection cookies (FNV-1a time-bucketed anti-spoof — not a cryptographic MAC), atomic dungeon-ticket claim |
 | Auth Security | TLS 1.2+ with AEAD-only ciphers, shipping enforces `SSL_VERIFY_PEER` (no self-signed), login rate limiting (5 attempts → 5-min lockout), version gate |
 | Auto-Reconnect | `ReconnectPhase` state machine, exponential backoff (1s→30s cap), 60s total timeout |
 | Idle Timeout | 15-min inactivity auto-disconnect, per-client activity tracking, system chat warning before kick |
@@ -347,11 +347,11 @@ Concrete performance, security, and reliability gains shipped in the latest phas
 
 | Win | Impact |
 |---|---|
-| **Protocol v5 security pass** — 64-bit CSPRNG sessionToken, encrypted `CmdAuthProof`, timing-safe comparisons, anonymous-DH fallback removed | Closed off-path UDP session-spoof predictability + plaintext-token account-takeover windows |
+| **v5-era security pass** (historical, now rolled into v9) — 64-bit CSPRNG sessionToken, encrypted `CmdAuthProof`, timing-safe comparisons, anonymous-DH fallback removed | Closed off-path UDP session-spoof predictability + plaintext-token account-takeover windows |
 | **Observer / spectate mode 5-bug chain fixed** — replication observer-bypass, ghost cleanup on scene switch, typed `SvSpectateAck`, MobAI observer-presence refcount, client interpolation loop | Admins can now `/spectate` any scene with full fidelity; sentinel log catches regressions |
 | **Shipping-build CI guard** — `scripts/check_shipping.ps1` wraps `VsDevCmd.bat` + `cmake --preset x64-Shipping`; every `imgui.h`/`ImGui::*`/editor member requires explicit `FATE_SHIPPING`/`EDITOR_BUILD` guard | Stripped ImGui-free shipping exe verified at 5.7 MB, 495/495 units; regressions fail fast in CI |
 | **Inventory bag integrity (Session 75)** — `moveItem` migrates `bagContents_` map on swap; `onBagContents` gates on `currentBagSlot_` | Fixed contents-loss on bag swap + auto-open-on-store popup |
-| **Retransmit offset bug after v5 widening** — ack/ackBits corrected `+14/+16` → `+12/+14` | `[Server] Unknown packet type 0x00` spam gone; reliable retransmits actually retransmit again |
+| **Retransmit offset bug fix (v5 header widening era)** — ack/ackBits corrected `+14/+16` → `+12/+14` | `[Server] Unknown packet type 0x00` spam gone; reliable retransmits actually retransmit again |
 | **Login heal-text suppression** — 12s window at initial-login | Stopped spurious "+10 HP" damage text from equipment-bonus regen tick |
 | **Critical-lane bypass** for 8 load-bearing opcodes | Eliminated "invisible mobs" + "death overlay never fires" under reliable-queue congestion |
 | **`MetricsCollector` sync DB → async `DbDispatcher`** (5 methods) | Eliminated invisible ~300–1500ms periodic stall that manifested as client-side ~6.5s mob-freeze stutter |
@@ -487,7 +487,7 @@ Coverage spans: combat formulas, encryption/decryption, entity replication, inve
 ```
 engine/                    # 78,000 LOC — Core engine (20 subsystems, 343 files)
  render/                   #   Sprite batching, SDF text, lighting, bloom, paper doll, VFX, Metal RHI
- net/                      #   Custom UDP (v5), Noise_NK crypto, AuthProof, replication, AOI, interpolation
+ net/                      #   Custom UDP (v9), Noise_NK crypto, AuthProof, replication, AOI, interpolation
  ecs/                      #   Archetype ECS (4096 reserve), 56 components, reflection, serialization
  ui/                       #   60 widgets, JSON screens, themes, viewport scaling
  editor/                   #   ImGui editor, undo/redo, Aseprite animation editor, asset browser
@@ -566,7 +566,7 @@ Apache License 2.0 — see [LICENSE](LICENSE) for details.
 <img src="https://img.shields.io/badge/C%2B%2B-172%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
 <img src="https://img.shields.io/badge/files-765%2B-2ea44f?style=flat-square" alt="Files" />
 <img src="https://img.shields.io/badge/tests-1%2C400%2B_passing-2ea44f?style=flat-square" alt="Tests" />
-<img src="https://img.shields.io/badge/protocol-v5-blueviolet?style=flat-square" alt="Protocol" />
+<img src="https://img.shields.io/badge/protocol-v9-blueviolet?style=flat-square" alt="Protocol" />
 <img src="https://img.shields.io/badge/crypto-Noise__NK%20%2B%20AuthProof-critical?style=flat-square" alt="Crypto" />
 <img src="https://img.shields.io/badge/platforms-5-orange?style=flat-square" alt="Platforms" />
 <img src="https://img.shields.io/badge/game_systems-50%2B-blueviolet?style=flat-square" alt="Game Systems" />

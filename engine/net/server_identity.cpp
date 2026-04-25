@@ -3,10 +3,105 @@
 #include <fstream>
 #include <cstring>
 #include <filesystem>
+#include <vector>
+#include <string>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <aclapi.h>
+#include <sddl.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
 
 #if FATE_HAS_SODIUM
 #include <sodium.h>
 #endif
+
+namespace {
+    // Lock down the static identity key to owner-only read/write so it can't
+    // leak to other local users on shared hosts. On POSIX this is 0600; on
+    // Windows we DACL the file to the current user + SYSTEM + Administrators.
+    // Best-effort: a failure here is logged but not fatal (dev setups often
+    // run in sandboxes where chmod/SetSecurityInfo would be redundant).
+    bool restrictKeyFilePermissions(const std::string& path) {
+#ifdef _WIN32
+        // Build a DACL granting FILE_ALL_ACCESS only to:
+        //   - BUILTIN\Administrators (S-1-5-32-544)
+        //   - NT AUTHORITY\SYSTEM     (S-1-5-18)
+        //   - the current user
+        PSID pAdminSid = nullptr, pSystemSid = nullptr, pUserSid = nullptr;
+        PACL pNewDacl = nullptr;
+        bool ok = false;
+
+        SID_IDENTIFIER_AUTHORITY ntAuth = SECURITY_NT_AUTHORITY;
+        if (!AllocateAndInitializeSid(&ntAuth, 2, SECURITY_BUILTIN_DOMAIN_RID,
+                                      DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &pAdminSid)) goto cleanup;
+        if (!AllocateAndInitializeSid(&ntAuth, 1, SECURITY_LOCAL_SYSTEM_RID,
+                                      0, 0, 0, 0, 0, 0, 0, &pSystemSid)) goto cleanup;
+
+        {
+            HANDLE hToken = nullptr;
+            if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) goto cleanup;
+            DWORD needed = 0;
+            GetTokenInformation(hToken, TokenUser, nullptr, 0, &needed);
+            std::vector<uint8_t> userBuf(needed);
+            if (!GetTokenInformation(hToken, TokenUser, userBuf.data(), needed, &needed)) {
+                CloseHandle(hToken);
+                goto cleanup;
+            }
+            PSID src = reinterpret_cast<TOKEN_USER*>(userBuf.data())->User.Sid;
+            DWORD sidLen = GetLengthSid(src);
+            pUserSid = static_cast<PSID>(LocalAlloc(LPTR, sidLen));
+            if (!pUserSid || !CopySid(sidLen, pUserSid, src)) {
+                CloseHandle(hToken);
+                goto cleanup;
+            }
+            CloseHandle(hToken);
+        }
+
+        {
+            EXPLICIT_ACCESSW ea[3] = {};
+            for (int i = 0; i < 3; ++i) {
+                ea[i].grfAccessPermissions = FILE_ALL_ACCESS;
+                ea[i].grfAccessMode = SET_ACCESS;
+                ea[i].grfInheritance = NO_INHERITANCE;
+                ea[i].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+                ea[i].Trustee.TrusteeType = TRUSTEE_IS_UNKNOWN;
+            }
+            ea[0].Trustee.ptstrName = static_cast<LPWSTR>(pAdminSid);
+            ea[1].Trustee.ptstrName = static_cast<LPWSTR>(pSystemSid);
+            ea[2].Trustee.ptstrName = static_cast<LPWSTR>(pUserSid);
+
+            if (SetEntriesInAclW(3, ea, nullptr, &pNewDacl) != ERROR_SUCCESS) goto cleanup;
+
+            // PROTECTED_DACL_SECURITY_INFORMATION removes inherited ACEs that
+            // might allow broader access.
+            std::wstring wpath(path.begin(), path.end());
+            DWORD rc = SetNamedSecurityInfoW(
+                const_cast<LPWSTR>(wpath.c_str()),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                nullptr, nullptr, pNewDacl, nullptr);
+            ok = (rc == ERROR_SUCCESS);
+        }
+
+    cleanup:
+        if (pNewDacl) LocalFree(pNewDacl);
+        if (pUserSid) LocalFree(pUserSid);
+        if (pSystemSid) FreeSid(pSystemSid);
+        if (pAdminSid) FreeSid(pAdminSid);
+        return ok;
+#else
+        // POSIX: 0600 — owner read/write, no one else.
+        return ::chmod(path.c_str(), S_IRUSR | S_IWUSR) == 0;
+#endif
+    }
+}
 
 namespace fate {
 
@@ -51,6 +146,16 @@ bool ServerIdentity::loadOrGenerate(const std::string& keyFilePath,
         }
         f.write(reinterpret_cast<const char*>(outKeypair.pk.data()), 32);
         f.write(reinterpret_cast<const char*>(outKeypair.sk.data()), 32);
+    }
+
+    // Restrict the secret key file to owner-only — this key authenticates
+    // every future connection, so a world-readable file is a real risk on
+    // multi-user hosts. Failure is non-fatal but logged.
+    if (!restrictKeyFilePermissions(keyFilePath)) {
+        LOG_WARN("ServerIdentity",
+                 "Failed to restrict permissions on %s — secret key may be readable by other users. "
+                 "Lock down the file manually (chmod 600 / ACL) before going to production.",
+                 keyFilePath.c_str());
     }
 
     // Also save the .pub file alongside

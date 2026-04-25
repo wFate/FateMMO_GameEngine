@@ -764,6 +764,12 @@ bool Device::loadMetalShaderLibrary(const std::string& path) {
     return impl_->shaderLib.loadMetallib(path);
 }
 
+bool Device::loadMetalShaderLibraryFromBytes(const void* data, size_t size,
+                                             const std::string& label) {
+    if (!impl_) return false;
+    return impl_->shaderLib.loadMetallibFromBytes(data, size, label);
+}
+
 } // namespace gfx
 
 #endif // FATEMMO_METAL

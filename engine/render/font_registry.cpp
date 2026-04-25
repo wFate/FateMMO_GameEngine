@@ -3,11 +3,54 @@
 #include "engine/core/logger.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <algorithm>
+#include <cctype>
+#include <set>
 #include "stb_image.h"
 
 using json = nlohmann::json;
 
 namespace fate {
+
+namespace {
+
+// Canonical weight tokens. Order roughly matches typographic weight ascending.
+struct WeightToken { const char* canonical; const char* lowercase; };
+constexpr WeightToken kWeightTokens[] = {
+    {"Thin",       "thin"},
+    {"ExtraLight", "extralight"},
+    {"Light",      "light"},
+    {"Regular",    "regular"},
+    {"Medium",     "medium"},
+    {"SemiBold",   "semibold"},
+    {"Bold",       "bold"},
+    {"ExtraBold",  "extrabold"},
+    {"Black",      "black"},
+};
+
+// Split a name like "inter_semibold" or "Inter-Bold" into (family, weight).
+// If no known weight suffix is found, family = full name and weight = "Regular".
+void autoDeriveFamilyWeight(const std::string& name, std::string& family, std::string& weight) {
+    std::string lower(name.size(), '\0');
+    std::transform(name.begin(), name.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    size_t sep = lower.find_last_of("_-");
+    if (sep != std::string::npos && sep + 1 < lower.size()) {
+        std::string tail = lower.substr(sep + 1);
+        for (const auto& tok : kWeightTokens) {
+            if (tail == tok.lowercase) {
+                family = name.substr(0, sep);
+                weight = tok.canonical;
+                return;
+            }
+        }
+    }
+    family = name;
+    weight = "Regular";
+}
+
+} // namespace
 
 bool FontRegistry::parseManifest(const std::string& jsonPath) {
     std::ifstream file(jsonPath);
@@ -42,6 +85,16 @@ bool FontRegistry::parseManifest(const std::string& jsonPath) {
 
         auto font = std::make_unique<SDFFont>();
         font->name = name;
+
+        // Explicit family/weight override the auto-derived values when present.
+        std::string explicitFamily = entry.value("family", std::string());
+        std::string explicitWeight = entry.value("weight", std::string());
+        if (!explicitFamily.empty() || !explicitWeight.empty()) {
+            font->family = explicitFamily.empty() ? name : explicitFamily;
+            font->weight = explicitWeight.empty() ? "Regular" : explicitWeight;
+        } else {
+            autoDeriveFamilyWeight(name, font->family, font->weight);
+        }
 
         if (typeStr == "bitmap") {
             font->type = SDFFont::Type::Bitmap;
@@ -199,7 +252,44 @@ std::vector<std::string> FontRegistry::fontNames() const {
     for (const auto& [name, _] : fonts_) {
         names.push_back(name);
     }
+    std::sort(names.begin(), names.end());
     return names;
+}
+
+std::vector<std::string> FontRegistry::families() const {
+    std::set<std::string> unique;
+    for (const auto& [_, font] : fonts_) {
+        if (!font->family.empty()) unique.insert(font->family);
+    }
+    return std::vector<std::string>(unique.begin(), unique.end());
+}
+
+std::vector<std::string> FontRegistry::weightsForFamily(const std::string& family) const {
+    // Canonical weight ordering — return in typographic order, not insertion order.
+    std::set<std::string> present;
+    for (const auto& [_, font] : fonts_) {
+        if (font->family == family) present.insert(font->weight);
+    }
+    std::vector<std::string> ordered;
+    ordered.reserve(present.size());
+    for (const auto& tok : kWeightTokens) {
+        if (present.count(tok.canonical)) ordered.push_back(tok.canonical);
+    }
+    // Include anything unrecognised at the end for forward compat.
+    for (const auto& w : present) {
+        bool known = false;
+        for (const auto& tok : kWeightTokens)
+            if (w == tok.canonical) { known = true; break; }
+        if (!known) ordered.push_back(w);
+    }
+    return ordered;
+}
+
+SDFFont* FontRegistry::getByFamilyWeight(const std::string& family, const std::string& weight) {
+    for (const auto& [_, font] : fonts_) {
+        if (font->family == family && font->weight == weight) return font.get();
+    }
+    return nullptr;
 }
 
 void FontRegistry::clear() {

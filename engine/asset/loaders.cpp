@@ -1,4 +1,5 @@
 #include "engine/asset/loaders.h"
+#include "engine/asset/asset_source.h"
 #include "engine/render/texture.h"
 #include "engine/render/gfx/types.h"
 #include "engine/render/shader.h"
@@ -12,58 +13,14 @@
 namespace fate {
 
 // ============================================================================
-// Texture Loader
+// Texture Loader  (Phase 2 of VFS migration: all IO via AssetRegistry::readBytes)
 // ============================================================================
 
-static void* textureLoad(const std::string& path) {
-    auto* tex = new Texture();
-    if (!tex->loadFromFile(path)) {
-        delete tex;
-        return nullptr;
-    }
-    return tex;
-}
-
-static bool textureReload(void* existing, const std::string& path) {
-    return static_cast<Texture*>(existing)->reloadFromFile(path);
-}
-
-static bool textureValidate(const std::string& path) {
-    // KTX files: check for valid identifier (first 12 bytes)
-    if (path.size() >= 4 && path.substr(path.size() - 4) == ".ktx") {
-        std::ifstream f(path, std::ios::binary);
-        if (!f.is_open()) return false;
-        uint8_t id[12];
-        f.read(reinterpret_cast<char*>(id), 12);
-        static constexpr uint8_t KTX_ID[12] = {
-            0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A
-        };
-        return f.good() && std::memcmp(id, KTX_ID, 12) == 0;
-    }
-    int w, h, c;
-    return stbi_info(path.c_str(), &w, &h, &c) != 0;
-}
-
-static void textureDestroy(void* data) {
-    delete static_cast<Texture*>(data);
-}
-
-// ---- Async decode/upload pipeline for textures ----------------------------
-
-// Intermediate data produced by fiber decode, consumed by main-thread upload.
-struct DecodedTexture {
-    std::vector<unsigned char> data;
-    int width = 0, height = 0;
-    int channels = 0;           // 0 for compressed formats
-    bool compressed = false;
-    gfx::TextureFormat format = gfx::TextureFormat::RGBA8;
-};
-
-// KTX1 header (duplicated here to keep decode self-contained on the fiber)
-static constexpr uint8_t ASYNC_KTX1_ID[12] = {
+// KTX1 magic + header (kept here so decode is self-contained on fiber threads).
+static constexpr uint8_t KTX1_ID[12] = {
     0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A
 };
-struct KTXHeaderLocal {
+struct KTXHeader {
     uint8_t  identifier[12];
     uint32_t endianness;
     uint32_t glType;
@@ -80,7 +37,7 @@ struct KTXHeaderLocal {
     uint32_t bytesOfKeyValueData;
 };
 
-static gfx::TextureFormat asyncGLFmtToTexFmt(uint32_t glFmt) {
+static gfx::TextureFormat glFmtToTexFmt(uint32_t glFmt) {
     switch (glFmt) {
         case 0x9278: return gfx::TextureFormat::ETC2_RGBA8;
         case 0x93B0: return gfx::TextureFormat::ASTC_4x4_RGBA;
@@ -89,94 +46,159 @@ static gfx::TextureFormat asyncGLFmtToTexFmt(uint32_t glFmt) {
     }
 }
 
-// Fiber-safe: decodes image from disk (no GPU calls).
-static void* textureDecodeAsync(const std::string& path) {
-    namespace fs = std::filesystem;
-    std::string actualPath = path;
+// Intermediate decoded data shipped from fiber decode → main-thread upload.
+// Kept identical across sync/async so they share the upload step.
+struct DecodedTexture {
+    std::vector<unsigned char> data;
+    int width = 0, height = 0;
+    int channels = 0;
+    bool compressed = false;
+    gfx::TextureFormat format = gfx::TextureFormat::RGBA8;
+};
 
-    // On mobile, prefer .ktx compressed variant
+static bool isKtxKey(const std::string& key) {
+    return key.size() >= 4 && key.substr(key.size() - 4) == ".ktx";
+}
+
+// On mobile, look for a sibling ".ktx" alongside any image asset key. Returns
+// the original key if no compressed variant exists.
+static std::string preferKtxOnMobile(const std::string& key) {
 #ifdef FATEMMO_MOBILE
-    if (path.size() < 4 || path.substr(path.size() - 4) != ".ktx") {
-        auto ktxPath = (fs::path(path).parent_path() / fs::path(path).stem()).string() + ".ktx";
-        if (fs::exists(ktxPath)) actualPath = ktxPath;
-    }
+    if (isKtxKey(key)) return key;
+    namespace fs = std::filesystem;
+    auto ktxKey = (fs::path(key).parent_path() / fs::path(key).stem()).string() + ".ktx";
+    std::replace(ktxKey.begin(), ktxKey.end(), '\\', '/');
+    auto* src = AssetRegistry::instance().source();
+    if (src && src->exists(ktxKey)) return ktxKey;
 #endif
+    return key;
+}
 
-    bool isKtx = actualPath.size() >= 4 &&
-                 actualPath.substr(actualPath.size() - 4) == ".ktx";
+// Decode a KTX1 blob (header already in `bytes`) into a DecodedTexture.
+// Returns nullptr on malformed/unsupported payload or missing GPU support.
+static DecodedTexture* decodeKtxBlob(const std::vector<uint8_t>& bytes) {
+    if (bytes.size() < sizeof(KTXHeader) + 4) return nullptr;
+    KTXHeader hdr;
+    std::memcpy(&hdr, bytes.data(), sizeof(KTXHeader));
+    if (std::memcmp(hdr.identifier, KTX1_ID, 12) != 0) return nullptr;
+    if (hdr.endianness != 0x04030201) return nullptr;
+    if (hdr.glType != 0 || hdr.glFormat != 0) return nullptr;
 
-    if (isKtx) {
-        // ---- KTX path: read header + compressed blob ----
-        std::ifstream file(actualPath, std::ios::binary);
-        if (!file.is_open()) return nullptr;
+    gfx::TextureFormat fmt = glFmtToTexFmt(hdr.glInternalFormat);
+    if (!gfx::isCompressedFormat(fmt)) return nullptr;
 
-        KTXHeaderLocal hdr{};
-        file.read(reinterpret_cast<char*>(&hdr), sizeof(KTXHeaderLocal));
-        if (!file || std::memcmp(hdr.identifier, ASYNC_KTX1_ID, 12) != 0) return nullptr;
-        if (hdr.endianness != 0x04030201) return nullptr;
-        if (hdr.glType != 0 || hdr.glFormat != 0) return nullptr;
+    auto& caps = GPUCompressedFormats::instance();
+    if (fmt == gfx::TextureFormat::ETC2_RGBA8 && !caps.etc2) return nullptr;
+    if ((fmt == gfx::TextureFormat::ASTC_4x4_RGBA ||
+         fmt == gfx::TextureFormat::ASTC_8x8_RGBA) && !caps.astc) return nullptr;
 
-        gfx::TextureFormat fmt = asyncGLFmtToTexFmt(hdr.glInternalFormat);
-        if (!gfx::isCompressedFormat(fmt)) return nullptr;
+    size_t cursor = sizeof(KTXHeader) + hdr.bytesOfKeyValueData;
+    if (cursor + 4 > bytes.size()) return nullptr;
+    uint32_t imageSize = 0;
+    std::memcpy(&imageSize, bytes.data() + cursor, 4);
+    cursor += 4;
+    if (imageSize == 0 || imageSize > 64 * 1024 * 1024) return nullptr;
+    if (cursor + imageSize > bytes.size()) return nullptr;
 
-        // GPU capability check (read-only singleton, safe from any thread)
-        auto& caps = GPUCompressedFormats::instance();
-        if (fmt == gfx::TextureFormat::ETC2_RGBA8 && !caps.etc2) return nullptr;
-        if ((fmt == gfx::TextureFormat::ASTC_4x4_RGBA ||
-             fmt == gfx::TextureFormat::ASTC_8x8_RGBA) && !caps.astc) return nullptr;
+    auto* d = new DecodedTexture();
+    d->data.assign(bytes.begin() + cursor, bytes.begin() + cursor + imageSize);
+    d->width = static_cast<int>(hdr.pixelWidth);
+    d->height = static_cast<int>(hdr.pixelHeight);
+    d->compressed = true;
+    d->format = fmt;
+    return d;
+}
 
-        file.seekg(hdr.bytesOfKeyValueData, std::ios::cur);
-
-        uint32_t imageSize = 0;
-        file.read(reinterpret_cast<char*>(&imageSize), 4);
-        if (!file || imageSize == 0 || imageSize > 64 * 1024 * 1024) return nullptr;
-
-        auto* decoded = new DecodedTexture();
-        decoded->data.resize(imageSize);
-        file.read(reinterpret_cast<char*>(decoded->data.data()), imageSize);
-        if (!file) { delete decoded; return nullptr; }
-
-        decoded->width = static_cast<int>(hdr.pixelWidth);
-        decoded->height = static_cast<int>(hdr.pixelHeight);
-        decoded->compressed = true;
-        decoded->format = fmt;
-        return decoded;
-    }
-
-    // ---- Regular image path: stbi_load (CPU decode) ----
+// Decode a stbi-supported image blob (PNG/JPG/BMP) into RGBA pixels.
+static DecodedTexture* decodeStbiBlob(const std::vector<uint8_t>& bytes) {
 #ifdef FATEMMO_METAL
     stbi_set_flip_vertically_on_load_thread(0);
 #else
     stbi_set_flip_vertically_on_load_thread(1);
 #endif
     int w, h, ch;
-    unsigned char* pixels = stbi_load(actualPath.c_str(), &w, &h, &ch, 4);
+    unsigned char* pixels = stbi_load_from_memory(bytes.data(),
+                                                   static_cast<int>(bytes.size()),
+                                                   &w, &h, &ch, 4);
     if (!pixels) return nullptr;
-
-    auto* decoded = new DecodedTexture();
-    decoded->width = w;
-    decoded->height = h;
-    decoded->channels = 4;
-    decoded->data.assign(pixels, pixels + (w * h * 4));
+    auto* d = new DecodedTexture();
+    d->width = w;
+    d->height = h;
+    d->channels = 4;
+    d->data.assign(pixels, pixels + (w * h * 4));
     stbi_image_free(pixels);
-    return decoded;
+    return d;
 }
 
-// Main-thread only: creates GPU texture from decoded data, consumes decoded.
-static void* textureUploadToGPU(void* raw) {
-    auto* decoded = static_cast<DecodedTexture*>(raw);
+static DecodedTexture* decodeTextureFromKey(const std::string& path) {
+    std::string key = preferKtxOnMobile(path);
+    auto bytes = AssetRegistry::readBytes(key);
+    if (!bytes) {
+        LOG_ERROR("TextureLoader", "readBytes failed for %s", key.c_str());
+        return nullptr;
+    }
+    return isKtxKey(key) ? decodeKtxBlob(*bytes) : decodeStbiBlob(*bytes);
+}
+
+static void* textureLoad(const std::string& path) {
+    auto* decoded = decodeTextureFromKey(path);
+    if (!decoded) return nullptr;
 
     auto* tex = new Texture();
-    bool ok = false;
-    if (decoded->compressed) {
-        ok = tex->loadFromMemoryCompressed(
-            decoded->data.data(), decoded->data.size(),
-            decoded->width, decoded->height, decoded->format);
-    } else {
-        ok = tex->loadFromMemory(
-            decoded->data.data(), decoded->width, decoded->height, decoded->channels);
-    }
+    bool ok = decoded->compressed
+        ? tex->loadFromMemoryCompressed(decoded->data.data(), decoded->data.size(),
+                                        decoded->width, decoded->height, decoded->format)
+        : tex->loadFromMemory(decoded->data.data(),
+                              decoded->width, decoded->height, decoded->channels);
+    delete decoded;
+    if (!ok) { delete tex; return nullptr; }
+    return tex;
+}
 
+static bool textureReload(void* existing, const std::string& path) {
+    auto* decoded = decodeTextureFromKey(path);
+    if (!decoded) return false;
+
+    auto* tex = static_cast<Texture*>(existing);
+    bool ok = decoded->compressed
+        ? tex->reloadFromCompressedMemory(decoded->data.data(), decoded->data.size(),
+                                          decoded->width, decoded->height, decoded->format)
+        : tex->reloadFromDecodedMemory(decoded->data.data(),
+                                       decoded->width, decoded->height, decoded->channels);
+    delete decoded;
+    return ok;
+}
+
+static bool textureValidate(const std::string& path) {
+    std::string key = preferKtxOnMobile(path);
+    auto bytes = AssetRegistry::readBytes(key);
+    if (!bytes) return false;
+
+    if (isKtxKey(key)) {
+        return bytes->size() >= 12 && std::memcmp(bytes->data(), KTX1_ID, 12) == 0;
+    }
+    int w, h, c;
+    return stbi_info_from_memory(bytes->data(),
+                                 static_cast<int>(bytes->size()),
+                                 &w, &h, &c) != 0;
+}
+
+static void textureDestroy(void* data) {
+    delete static_cast<Texture*>(data);
+}
+
+static void* textureDecodeAsync(const std::string& path) {
+    return decodeTextureFromKey(path);
+}
+
+static void* textureUploadToGPU(void* raw) {
+    auto* decoded = static_cast<DecodedTexture*>(raw);
+    auto* tex = new Texture();
+    bool ok = decoded->compressed
+        ? tex->loadFromMemoryCompressed(decoded->data.data(), decoded->data.size(),
+                                        decoded->width, decoded->height, decoded->format)
+        : tex->loadFromMemory(decoded->data.data(),
+                              decoded->width, decoded->height, decoded->channels);
     delete decoded;
     if (!ok) { delete tex; return nullptr; }
     return tex;
@@ -205,23 +227,23 @@ AssetLoader makeTextureLoader() {
 // ============================================================================
 
 static void* jsonLoad(const std::string& path) {
+    auto text = AssetRegistry::readText(path);
+    if (!text) return nullptr;
     try {
-        std::ifstream file(path);
-        if (!file.is_open()) return nullptr;
         auto* j = new nlohmann::json();
-        *j = nlohmann::json::parse(file);
+        *j = nlohmann::json::parse(*text);
         return j;
     } catch (const nlohmann::json::exception& e) {
-        LOG_ERROR("JsonLoader", "Parse failed: %s --%s", path.c_str(), e.what());
+        LOG_ERROR("JsonLoader", "Parse failed: %s -- %s", path.c_str(), e.what());
         return nullptr;
     }
 }
 
 static bool jsonReload(void* existing, const std::string& path) {
+    auto text = AssetRegistry::readText(path);
+    if (!text) return false;
     try {
-        std::ifstream file(path);
-        if (!file.is_open()) return false;
-        auto temp = nlohmann::json::parse(file);
+        auto temp = nlohmann::json::parse(*text);
         *static_cast<nlohmann::json*>(existing) = std::move(temp);
         return true;
     } catch (...) {
@@ -230,10 +252,10 @@ static bool jsonReload(void* existing, const std::string& path) {
 }
 
 static bool jsonValidate(const std::string& path) {
+    auto text = AssetRegistry::readText(path);
+    if (!text) return false;
     try {
-        std::ifstream file(path);
-        if (!file.is_open()) return false;
-        nlohmann::json::parse(file);
+        (void)nlohmann::json::parse(*text);
         return true;
     } catch (...) {
         return false;
@@ -252,7 +274,7 @@ AssetLoader makeJsonLoader() {
         .validate = jsonValidate,
         .destroy = jsonDestroy,
         .extensions = {".json"},
-        .decode = jsonLoad,  // JSON is CPU-only; decode result IS the final asset
+        .decode = jsonLoad,
     };
 }
 
@@ -260,47 +282,85 @@ AssetLoader makeJsonLoader() {
 // Shader Loader
 // ============================================================================
 
-static std::string inferPartnerPath(const std::string& path) {
+static std::string inferPartnerKey(const std::string& key) {
     namespace fs = std::filesystem;
-    auto ext = fs::path(path).extension().string();
-    auto stem = fs::path(path).parent_path() / fs::path(path).stem();
-    if (ext == ".vert") return stem.string() + ".frag";
-    if (ext == ".frag") return stem.string() + ".vert";
-    return "";
+    auto ext = fs::path(key).extension().string();
+    auto stem = fs::path(key).parent_path() / fs::path(key).stem();
+    std::string partner;
+    if (ext == ".vert") partner = stem.string() + ".frag";
+    else if (ext == ".frag") partner = stem.string() + ".vert";
+    if (!partner.empty()) std::replace(partner.begin(), partner.end(), '\\', '/');
+    return partner;
+}
+
+static void resolveShaderPair(const std::string& key,
+                              std::string& vertKey, std::string& fragKey) {
+    namespace fs = std::filesystem;
+    auto ext = fs::path(key).extension().string();
+    if (ext == ".vert") {
+        vertKey = key;
+        fragKey = inferPartnerKey(key);
+    } else if (ext == ".frag") {
+        fragKey = key;
+        vertKey = inferPartnerKey(key);
+    } else {
+        auto stem = fs::path(key).parent_path() / fs::path(key).stem();
+        vertKey = stem.string() + ".vert";
+        fragKey = stem.string() + ".frag";
+        std::replace(vertKey.begin(), vertKey.end(), '\\', '/');
+        std::replace(fragKey.begin(), fragKey.end(), '\\', '/');
+    }
 }
 
 static void* shaderLoad(const std::string& path) {
-    namespace fs = std::filesystem;
-    auto ext = fs::path(path).extension().string();
-    std::string vertPath, fragPath;
-    if (ext == ".vert") {
-        vertPath = path;
-        fragPath = inferPartnerPath(path);
-    } else if (ext == ".frag") {
-        fragPath = path;
-        vertPath = inferPartnerPath(path);
-    } else {
-        auto stem = fs::path(path).parent_path() / fs::path(path).stem();
-        vertPath = stem.string() + ".vert";
-        fragPath = stem.string() + ".frag";
-    }
+    std::string vertKey, fragKey;
+    resolveShaderPair(path, vertKey, fragKey);
 
     auto* shader = new Shader();
-    if (!shader->loadFromFile(vertPath, fragPath)) {
+#ifdef FATEMMO_METAL
+    // Metal: createShaderFromFiles only derives a basename ("sprite.vert" →
+    // "sprite") to look up pre-compiled functions in the shared MTLLibrary
+    // already populated at App::init via loadMetalShaderLibraryFromBytes /
+    // compileMetalShaderSource. No disk read happens in this path, so it is
+    // VFS-safe. The library load itself is now bytes-routed (see app.cpp).
+    if (!shader->loadFromFile(vertKey, fragKey)) { delete shader; return nullptr; }
+#else
+    auto vertSrc = AssetRegistry::readText(vertKey);
+    auto fragSrc = AssetRegistry::readText(fragKey);
+    if (!vertSrc || !fragSrc) {
+        LOG_ERROR("ShaderLoader", "readText failed for %s / %s",
+                  vertKey.c_str(), fragKey.c_str());
         delete shader;
         return nullptr;
     }
+    if (!shader->loadFromSource(*vertSrc, *fragSrc)) { delete shader; return nullptr; }
+    shader->setPaths(vertKey, fragKey);
+#endif
     return shader;
 }
 
-static bool shaderReload(void* existing, const std::string& path) {
+static bool shaderReload(void* existing, const std::string& /*path*/) {
     auto* shader = static_cast<Shader*>(existing);
-    return shader->reloadFromFile(shader->vertPath(), shader->fragPath());
+    const std::string& vertKey = shader->vertPath();
+    const std::string& fragKey = shader->fragPath();
+#ifdef FATEMMO_METAL
+    return shader->reloadFromFile(vertKey, fragKey);
+#else
+    auto vertSrc = AssetRegistry::readText(vertKey);
+    auto fragSrc = AssetRegistry::readText(fragKey);
+    if (!vertSrc || !fragSrc) return false;
+    if (!shader->loadFromSource(*vertSrc, *fragSrc)) return false;
+    shader->setPaths(vertKey, fragKey);
+    return true;
+#endif
 }
 
 static bool shaderValidate(const std::string& path) {
-    std::ifstream file(path);
-    return file.is_open() && file.peek() != std::ifstream::traits_type::eof();
+    std::string vertKey, fragKey;
+    resolveShaderPair(path, vertKey, fragKey);
+    auto* src = AssetRegistry::instance().source();
+    if (!src) return false;
+    return src->exists(vertKey) && src->exists(fragKey);
 }
 
 static void shaderDestroy(void* data) {

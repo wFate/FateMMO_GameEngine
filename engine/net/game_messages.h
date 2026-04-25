@@ -55,9 +55,10 @@ namespace BountyAction {
 // Client -> Server: CmdGauntlet sub-actions
 // ============================================================================
 namespace GauntletAction {
-    constexpr uint8_t Register   = 0;  // (no extra fields — division auto-detected from level)
-    constexpr uint8_t Unregister = 1;
-    constexpr uint8_t GetStatus  = 2;
+    constexpr uint8_t Register       = 0;  // (no extra fields — division auto-detected from level)
+    constexpr uint8_t Unregister     = 1;
+    constexpr uint8_t GetStatus      = 2;
+    constexpr uint8_t GetScoreboard  = 3;  // (no extra fields)
 }
 
 // ============================================================================
@@ -86,6 +87,7 @@ namespace SocialAction {
     constexpr uint8_t RemoveFriend      = 3;  // + friendCharId:string
     constexpr uint8_t BlockPlayer       = 4;  // + targetCharId:string
     constexpr uint8_t UnblockPlayer     = 5;  // + targetCharId:string
+    constexpr uint8_t GetFriendsList    = 6;  // (no extra fields — triggers SvFriendsList refresh)
 }
 
 // ============================================================================
@@ -199,6 +201,75 @@ struct SvBountyUpdateMsg {
     }
 };
 
+struct SvBountyBoardEntry {
+    std::string targetCharId;
+    std::string targetName;
+    int64_t     amount = 0;
+    std::string placerName;
+    uint32_t    secondsRemaining = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeString(targetCharId);
+        w.writeString(targetName);
+        detail::writeI64(w, amount);
+        w.writeString(placerName);
+        w.writeU32(secondsRemaining);
+    }
+    static SvBountyBoardEntry read(ByteReader& r) {
+        SvBountyBoardEntry e;
+        e.targetCharId     = r.readString();
+        e.targetName       = r.readString();
+        e.amount           = detail::readI64(r);
+        e.placerName       = r.readString();
+        e.secondsRemaining = r.readU32();
+        return e;
+    }
+};
+
+struct SvBountyHistoryEntry {
+    std::string targetName;
+    int64_t     amount = 0;
+    uint8_t     outcome = 0;   // 0=Claimed, 1=Expired, 2=Cancelled
+    int64_t     timestampUtc = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeString(targetName);
+        detail::writeI64(w, amount);
+        w.writeU8(outcome);
+        detail::writeI64(w, timestampUtc);
+    }
+    static SvBountyHistoryEntry read(ByteReader& r) {
+        SvBountyHistoryEntry e;
+        e.targetName   = r.readString();
+        e.amount       = detail::readI64(r);
+        e.outcome      = r.readU8();
+        e.timestampUtc = detail::readI64(r);
+        return e;
+    }
+};
+
+struct SvBountyBoardMsg {
+    std::vector<SvBountyBoardEntry>   active;
+    std::vector<SvBountyBoardEntry>   mine;
+    std::vector<SvBountyHistoryEntry> history;
+
+    void write(ByteWriter& w) const {
+        w.writeU16((uint16_t)active.size());  for (const auto& e : active)  e.write(w);
+        w.writeU16((uint16_t)mine.size());    for (const auto& e : mine)    e.write(w);
+        w.writeU16((uint16_t)history.size()); for (const auto& e : history) e.write(w);
+    }
+    static SvBountyBoardMsg read(ByteReader& r) {
+        SvBountyBoardMsg m;
+        uint16_t na = r.readU16(); m.active.reserve(na);
+        for (uint16_t i = 0; i < na; ++i) m.active.push_back(SvBountyBoardEntry::read(r));
+        uint16_t nm = r.readU16(); m.mine.reserve(nm);
+        for (uint16_t i = 0; i < nm; ++i) m.mine.push_back(SvBountyBoardEntry::read(r));
+        uint16_t nh = r.readU16(); m.history.reserve(nh);
+        for (uint16_t i = 0; i < nh; ++i) m.history.push_back(SvBountyHistoryEntry::read(r));
+        return m;
+    }
+};
+
 struct SvGauntletUpdateMsg {
     uint8_t updateType = 0;  // 0=signupOpen, 1=registered, 2=matchStart, 3=waveStart, 4=scores, 5=matchEnd
     uint8_t resultCode = 0;
@@ -214,6 +285,67 @@ struct SvGauntletUpdateMsg {
         m.updateType = r.readU8();
         m.resultCode = r.readU8();
         m.message    = r.readString();
+        return m;
+    }
+};
+
+struct SvGauntletScoreboardEntry {
+    std::string charId;
+    std::string name;
+    int32_t     score = 0;
+    int32_t     kills = 0;
+    int32_t     waveReached = 0;
+    int32_t     rank = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeString(charId);
+        w.writeString(name);
+        w.writeI32(score);
+        w.writeI32(kills);
+        w.writeI32(waveReached);
+        w.writeI32(rank);
+    }
+    static SvGauntletScoreboardEntry read(ByteReader& r) {
+        SvGauntletScoreboardEntry e;
+        e.charId      = r.readString();
+        e.name        = r.readString();
+        e.score       = r.readI32();
+        e.kills       = r.readI32();
+        e.waveReached = r.readI32();
+        e.rank        = r.readI32();
+        return e;
+    }
+};
+
+struct SvGauntletScoreboardMsg {
+    uint8_t  matchState = 0;        // 0=lobby, 1=active, 2=ended
+    int32_t  waveNumber = 0;
+    uint32_t secondsRemaining = 0;
+    std::vector<SvGauntletScoreboardEntry> entries;
+    int32_t  yourRank = 0;
+    int32_t  yourScore = 0;
+    std::string rewardsSummary;     // only populated on matchEnd
+
+    void write(ByteWriter& w) const {
+        w.writeU8(matchState);
+        w.writeI32(waveNumber);
+        w.writeU32(secondsRemaining);
+        w.writeU16((uint16_t)entries.size());
+        for (const auto& e : entries) e.write(w);
+        w.writeI32(yourRank);
+        w.writeI32(yourScore);
+        w.writeString(rewardsSummary);
+    }
+    static SvGauntletScoreboardMsg read(ByteReader& r) {
+        SvGauntletScoreboardMsg m;
+        m.matchState       = r.readU8();
+        m.waveNumber       = r.readI32();
+        m.secondsRemaining = r.readU32();
+        uint16_t n = r.readU16(); m.entries.reserve(n);
+        for (uint16_t i = 0; i < n; ++i) m.entries.push_back(SvGauntletScoreboardEntry::read(r));
+        m.yourRank       = r.readI32();
+        m.yourScore      = r.readI32();
+        m.rewardsSummary = r.readString();
         return m;
     }
 };
@@ -258,6 +390,70 @@ struct SvSocialUpdateMsg {
         m.resultCode    = r.readU8();
         m.characterName = r.readString();
         m.message       = r.readString();
+        return m;
+    }
+};
+
+struct SvFriendsListEntry {
+    std::string charId;
+    std::string name;
+    bool        online = false;
+    std::string zone;
+    int64_t     lastSeenUtc = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeString(charId);
+        w.writeString(name);
+        w.writeU8(online ? 1 : 0);
+        w.writeString(zone);
+        detail::writeI64(w, lastSeenUtc);
+    }
+    static SvFriendsListEntry read(ByteReader& r) {
+        SvFriendsListEntry e;
+        e.charId      = r.readString();
+        e.name        = r.readString();
+        e.online      = r.readU8() != 0;
+        e.zone        = r.readString();
+        e.lastSeenUtc = detail::readI64(r);
+        return e;
+    }
+};
+
+struct SvFriendsListSimpleEntry {
+    std::string charId;
+    std::string name;
+
+    void write(ByteWriter& w) const { w.writeString(charId); w.writeString(name); }
+    static SvFriendsListSimpleEntry read(ByteReader& r) {
+        SvFriendsListSimpleEntry e;
+        e.charId = r.readString();
+        e.name   = r.readString();
+        return e;
+    }
+};
+
+struct SvFriendsListMsg {
+    std::vector<SvFriendsListEntry>       friends;
+    std::vector<SvFriendsListSimpleEntry> incoming;
+    std::vector<SvFriendsListSimpleEntry> outgoing;
+    std::vector<SvFriendsListSimpleEntry> blocked;
+
+    void write(ByteWriter& w) const {
+        w.writeU16((uint16_t)friends.size());  for (const auto& e : friends)  e.write(w);
+        w.writeU16((uint16_t)incoming.size()); for (const auto& e : incoming) e.write(w);
+        w.writeU16((uint16_t)outgoing.size()); for (const auto& e : outgoing) e.write(w);
+        w.writeU16((uint16_t)blocked.size());  for (const auto& e : blocked)  e.write(w);
+    }
+    static SvFriendsListMsg read(ByteReader& r) {
+        SvFriendsListMsg m;
+        uint16_t nf = r.readU16(); m.friends.reserve(nf);
+        for (uint16_t i = 0; i < nf; ++i) m.friends.push_back(SvFriendsListEntry::read(r));
+        uint16_t ni = r.readU16(); m.incoming.reserve(ni);
+        for (uint16_t i = 0; i < ni; ++i) m.incoming.push_back(SvFriendsListSimpleEntry::read(r));
+        uint16_t no = r.readU16(); m.outgoing.reserve(no);
+        for (uint16_t i = 0; i < no; ++i) m.outgoing.push_back(SvFriendsListSimpleEntry::read(r));
+        uint16_t nb = r.readU16(); m.blocked.reserve(nb);
+        for (uint16_t i = 0; i < nb; ++i) m.blocked.push_back(SvFriendsListSimpleEntry::read(r));
         return m;
     }
 };

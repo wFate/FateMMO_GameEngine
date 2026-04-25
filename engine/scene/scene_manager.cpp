@@ -35,16 +35,18 @@ void SceneManager::registerScene(const std::string& name, SceneFactory factory) 
 }
 
 bool SceneManager::loadScene(const std::string& name, const std::string& jsonPath) {
-    // Exit current scene
-    if (currentScene_) {
-        currentScene_->onExit();
-    }
-
-    // Create new scene (blocks until JSON parse + entity creation complete)
+    // Build + validate the replacement BEFORE exiting the current scene. If
+    // the load fails we leave the existing scene intact — otherwise a bad
+    // file path / malformed JSON would leave us with no active scene.
     auto scene = std::make_unique<Scene>(name);
     if (!scene->loadFromFile(jsonPath)) {
-        LOG_ERROR("SceneManager", "Failed to load scene '%s' from %s", name.c_str(), jsonPath.c_str());
+        LOG_ERROR("SceneManager", "Failed to load scene '%s' from %s (current scene preserved)",
+                  name.c_str(), jsonPath.c_str());
         return false;
+    }
+
+    if (currentScene_) {
+        currentScene_->onExit();
     }
 
     currentScene_ = std::move(scene);

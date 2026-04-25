@@ -71,6 +71,30 @@ void JobSystem::shutdown() {
     LOG_INFO("JobSystem", "Shutdown complete");
 }
 
+namespace {
+    // Bounded backpressure for job submission. Prior code spun on
+    // std::this_thread::yield() forever, which hangs the main thread if
+    // workers are blocked or shutting down. We still yield (no behavior
+    // change for the common case where a slot frees up in a few iterations)
+    // but log loudly after a threshold so the hang is visible in logs.
+    constexpr int kJobSubmitYieldWarnThreshold = 1024;
+    constexpr int kJobSubmitYieldLogEveryN     = 4096;
+
+    inline void spinUntilPushSucceeds(auto& queue, fate::Job& j, const char* site) {
+        int spins = 0;
+        while (!queue.push(j)) {
+            ++spins;
+            if (spins == kJobSubmitYieldWarnThreshold) {
+                LOG_WARN("JobSystem", "%s: queue full, backpressure engaged (spins=%d)", site, spins);
+            } else if (spins > kJobSubmitYieldWarnThreshold &&
+                       spins % kJobSubmitYieldLogEveryN == 0) {
+                LOG_WARN("JobSystem", "%s: still blocked (spins=%d) — workers stalled?", site, spins);
+            }
+            std::this_thread::yield();
+        }
+    }
+}
+
 Counter* JobSystem::submit(Job* jobs, int count) {
     Counter* counter = counterPool_.acquire();
     if (!counter) return nullptr;
@@ -80,8 +104,7 @@ Counter* JobSystem::submit(Job* jobs, int count) {
     for (int i = 0; i < count; ++i) {
         Job j = jobs[i];
         j.counter = counter;
-        while (!jobQueue_.push(j))
-            std::this_thread::yield();
+        spinUntilPushSucceeds(jobQueue_, j, "submit");
     }
     return counter;
 }
@@ -90,8 +113,7 @@ void JobSystem::submitFireAndForget(Job* jobs, int count) {
     for (int i = 0; i < count; ++i) {
         Job j = jobs[i];
         j.counter = nullptr;
-        while (!jobQueue_.push(j))
-            std::this_thread::yield();
+        spinUntilPushSucceeds(jobQueue_, j, "submitFireAndForget");
     }
 }
 

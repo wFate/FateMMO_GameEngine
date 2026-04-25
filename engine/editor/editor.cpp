@@ -4,6 +4,7 @@
 #include "engine/ui/ui_safe_area.h"
 #endif
 #include "engine/core/logger.h"
+#include "engine/core/atomic_write.h"
 #ifndef FATEMMO_METAL
 // Editor uses direct GL for ImGui integration --intentionally outside RHI
 #include "engine/render/gfx/backend/gl/gl_loader.h"
@@ -712,7 +713,9 @@ void Editor::drawDockSpace() {
             // Save --enabled when a scene path is set (from Open Scene or async load)
             const bool canSaveScene = !currentScenePath_.empty() && (!inPlayMode_ || paused_);
             if (ImGui::MenuItem("Save", "Ctrl+S", false, canSaveScene)) {
-                saveScene(dockWorld_, currentScenePath_);
+                if (!saveScene(dockWorld_, currentScenePath_)) {
+                    LOG_WARN("Editor", "Menu save did not complete: %s", lastSaveStatus_.c_str());
+                }
             }
             // Save As --always prompts for a new name
             if (ImGui::BeginMenu("Save As...", !inPlayMode_ || paused_)) {
@@ -721,7 +724,9 @@ void Editor::drawDockSpace() {
                 if (ImGui::Button("Save")) {
                     if (isValidAssetName(saveNameBuf)) {
                         std::string path = std::string("assets/scenes/") + saveNameBuf + ".json";
-                        saveScene(dockWorld_, path);
+                        if (!saveScene(dockWorld_, path)) {
+                            LOG_WARN("Editor", "Save As did not complete: %s", lastSaveStatus_.c_str());
+                        }
                         ImGui::CloseCurrentPopup();
                     } else {
                         LOG_WARN("Editor", "Invalid scene name: %s", saveNameBuf);
@@ -1341,6 +1346,18 @@ void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPo
                               int windowWidth, int windowHeight) {
     if (!world || !camera || !open_) return;
 
+    // Paint-tool fallback: route to paintTileAt if a paint tool is active.
+    // This catches clicks that bypass isTilePaintMode() (e.g. toolbar "Paint"
+    // pressed before a tile is selected). paintTileAt guards internally and
+    // returns early when nothing valid is selected, so behaviour is unchanged.
+    if (currentTool_ == EditorTool::Paint   ||
+        currentTool_ == EditorTool::Fill     ||
+        currentTool_ == EditorTool::RectFill ||
+        currentTool_ == EditorTool::LineTool) {
+        paintTileAt(world, camera, screenPos, windowWidth, windowHeight);
+        return;
+    }
+
     Vec2 worldPos = camera->screenToWorld(screenPos, windowWidth, windowHeight);
 
     // Asset placement mode: click to place
@@ -1670,6 +1687,8 @@ static std::unique_ptr<UndoCommand> paintOneTile(World* world,
     const std::shared_ptr<Texture>& paletteTexture,
     const std::string& paletteTexturePath,
     const std::string& tileLayer);
+static std::unique_ptr<UndoCommand> paintOneCollisionTile(World* world,
+    const Vec2& worldPos, float gridSize);
 static Vec2 tileToWorldCenter(int col, int row, float gridSize);
 
 void Editor::handleMouseUp() {
@@ -1730,34 +1749,55 @@ void Editor::handleMouseUp() {
     isResizingEntity_ = false;
     resizeHandle_ = -1;
 
-    // Finalize RectFill / LineTool drag
+    // Finalize RectFill / LineTool drag.
+    // Collision-layer rect/line tools don't require a palette texture — they
+    // stamp tinted squares like the brush does on the collision layer. Other
+    // layers still need a selected tile + palette; surface a clear status if
+    // those are missing instead of dropping the drag silently.
     if (isToolDragging_ && dockWorld_ &&
-        (currentTool_ == EditorTool::RectFill || currentTool_ == EditorTool::LineTool) &&
-        selectedTileIndex_ >= 0 && paletteTexture_) {
+        (currentTool_ == EditorTool::RectFill || currentTool_ == EditorTool::LineTool)) {
 
-        TileCoordList coords;
-        std::string toolName;
-        if (currentTool_ == EditorTool::RectFill) {
-            coords = rectangleFill(toolDragStart_.x, toolDragStart_.y,
-                                   toolDragEnd_.x, toolDragEnd_.y);
-            toolName = "Rect Fill";
-        } else {
-            coords = lineTool(toolDragStart_.x, toolDragStart_.y,
-                              toolDragEnd_.x, toolDragEnd_.y);
-            toolName = "Line";
-        }
+        const bool isCollisionLayer = (selectedTileLayer_ == "collision");
+        bool ready = isCollisionLayer
+                   ? true
+                   : (selectedTileIndex_ >= 0 && paletteTexture_ != nullptr);
 
-        if (!coords.empty()) {
-            auto compound = std::make_unique<CompoundCommand>();
-            compound->desc = toolName + " (" + std::to_string(coords.size()) + " tiles)";
-            for (auto& coord : coords) {
-                Vec2 wp = tileToWorldCenter(coord.x, coord.y, gridSize_);
-                auto cmd = paintOneTile(dockWorld_, wp, selectedTileIndex_, paletteColumns_,
-                                        paletteTileSize_, gridSize_, paletteTexture_, paletteTexturePath_,
-                                        selectedTileLayer_);
-                if (cmd) compound->commands.push_back(std::move(cmd));
+        if (!ready) {
+            if (!paletteTexture_) {
+                lastToolStatus_ = "Rect/Line tool: no tileset loaded — open Tile Palette and pick one";
+            } else {
+                lastToolStatus_ = "Rect/Line tool: select a tile in the Tile Palette first";
             }
-            if (!compound->empty()) UndoSystem::instance().push(std::move(compound));
+        } else {
+            TileCoordList coords;
+            std::string toolName;
+            if (currentTool_ == EditorTool::RectFill) {
+                coords = rectangleFill(toolDragStart_.x, toolDragStart_.y,
+                                       toolDragEnd_.x, toolDragEnd_.y);
+                toolName = "Rect Fill";
+            } else {
+                coords = lineTool(toolDragStart_.x, toolDragStart_.y,
+                                  toolDragEnd_.x, toolDragEnd_.y);
+                toolName = "Line";
+            }
+
+            if (!coords.empty()) {
+                auto compound = std::make_unique<CompoundCommand>();
+                compound->desc = toolName + " (" + std::to_string(coords.size()) + " tiles)";
+                for (auto& coord : coords) {
+                    Vec2 wp = tileToWorldCenter(coord.x, coord.y, gridSize_);
+                    auto cmd = isCollisionLayer
+                        ? paintOneCollisionTile(dockWorld_, wp, gridSize_)
+                        : paintOneTile(dockWorld_, wp, selectedTileIndex_, paletteColumns_,
+                                       paletteTileSize_, gridSize_, paletteTexture_, paletteTexturePath_,
+                                       selectedTileLayer_);
+                    if (cmd) compound->commands.push_back(std::move(cmd));
+                }
+                if (!compound->empty()) {
+                    UndoSystem::instance().push(std::move(compound));
+                    lastToolStatus_.clear();
+                }
+            }
         }
     }
     isToolDragging_ = false;
@@ -2191,16 +2231,18 @@ static std::unique_ptr<UndoCommand> paintOneTile(World* world,
         paletteTileSize / texH
     };
 
-    // Check if there's already a tile from the SAME tileset + layer at this position
+    // Check if there's already a tile from the SAME tileset + layer at this position.
+    // Editable tile = has TileLayerComponent matching the target layer
+    //               OR (legacy pre-TLC) entity tagged "ground" on the ground layer.
     std::unique_ptr<UndoCommand> result;
     bool replaced = false;
     world->forEach<Transform, SpriteComponent>(
         [&](Entity* entity, Transform* t, SpriteComponent* s) {
             if (replaced) return;
-            if (entity->tag() != "ground") return;
             auto* tlc = entity->getComponent<TileLayerComponent>();
             std::string entLayer = tlc ? tlc->layer : "ground";
             if (entLayer != tileLayer) return;
+            if (!tlc && entity->tag() != "ground") return;
             if (std::abs(t->position.x - worldPos.x) > 1.0f ||
                 std::abs(t->position.y - worldPos.y) > 1.0f) return;
             if (s->texturePath != paletteTexturePath) return;
@@ -2223,8 +2265,9 @@ static std::unique_ptr<UndoCommand> paintOneTile(World* world,
             [&](Entity* entity, Transform* t, SpriteComponent*) {
                 auto* etc = entity->getComponent<TileLayerComponent>();
                 std::string el = etc ? etc->layer : "ground";
-                if (el == tileLayer && entity->tag() == "ground" &&
-                    std::abs(t->position.x - worldPos.x) < 1.0f &&
+                if (el != tileLayer) return;
+                if (!etc && entity->tag() != "ground") return;
+                if (std::abs(t->position.x - worldPos.x) < 1.0f &&
                     std::abs(t->position.y - worldPos.y) < 1.0f) {
                     if (t->depth >= tileDepth) tileDepth = t->depth + 1.0f;
                 }
@@ -2260,13 +2303,70 @@ static Vec2 tileToWorldCenter(int col, int row, float gridSize) {
     return { col * gridSize + half, row * gridSize + half };
 }
 
+// Stamp a collision tile at worldPos if one isn't already there. Used by both
+// the brush loop and the rect/line tools so collision-layer authoring isn't
+// gated on a palette texture (collision tiles render as a tinted square, not
+// a sprite source rect). Defined inside the FATE_HAS_GAME block above.
+static std::unique_ptr<UndoCommand> paintOneCollisionTile(World* world,
+                                                          const Vec2& worldPos,
+                                                          float gridSize) {
+    bool exists = false;
+    world->forEach<Transform, TileLayerComponent>(
+        [&](Entity*, Transform* t, TileLayerComponent* tlc) {
+            if (tlc->layer == "collision" &&
+                std::abs(t->position.x - worldPos.x) < 1.0f &&
+                std::abs(t->position.y - worldPos.y) < 1.0f) {
+                exists = true;
+            }
+        }
+    );
+    if (exists) return nullptr;
+
+    Entity* tile = world->createEntity("CollisionTile");
+    tile->setTag("ground");
+    auto* transform = tile->addComponent<Transform>(worldPos);
+    transform->depth = -1.0f;
+    auto* sprite = tile->addComponent<SpriteComponent>();
+    sprite->size = {gridSize, gridSize};
+    sprite->tint = Color(1.0f, 0.2f, 0.2f, 0.35f);
+    auto* tlc = tile->addComponent<TileLayerComponent>();
+    tlc->layer = "collision";
+
+    auto cmd = std::make_unique<CreateCommand>();
+    cmd->createdHandle = tile->handle();
+    cmd->entityData = PrefabLibrary::entityToJson(tile);
+    return cmd;
+}
+
 void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
                          int windowWidth, int windowHeight) {
     bool isCollisionLayer = (selectedTileLayer_ == "collision");
     if (!world || !camera) return;
-    if (!isCollisionLayer && (selectedTileIndex_ < 0 || !paletteTexture_)) return;
-    if (!isCollisionLayer && (paletteColumns_ <= 0 || paletteRows_ <= 0 || paletteTileSize_ <= 0)) return;
-    if (!isCollisionLayer && selectedTileIndex_ >= paletteColumns_ * paletteRows_) return;
+
+    // Surface why a tile click had no effect — previously these gates returned
+    // silently and the user had no way to know whether their click was being
+    // ignored or whether something else was wrong. Collision layer never needs
+    // a palette texture, only the other layers do.
+    if (!isCollisionLayer) {
+        if (!paletteTexture_) {
+            lastToolStatus_ = "Tile tool: no tileset loaded — open Tile Palette and pick one";
+            return;
+        }
+        if (paletteColumns_ <= 0 || paletteRows_ <= 0 || paletteTileSize_ <= 0) {
+            lastToolStatus_ = "Tile tool: palette has no tiles — check tile size";
+            return;
+        }
+        if (selectedTileIndex_ < 0) {
+            lastToolStatus_ = "Tile tool: select a tile in the Tile Palette first";
+            return;
+        }
+        if (selectedTileIndex_ >= paletteColumns_ * paletteRows_) {
+            lastToolStatus_ = "Tile tool: selected tile index out of range — re-select after changing tile size";
+            return;
+        }
+    }
+    // Successful tile tool entry — clear stale status so it doesn't linger.
+    lastToolStatus_.clear();
 
     Vec2 worldPos = camera->screenToWorld(screenPos, windowWidth, windowHeight);
 
@@ -2302,10 +2402,10 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
 
         world->forEach<Transform, SpriteComponent>(
             [&](Entity* entity, Transform* t, SpriteComponent* s) {
-                if (entity->tag() != "ground") return;
                 auto* tlc = entity->getComponent<TileLayerComponent>();
                 std::string entLayer = tlc ? tlc->layer : "ground";
                 if (entLayer != selectedTileLayer_) return;
+                if (!tlc && entity->tag() != "ground") return;
                 if (s->texturePath != paletteTexturePath_) return;
                 int tc = (int)std::floor(t->position.x / gridSize_);
                 int tr = (int)std::floor(t->position.y / gridSize_);
@@ -2380,31 +2480,8 @@ void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
             };
 
             if (isCollisionLayer) {
-                // Check if collision tile already exists here
-                bool exists = false;
-                world->forEach<Transform, TileLayerComponent>(
-                    [&](Entity* entity, Transform* t, TileLayerComponent* tlc) {
-                        if (tlc->layer == "collision" &&
-                            std::abs(t->position.x - stampPos.x) < 1.0f &&
-                            std::abs(t->position.y - stampPos.y) < 1.0f) {
-                            exists = true;
-                        }
-                    }
-                );
-                if (!exists) {
-                    Entity* tile = world->createEntity("CollisionTile");
-                    tile->setTag("ground");
-                    auto* transform = tile->addComponent<Transform>(stampPos);
-                    transform->depth = -1.0f;
-                    auto* sprite = tile->addComponent<SpriteComponent>();
-                    sprite->size = {gridSize_, gridSize_};
-                    sprite->tint = Color(1.0f, 0.2f, 0.2f, 0.35f);
-                    auto* tlc = tile->addComponent<TileLayerComponent>();
-                    tlc->layer = "collision";
-
-                    auto cmd = std::make_unique<CreateCommand>();
-                    cmd->createdHandle = tile->handle();
-                    cmd->entityData = PrefabLibrary::entityToJson(tile);
+                auto cmd = paintOneCollisionTile(world, stampPos, gridSize_);
+                if (cmd) {
                     if (!pendingBrushStroke_) {
                         pendingBrushStroke_ = std::make_unique<CompoundCommand>();
                         pendingBrushStroke_->desc = "Paint brush stroke";
@@ -2855,8 +2932,12 @@ void Editor::exitPlayMode(World* world) {
 // Scene Save / Load
 // ============================================================================
 
-void Editor::saveScene(World* world, const std::string& path) {
-    if (!world) return;
+bool Editor::saveScene(World* world, const std::string& path) {
+    if (!world) {
+        lastSaveStatus_ = "Scene save FAILED: no world";
+        lastSaveSucceeded_ = false;
+        return false;
+    }
     currentScenePath_ = path;
 
     nlohmann::json root;
@@ -2887,53 +2968,71 @@ void Editor::saveScene(World* world, const std::string& path) {
 
     std::string jsonStr = root.dump(2);
 
-    // Atomic write to runtime dir: write .tmp then rename over target
-    auto atomicWrite = [](const std::string& target, const std::string& content) -> bool {
-        auto parentDir = fs::path(target).parent_path();
-        if (!parentDir.empty() && !fs::exists(parentDir))
-            fs::create_directories(parentDir);
-
-        fs::path tmp = fs::path(target);
-        tmp += ".tmp";
-        {
-            std::ofstream file(tmp);
-            if (!file.is_open()) return false;
-            file << content;
-            if (!file.good()) {
-                std::error_code ec;
-                fs::remove(tmp, ec);
-                return false;
-            }
-        }
-        std::error_code ec;
-        fs::rename(tmp, fs::path(target), ec);
-        if (ec) {
-            fs::copy_file(tmp, fs::path(target), fs::copy_options::overwrite_existing, ec);
-            fs::remove(tmp);
-            if (ec) return false;
-        }
-        return true;
-    };
-
-    atomicWrite(path, jsonStr);
+    // Editor save deliberately bypasses IAssetSource and writes loose-files
+    // directly via writeFileAtomic. This is intentional and load-bearing:
+    //   1. The editor is stripped from FATE_SHIPPING builds (see CMakeLists.txt),
+    //      so it only ever runs against loose-files on a developer machine.
+    //   2. Atomic .tmp+rename has no PhysFS analogue — packed `.pak` archives
+    //      don't support partial-overwrite, so an IAssetWriter wrapper would
+    //      either be a no-op for archives or have radically different semantics
+    //      from the disk path callers depend on (.tmp survival, source-dir
+    //      dual-save, hot-reload suppression).
+    // To enable saving into a packaged build, introduce a `IAssetWriter`
+    // interface with `writeBytes(key, content) → Result` semantics, route
+    // every authored-asset writer (this function, UISerializer::saveToFile,
+    // DialogueNodeEditor::saveToFile, AnimationEditor::saveTemplate /
+    // saveFrameSet / saveMetaJson, the packed-meta writer in packFrameSet,
+    // and the prefab save path) through it, and provide both a DirectFs
+    // writer (preserves today's behavior) and a `.pak` overlay writer.
+    // Until that interface lands, the loose-file assumption is a hard
+    // contract — do NOT add a new authored-asset writer that calls
+    // std::ofstream / fwrite / IAssetSource directly.
+    std::string writeErr;
+    if (!writeFileAtomic(path, jsonStr, &writeErr)) {
+        LOG_ERROR("Editor", "Scene save FAILED: %s (%s) — runtime path not updated on disk",
+                  path.c_str(), writeErr.c_str());
+        lastSaveStatus_ = "Scene save FAILED: " + path + " (" + writeErr + ")";
+        lastSaveSucceeded_ = false;
+        return false;
+    }
 
     // Also save to source dir (persists across rebuilds)
     if (!sourceDir_.empty()) {
         std::string srcPath = sourceDir_ + "/" + fs::path(path).filename().string();
-        atomicWrite(srcPath, jsonStr);
+        if (!writeFileAtomic(srcPath, jsonStr, &writeErr)) {
+            LOG_ERROR("Editor", "Scene save to source FAILED: %s (%s) — runtime copy ok, source copy stale",
+                      srcPath.c_str(), writeErr.c_str());
+            lastSaveStatus_ = "Source save FAILED: " + srcPath + " (" + writeErr + ")";
+            lastSaveSucceeded_ = false;
+            return false;
+        }
         LOG_INFO("Editor", "Scene also saved to source: %s", srcPath.c_str());
     }
 
     LOG_INFO("Editor", "Scene saved to %s (%zu entities)", path.c_str(), entitiesJson.size());
+    lastSaveStatus_ = "Scene saved: " + path;
+    lastSaveSucceeded_ = true;
+    return true;
 }
 
 void Editor::loadScene(World* world, const std::string& path) {
     if (!world) return;
-    currentScenePath_ = path;
+
+    // Helper: surface a load failure both in the log and the HUD strip. Reuses
+    // the save status channel — designers don't distinguish save vs load
+    // failures, they just need to know the scene didn't come up. Note that
+    // currentScenePath_ is NOT updated until the load actually succeeds, so
+    // a Ctrl+S immediately after a failed load won't quietly overwrite the
+    // good source file with whatever's in the world right now.
+    auto reportLoadFailure = [this, &path](const std::string& detail) {
+        LOG_ERROR("Editor", "Scene load FAILED (%s): %s", detail.c_str(), path.c_str());
+        lastSaveStatus_ = "Scene load FAILED: " + path + " (" + detail + ")";
+        lastSaveSucceeded_ = false;
+    };
 
     std::ifstream file(path);
     if (!file.is_open()) {
-        LOG_ERROR("Editor", "Cannot open scene: %s", path.c_str());
+        reportLoadFailure("cannot open file");
         return;
     }
 
@@ -2941,16 +3040,44 @@ void Editor::loadScene(World* world, const std::string& path) {
     try {
         root = nlohmann::json::parse(file);
     } catch (const nlohmann::json::exception& e) {
-        LOG_ERROR("Editor", "Scene parse error: %s", e.what());
+        reportLoadFailure(std::string("parse error: ") + e.what());
         return;
     }
 
     // Read version (default to 1 for backward compat with pre-header files)
     int version = root.value("version", 1);
     if (version > SCENE_FORMAT_VERSION) {
-        LOG_ERROR("Editor", "Scene file version %d is newer than supported (%d)",
-                  version, SCENE_FORMAT_VERSION);
+        reportLoadFailure("file version " + std::to_string(version) +
+                          " is newer than supported " + std::to_string(SCENE_FORMAT_VERSION));
         return;
+    }
+
+    // Validate shape BEFORE destroying anything — otherwise a scene file with
+    // valid JSON but a malformed entities/gridSize/metadata field would wipe
+    // the current world and leave the editor empty.
+    if (root.contains("gridSize") && !root["gridSize"].is_number()) {
+        reportLoadFailure(std::string("gridSize must be a number (got ") +
+                          root["gridSize"].type_name() + ")");
+        return;
+    }
+    if (root.contains("metadata") && !root["metadata"].is_object()) {
+        reportLoadFailure(std::string("metadata must be an object (got ") +
+                          root["metadata"].type_name() + ")");
+        return;
+    }
+    if (root.contains("entities") && !root["entities"].is_array()) {
+        reportLoadFailure(std::string("entities must be an array (got ") +
+                          root["entities"].type_name() + ")");
+        return;
+    }
+
+    // Validation passed — committing to the load. Adopt the path now so that
+    // a follow-up Ctrl+S targets this scene, and clear any stale failure
+    // status from a prior load attempt.
+    currentScenePath_ = path;
+    if (!lastSaveSucceeded_ && lastSaveStatus_.find("load FAILED") != std::string::npos) {
+        lastSaveStatus_.clear();
+        lastSaveSucceeded_ = true;
     }
 
     // Clear existing entities (in play mode, keep runtime entities for spectator)
@@ -3050,6 +3177,37 @@ void Editor::drawHUD(World* world) {
     ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 0.9f), "%s", buf);
     ImGui::End();
     ImGui::PopStyleVar(2);
+
+    // Show save failures in the HUD so the designer notices even if they
+    // weren't watching the log. Success path stays silent.
+    float bottomY = io.DisplaySize.y - 42.0f;
+    if (!lastSaveSucceeded_ && !lastSaveStatus_.empty()) {
+        ImVec2 errPad(12.0f, 6.0f);
+        ImGui::SetNextWindowPos(ImVec2(12.0f, bottomY));
+        ImGui::SetNextWindowBgAlpha(0.85f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, errPad);
+        ImGui::Begin("##HUD_SaveErr", nullptr, flags);
+        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", lastSaveStatus_.c_str());
+        ImGui::End();
+        ImGui::PopStyleVar(2);
+        bottomY -= 32.0f;
+    }
+
+    // Tile-tool feedback ("no tileset", "select a tile", etc.). Stacked above
+    // the save error so both are visible if both are active. Amber rather than
+    // red — these are workflow hints, not failures.
+    if (!lastToolStatus_.empty()) {
+        ImVec2 hintPad(12.0f, 6.0f);
+        ImGui::SetNextWindowPos(ImVec2(12.0f, bottomY));
+        ImGui::SetNextWindowBgAlpha(0.85f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, hintPad);
+        ImGui::Begin("##HUD_ToolStatus", nullptr, flags);
+        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "%s", lastToolStatus_.c_str());
+        ImGui::End();
+        ImGui::PopStyleVar(2);
+    }
 }
 
 // ============================================================================
@@ -3304,10 +3462,10 @@ void Editor::eraseTileAt(World* world, Camera* camera, const Vec2& screenPos,
 
             world->forEach<Transform, SpriteComponent>(
                 [&](Entity* entity, Transform* t, SpriteComponent*) {
-                    if (entity->tag() != "ground") return;
                     auto* tlc = entity->getComponent<TileLayerComponent>();
                     std::string entLayer = tlc ? tlc->layer : "ground";
                     if (entLayer != selectedTileLayer_) return;
+                    if (!tlc && entity->tag() != "ground") return;
                     float dist = erasePos.distance(t->position);
                     if (dist < gridSize_ * 0.6f && dist < nearestDist) {
                         nearest = entity;
@@ -3519,10 +3677,17 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     // Ctrl+S = Save current scene
     if (ctrl && scancode == SDL_SCANCODE_S && (!inPlayMode_ || paused_)) {
         if (!currentScenePath_.empty()) {
-            saveScene(world, currentScenePath_);
-            LOG_INFO("Editor", "Ctrl+S: saved scene to %s", currentScenePath_.c_str());
+            if (saveScene(world, currentScenePath_)) {
+                LOG_INFO("Editor", "Ctrl+S: saved scene to %s", currentScenePath_.c_str());
+            } else {
+                LOG_ERROR("Editor", "Ctrl+S: save did not complete — %s", lastSaveStatus_.c_str());
+            }
         } else {
-            LOG_WARN("Editor", "Ctrl+S: no scene path set (currentScenePath_ is empty)");
+            // New scene with no path — surface in HUD too so it's not just a
+            // log line the user has to dig for. Reuses the save-error HUD.
+            lastSaveStatus_ = "Save As required: this scene has no path yet (File > Save As...)";
+            lastSaveSucceeded_ = false;
+            LOG_WARN("Editor", "Ctrl+S: %s", lastSaveStatus_.c_str());
         }
     }
 #ifdef FATE_HAS_GAME
@@ -3535,20 +3700,29 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
             auto* root = uiManager_->getScreen(screenId);
             if (root) {
                 std::string relPath = "assets/ui/screens/" + screenId + ".json";
-                UISerializer::saveToFile(relPath, screenId, root);
-                LOG_INFO("Editor", "Saved UI screen: %s", relPath.c_str());
-                // Also save to source directory so changes survive rebuilds
-                // sourceDir_ is FATE_SOURCE_DIR/assets/scenes --go up to project root
-                if (!sourceDir_.empty()) {
-                    std::string projectRoot = sourceDir_;
-                    auto pos = projectRoot.rfind("/assets/scenes");
-                    if (pos == std::string::npos) pos = projectRoot.rfind("\\assets\\scenes");
-                    if (pos != std::string::npos) projectRoot = projectRoot.substr(0, pos);
-                    std::string srcPath = projectRoot + "/" + relPath;
-                    UISerializer::saveToFile(srcPath, screenId, root);
-                    LOG_INFO("Editor", "Saved UI screen (source): %s", srcPath.c_str());
+                bool runtimeOk = UISerializer::saveToFile(relPath, screenId, root);
+                if (!runtimeOk) {
+                    lastSaveStatus_ = "UI screen save FAILED: " + relPath;
+                    lastSaveSucceeded_ = false;
+                } else {
+                    LOG_INFO("Editor", "Saved UI screen: %s", relPath.c_str());
+                    // Also save to source directory so changes survive rebuilds
+                    // sourceDir_ is FATE_SOURCE_DIR/assets/scenes --go up to project root
+                    if (!sourceDir_.empty()) {
+                        std::string projectRoot = sourceDir_;
+                        auto pos = projectRoot.rfind("/assets/scenes");
+                        if (pos == std::string::npos) pos = projectRoot.rfind("\\assets\\scenes");
+                        if (pos != std::string::npos) projectRoot = projectRoot.substr(0, pos);
+                        std::string srcPath = projectRoot + "/" + relPath;
+                        if (!UISerializer::saveToFile(srcPath, screenId, root)) {
+                            lastSaveStatus_ = "UI screen source save FAILED: " + srcPath;
+                            lastSaveSucceeded_ = false;
+                        } else {
+                            LOG_INFO("Editor", "Saved UI screen (source): %s", srcPath.c_str());
+                        }
+                    }
+                    uiManager_->suppressHotReload();
                 }
-                uiManager_->suppressHotReload();
             }
         }
         // Player prefab save is handled above (before the !open_ guard)
@@ -3795,7 +3969,7 @@ void Editor::drawTilePalette(World*, Camera*) {}
 void Editor::drawSceneGrid(SpriteBatch*, Camera*) {}
 void Editor::drawSelectionOutlines(SpriteBatch*, Camera*) {}
 void Editor::drawImGuizmo(Camera*) {}
-void Editor::saveScene(World*, const std::string&) {}
+bool Editor::saveScene(World*, const std::string&) { return false; }
 void Editor::loadScene(World*, const std::string&) {}
 void Editor::enterPlayMode(World*) {}
 void Editor::exitPlayMode(World*) {}

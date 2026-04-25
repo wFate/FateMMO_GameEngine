@@ -217,11 +217,26 @@ public:
     bool isScaleMode() const { return currentTool_ == EditorTool::Scale; }
 
     EditorTool currentTool() const { return currentTool_; }
+    // Test-only accessors — do not use in production code.
+    void setCurrentTool(EditorTool t) { currentTool_ = t; }
+    void setSelectedTileLayer(const std::string& layer) { selectedTileLayer_ = layer; }
+    void setSelectedTileIndex(int index) { selectedTileIndex_ = index; }
 
     bool gridSnapEnabled() const { return gridSnap_; }
     float gridSize() const { return gridSize_; }
 
-    void saveScene(World* world, const std::string& path);
+    // Returns true on successful write to runtime (and source, if configured).
+    // On failure, see lastSaveStatus() / lastSaveSucceeded() for detail.
+    bool saveScene(World* world, const std::string& path);
+    const std::string& lastSaveStatus() const { return lastSaveStatus_; }
+    bool lastSaveSucceeded() const { return lastSaveSucceeded_; }
+
+    // Tile-tool feedback ("no palette texture", "select a tile first", etc.).
+    // Surfaced in the HUD next to the save status so designers see why a
+    // paint/fill/rect/line click had no visible effect, instead of having to
+    // tail the log.
+    const std::string& lastToolStatus() const { return lastToolStatus_; }
+    void clearToolStatus() { lastToolStatus_.clear(); }
     void loadScene(World* world, const std::string& path);
 
     // Play-in-editor: snapshot/restore ECS state
@@ -329,6 +344,17 @@ private:
     bool openSavePrefab_ = false;
     bool resetLayout_ = false;  // Set via View > Reset Layout
     std::string currentScenePath_;  // Path of currently loaded/saved scene
+
+    // Populated by saveScene() so the editor HUD / hotkey-bind can surface
+    // write failures. Prior to this flag a failed atomic write was silently
+    // discarded and the UI still reported success.
+    std::string lastSaveStatus_;
+    bool lastSaveSucceeded_ = true;
+
+    // Populated by paintTileAt() / handleMouseUp() when a tile-tool click
+    // was rejected (no palette, no tile selected, out-of-range index, etc.).
+    // Cleared on every successful tile op so it only flashes when actionable.
+    std::string lastToolStatus_;
 
     // Tool mode
     EditorTool currentTool_ = EditorTool::Move;

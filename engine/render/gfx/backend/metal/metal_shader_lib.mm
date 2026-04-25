@@ -1,6 +1,7 @@
 #import "engine/render/gfx/backend/metal/metal_shader_lib.h"
 #import "engine/core/logger.h"
 #import <Metal/Metal.h>
+#import <dispatch/dispatch.h>
 
 namespace gfx {
 namespace metal {
@@ -70,6 +71,39 @@ bool MetalShaderLib::loadMetallib(const std::string& path) {
         }
         LOG_INFO("metal", "Loaded metallib: %s (%lu functions)",
                  path.c_str(), (unsigned long)[lib functionNames].count);
+        return true;
+    }
+}
+
+bool MetalShaderLib::loadMetallibFromBytes(const void* data, size_t size, const std::string& label) {
+    if (!data || size == 0) {
+        LOG_ERROR("metal", "loadMetallibFromBytes: empty payload");
+        return false;
+    }
+    @autoreleasepool {
+        // dispatch_data_create copies the buffer (DISPATCH_DATA_DESTRUCTOR_DEFAULT),
+        // so the caller's std::vector<uint8_t> can free immediately after this call.
+        dispatch_data_t dd = dispatch_data_create(data, size, dispatch_get_main_queue(),
+                                                  DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+        NSError* error = nil;
+        id<MTLLibrary> lib = [device_ newLibraryWithData:dd error:&error];
+        if (!lib) {
+            LOG_ERROR("metal", "Failed to load metallib from bytes (%s): %s",
+                      label.empty() ? "<unlabeled>" : label.c_str(),
+                      [[error localizedDescription] UTF8String]);
+            return false;
+        }
+
+        library_ = lib;
+        for (NSString* name in [lib functionNames]) {
+            id<MTLFunction> func = [lib newFunctionWithName:name];
+            if (func) {
+                cache_[std::string([name UTF8String])] = (__bridge_retained void*)func;
+            }
+        }
+        LOG_INFO("metal", "Loaded metallib from bytes: %s (%lu functions, %zu bytes)",
+                 label.empty() ? "<unlabeled>" : label.c_str(),
+                 (unsigned long)[lib functionNames].count, size);
         return true;
     }
 }

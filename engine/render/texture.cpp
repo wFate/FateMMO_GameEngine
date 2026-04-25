@@ -251,6 +251,29 @@ bool Texture::reloadFromFile(const std::string& path) {
     return result;
 }
 
+bool Texture::reloadFromDecodedMemory(const unsigned char* data, int width, int height, int channels) {
+    if (gfxHandle_.valid()) {
+        gfx::Device::instance().destroy(gfxHandle_);
+        gfxHandle_ = {};
+#ifndef FATEMMO_METAL
+        textureId_ = 0;
+#endif
+    }
+    return loadFromMemory(data, width, height, channels);
+}
+
+bool Texture::reloadFromCompressedMemory(const unsigned char* data, size_t dataSize,
+                                         int width, int height, gfx::TextureFormat fmt) {
+    if (gfxHandle_.valid()) {
+        gfx::Device::instance().destroy(gfxHandle_);
+        gfxHandle_ = {};
+#ifndef FATEMMO_METAL
+        textureId_ = 0;
+#endif
+    }
+    return loadFromMemoryCompressed(data, dataSize, width, height, fmt);
+}
+
 bool Texture::loadFromMemory(const unsigned char* data, int width, int height, int channels) {
     width_ = width;
     height_ = height;

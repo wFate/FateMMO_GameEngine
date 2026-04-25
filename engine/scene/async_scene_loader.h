@@ -39,6 +39,11 @@ public:
     void startLoad(const std::string& sceneName, const std::string& jsonPath);
     bool tickFinalization(World& world);
 
+    // Clear active/pending state so startLoad can run again. Call after
+    // observing hasFailed() and reporting the error — otherwise the loader
+    // stays "active" and all future startLoad() calls are silently ignored.
+    void reset();
+
     bool isWorkerDone() const;
     bool hasFailed() const;
     const std::string& errorMessage() const;

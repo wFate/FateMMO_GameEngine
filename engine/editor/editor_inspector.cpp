@@ -300,7 +300,11 @@ static bool inspectDialogueTree(std::vector<fate::DialogueNode>& nodes, uint32_t
         changed = true;
 
     static const char* condNames[] = { "None", "HasFlag", "MinLevel", "HasItem", "HasClass" };
-    static const char* actNames[]  = { "None", "GiveItem", "GiveXP", "GiveGold", "SetFlag", "Heal" };
+    static const char* actNames[]  = {
+        "None", "GiveItem", "GiveXP", "GiveGold", "SetFlag", "Heal",
+        "AcceptQuest", "CompleteQuest", "AbandonQuest", "IncludeQuestTree",
+        "EndDialogue", "OpenScreen"
+    };
 
     int removeNodeIdx = -1;
     for (int ni = 0; ni < (int)nodes.size(); ++ni) {
@@ -349,8 +353,8 @@ static bool inspectDialogueTree(std::vector<fate::DialogueNode>& nodes, uint32_t
                         if (ImGui::DragScalar("Next Node", ImGuiDataType_U32, &choice.nextNodeId, 1.0f)) changed = true;
 
                         int actIdx = static_cast<int>(choice.onSelect.action);
-                        if (actIdx < 0 || actIdx > 5) actIdx = 0;
-                        if (ImGui::Combo("Action", &actIdx, actNames, 6))
+                        if (actIdx < 0 || actIdx > 11) actIdx = 0;
+                        if (ImGui::Combo("Action", &actIdx, actNames, 12))
                             { choice.onSelect.action = static_cast<fate::DialogueAction>(actIdx); changed = true; }
                         if (choice.onSelect.action != fate::DialogueAction::None) {
                             char aBuf[128];
@@ -2278,6 +2282,52 @@ void Editor::drawInspector() {
                             (int)story->dialogueTree.size(), story->rootNodeId);
                 if (inspectDialogueTree(story->dialogueTree, story->rootNodeId))
                     captureInspectorUndo();
+            }
+        }
+
+        // InteractSiteComponent
+        if (auto* site = selectedEntity_->getComponent<InteractSiteComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Interact Site");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmInteractSite")) {
+                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<InteractSiteComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<InteractSiteComponent>()) {
+                char idBuf[128];
+                std::snprintf(idBuf, sizeof(idBuf), "%s", site->siteStringId.c_str());
+                if (ImGui::InputText("Site String ID", idBuf, sizeof(idBuf))) {
+                    site->siteStringId = idBuf;
+                    captureInspectorUndo();
+                }
+                char flagBuf[128];
+                std::snprintf(flagBuf, sizeof(flagBuf), "%s", site->flagToSet.c_str());
+                if (ImGui::InputText("Flag To Set", flagBuf, sizeof(flagBuf))) {
+                    site->flagToSet = flagBuf;
+                    captureInspectorUndo();
+                }
+                char treeBuf[128];
+                std::snprintf(treeBuf, sizeof(treeBuf), "%s", site->dialogueTreeId.c_str());
+                if (ImGui::InputText("Dialogue Tree ID##site", treeBuf, sizeof(treeBuf))) {
+                    site->dialogueTreeId = treeBuf;
+                    captureInspectorUndo();
+                }
+                char promptBuf[128];
+                std::snprintf(promptBuf, sizeof(promptBuf), "%s", site->interactPrompt.c_str());
+                if (ImGui::InputText("Interact Prompt", promptBuf, sizeof(promptBuf))) {
+                    site->interactPrompt = promptBuf;
+                    captureInspectorUndo();
+                }
+                int reqQ = static_cast<int>(site->requiredQuestId);
+                if (ImGui::InputInt("Required Quest ID (0=none)", &reqQ)) {
+                    site->requiredQuestId = static_cast<uint32_t>((std::max)(0, reqQ));
+                    captureInspectorUndo();
+                }
+                if (ImGui::SliderFloat("Interaction Radius (px)", &site->interactionRadius, 16.0f, 256.0f)) {
+                    captureInspectorUndo();
+                }
+                ImGui::TextDisabled("Tree authored in assets/dialogue/sites/<id>.json");
             }
         }
 

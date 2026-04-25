@@ -1,14 +1,19 @@
 #pragma once
 #include "engine/asset/asset_handle.h"
 #include <string>
+#include <string_view>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
 #include <mutex>
 #include <atomic>
 #include <memory>
+#include <optional>
+#include <cstdint>
 
 namespace fate {
+
+class IAssetSource;
 
 enum class AssetKind : uint8_t { Texture, Json, Shader };
 enum class AssetState : uint8_t { Empty, Loading, Ready, Failed };
@@ -80,6 +85,38 @@ public:
     // Debug info
     size_t assetCount() const;
 
+    // ---- VFS integration (Phase 1: plumbing only) --------------------------
+    // Install the active asset source. Takes ownership. Pass nullptr to clear.
+    // Phase 1 stores the pointer but does not yet route loader IO through it;
+    // that migration is Phase 2 (loaders) + Phase 3 (scene loader) + Phase 4
+    // (audio). When source() returns non-null and FATE_USE_VFS is enabled at
+    // build time, future phases will prefer source->readBytes() over fopen.
+    void setSource(std::unique_ptr<IAssetSource> source);
+    IAssetSource* source();
+    const IAssetSource* source() const;
+
+    // Logical asset key: forward-slash, no filesystem resolution. Phase 2
+    // flipped pathToIndex_ to use this — keys look like "assets/foo.png",
+    // not "C:/.../assets/foo.png". FileWatcher callback updated together to
+    // produce matching keys.
+    static std::string toAssetKey(std::string_view path);
+
+    // Read raw bytes for an asset key via the installed IAssetSource.
+    // Loaders MUST call this instead of fopen so packaged .pak builds work
+    // with FATE_USE_VFS=ON. Thread-safe (sources promise read methods are).
+    // Returns nullopt on miss / IO error / no source installed.
+    static std::optional<std::vector<uint8_t>> readBytes(std::string_view assetKey);
+    static std::optional<std::string> readText(std::string_view assetKey);
+
+    // Recent-reads ring (latest first). Used by the `/vfs_status` GM command
+    // to help answer "why is this texture not loading." Thread-safe.
+    struct ReadLogEntry {
+        std::string key;
+        size_t bytes = 0;  // 0 on miss/error
+        bool ok = false;
+    };
+    static std::vector<ReadLogEntry> recentReads();
+
 private:
     AssetRegistry();
 
@@ -111,6 +148,8 @@ private:
     static constexpr float kDebounceDelay = 0.3f;
 
     std::vector<std::unique_ptr<AsyncDecodeRequest>> activeDecodes_;
+
+    std::unique_ptr<IAssetSource> source_;
 
     const AssetLoader* findLoader(const std::string& path) const;
     uint32_t allocSlot();

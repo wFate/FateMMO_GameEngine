@@ -17,7 +17,9 @@ public:
     nlohmann::json saveToJson() const;
 
     void loadFromFile(const std::string& path);
-    void saveToFile(const std::string& path);
+    // Returns true on a successful atomic write; on failure, leaves the
+    // existing destination file untouched and does not update currentFilePath_.
+    bool saveToFile(const std::string& path);
 
     bool isOpen() const { return open_; }
     void setOpen(bool o) { open_ = o; }

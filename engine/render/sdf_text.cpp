@@ -165,18 +165,20 @@ void SDFText::loadMetrics(const std::string& jsonPath) {
 }
 
 void SDFText::drawWorld(SpriteBatch& batch, const std::string& text, Vec2 position,
-                        float fontSize, Color color, float depth, TextStyle style) {
-    drawInternal(batch, text, position, fontSize, color, depth, style, false);
+                        float fontSize, Color color, float depth, TextStyle style,
+                        const TextLayout& layout) {
+    drawInternal(batch, text, position, fontSize, color, depth, style, false, layout);
 }
 
 void SDFText::drawScreen(SpriteBatch& batch, const std::string& text, Vec2 position,
-                         float fontSize, Color color, float depth, TextStyle style) {
-    drawInternal(batch, text, position, fontSize, color, depth, style, true);
+                         float fontSize, Color color, float depth, TextStyle style,
+                         const TextLayout& layout) {
+    drawInternal(batch, text, position, fontSize, color, depth, style, true, layout);
 }
 
 void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 position,
                            float fontSize, Color color, float depth, TextStyle style,
-                           bool yDown) {
+                           bool yDown, const TextLayout& layout) {
 #ifdef FATEMMO_METAL
     if (!activeGlyphs_ || activeGlyphs_->empty() || !atlasGfxHandle_.valid()) return;
 #else
@@ -203,7 +205,7 @@ void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 pos
 
         if (cp == '\n') {
             penX = startX;
-            penY += (yDown ? 1.0f : -1.0f) * lineHeight_ * fontSize;
+            penY += (yDown ? 1.0f : -1.0f) * lineHeight_ * fontSize * layout.lineHeight;
             continue;
         }
 
@@ -245,11 +247,11 @@ void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 pos
 #endif
         }
 
-        penX += gm.advance * scale;
+        penX += gm.advance * scale + layout.letterSpacing;
     }
 }
 
-Vec2 SDFText::measure(const std::string& text, float fontSize) const {
+Vec2 SDFText::measure(const std::string& text, float fontSize, const TextLayout& layout) const {
     if (!activeGlyphs_) return {0.0f, 0.0f};
     const auto& glyphs = *activeGlyphs_;
     const float scale = fontSize;
@@ -270,12 +272,12 @@ Vec2 SDFText::measure(const std::string& text, float fontSize) const {
 
         auto it = glyphs.find(cp);
         if (it != glyphs.end()) {
-            totalWidth += it->second.advance * scale;
+            totalWidth += it->second.advance * scale + layout.letterSpacing;
         }
     }
 
     if (totalWidth > maxWidth) maxWidth = totalWidth;
-    return {maxWidth, lineHeight_ * fontSize * lines};
+    return {maxWidth, lineHeight_ * fontSize * layout.lineHeight * lines};
 }
 
 void SDFText::setFontRegistry(FontRegistry* registry) {
@@ -284,12 +286,12 @@ void SDFText::setFontRegistry(FontRegistry* registry) {
 
 void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 position,
                            float fontSize, Color color, float depth, TextStyle style,
-                           const std::string& fontName) {
+                           const std::string& fontName, const TextLayout& layout) {
     if (fontRegistry_) {
         SDFFont* font = fontRegistry_->getFont(fontName);
         if (font && font->atlas && !font->glyphs.empty()) {
             if (font->type == SDFFont::Type::Bitmap) {
-                drawBitmap(batch, *font, text, position, fontSize, color, depth, true);
+                drawBitmap(batch, *font, text, position, fontSize, color, depth, true, layout);
                 return;
             }
             // MSDF font from registry: temporarily swap in the font's data
@@ -317,7 +319,7 @@ void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 pos
             ascender_    = font->ascender;
             emSize_      = font->emSize;
 
-            drawInternal(batch, text, position, fontSize, color, depth, style, true);
+            drawInternal(batch, text, position, fontSize, color, depth, style, true, layout);
 
             activeGlyphs_   = savedActiveGlyphs;
 #ifndef FATEMMO_METAL
@@ -334,17 +336,17 @@ void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 pos
         }
     }
     // Fallback: use default font
-    drawInternal(batch, text, position, fontSize, color, depth, style, true);
+    drawInternal(batch, text, position, fontSize, color, depth, style, true, layout);
 }
 
 void SDFText::drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 position,
                           float fontSize, Color color, float depth, TextStyle style,
-                          const std::string& fontName) {
+                          const std::string& fontName, const TextLayout& layout) {
     if (fontRegistry_) {
         SDFFont* font = fontRegistry_->getFont(fontName);
         if (font && font->atlas && !font->glyphs.empty()) {
             if (font->type == SDFFont::Type::Bitmap) {
-                drawBitmap(batch, *font, text, position, fontSize, color, depth, false);
+                drawBitmap(batch, *font, text, position, fontSize, color, depth, false, layout);
                 return;
             }
             // MSDF font from registry: temporarily swap in the font's data
@@ -372,7 +374,7 @@ void SDFText::drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 posi
             ascender_    = font->ascender;
             emSize_      = font->emSize;
 
-            drawInternal(batch, text, position, fontSize, color, depth, style, false);
+            drawInternal(batch, text, position, fontSize, color, depth, style, false, layout);
 
             activeGlyphs_   = savedActiveGlyphs;
 #ifndef FATEMMO_METAL
@@ -389,16 +391,16 @@ void SDFText::drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 posi
         }
     }
     // Fallback: use default font
-    drawInternal(batch, text, position, fontSize, color, depth, style, false);
+    drawInternal(batch, text, position, fontSize, color, depth, style, false, layout);
 }
 
 Vec2 SDFText::measureEx(const std::string& text, float fontSize,
-                        const std::string& fontName) const {
+                        const std::string& fontName, const TextLayout& layout) const {
     if (fontRegistry_) {
         SDFFont* font = fontRegistry_->getFont(fontName);
         if (font && !font->glyphs.empty()) {
             if (font->type == SDFFont::Type::Bitmap) {
-                return measureBitmap(*font, text, fontSize);
+                return measureBitmap(*font, text, fontSize, layout);
             }
             // MSDF font from registry: compute using font's glyphs/metrics
             const float scale = fontSize;
@@ -417,18 +419,19 @@ Vec2 SDFText::measureEx(const std::string& text, float fontSize,
                 }
                 auto it = font->glyphs.find(cp);
                 if (it != font->glyphs.end()) {
-                    totalWidth += it->second.advance * scale;
+                    totalWidth += it->second.advance * scale + layout.letterSpacing;
                 }
             }
             if (totalWidth > maxWidth) maxWidth = totalWidth;
-            return {maxWidth, font->lineHeight * fontSize * lines};
+            return {maxWidth, font->lineHeight * fontSize * layout.lineHeight * lines};
         }
     }
-    return measure(text, fontSize);
+    return measure(text, fontSize, layout);
 }
 
 void SDFText::drawBitmap(SpriteBatch& batch, const SDFFont& font, const std::string& text,
-                         Vec2 position, float fontSize, Color color, float depth, bool yDown) {
+                         Vec2 position, float fontSize, Color color, float depth, bool yDown,
+                         const TextLayout& layout) {
     if (!font.atlas || font.glyphHeight <= 0 || font.columns <= 0) return;
 
     int scaleI = static_cast<int>(std::round(fontSize / font.glyphHeight));
@@ -450,13 +453,13 @@ void SDFText::drawBitmap(SpriteBatch& batch, const SDFFont& font, const std::str
 
         if (cp == '\n') {
             penX = startX;
-            penY += yDown ? scaledH : -scaledH;
+            penY += (yDown ? scaledH : -scaledH) * layout.lineHeight;
             continue;
         }
 
         int ch = static_cast<int>(cp);
         if (ch < font.firstChar || ch > font.lastChar) {
-            penX += scaledW;
+            penX += scaledW + layout.letterSpacing;
             continue;
         }
 
@@ -476,11 +479,12 @@ void SDFText::drawBitmap(SpriteBatch& batch, const SDFFont& font, const std::str
 
         batch.drawTexturedQuad(font.atlas->gfxHandle(), font.atlas->id(), params, 0.0f);
 
-        penX += scaledW;
+        penX += scaledW + layout.letterSpacing;
     }
 }
 
-Vec2 SDFText::measureBitmap(const SDFFont& font, const std::string& text, float fontSize) const {
+Vec2 SDFText::measureBitmap(const SDFFont& font, const std::string& text, float fontSize,
+                            const TextLayout& layout) const {
     if (font.glyphHeight <= 0) return {0.0f, 0.0f};
 
     int scaleI = static_cast<int>(std::round(fontSize / font.glyphHeight));
@@ -501,10 +505,10 @@ Vec2 SDFText::measureBitmap(const SDFFont& font, const std::string& text, float 
             lines++;
             continue;
         }
-        totalWidth += scaledW;
+        totalWidth += scaledW + layout.letterSpacing;
     }
     if (totalWidth > maxWidth) maxWidth = totalWidth;
-    return {maxWidth, scaledH * lines};
+    return {maxWidth, scaledH * layout.lineHeight * lines};
 }
 
 unsigned int SDFText::atlasTextureId() const {

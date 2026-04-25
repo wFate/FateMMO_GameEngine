@@ -1,6 +1,7 @@
 #include "engine/editor/animation_editor.h"
 #include "engine/editor/aseprite_importer.h"
 #include "engine/core/logger.h"
+#include "engine/core/atomic_write.h"
 #include "engine/render/texture.h"
 #ifdef FATE_HAS_GAME
 #include "game/animation_loader.h"
@@ -53,11 +54,38 @@ void AnimationEditor::shutdown() {
     frameTexCache_.clear();
 }
 
+void AnimationEditor::noteSaveOk(const std::string& msg) {
+    lastSaveStatus_ = msg;
+    lastSaveSucceeded_ = true;
+}
+
+void AnimationEditor::noteSaveFailure(const std::string& msg) {
+    lastSaveStatus_ = msg;
+    lastSaveSucceeded_ = false;
+}
+
+void AnimationEditor::drawSaveStatusStrip() {
+    if (lastSaveStatus_.empty()) return;
+    ImVec4 col = lastSaveSucceeded_
+                   ? ImVec4(0.45f, 0.85f, 0.45f, 1.0f)   // green
+                   : ImVec4(1.0f, 0.35f, 0.35f, 1.0f);   // red
+    ImGui::PushStyleColor(ImGuiCol_Text, col);
+    ImGui::TextWrapped("%s", lastSaveStatus_.c_str());
+    ImGui::PopStyleColor();
+    ImGui::SameLine();
+    if (ImGui::SmallButton("X##animSaveStatusDismiss")) {
+        lastSaveStatus_.clear();
+        lastSaveSucceeded_ = true;
+    }
+    ImGui::Separator();
+}
+
 void AnimationEditor::draw() {
     if (!open_) return;
 
     if (ImGui::Begin("Animation Editor", &open_, ImGuiWindowFlags_MenuBar)) {
         drawMenuBar();
+        drawSaveStatusStrip();
         drawTopBar();
         ImGui::Separator();
         drawFrameWorkspace();
@@ -210,6 +238,7 @@ void AnimationEditor::loadTemplate(const std::string& path) {
 void AnimationEditor::saveTemplate() {
     if (templatePath_.empty()) {
         LOG_WARN("AnimEditor", "No template path set --cannot save");
+        noteSaveFailure("Save Template: no path set — use File > Open or Save As first");
         return;
     }
 
@@ -234,19 +263,17 @@ void AnimationEditor::saveTemplate() {
     }
     j["states"] = statesArr;
 
-    // Ensure parent directory exists
-    fs::path p(templatePath_);
-    if (p.has_parent_path()) {
-        fs::create_directories(p.parent_path());
-    }
-
-    std::ofstream out(templatePath_);
-    if (!out.is_open()) {
-        LOG_ERROR("AnimEditor", "Failed to write template: %s", templatePath_.c_str());
+    // Atomic .tmp+rename — never leave a half-written .anim template on disk
+    // that the next loadTemplate() would silently parse as truncated.
+    std::string err;
+    if (!writeFileAtomic(templatePath_, j.dump(2), &err)) {
+        LOG_ERROR("AnimEditor", "Failed to write template %s: %s",
+                  templatePath_.c_str(), err.c_str());
+        noteSaveFailure("Save Template FAILED: " + templatePath_ + " (" + err + ")");
         return;
     }
-    out << j.dump(2);
     LOG_INFO("AnimEditor", "Saved template: %s", templatePath_.c_str());
+    noteSaveOk("Saved template: " + templatePath_);
 }
 
 // ---------------------------------------------------------------------------
@@ -777,16 +804,17 @@ void AnimationEditor::saveFrameSet(const std::string& layerVariantKey) {
 
     // Output path based on template name
     std::string dir = "assets/animations";
-    fs::create_directories(dir);
     std::string outPath = dir + "/" + template_.name + "_" + fset.layer + "_" + fset.variant + ".frameset";
 
-    std::ofstream out(outPath);
-    if (!out.is_open()) {
-        LOG_ERROR("AnimEditor", "Failed to write frame set: %s", outPath.c_str());
+    std::string err;
+    if (!writeFileAtomic(outPath, j.dump(2), &err)) {
+        LOG_ERROR("AnimEditor", "Failed to write frame set %s: %s",
+                  outPath.c_str(), err.c_str());
+        noteSaveFailure("Save Frame Set FAILED: " + outPath + " (" + err + ")");
         return;
     }
-    out << j.dump(2);
     LOG_INFO("AnimEditor", "Saved frame set: %s", outPath.c_str());
+    noteSaveOk("Saved frame set: " + outPath);
 
     // Also pack the sprite sheet
     packFrameSet(layerVariantKey);
@@ -1155,11 +1183,13 @@ void AnimationEditor::packFrameSet(const std::string& layerVariantKey) {
     }
     meta["entries"] = entries;
 
-    std::ofstream metaOut(metaPath);
-    if (!metaOut.is_open()) {
-        LOG_ERROR("AnimEditor", "Failed to write metadata: %s", metaPath.c_str());
+    std::string metaErr;
+    if (!writeFileAtomic(metaPath, meta.dump(2), &metaErr)) {
+        LOG_ERROR("AnimEditor", "Failed to write metadata %s: %s",
+                  metaPath.c_str(), metaErr.c_str());
+        noteSaveFailure("Pack metadata FAILED: " + metaPath + " (" + metaErr + ")");
     } else {
-        metaOut << meta.dump(2);
+        noteSaveOk("Packed sheet metadata: " + metaPath);
     }
 
     // Update frame set references
@@ -1622,31 +1652,48 @@ void AnimationEditor::saveMetaJson(const std::string& sheetPath) {
         }
     }
 
-    // Save to build dir
+    std::string serialized = j.dump(2);
+
+    // Save to build dir (atomic)
+    bool buildOk = false;
+    std::string buildErr;
     {
-        auto parentDir = fs::path(metaPath).parent_path();
-        if (!parentDir.empty() && !fs::exists(parentDir))
-            fs::create_directories(parentDir);
-        std::ofstream f(metaPath);
-        if (f.is_open()) {
-            f << j.dump(2);
+        if (writeFileAtomic(metaPath, serialized, &buildErr)) {
             LOG_INFO("AnimEditor", "Saved meta: %s", metaPath.c_str());
+            buildOk = true;
+        } else {
+            LOG_ERROR("AnimEditor", "Failed to save meta %s: %s",
+                      metaPath.c_str(), buildErr.c_str());
         }
     }
 
     // Dual-save to source dir (only for relative paths -- absolute paths
     // already saved to the correct location above)
+    bool srcAttempted = false;
+    bool srcOk = true;
+    std::string srcErr;
+    std::string srcPath;
     if (!sourceDir_.empty() && !fs::path(metaPath).is_absolute()) {
-        std::string srcPath = sourceDir_ + "/" + metaPath;
-        std::error_code ec;
-        auto parentDir = fs::path(srcPath).parent_path();
-        if (!parentDir.empty() && !fs::exists(parentDir, ec))
-            fs::create_directories(parentDir, ec);
-        std::ofstream f(srcPath);
-        if (f.is_open()) {
-            f << j.dump(2);
+        srcAttempted = true;
+        srcPath = sourceDir_ + "/" + metaPath;
+        if (writeFileAtomic(srcPath, serialized, &srcErr)) {
             LOG_INFO("AnimEditor", "Saved meta (source): %s", srcPath.c_str());
+        } else {
+            LOG_ERROR("AnimEditor", "Failed to save meta source %s: %s",
+                      srcPath.c_str(), srcErr.c_str());
+            srcOk = false;
         }
+    }
+
+    if (!buildOk) {
+        noteSaveFailure("Save slicer meta FAILED: " + metaPath + " (" + buildErr + ")");
+    } else if (srcAttempted && !srcOk) {
+        noteSaveFailure("Save slicer meta source FAILED: " + srcPath + " (" + srcErr +
+                        ") — runtime copy ok, source copy stale");
+    } else {
+        noteSaveOk(srcAttempted
+                     ? "Saved slicer meta (build + source): " + metaPath
+                     : "Saved slicer meta: " + metaPath);
     }
 }
 

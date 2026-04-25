@@ -57,6 +57,14 @@ public:
     void openWithSheet(const std::string& texturePath);
     void setSourceDir(const std::string& dir) { sourceDir_ = dir; }
 
+    // Most recent save outcome for this panel. Surfaces in the panel header
+    // (red = failure, green = success) and supplements the LOG_ERROR line so a
+    // designer doesn't have to tail the log to know whether their save landed.
+    // Cleared on a successful save; updated on every save attempt regardless
+    // of which sub-path (template, frameset, packed meta, slicer meta) ran.
+    const std::string& lastSaveStatus() const { return lastSaveStatus_; }
+    bool lastSaveSucceeded() const { return lastSaveSucceeded_; }
+
 private:
     bool open_ = false;
 
@@ -152,6 +160,14 @@ private:
 
     ImFont* fontHeading_ = nullptr;
     ImFont* fontSmall_ = nullptr;
+
+    // Save status surfacing — see lastSaveStatus()/lastSaveSucceeded() above.
+    // Drawn at the top of the panel by drawSaveStatusStrip().
+    std::string lastSaveStatus_;
+    bool lastSaveSucceeded_ = true;
+    void noteSaveOk(const std::string& msg);
+    void noteSaveFailure(const std::string& msg);
+    void drawSaveStatusStrip();
 };
 
 } // namespace fate
