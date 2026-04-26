@@ -649,10 +649,7 @@ static const ItemTabDef itemTabs[] = {
     {"Armor",      [](const nlohmann::json& i) { return jstr(i,"type") == "Armor" && !isAccessory(i); }},
     {"Accessory",  [](const nlohmann::json& i) { return isAccessory(i); }},
     {"Consumable", [](const nlohmann::json& i) { return jstr(i,"type") == "Consumable"; }},
-    {"Material",   [](const nlohmann::json& i) {
-        std::string t = jstr(i,"type");
-        return t == "Material" || t == "material"; // DB has both cases
-    }},
+    {"Material",   [](const nlohmann::json& i) { return jstr(i,"type") == "Material"; }},
     {"Currency",   [](const nlohmann::json& i) { return jstr(i,"type") == "Currency"; }},
     {"Enhancement",[](const nlohmann::json& i) { return jstr(i,"type") == "Enhancement"; }},
 };

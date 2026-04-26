@@ -14,9 +14,7 @@
 #include <implot.h>
 #endif
 #include "engine/editor/tile_tools.h"
-#ifdef FATE_HAS_GAME
-#include "game/components/tile_layer_component.h"
-#endif
+#include "engine/components/tile_layer_component.h"
 #include "engine/editor/undo.h"
 #include "engine/editor/node_editor.h"
 #include "engine/editor/animation_editor.h"
@@ -162,6 +160,20 @@ public:
     bool handleSpawnZoneScroll(float scrollY);
     void paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
                      int windowWidth, int windowHeight);
+
+    // Demo-side tile-tool dispatchers (defined in editor_tile.cpp). The
+    // FATE_HAS_GAME branch in editor.cpp does this dispatch inline because
+    // tile clicks compete with selection/drag/spawn-zone/NPC handlers.
+    void dispatchTileSceneClick(World* world, Camera* camera, const Vec2& screenPos,
+                                int windowWidth, int windowHeight);
+    void dispatchTileSceneDrag(Camera* camera, const Vec2& screenPos,
+                               int windowWidth, int windowHeight);
+    void finishTileMouseUp(World* world);
+    void drawTileBrushPreview(SpriteBatch* batch, Camera* camera);
+
+    // Iterates Transform+SpriteComponent and renders enabled sprites — used by
+    // the demo build (the FATE_HAS_GAME path uses game/systems/render_system).
+    void renderTilemap(SpriteBatch* batch, Camera* camera);
 
     bool isOpen() const { return open_; }
     void toggle() { open_ = !open_; }
@@ -467,6 +479,9 @@ private:
 
     // Combat text editor
     bool showCombatTextEditor_ = false;
+
+    // Tile palette panel (demo build wires this through View menu)
+    bool showTilePalette_ = false;
 
     // Enhanced asset browser
     AssetBrowser assetBrowser_;

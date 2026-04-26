@@ -4,8 +4,8 @@
 #include "imgui_internal.h"
 #include "engine/ecs/component_meta.h"
 #ifdef FATE_HAS_GAME
-#include "game/components/transform.h"
-#include "game/components/sprite_component.h"
+#include "engine/components/transform.h"
+#include "engine/components/sprite_component.h"
 #include "game/components/player_controller.h"
 #include "game/components/box_collider.h"
 #include "game/components/polygon_collider.h"

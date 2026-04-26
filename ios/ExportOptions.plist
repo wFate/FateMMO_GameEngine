@@ -3,6 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>method</key>        <string>app-store</string>
+    <!-- TODO: replace YOUR_TEAM_ID with Apple Developer team ID before first
+         TestFlight upload. Format: 10-char alphanumeric (e.g. ABCDE12345).
+         Find at https://developer.apple.com/account/ → Membership Details. -->
     <key>teamID</key>        <string>YOUR_TEAM_ID</string>
     <key>uploadSymbols</key> <true/>
     <key>uploadBitcode</key> <false/>

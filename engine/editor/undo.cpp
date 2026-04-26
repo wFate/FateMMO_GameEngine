@@ -2,8 +2,8 @@
 #include "engine/core/logger.h"
 #ifdef FATE_HAS_GAME
 #include "engine/ui/ui_manager.h"
-#include "game/components/transform.h"
-#include "game/components/sprite_component.h"
+#include "engine/components/transform.h"
+#include "engine/components/sprite_component.h"
 #include "game/systems/spawn_system.h"
 #endif // FATE_HAS_GAME
 

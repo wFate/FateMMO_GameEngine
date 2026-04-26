@@ -30,7 +30,6 @@ nlohmann::json Scene::metadataToJson() const {
     meta["sceneType"]   = metadata_.sceneType;
     meta["minLevel"]    = metadata_.minLevel;
     meta["maxLevel"]    = metadata_.maxLevel;
-    meta["pvpEnabled"]  = metadata_.pvpEnabled;
     meta["isDungeon"]   = metadata_.isDungeon;
     meta["isAurora"]    = metadata_.isAurora;
     return meta;
@@ -42,7 +41,6 @@ void Scene::metadataFromJson(const nlohmann::json& meta) {
     if (meta.contains("sceneType"))   metadata_.sceneType   = meta["sceneType"];
     if (meta.contains("minLevel"))    metadata_.minLevel    = meta["minLevel"];
     if (meta.contains("maxLevel"))    metadata_.maxLevel    = meta["maxLevel"];
-    if (meta.contains("pvpEnabled"))  metadata_.pvpEnabled  = meta["pvpEnabled"];
     if (meta.contains("isDungeon"))   metadata_.isDungeon   = meta["isDungeon"];
     if (meta.contains("isAurora"))   metadata_.isAurora   = meta["isAurora"].get<bool>();
 }

@@ -9,6 +9,7 @@
 #include "engine/render/camera.h"
 #include "engine/render/sprite_batch.h"
 #include "engine/core/logger.h"
+#include "engine/components/register_engine_components.h"
 
 #ifndef FATE_SHIPPING
 #include "engine/editor/editor.h"
@@ -22,13 +23,23 @@ using namespace fate;
 class DemoApp : public App {
 public:
     void onInit() override {
+        // Required for save/load + Play/Stop snapshot of painted tiles. The
+        // full-game build registers these via game/register_components.h; the
+        // demo has to do it explicitly since it doesn't link the game side.
+        registerEngineComponents();
+
         SceneManager::instance().registerScene("demo", [](Scene&) {});
         SceneManager::instance().switchScene("demo");
 
 #ifndef FATE_SHIPPING
         // Point the asset browser at the project root so users can explore
-        // the engine source tree, shaders, and example code.
+        // the engine source tree, shaders, and example code. The tile palette
+        // and animation editor each have their own asset-discovery logic that
+        // looks under `<root>/assets/...` either directly or as a fallback.
         Editor::instance().setAssetRoot(projectRoot_);
+        // Source dir is where the animation editor / scene save dual-write
+        // their JSON outputs (see AnimationEditor::saveMetaJson, Editor::saveScene).
+        Editor::instance().setSourceDir(projectRoot_ + "/assets");
         Editor::instance().setPaused(true);
 #endif
 

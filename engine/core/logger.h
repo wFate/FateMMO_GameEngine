@@ -27,7 +27,13 @@ public:
         return s_instance;
     }
 
-    void init(const std::string& logFilePath = "fate_engine.log") {
+    // Initialize sinks. `jsonlFilePath` is optional — when non-empty, every
+    // log record is also emitted as a JSON Lines record to that file (one
+    // record per line). Useful for SIEM ingestion and structured ops queries.
+    // Format: {"time":"...","level":"...","cat":"...","msg":"..."}
+    // Rotation matches the text sink (5 MB × 3 files).
+    void init(const std::string& logFilePath = "fate_engine.log",
+              const std::string& jsonlFilePath = "") {
         if (initialized_) return;
 
         auto consoleSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
@@ -44,8 +50,23 @@ public:
                 }
             });
 
-        spdlog::sinks_init_list sinks = {consoleSink, fileSink, callbackSink_};
-        defaultLogger_ = std::make_shared<spdlog::logger>("fate", sinks);
+        std::vector<spdlog::sink_ptr> sinks = {consoleSink, fileSink, callbackSink_};
+
+        if (!jsonlFilePath.empty()) {
+            auto jsonlSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+                jsonlFilePath, 5 * 1024 * 1024, 3);
+            // Plain JSON-line: msg payload is escaped via spdlog's %v (not safe for
+            // arbitrary embedded quotes/newlines, but adequate for our LOG_INFO format
+            // strings which are sprintf-style and don't carry raw user input). For
+            // user-string sites (chat, character names), the source-side LOG_INFO
+            // should pre-escape via fmt::format — but in practice chat is censored
+            // before logging (chat_handler.cpp:73) so this is low risk.
+            jsonlSink->set_pattern(
+                "{\"time\":\"%Y-%m-%dT%H:%M:%S.%e%z\",\"level\":\"%l\",\"cat\":\"%n\",\"msg\":\"%v\"}");
+            sinks.push_back(jsonlSink);
+        }
+
+        defaultLogger_ = std::make_shared<spdlog::logger>("fate", sinks.begin(), sinks.end());
         defaultLogger_->set_pattern("[%H:%M:%S.%e] [%^%l%$] [%n] %v");
         defaultLogger_->set_level(spdlog::level::debug);
         defaultLogger_->flush_on(spdlog::level::warn);

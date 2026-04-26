@@ -1,3 +1,9 @@
+// The UI editor panel authors gameplay HUD/widgets — it depends on the
+// `engine/ui/widgets/*` family which is only compiled when FATE_HAS_GAME=1.
+// In demo builds this whole file compiles to nothing; the corresponding
+// header (engine/editor/ui_editor_panel.h) is also fenced out of editor.h
+// (see editor.h:25-29 forward-decl shim).
+#ifdef FATE_HAS_GAME
 #include "engine/editor/ui_editor_panel.h"
 #include "engine/editor/undo.h"
 #include "engine/editor/property_inspector.h"
@@ -5,7 +11,6 @@
 #include "engine/ui/ui_widget_registry.h"
 #include "engine/render/font_registry.h"
 #include "engine/core/logger.h"
-#ifdef FATE_HAS_GAME
 #include "engine/ui/widgets/panel.h"
 #include "engine/ui/widgets/label.h"
 #include "engine/ui/widgets/button.h"
@@ -70,7 +75,6 @@
 #include "engine/ui/widgets/friends_panel.h"
 #include "engine/ui/widgets/gauntlet_hud.h"
 #include "engine/ui/widgets/gauntlet_result_modal.h"
-#endif // FATE_HAS_GAME
 #include <imgui.h>
 #include <cstdio>
 #include <algorithm>
@@ -3934,3 +3938,5 @@ void UIEditorPanel::drawStyleEditor(UINode* node, UIManager& uiMgr) {
 }
 
 } // namespace fate
+
+#endif // FATE_HAS_GAME

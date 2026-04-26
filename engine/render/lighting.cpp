@@ -5,7 +5,7 @@
 #include "engine/ecs/world.h"
 #include "engine/render/camera.h"
 #ifdef FATE_HAS_GAME
-#include "game/components/transform.h"
+#include "engine/components/transform.h"
 #endif // FATE_HAS_GAME
 #include "engine/core/logger.h"
 #include <mutex>

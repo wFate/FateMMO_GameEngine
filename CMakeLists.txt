@@ -529,6 +529,15 @@ file(GLOB_RECURSE GAME_SOURCES
     game/*.h
 )
 
+# Lets developers validate the open-source demo build (FATE_HAS_GAME undefined,
+# FateDemo target instead of FateEngine) on a checkout that still has game/
+# sources. Without this you'd have to rename game/ to test the demo path.
+option(FATE_FORCE_DEMO_BUILD "Build as if game/ were absent (for demo CI)" OFF)
+if(FATE_FORCE_DEMO_BUILD)
+    set(GAME_SOURCES "")
+    message(STATUS "FATE_FORCE_DEMO_BUILD=ON — building demo target only")
+endif()
+
 if(GAME_SOURCES)
     # Define FATE_HAS_GAME so engine code can conditionally include game headers
     target_compile_definitions(fate_engine PUBLIC FATE_HAS_GAME=1)

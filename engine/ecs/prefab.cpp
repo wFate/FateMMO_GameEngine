@@ -3,11 +3,9 @@
 #include "engine/ecs/component_traits.h"
 #include "engine/core/logger.h"
 
-#ifdef FATE_HAS_GAME
-#include "game/components/transform.h"  // needed by spawn() for position override
-#include "game/components/tile_layer_component.h"
-#include "game/components/sprite_component.h"  // needed for collision layer stripping
-#endif // FATE_HAS_GAME
+#include "engine/components/transform.h"  // needed by spawn() for position override
+#include "engine/components/tile_layer_component.h"
+#include "engine/components/sprite_component.h"  // needed for collision layer stripping
 
 #include <fstream>
 #include <filesystem>

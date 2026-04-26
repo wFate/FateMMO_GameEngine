@@ -78,6 +78,12 @@ struct ClientConnection {
     // Set by CmdSetPickupPreference; defaults to 0 so old clients behave like today.
     uint8_t pickupPreference = 0;
 
+    // Sharding prep (PersistentId carries shard in high 4 bits).
+    // Always 0 in single-shard deployments. Set on character load to the
+    // shard that owns this character; CmdZoneTransition handler will use
+    // it to route cross-shard transitions when the cluster grows.
+    uint8_t shardId = 0;
+
     // Scene population: set whenever AOI is cleared (zone transition, GM teleport,
     // initial login, etc.). ReplicationManager sends SvScenePopulated after the
     // first replication tick and clears the flag, so the client knows all initial

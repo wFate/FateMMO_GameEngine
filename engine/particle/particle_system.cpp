@@ -1,7 +1,7 @@
 #include "engine/particle/particle_system.h"
 #include "engine/particle/particle_emitter_component.h"
 #ifdef FATE_HAS_GAME
-#include "game/components/transform.h"
+#include "engine/components/transform.h"
 #endif // FATE_HAS_GAME
 
 namespace fate {

@@ -29,9 +29,9 @@
 #include "imgui_impl_opengl3.h"
 #endif
 
+#include "engine/components/transform.h"
+#include "engine/components/sprite_component.h"
 #ifdef FATE_HAS_GAME
-#include "game/components/transform.h"
-#include "game/components/sprite_component.h"
 #include "game/components/player_controller.h"
 #include "game/components/box_collider.h"
 #include "game/components/polygon_collider.h"
@@ -478,7 +478,7 @@ void Editor::loadScene(World* world, const std::string& path) {
         gridSize_ = root["gridSize"].get<float>();
     }
 
-    // Preserve scene metadata for round-trip (sceneType, minLevel, pvpEnabled, etc.)
+    // Preserve scene metadata for round-trip (sceneType, minLevel, maxLevel, etc.)
     if (root.contains("metadata")) {
         sceneMetadata_ = root["metadata"];
     } else {
@@ -527,16 +527,6 @@ void Editor::loadScene(World* world, const std::string& path) {
 // ============================================================================
 // Render
 // ============================================================================
-
-void Editor::applyLayerVisibility(World* world) {
-    if (!world) return;
-    world->forEach<SpriteComponent, TileLayerComponent>(
-        [&](Entity* entity, SpriteComponent* s, TileLayerComponent* tlc) {
-            int idx = layerIndex(tlc->layer);
-            s->enabled = showLayer_[idx];
-        }
-    );
-}
 
 void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
     // Called while FBO is bound --draw in-viewport overlays via SpriteBatch
@@ -730,42 +720,6 @@ void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
             }
         }
     }
-}
-
-void Editor::drawSceneGridShader(Camera* camera) {
-    // Lazy-load the grid shader (only attempt once)
-    if (!gridShaderLoaded_ && !gridShaderAttempted_) {
-        gridShaderAttempted_ = true;
-        gridShaderLoaded_ = gridShader_.loadFromFile(
-            "assets/shaders/fullscreen_quad.vert",
-            "assets/shaders/grid.frag");
-        if (!gridShaderLoaded_) {
-            LOG_ERROR("Editor", "Failed to load grid shader --falling back to SpriteBatch grid");
-            return;
-        }
-    }
-    if (!gridShaderLoaded_) return;
-
-    Mat4 vp = const_cast<Camera*>(camera)->getViewProjection();
-    Mat4 invVP = vp.inverse();
-
-    gridShader_.bind();
-    gridShader_.setMat4("u_inverseVP", invVP);
-    gridShader_.setFloat("u_gridSize", gridSize_);
-    gridShader_.setFloat("u_zoom", camera->zoom());
-    gridShader_.setVec4("u_gridColor", 1.0f, 1.0f, 1.0f, 0.2f);
-    gridShader_.setVec2("u_cameraPos", camera->position());
-
-    // Additive/transparent blend for grid overlay
-#ifndef FATEMMO_METAL
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_DEPTH_TEST);
-#endif
-
-    FullscreenQuad::instance().draw();
-
-    gridShader_.unbind();
 }
 
 void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameArena* frameArena) {
@@ -1898,16 +1852,16 @@ void Editor::handleSceneDrag(Camera* camera, const Vec2& screenPos,
     t->position = newPos;
 }
 
-// Forward declarations for tile tool helpers (defined below paintTileAt)
-static std::unique_ptr<UndoCommand> paintOneTile(World* world,
+// Forward declarations for tile tool helpers (defined in engine/editor/editor_tile.cpp)
+std::unique_ptr<UndoCommand> paintOneTile(World* world,
     const Vec2& worldPos, int tileIndex, int paletteCols,
     int paletteTileSize, float gridSize,
     const std::shared_ptr<Texture>& paletteTexture,
     const std::string& paletteTexturePath,
     const std::string& tileLayer);
-static std::unique_ptr<UndoCommand> paintOneCollisionTile(World* world,
+std::unique_ptr<UndoCommand> paintOneCollisionTile(World* world,
     const Vec2& worldPos, float gridSize);
-static Vec2 tileToWorldCenter(int col, int row, float gridSize);
+Vec2 tileToWorldCenter(int col, int row, float gridSize);
 
 void Editor::handleMouseUp() {
     // Save spawn zone position after drag
@@ -2401,601 +2355,7 @@ void Editor::drawAssetBrowser(World* world, Camera* camera) {
     ImGui::End();
 }
 
-// ============================================================================
-// Scene Grid Overlay
-// ============================================================================
 
-// ============================================================================
-// Tile Palette
-// ============================================================================
-
-void Editor::loadTileset(const std::string& path, int tileSize) {
-    paletteTexture_ = TextureCache::instance().load(path);
-    if (!paletteTexture_) {
-        LOG_ERROR("Editor", "Failed to load tileset: %s", path.c_str());
-        return;
-    }
-    paletteTexturePath_ = path;
-    paletteTileSize_ = tileSize;
-    if (paletteTileSize_ < 1) paletteTileSize_ = 32;
-    paletteColumns_ = paletteTexture_->width() / paletteTileSize_;
-    paletteRows_ = paletteTexture_->height() / paletteTileSize_;
-    if (paletteColumns_ < 1) paletteColumns_ = 1;
-    if (paletteRows_ < 1) paletteRows_ = 1;
-    selectedTileIndex_ = -1;
-    currentTool_ = EditorTool::Move;
-    LOG_INFO("Editor", "Loaded tileset: %s (%dx%d tiles, %dx%d px)",
-             path.c_str(), paletteColumns_, paletteRows_,
-             paletteTexture_->width(), paletteTexture_->height());
-}
-
-// Paint a single tile at world position, returning the undo command (caller manages undo stack)
-static std::unique_ptr<UndoCommand> paintOneTile(World* world,
-    const Vec2& worldPos, int tileIndex, int paletteCols,
-    int paletteTileSize, float gridSize,
-    const std::shared_ptr<Texture>& paletteTexture,
-    const std::string& paletteTexturePath,
-    const std::string& tileLayer) {
-
-    int col = tileIndex % paletteCols;
-    int row = tileIndex / paletteCols;
-    float texW = (float)paletteTexture->width();
-    float texH = (float)paletteTexture->height();
-
-    Rect srcRect = {
-        (col * paletteTileSize) / texW,
-        1.0f - ((row + 1) * paletteTileSize) / texH,
-        paletteTileSize / texW,
-        paletteTileSize / texH
-    };
-
-    // Check if there's already a tile from the SAME tileset + layer at this position.
-    // Editable tile = has TileLayerComponent matching the target layer
-    //               OR (legacy pre-TLC) entity tagged "ground" on the ground layer.
-    std::unique_ptr<UndoCommand> result;
-    bool replaced = false;
-    world->forEach<Transform, SpriteComponent>(
-        [&](Entity* entity, Transform* t, SpriteComponent* s) {
-            if (replaced) return;
-            auto* tlc = entity->getComponent<TileLayerComponent>();
-            std::string entLayer = tlc ? tlc->layer : "ground";
-            if (entLayer != tileLayer) return;
-            if (!tlc && entity->tag() != "ground") return;
-            if (std::abs(t->position.x - worldPos.x) > 1.0f ||
-                std::abs(t->position.y - worldPos.y) > 1.0f) return;
-            if (s->texturePath != paletteTexturePath) return;
-
-            auto cmd = std::make_unique<PropertyCommand>();
-            cmd->entityHandle = entity->handle();
-            cmd->oldState = PrefabLibrary::entityToJson(entity);
-            cmd->desc = "Paint Tile";
-            s->sourceRect = srcRect;
-            cmd->newState = PrefabLibrary::entityToJson(entity);
-            result = std::move(cmd);
-            replaced = true;
-        }
-    );
-
-    if (!replaced) {
-        float baseDepth = Editor::layerBaseDepth(tileLayer);
-        float tileDepth = baseDepth;
-        world->forEach<Transform, SpriteComponent>(
-            [&](Entity* entity, Transform* t, SpriteComponent*) {
-                auto* etc = entity->getComponent<TileLayerComponent>();
-                std::string el = etc ? etc->layer : "ground";
-                if (el != tileLayer) return;
-                if (!etc && entity->tag() != "ground") return;
-                if (std::abs(t->position.x - worldPos.x) < 1.0f &&
-                    std::abs(t->position.y - worldPos.y) < 1.0f) {
-                    if (t->depth >= tileDepth) tileDepth = t->depth + 1.0f;
-                }
-            }
-        );
-
-        Entity* tile = world->createEntity("Tile");
-        tile->setTag("ground");
-
-        auto* transform = tile->addComponent<Transform>(worldPos);
-        transform->depth = tileDepth;
-
-        auto* sprite = tile->addComponent<SpriteComponent>();
-        sprite->texture = paletteTexture;
-        sprite->texturePath = paletteTexturePath;
-        sprite->sourceRect = srcRect;
-        sprite->size = {(float)paletteTileSize, (float)paletteTileSize};
-
-        auto* tlc = tile->addComponent<TileLayerComponent>();
-        tlc->layer = tileLayer;
-
-        auto cmd = std::make_unique<CreateCommand>();
-        cmd->createdHandle = tile->handle();
-        cmd->entityData = PrefabLibrary::entityToJson(tile);
-        result = std::move(cmd);
-    }
-    return result;
-}
-
-// Convert tile col/row to snapped world position
-static Vec2 tileToWorldCenter(int col, int row, float gridSize) {
-    float half = gridSize * 0.5f;
-    return { col * gridSize + half, row * gridSize + half };
-}
-
-// Stamp a collision tile at worldPos if one isn't already there. Used by both
-// the brush loop and the rect/line tools so collision-layer authoring isn't
-// gated on a palette texture (collision tiles render as a tinted square, not
-// a sprite source rect). Defined inside the FATE_HAS_GAME block above.
-static std::unique_ptr<UndoCommand> paintOneCollisionTile(World* world,
-                                                          const Vec2& worldPos,
-                                                          float gridSize) {
-    bool exists = false;
-    world->forEach<Transform, TileLayerComponent>(
-        [&](Entity*, Transform* t, TileLayerComponent* tlc) {
-            if (tlc->layer == "collision" &&
-                std::abs(t->position.x - worldPos.x) < 1.0f &&
-                std::abs(t->position.y - worldPos.y) < 1.0f) {
-                exists = true;
-            }
-        }
-    );
-    if (exists) return nullptr;
-
-    Entity* tile = world->createEntity("CollisionTile");
-    tile->setTag("ground");
-    auto* transform = tile->addComponent<Transform>(worldPos);
-    transform->depth = -1.0f;
-    auto* sprite = tile->addComponent<SpriteComponent>();
-    sprite->size = {gridSize, gridSize};
-    sprite->tint = Color(1.0f, 0.2f, 0.2f, 0.35f);
-    auto* tlc = tile->addComponent<TileLayerComponent>();
-    tlc->layer = "collision";
-
-    auto cmd = std::make_unique<CreateCommand>();
-    cmd->createdHandle = tile->handle();
-    cmd->entityData = PrefabLibrary::entityToJson(tile);
-    return cmd;
-}
-
-void Editor::paintTileAt(World* world, Camera* camera, const Vec2& screenPos,
-                         int windowWidth, int windowHeight) {
-    bool isCollisionLayer = (selectedTileLayer_ == "collision");
-    if (!world || !camera) return;
-
-    // Surface why a tile click had no effect — previously these gates returned
-    // silently and the user had no way to know whether their click was being
-    // ignored or whether something else was wrong. Collision layer never needs
-    // a palette texture, only the other layers do.
-    if (!isCollisionLayer) {
-        if (!paletteTexture_) {
-            lastToolStatus_ = "Tile tool: no tileset loaded — open Tile Palette and pick one";
-            return;
-        }
-        if (paletteColumns_ <= 0 || paletteRows_ <= 0 || paletteTileSize_ <= 0) {
-            lastToolStatus_ = "Tile tool: palette has no tiles — check tile size";
-            return;
-        }
-        if (selectedTileIndex_ < 0) {
-            lastToolStatus_ = "Tile tool: select a tile in the Tile Palette first";
-            return;
-        }
-        if (selectedTileIndex_ >= paletteColumns_ * paletteRows_) {
-            lastToolStatus_ = "Tile tool: selected tile index out of range — re-select after changing tile size";
-            return;
-        }
-    }
-    // Successful tile tool entry — clear stale status so it doesn't linger.
-    lastToolStatus_.clear();
-
-    Vec2 worldPos = camera->screenToWorld(screenPos, windowWidth, windowHeight);
-
-    // Snap to grid center
-    float half = gridSize_ * 0.5f;
-    worldPos.x = std::floor(worldPos.x / gridSize_) * gridSize_ + half;
-    worldPos.y = std::floor(worldPos.y / gridSize_) * gridSize_ + half;
-
-    int tileCol = (int)std::floor(worldPos.x / gridSize_);
-    int tileRow = (int)std::floor(worldPos.y / gridSize_);
-
-    // --- Fill tool: flood fill on click ---
-    if (currentTool_ == EditorTool::Fill) {
-        // Collision layer has no source rects --fill is not meaningful
-        if (isCollisionLayer) return;
-        // Build a lookup of occupied tile positions (same tileset, same GID)
-        int srcCol = selectedTileIndex_ % paletteColumns_;
-        int srcRow = selectedTileIndex_ / paletteColumns_;
-        float texW = (float)paletteTexture_->width();
-        float texH = (float)paletteTexture_->height();
-        Rect selectedSrcRect = {
-            (srcCol * paletteTileSize_) / texW,
-            1.0f - ((srcRow + 1) * paletteTileSize_) / texH,
-            paletteTileSize_ / texW,
-            paletteTileSize_ / texH
-        };
-
-        // Collect existing ground tile positions and their source rects
-        auto pack = [](int c, int r) -> int64_t { return ((int64_t)r << 32) | (uint32_t)c; };
-        std::unordered_map<int64_t, Rect> tileMap;
-        int minCol = tileCol, maxCol = tileCol;
-        int minRow = tileRow, maxRow = tileRow;
-
-        world->forEach<Transform, SpriteComponent>(
-            [&](Entity* entity, Transform* t, SpriteComponent* s) {
-                auto* tlc = entity->getComponent<TileLayerComponent>();
-                std::string entLayer = tlc ? tlc->layer : "ground";
-                if (entLayer != selectedTileLayer_) return;
-                if (!tlc && entity->tag() != "ground") return;
-                if (s->texturePath != paletteTexturePath_) return;
-                int tc = (int)std::floor(t->position.x / gridSize_);
-                int tr = (int)std::floor(t->position.y / gridSize_);
-                tileMap[pack(tc, tr)] = s->sourceRect;
-                if (tc < minCol) minCol = tc;
-                if (tc > maxCol) maxCol = tc;
-                if (tr < minRow) minRow = tr;
-                if (tr > maxRow) maxRow = tr;
-            }
-        );
-        // Pad bounds by 1 so fill can expand one tile beyond existing edges
-        minCol--; minRow--; maxCol += 2; maxRow += 2;
-
-        // Fill target: tiles that have the same source rect as the clicked tile,
-        // or empty tiles if the clicked tile was empty
-        auto it = tileMap.find(pack(tileCol, tileRow));
-        bool clickedEmpty = (it == tileMap.end());
-        Rect clickedRect = clickedEmpty ? Rect{} : it->second;
-
-        auto matchesFillTarget = [&](int c, int r) -> bool {
-            auto found = tileMap.find(pack(c, r));
-            if (clickedEmpty) return found == tileMap.end();
-            if (found == tileMap.end()) return false;
-            // Match if same source rect
-            auto& sr = found->second;
-            return std::abs(sr.x - clickedRect.x) < 0.001f &&
-                   std::abs(sr.y - clickedRect.y) < 0.001f &&
-                   std::abs(sr.w - clickedRect.w) < 0.001f &&
-                   std::abs(sr.h - clickedRect.h) < 0.001f;
-        };
-
-        auto coords = floodFill(tileCol, tileRow, minCol, minRow, maxCol, maxRow, matchesFillTarget);
-        if (coords.empty()) return;
-
-        // Don't fill if same tile already
-        if (!clickedEmpty) {
-            if (std::abs(clickedRect.x - selectedSrcRect.x) < 0.001f &&
-                std::abs(clickedRect.y - selectedSrcRect.y) < 0.001f) return;
-        }
-
-        auto compound = std::make_unique<CompoundCommand>();
-        compound->desc = "Fill (" + std::to_string(coords.size()) + " tiles)";
-        for (auto& coord : coords) {
-            Vec2 wp = tileToWorldCenter(coord.x, coord.y, gridSize_);
-            auto cmd = paintOneTile(world, wp, selectedTileIndex_, paletteColumns_,
-                                    paletteTileSize_, gridSize_, paletteTexture_, paletteTexturePath_,
-                                    selectedTileLayer_);
-            if (cmd) compound->commands.push_back(std::move(cmd));
-        }
-        if (!compound->empty()) UndoSystem::instance().push(std::move(compound));
-        return;
-    }
-
-    // --- RectFill / LineTool: record drag start on mousedown, track end ---
-    if (currentTool_ == EditorTool::RectFill || currentTool_ == EditorTool::LineTool) {
-        if (!isToolDragging_) {
-            toolDragStart_ = {tileCol, tileRow};
-            isToolDragging_ = true;
-        }
-        toolDragEnd_ = {tileCol, tileRow};
-        // Actual painting happens in handleMouseUp
-        return;
-    }
-
-    // --- Paint tool: NxN brush stamp (accumulated into brush stroke compound) ---
-    int bhalf = brushSize_ / 2;
-    for (int dy = 0; dy < brushSize_; ++dy) {
-        for (int dx = 0; dx < brushSize_; ++dx) {
-            Vec2 stampPos = {
-                worldPos.x + (dx - bhalf) * gridSize_,
-                worldPos.y + (dy - bhalf) * gridSize_
-            };
-
-            if (isCollisionLayer) {
-                auto cmd = paintOneCollisionTile(world, stampPos, gridSize_);
-                if (cmd) {
-                    if (!pendingBrushStroke_) {
-                        pendingBrushStroke_ = std::make_unique<CompoundCommand>();
-                        pendingBrushStroke_->desc = "Paint brush stroke";
-                    }
-                    pendingBrushStroke_->commands.push_back(std::move(cmd));
-                }
-            } else {
-                // Normal tile painting
-                auto cmd = paintOneTile(world, stampPos, selectedTileIndex_, paletteColumns_,
-                                        paletteTileSize_, gridSize_, paletteTexture_, paletteTexturePath_,
-                                        selectedTileLayer_);
-                if (cmd) {
-                    if (!pendingBrushStroke_) {
-                        pendingBrushStroke_ = std::make_unique<CompoundCommand>();
-                        pendingBrushStroke_->desc = "Paint brush stroke";
-                    }
-                    pendingBrushStroke_->commands.push_back(std::move(cmd));
-                }
-            }
-        }
-    }
-}
-
-void Editor::drawTilePalette(World* world, Camera* camera) {
-    if (!ImGui::Begin("Tile Palette", nullptr, ImGuiWindowFlags_None)) {
-        ImGui::End();
-        return; // collapsed
-    }
-
-    // Tileset selector
-    if (ImGui::BeginCombo("##Tileset", paletteTexturePath_.empty() ? "Select tileset..." :
-                          fs::path(paletteTexturePath_).filename().string().c_str())) {
-        std::string tilesDir = assetRoot_ + "/tiles";
-        if (fs::exists(tilesDir)) {
-            for (auto& entry : fs::recursive_directory_iterator(tilesDir)) {
-                if (!entry.is_regular_file()) continue;
-                std::string ext = entry.path().extension().string();
-                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-                if (ext != ".png" && ext != ".jpg") continue;
-
-                std::string path = entry.path().string();
-                std::replace(path.begin(), path.end(), '\\', '/');
-                // Show relative path from tiles dir for clarity
-                std::string name = fs::relative(entry.path(), tilesDir).string();
-                std::replace(name.begin(), name.end(), '\\', '/');
-
-                if (ImGui::Selectable(name.c_str(), paletteTexturePath_ == path)) {
-                    loadTileset(path, paletteTileSize_);
-                }
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    // Tile size with reload on change
-    int prevSize = paletteTileSize_;
-    ImGui::SetNextItemWidth(80);
-    ImGui::InputInt("Tile px", &paletteTileSize_, 8, 16);
-    if (paletteTileSize_ < 8) paletteTileSize_ = 8;
-    if (paletteTileSize_ > 256) paletteTileSize_ = 256;
-    if (paletteTileSize_ != prevSize && paletteTexture_) {
-        paletteColumns_ = paletteTexture_->width() / paletteTileSize_;
-        paletteRows_ = paletteTexture_->height() / paletteTileSize_;
-        if (paletteColumns_ < 1) paletteColumns_ = 1;
-        if (paletteRows_ < 1) paletteRows_ = 1;
-        selectedTileIndex_ = -1;
-    }
-
-    // Brush size
-    ImGui::SetNextItemWidth(80);
-    ImGui::InputInt("Brush", &brushSize_, 1, 1);
-    if (brushSize_ < 1) brushSize_ = 1;
-    if (brushSize_ > 5) brushSize_ = 5;
-
-    // Layer selector
-    const char* layerNames[] = {"Ground", "Detail", "Fringe", "Collision"};
-    const char* layerValues[] = {"ground", "detail", "fringe", "collision"};
-    int currentLayerIdx = layerIndex(selectedTileLayer_);
-    ImGui::SetNextItemWidth(120);
-    if (ImGui::Combo("Layer", &currentLayerIdx, layerNames, 4)) {
-        selectedTileLayer_ = layerValues[currentLayerIdx];
-    }
-
-    // Layer visibility toggles
-    ImGui::Text("Visible:");
-    ImGui::SameLine();
-    for (int i = 0; i < 4; ++i) {
-        ImGui::SameLine();
-        ImGui::PushID(i);
-        ImGui::Checkbox(layerNames[i], &showLayer_[i]);
-        ImGui::PopID();
-    }
-
-    if (!paletteTexture_ || paletteColumns_ <= 0 || paletteRows_ <= 0) {
-        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1), "Place .png tilesets in assets/tiles/");
-        ImGui::End();
-        return;
-    }
-
-    // Paint mode toggle --shows active tool name
-    bool isTileToolActive = (currentTool_ == EditorTool::Paint ||
-                             currentTool_ == EditorTool::Fill ||
-                             currentTool_ == EditorTool::RectFill ||
-                             currentTool_ == EditorTool::LineTool);
-    if (isTileToolActive) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
-        const char* activeLabel = currentTool_ == EditorTool::Paint ? "PAINTING" :
-                                  currentTool_ == EditorTool::Fill ? "FILLING" :
-                                  currentTool_ == EditorTool::RectFill ? "RECT FILL" : "LINE";
-        if (ImGui::Button(activeLabel)) currentTool_ = EditorTool::Move;
-        ImGui::PopStyleColor();
-    } else {
-        if (ImGui::Button("Paint") && selectedTileIndex_ >= 0) currentTool_ = EditorTool::Paint;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Stop")) { currentTool_ = EditorTool::Move; selectedTileIndex_ = -1; }
-
-    if (selectedTileIndex_ >= 0 && paletteColumns_ > 0) {
-        ImGui::SameLine();
-        ImGui::Text("(%d,%d)", selectedTileIndex_ % paletteColumns_, selectedTileIndex_ / paletteColumns_);
-    }
-
-    ImGui::Separator();
-
-    // Scrollable tile grid
-    ImGui::BeginChild("TileGrid", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
-
-    float availW = ImGui::GetContentRegionAvail().x;
-    float tileDisplaySize = availW / (float)paletteColumns_ - 2.0f;
-    if (tileDisplaySize < 16.0f) tileDisplaySize = 16.0f;
-    if (tileDisplaySize > 64.0f) tileDisplaySize = 64.0f;
-
-    ImTextureID texId = (ImTextureID)(intptr_t)paletteTexture_->id();
-    float texW = (float)paletteTexture_->width();
-    float texH = (float)paletteTexture_->height();
-    int totalTiles = paletteColumns_ * paletteRows_;
-
-    for (int row = 0; row < paletteRows_; row++) {
-        for (int col = 0; col < paletteColumns_; col++) {
-            int index = row * paletteColumns_ + col;
-            if (index >= totalTiles) break;
-
-            if (col > 0) ImGui::SameLine(0, 2);
-
-            float u0 = (float)(col * paletteTileSize_) / texW;
-            float u1 = (float)((col + 1) * paletteTileSize_) / texW;
-            float v0 = 1.0f - (float)((row + 1) * paletteTileSize_) / texH;
-            float v1 = 1.0f - (float)(row * paletteTileSize_) / texH;
-
-            char btnId[32];
-            snprintf(btnId, sizeof(btnId), "##t%d", index);
-
-            bool selected = (index == selectedTileIndex_);
-            if (selected) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 1.0f, 0.8f));
-
-            if (ImGui::ImageButton(btnId, texId, ImVec2(tileDisplaySize, tileDisplaySize),
-                                   ImVec2(u0, v1), ImVec2(u1, v0))) {
-                selectedTileIndex_ = index;
-                // Preserve current tile tool if active; otherwise default to Paint
-                if (currentTool_ != EditorTool::Fill &&
-                    currentTool_ != EditorTool::RectFill &&
-                    currentTool_ != EditorTool::LineTool) {
-                    currentTool_ = EditorTool::Paint;
-                }
-            }
-
-            if (selected) ImGui::PopStyleColor();
-        }
-    }
-
-    ImGui::EndChild();
-    ImGui::End();
-}
-
-// ============================================================================
-// Scene Grid
-// ============================================================================
-
-void Editor::drawSceneGrid(SpriteBatch* batch, Camera* camera) {
-    Rect visible = camera->getVisibleBounds();
-    Mat4 vp = camera->getViewProjection();
-
-    batch->begin(vp);
-
-    // Grid lines at tile edges: 0, 32, 64... (tile centers are at 16, 48, 80...)
-    float startX = std::floor(visible.x / gridSize_) * gridSize_;
-    float startY = std::floor(visible.y / gridSize_) * gridSize_;
-
-    Color gridColor(1.0f, 1.0f, 1.0f, 0.08f);
-
-    for (float x = startX; x <= visible.x + visible.w; x += gridSize_) {
-        batch->drawRect({x, visible.y + visible.h * 0.5f},
-                       {1.0f, visible.h}, gridColor, -5.0f);
-    }
-    for (float y = startY; y <= visible.y + visible.h; y += gridSize_) {
-        batch->drawRect({visible.x + visible.w * 0.5f, y},
-                       {visible.w, 1.0f}, gridColor, -5.0f);
-    }
-
-    // Origin crosshair
-    batch->drawRect({0, visible.y + visible.h * 0.5f},
-                   {2.0f, visible.h}, Color(1, 0, 0, 0.2f), -4.0f);
-    batch->drawRect({visible.x + visible.w * 0.5f, 0},
-                   {visible.w, 2.0f}, Color(0, 1, 0, 0.2f), -4.0f);
-
-    // Selection highlight + resize handles
-    if (selectedEntity_) {
-        auto* t = selectedEntity_->getComponent<Transform>();
-        auto* s = selectedEntity_->getComponent<SpriteComponent>();
-        auto* szSel = selectedEntity_->getComponent<SpawnZoneComponent>();
-
-        // Determine bounds from sprite OR spawn zone
-        float hw = 0, hh = 0;
-        if (szSel) {
-            hw = szSel->config.size.x * 0.5f + 2.0f;
-            hh = szSel->config.size.y * 0.5f + 2.0f;
-        } else if (s && t) {
-            hw = s->size.x * t->scale.x * 0.5f + 2.0f;
-            hh = s->size.y * t->scale.y * 0.5f + 2.0f;
-        }
-
-        if (t && (s || szSel) && hw > 0) {
-            Color sel(0.2f, 0.6f, 1.0f, 0.6f);
-
-            // Border
-            batch->drawRect({t->position.x, t->position.y + hh}, {hw * 2, 2.0f}, sel, 99.0f);
-            batch->drawRect({t->position.x, t->position.y - hh}, {hw * 2, 2.0f}, sel, 99.0f);
-            batch->drawRect({t->position.x - hw, t->position.y}, {2.0f, hh * 2}, sel, 99.0f);
-            batch->drawRect({t->position.x + hw, t->position.y}, {2.0f, hh * 2}, sel, 99.0f);
-
-            // Corner resize handles (white squares)
-            float handleSize = 10.0f;
-            Color handleColor(1.0f, 1.0f, 1.0f, 0.9f);
-            batch->drawRect({t->position.x - hw, t->position.y + hh}, {handleSize, handleSize}, handleColor, 100.0f);
-            batch->drawRect({t->position.x + hw, t->position.y + hh}, {handleSize, handleSize}, handleColor, 100.0f);
-            batch->drawRect({t->position.x - hw, t->position.y - hh}, {handleSize, handleSize}, handleColor, 100.0f);
-            batch->drawRect({t->position.x + hw, t->position.y - hh}, {handleSize, handleSize}, handleColor, 100.0f);
-
-            // Edge midpoint handles
-            float midSize = 7.0f;
-            batch->drawRect({t->position.x, t->position.y + hh}, {midSize, midSize}, handleColor, 100.0f);
-            batch->drawRect({t->position.x, t->position.y - hh}, {midSize, midSize}, handleColor, 100.0f);
-            batch->drawRect({t->position.x - hw, t->position.y}, {midSize, midSize}, handleColor, 100.0f);
-            batch->drawRect({t->position.x + hw, t->position.y}, {midSize, midSize}, handleColor, 100.0f);
-        }
-    }
-
-    batch->end();
-}
-
-// ============================================================================
-// Selection Outlines (stencil-based)
-// ============================================================================
-
-void Editor::drawSelectionOutlines(SpriteBatch* batch, Camera* camera) {
-    if (!selectedEntity_ || !batch || !camera) return;
-
-    // Single selection = orange, multi-selection = blue
-    bool isMulti = selectedEntities_.size() > 1;
-    Color outlineColor = isMulti ? Color(0.2f, 0.4f, 1.0f, 0.9f) : Color(1.0f, 0.55f, 0.0f, 0.9f);
-
-    Mat4 vp = const_cast<Camera*>(camera)->getViewProjection();
-
-    auto drawOutlineFor = [&](Entity* entity, Color col) {
-        auto* t = entity->getComponent<Transform>();
-        auto* s = entity->getComponent<SpriteComponent>();
-        if (!t || !s) return;
-
-        float hw = s->size.x * t->scale.x * 0.5f + 3.0f;
-        float hh = s->size.y * t->scale.y * 0.5f + 3.0f;
-
-        // Draw border rects as outline
-        batch->begin(vp);
-        // Top
-        batch->drawRect({t->position.x, t->position.y + hh}, {hw * 2.0f, 2.0f}, col, 200.0f);
-        // Bottom
-        batch->drawRect({t->position.x, t->position.y - hh}, {hw * 2.0f, 2.0f}, col, 200.0f);
-        // Left
-        batch->drawRect({t->position.x - hw, t->position.y}, {2.0f, hh * 2.0f}, col, 200.0f);
-        // Right
-        batch->drawRect({t->position.x + hw, t->position.y}, {2.0f, hh * 2.0f}, col, 200.0f);
-        batch->end();
-    };
-
-    if (isMulti) {
-        for (auto& handle : selectedEntities_) {
-            Entity* e = nullptr;
-            if (dockWorld_) {
-                e = dockWorld_->getEntity(handle);
-            }
-            if (e) drawOutlineFor(e, outlineColor);
-        }
-    } else {
-        drawOutlineFor(selectedEntity_, outlineColor);
-    }
-}
 
 // ============================================================================
 // ImGuizmo Transform Handles
@@ -3379,63 +2739,6 @@ void Editor::drawHierarchy(World* world) {
 // Inspector methods moved to editor_inspector.cpp
 // (drawReflectedComponent, captureInspectorUndo, drawInspector)
 
-// ============================================================================
-// Erase Tool
-// ============================================================================
-
-void Editor::eraseTileAt(World* world, Camera* camera, const Vec2& screenPos,
-                         int windowWidth, int windowHeight) {
-    if (!world || !camera) return;
-
-    Vec2 worldPos = camera->screenToWorld(screenPos, windowWidth, windowHeight);
-
-    // Snap to grid center
-    float half = gridSize_ * 0.5f;
-    worldPos.x = std::floor(worldPos.x / gridSize_) * gridSize_ + half;
-    worldPos.y = std::floor(worldPos.y / gridSize_) * gridSize_ + half;
-
-    auto compound = std::make_unique<CompoundCommand>();
-    compound->desc = "Erase (" + std::to_string(brushSize_ * brushSize_) + " tiles)";
-
-    int bhalf = brushSize_ / 2;
-    for (int dy = 0; dy < brushSize_; ++dy) {
-        for (int dx = 0; dx < brushSize_; ++dx) {
-            Vec2 erasePos = {
-                worldPos.x + (dx - bhalf) * gridSize_,
-                worldPos.y + (dy - bhalf) * gridSize_
-            };
-
-            Entity* nearest = nullptr;
-            float nearestDist = 999999.0f;
-
-            world->forEach<Transform, SpriteComponent>(
-                [&](Entity* entity, Transform* t, SpriteComponent*) {
-                    auto* tlc = entity->getComponent<TileLayerComponent>();
-                    std::string entLayer = tlc ? tlc->layer : "ground";
-                    if (entLayer != selectedTileLayer_) return;
-                    if (!tlc && entity->tag() != "ground") return;
-                    float dist = erasePos.distance(t->position);
-                    if (dist < gridSize_ * 0.6f && dist < nearestDist) {
-                        nearest = entity;
-                        nearestDist = dist;
-                    }
-                }
-            );
-
-            if (nearest) {
-                auto cmd = std::make_unique<DeleteCommand>();
-                cmd->entityData = PrefabLibrary::entityToJson(nearest);
-                cmd->deletedHandle = nearest->handle();
-                compound->commands.push_back(std::move(cmd));
-                world->destroyEntity(nearest->handle());
-            }
-        }
-    }
-
-    if (!compound->empty()) {
-        UndoSystem::instance().push(std::move(compound));
-    }
-}
 
 // ============================================================================
 // Console Command Panel
@@ -3760,8 +3063,28 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
 
 #else // !FATE_HAS_GAME --demo build with engine-only panels
 
-void Editor::applyLayerVisibility(World*) {}
-void Editor::renderScene(SpriteBatch*, Camera*) {}
+void Editor::renderScene(SpriteBatch* batch, Camera* camera) {
+    if (!open_ || !batch || !camera) return;
+
+    if (paused_ && dockWorld_) {
+        applyLayerVisibility(dockWorld_);
+    }
+
+    // Render entity sprites first so overlays draw on top.
+    renderTilemap(batch, camera);
+
+    if (showGrid_ && paused_) {
+        drawSceneGridShader(camera);
+        if (!gridShaderLoaded_) {
+            drawSceneGrid(batch, camera);
+        }
+    }
+
+    if (paused_) {
+        drawSelectionOutlines(batch, camera);
+        drawTileBrushPreview(batch, camera);
+    }
+}
 void Editor::renderUI(World* world, Camera* camera, SpriteBatch*, FrameArena* frameArena) {
     if (!frameStarted_) return;
 
@@ -3778,6 +3101,10 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch*, FrameArena* fr
         LogViewer::instance().draw();
         drawAssetBrowser(world, nullptr);
         dialogueEditor_.draw();
+        animationEditor_.draw();
+        if (showTilePalette_) {
+            drawTilePalette(world, dockCamera_);
+        }
 
 #ifdef FATE_HAS_GAME
         if (uiManager_) {
@@ -3932,6 +3259,12 @@ void Editor::drawMenuBar(World*) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View")) {
+            ImGui::MenuItem("Tile Palette", nullptr, &showTilePalette_);
+            bool animOpen = animationEditor_.isOpen();
+            if (ImGui::MenuItem("Animation Editor", nullptr, &animOpen)) {
+                animationEditor_.setOpen(animOpen);
+            }
+            ImGui::Separator();
             ImGui::MenuItem("Post Process", nullptr, &showPostProcessPanel_);
             ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout")) { resetLayout_ = true; }
@@ -3943,7 +3276,7 @@ void Editor::drawMenuBar(World*) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("About")) {
-            ImGui::Text("FateMMO Engine v2.0");
+            ImGui::Text("FateMMO Engine v3.0");
             ImGui::Separator();
             ImGui::Text("C++23 | OpenGL 3.3 | Custom UDP");
             ImGui::Text("github.com/wFate/FateMMO_GameEngine");
@@ -4140,13 +3473,18 @@ void Editor::drawDebugInfoPanel(World* world) {
     }
     ImGui::End();
 }
-void Editor::drawSceneGridShader(Camera*) {}
-void Editor::handleSceneClick(World*, Camera*, const Vec2&, int, int) {}
-void Editor::handleSceneDrag(Camera*, const Vec2&, int, int) {}
-void Editor::handleMouseUp() {}
+void Editor::handleSceneClick(World* world, Camera* camera, const Vec2& screenPos,
+                              int windowWidth, int windowHeight) {
+    dispatchTileSceneClick(world, camera, screenPos, windowWidth, windowHeight);
+}
+void Editor::handleSceneDrag(Camera* camera, const Vec2& screenPos,
+                             int windowWidth, int windowHeight) {
+    dispatchTileSceneDrag(camera, screenPos, windowWidth, windowHeight);
+}
+void Editor::handleMouseUp() {
+    finishTileMouseUp(dockWorld_);
+}
 bool Editor::handleSpawnZoneScroll(float) { return false; }
-void Editor::paintTileAt(World*, Camera*, const Vec2&, int, int) {}
-void Editor::eraseTileAt(World*, Camera*, const Vec2&, int, int) {}
 void Editor::scanAssets() {}
 void Editor::drawAssetBrowser(World* world, Camera* camera) {
     if (ImGui::Begin("Project")) {
@@ -4154,15 +3492,11 @@ void Editor::drawAssetBrowser(World* world, Camera* camera) {
     }
     ImGui::End();
 }
-void Editor::drawTilePalette(World*, Camera*) {}
-void Editor::drawSceneGrid(SpriteBatch*, Camera*) {}
-void Editor::drawSelectionOutlines(SpriteBatch*, Camera*) {}
 void Editor::drawImGuizmo(Camera*) {}
 void Editor::drawHUD(World*) {}
 void Editor::drawToolbar(World*) {}
 void Editor::drawConsole(World*) {}
 void Editor::executeCommand(World*, const std::string&) {}
-void Editor::loadTileset(const std::string&, int) {}
 void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     if (!world) return;
     if (event.type != SDL_KEYDOWN) return;

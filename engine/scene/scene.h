@@ -58,7 +58,6 @@ public:
         std::string sceneType = "zone";  // town, zone, dungeon, instance
         int minLevel = 1;
         int maxLevel = 99;
-        bool pvpEnabled = false;
         bool isDungeon = false;
         bool isAurora = false;
     };
