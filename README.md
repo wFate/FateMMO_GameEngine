@@ -5,15 +5,17 @@
 [![CI](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/wFate/FateMMO_GameEngine?style=flat-square&label=🎮%20Release&color=gold)](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMOv2)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue?style=flat-square&logo=cplusplus)
-![Lines of Code](https://img.shields.io/badge/LOC-187%2C000%2B-brightgreen?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-1%2C546-brightgreen?style=flat-square)
+![Lines of Code](https://img.shields.io/badge/LOC-193%2C000%2B-brightgreen?style=flat-square)
+![Files](https://img.shields.io/badge/files-848-2ea44f?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-1%2C621_passing-brightgreen?style=flat-square)
 ![Protocol](https://img.shields.io/badge/protocol-v12-blueviolet?style=flat-square)
+![Quests](https://img.shields.io/badge/quests-167-E040FB?style=flat-square)
 ![Security](https://img.shields.io/badge/security-Noise__NK%20%2B%20AuthProof%20%2B%20DB__sessions-critical?style=flat-square)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20iOS%20%7C%20Android%20%7C%20Linux%20%7C%20macOS-orange?style=flat-square)
 
 **Production-grade 2D MMORPG engine built entirely in C++23.** Engineered for mobile-first landscape gameplay with a fully integrated Unity-style editor, server-authoritative multiplayer architecture, and Noise_NK encrypted custom networking — all from a single codebase, zero middleware, zero third-party game frameworks.
 
-> **187,000+ lines** across **834+ files** — engine (83K), game (38K), server (36K), tests (29K)
+> **193,000+ lines** across **848 files** — engine (85K), game (41K), server (37K), tests (31K)
 
 🌐 [**www.FateMMO.com**](https://www.FateMMO.com) &nbsp;·&nbsp; 🎬 [**Watch the Showcase**](https://www.youtube.com/watch?v=9zS-RVbranE)
 
@@ -21,9 +23,21 @@
 
 ---
 
+### 🚧 v3 Incoming — Phase 3C Content Drop
+
+> **Demo v3 is around the corner.** Building on v2's editor-runtime loop, the next release folds in **Phase 3C ambient NPC mini-chains** (10 chains × 3 quests = 30 new side quests, ~6,500 kills of brutal end-grind), the **Tier 3 narrative arc** (Gravestones / Altars / Umbra Remnants), the **type-taxonomy hygiene pass** (816 items normalized into 6 canonical buckets), and a **server-authoritative PvP zone gate** rebuild that closes a silent disable bug. **Protocol stays at v12** — no client redistribution required for shipped wins; just freshen `FateEngine.exe`.
+>
+> 🎯 **Headline content (since v2):**
+> - 🪦 **Greta's Gravestones** (WhisperingWoods, Lv 6-12) — 5 cairn sites + parallel "tend / question" tails. First content to seed Opals into the live loop.
+> - 🕯️ **Brae's Altars** (BlightedSwamp, Lv 38-46) — 3 altar sites, 3-way fork (Sun-Touched / Bough-Bound / Balanced).
+> - 🌑 **Umbra Remnants** (Althea, Lv 50-65) — 5 quests, 2 branching endings ("Let her rest" vs "Hold the wards yourself").
+> - ⚔️ **Phase 3C ambient grind** — Bram, Hadrik, Tessen, Mira+Vell, Sister Sand+Old Cinder, Toren, Vael, Vess, Ash, Mora promoted to quest-givers with stat scrolls + Fate's Grace + tier-matched enhance stones on every Q3 capstone.
+
+---
+
 ### 🎉 v2 Release — Engine Demo Levels Up
 
-> **Demo v2 is live.** The open-source `FateDemo` build now ships with the full editor-runtime control loop the proprietary game uses every day:
+> **Demo v2 is live.** The open-source `FateDemo` build ships with the full editor-runtime control loop the proprietary game uses every day:
 >
 > - ▶️ **Play / Pause / Resume / Stop** — green Play snapshots the ECS, red Stop restores it; Pause/Resume preserves camera state mid-session.
 > - 👁️ **Observe Mode** — blue **Observe** button runs the loaded scene live with editor chrome hidden, so you see exactly what the player sees. Wire your own handler via `AppConfig::onObserveStart` to swap in a network-spectate flow.
@@ -36,21 +50,24 @@
 
 ## 💎 Key Highlights
 
-| 🏗️ | **187K+ LOC** of hand-written C++23 across engine, game, server, and tests — no code generation, no middleware |
+| 🏗️ | **193K+ LOC** of hand-written C++23 across engine, game, server, and tests — no code generation, no middleware, no AAA framework license fees |
 |:---:|:---|
 | 🔐 | **Noise_NK cryptography** — two X25519 DH ops + XChaCha20-Poly1305 AEAD, forward secrecy, symmetric epoch-gated rekeying, **encrypted AuthProof** so auth tokens never leave the client in the clear |
 | 🛡️ | **Hardened v12 protocol** — 64-bit CSPRNG session tokens, timing-safe auth comparisons, anti-replay nonces, 64-bit ACK window, `CmdAckExtended` recovery, DB-backed `auth_sessions` with cross-process `LISTEN/NOTIFY` kick |
 | 🎮 | **50+ server-authoritative game systems** — combat, skills, inventory, trade, guilds, arenas, dungeons, pets, costumes, collections, opals economy |
-| ▶️ | **Play / Observe / Scene-dropdown** — full editor-runtime loop in the open-source demo, with snapshot/restore on Play and configurable Observer hooks |
-| 🌳 | **Branching dialogue-tree quests** — 126 quests across 4 tiers with state-aware NPC trees, **interact-site framework** (cairns / altars / shrines), Honor + Opals rewards on every turn-in |
+| ▶️ | **Play / Observe / Scene-dropdown** — full editor-runtime loop in the open-source v2 demo, with snapshot/restore on Play and configurable Observer hooks |
+| 🌳 | **Branching dialogue-tree quests** — **167 quests** across 4 tiers + Phase 3C ambient mini-chains, state-aware NPC trees, **interact-site framework** (cairns / altars / shrines / gravestones), Honor + Opals + tier-matched enhance stones on every turn-in |
+| 🪦 | **3 Tier-3 narrative arcs** — Greta's Gravestones (Lv 6-12), Brae's Altars (Lv 38-46, 3-way fork), Umbra Remnants (Lv 50-65, branching ending). Story-first chains with zero new mobs and zero combat balance changes |
+| ⚔️ | **Phase 3C ambient grind** — 30 new side quests (Q730-Q822) across 10 NPC chains, ~6,500 brutal kills, themed stat scrolls + Fate's Grace + tier-matched enhance stones on every Q3 capstone |
+| 🗄️ | **DB-driven content engine** — **111 numbered SQL migrations**, **816 hand-tuned items** across 6 canonical types, **23 PostgreSQL repository files** with fiber-based async dispatch (zero game-thread blocking) |
 | 🖥️ | **Full Unity-style editor** with live inspector, undo/redo, Aseprite animation editor, atomic-write JSON saves, asset browser, and 29 device profiles |
-| 📱 | **5-platform support** from a single codebase — Windows, **macOS (native Metal)**, iOS, Android, Linux |
-| 🧪 | **1,546 automated tests** across 214 test files keeping every subsystem honest |
-| 🎨 | **64 custom UI widgets** with 42 theme styles, JSON-driven screens, viewport scaling, and zero-ImGui shipping builds |
-| 🌍 | **27-scene handcrafted world** with 5 factions, faction guards, boss rotations, and 24+ quest-bearing NPCs |
+| 📱 | **5-platform support** from a single codebase — Windows, **macOS (native Metal, ProMotion 120fps)**, iOS, Android, Linux |
+| 🧪 | **1,621 automated tests** across 218 test files keeping every subsystem honest (10,585 assertions, all green) |
+| 🎨 | **64 custom UI widgets** with 42 theme styles, JSON-driven screens, viewport scaling, and zero-ImGui shipping builds (5.7 MB stripped exe) |
+| 🌍 | **27-scene handcrafted world** with 5 factions, **67 placed NPCs**, faction guards, boss rotations, and Aurora Gauntlet endgame PvP tower |
 | 📡 | **Protocol v12** custom UDP — critical-lane bypass for 9 load-bearing opcodes, `SvEntityEnterBatch` coalesce, 32-bit delta compression, fiber-based async DB dispatch, client-side `CharacterFlags` mirror |
 | 👁️ | **Admin observer/spectate mode** — log in without a character and roam any live scene with full replication |
-| 🐾 | **Active pet system** — equip one pet, share 50% XP, gain stat bonuses, auto-loot within radius |
+| 🐾 | **Active pet system** — equip one pet, share 50% XP, gain stat bonuses, auto-loot within radius (Legendary Fox: 0.2s tick, 128px) |
 | 💰 | **Opals economy + AdMob rewarded video** with ECDSA-signed server-side verification |
 | 📦 | **Pluggable VFS** — `IAssetSource` abstracts every read; ship loose files in dev, bundled `.pak` archives in production via PhysicsFS overlay |
 
@@ -90,7 +107,7 @@ The demo opens the full editor UI with a procedural tile grid. Use the new **▶
 | **Render Pipeline** | 11-pass RenderGraph: GroundTiles → Entities → Particles → **SkillVFX** → SDFText → DebugOverlays → Lighting → BloomExtract → BloomBlur → PostProcess → Blit |
 | **Editor** | Dear ImGui (docking) + ImGuizmo + ImPlot + imnodes. Custom dark theme (Inter font family, FreeType LightHinting). **Scene viewport toolbar** (Play/Pause/Resume/Stop, Observe, Scene dropdown). Property inspectors, visual node editors, **Aseprite-first animation editor** with layered paper-doll preview (5-layer composite), sprite slicing, tile painting, play-in-editor, undo/redo (200 actions). Every editor-authored JSON write goes through `writeFileAtomic` (`.tmp` + rename + cross-volume fallback) |
 | **Networking** | Custom reliable UDP (`0xFA7E`, **PROTOCOL_VERSION 12**), **Noise_NK handshake** (two X25519 DH ops) + **XChaCha20-Poly1305 AEAD** encryption (key-derived 48-bit nonce prefix, symmetric rekeying every 65K packets / 15 min, epoch-gated). **Auth hardening**: 64-bit CSPRNG session tokens (libsodium), encrypted `CmdAuthProof` (0xD8) so the token never rides plaintext, timing-safe comparisons, per-account login lockout with exponential backoff, fail-closed encrypt symmetry on both client and server send paths. **DB-backed sessions** (`auth_sessions` table, mig 089) with `LISTEN/NOTIFY session_kicked` cross-process kick. IPv6 dual-stack, 3 channel types, **26-byte header with 64-bit ACK bitfield** (v9+), RTT-based retransmission, 1 MB kernel socket buffers, 2048-slot pending queue with **critical-lane bypass for 9 load-bearing opcodes**, **SvEntityEnterBatch coalesce**, **CmdAckExtended** out-of-window recovery |
-| **Database** | PostgreSQL (libpqxx), **23 repository files**, **10 startup caches**, **fiber-based `DbDispatcher`** (async player load, disconnect saves, metrics, maintenance — zero game-thread blocking), connection pool (5–50) + circuit breaker, priority-based 4-tier dirty-flag flushing, 30s staggered auto-save. `PlayerLockMap` for concurrent mutation serialization. WAL removed — 30s window bounds crash loss. **102 numbered SQL migrations** under `Docs/migrations/` |
+| **Database** | PostgreSQL (libpqxx), **23 repository files**, **10 startup caches**, **fiber-based `DbDispatcher`** (async player load, disconnect saves, metrics, maintenance — zero game-thread blocking), connection pool (5–50) + circuit breaker, priority-based 4-tier dirty-flag flushing, 30s staggered auto-save. `PlayerLockMap` for concurrent mutation serialization. WAL removed — 30s window bounds crash loss. **111 numbered SQL migrations** under `Docs/migrations/`. **816 items** in `item_definitions` across 6 canonical types — Armor 355 / Consumable 222 / Material 148 / Weapon 86 / Container 4 / Currency 1 (vendor-exchange token; gold + opals are first-class account columns, not item rows) — hardened by the S118-S120 type-taxonomy passes |
 | **ECS** | Data-oriented archetype ECS, contiguous SoA memory, **56 registered components**, generational handles, prefab variants (JSON Patch), compile-time `CompId`, Hot/Warm/Cold tier classification, `FATE_REFLECT` macro with field-level metadata, `ComponentFlags` trait policies, RAII iteration depth guard, 4096-archetype reserve capacity. `World::processDestroyQueue(scope)` tags every flush with caller intent + per-type entity breakdown for diagnosability |
 | **Memory** | Zone arenas (256 MB, O(1) reset), double-buffered frame arenas (64 MB), thread-local scratch arenas (Fleury conflict-avoidance), lock-free pool allocators, debug occupancy bitmaps, ImPlot visualization panels |
 | **Audio** | SoLoud (SDL2 backend, 32 virtual voices, OGG streaming, 2D spatial audio, 3 buses, 10 game events wired). All loads route through `IAssetSource::readBytes` → `Wav::loadMem(copy=true)` so packaged `.pak` archives work transparently |
@@ -102,9 +119,9 @@ The demo opens the full editor UI with a procedural tile grid. Use the new **▶
 
 ## 🗡️ Game Systems
 
-Five factions shape a **27-scene world** — the 🩸 **Xyros** severing the threads of fate, the 🛡️ **Fenor** weaving steadfast eternity, the 🔮 **Zethos** unraveling ancient mysteries, the 👑 **Solis** forging a golden epoch, and the 🕳️ **Umbra** — a secret non-playable faction born from the negative space of the tapestry itself, hostile to all who enter their domain. Each faction fields **3 tiers of named guards** — mage sentries, archer elites, and a boss-tier warden — that auto-aggro enemy-faction players on sight. Bind at **Innkeeper NPCs**, journey through **126 dialogue-tree quests** across 4 tiers, and fight the **Fate Guardian** in the rotating boss arena.
+Five factions shape a **27-scene world** — the 🩸 **Xyros** severing the threads of fate, the 🛡️ **Fenor** weaving steadfast eternity, the 🔮 **Zethos** unraveling ancient mysteries, the 👑 **Solis** forging a golden epoch, and the 🕳️ **Umbra** — a secret non-playable faction born from the negative space of the tapestry itself, hostile to all who enter their domain. Each faction fields **3 tiers of named guards** — mage sentries, archer elites, and a boss-tier warden — that auto-aggro enemy-faction players on sight. Bind at **Innkeeper NPCs**, journey through **167 dialogue-tree quests** across 4 tiers + Phase 3C ambient mini-chains, and fight the **Fate Guardian** in the rotating boss arena.
 
-All gameplay logic is fully server-authoritative with priority-based DB persistence, dirty-flag tracking at **95 mutation sites**, spanning **50+ robust systems** across 67 shared gameplay files (**18,000+ LOC** of pure C++ game logic — zero engine dependencies). Every system is DB-wired with load-on-connect, save-on-disconnect, and async auto-save.
+All gameplay logic is fully server-authoritative with priority-based DB persistence, dirty-flag tracking at **95 mutation sites**, spanning **50+ robust systems** across **75 shared gameplay files** (**19,000+ LOC** of pure C++ game logic — zero engine dependencies). Every system is DB-wired with load-on-connect, save-on-disconnect, and async auto-save.
 
 <details>
 <summary><b>🔥 Combat, PvP & Classes</b></summary>
@@ -130,15 +147,16 @@ All gameplay logic is fully server-authoritative with priority-based DB persiste
 <details>
 <summary><b>🌳 Quest Trees & Interact-Sites</b></summary>
 
-- **Dialogue-Tree Framework** — Every quest is a JSON-authored branching tree (`assets/dialogue/quests/<id>.json`) with `offer` / `inProgress` / `turnIn` sub-trees, 12-action vocabulary (`AcceptQuest`, `CompleteQuest`, `OpenShop`, `OpenScreen`, `SetFlag`, `Goto`, `EndDialogue`, etc.), and condition-gated visibility per choice (`HasItem`, `HasFlag`, `HasInventorySpace`, `HasCompletedQuest`). 156 dialogue JSON files: 126 quest trees + 14 NPC trees + 16 interact-site trees.
-- **126 Quests, 4 Tiers** — Starter / Novice / Apprentice / Adept, plus the Umbra fragment chain. **10 objective types** (`Kill`, `Collect`, `Deliver`, `TalkTo`, `Interact`, `PvP`, `Explore`, `KillInParty`, `CompleteArena`, `CompleteBattlefield`, `PvPKillByStatus`) with prerequisite chains, max 10 active.
+- **Dialogue-Tree Framework** — Every quest is a JSON-authored branching tree (`assets/dialogue/quests/<id>.json`) with `offer` / `inProgress` / `turnIn` sub-trees, 12-action vocabulary (`AcceptQuest`, `CompleteQuest`, `OpenShop`, `OpenScreen`, `SetFlag`, `Goto`, `EndDialogue`, etc.), and condition-gated visibility per choice (`HasItem`, `HasFlag`, `HasInventorySpace`, `HasCompletedQuest`, `HasActiveQuest`). **183 dialogue JSON files**: 124 quest trees + 33 NPC trees + 26 interact-site trees.
+- **167 Quests, 4 Tiers + Phase 3C** — Starter / Novice / Apprentice / Adept, plus the Umbra fragment chain and the new ambient mini-chains. **11 objective types** (`Kill`, `Collect`, `Deliver`, `TalkTo`, `Interact`, `PvP`, `Explore`, `KillInParty`, `CompleteArena`, `CompleteBattlefield`, `PvPKillByStatus`) with prerequisite chains, max 10 active.
 - **Interact-Site Framework** — `InteractSiteComponent` placed on world entities (cairns, altars, shrines, gravestones, ward-stones) progresses `ObjectiveType::Interact` quests via player click, sets `CharacterFlagsComponent` flags, and triggers tree dialogues with first-visit + revisit nodes. **Wire packet (`CmdInteractSite` 0xE2 / `SvInteractSiteResult` 0xE3)** keys off `siteStringId` directly — no PIDs, no server-issued ghost replication, and identical scene-JSON resolution on both sides.
-- **Tier 3 Investigation Chains** — Story-first arcs with zero new mobs and zero combat balance changes:
+- **Tier 3 Investigation Chains** — Story-first arcs
   - 🪦 **Gravestones (WhisperingWoods, Greta the Gravekeeper, Lv 6-12)** — 4 quests, 5 cairn sites (named / unmarked / drowned), parallel "tend" / "question" tails. First content to seed Opals into the live-play loop (+5 / +1 per quest).
-  - 🕯️ **Altars (BlightedSwamp, Brae, Lv 38-46)** — 4 quests, 3 sites. The third altar is where the player first realizes the world is older than the four factions.
+  - 🕯️ **Altars (BlightedSwamp, Brae, Lv 38-46)** — 6 quests, 3 sites, 3-way fork (Sun-Touched / Bough-Bound / Balanced + Broker capstone). The third altar is where the player first realizes the world is older than the four factions.
   - 🌑 **Umbra Remnants (Althea, Lv 50-65)** — 5 quests, 5 sites, 2 branching endings ("Let her rest" vs "Hold the wards yourself"). Foreshadowed by Q703's "older weathers, older peoples" line.
-- **Honor + Opals on Every Turn-In** — `QuestRewards` carries `int honor = 0` (0 = use formula) and `int64_t opals = 0` (opt-in). Both are applied in `QuestManager::turnInQuest` after objective verification + Collect/Deliver consumption.
-- **8 Milestone Collections** — `QuestsCompleted` collection condition fires on every successful turn-in and grants permanent stat bonuses at thresholds **10 → Wayfarer (+2 CON), 25 → Storyseeker (+3 WIS), 50 → Threadwalker (+5 CON), 70 → Pathfinder (+5 DEX), 75 → Fate-Touched (+75 MaxHP), 80 → Loresworn (+5 INT), 100 → Bearer of Stories (+8 STR), 150 → Hand of Fate (+200 MaxHP)**.
+- **🆕 Phase 3C Ambient Mini-Chains (10 chains × 3 quests = 30 side quests)** 
+- **Honor + Opals on Every Turn-In** — `QuestRewards` carries `int honor = 0` (0 = use formula `(5 + reqLvl×2 + chainLen×10) × tierMul`, Starter 1.0 → Adept 2.0) and `int64_t opals = 0` (opt-in). Both are applied in `QuestManager::turnInQuest` after objective verification + Collect/Deliver consumption. Granted rewards echo back to chat as `[Quest]` lines (title / EXP / gold / honor / opals / items).
+- **8 Milestone Collections** — `QuestsCompleted` collection condition fires on every successful turn-in and grants permanent stat bonuses at thresholds
 - **Cross-Zone Delivery Chains** — Maren → Aelith → Helga / Kiral arcs span up to 5 zones, with NPC-A handing the player a soulbound quest item to deliver to NPC-B halfway across the world map.
 - **Branching NPC Dialogue** — State-aware quest-tree picker at every NPC. Priority: turnIn > inProgress > offer > NPC ambient > legacy greeting. Driven by `QuestGiverComponent.questIds`.
 - **`CharacterFlagsComponent` client mirror (v12)** — `SvCharacterFlagsSnapshot` (login) + `SvCharacterFlagDelta` (per-mutation) replicate the player's flag set so dialogue `HasFlag` conditions evaluate locally without round-trips. Enables hard-branching trees on the client.
@@ -157,7 +175,7 @@ All gameplay logic is fully server-authoritative with priority-based DB persiste
 - **Consumables Pipeline** — **18 effect types** fully wired: HP/MP Potions, SkillBooks (class/level validated), Stat Reset (Elixir of Forgetting), Town Recall (blocked in combat/instanced content), Fate Coins (3→level×50 XP), EXP Boost Scrolls (10%/20%, 1hr, stackable tiers), Beacon of Calling (cross-scene party teleport), Soul Anchor (auto-consumed on death to prevent XP loss), Fate's Grace (revive-in-place).
 - **Costumes & Closet** — DB-driven cosmetic system. 5 rarity tiers (Common→Legendary), per-slot equipping, master show/hide toggle, paper-doll integration. 3 grant paths: mob drops (per-mob drop chance via `mob_costume_drops`), collection rewards, shop purchase. Full replication via 32-bit delta field mask. `SvCostumeDefs` / `SvCostumeSync` / `SvCostumeUpdate` packets.
 - **💎 Opals Currency** — Premium non-P2W currency. End-to-end wired: direct-credit mob drops (Normals 1–5 @ 20–30%, MiniBosses 10–40 @ 90–100%, Bosses 200–700 @ 100% in dungeons), DB persistence, `SvPlayerState` replication, menu-driven Opals Shop with server-validated purchases against JSON catalog. QoL items priced as grind goals, not power.
-- **Per-Item Stack Caps** — `MAX_STACK_SIZE = 9999` global removed; `Inventory::addItem` / `moveItem` / `moveBagItem` honor per-item `max_stack` and split oversized drops across multiple slots (200-pot drop with `max_stack=99` → 99+99+2 across 3 slots).
+- **Per-Item Stack Caps** — `Inventory::addItem` / `moveItem` / `moveBagItem` honor per-item `max_stack` and split oversized drops across multiple slots (200-pot drop with `max_stack=99` → 99+99+2 across 3 slots).
 
 </details>
 
@@ -186,7 +204,7 @@ All gameplay logic is fully server-authoritative with priority-based DB persiste
   - 🔮 **Zethos** — Seekers chasing rumors at the edge of an ancient forest. Take every quest, explore every corner. Guards: **Sage** (Mage) → **Seeker** (Archer) → **Prophecy** (Warrior Boss).
   - 👑 **Solis** — Gold moves the world. Trade ruthlessly, grind efficiently, every quest has a payout. Guards: **Treasure** (Mage) → **Fortune** (Archer) → **Heir** (Warrior Boss).
   - 🕳️ **Umbra** — The negative space in the tapestry of fate — what remains when threads are severed. Not evil, just absence. Every name they carry is incomplete, every word trails off. Their village, **The Scorched Hollow**, is the mid-game recall hub — players *need* it, but Umbra guards attack everyone on sight and PvP is enabled. Guards: **Whisper** (Mage Lv35) → **Phantom** (Archer Lv40) → **Erasure** (Warrior Boss Lv45).
-- **47+ NPCs** across 5 villages — 40 faction NPCs (10 per village) + 7 Umbra fragment-named NPCs: **Vess** (Innkeeper), **Faded** (Shopkeeper), **Ash** (Banker), **"The"** (Quest Giver), **One** (Blacksmith), **Mora** (Alchemist), **Absent** (Lore NPC) — plus zone NPCs like **Greta the Gravekeeper**, **Maren**, **Tomas**, **Aelith**, **Kiral**, **Helga**, **Nessa**, **Kais**, and **Seraph Althea** in the adventure zones. Helpful but unsettling Umbra voices, hollow tones, unfinished sentences. Faction-aware click-targeting via `NPCComponent.targetFactions`.
+- **67 NPCs placed** across 13 NPC-bearing scenes — 40 faction NPCs (10 per village) + 7 Umbra fragment-named NPCs in The Scorched Hollow (**Vess** Innkeeper, **Faded** Shopkeeper, **Ash** Banker, **"The"** Quest Giver, **One** Blacksmith, **Mora** Alchemist, **Absent** Lore NPC) + 17 adventure-zone anchors + 3 Castle hub NPCs. After Session 119, **36 of those NPCs offer quests** — including the new Phase 3C ambient quest-givers **Bram**, **Hadrik**, **Tessen**, **Mira+Vell**, **Sister Sand+Old Cinder**, **Toren**, **Vael** alongside legacy chain anchors **Greta**, **Maren**, **Tomas**, **Aelith**, **Kiral**, **Helga**, **Nessa**, **Kais**, **Seraph Althea**, and **The Broker**. Helpful but unsettling Umbra voices, hollow tones, unfinished sentences. Faction-aware click-targeting via `NPCComponent.targetFactions`.
 - **"The" Quest Chain** — An NPC whose name is literally all that remains of a title. His quests aren't generic kill tasks — they're a fragmented being searching for what was taken:
   - *Crystal Caverns (Lv22-30):* "I heard something down there once. My name, maybe. Bring it back."
   - *Scorched Wastes (Lv32-40):* "The fire took something from me. I can't remember what. Look in the ash."
@@ -203,10 +221,10 @@ All gameplay logic is fully server-authoritative with priority-based DB persiste
 
 - **Mob AI** — Cardinal-only movement with L-shaped chase pathing, axis locking, wiggle unstuck, roam/idle phases, threat-based aggro tables, `shouldBlockDamage` callback (god mode). **Server-side DEAR** — mobs in empty scenes skipped entirely, distance-based tick scaling (full rate within 20 tiles, quadratic throttle beyond, 2s idle patrol beyond 48 tiles). Wall collision is intentional — enables classic lure-and-farm positioning tactics.
 - **Spawns & Zones** — `SceneSpawnCoordinator` per-scene lifecycle (activate on first player, teardown on last leave), `SpawnZoneCache` from DB (circle/square shapes), respawn timers, death persistence via `ZoneMobStateRepository` (prevents boss respawn exploit). `createMobEntity()` static factory. Collision-validated spawn positions (30 retries, 48px mob separation). Per-entity stat overrides via `spawn_zones.instances_json` — HP/damage/attackRange/leashRadius/respawnSeconds/hpRegenPerSec per-instance.
-- **Quest System** — 10 objective types (Kill / Collect / Deliver / TalkTo / **Interact** / PvP / Explore / KillInParty / CompleteArena / CompleteBattlefield / PvPKillByStatus) with prerequisite chains, branching NPC dialogue trees (enum-based actions + conditions), max 10 active, **126 quests** across 4 tiers (Starter / Novice / Apprentice / Adept) plus the Umbra chain.
+- **Quest System** — 11 objective types (Kill / Collect / Deliver / TalkTo / **Interact** / PvP / Explore / KillInParty / CompleteArena / CompleteBattlefield / PvPKillByStatus) with prerequisite chains, branching NPC dialogue trees (enum-based actions + conditions), max 10 active, **167 quests** across 4 tiers (Starter / Novice / Apprentice / Adept) + the Umbra fragment chain + Phase 3C ambient mini-chains (Q730-Q822).
 - **Instanced Dungeons** — Per-party ECS worlds, 10-minute timers, boss rewards, daily tickets (per-dungeon), invite system (30s timeout), celebration phase. Reconnect grace (180s). Event locks prevent double-enrollment. Per-minute chat timer. Per-dungeon HP×1.5 / damage×1.3 multipliers for 3-player party tuning.
 - **Aurora Gauntlet** — 6-zone PvP with hourly faction-rotation buff (+25% ATK/EXP), wall-clock `hour%4` rotation. Aether Stone + 50K gold entry. Aether world boss (Lv55, 150M HP, 36hr respawn) with 23-item loot table. Zone scaling Lv10→55. Death ejects to Town. Live `GauntletHUD` (TopRight) + `GauntletResultModal` top-10 leaderboard.
-- **🐾 Active Pet System** — Equip one pet at a time; active pet shares 50% of player XP from mob kills, contributes to `equipBonus*` (HP + crit rate + XP bonus) via `PetSystem::applyToEquipBonuses` (recalc on equip/unequip/level). 6 pets shipped across 4 rarity tiers: 🐢 Turtle + 🐺 Wolf (Common), 🦅 Hawk (Uncommon), 🐆 Panther + (Rare), 🦊 Fox (Legendary). Premium tier knobs (interval/itemsPerTick/radius) on `pet_definitions` — Legendary Fox auto-loots every 0.2s with 128px radius. Client-side `PetFollowSystem` keeps the active pet trailing the player with 4-state machine (Following / Idle / MovingToLoot / PickingUp). Server-authoritative auto-looting (per-rarity tick, 64–128px radius, ownership + party aware). DB-level unique partial index enforces one active pet per character. Consumable pet eggs purchasable from the Opals Shop (Legendary Fox 30,000 opals).
+- **🐾 Active Pet System** — Equip one pet at a time; active pet shares 50% of player XP from mob kills, contributes to `equipBonus*` (HP + crit rate + XP bonus) via `PetSystem::applyToEquipBonuses` (recalc on equip/unequip/level). 5 pets shipped across 4 rarity tiers: 🐢 Turtle + 🐺 Wolf (Common), 🦅 Hawk (Uncommon), 🐆 Panther + (Rare), 🦊 Fox (Legendary). Premium tier knobs (interval/itemsPerTick/radius) on `pet_definitions` — Legendary Fox auto-loots every 0.2s with 128px radius. Client-side `PetFollowSystem` keeps the active pet trailing the player with 4-state machine (Following / Idle / MovingToLoot / PickingUp). Server-authoritative auto-looting (per-rarity tick, 64–128px radius, ownership + party aware). DB-level unique partial index enforces one active pet per character. Consumable pet eggs purchasable from the Opals Shop (Legendary Fox 30,000 opals).
 - **Loot Pipeline** — Server rolls → ground entities → spatial replication → pickup validation → 90s despawn. Per-player damage attribution, live party lookup at death, strict purge on DC/leave. Epic/Legendary/Mythic server-wide broadcast; party loot broadcast to all members.
 - **NPC System** — 10 NPC types: Shop, Bank, Teleporter (with item/gold/level costs), Guild, Dungeon, Arena, Battlefield, Story (branching dialogue), QuestGiver, Innkeeper (respawn binding). Proximity validation on all interactions. `EntityHandle`-based caching for zone-transition safety.
 - **Event Return Points** — Centralized system prevents players from being stranded after disconnecting from instanced content. Return point set on event entry, cleared on normal exit, re-set on grace rejoin.
@@ -378,20 +396,25 @@ Full visual animation authoring with an Aseprite-first import pipeline and layer
 
 ## 📈 Recent Engineering Wins
 
-Concrete performance, security, and reliability gains shipped in the latest phases.
+Concrete performance, security, and reliability gains shipped in the latest phases (Sessions 95-120).
 
 | Win | Impact |
 |---|---|
+| 🆕 **Phase 3C ambient NPC mini-chains shipped (S119)** | 30 new quests Q730-Q822 across 10 chains, ~6,500 brutal kills, 12 NPC dialogue rewrites with Greta/Brae state-machine pattern. Q721 cameo precedence preserved on Vess/Ash/Mora via `autoAdvance` ordering. **1599/1599 tests / 10,585 assertions green.** Zero migrations, zero protocol bump — entirely additive content using existing assets |
+| 🆕 **`item_definitions` type-taxonomy hygiene pass (S120)** | Closed 4 long-standing data-shape gaps: lowercase `type='material'` (1 row), empty-subtype Materials (17 rows reclassified), `Material/Material` tautology (1 row), `type='Equipment'` orphan ladder (24 rows deleted in S118). DB landed at 816 items across 6 canonical types and 22 Material subtypes. Test seeder patched to `ON CONFLICT DO UPDATE` so future fixture writes self-heal |
+| 🆕 **Server-authoritative PvP zone gate restored (S115)** | `combat_handler.cpp` was reading `CharacterStats::isInPvPZone` — a per-character flag that defaulted false and was never written anywhere on the server. PvP was silently disabled game-wide. Wired `inSafeZone` to `sceneCache_.isPvPEnabled(currentScene)`, deleted 3 dead-code paths, restored a broken `MetricsCollector` counter, added 8 new contract tests |
+| 🆕 **Atomic-save swap-conflict fix (S116)** | `Inventory::moveItem` is implemented as `std::swap` — both items keep their `instance_id`s, only `slot_index` exchanges. Re-save tripped `uq_character_inventory_slot` partial unique index because Postgres validates per-statement. Fix: NULL the position columns on preserved rows between the orphan-DELETE and UPSERT loop. Two new regression tests cover top-slot + bag-slot swaps |
+| 🆕 **Loot economy rebalance (S117, migrations 098+099)** | Squirrel `P(any item) = 89.3% → 20%` via item-by-item drop cuts. 4 `consumable_*_potion` duplicates retired (15 loot rows + 4 item_defs). 317 non-equipment items reset to `level_req=1`. 109 non-boss potion drops capped at 5%/qty 1. 14 mid-tier mobs tier-shifted (small→medium / medium→large). Boss potion drops intentionally untouched |
 | **Demo v2 — Play / Observe / Scene-dropdown / File menu / Ctrl+S** | Open-source `FateDemo` reaches feature parity with the proprietary editor's runtime control loop. Configurable `AppConfig::onObserveStart` hook lets downstream apps swap in network spectate or other observer flows |
-| **Quest-tree framework + 126 dialogue-tree quests + interact-site framework** | Every quest is a JSON branching tree with state-aware NPC pickers, `ObjectiveType::Interact` for cairns/altars/shrines, and Honor + Opals on every turn-in. 8 milestone collections fire on lifetime-quest thresholds |
-| **PROTOCOL v9 → v10 → v11 → v12 in 3 sessions** | v9: 64-bit ACK window, `SvEntityEnterBatch` coalesce, `CmdAckExtended`, epoch-gated rekey. v10: interact-site packets. v11: site-string-id swap (PIDs add zero value when sites have stable string IDs). v12: `CharacterFlags` client mirror so dialogue `HasFlag` conditions evaluate locally |
+| **Quest-tree framework + 167 dialogue-tree quests + interact-site framework** | Every quest is a JSON branching tree with state-aware NPC pickers, `ObjectiveType::Interact` for cairns/altars/shrines, and Honor + Opals on every turn-in. 8 milestone collections fire on lifetime-quest thresholds |
+| **PROTOCOL v9 → v10 → v11 → v12 in 3 sessions** | v9: 64-bit ACK window, `SvEntityEnterBatch` coalesce, `CmdAckExtended`, epoch-gated rekey. v10: interact-site packets. v11: site-string-id swap (PIDs add zero value when sites have stable string IDs). v12: `CharacterFlags` client mirror so dialogue `HasFlag` conditions evaluate locally. **Five subsequent sessions shipped without a bump** — protocol surface has stabilized |
 | **DB-backed `auth_sessions` + cross-process LISTEN/NOTIFY kick** | Sessions survive process crashes. Multi-process deployment ready: login on node B kicks the existing session on node A within ~1s via Postgres NOTIFY. Replaces three in-memory ServerApp maps |
 | **Fail-closed encrypt symmetry on both client + server send paths** | Drops + LOG_ERROR on encrypt failure rather than silently falling back to plaintext (which the peer would reject and force infinite retransmits) |
 | **`AuthPhase` state machine** | `HandshakePending` → `ProofReceived` → `Authenticated`. Non-system handlers reject packets until proof verifies — closes the theoretical window where malformed proof bytes could reach game logic |
 | **Atomic write helper for every editor JSON save** | Scene saves, UI screens, dialogue nodes, animation templates / framesets / packed meta / `.meta.json` siblings — all route through `writeFileAtomic` (`.tmp` + rename + cross-volume copy fallback). Failed Save-As no longer corrupts destination |
 | **`IAssetSource` + PhysicsFS VFS** | Unified read path for textures, JSON, shaders, scenes, audio, dialogue, server scene scans, shutdown config. Two implementations (DirectFs + Vfs), behind `option(FATE_USE_VFS …)`. 1507/1507 tests pass under both flag states |
 | **Shipping-build CI guard** — `scripts/check_shipping.ps1` wraps `VsDevCmd.bat` + `cmake --preset x64-Shipping`; every `imgui.h`/`ImGui::*`/editor member requires explicit `FATE_SHIPPING`/`EDITOR_BUILD` guard | Stripped ImGui-free shipping exe verified at 5.7 MB; regressions fail fast in CI |
-| **Persistence contract test** — every mutable column in characters / inventory / bank / pets / costumes / quests / skills round-trips against a live DB | Catches save-method drift across every subsystem repository (gated on `FATE_DB_HOST` env so CI without DB still passes) |
+| **Persistence contract test** — every mutable column in characters / inventory / bank / pets / costumes / quests / skills round-trips against a live DB | Catches save-method drift across every subsystem repository (gated on `FATE_DB_HOST` env so CI without DB still passes). `TestAccountGuard` RAII wrapper added in S120 ensures `ctest_*` rows clean up on `REQUIRE`-throw unwind |
 | **`MAX_STACK_SIZE = 9999` global removed** | `Inventory::addItem` / `moveItem` / `moveBagItem` honor per-item `max_stack` and split oversized drops into multiple capped chunks. 25 server call sites + 8 test files updated. `canAddItem` simulates the same routing without mutation for visibility-condition checks |
 | **Critical-lane bypass extended to `SvEntityEnterBatch`** | 9 load-bearing opcodes (was 8) bypass reliable-queue congestion check — death overlays + initial-entry replication never get strangled under load |
 | **`MetricsCollector` sync DB → async `DbDispatcher`** (5 methods) | Eliminated invisible ~300–1500ms periodic stall that manifested as client-side ~6.5s mob-freeze stutter |
@@ -487,7 +510,7 @@ pwsh scripts/check_shipping.ps1 -Target FateServer     # server-only rebuild
 | **FateDemo** | Minimal demo with editor UI + Play/Observe/Scene-dropdown | Open-source build |
 | **FateEngine** | Full game client | When `game/` sources present |
 | **FateServer** | Headless authoritative server | When `server/` + PostgreSQL present |
-| **fate_tests** | 1,546 unit tests (doctest) | When `tests/` sources present |
+| **fate_tests** | 1,621 unit tests (doctest, 10,585 assertions) | When `tests/` sources present |
 
 ### Platform Matrix
 
@@ -503,7 +526,7 @@ pwsh scripts/check_shipping.ps1 -Target FateServer     # server-only rebuild
 
 ## 🧪 Testing
 
-The engine maintains exceptional stability through **1,546 test cases** across **214 test files**, powered by `doctest`. **9,121 assertions**, all green.
+The engine maintains exceptional stability through **1,621 test cases** across **218 test files**, powered by `doctest`. **10,585 assertions**, all green.
 
 ```bash
 # Run all tests:
@@ -531,7 +554,7 @@ Coverage spans: combat formulas, encryption/decryption, entity replication, inve
 ## 📐 Architecture at a Glance
 
 ```
-engine/                    # 83,000 LOC — Core engine (20 subsystems, 360 files)
+engine/                    # 85,391 LOC — Core engine (20 subsystems, 373 files)
  render/                   #   Sprite batching, SDF text, lighting, bloom, paper doll, VFX, Metal RHI
  net/                      #   Custom UDP (v12), Noise_NK crypto, AuthProof, replication, AOI, interpolation
  ecs/                      #   Archetype ECS (4096 reserve), 56 components, reflection, serialization
@@ -553,9 +576,9 @@ engine/                    # 83,000 LOC — Core engine (20 subsystems, 360 file
  vfs/                      #   PhysicsFS, ZIP mount, overlay priority
  telemetry/                #   Metric collection, JSON flush, HTTPS stub
 
-game/                      # 38,000 LOC — Game logic layer (120 files)
- shared/                   #   18,000+ LOC of pure gameplay (zero engine deps)
-   combat_system           #   Hit rate, armor, crits, class advantage, PvP balance
+game/                      # 40,559 LOC — Game logic layer (117 files)
+ shared/                   #   19,148 LOC of pure gameplay across 75 files (zero engine deps)
+   combat_system           #   Hit rate, armor, crits, class advantage, PvP balance, scene-cache PvP gate
    skill_manager           #   60+ skills, cooldowns, cast times, resource types
    mob_ai                  #   Cardinal movement, threat, leash, L-shaped chase
    status_effects          #   DoTs, buffs, shields, source-tagged removal
@@ -566,24 +589,25 @@ game/                      # 38,000 LOC — Game logic layer (120 files)
    faction_system          #   5 factions, guards, innkeeper, faction-aware targeting
    pet_system              #   Active pet equip, XP share, stat bonuses, auto-loot
    opals_system            #   Currency, shop catalog, direct-credit drops, AdMob rewards
-   quest_manager           #   126 quests, dialogue trees, interact sites, honor + opals
+   quest_manager           #   167 quests, dialogue trees, interact sites, honor + opals + Phase 3C ambient grind
    dialogue_registry       #   npcs/ + quests/ + sites/ scan, condition evaluator
    ...                     #   +25 more systems (guild, party, crafting, collections, etc.)
- components/               #   ECS component wrappers + InteractSiteComponent + CharacterFlagsComponent
+ components/               #   ECS component wrappers + InteractSiteComponent + CharacterFlagsComponent + QuestGiverComponent
  systems/                  #   12 ECS systems (combat, render, movement, mob AI, pet follow, spawn, interact site...)
  data/                     #   Paper doll catalog, NPC definitions, quest data, opals shop catalog
 
-server/                    # 36,000 LOC — Headless authoritative server (138 files)
+server/                    # 36,827 LOC — Headless authoritative server (140 files)
  handlers/                 #   46 packet handler files (split from monolith)
  db/                       #   23 repository files, 10 startup caches, pool, fiber DbDispatcher, session_repo + listener
  cache/                    #   Item/loot/recipe/pet/costume/collection/guard caches
  auth/                     #   TLS auth server (bcrypt + dummy-hash timing-oracle defense, starter equipment, login rate limiting, CSPRNG tokens)
  *.h/.cpp                  #   ServerApp, SpawnCoordinator, DungeonManager, RateLimiter, GM commands, MetricsCollector, ShutdownManager
 
-tests/                     # 29,000 LOC — 1,546 test cases across 214 files
+tests/                     # 30,619 LOC — 1,621 test cases across 218 files (10,585 assertions, all green)
 
 ads_ssv_server/            # Standalone rewarded-video verifier (ECDSA-signed HTTPS callbacks)
-Docs/migrations/           # 102 numbered SQL migrations (schema + content seeds)
+Docs/migrations/           # 111 numbered SQL migrations (schema + content seeds)
+assets/dialogue/           # 183 dialogue trees: 124 quests + 33 NPCs + 26 sites
 scripts/                   # check_shipping.ps1 (CI), run_server.ps1 (launcher)
 ```
 
@@ -611,22 +635,25 @@ Apache License 2.0 — see [LICENSE](LICENSE) for details.
 
 <br><br>
 
-<img src="https://img.shields.io/badge/C%2B%2B-187%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
-<img src="https://img.shields.io/badge/files-834%2B-2ea44f?style=flat-square" alt="Files" />
-<img src="https://img.shields.io/badge/tests-1%2C546_passing-2ea44f?style=flat-square" alt="Tests" />
+<img src="https://img.shields.io/badge/C%2B%2B-193%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
+<img src="https://img.shields.io/badge/files-848-2ea44f?style=flat-square" alt="Files" />
+<img src="https://img.shields.io/badge/tests-1%2C621_passing-2ea44f?style=flat-square" alt="Tests" />
+<img src="https://img.shields.io/badge/assertions-10%2C585-success?style=flat-square" alt="Assertions" />
 <img src="https://img.shields.io/badge/protocol-v12-blueviolet?style=flat-square" alt="Protocol" />
 <img src="https://img.shields.io/badge/crypto-Noise__NK%20%2B%20AuthProof%20%2B%20DB__sessions-critical?style=flat-square" alt="Crypto" />
 <img src="https://img.shields.io/badge/platforms-5-orange?style=flat-square" alt="Platforms" />
 <img src="https://img.shields.io/badge/game_systems-50%2B-blueviolet?style=flat-square" alt="Game Systems" />
 <img src="https://img.shields.io/badge/UI_widgets-64-ff69b4?style=flat-square" alt="UI Widgets" />
-<img src="https://img.shields.io/badge/quests-126-E040FB?style=flat-square" alt="Quests" />
+<img src="https://img.shields.io/badge/quests-167-E040FB?style=flat-square" alt="Quests" />
 <img src="https://img.shields.io/badge/factions-5-red?style=flat-square" alt="Factions" />
 <img src="https://img.shields.io/badge/scenes-27-FFB300?style=flat-square" alt="Scenes" />
+<img src="https://img.shields.io/badge/NPCs-67_placed-orange?style=flat-square" alt="NPCs" />
+<img src="https://img.shields.io/badge/items-816-yellowgreen?style=flat-square" alt="Items" />
 <img src="https://img.shields.io/badge/admin_commands-44-4CAF50?style=flat-square" alt="GM Commands" />
 <img src="https://img.shields.io/badge/handlers-46-9cf?style=flat-square" alt="Handler Files" />
 <img src="https://img.shields.io/badge/DB_repos-23-informational?style=flat-square" alt="DB Repos" />
-<img src="https://img.shields.io/badge/migrations-102-FF7043?style=flat-square" alt="Migrations" />
-<img src="https://img.shields.io/badge/dialogue_trees-156-9C27B0?style=flat-square" alt="Dialogue Trees" />
+<img src="https://img.shields.io/badge/migrations-111-FF7043?style=flat-square" alt="Migrations" />
+<img src="https://img.shields.io/badge/dialogue_trees-183-9C27B0?style=flat-square" alt="Dialogue Trees" />
 
 <br><br>
 
