@@ -117,6 +117,12 @@ void JobSystem::submitFireAndForget(Job* jobs, int count) {
     }
 }
 
+bool JobSystem::tryPushFireAndForget(const Job& j_in) {
+    Job j = j_in;
+    j.counter = nullptr;
+    return jobQueue_.push(j);
+}
+
 void JobSystem::waitForCounter(Counter* counter, int target) {
     if (!counter) return; // submit() can return nullptr if pool exhausted
     if (counter->value.load(std::memory_order_acquire) <= target) {

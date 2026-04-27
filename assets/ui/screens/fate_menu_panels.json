@@ -171,6 +171,12 @@
           0,
           0
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
@@ -285,7 +291,7 @@
           ],
           "offset": [
             -570.0,
-            0.0
+            1.0
           ],
           "preset": "Center",
           "size": [
@@ -312,8 +318,8 @@
           255
         ],
         "bagPanelBorderWidth": 2.0,
-        "bagPanelPadding": 40.0,
-        "bagTitleHeight": 0.0,
+        "bagPanelPadding": 44.0,
+        "bagTitleHeight": 2.0,
         "borderColor": [
           255,
           255,
@@ -321,6 +327,104 @@
           0
         ],
         "characterScale": 5.0,
+        "chromeRarityCommonColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "chromeRarityEpicColor": [
+          217,
+          115,
+          255,
+          255
+        ],
+        "chromeRarityLegendaryColor": [
+          255,
+          179,
+          51,
+          255
+        ],
+        "chromeRarityRareColor": [
+          102,
+          179,
+          255,
+          255
+        ],
+        "chromeRarityUncommonColor": [
+          102,
+          255,
+          102,
+          255
+        ],
+        "chromeTooltipBgColor": [
+          255,
+          255,
+          255,
+          240
+        ],
+        "chromeTooltipBorderColor": [
+          255,
+          84,
+          0,
+          444
+        ],
+        "chromeTooltipBorderWidth": 1.600000023841858,
+        "chromeTooltipCornerRadius": 17.0,
+        "chromeTooltipGradientBottom": [
+          32,
+          23,
+          31,
+          240
+        ],
+        "chromeTooltipGradientTop": [
+          38,
+          24,
+          6,
+          240
+        ],
+        "chromeTooltipLevelColor": [
+          242,
+          102,
+          102,
+          255
+        ],
+        "chromeTooltipLevelFontSize": 27.0,
+        "chromeTooltipLevelMetColor": [
+          102,
+          242,
+          128,
+          255
+        ],
+        "chromeTooltipLineSpacing": 2.0,
+        "chromeTooltipNameFontSize": 30.0,
+        "chromeTooltipOffset": 6.0,
+        "chromeTooltipPadding": 10.0,
+        "chromeTooltipSepColor": [
+          64,
+          88,
+          157,
+          170
+        ],
+        "chromeTooltipSepHeight": 4.0,
+        "chromeTooltipShadowBlur": 8.0,
+        "chromeTooltipShadowColor": [
+          0,
+          0,
+          0,
+          100
+        ],
+        "chromeTooltipShadowOffset": [
+          22.0,
+          22.0
+        ],
+        "chromeTooltipStatColor": [
+          199,
+          209,
+          235,
+          333
+        ],
+        "chromeTooltipStatFontSize": 27.0,
         "closeBtnBgColor": [
           26,
           25,
@@ -506,6 +610,12 @@
         "gridColumns": 4,
         "gridPadding": 40.0,
         "gridRows": 4,
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
@@ -581,14 +691,14 @@
           255
         ],
         "rarityRareColor": [
-          0,
-          0,
-          0,
+          6,
+          63,
+          255,
           255
         ],
         "rarityUncommonColor": [
-          0,
-          0,
+          58,
+          255,
           0,
           255
         ],
@@ -672,6 +782,7 @@
           255
         ],
         "tooltipStatFontSize": 27.0,
+        "tooltipUseChrome": true,
         "tooltipWidth": 200.0,
         "type": "inventory_panel",
         "uiShadowColor": [
@@ -679,8 +790,7 @@
           0,
           0,
           0
-        ],
-        "visible": false
+        ]
       },
       {
         "activeSetPage": 0,
@@ -1166,6 +1276,12 @@
           255
         ],
         "guildNameFontSize": 30.0,
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "headerHeight": 70.0,
         "hoverColor": [
           0,
@@ -1275,30 +1391,6 @@
           0,
           0
         ],
-        "disabledColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "gradientBottom": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "gradientTop": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "hoverColor": [
-          0,
-          0,
-          0,
-          0
-        ],
         "children": [
           {
             "anchor": {
@@ -1318,10 +1410,133 @@
                 0.0
               ]
             },
+            "backgroundColor": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "bgColor": [
+              26,
+              26,
+              33,
+              242
+            ],
+            "borderColor": [
+              153,
+              128,
+              64,
+              255
+            ],
+            "disabledColor": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "gradientBottom": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "gradientTop": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "headerColor": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "headerHeight": 48.0,
+            "hoverColor": [
+              0,
+              0,
+              0,
+              0
+            ],
             "id": "friends_panel_inner",
+            "offlineColor": [
+              153,
+              153,
+              153,
+              255
+            ],
+            "onlineColor": [
+              115,
+              217,
+              115,
+              255
+            ],
+            "pressedColor": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "rowBgEven": [
+              36,
+              36,
+              46,
+              230
+            ],
+            "rowBgOdd": [
+              31,
+              31,
+              38,
+              230
+            ],
+            "rowHeight": 32.0,
+            "tabHeight": 36.0,
+            "textColor": [
+              255,
+              255,
+              255,
+              255
+            ],
             "type": "friends_panel",
-            "visible": true
+            "uiShadowColor": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "visible": false
           }
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "id": "social_panel",
         "pressedColor": [
@@ -1403,6 +1618,12 @@
           0
         ],
         "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
           0,
           0,
           0,
@@ -1718,6 +1939,12 @@
           53,
           230
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "headerFontSize": 11.0,
         "headerHeight": 56.0,
         "hoverColor": [
@@ -1886,6 +2113,12 @@
           0
         ],
         "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
           0,
           0,
           0,
@@ -2065,6 +2298,12 @@
           77,
           255
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
@@ -2215,6 +2454,12 @@
           0
         ],
         "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
           0,
           0,
           0,
@@ -2389,6 +2634,12 @@
         "gridOffset": [
           0.0,
           0.0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
         ],
         "headerHeight": 28.0,
         "hintColor": [
@@ -2586,6 +2837,12 @@
           0
         ],
         "gridColumns": 2,
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
@@ -2732,6 +2989,12 @@
           0,
           0
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
@@ -2779,7 +3042,7 @@
         "zOrder": 115
       },
       {
-        "activeTab": 5,
+        "activeTab": 1,
         "activeTabBg": [
           34,
           2,
@@ -2861,6 +3124,12 @@
           0,
           0
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "highlightColor": [
           255,
           220,
@@ -2914,8 +3183,100 @@
           0,
           0
         ],
-        "visible": false,
         "zOrder": 10
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            280.0,
+            140.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "buttonColor": [
+          140,
+          115,
+          64,
+          255
+        ],
+        "buttonFontSize": 13.0,
+        "buttonHeight": 32.0,
+        "buttonHoverColor": [
+          179,
+          148,
+          77,
+          255
+        ],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
+        "buttonSpacing": 16.0,
+        "buttonWidth": 100.0,
+        "cancelText": "Cancel",
+        "confirmText": "Destroy",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "destroy_item_dialog",
+        "message": "Destroy Nut?",
+        "messageFontSize": 13.0,
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "confirm_dialog",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "zOrder": 200
       }
     ],
     "disabledColor": [
@@ -2931,6 +3292,12 @@
       0
     ],
     "gradientTop": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "headerColor": [
       0,
       0,
       0,
@@ -2955,8 +3322,7 @@
       0,
       0,
       0
-    ],
-    "visible": false
+    ]
   },
   "screen": "fate_menu_panels"
 }

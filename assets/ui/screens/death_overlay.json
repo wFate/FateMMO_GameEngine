@@ -342,16 +342,16 @@
           ]
         },
         "backgroundColor": [
-          51,
-          51,
-          71,
-          219
+          46,
+          56,
+          82,
+          255
         ],
         "borderColor": [
-          89,
-          89,
           115,
-          153
+          140,
+          191,
+          204
         ],
         "bind": {
           "text": "{death.respawnButtonLabel}"
@@ -391,6 +391,12 @@
         ],
         "style": "button_death",
         "text": "Respawn in Village",
+        "textColor": [
+          242,
+          247,
+          255,
+          255
+        ],
         "type": "button",
         "uiShadowColor": [
           0,
@@ -413,16 +419,16 @@
           ]
         },
         "backgroundColor": [
-          51,
-          51,
-          71,
-          219
+          46,
+          56,
+          82,
+          255
         ],
         "borderColor": [
-          89,
-          89,
           115,
-          153
+          140,
+          191,
+          204
         ],
         "borderWidth": 1.0,
         "disabledColor": [
@@ -459,6 +465,12 @@
         ],
         "style": "button_death",
         "text": "Respawn at Spawn Point",
+        "textColor": [
+          242,
+          247,
+          255,
+          255
+        ],
         "type": "button",
         "uiShadowColor": [
           0,
@@ -481,16 +493,16 @@
           ]
         },
         "backgroundColor": [
-          102,
-          51,
-          153,
+          46,
+          56,
+          82,
           255
         ],
         "borderColor": [
+          115,
           140,
-          77,
-          204,
-          255
+          191,
+          204
         ],
         "borderWidth": 1.0,
         "disabledColor": [
@@ -527,6 +539,12 @@
         ],
         "style": "button_death_fates_grace",
         "text": "Revive Here (Fate's Grace)",
+        "textColor": [
+          242,
+          247,
+          255,
+          255
+        ],
         "type": "button",
         "uiShadowColor": [
           0,

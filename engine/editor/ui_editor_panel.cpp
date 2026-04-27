@@ -853,6 +853,21 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     else if (auto* ticker = dynamic_cast<ChatTicker*>(selectedNode_)) {
         ImGui::SeparatorText("ChatTicker");
         ImGui::DragFloat("Scroll Speed##ticker", &ticker->scrollSpeed, 1.0f, 0.0f, 200.0f); checkUndoCapture(uiMgr);
+
+        ImGui::Separator();
+        if (ImGui::TreeNode("Chrome ChatTicker##chatticker_cp")) {
+            ImGui::Checkbox  ("Use Chrome##chatticker_cp",                 &ticker->hudUseChrome_);                     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Border Width##chatticker_cp",               &ticker->chromePanelBorderWidth, 0.1f);     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##chatticker_cp",              &ticker->chromePanelCornerRadius, 0.5f);    checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##chatticker_cp",              &ticker->chromePanelShadowOffset.x, 0.1f);  checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##chatticker_cp",                &ticker->chromePanelShadowBlur, 0.5f);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##chatticker_cp",                   &ticker->chromePanelBgColor.r);             checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##chatticker_cp",               &ticker->chromePanelGradientTop.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##chatticker_cp",            &ticker->chromePanelGradientBottom.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##chatticker_cp",               &ticker->chromePanelBorderColor.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow Color##chatticker_cp",               &ticker->chromePanelShadowColor.r);         checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* idle = dynamic_cast<ChatIdleOverlay*>(selectedNode_)) {
         ImGui::SeparatorText("ChatIdleOverlay");
@@ -877,6 +892,20 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Shadow##idle", &idle->shadowColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+        ImGui::Separator();
+        if (ImGui::TreeNode("Chrome ChatIdleOverlay##chatidle_cp")) {
+            ImGui::Checkbox  ("Use Chrome##chatidle_cp",                  &idle->hudUseChrome_);                     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Border Width##chatidle_cp",                &idle->chromePanelBorderWidth, 0.1f);     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##chatidle_cp",               &idle->chromePanelCornerRadius, 0.5f);    checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##chatidle_cp",               &idle->chromePanelShadowOffset.x, 0.1f);  checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##chatidle_cp",                 &idle->chromePanelShadowBlur, 0.5f);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##chatidle_cp",                    &idle->chromePanelBgColor.r);             checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##chatidle_cp",                &idle->chromePanelGradientTop.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##chatidle_cp",             &idle->chromePanelGradientBottom.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##chatidle_cp",                &idle->chromePanelBorderColor.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow Color##chatidle_cp",                &idle->chromePanelShadowColor.r);         checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* expBar = dynamic_cast<EXPBar*>(selectedNode_)) {
         ImGui::SeparatorText("EXPBar");
@@ -891,6 +920,17 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         if (ImGui::TreeNodeEx("Colors##eb", 0)) {
             ImGui::ColorEdit4("Fill##ebc", &expBar->fillColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Shadow##ebc", &expBar->shadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Chrome ExpBar##expbar_cp")) {
+            ImGui::Checkbox  ("Use Chrome##expbar_cp",        &expBar->hudUseChrome_);                checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##expbar_cp",          &expBar->chromeBgColor.r);              checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##expbar_cp",      &expBar->chromeBorderColor.r);          checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Border Width##expbar_cp",      &expBar->chromeBorderWidth, 0.1f);      checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##expbar_cp",     &expBar->chromeCornerRadius, 0.5f);     checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##expbar_cp",     &expBar->chromeShadowOffset.x, 0.1f);   checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##expbar_cp",       &expBar->chromeShadowBlur, 0.5f);       checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow Color##expbar_cp",      &expBar->chromeShadowColor.r);          checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         ImGui::Text("XP: %.0f / %.0f", expBar->xp, expBar->xpToLevel);
@@ -952,6 +992,21 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::Text("Active Panel: %s", lsb->activePanel.c_str());
         for (size_t i = 0; i < lsb->panelLabels.size(); i++) {
             ImGui::Text("  Panel %zu: %s", i, lsb->panelLabels[i].c_str());
+        }
+        ImGui::Separator();
+        if (ImGui::TreeNode("Chrome LeftSidebar##sidebar_cp")) {
+            ImGui::Checkbox  ("Use Chrome##sidebar_cp",                  &lsb->hudUseChrome_);                     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Border Width##sidebar_cp",                &lsb->chromePanelBorderWidth, 0.1f);     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##sidebar_cp",               &lsb->chromePanelCornerRadius, 0.5f);    checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##sidebar_cp",               &lsb->chromePanelShadowOffset.x, 0.1f);  checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##sidebar_cp",                 &lsb->chromePanelShadowBlur, 0.5f);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##sidebar_cp",                    &lsb->chromePanelBgColor.r);             checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##sidebar_cp",                &lsb->chromePanelGradientTop.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##sidebar_cp",             &lsb->chromePanelGradientBottom.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##sidebar_cp",                &lsb->chromePanelBorderColor.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow Color##sidebar_cp",                &lsb->chromePanelShadowColor.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Color##sidebar_cp",                 &lsb->chromeTitleColor.r);               checkUndoCapture(uiMgr);
+            ImGui::TreePop();
         }
     }
     else if (auto* inv = dynamic_cast<InventoryPanel*>(selectedNode_)) {
@@ -1093,11 +1148,45 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Border Width##invpan", &inv->panelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel (Checkpoint 3)##invpc", &inv->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Chrome path reads Chrome Panel groups below;");
+        ImGui::TextDisabled("legacy fields above are ignored when chrome is on.");
+        ImGui::Separator();
+
+        if (ImGui::TreeNodeEx("Chrome Panel Layout##inv", 0)) {
+            ImGui::DragFloat("Border Width##invcpl", &inv->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##invcpl", &inv->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##invcpl", &inv->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##invcpl", &inv->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Panel Colors##inv", 0)) {
+            ImGui::ColorEdit4("Background##invcpc", &inv->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##invcpc", &inv->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##invcpc", &inv->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##invcpc", &inv->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##invcpc", &inv->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Close Button##inv", 0)) {
+            ImGui::ColorEdit4("Bg##invccb", &inv->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##invccb", &inv->chromeCloseBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##invccb", &inv->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Visibility##inv", 0)) {
             ImGui::Checkbox("Equip Area Visible", &inv->equipAreaVisible); checkUndoCapture(uiMgr);
             ImGui::Checkbox("Grid Area Visible", &inv->gridAreaVisible); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome (Checkpoint 2)##invtt", &inv->tooltipUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Chrome path reads Chrome Tooltip groups below;");
+        ImGui::TextDisabled("legacy fields above are ignored when chrome is on.");
+        ImGui::Separator();
 
         if (ImGui::TreeNodeEx("Tooltip Layout##inv", 0)) {
             ImGui::Checkbox("Auto Width##tt", &inv->tooltipAutoWidth); checkUndoCapture(uiMgr);
@@ -1138,6 +1227,46 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Rare##rar", &inv->rarityRareColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Epic##rar", &inv->rarityEpicColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Legendary##rar", &inv->rarityLegendaryColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        // ----- Chrome (Checkpoint 2) tooltip fields — parallel to legacy -----
+        if (ImGui::TreeNodeEx("Chrome Tooltip Layout##inv", 0)) {
+            ImGui::DragFloat("Padding##cttl", &inv->chromeTooltipPadding, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Offset##cttl", &inv->chromeTooltipOffset, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Line Spacing##cttl", &inv->chromeTooltipLineSpacing, 0.5f, 0.0f, 16.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##cttl", &inv->chromeTooltipBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Separator Height##cttl", &inv->chromeTooltipSepHeight, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Separator Offset##cttl", &inv->chromeTooltipSepOffset.x, 0.5f, -100.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##cttl", &inv->chromeTooltipCornerRadius, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##cttl", &inv->chromeTooltipShadowOffset.x, 0.5f, -20.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##cttl", &inv->chromeTooltipShadowBlur, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Tooltip Fonts##inv", 0)) {
+            ImGui::DragFloat("Name Font##cttf", &inv->chromeTooltipNameFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Stat Font##cttf", &inv->chromeTooltipStatFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Level Font##cttf", &inv->chromeTooltipLevelFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Tooltip Colors##inv", 0)) {
+            ImGui::ColorEdit4("Background##cttc", &inv->chromeTooltipBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##cttc", &inv->chromeTooltipGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##cttc", &inv->chromeTooltipGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##cttc", &inv->chromeTooltipBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##cttc", &inv->chromeTooltipShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Stat Text##cttc", &inv->chromeTooltipStatColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Separator##cttc", &inv->chromeTooltipSepColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Level Req (Unmet)##cttc", &inv->chromeTooltipLevelColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Level Req (Met)##cttc", &inv->chromeTooltipLevelMetColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Rarity Colors##inv", 0)) {
+            ImGui::ColorEdit4("Common##crar", &inv->chromeRarityCommonColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Uncommon##crar", &inv->chromeRarityUncommonColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Rare##crar", &inv->chromeRarityRareColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Epic##crar", &inv->chromeRarityEpicColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Legendary##crar", &inv->chromeRarityLegendaryColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -1276,6 +1405,26 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Level##spc", &sp->levelColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Stat Label##spc", &sp->statLabelColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Faction##spc", &sp->factionColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##sppc", &sp->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##sp", 0)) {
+            ImGui::DragFloat("Border Width##spcp", &sp->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##spcp", &sp->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##spcp", &sp->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##spcp", &sp->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##spcp", &sp->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##spcp", &sp->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##spcp", &sp->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##spcp", &sp->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##spcp", &sp->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##spcp", &sp->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##spcp", &sp->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Border##spcp", &sp->chromeCloseBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##spcp", &sp->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -1476,6 +1625,65 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Desc##sktt", &skp->tooltipDescColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome (Checkpoint B sweep)##skptt", &skp->tooltipUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Chrome path reads Chrome Tooltip groups below;");
+        ImGui::TextDisabled("legacy fields above are ignored when chrome is on.");
+        ImGui::Separator();
+
+        if (ImGui::TreeNode("Chrome Tooltip Layout##skp")) {
+            ImGui::DragFloat("Width##skcttl", &skp->chromeTooltipW, 1.0f, 80.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##skcttl", &skp->chromeTooltipPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##skcttl", &skp->chromeTooltipBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Line Spacing##skcttl", &skp->chromeTooltipLineSpacing, 0.25f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Desc Gap##skcttl", &skp->chromeTooltipDescGap, 0.25f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##skcttl", &skp->chromeTooltipCornerRadius, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##skcttl", &skp->chromeTooltipShadowOffset.x, 0.5f, -20.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##skcttl", &skp->chromeTooltipShadowBlur, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Chrome Tooltip Fonts##skp")) {
+            ImGui::DragFloat("Title##skcttf", &skp->chromeTooltipTitleFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Body##skcttf", &skp->chromeTooltipBodyFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Rank##skcttf", &skp->chromeTooltipRankFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Req##skcttf", &skp->chromeTooltipReqFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Desc##skcttf", &skp->chromeTooltipDescFontSize, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Chrome Tooltip Colors##skp")) {
+            ImGui::ColorEdit4("Background##skcttc", &skp->chromeTooltipBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##skcttc", &skp->chromeTooltipGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##skcttc", &skp->chromeTooltipGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##skcttc", &skp->chromeTooltipBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##skcttc", &skp->chromeTooltipShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##skcttc", &skp->chromeTooltipTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Rank##skcttc", &skp->chromeTooltipRankColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##skcttc", &skp->chromeTooltipTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Req Level##skcttc", &skp->chromeTooltipReqColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Desc##skcttc", &skp->chromeTooltipDescColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##skppc", &skp->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNode("Chrome Panel##skp")) {
+            ImGui::DragFloat("Border Width##skpcp", &skp->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##skpcp", &skp->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##skpcp", &skp->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##skpcp", &skp->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##skpcp", &skp->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##skpcp", &skp->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##skpcp", &skp->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##skpcp", &skp->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##skpcp", &skp->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##skpcp", &skp->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##skpcp", &skp->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Border##skpcp", &skp->chromeCloseBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##skpcp", &skp->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* img = dynamic_cast<ImageBox*>(selectedNode_)) {
         ImGui::SeparatorText("ImageBox");
@@ -1524,6 +1732,48 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Width##bbt", &bb->tooltipWidth, 1.0f, 50.0f, 400.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome (Checkpoint B sweep)##bbtt", &bb->tooltipUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Chrome path reads Chrome Tooltip groups below;");
+        ImGui::TextDisabled("legacy fields above are ignored when chrome is on.");
+        ImGui::Separator();
+
+        if (ImGui::TreeNodeEx("Chrome Tooltip Layout##bb", 0)) {
+            ImGui::DragFloat("Padding##bbcttl", &bb->chromeTooltipPadding, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Line Spacing##bbcttl", &bb->chromeTooltipLineSpacing, 0.25f, 0.0f, 16.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##bbcttl", &bb->chromeTooltipBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##bbcttl", &bb->chromeTooltipCornerRadius, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##bbcttl", &bb->chromeTooltipShadowOffset.x, 0.5f, -20.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##bbcttl", &bb->chromeTooltipShadowBlur, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Tooltip Fonts##bb", 0)) {
+            ImGui::DragFloat("Tooltip##bbcttf", &bb->chromeTooltipFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Tooltip Colors##bb", 0)) {
+            ImGui::ColorEdit4("Background##bbcttc", &bb->chromeTooltipBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##bbcttc", &bb->chromeTooltipGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##bbcttc", &bb->chromeTooltipGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##bbcttc", &bb->chromeTooltipBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##bbcttc", &bb->chromeTooltipShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##bbcttc", &bb->chromeTooltipTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Chrome BuffBar##buffbar_cp")) {
+            ImGui::Checkbox  ("Use Chrome##buffbar_cp",        &bb->hudUseChrome_);                checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##buffbar_cp",          &bb->chromeBgColor.r);              checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##buffbar_cp",      &bb->chromeBorderColor.r);          checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Border Width##buffbar_cp",      &bb->chromeBorderWidth, 0.1f);      checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##buffbar_cp",     &bb->chromeCornerRadius, 0.5f);     checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##buffbar_cp",     &bb->chromeShadowOffset.x, 0.1f);   checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##buffbar_cp",       &bb->chromeShadowBlur, 0.5f);       checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow Color##buffbar_cp",      &bb->chromeShadowColor.r);          checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
         ImGui::DragFloat("Icon Size##bb", &bb->iconSize, 1.0f, 8.0f, 64.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Spacing##bb", &bb->spacing, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
         ImGui::DragInt("Max Visible", &bb->maxVisible, 1.0f, 1, 30); checkUndoCapture(uiMgr);
@@ -1563,6 +1813,17 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Name Text##bhc", &bhp->nameTextColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Bar Track##bhc", &bhp->barTrackColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("HP Fill##bhc", &bhp->hpFillColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Chrome BossHpBar##bosshp_cp")) {
+            ImGui::Checkbox  ("Use Chrome##bosshp_cp",        &bhp->hudUseChrome_);                checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##bosshp_cp",          &bhp->chromeBgColor.r);              checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##bosshp_cp",      &bhp->chromeBorderColor.r);          checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Border Width##bosshp_cp",      &bhp->chromeBorderWidth, 0.1f);      checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##bosshp_cp",     &bhp->chromeCornerRadius, 0.5f);     checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##bosshp_cp",     &bhp->chromeShadowOffset.x, 0.1f);   checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##bosshp_cp",       &bhp->chromeShadowBlur, 0.5f);       checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow Color##bosshp_cp",      &bhp->chromeShadowColor.r);          checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         ImGui::DragFloat("Bar Height##bhp", &bhp->barHeight, 1.0f, 8.0f, 60.0f); checkUndoCapture(uiMgr);
@@ -1709,6 +1970,26 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Text Color##bvpcb", &bv->closeBtnTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##bvppc", &bv->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##bvp", 0)) {
+            ImGui::DragFloat("Border Width##bvpcp", &bv->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##bvpcp", &bv->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##bvpcp", &bv->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##bvpcp", &bv->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##bvpcp", &bv->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##bvpcp", &bv->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##bvpcp", &bv->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##bvpcp", &bv->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##bvpcp", &bv->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Text##bvpcp", &bv->chromeTitleTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##bvpcp", &bv->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Border##bvpcp", &bv->chromeCloseBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##bvpcp", &bv->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* ip = dynamic_cast<InvitePromptPanel*>(selectedNode_)) {
         ImGui::SeparatorText("InvitePromptPanel");
@@ -1769,6 +2050,17 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
         if (ImGui::TreeNodeEx("Colors##nt", 0)) {
             ImGui::ColorEdit4("Toast BG##ntc", &nt->toastBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Chrome NotificationToast##notif_cp")) {
+            ImGui::Checkbox  ("Use Chrome##notif_cp",        &nt->hudUseChrome_);                checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##notif_cp",          &nt->chromeBgColor.r);              checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##notif_cp",      &nt->chromeBorderColor.r);          checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Border Width##notif_cp",      &nt->chromeBorderWidth, 0.1f);      checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##notif_cp",     &nt->chromeCornerRadius, 0.5f);     checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##notif_cp",     &nt->chromeShadowOffset.x, 0.1f);   checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##notif_cp",       &nt->chromeShadowBlur, 0.5f);       checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow Color##notif_cp",      &nt->chromeShadowColor.r);          checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         ImGui::DragFloat("Toast Height", &nt->toastHeight, 1.0f, 16.0f, 60.0f); checkUndoCapture(uiMgr);
@@ -1834,7 +2126,42 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
                 ImGui::SetTooltip("Space between the two parallel strokes (px).");
         }
     }
-    // login_screen: handled by reflectedProperties() auto-inspector above
+    // login_screen: reflected properties drive the auto-inspector above. This
+    // branch only adds the S128 Tier E chrome rows (not in FATE_REFLECT).
+    else if (auto* ls = dynamic_cast<LoginScreen*>(selectedNode_)) {
+        ImGui::SeparatorText("LoginScreen Chrome (S128 Tier E)");
+        if (ImGui::TreeNode("Chrome LoginScreen##login_cp")) {
+            if (ImGui::TreeNode("Layout##login_l")) {
+                ImGui::Checkbox  ("Use Chrome##login_l",            &ls->loginUseChrome_);              checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Border Width##login_l",          &ls->chromePanelBorderWidth, 0.1f); checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Corner Radius##login_l",         &ls->chromePanelCornerRadius, 0.5f); checkUndoCapture(uiMgr);
+                ImGui::DragFloat2("Shadow Offset##login_l",         &ls->chromePanelShadowOffset.x, 0.1f); checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Shadow Blur##login_l",           &ls->chromePanelShadowBlur, 0.5f);  checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Bg Color##login_l",              &ls->chromePanelBgColor.r);          checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Gradient Top##login_l",          &ls->chromePanelGradientTop.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Gradient Bottom##login_l",       &ls->chromePanelGradientBottom.r);   checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Border Color##login_l",          &ls->chromePanelBorderColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Shadow Color##login_l",          &ls->chromePanelShadowColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Title Bar Color##login_l",       &ls->chromeTitleBarColor.r);         checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Title Color##login_l",           &ls->chromeTitleColor.r);            checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Backdrop Tint##login_l",         &ls->chromeBackdropTintColor.r);     checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Form##login_cp")) {
+                ImGui::ColorEdit4("Form Field Bg##login_f",         &ls->chromeFormFieldBgColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Form Field Border##login_f",     &ls->chromeFormFieldBorderColor.r);  checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Row Bg##login_f",         &ls->chromeButtonRowBgColor.r);      checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Buttons##login_cp")) {
+                ImGui::ColorEdit4("Button Bg##login_b",             &ls->chromeButtonBgColor.r);         checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Border##login_b",         &ls->chromeButtonBorderColor.r);     checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Text##login_b",           &ls->chromeButtonTextColor.r);       checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            ImGui::TreePop();
+        }
+    }
     else if (auto* pf = dynamic_cast<PartyFrame*>(selectedNode_)) {
         ImGui::SeparatorText("PartyFrame");
         if (ImGui::TreeNodeEx("Position Offsets##pf", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -2026,6 +2353,22 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::TreePop();
         }
 
+        if (ImGui::TreeNode("Chrome ChatPanel##chat_cp")) {
+            ImGui::Checkbox  ("Use Chrome##chat_cp",                  &cp->hudUseChrome_);                     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Border Width##chat_cp",                &cp->chromePanelBorderWidth, 0.1f);     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##chat_cp",               &cp->chromePanelCornerRadius, 0.5f);    checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##chat_cp",               &cp->chromePanelShadowOffset.x, 0.1f);  checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##chat_cp",                 &cp->chromePanelShadowBlur, 0.5f);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##chat_cp",                    &cp->chromePanelBgColor.r);             checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##chat_cp",                &cp->chromePanelGradientTop.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##chat_cp",             &cp->chromePanelGradientBottom.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##chat_cp",                &cp->chromePanelBorderColor.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow Color##chat_cp",                &cp->chromePanelShadowColor.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar Color##chat_cp",             &cp->chromeTitleBarColor.r);            checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Color##chat_cp",                 &cp->chromeTitleColor.r);               checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
         ImGui::Separator();
         ImGui::Text("Active Tab: %d", cp->activeTab);
         ImGui::Text("Mode: %s", cp->fullPanelMode_ ? "Full Panel" : "Idle Overlay");
@@ -2118,6 +2461,29 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat("Chat Btn Font", &fsb->chatBtnFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Chat Btn Text", &fsb->chatBtnTextColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Chat Btn Bg", &fsb->chatBtnBgColor.r); checkUndoCapture(uiMgr);
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome (S125b)##fsbpc", &fsb->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Menu Button##fsb", 0)) {
+            ImGui::ColorEdit4("Bg##fsbcmb", &fsb->chromeMenuBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##fsbcmb", &fsb->chromeMenuBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##fsbcmb", &fsb->chromeMenuBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Chat Button##fsb", 0)) {
+            ImGui::ColorEdit4("Bg##fsbccb", &fsb->chromeChatBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##fsbccb", &fsb->chromeChatBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##fsbccb", &fsb->chromeChatBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Menu Overlay##fsb", 0)) {
+            ImGui::ColorEdit4("Bg##fsbcmo", &fsb->chromeMenuOverlayBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##fsbcmo", &fsb->chromeMenuOverlayBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Item Text##fsbcmo", &fsb->chromeMenuItemTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Divider##fsbcmo", &fsb->chromeMenuDividerColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
 
         ImGui::SeparatorText("Coordinates");
         ImGui::Checkbox("Show Coordinates", &fsb->showCoordinates); checkUndoCapture(uiMgr);
@@ -2227,6 +2593,40 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         checkUndoCapture(uiMgr);
         ImGui::DragFloat("Countdown##dov", &dov->countdown, 0.1f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
         ImGui::Checkbox("Respawn Pending", &dov->respawnPending); checkUndoCapture(uiMgr);
+
+        // S128 Tier E chrome — driven by UIManager::hudUseChrome_ (in-game).
+        ImGui::SeparatorText("DeathOverlay Chrome (S128 Tier E)");
+        if (ImGui::TreeNode("Chrome DeathOverlay##deathoverlay_cp")) {
+            if (ImGui::TreeNode("Layout##deathoverlay_l")) {
+                ImGui::Checkbox  ("Use Chrome##deathoverlay_l",            &dov->hudUseChrome_);                 checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Border Width##deathoverlay_l",          &dov->chromePanelBorderWidth, 0.1f);  checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Corner Radius##deathoverlay_l",         &dov->chromePanelCornerRadius, 0.5f); checkUndoCapture(uiMgr);
+                ImGui::DragFloat2("Shadow Offset##deathoverlay_l",         &dov->chromePanelShadowOffset.x, 0.1f); checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Shadow Blur##deathoverlay_l",           &dov->chromePanelShadowBlur, 0.5f);   checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Bg Color##deathoverlay_l",              &dov->chromePanelBgColor.r);          checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Gradient Top##deathoverlay_l",          &dov->chromePanelGradientTop.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Gradient Bottom##deathoverlay_l",       &dov->chromePanelGradientBottom.r);   checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Border Color##deathoverlay_l",          &dov->chromePanelBorderColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Shadow Color##deathoverlay_l",          &dov->chromePanelShadowColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Title Bar Color##deathoverlay_l",       &dov->chromeTitleBarColor.r);         checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Title Color##deathoverlay_l",           &dov->chromeTitleColor.r);            checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Backdrop Tint##deathoverlay_l",         &dov->chromeBackdropTintColor.r);     checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Form##deathoverlay_cp")) {
+                ImGui::ColorEdit4("Form Field Bg##deathoverlay_f",         &dov->chromeFormFieldBgColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Form Field Border##deathoverlay_f",     &dov->chromeFormFieldBorderColor.r);  checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Row Bg##deathoverlay_f",         &dov->chromeButtonRowBgColor.r);      checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Buttons##deathoverlay_cp")) {
+                ImGui::ColorEdit4("Button Bg##deathoverlay_b",             &dov->chromeButtonBgColor.r);         checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Border##deathoverlay_b",         &dov->chromeButtonBorderColor.r);     checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Text##deathoverlay_b",           &dov->chromeButtonTextColor.r);       checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            ImGui::TreePop();
+        }
     }
     else if (auto* css = dynamic_cast<CharacterSelectScreen*>(selectedNode_)) {
         ImGui::SeparatorText("CharacterSelectScreen");
@@ -2351,6 +2751,40 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Text Color##backbtn", &css->backBtnTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+
+        // S128 Tier E chrome (panel + form + button overrides + backdrop)
+        ImGui::SeparatorText("CharacterSelectScreen Chrome (S128 Tier E)");
+        if (ImGui::TreeNode("Chrome CharacterSelectScreen##charsel_cp")) {
+            if (ImGui::TreeNode("Layout##charsel_l")) {
+                ImGui::Checkbox  ("Use Chrome##charsel_l",            &css->loginUseChrome_);              checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Border Width##charsel_l",          &css->chromePanelBorderWidth, 0.1f); checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Corner Radius##charsel_l",         &css->chromePanelCornerRadius, 0.5f); checkUndoCapture(uiMgr);
+                ImGui::DragFloat2("Shadow Offset##charsel_l",         &css->chromePanelShadowOffset.x, 0.1f); checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Shadow Blur##charsel_l",           &css->chromePanelShadowBlur, 0.5f);  checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Bg Color##charsel_l",              &css->chromePanelBgColor.r);          checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Gradient Top##charsel_l",          &css->chromePanelGradientTop.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Gradient Bottom##charsel_l",       &css->chromePanelGradientBottom.r);   checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Border Color##charsel_l",          &css->chromePanelBorderColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Shadow Color##charsel_l",          &css->chromePanelShadowColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Title Bar Color##charsel_l",       &css->chromeTitleBarColor.r);         checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Title Color##charsel_l",           &css->chromeTitleColor.r);            checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Backdrop Tint##charsel_l",         &css->chromeBackdropTintColor.r);     checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Form##charsel_cp")) {
+                ImGui::ColorEdit4("Form Field Bg##charsel_f",         &css->chromeFormFieldBgColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Form Field Border##charsel_f",     &css->chromeFormFieldBorderColor.r);  checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Row Bg##charsel_f",         &css->chromeButtonRowBgColor.r);      checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Buttons##charsel_cp")) {
+                ImGui::ColorEdit4("Button Bg##charsel_b",             &css->chromeButtonBgColor.r);         checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Border##charsel_b",         &css->chromeButtonBorderColor.r);     checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Text##charsel_b",           &css->chromeButtonTextColor.r);       checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            ImGui::TreePop();
+        }
     }
     else if (auto* ccs = dynamic_cast<CharacterCreationScreen*>(selectedNode_)) {
         ImGui::SeparatorText("CharacterCreationScreen");
@@ -2465,6 +2899,40 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Success##ccs", &ccs->successColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+
+        // S128 Tier E chrome (panel + form + button overrides + backdrop)
+        ImGui::SeparatorText("CharacterCreationScreen Chrome (S128 Tier E)");
+        if (ImGui::TreeNode("Chrome CharacterCreationScreen##charcreate_cp")) {
+            if (ImGui::TreeNode("Layout##charcreate_l")) {
+                ImGui::Checkbox  ("Use Chrome##charcreate_l",            &ccs->loginUseChrome_);              checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Border Width##charcreate_l",          &ccs->chromePanelBorderWidth, 0.1f); checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Corner Radius##charcreate_l",         &ccs->chromePanelCornerRadius, 0.5f); checkUndoCapture(uiMgr);
+                ImGui::DragFloat2("Shadow Offset##charcreate_l",         &ccs->chromePanelShadowOffset.x, 0.1f); checkUndoCapture(uiMgr);
+                ImGui::DragFloat ("Shadow Blur##charcreate_l",           &ccs->chromePanelShadowBlur, 0.5f);  checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Bg Color##charcreate_l",              &ccs->chromePanelBgColor.r);          checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Gradient Top##charcreate_l",          &ccs->chromePanelGradientTop.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Gradient Bottom##charcreate_l",       &ccs->chromePanelGradientBottom.r);   checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Border Color##charcreate_l",          &ccs->chromePanelBorderColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Shadow Color##charcreate_l",          &ccs->chromePanelShadowColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Title Bar Color##charcreate_l",       &ccs->chromeTitleBarColor.r);         checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Title Color##charcreate_l",           &ccs->chromeTitleColor.r);            checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Backdrop Tint##charcreate_l",         &ccs->chromeBackdropTintColor.r);     checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Form##charcreate_cp")) {
+                ImGui::ColorEdit4("Form Field Bg##charcreate_f",         &ccs->chromeFormFieldBgColor.r);      checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Form Field Border##charcreate_f",     &ccs->chromeFormFieldBorderColor.r);  checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Row Bg##charcreate_f",         &ccs->chromeButtonRowBgColor.r);      checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Buttons##charcreate_cp")) {
+                ImGui::ColorEdit4("Button Bg##charcreate_b",             &ccs->chromeButtonBgColor.r);         checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Border##charcreate_b",         &ccs->chromeButtonBorderColor.r);     checkUndoCapture(uiMgr);
+                ImGui::ColorEdit4("Button Text##charcreate_b",           &ccs->chromeButtonTextColor.r);       checkUndoCapture(uiMgr);
+                ImGui::TreePop();
+            }
+            ImGui::TreePop();
+        }
     }
     else if (auto* gp = dynamic_cast<GuildPanel*>(selectedNode_)) {
         ImGui::SeparatorText("GuildPanel");
@@ -2506,6 +2974,25 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Roster Row Text##gpc", &gp->rosterRowTextColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Online##gpc", &gp->onlineColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Offline##gpc", &gp->offlineColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##gppc", &gp->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##gp", 0)) {
+            ImGui::DragFloat("Border Width##gpcp", &gp->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##gpcp", &gp->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##gpcp", &gp->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##gpcp", &gp->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##gpcp", &gp->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##gpcp", &gp->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##gpcp", &gp->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##gpcp", &gp->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##gpcp", &gp->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##gpcp", &gp->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##gpcp", &gp->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Border##gpcp", &gp->chromeCloseBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##gpcp", &gp->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         char gnameBuf[128] = {};
@@ -2599,7 +3086,32 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
     else if (auto* sp2 = dynamic_cast<ShopPanel*>(selectedNode_)) {
         ImGui::SeparatorText("ShopPanel");
-        ImGui::Checkbox("Use Chrome (Session 90)##sp", &sp2->useChrome_); checkUndoCapture(uiMgr);
+        ImGui::Checkbox("Use Chrome (Checkpoint 4)##sp", &sp2->useChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Shop Chrome (Checkpoint 4) toggle.");
+
+        if (ImGui::TreeNodeEx("Chrome Panel Layout##shp", 0)) {
+            ImGui::DragFloat("Border Width##shpcpl", &sp2->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##shpcpl", &sp2->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##shpcpl", &sp2->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##shpcpl", &sp2->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Panel Colors##shp", 0)) {
+            ImGui::ColorEdit4("Background##shpcpc", &sp2->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##shpcpc", &sp2->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##shpcpc", &sp2->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##shpcpc", &sp2->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##shpcpc", &sp2->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Header BG##shpcpc", &sp2->chromeHeaderBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##shpcpc", &sp2->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Close Button##shp", 0)) {
+            ImGui::ColorEdit4("Bg##shpccb", &sp2->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##shpccb", &sp2->chromeCloseBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##shpccb", &sp2->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Category Tab Rail##shpct", 0)) {
             ImGui::DragFloat("Bar Height##shpct", &sp2->categoryTabBarHeight, 0.5f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Font Size##shpct", &sp2->categoryTabFontSize, 0.5f, 8.0f, 32.0f); checkUndoCapture(uiMgr);
@@ -2771,6 +3283,35 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Divider##bnkc", &bp->dividerColorVal.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel (Checkpoint 6)##bnkpc", &bp->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        ImGui::Separator();
+
+        if (ImGui::TreeNodeEx("Chrome Panel Layout##bnk", 0)) {
+            ImGui::DragFloat("Border Width##bnkcpl", &bp->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##bnkcpl", &bp->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##bnkcpl", &bp->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##bnkcpl", &bp->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Panel Colors##bnk", 0)) {
+            ImGui::ColorEdit4("Background##bnkcpc", &bp->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##bnkcpc", &bp->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##bnkcpc", &bp->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##bnkcpc", &bp->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##bnkcpc", &bp->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar BG##bnkcpc", &bp->chromeTitleBarBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##bnkcpc", &bp->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Close Button##bnk", 0)) {
+            ImGui::ColorEdit4("Bg##bnkccb", &bp->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##bnkccb", &bp->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
         int64_t bg = bp->bankGold;
         int bgInt = static_cast<int>(bg);
         if (ImGui::DragInt("Bank Gold", &bgInt, 1.0f, 0, 999999)) {
@@ -2825,6 +3366,25 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::TreePop();
         }
         ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##tppc", &tp->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##tp", 0)) {
+            ImGui::DragFloat("Border Width##tpcp", &tp->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##tpcp", &tp->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##tpcp", &tp->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##tpcp", &tp->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##tpcp", &tp->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##tpcp", &tp->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##tpcp", &tp->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##tpcp", &tp->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##tpcp", &tp->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar##tpcp", &tp->chromeTitleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##tpcp", &tp->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##tpcp", &tp->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##tpcp", &tp->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
         ImGui::Text("Destinations: %zu", tp->destinations.size());
         for (size_t i = 0; i < tp->destinations.size(); i++) {
             auto& d = tp->destinations[i];
@@ -2863,6 +3423,25 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::TreePop();
         }
         ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##appc", &ap->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##arena", 0)) {
+            ImGui::DragFloat("Border Width##apcp", &ap->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##apcp", &ap->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##apcp", &ap->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##apcp", &ap->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##apcp", &ap->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##apcp", &ap->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##apcp", &ap->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##apcp", &ap->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##apcp", &ap->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar##apcp", &ap->chromeTitleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##apcp", &ap->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##apcp", &ap->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##apcp", &ap->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
         ImGui::Text("NPC: %u", ap->npcId);
         ImGui::Text("Registered: %s (Mode: %u)", ap->isRegistered ? "Yes" : "No", ap->currentMode);
     }
@@ -2894,6 +3473,25 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Registered##bf", &bp->registeredColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Timer##bf", &bp->timerColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Status##bf", &bp->statusColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##bfpc", &bp->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##bf", 0)) {
+            ImGui::DragFloat("Border Width##bfcp", &bp->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##bfcp", &bp->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##bfcp", &bp->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##bfcp", &bp->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##bfcp", &bp->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##bfcp", &bp->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##bfcp", &bp->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##bfcp", &bp->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##bfcp", &bp->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar##bfcp", &bp->chromeTitleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##bfcp", &bp->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##bfcp", &bp->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##bfcp", &bp->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         ImGui::Separator();
@@ -2935,6 +3533,27 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Selected Bg##pet", &pp->selectedBgColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##petpc", &pp->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##pet", 0)) {
+            ImGui::DragFloat("Border Width##petcp", &pp->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##petcp", &pp->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##petcp", &pp->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##petcp", &pp->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##petcp", &pp->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##petcp", &pp->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##petcp", &pp->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##petcp", &pp->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##petcp", &pp->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar##petcp", &pp->chromeTitleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##petcp", &pp->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##petcp", &pp->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##petcp", &pp->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
         ImGui::Separator();
         ImGui::Text("Has Pet: %s", pp->hasPet ? "Yes" : "No");
         if (pp->hasPet) {
@@ -2977,6 +3596,25 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Gold##craft", &cp->goldColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Slot Bg##craft", &cp->slotBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Status##craft", &cp->statusColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##craftpc", &cp->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##craft", 0)) {
+            ImGui::DragFloat("Border Width##craftcp", &cp->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##craftcp", &cp->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##craftcp", &cp->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##craftcp", &cp->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##craftcp", &cp->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##craftcp", &cp->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##craftcp", &cp->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##craftcp", &cp->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##craftcp", &cp->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar##craftcp", &cp->chromeTitleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##craftcp", &cp->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##craftcp", &cp->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##craftcp", &cp->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         ImGui::Separator();
@@ -3052,6 +3690,27 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Divider##twc", &tw->dividerColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##twpc", &tw->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##tw", 0)) {
+            ImGui::DragFloat("Border Width##twcp", &tw->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##twcp", &tw->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##twcp", &tw->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##twcp", &tw->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##twcp", &tw->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##twcp", &tw->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##twcp", &tw->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##twcp", &tw->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##twcp", &tw->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##twcp", &tw->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##twcp", &tw->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Border##twcp", &tw->chromeCloseBtnBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##twcp", &tw->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
         char pnameBuf[128] = {};
         snprintf(pnameBuf, sizeof(pnameBuf), "%s", tw->partnerName.c_str());
         if (ImGui::InputText("Partner Name", pnameBuf, sizeof(pnameBuf))) {
@@ -3102,6 +3761,25 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Incomplete", &col->incompleteColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Reward", &col->rewardColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Progress", &col->progressColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##colpc", &col->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##col", 0)) {
+            ImGui::DragFloat("Border Width##colcp", &col->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##colcp", &col->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##colcp", &col->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##colcp", &col->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##colcp", &col->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##colcp", &col->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##colcp", &col->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##colcp", &col->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##colcp", &col->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar##colcp", &col->chromeTitleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##colcp", &col->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##colcp", &col->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##colcp", &col->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
     }
@@ -3161,6 +3839,25 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Hint", &cos->hintColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##cospc", &cos->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##cos", 0)) {
+            ImGui::DragFloat("Border Width##coscp", &cos->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##coscp", &cos->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##coscp", &cos->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##coscp", &cos->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##coscp", &cos->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##coscp", &cos->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##coscp", &cos->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##coscp", &cos->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##coscp", &cos->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar##coscp", &cos->chromeTitleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##coscp", &cos->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##coscp", &cos->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##coscp", &cos->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* sp = dynamic_cast<SettingsPanel*>(selectedNode_)) {
         ImGui::SeparatorText("SettingsPanel");
@@ -3218,6 +3915,21 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::Checkbox("Show ms##fpc", &fc->showMs); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Text Color##fpc", &fc->textColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Shadow Color##fpc", &fc->shadowColor.r); checkUndoCapture(uiMgr);
+
+        ImGui::Separator();
+        if (ImGui::TreeNode("Chrome FpsCounter##fps_cp")) {
+            ImGui::Checkbox  ("Use Chrome##fps_cp",                  &fc->hudUseChrome_);                     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Border Width##fps_cp",                &fc->chromePanelBorderWidth, 0.1f);     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##fps_cp",               &fc->chromePanelCornerRadius, 0.5f);    checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##fps_cp",               &fc->chromePanelShadowOffset.x, 0.1f);  checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##fps_cp",                 &fc->chromePanelShadowBlur, 0.5f);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##fps_cp",                    &fc->chromePanelBgColor.r);             checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##fps_cp",                &fc->chromePanelGradientTop.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##fps_cp",             &fc->chromePanelGradientBottom.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##fps_cp",                &fc->chromePanelBorderColor.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow Color##fps_cp",                &fc->chromePanelShadowColor.r);         checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* lbp = dynamic_cast<LeaderboardPanel*>(selectedNode_)) {
         ImGui::SeparatorText("LeaderboardPanel");
@@ -3269,6 +3981,24 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Btn Border##lbpc", &lbp->btnBorderColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Gold Accent##lbpc", &lbp->goldAccentColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Close X##lbpc", &lbp->closeXColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##lbppc", &lbp->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##lbp", 0)) {
+            ImGui::DragFloat("Border Width##lbpcp", &lbp->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##lbpcp", &lbp->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##lbpcp", &lbp->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##lbpcp", &lbp->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##lbpcp", &lbp->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##lbpcp", &lbp->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##lbpcp", &lbp->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##lbpcp", &lbp->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##lbpcp", &lbp->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##lbpcp", &lbp->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##lbpcp", &lbp->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##lbpcp", &lbp->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         ImGui::Separator();
@@ -3440,6 +4170,69 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Level Req##mktttc", &mp->tooltipLevelColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome (Checkpoint 5)##mkttt", &mp->tooltipUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Chrome path reads Chrome Tooltip groups below;");
+        ImGui::TextDisabled("legacy fields above are ignored when chrome is on.");
+        ImGui::Separator();
+
+        if (ImGui::TreeNodeEx("Chrome Tooltip Layout##mkt", 0)) {
+            ImGui::DragFloat("Padding##mkcttl", &mp->chromeTooltipPadding, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Row Offset##mkcttl", &mp->chromeTooltipOffset, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Line Spacing##mkcttl", &mp->chromeTooltipLineSpacing, 0.5f, 0.0f, 16.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##mkcttl", &mp->chromeTooltipBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Separator Height##mkcttl", &mp->chromeTooltipSepHeight, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Separator Offset##mkcttl", &mp->chromeTooltipSepOffset.x, 0.5f, -100.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##mkcttl", &mp->chromeTooltipCornerRadius, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##mkcttl", &mp->chromeTooltipShadowOffset.x, 0.5f, -20.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##mkcttl", &mp->chromeTooltipShadowBlur, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Tooltip Fonts##mkt", 0)) {
+            ImGui::DragFloat("Name Font##mkcttf", &mp->chromeTooltipNameFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Stat Font##mkcttf", &mp->chromeTooltipStatFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Level Font##mkcttf", &mp->chromeTooltipLevelFontSize, 0.5f, 4.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Tooltip Colors##mkt", 0)) {
+            ImGui::ColorEdit4("Background##mkcttc", &mp->chromeTooltipBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##mkcttc", &mp->chromeTooltipGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##mkcttc", &mp->chromeTooltipGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##mkcttc", &mp->chromeTooltipBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##mkcttc", &mp->chromeTooltipShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Stat Text##mkcttc", &mp->chromeTooltipStatColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Separator##mkcttc", &mp->chromeTooltipSepColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Level Req##mkcttc", &mp->chromeTooltipLevelColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Rarity Colors##mkt", 0)) {
+            ImGui::ColorEdit4("Common##mkcrar", &mp->chromeRarityCommonColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Uncommon##mkcrar", &mp->chromeRarityUncommonColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Rare##mkcrar", &mp->chromeRarityRareColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Epic##mkcrar", &mp->chromeRarityEpicColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Legendary##mkcrar", &mp->chromeRarityLegendaryColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##mktpc", &mp->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##mkt", 0)) {
+            ImGui::DragFloat("Border Width##mktcp", &mp->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##mktcp", &mp->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##mktcp", &mp->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##mktcp", &mp->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##mktcp", &mp->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##mktcp", &mp->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##mktcp", &mp->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##mktcp", &mp->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##mktcp", &mp->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar##mktcp", &mp->chromeTitleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title##mktcp", &mp->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
         ImGui::Separator();
         ImGui::Text("Listings: %zu", mp->listings.size());
         ImGui::Text("Page: %d / %d", mp->currentPage, mp->totalPages);
@@ -3466,13 +4259,51 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
     }
     else if (auto* tt = dynamic_cast<Tooltip*>(selectedNode_)) {
+        ImGui::SeparatorText("Tooltip");
+
         char textBuf[512] = {};
         snprintf(textBuf, sizeof(textBuf), "%s", tt->tooltipText.c_str());
-        if (ImGui::InputText("Tooltip Text", textBuf, sizeof(textBuf))) {
-            tt->tooltipText = textBuf;
-        }
+        if (ImGui::InputText("Tooltip Text", textBuf, sizeof(textBuf))) tt->tooltipText = textBuf;
         checkUndoCapture(uiMgr);
         ImGui::DragFloat("Max Width", &tt->maxWidth, 1.0f, 50.0f, 800.0f); checkUndoCapture(uiMgr);
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome (Checkpoint 2)##tt", &tt->useChrome_); checkUndoCapture(uiMgr);
+
+        if (ImGui::TreeNodeEx("Chrome Positioning##tt", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Cursor Offset X##tt", &tt->chromeCursorOffsetX, 0.5f, 0.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Cursor Offset Y##tt", &tt->chromeCursorOffsetY, 0.5f, 0.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Padding##tt", &tt->chromePadding.x, 0.5f, 0.0f, 50.0f); checkUndoCapture(uiMgr);
+            ImGui::TextDisabled("Padding 0,0 -> use theme");
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Shape##tt", 0)) {
+            ImGui::DragFloat("Corner Radius##tt", &tt->chromeCornerRadius, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##tt", &tt->chromeBorderWidth, 0.25f, 0.0f, 6.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##tt", &tt->chromeShadowOffset.x, 0.5f, -20.0f, 20.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##tt", &tt->chromeShadowBlur, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::TextDisabled("0 / 0,0 -> use theme");
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Fonts##tt", 0)) {
+            ImGui::DragFloat("Font Size##tt", &tt->chromeFontSize, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            char fontBuf[64] = {};
+            snprintf(fontBuf, sizeof(fontBuf), "%s", tt->chromeFontName.c_str());
+            if (ImGui::InputText("Font Name##tt", fontBuf, sizeof(fontBuf))) tt->chromeFontName = fontBuf;
+            checkUndoCapture(uiMgr);
+            ImGui::TextDisabled("blank -> use theme");
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Colors##tt", 0)) {
+            ImGui::ColorEdit4("Background##tt",      &tt->chromeBgColor.r);        checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##tt",    &tt->chromeGradientTop.r);    checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##tt", &tt->chromeGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##tt",          &tt->chromeBorderColor.r);    checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##tt",          &tt->chromeShadowColor.r);    checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##tt",            &tt->chromeTextColor.r);      checkUndoCapture(uiMgr);
+            ImGui::TextDisabled("Alpha 0 -> use theme");
+            ImGui::TreePop();
+        }
     }
     else if (auto* p = dynamic_cast<BountyPanel*>(selectedNode_)) {
         ImGui::SeparatorText("BountyPanel");
@@ -3485,6 +4316,21 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::ColorEdit4("Row Odd##bp",      &p->rowBgOdd.r);    checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Text##bp",         &p->textColor.r);   checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Gold##bp",         &p->goldColor.r);   checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##bppc", &p->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##bp", 0)) {
+            ImGui::DragFloat("Border Width##bpcp", &p->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##bpcp", &p->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##bpcp", &p->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##bpcp", &p->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##bpcp", &p->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##bpcp", &p->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##bpcp", &p->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##bpcp", &p->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##bpcp", &p->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* p = dynamic_cast<FriendsPanel*>(selectedNode_)) {
         ImGui::SeparatorText("FriendsPanel");
@@ -3498,6 +4344,21 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::ColorEdit4("Text##fp",         &p->textColor.r);    checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Online##fp",       &p->onlineColor.r);  checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Offline##fp",      &p->offlineColor.r); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##fppc", &p->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##fp", 0)) {
+            ImGui::DragFloat("Border Width##fpcp", &p->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##fpcp", &p->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##fpcp", &p->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##fpcp", &p->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##fpcp", &p->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##fpcp", &p->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##fpcp", &p->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##fpcp", &p->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##fpcp", &p->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* w = dynamic_cast<GauntletHUD*>(selectedNode_)) {
         ImGui::SeparatorText("GauntletHUD");
@@ -3507,6 +4368,22 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::ColorEdit4("Text##gh",       &w->textColor.r);   checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Gold##gh",       &w->goldColor.r);   checkUndoCapture(uiMgr);
         ImGui::Checkbox("Active (test)##gh", &w->active);
+
+        if (ImGui::TreeNode("Chrome GauntletHUD##ghud_cp")) {
+            ImGui::Checkbox  ("Use Chrome##ghud_cp",                  &w->hudUseChrome_);                     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Border Width##ghud_cp",                &w->chromePanelBorderWidth, 0.1f);     checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##ghud_cp",               &w->chromePanelCornerRadius, 0.5f);    checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##ghud_cp",               &w->chromePanelShadowOffset.x, 0.1f);  checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##ghud_cp",                 &w->chromePanelShadowBlur, 0.5f);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##ghud_cp",                    &w->chromePanelBgColor.r);             checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##ghud_cp",                &w->chromePanelGradientTop.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##ghud_cp",             &w->chromePanelGradientBottom.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##ghud_cp",                &w->chromePanelBorderColor.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow Color##ghud_cp",                &w->chromePanelShadowColor.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar Color##ghud_cp",             &w->chromeTitleBarColor.r);            checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Color##ghud_cp",                 &w->chromeTitleColor.r);               checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* w = dynamic_cast<GauntletResultModal*>(selectedNode_)) {
         ImGui::SeparatorText("GauntletResultModal");
@@ -3520,6 +4397,23 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::ColorEdit4("Text##grm",          &w->textColor.r);      checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Gold##grm",          &w->goldColor.r);      checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Highlight##grm",     &w->highlightColor.r); checkUndoCapture(uiMgr);
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##grmpc", &w->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##grm", 0)) {
+            ImGui::DragFloat("Border Width##grmcp", &w->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##grmcp", &w->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##grmcp", &w->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##grmcp", &w->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##grmcp", &w->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##grmcp", &w->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##grmcp", &w->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##grmcp", &w->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##grmcp", &w->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Bg##grmcp", &w->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Close Btn Text##grmcp", &w->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         ImGui::Checkbox("Visible (test)##grm",  &w->visible);
     }
     else {

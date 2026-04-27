@@ -938,6 +938,28 @@ void Editor::drawDockSpace() {
             ImGui::Separator();
             ImGui::MenuItem("UI Hierarchy", nullptr, &uiEditorPanel_.showHierarchy);
             ImGui::MenuItem("UI Inspector", nullptr, &uiEditorPanel_.showInspector);
+            if (uiManager_) {
+                bool ttChrome = uiManager_->tooltipUseChrome();
+                if (ImGui::MenuItem("Tooltip Chrome (Checkpoint 2)", nullptr, &ttChrome)) {
+                    uiManager_->setTooltipUseChrome(ttChrome);
+                }
+                bool pnChrome = uiManager_->panelUseChrome();
+                if (ImGui::MenuItem("Panel Chrome (Checkpoint 3)", nullptr, &pnChrome)) {
+                    uiManager_->setPanelUseChrome(pnChrome);
+                }
+                bool shChrome = uiManager_->shopUseChrome();
+                if (ImGui::MenuItem("Shop Chrome (Checkpoint 4)", nullptr, &shChrome)) {
+                    uiManager_->setShopUseChrome(shChrome);
+                }
+                bool lgChrome = uiManager_->loginUseChrome();
+                if (ImGui::MenuItem("Login Chrome (Checkpoint 6)", nullptr, &lgChrome)) {
+                    uiManager_->setLoginUseChrome(lgChrome);
+                }
+                bool hudChrome = uiManager_->hudUseChrome();
+                if (ImGui::MenuItem("HUD Chrome (Checkpoint 7)", nullptr, &hudChrome)) {
+                    uiManager_->setHudUseChrome(hudChrome);
+                }
+            }
             if (netPanelOpen_) {
                 ImGui::MenuItem("Network", nullptr, netPanelOpen_);
             }

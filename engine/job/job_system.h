@@ -120,6 +120,12 @@ public:
 
     Counter* submit(Job* jobs, int count);
     void submitFireAndForget(Job* jobs, int count);
+    // Non-blocking variant: returns false immediately if the job queue is
+    // full, instead of yield-spinning until a slot opens. Callers (typically
+    // DbDispatcher) are expected to backlog the job and retry on the next
+    // tick. This prevents the game thread from stalling on a full queue
+    // when workers are slow (e.g. high-RTT remote DB during mass disconnect).
+    bool tryPushFireAndForget(const Job& j);
     void waitForCounter(Counter* counter, int target = 0);
 
     Arena* fiberScratchArena();
