@@ -8,7 +8,7 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 12;  // v12: SvCharacterFlagsSnapshot/SvCharacterFlagDelta — client mirrors CharacterFlagsComponent.flags so dialogue HasFlag conditions evaluate locally
+constexpr uint8_t  PROTOCOL_VERSION  = 15;  // v15: protected stones are physical items; CmdCraftProtectStone added (S134)
 constexpr size_t   PACKET_HEADER_SIZE = 26;  // v9: ackBits widened 4→8 bytes (32→64 bit ACK window)
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
@@ -102,7 +102,7 @@ namespace PacketType {
     constexpr uint8_t CmdMoveItem          = 0x33;
     constexpr uint8_t CmdDestroyItem       = 0x34;
     constexpr uint8_t CmdActivateSkillRank = 0x35;
-    constexpr uint8_t CmdAssignSkillSlot   = 0x36;
+    constexpr uint8_t CmdAssignSlot        = 0x36;  // was CmdAssignSkillSlot — skill-bar slot now polymorphic (skill OR consumable)
     constexpr uint8_t CmdAllocateStat      = 0x37;
     constexpr uint8_t CmdEquipCostume      = 0x38;
     constexpr uint8_t CmdUnequipCostume    = 0x39;
@@ -218,6 +218,19 @@ namespace PacketType {
     // every mutation. See dialogue_messages.h for the parallel pattern.
     constexpr uint8_t SvCharacterFlagsSnapshot = 0xE7;
     constexpr uint8_t SvCharacterFlagDelta     = 0xE8;
+
+    // v13 — consumable cooldown poke. Sent server→client after a successful
+    // CmdUseConsumable; client SkillLoadout applies the per-itemId cooldown
+    // to every bound slot whose instanceId resolves to itemId.
+    constexpr uint8_t SvConsumableCooldown     = 0xE9;
+
+    // v15 — protected-stone craft flow (S134). Drag mat_protect_stone onto a
+    // base enhancement stone stack -> server consumes 1 of each, produces 1
+    // `_protected` enhancement stone item via standard inventory add rules.
+    // Protected stones are physical items; their protectedness lives in the
+    // item id, not in client state.
+    constexpr uint8_t CmdCraftProtectStone     = 0xEA;
+    constexpr uint8_t SvCraftProtectStoneResult = 0xEB;
 
     // Pet panel seed on login (silent). Distinct from SvPetGranted which
     // fires on mid-session hatch and shows a "Hatched: X" chat toast.

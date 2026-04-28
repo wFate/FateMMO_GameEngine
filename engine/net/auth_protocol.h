@@ -171,6 +171,8 @@ struct CharacterPreview {
     std::string weaponStyle;
     std::string armorStyle;
     std::string hatStyle;
+    int64_t merchantPassExpiresAtUnix = 0;
+    int32_t maxMarketplaceListings = 7;
 
     void write(ByteWriter& w) const {
         w.writeString(characterId);
@@ -183,6 +185,8 @@ struct CharacterPreview {
         w.writeString(weaponStyle);
         w.writeString(armorStyle);
         w.writeString(hatStyle);
+        detail::writeI64(w, merchantPassExpiresAtUnix);
+        w.writeI32(maxMarketplaceListings);
     }
     static CharacterPreview read(ByteReader& r) {
         CharacterPreview p;
@@ -196,6 +200,8 @@ struct CharacterPreview {
         p.weaponStyle = r.readString();
         p.armorStyle  = r.readString();
         p.hatStyle    = r.readString();
+        p.merchantPassExpiresAtUnix = detail::readI64(r);
+        p.maxMarketplaceListings    = r.readI32();
         return p;
     }
     static void writeList(ByteWriter& w, const std::vector<CharacterPreview>& list) {

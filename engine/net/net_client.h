@@ -36,6 +36,8 @@ public:
     void sendUseSkill(const std::string& skillId, uint8_t rank, uint64_t targetPersistentId);
     void sendUseConsumable(uint8_t inventorySlot);
     void sendUseConsumableWithTarget(uint8_t slot, uint32_t targetEntityId);
+    // v13: skill-bar slot (0..19) variant for consumable bindings.
+    void sendUseLoadoutConsumable(uint8_t loadoutSlot, uint32_t targetEntityId = 0);
     void sendStatEnchant(uint8_t targetSlot, const std::string& scrollItemId);
     void sendShopBuy(uint32_t npcId, const std::string& itemId, uint16_t quantity);
     void sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t quantity);
@@ -68,10 +70,21 @@ public:
     void sendUnequipToBag(uint8_t equipSlot, int32_t bagInventorySlot, int32_t bagSlotIndex);
     void sendEquipFromBag(int32_t bagInventorySlot, int32_t bagSlotIndex, uint8_t targetEquipSlot);
     void sendActivateSkillRank(const std::string& skillId);
-    void sendAssignSkillSlot(uint8_t action, const std::string& skillId, uint8_t slotA, uint8_t slotB = 0);
+    void sendAssignSlot(uint8_t action, uint8_t kind, const std::string& skillId,
+                        const std::string& instanceId, uint8_t slotA, uint8_t slotB = 0);
     void sendAllocateStat(uint8_t statType, int16_t amount);
-    void sendEnchant(uint8_t inventorySlot, uint8_t useProtectionStone);
-    void sendBagEnchant(uint8_t bagSlot, uint8_t bagSubSlot, uint8_t useProtectionStone);
+    // v14: stoneSlot is the source slot of the enhancement stone in the SAME
+    // container as the equipment (per project_enchant_same_container_rule).
+    // v15: useProtectionStone is deprecated (kept on wire for compat); server
+    // derives protection from whether the stone is a `_protected` variant.
+    void sendEnchant(uint8_t inventorySlot, uint8_t useProtectionStone, uint8_t stoneSlot);
+    void sendBagEnchant(uint8_t bagSlot, uint8_t bagSubSlot,
+                        uint8_t useProtectionStone, uint8_t stoneSubSlot);
+    // v15: craft 1 `_protected` enhancement stone from 1 mat_protect_stone +
+    // 1 base enhancement stone. Same-container slots; server checks space
+    // BEFORE consuming.
+    void sendCraftProtectStone(uint8_t isBagItem, uint8_t bagSlot,
+                               uint8_t protectSlot, uint8_t stoneSlot);
     void sendRepair(uint8_t inventorySlot);
     void sendBagRepair(uint8_t bagSlot, uint8_t bagSubSlot);
     void sendExtractCore(uint8_t itemSlot, uint8_t scrollSlot);
@@ -261,10 +274,12 @@ public:
     std::function<void(const SvSkillResultMsg&)> onSkillResult;
     std::function<void(const SvLevelUpMsg&)> onLevelUp;
     std::function<void(const SvSkillSyncMsg&)> onSkillSync;
+    std::function<void(const struct SvConsumableCooldownMsg&)> onConsumableCooldown;
     std::function<void(const SvQuestSyncMsg&)> onQuestSync;
     std::function<void(const SvInventorySyncMsg&)> onInventorySync;
     std::function<void(const SvBossLootOwnerMsg&)> onBossLootOwner;
     std::function<void(const SvEnchantResultMsg&)> onEnchantResult;
+    std::function<void(const SvCraftProtectStoneResultMsg&)> onCraftProtectStoneResult;
     std::function<void(const SvRepairResultMsg&)> onRepairResult;
     std::function<void(const SvExtractResultMsg&)> onExtractResult;
     std::function<void(const SvCraftResultMsg&)> onCraftResult;

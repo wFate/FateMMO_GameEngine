@@ -608,7 +608,7 @@
         ],
         "gridAreaVisible": true,
         "gridColumns": 4,
-        "gridPadding": 40.0,
+        "gridPadding": 8.0,
         "gridRows": 4,
         "headerColor": [
           0,
@@ -722,6 +722,36 @@
           255
         ],
         "slotSize": 52.0,
+        "skillLoadoutStrip": {
+          "cooldownOverlayAlpha": 0.65,
+          "cooldownOverlayColor": [0, 0, 0, 166],
+          "cornerRadius": 6.0,
+          "dropHighlightColor": [102, 255, 102, 179],
+          "dropHighlightThickness": 2.5,
+          "emptySlotIconColor": [153, 153, 166, 102],
+          "origin": [0.0, 0.0],
+          "pageDotColor": [115, 115, 128, 179],
+          "pageDotColorActive": [191, 166, 115, 255],
+          "pageDotGap": 12.0,
+          "pageDotRadius": 6.0,
+          "pageSelectorAlignment": "right",
+          "pageSelectorOffset": [0.0, 0.0],
+          "slotBgColor": [46, 41, 56, 224],
+          "slotBgColorActive": [64, 56, 77, 242],
+          "slotBorderColor": [128, 122, 148, 140],
+          "slotBorderColorActive": [217, 191, 115, 255],
+          "slotBorderThickness": 1.5,
+          "slotGap": 8.0,
+          "slotSize": 56.0,
+          "stackCountColor": [255, 255, 255, 242],
+          "stackCountFontSize": 11.0,
+          "useChrome": true
+        },
+        "stripBgColor": [26, 26, 33, 217],
+        "stripBorderColor": [102, 89, 51, 230],
+        "stripHeight": 80.0,
+        "stripPadding": 8.0,
+        "stripVisible": true,
         "style": "panel_hud",
         "textColor": [
           255,
@@ -3257,6 +3287,192 @@
         ],
         "id": "destroy_item_dialog",
         "message": "Destroy Nut?",
+        "messageFontSize": 13.0,
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "confirm_dialog",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "zOrder": 200
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            320.0,
+            160.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "buttonColor": [
+          140,
+          115,
+          64,
+          255
+        ],
+        "buttonFontSize": 13.0,
+        "buttonHeight": 32.0,
+        "buttonHoverColor": [
+          179,
+          148,
+          77,
+          255
+        ],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
+        "buttonSpacing": 16.0,
+        "buttonWidth": 100.0,
+        "cancelText": "Cancel",
+        "confirmText": "Enchant",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "enchant_confirm_dialog",
+        "message": "Enchant?",
+        "messageFontSize": 13.0,
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "confirm_dialog",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "zOrder": 200
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            320.0,
+            140.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "buttonColor": [
+          140,
+          115,
+          64,
+          255
+        ],
+        "buttonFontSize": 13.0,
+        "buttonHeight": 32.0,
+        "buttonHoverColor": [
+          179,
+          148,
+          77,
+          255
+        ],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
+        "buttonSpacing": 16.0,
+        "buttonWidth": 100.0,
+        "cancelText": "Cancel",
+        "confirmText": "Apply",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "enchant_protect_confirm_dialog",
+        "message": "Apply protection?",
         "messageFontSize": 13.0,
         "messageOffset": [
           0.0,

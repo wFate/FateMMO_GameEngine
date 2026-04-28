@@ -1182,6 +1182,47 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::TreePop();
         }
 
+        if (ImGui::TreeNodeEx("Skill Loadout Strip##inv", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Checkbox("Strip Visible##inv", &inv->stripVisible); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Strip Height##inv", &inv->stripHeight, 1.0f, 30.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Strip Padding##inv", &inv->stripPadding, 1.0f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Strip BG##inv", &inv->stripBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Strip Border##inv", &inv->stripBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Strip Chrome##inv", 0)) {
+            auto& s = inv->strip_;
+            ImGui::DragFloat2("Origin##strip", &s.origin.x, 1.0f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Size##strip", &s.slotSize, 1.0f, 16.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Gap##strip", &s.slotGap, 1.0f, 0.0f, 50.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Page Sel Offset##strip", &s.pageSelectorOffset.x, 1.0f, -300.0f, 300.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Page Dot Radius##strip", &s.pageDotRadius, 0.5f, 1.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Page Dot Gap##strip", &s.pageDotGap, 0.5f, 0.0f, 50.0f); checkUndoCapture(uiMgr);
+            int align = static_cast<int>(s.pageSelectorAlignment);
+            if (ImGui::Combo("Page Sel Alignment##strip", &align, "Left\0Right\0\0")) {
+                s.pageSelectorAlignment = static_cast<SkillLoadoutStrip::PageAlign>(align);
+                checkUndoCapture(uiMgr);
+            }
+            ImGui::Checkbox("Use Chrome##strip", &s.useChrome); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Slot BG##strip",            &s.slotBgColor.r);           checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Slot BG Active##strip",     &s.slotBgColorActive.r);     checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Slot Border##strip",        &s.slotBorderColor.r);       checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Slot Border Active##strip", &s.slotBorderColorActive.r); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Border Thick##strip",   &s.slotBorderThickness, 0.1f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##strip",       &s.cornerRadius,        0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Page Dot##strip",           &s.pageDotColor.r);          checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Page Dot Active##strip",    &s.pageDotColorActive.r);    checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Stack Count##strip",        &s.stackCountColor.r);       checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Stack Count Font##strip",    &s.stackCountFontSize, 0.5f, 6.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Drop Highlight##strip",     &s.dropHighlightColor.r);    checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Drop High Thick##strip",     &s.dropHighlightThickness, 0.1f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Cooldown Overlay##strip",   &s.cooldownOverlayColor.r);  checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Cooldown Alpha##strip",      &s.cooldownOverlayAlpha, 0.05f, 0.0f, 1.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Empty Slot Icon##strip",    &s.emptySlotIconColor.r);    checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
         ImGui::Separator();
         ImGui::Checkbox("Use Chrome (Checkpoint 2)##invtt", &inv->tooltipUseChrome_); checkUndoCapture(uiMgr);
         ImGui::TextDisabled("Chrome path reads Chrome Tooltip groups below;");
@@ -1555,7 +1596,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         if (ImGui::TreeNode("Runtime State")) {
             ImGui::InputInt("Active Set Page", &skp->activeSetPage);
             if (skp->activeSetPage < 0) skp->activeSetPage = 0;
-            if (skp->activeSetPage > 4) skp->activeSetPage = 4;
+            if (skp->activeSetPage > 3) skp->activeSetPage = 3;
             ImGui::Text("Remaining Points: %d", skp->remainingPoints);
             ImGui::Text("Selected Skill: %d", skp->selectedSkillIndex);
             ImGui::Text("%zu skills loaded", skp->classSkills.size());
@@ -2482,6 +2523,47 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Border##fsbcmo", &fsb->chromeMenuOverlayBorderColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Item Text##fsbcmo", &fsb->chromeMenuItemTextColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Divider##fsbcmo", &fsb->chromeMenuDividerColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("S130 Chrome — Strip")) {
+            ImGui::ColorEdit4("chromeStripBgColor",        &fsb->chromeStripBgColor.r);        checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeStripGradientTop",    &fsb->chromeStripGradientTop.r);    checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeStripGradientBottom", &fsb->chromeStripGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeStripBorderColor",    &fsb->chromeStripBorderColor.r);    checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("chromeStripBorderWidth",    &fsb->chromeStripBorderWidth, 0.1f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("S130 Chrome — Portrait")) {
+            ImGui::ColorEdit4("chromePortraitFillColor",   &fsb->chromePortraitFillColor.r);   checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromePortraitBorderColor", &fsb->chromePortraitBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("S130 Chrome — EXP Arc (incl. legacy promotions)")) {
+            // Legacy schema-gap promotions (read by both legacy and chrome modes)
+            ImGui::ColorEdit4("expArcFillColor (legacy)",  &fsb->expArcFillColor.r);           checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("expArcTrackColor (legacy)", &fsb->expArcTrackColor.r);          checkUndoCapture(uiMgr);
+            // Chrome-only
+            ImGui::ColorEdit4("chromeExpArcFillColor",     &fsb->chromeExpArcFillColor.r);     checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeExpArcTrackColor",    &fsb->chromeExpArcTrackColor.r);    checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("S130 Chrome — HP/MP Bar Tracks")) {
+            ImGui::ColorEdit4("chromeHpBarBgColor", &fsb->chromeHpBarBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeMpBarBgColor", &fsb->chromeMpBarBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("S130 Chrome — HUD Text")) {
+            ImGui::ColorEdit4("chromeHpLabelColor",  &fsb->chromeHpLabelColor.r);  checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeHpNumberColor", &fsb->chromeHpNumberColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeMpLabelColor",  &fsb->chromeMpLabelColor.r);  checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeMpNumberColor", &fsb->chromeMpNumberColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeLevelColor",    &fsb->chromeLevelColor.r);    checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeCoordColor",    &fsb->chromeCoordColor.r);    checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 

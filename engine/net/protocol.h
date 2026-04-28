@@ -444,6 +444,10 @@ struct SvPlayerStateMsg {
     int16_t allocatedCON = 0;
     int16_t allocatedWIS = 0;
 
+    // Marketplace
+    int64_t merchantPassExpiresAtUnix = 0;
+    int32_t maxMarketplaceListings    = 7;
+
     void write(ByteWriter& w) const {
         w.writeI32(currentHP);
         w.writeI32(maxHP);
@@ -473,6 +477,8 @@ struct SvPlayerStateMsg {
         w.writeU16(static_cast<uint16_t>(allocatedDEX));
         w.writeU16(static_cast<uint16_t>(allocatedCON));
         w.writeU16(static_cast<uint16_t>(allocatedWIS));
+        detail::writeI64(w, merchantPassExpiresAtUnix);
+        w.writeI32(maxMarketplaceListings);
     }
 
     static SvPlayerStateMsg read(ByteReader& r) {
@@ -505,6 +511,8 @@ struct SvPlayerStateMsg {
         m.allocatedDEX   = static_cast<int16_t>(r.readU16());
         m.allocatedCON   = static_cast<int16_t>(r.readU16());
         m.allocatedWIS   = static_cast<int16_t>(r.readU16());
+        m.merchantPassExpiresAtUnix = detail::readI64(r);
+        m.maxMarketplaceListings    = r.readI32();
         return m;
     }
 };
@@ -565,9 +573,30 @@ struct SkillSyncEntry {
     uint8_t activatedRank = 0;
 };
 
+// v13: polymorphic skill-bar slot — empty (kind=0), skill (kind=1), or item (kind=2).
+// Replaces the legacy `vector<string> skillBar` element type in SvSkillSyncMsg.
+struct LoadoutSlotWire {
+    uint8_t  kind = 0;       // 0=empty, 1=skill, 2=item
+    std::string skillId;     // valid iff kind==1
+    std::string instanceId;  // valid iff kind==2 — character_inventory.instance_id
+
+    void write(ByteWriter& w) const {
+        w.writeU8(kind);
+        w.writeString(skillId);
+        w.writeString(instanceId);
+    }
+    static LoadoutSlotWire read(ByteReader& r) {
+        LoadoutSlotWire e;
+        e.kind = r.readU8();
+        e.skillId = r.readString();
+        e.instanceId = r.readString();
+        return e;
+    }
+};
+
 struct SvSkillSyncMsg {
     std::vector<SkillSyncEntry> skills;
-    std::vector<std::string> skillBar; // 20 slots, empty string = unbound
+    std::vector<LoadoutSlotWire> skillBar; // 20 slots, kind=0 = empty
     int16_t availablePoints = 0;
     int16_t earnedPoints = 0;
     int16_t spentPoints = 0;
@@ -581,7 +610,7 @@ struct SvSkillSyncMsg {
         }
         w.writeU8(static_cast<uint8_t>(skillBar.size()));
         for (const auto& slot : skillBar) {
-            w.writeString(slot);
+            slot.write(w);
         }
         w.writeU16(static_cast<uint16_t>(availablePoints));
         w.writeU16(static_cast<uint16_t>(earnedPoints));
@@ -600,11 +629,31 @@ struct SvSkillSyncMsg {
         uint8_t barCount = r.readU8();
         m.skillBar.resize(barCount);
         for (uint8_t i = 0; i < barCount; ++i) {
-            m.skillBar[i] = r.readString();
+            m.skillBar[i] = LoadoutSlotWire::read(r);
         }
         m.availablePoints = static_cast<int16_t>(r.readU16());
         m.earnedPoints = static_cast<int16_t>(r.readU16());
         m.spentPoints = static_cast<int16_t>(r.readU16());
+        return m;
+    }
+};
+
+// v13: server pokes the client to start a per-itemId cooldown after a
+// successful consumable use (legacy or loadout-bound). Client SkillLoadout
+// applies the cooldown to every loadout slot whose bound instanceId
+// resolves to itemId.
+struct SvConsumableCooldownMsg {
+    std::string itemId;
+    uint32_t    cooldownMs = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeString(itemId);
+        w.writeU32(cooldownMs);
+    }
+    static SvConsumableCooldownMsg read(ByteReader& r) {
+        SvConsumableCooldownMsg m;
+        m.itemId = r.readString();
+        m.cooldownMs = r.readU32();
         return m;
     }
 };

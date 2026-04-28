@@ -874,10 +874,21 @@ struct SvLevelUpMsg {
 // ============================================================================
 struct CmdEnchantMsg {
     uint8_t inventorySlot = 0;
-    uint8_t useProtectionStone = 0;
-    uint8_t isBagItem = 0;    // 1 = target is inside a bag
+    uint8_t useProtectionStone = 0;  // v15: deprecated/ignored. Protection is
+                                      // derived from the stone in `stoneSlot`
+                                      // being a `_protected` variant. Wire kept
+                                      // for backward-compat readers; server
+                                      // ignores it. Will be reaped at next bump.
+    uint8_t isBagItem = 0;    // 1 = target equipment is inside a bag
     uint8_t bagSlot = 0;      // main inventory slot of the bag
-    uint8_t bagSubSlot = 0;   // sub-slot within the bag
+    uint8_t bagSubSlot = 0;   // sub-slot within the bag (target equipment)
+    // S134/v14 — explicit stone source (same container as the equipment).
+    // If isBagItem=0: stoneSlot is a main inventory slot index.
+    // If isBagItem=1: stoneSlot is the bag sub-slot inside `bagSlot`.
+    // Server validates the slot contains the expected stone tier and
+    // consumes from THAT exact slot. v15: stone may be a `_protected`
+    // variant — server detects this and runs the enchant with protection.
+    uint8_t stoneSlot = 0;
 
     void write(ByteWriter& w) const {
         w.writeU8(inventorySlot);
@@ -885,6 +896,7 @@ struct CmdEnchantMsg {
         w.writeU8(isBagItem);
         w.writeU8(bagSlot);
         w.writeU8(bagSubSlot);
+        w.writeU8(stoneSlot);
     }
     static CmdEnchantMsg read(ByteReader& r) {
         CmdEnchantMsg m;
@@ -893,6 +905,7 @@ struct CmdEnchantMsg {
         m.isBagItem = r.readU8();
         m.bagSlot = r.readU8();
         m.bagSubSlot = r.readU8();
+        m.stoneSlot = r.readU8();
         return m;
     }
 };
@@ -915,6 +928,57 @@ struct SvEnchantResultMsg {
         m.newLevel = r.readU8();
         m.broke = r.readU8();
         m.message = r.readString();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: CmdCraftProtectStone / Server -> Client: SvCraftProtectStoneResult
+//
+// S134/v15 — converts a (mat_protect_stone + base enhancement stone) pair
+// into 1 `_protected` enhancement stone via standard inventory add rules.
+// Same-container constraint: protect scroll source slot + stone source slot
+// live in the same container as each other (per project_enchant_same_container_rule).
+// Server validates BOTH slots, checks for room for the produced stone BEFORE
+// consuming anything, and replies with success/message via SvCraftProtectStoneResult.
+// ============================================================================
+struct CmdCraftProtectStoneMsg {
+    uint8_t isBagItem    = 0;  // 1 = both source slots are inside a bag
+    uint8_t bagSlot      = 0;  // main inv slot of the bag (if isBagItem=1)
+    uint8_t protectSlot  = 0;  // source slot of the mat_protect_stone (main inv idx OR bag sub-slot)
+    uint8_t stoneSlot    = 0;  // source slot of the enhancement stone (main inv idx OR bag sub-slot)
+
+    void write(ByteWriter& w) const {
+        w.writeU8(isBagItem);
+        w.writeU8(bagSlot);
+        w.writeU8(protectSlot);
+        w.writeU8(stoneSlot);
+    }
+    static CmdCraftProtectStoneMsg read(ByteReader& r) {
+        CmdCraftProtectStoneMsg m;
+        m.isBagItem   = r.readU8();
+        m.bagSlot     = r.readU8();
+        m.protectSlot = r.readU8();
+        m.stoneSlot   = r.readU8();
+        return m;
+    }
+};
+
+struct SvCraftProtectStoneResultMsg {
+    uint8_t success = 0;
+    std::string producedItemId;  // e.g. "mat_enhance_stone_basic_protected" on success, empty on fail
+    std::string message;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(success);
+        w.writeString(producedItemId);
+        w.writeString(message);
+    }
+    static SvCraftProtectStoneResultMsg read(ByteReader& r) {
+        SvCraftProtectStoneResultMsg m;
+        m.success        = r.readU8();
+        m.producedItemId = r.readString();
+        m.message        = r.readString();
         return m;
     }
 };
@@ -1584,15 +1648,21 @@ struct SvStatEnchantResultMsg {
 // Client -> Server: CmdUseConsumable / Server -> Client: SvConsumeResult
 // ============================================================================
 struct CmdUseConsumableMsg {
-    uint8_t inventorySlot = 0;
+    // v13: dual-source — 0=legacy inventory slot, 1=skill-bar loadout slot.
+    // Source determines how `inventorySlot` is interpreted (inventory index
+    // for source=0, loadout flat slot 0..19 for source=1).
+    uint8_t  source = 0;
+    uint8_t  inventorySlot = 0;
     uint32_t targetEntityId = 0;  // 0 = no target (normal consumable)
 
     void write(ByteWriter& w) const {
+        w.writeU8(source);
         w.writeU8(inventorySlot);
         w.writeU32(targetEntityId);
     }
     static CmdUseConsumableMsg read(ByteReader& r) {
         CmdUseConsumableMsg m;
+        m.source = r.readU8();
         m.inventorySlot = r.readU8();
         m.targetEntityId = r.readU32();
         return m;
@@ -1951,26 +2021,32 @@ struct CmdActivateSkillRankMsg {
 };
 
 // ============================================================================
-// Client -> Server: CmdAssignSkillSlot (rearrange skill bar)
+// Client -> Server: CmdAssignSlot (rearrange skill bar — skills or consumables)
 // ============================================================================
-struct CmdAssignSkillSlotMsg {
-    uint8_t action = 0;   // 0=assign, 1=clear, 2=swap
-    std::string skillId;  // used for action=0 (assign)
-    uint8_t slotA = 0;    // target slot (0-19) for assign/clear, first slot for swap
-    uint8_t slotB = 0;    // second slot for swap
+struct CmdAssignSlotMsg {
+    uint8_t  action     = 0;   // 0=assign, 1=clear, 2=swap
+    uint8_t  kind       = 0;   // 0=empty, 1=skill, 2=item — meaningful when action=assign
+    std::string skillId;       // valid iff kind==1
+    std::string instanceId;    // valid iff kind==2 — character_inventory.instance_id
+    uint8_t  slotA      = 0;   // target slot (0..19) for assign/clear, first slot for swap
+    uint8_t  slotB      = 0;   // second slot for swap
 
     void write(ByteWriter& w) const {
         w.writeU8(action);
+        w.writeU8(kind);
         w.writeString(skillId);
+        w.writeString(instanceId);
         w.writeU8(slotA);
         w.writeU8(slotB);
     }
-    static CmdAssignSkillSlotMsg read(ByteReader& r) {
-        CmdAssignSkillSlotMsg m;
-        m.action  = r.readU8();
-        m.skillId = r.readString();
-        m.slotA   = r.readU8();
-        m.slotB   = r.readU8();
+    static CmdAssignSlotMsg read(ByteReader& r) {
+        CmdAssignSlotMsg m;
+        m.action     = r.readU8();
+        m.kind       = r.readU8();
+        m.skillId    = r.readString();
+        m.instanceId = r.readString();
+        m.slotA      = r.readU8();
+        m.slotB      = r.readU8();
         return m;
     }
 };

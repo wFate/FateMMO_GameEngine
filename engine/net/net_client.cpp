@@ -724,6 +724,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onSkillSync) onSkillSync(msg);
             break;
         }
+        case PacketType::SvConsumableCooldown: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvConsumableCooldownMsg::read(payload);
+            if (onConsumableCooldown) onConsumableCooldown(msg);
+            break;
+        }
         case PacketType::SvQuestSync: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvQuestSyncMsg::read(payload);
@@ -746,6 +752,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvEnchantResultMsg::read(payload);
             if (onEnchantResult) onEnchantResult(msg);
+            break;
+        }
+        case PacketType::SvCraftProtectStoneResult: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvCraftProtectStoneResultMsg::read(payload);
+            if (onCraftProtectStoneResult) onCraftProtectStoneResult(msg);
             break;
         }
         case PacketType::SvRepairResult: {
@@ -999,6 +1011,7 @@ void NetClient::sendUseConsumable(uint8_t inventorySlot) {
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
     CmdUseConsumableMsg msg;
+    msg.source = 0;  // v13: legacy inventory-slot source
     msg.inventorySlot = inventorySlot;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdUseConsumable, w.data(), w.size());
@@ -1006,7 +1019,19 @@ void NetClient::sendUseConsumable(uint8_t inventorySlot) {
 
 void NetClient::sendUseConsumableWithTarget(uint8_t slot, uint32_t targetEntityId) {
     CmdUseConsumableMsg msg;
+    msg.source = 0;  // v13: legacy inventory-slot source
     msg.inventorySlot = slot;
+    msg.targetEntityId = targetEntityId;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdUseConsumable, w.data(), w.size());
+}
+
+void NetClient::sendUseLoadoutConsumable(uint8_t loadoutSlot, uint32_t targetEntityId) {
+    CmdUseConsumableMsg msg;
+    msg.source = 1;  // v13: skill-bar loadout slot
+    msg.inventorySlot = loadoutSlot;  // reused field — flat slot index 0..19
     msg.targetEntityId = targetEntityId;
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
@@ -1578,16 +1603,21 @@ void NetClient::sendActivateSkillRank(const std::string& skillId) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdActivateSkillRank, w.data(), w.size());
 }
 
-void NetClient::sendAssignSkillSlot(uint8_t action, const std::string& skillId, uint8_t slotA, uint8_t slotB) {
-    CmdAssignSkillSlotMsg msg;
+void NetClient::sendAssignSlot(uint8_t action, uint8_t kind,
+                                const std::string& skillId,
+                                const std::string& instanceId,
+                                uint8_t slotA, uint8_t slotB) {
+    CmdAssignSlotMsg msg;
     msg.action = action;
+    msg.kind = kind;
     msg.skillId = skillId;
+    msg.instanceId = instanceId;
     msg.slotA = slotA;
     msg.slotB = slotB;
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
     msg.write(w);
-    sendPacket(Channel::ReliableOrdered, PacketType::CmdAssignSkillSlot, w.data(), w.size());
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdAssignSlot, w.data(), w.size());
 }
 
 void NetClient::sendAllocateStat(uint8_t statType, int16_t amount) {
@@ -1600,17 +1630,19 @@ void NetClient::sendAllocateStat(uint8_t statType, int16_t amount) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdAllocateStat, w.data(), w.size());
 }
 
-void NetClient::sendEnchant(uint8_t inventorySlot, uint8_t useProtectionStone) {
+void NetClient::sendEnchant(uint8_t inventorySlot, uint8_t useProtectionStone, uint8_t stoneSlot) {
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
     CmdEnchantMsg msg;
     msg.inventorySlot = inventorySlot;
     msg.useProtectionStone = useProtectionStone;
+    msg.stoneSlot = stoneSlot;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdEnchant, w.data(), w.size());
 }
 
-void NetClient::sendBagEnchant(uint8_t bagSlot, uint8_t bagSubSlot, uint8_t useProtectionStone) {
+void NetClient::sendBagEnchant(uint8_t bagSlot, uint8_t bagSubSlot,
+                                uint8_t useProtectionStone, uint8_t stoneSubSlot) {
     uint8_t buf[MAX_PAYLOAD_SIZE];
     ByteWriter w(buf, sizeof(buf));
     CmdEnchantMsg msg;
@@ -1618,8 +1650,22 @@ void NetClient::sendBagEnchant(uint8_t bagSlot, uint8_t bagSubSlot, uint8_t useP
     msg.bagSlot = bagSlot;
     msg.bagSubSlot = bagSubSlot;
     msg.useProtectionStone = useProtectionStone;
+    msg.stoneSlot = stoneSubSlot;
     msg.write(w);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdEnchant, w.data(), w.size());
+}
+
+void NetClient::sendCraftProtectStone(uint8_t isBagItem, uint8_t bagSlot,
+                                       uint8_t protectSlot, uint8_t stoneSlot) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    CmdCraftProtectStoneMsg msg;
+    msg.isBagItem   = isBagItem;
+    msg.bagSlot     = bagSlot;
+    msg.protectSlot = protectSlot;
+    msg.stoneSlot   = stoneSlot;
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdCraftProtectStone, w.data(), w.size());
 }
 
 void NetClient::sendRepair(uint8_t inventorySlot) {
