@@ -480,6 +480,10 @@ private:
     // Combat text editor
     bool showCombatTextEditor_ = false;
 
+    // Role nameplates editor (Window menu)
+    bool showRoleNameplatesPanel_ = false;
+    void drawRoleNameplatesPanel();
+
     // Tile palette panel (demo build wires this through View menu)
     bool showTilePalette_ = false;
 

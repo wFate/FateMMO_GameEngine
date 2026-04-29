@@ -80,6 +80,67 @@
           0.0
         ],
         "characterScale": 5.0,
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
         "closeBtnBgColor": [
           27,
           26,
@@ -207,6 +268,7 @@
           0.0
         ],
         "noFactionText": " ",
+        "panelUseChrome": true,
         "pressedColor": [
           0,
           0,
@@ -317,9 +379,13 @@
           36,
           255
         ],
-        "bagPanelBorderWidth": 2.0,
-        "bagPanelPadding": 44.0,
-        "bagTitleHeight": 2.0,
+        "bagPanelBorderWidth": 1.0,
+        "bagPanelOffset": [
+          0.0,
+          130.0
+        ],
+        "bagPanelPadding": 10.0,
+        "bagTitleHeight": 20.0,
         "borderColor": [
           255,
           255,
@@ -327,6 +393,61 @@
           0
         ],
         "characterScale": 5.0,
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
         "chromeRarityCommonColor": [
           255,
           255,
@@ -407,6 +528,10 @@
           170
         ],
         "chromeTooltipSepHeight": 4.0,
+        "chromeTooltipSepOffset": [
+          0.0,
+          0.0
+        ],
         "chromeTooltipShadowBlur": 8.0,
         "chromeTooltipShadowColor": [
           0,
@@ -659,6 +784,7 @@
           255
         ],
         "panelBorderWidth": 2.0,
+        "panelUseChrome": true,
         "pressedColor": [
           0,
           0,
@@ -702,6 +828,87 @@
           0,
           255
         ],
+        "skillLoadoutStrip": {
+          "cooldownOverlayAlpha": 0.6499999761581421,
+          "cooldownOverlayColor": [
+            0,
+            0,
+            0,
+            166
+          ],
+          "cornerRadius": 6.0,
+          "dropHighlightColor": [
+            102,
+            255,
+            102,
+            179
+          ],
+          "dropHighlightThickness": 2.5,
+          "emptySlotIconColor": [
+            153,
+            153,
+            166,
+            102
+          ],
+          "origin": [
+            1300.0,
+            -70.0
+          ],
+          "pageDotColor": [
+            115,
+            115,
+            128,
+            179
+          ],
+          "pageDotColorActive": [
+            191,
+            166,
+            115,
+            255
+          ],
+          "pageDotGap": 20.0,
+          "pageDotRadius": 20.0,
+          "pageSelectorAlignment": "right",
+          "pageSelectorOffset": [
+            40.0,
+            1.0
+          ],
+          "slotBgColor": [
+            46,
+            41,
+            56,
+            224
+          ],
+          "slotBgColorActive": [
+            64,
+            56,
+            77,
+            242
+          ],
+          "slotBorderColor": [
+            128,
+            122,
+            148,
+            140
+          ],
+          "slotBorderColorActive": [
+            217,
+            191,
+            115,
+            255
+          ],
+          "slotBorderThickness": 1.5,
+          "slotGap": 8.0,
+          "slotSize": 80.0,
+          "stackCountColor": [
+            255,
+            255,
+            255,
+            242
+          ],
+          "stackCountFontSize": 11.0,
+          "useChrome": true
+        },
         "slotBorderWidth": 1.0,
         "slotEmptyBgColor": [
           199,
@@ -722,35 +929,20 @@
           255
         ],
         "slotSize": 52.0,
-        "skillLoadoutStrip": {
-          "cooldownOverlayAlpha": 0.65,
-          "cooldownOverlayColor": [0, 0, 0, 166],
-          "cornerRadius": 6.0,
-          "dropHighlightColor": [102, 255, 102, 179],
-          "dropHighlightThickness": 2.5,
-          "emptySlotIconColor": [153, 153, 166, 102],
-          "origin": [0.0, 0.0],
-          "pageDotColor": [115, 115, 128, 179],
-          "pageDotColorActive": [191, 166, 115, 255],
-          "pageDotGap": 12.0,
-          "pageDotRadius": 6.0,
-          "pageSelectorAlignment": "right",
-          "pageSelectorOffset": [0.0, 0.0],
-          "slotBgColor": [46, 41, 56, 224],
-          "slotBgColorActive": [64, 56, 77, 242],
-          "slotBorderColor": [128, 122, 148, 140],
-          "slotBorderColorActive": [217, 191, 115, 255],
-          "slotBorderThickness": 1.5,
-          "slotGap": 8.0,
-          "slotSize": 56.0,
-          "stackCountColor": [255, 255, 255, 242],
-          "stackCountFontSize": 11.0,
-          "useChrome": true
-        },
-        "stripBgColor": [26, 26, 33, 217],
-        "stripBorderColor": [102, 89, 51, 230],
-        "stripHeight": 80.0,
-        "stripPadding": 8.0,
+        "stripBgColor": [
+          26,
+          26,
+          33,
+          217
+        ],
+        "stripBorderColor": [
+          102,
+          89,
+          51,
+          230
+        ],
+        "stripHeight": 40.0,
+        "stripPadding": 10.0,
         "stripVisible": true,
         "style": "panel_hud",
         "textColor": [
@@ -854,6 +1046,143 @@
           0
         ],
         "borderWidth": 0.0,
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromeTooltipBgColor": [
+          26,
+          31,
+          46,
+          240
+        ],
+        "chromeTooltipBodyFontSize": 10.0,
+        "chromeTooltipBorderColor": [
+          77,
+          89,
+          128,
+          102
+        ],
+        "chromeTooltipBorderWidth": 1.0,
+        "chromeTooltipCornerRadius": 10.0,
+        "chromeTooltipDescColor": [
+          191,
+          204,
+          230,
+          255
+        ],
+        "chromeTooltipDescFontSize": 9.0,
+        "chromeTooltipDescGap": 5.0,
+        "chromeTooltipGradientBottom": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromeTooltipGradientTop": [
+          33,
+          38,
+          56,
+          240
+        ],
+        "chromeTooltipLineSpacing": 3.0,
+        "chromeTooltipPadding": 10.0,
+        "chromeTooltipRankColor": [
+          235,
+          242,
+          255,
+          255
+        ],
+        "chromeTooltipRankFontSize": 10.0,
+        "chromeTooltipReqColor": [
+          242,
+          140,
+          128,
+          255
+        ],
+        "chromeTooltipReqFontSize": 10.0,
+        "chromeTooltipShadowBlur": 8.0,
+        "chromeTooltipShadowColor": [
+          0,
+          0,
+          0,
+          115
+        ],
+        "chromeTooltipShadowOffset": [
+          0.0,
+          3.0
+        ],
+        "chromeTooltipTextColor": [
+          217,
+          224,
+          242,
+          255
+        ],
+        "chromeTooltipTitleColor": [
+          255,
+          217,
+          77,
+          255
+        ],
+        "chromeTooltipTitleFontSize": 12.0,
+        "chromeTooltipW": 200.0,
         "circleRadiusMul": 0.25,
         "closeBtnBgColor": [
           47,
@@ -1018,6 +1347,7 @@
           51,
           255
         ],
+        "panelUseChrome": true,
         "pointsBadge": [
           255,
           131,
@@ -1203,6 +1533,7 @@
           255
         ],
         "tooltipTitleFontSize": 50.0,
+        "tooltipUseChrome": true,
         "tooltipW": 450.0,
         "type": "skill_panel",
         "uiShadowColor": [
@@ -1253,6 +1584,67 @@
           255
         ],
         "borderWidth": 5.0,
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
         "closeBgColor": [
           41,
           11,
@@ -1339,6 +1731,7 @@
           77,
           255
         ],
+        "panelUseChrome": true,
         "pressedColor": [
           0,
           0,
@@ -1458,6 +1851,43 @@
               64,
               255
             ],
+            "chromePanelBgColor": [
+              20,
+              26,
+              41,
+              240
+            ],
+            "chromePanelBorderColor": [
+              89,
+              107,
+              153,
+              140
+            ],
+            "chromePanelBorderWidth": 1.5,
+            "chromePanelCornerRadius": 14.0,
+            "chromePanelGradientBottom": [
+              15,
+              20,
+              36,
+              240
+            ],
+            "chromePanelGradientTop": [
+              33,
+              41,
+              61,
+              240
+            ],
+            "chromePanelShadowBlur": 12.0,
+            "chromePanelShadowColor": [
+              0,
+              0,
+              0,
+              140
+            ],
+            "chromePanelShadowOffset": [
+              0.0,
+              4.0
+            ],
             "disabledColor": [
               0,
               0,
@@ -1502,6 +1932,7 @@
               115,
               255
             ],
+            "panelUseChrome": true,
             "pressedColor": [
               0,
               0,
@@ -1625,6 +2056,85 @@
           255
         ],
         "checkboxSize": 44.0,
+        "chromeLogoutBgColor": [
+          140,
+          38,
+          38,
+          230
+        ],
+        "chromeLogoutBorderColor": [
+          140,
+          38,
+          38,
+          230
+        ],
+        "chromeLogoutTextColor": [
+          255,
+          242,
+          230,
+          255
+        ],
+        "chromePanelBgColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "chromePanelBorderColor": [
+          179,
+          153,
+          102,
+          102
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 0.0,
+        "chromePanelGradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "chromePanelGradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "chromePanelShadowBlur": 0.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          0.0
+        ],
+        "chromeTitleBarColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "chromeTitleColor": [
+          64,
+          41,
+          20,
+          255
+        ],
+        "chromeToggleOffBgColor": [
+          115,
+          89,
+          64,
+          179
+        ],
+        "chromeToggleOnBgColor": [
+          77,
+          140,
+          77,
+          230
+        ],
         "disabledColor": [
           0,
           0,
@@ -1698,6 +2208,7 @@
           255,
           255
         ],
+        "panelUseChrome": true,
         "pressedColor": [
           0,
           0,
@@ -1856,6 +2367,73 @@
           191,
           191,
           204,
+          255
+        ],
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromeHeaderBgColor": [
+          41,
+          51,
+          77,
+          217
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
           255
         ],
         "closeBtnBgColor": [
@@ -2118,6 +2696,67 @@
           217,
           255
         ],
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleBarColor": [
+          41,
+          51,
+          77,
+          217
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
         "closeBtnColor": [
           47,
           47,
@@ -2172,6 +2811,7 @@
           0.0
         ],
         "nameFontSize": 15.0,
+        "panelUseChrome": true,
         "petInfoOffset": [
           0.0,
           0.0
@@ -2288,6 +2928,67 @@
           217,
           255
         ],
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleBarColor": [
+          41,
+          51,
+          77,
+          217
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
         "closeBtnColor": [
           47,
           47,
@@ -2354,6 +3055,7 @@
           77,
           255
         ],
+        "panelUseChrome": true,
         "pressedColor": [
           0,
           0,
@@ -2453,6 +3155,67 @@
         ],
         "borderWidth": 2.0,
         "categoryTabHeight": 28.0,
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleBarColor": [
+          41,
+          51,
+          77,
+          217
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
         "closeBtnColor": [
           47,
           47,
@@ -2509,6 +3272,7 @@
           128,
           255
         ],
+        "panelUseChrome": true,
         "pressedColor": [
           0,
           0,
@@ -2623,6 +3387,67 @@
           217,
           255
         ],
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleBarColor": [
+          41,
+          51,
+          77,
+          217
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
         "closeBtnColor": [
           47,
           47,
@@ -2696,6 +3521,7 @@
           204,
           255
         ],
+        "panelUseChrome": true,
         "pressedColor": [
           0,
           0,
@@ -3072,6 +3898,324 @@
         "zOrder": 115
       },
       {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            280.0,
+            140.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bgColor": [
+          26,
+          26,
+          33,
+          242
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderWidth": 2.0,
+        "buttonColor": [
+          140,
+          115,
+          64,
+          255
+        ],
+        "buttonFontSize": 13.0,
+        "buttonHeight": 32.0,
+        "buttonHoverColor": [
+          179,
+          148,
+          77,
+          255
+        ],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
+        "buttonSpacing": 16.0,
+        "buttonWidth": 100.0,
+        "cancelText": "Cancel",
+        "confirmText": "Destroy",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "destroy_item_dialog",
+        "message": "Destroy Nut?",
+        "messageFontSize": 13.0,
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "confirm_dialog",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "zOrder": 200
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            320.0,
+            160.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bgColor": [
+          26,
+          26,
+          33,
+          242
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderWidth": 2.0,
+        "buttonColor": [
+          140,
+          115,
+          64,
+          255
+        ],
+        "buttonFontSize": 13.0,
+        "buttonHeight": 32.0,
+        "buttonHoverColor": [
+          179,
+          148,
+          77,
+          255
+        ],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
+        "buttonSpacing": 16.0,
+        "buttonWidth": 100.0,
+        "cancelText": "Cancel",
+        "confirmText": "Enchant",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "enchant_confirm_dialog",
+        "message": "Enchant?",
+        "messageFontSize": 13.0,
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "confirm_dialog",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "zOrder": 200
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            320.0,
+            140.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bgColor": [
+          26,
+          26,
+          33,
+          242
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderWidth": 2.0,
+        "buttonColor": [
+          140,
+          115,
+          64,
+          255
+        ],
+        "buttonFontSize": 13.0,
+        "buttonHeight": 32.0,
+        "buttonHoverColor": [
+          179,
+          148,
+          77,
+          255
+        ],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
+        "buttonSpacing": 16.0,
+        "buttonWidth": 100.0,
+        "cancelText": "Cancel",
+        "confirmText": "Apply",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "enchant_protect_confirm_dialog",
+        "message": "Apply protection?",
+        "messageFontSize": 13.0,
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "confirm_dialog",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "zOrder": 200
+      },
+      {
         "activeTab": 1,
         "activeTabBg": [
           34,
@@ -3135,6 +4279,60 @@
           255
         ],
         "borderWidth": 0.0,
+        "chromeActiveTabBgColor": [
+          200,
+          168,
+          50,
+          255
+        ],
+        "chromeActiveTabBorderColor": [
+          89,
+          66,
+          36,
+          255
+        ],
+        "chromeArrowBgColor": [
+          56,
+          48,
+          36,
+          255
+        ],
+        "chromeArrowTextColor": [
+          230,
+          209,
+          140,
+          255
+        ],
+        "chromeInactiveTabBgColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "chromeStripBgColor": [
+          74,
+          63,
+          47,
+          255
+        ],
+        "chromeStripBorderColor": [
+          89,
+          66,
+          36,
+          255
+        ],
+        "chromeStripCornerRadius": 0.0,
+        "chromeStripShadowBlur": 0.0,
+        "chromeStripShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "chromeStripShadowOffset": [
+          0.0,
+          0.0
+        ],
         "disabledColor": [
           0,
           0,
@@ -3186,6 +4384,7 @@
           255
         ],
         "opacity": 2222.0,
+        "panelUseChrome": true,
         "pressedColor": [
           0,
           0,
@@ -3214,285 +4413,6 @@
           0
         ],
         "zOrder": 10
-      },
-      {
-        "anchor": {
-          "offset": [
-            0.0,
-            0.0
-          ],
-          "preset": "Center",
-          "size": [
-            280.0,
-            140.0
-          ]
-        },
-        "backgroundColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "borderColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "buttonColor": [
-          140,
-          115,
-          64,
-          255
-        ],
-        "buttonFontSize": 13.0,
-        "buttonHeight": 32.0,
-        "buttonHoverColor": [
-          179,
-          148,
-          77,
-          255
-        ],
-        "buttonOffset": [
-          0.0,
-          0.0
-        ],
-        "buttonSpacing": 16.0,
-        "buttonWidth": 100.0,
-        "cancelText": "Cancel",
-        "confirmText": "Destroy",
-        "disabledColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "gradientBottom": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "gradientTop": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "hoverColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "id": "destroy_item_dialog",
-        "message": "Destroy Nut?",
-        "messageFontSize": 13.0,
-        "messageOffset": [
-          0.0,
-          0.0
-        ],
-        "pressedColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "type": "confirm_dialog",
-        "uiShadowColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "visible": false,
-        "zOrder": 200
-      },
-      {
-        "anchor": {
-          "offset": [
-            0.0,
-            0.0
-          ],
-          "preset": "Center",
-          "size": [
-            320.0,
-            160.0
-          ]
-        },
-        "backgroundColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "borderColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "buttonColor": [
-          140,
-          115,
-          64,
-          255
-        ],
-        "buttonFontSize": 13.0,
-        "buttonHeight": 32.0,
-        "buttonHoverColor": [
-          179,
-          148,
-          77,
-          255
-        ],
-        "buttonOffset": [
-          0.0,
-          0.0
-        ],
-        "buttonSpacing": 16.0,
-        "buttonWidth": 100.0,
-        "cancelText": "Cancel",
-        "confirmText": "Enchant",
-        "disabledColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "gradientBottom": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "gradientTop": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "hoverColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "id": "enchant_confirm_dialog",
-        "message": "Enchant?",
-        "messageFontSize": 13.0,
-        "messageOffset": [
-          0.0,
-          0.0
-        ],
-        "pressedColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "type": "confirm_dialog",
-        "uiShadowColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "visible": false,
-        "zOrder": 200
-      },
-      {
-        "anchor": {
-          "offset": [
-            0.0,
-            0.0
-          ],
-          "preset": "Center",
-          "size": [
-            320.0,
-            140.0
-          ]
-        },
-        "backgroundColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "borderColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "buttonColor": [
-          140,
-          115,
-          64,
-          255
-        ],
-        "buttonFontSize": 13.0,
-        "buttonHeight": 32.0,
-        "buttonHoverColor": [
-          179,
-          148,
-          77,
-          255
-        ],
-        "buttonOffset": [
-          0.0,
-          0.0
-        ],
-        "buttonSpacing": 16.0,
-        "buttonWidth": 100.0,
-        "cancelText": "Cancel",
-        "confirmText": "Apply",
-        "disabledColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "gradientBottom": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "gradientTop": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "hoverColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "id": "enchant_protect_confirm_dialog",
-        "message": "Apply protection?",
-        "messageFontSize": 13.0,
-        "messageOffset": [
-          0.0,
-          0.0
-        ],
-        "pressedColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "type": "confirm_dialog",
-        "uiShadowColor": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "visible": false,
-        "zOrder": 200
       }
     ],
     "disabledColor": [

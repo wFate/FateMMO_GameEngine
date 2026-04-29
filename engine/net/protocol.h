@@ -136,6 +136,7 @@ struct SvEntityEnterMsg {
     // Player fields (only serialized when entityType == 0)
     uint8_t pkStatus  = 0; // PKStatus enum (only for entityType == 0, player)
     uint8_t honorRank = 0; // HonorRank enum (only for entityType == 0, player)
+    uint8_t adminRole = 0; // AdminRole enum (only for entityType == 0, player) — v16
 
     // Player appearance (only serialized when entityType == 0)
     uint8_t gender    = 0; // 0=male, 1=female
@@ -161,6 +162,7 @@ struct SvEntityEnterMsg {
             detail::writeU64(w, costumeVisuals);
             w.writeString(guildName);
             w.writeString(guildIconPath);
+            w.writeU8(adminRole);   // v16
         }
         if (entityType == 3) {
             w.writeString(itemId);
@@ -209,6 +211,9 @@ struct SvEntityEnterMsg {
             m.costumeVisuals = detail::readU64(r);
             m.guildName     = r.readString();
             m.guildIconPath = r.readString();
+            m.adminRole     = r.readU8();   // v16
+            // Defensive clamp: only 0/1/2 are defined AdminRole values.
+            if (m.adminRole > 2) m.adminRole = 0;
         }
         if (m.entityType == 3) {
             m.itemId       = r.readString();

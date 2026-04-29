@@ -1376,6 +1376,31 @@ struct CmdShopSellMsg {
     }
 };
 
+// v17 (S136): sell an item that lives inside a bag sub-slot. Distinct packet
+// rather than overloading CmdShopSellMsg so the existing top-level path stays
+// byte-identical (no risk of an old field decoding into a new one).
+struct CmdShopSellFromBagMsg {
+    uint32_t npcId = 0;
+    uint8_t  bagSlot = 0;     // top-level inventory slot of the bag container
+    uint8_t  bagSubSlot = 0;  // index inside that bag's contents
+    uint16_t quantity = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU32(npcId);
+        w.writeU8(bagSlot);
+        w.writeU8(bagSubSlot);
+        w.writeU16(quantity);
+    }
+    static CmdShopSellFromBagMsg read(ByteReader& r) {
+        CmdShopSellFromBagMsg m;
+        m.npcId      = r.readU32();
+        m.bagSlot    = r.readU8();
+        m.bagSubSlot = r.readU8();
+        m.quantity   = r.readU16();
+        return m;
+    }
+};
+
 // ============================================================================
 // Server -> Client: SvShopResult
 // ============================================================================

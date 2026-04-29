@@ -742,6 +742,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
     if (showCombatTextEditor_) {
         drawCombatTextEditorWindow(&showCombatTextEditor_);
     }
+    if (showRoleNameplatesPanel_) drawRoleNameplatesPanel();
     LogViewer::instance().draw();
     drawTilePalette(world, camera);
     drawAssetBrowser(world, camera);
@@ -1015,6 +1016,7 @@ void Editor::drawDockSpace() {
                 animationEditor_.setOpen(animOpen);
             }
             ImGui::MenuItem("Combat Text Editor", nullptr, &showCombatTextEditor_);
+            ImGui::MenuItem("Role Nameplates",    nullptr, &showRoleNameplatesPanel_);
             bool pdOpen = paperDollPanel_.isOpen();
             if (ImGui::MenuItem("Paper Doll Manager", nullptr, &pdOpen)) {
                 paperDollPanel_.setOpen(pdOpen);

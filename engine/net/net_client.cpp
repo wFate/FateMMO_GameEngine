@@ -1131,6 +1131,19 @@ void NetClient::sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t qua
     sendPacket(Channel::ReliableOrdered, PacketType::CmdShopSell, buf, w.size());
 }
 
+void NetClient::sendShopSellFromBag(uint32_t npcId, uint8_t bagSlot,
+                                    uint8_t bagSubSlot, uint16_t quantity) {
+    CmdShopSellFromBagMsg msg;
+    msg.npcId      = npcId;
+    msg.bagSlot    = bagSlot;
+    msg.bagSubSlot = bagSubSlot;
+    msg.quantity   = quantity;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdShopSellFromBag, buf, w.size());
+}
+
 // Phase 71: Opals shop (in-game SHP menu tab). No NPC — the catalog is loaded
 // from assets/data/opals_shop.json and the purchase is validated server-side
 // against the same catalog. Server returns SvShopResult with updatedOpals set.

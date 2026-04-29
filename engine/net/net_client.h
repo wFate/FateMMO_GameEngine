@@ -41,6 +41,8 @@ public:
     void sendStatEnchant(uint8_t targetSlot, const std::string& scrollItemId);
     void sendShopBuy(uint32_t npcId, const std::string& itemId, uint16_t quantity);
     void sendShopSell(uint32_t npcId, uint8_t inventorySlot, uint16_t quantity);
+    void sendShopSellFromBag(uint32_t npcId, uint8_t bagSlot, uint8_t bagSubSlot,
+                             uint16_t quantity);
 
     // Quest accept/abandon/complete (subAction per engine/net/game_messages.h QuestAction).
     void sendQuestAction(uint8_t subAction, uint32_t questId);

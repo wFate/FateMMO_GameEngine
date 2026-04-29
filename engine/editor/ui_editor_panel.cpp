@@ -788,6 +788,31 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::ColorEdit4("Empty Slot Plus##arc", &arc->emptySlotPlusColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Cooldown Overlay##arc", &arc->cooldownOverlayColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Page Inactive BG##arc", &arc->pageInactiveBgColor.r); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("SkillArc — Chrome");
+        ImGui::Checkbox("hudUseChrome", &arc->hudUseChrome_); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Chrome — Buttons##sa", 0)) {
+            ImGui::ColorEdit4("chromeAttackBgColor",          &arc->chromeAttackBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeAttackGradientTopColor", &arc->chromeAttackGradientTopColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeAttackBorderColor",      &arc->chromeAttackBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromePickUpBgColor",          &arc->chromePickUpBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromePickUpGradientTopColor", &arc->chromePickUpGradientTopColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromePickUpBorderColor",      &arc->chromePickUpBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome — Slots##sa", 0)) {
+            ImGui::ColorEdit4("chromeFilledSlotBgColor",          &arc->chromeFilledSlotBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeFilledSlotBorderColor",      &arc->chromeFilledSlotBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeFilledSlotGradientTopColor", &arc->chromeFilledSlotGradientTopColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeEmptySlotBgColor",           &arc->chromeEmptySlotBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeEmptySlotBorderColor",       &arc->chromeEmptySlotBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome — Pages##sa", 0)) {
+            ImGui::ColorEdit4("chromePageActiveBgColor",   &arc->chromePageActiveBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromePageInactiveBgColor", &arc->chromePageInactiveBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* dp = dynamic_cast<DPad*>(selectedNode_)) {
         ImGui::SeparatorText("DPad — Layout");
@@ -814,6 +839,21 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat("Arrow Height", &dp->arrowHeightRatio, 0.005f, 0.02f, 0.3f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Active Length", &dp->activeLenRatio, 0.01f, 0.1f, 1.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Active Offset", &dp->activeOffsetRatio, 0.01f, 0.0f, 0.5f); checkUndoCapture(uiMgr);
+
+        ImGui::SeparatorText("DPad — Chrome");
+        ImGui::Checkbox("hudUseChrome", &dp->hudUseChrome_); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Chrome##dp", 0)) {
+            ImGui::DragFloat("chromeDiscCornerRadius",   &dp->chromeDiscCornerRadius,   0.5f, 0.0f, 256.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("chromeDiscShadowOffset",  &dp->chromeDiscShadowOffset.x, 0.5f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("chromeDiscShadowBlur",     &dp->chromeDiscShadowBlur,     0.5f, 0.0f, 64.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeDiscBgColor",       &dp->chromeDiscBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeDiscBorderColor",   &dp->chromeDiscBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeDiscShadowColor",   &dp->chromeDiscShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeArmColor",          &dp->chromeArmColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeActiveColor",       &dp->chromeActiveColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeArrowColor",        &dp->chromeArrowColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* mbr = dynamic_cast<MenuButtonRow*>(selectedNode_)) {
         ImGui::SeparatorText("MenuButtonRow");
@@ -848,6 +888,23 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::SeparatorText("Tab Labels");
         for (size_t i = 0; i < mtb->tabLabels.size(); i++) {
             ImGui::Text("  Tab %zu: %s", i, mtb->tabLabels[i].c_str());
+        }
+
+        ImGui::SeparatorText("MenuTabBar — Chrome");
+        ImGui::Checkbox("panelUseChrome", &mtb->panelUseChrome_); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Chrome##mtb", 0)) {
+            ImGui::DragFloat("chromeStripCornerRadius",   &mtb->chromeStripCornerRadius,   0.5f, 0.0f, 64.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("chromeStripShadowBlur",     &mtb->chromeStripShadowBlur,     0.5f, 0.0f, 64.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("chromeStripShadowOffset",  &mtb->chromeStripShadowOffset.x, 0.5f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeStripBgColor",          &mtb->chromeStripBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeStripBorderColor",      &mtb->chromeStripBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeStripShadowColor",      &mtb->chromeStripShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeActiveTabBgColor",      &mtb->chromeActiveTabBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeActiveTabBorderColor",  &mtb->chromeActiveTabBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeInactiveTabBgColor",    &mtb->chromeInactiveTabBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeArrowBgColor",          &mtb->chromeArrowBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeArrowTextColor",        &mtb->chromeArrowTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
         }
     }
     else if (auto* ticker = dynamic_cast<ChatTicker*>(selectedNode_)) {
@@ -1205,6 +1262,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
                 checkUndoCapture(uiMgr);
             }
             ImGui::Checkbox("Use Chrome##strip", &s.useChrome); checkUndoCapture(uiMgr);
+            ImGui::Checkbox("Slot Is Circle##strip", &s.slotIsCircle); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Slot BG##strip",            &s.slotBgColor.r);           checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Slot BG Active##strip",     &s.slotBgColorActive.r);     checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Slot Border##strip",        &s.slotBorderColor.r);       checkUndoCapture(uiMgr);
@@ -1328,8 +1386,9 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("BG Color##bagpanel",      &inv->bagPanelBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Border Color##bagpanel",  &inv->bagPanelBorderColor.r); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Border Width##bagpanel",   &inv->bagPanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Padding##bagpanel",        &inv->bagPanelPadding, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Padding##bagpanel",        &inv->bagPanelPadding, 0.5f, 0.0f, 64.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Title Height##bagpanel",   &inv->bagTitleHeight, 0.5f, 0.0f, 64.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Panel Offset##bagpanel",  &inv->bagPanelOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
 
@@ -3987,6 +4046,31 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Toggle On##setpc",    &sp->toggleOnColor.r);       checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Toggle Off##setpc",   &sp->toggleOffColor.r);      checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Check On##setpc",     &sp->checkOnColor.r);        checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+
+        ImGui::SeparatorText("SettingsPanel — Chrome");
+        ImGui::Checkbox("panelUseChrome", &sp->panelUseChrome_); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Chrome — Panel##sp", 0)) {
+            ImGui::DragFloat("chromePanelBorderWidth",   &sp->chromePanelBorderWidth,   0.25f, 0.0f, 16.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("chromePanelCornerRadius",  &sp->chromePanelCornerRadius,  0.5f, 0.0f, 64.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("chromePanelShadowOffset", &sp->chromePanelShadowOffset.x, 0.5f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("chromePanelShadowBlur",    &sp->chromePanelShadowBlur,    0.5f, 0.0f, 64.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromePanelBgColor",        &sp->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromePanelGradientTop",    &sp->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromePanelGradientBottom", &sp->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromePanelBorderColor",    &sp->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromePanelShadowColor",    &sp->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeTitleBarColor",       &sp->chromeTitleBarColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeTitleColor",          &sp->chromeTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome — Bespoke##sp", 0)) {
+            ImGui::ColorEdit4("chromeLogoutBgColor",     &sp->chromeLogoutBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeLogoutBorderColor", &sp->chromeLogoutBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeLogoutTextColor",   &sp->chromeLogoutTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeToggleOnBgColor",   &sp->chromeToggleOnBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("chromeToggleOffBgColor",  &sp->chromeToggleOffBgColor.r); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
     }

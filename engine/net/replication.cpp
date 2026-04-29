@@ -461,7 +461,8 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
 
         auto* nameplate = entity->getComponent<NameplateComponent>();
         if (nameplate) {
-            msg.name = nameplate->displayName;
+            msg.name      = nameplate->displayName;
+            msg.adminRole = nameplate->roleTier;
         }
 
         auto* guildComp = entity->getComponent<GuildComponent>();

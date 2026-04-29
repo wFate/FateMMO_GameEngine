@@ -75,6 +75,163 @@
           255,
           255
         ],
+        "chromeChatBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeChatBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeChatBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromeCoordColor": [
+          242,
+          247,
+          255,
+          204
+        ],
+        "chromeExpArcFillColor": [
+          204,
+          166,
+          26,
+          230
+        ],
+        "chromeExpArcTrackColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromeHpBarBgColor": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromeHpLabelColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromeHpNumberColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromeLevelColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromeMenuBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeMenuBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeMenuBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromeMenuDividerColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromeMenuItemTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromeMenuOverlayBgColor": [
+          26,
+          33,
+          51,
+          242
+        ],
+        "chromeMenuOverlayBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeMpBarBgColor": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromeMpLabelColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromeMpNumberColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePortraitBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromePortraitFillColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeStripBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromeStripBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromeStripBorderWidth": 1.5,
+        "chromeStripGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromeStripGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
         "coordColor": [
           232,
           194,
@@ -95,6 +252,18 @@
           0,
           0
         ],
+        "expArcFillColor": [
+          204,
+          166,
+          26,
+          230
+        ],
+        "expArcTrackColor": [
+          77,
+          77,
+          77,
+          128
+        ],
         "gradientBottom": [
           0,
           0,
@@ -102,6 +271,12 @@
           0
         ],
         "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
           0,
           0,
           0,
@@ -255,6 +430,7 @@
           30.0
         ],
         "numberFontSize": 30.0,
+        "panelUseChrome": true,
         "portraitBorderColor": [
           140,
           140,
@@ -351,6 +527,77 @@
           0,
           0
         ],
+        "chromeBgColor": [
+          20,
+          26,
+          41,
+          0
+        ],
+        "chromeBorderColor": [
+          89,
+          107,
+          153,
+          0
+        ],
+        "chromeBorderWidth": 1.5,
+        "chromeCornerRadius": 8.0,
+        "chromeShadowBlur": 8.0,
+        "chromeShadowColor": [
+          0,
+          0,
+          0,
+          115
+        ],
+        "chromeShadowOffset": [
+          0.0,
+          3.0
+        ],
+        "chromeTooltipBgColor": [
+          26,
+          31,
+          46,
+          240
+        ],
+        "chromeTooltipBorderColor": [
+          77,
+          89,
+          128,
+          102
+        ],
+        "chromeTooltipBorderWidth": 1.0,
+        "chromeTooltipCornerRadius": 10.0,
+        "chromeTooltipFontSize": 17.0,
+        "chromeTooltipGradientBottom": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromeTooltipGradientTop": [
+          33,
+          38,
+          56,
+          240
+        ],
+        "chromeTooltipLineSpacing": 1.0,
+        "chromeTooltipPadding": 1.0,
+        "chromeTooltipShadowBlur": 10.0,
+        "chromeTooltipShadowColor": [
+          0,
+          0,
+          0,
+          115
+        ],
+        "chromeTooltipShadowOffset": [
+          0.0,
+          1.0
+        ],
+        "chromeTooltipTextColor": [
+          224,
+          235,
+          255,
+          255
+        ],
         "cooldownOverlayColor": [
           0,
           0,
@@ -375,12 +622,19 @@
           0,
           0
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
           0,
           0
         ],
+        "hudUseChrome": true,
         "iconAtlasCols": 8,
         "iconAtlasRows": 4,
         "iconSize": 50.0,
@@ -430,7 +684,8 @@
           255,
           255
         ],
-        "tooltipWidth": 140.0,
+        "tooltipUseChrome": true,
+        "tooltipWidth": 80.0,
         "type": "buff_bar",
         "uiShadowColor": [
           0,
@@ -486,6 +741,12 @@
           0
         ],
         "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
           0,
           0,
           0,
@@ -575,7 +836,7 @@
           0,
           0
         ],
-        "targetName": "Living Root",
+        "targetName": "Squirrel",
         "type": "target_frame",
         "uiShadowColor": [
           0,
@@ -593,7 +854,7 @@
           255,
           217
         ],
-        "activeLenRatio": 0.2800000011920929,
+        "activeLenRatio": 0.26499998569488525,
         "activeOffsetRatio": 0.28999999165534973,
         "anchor": {
           "offset": [
@@ -649,6 +910,48 @@
           49
         ],
         "centerSizeRatio": 0.20000000298023224,
+        "chromeActiveColor": [
+          233,
+          11,
+          255,
+          70
+        ],
+        "chromeArmColor": [
+          8,
+          9,
+          59,
+          217
+        ],
+        "chromeArrowColor": [
+          255,
+          255,
+          255,
+          217
+        ],
+        "chromeDiscBgColor": [
+          46,
+          39,
+          34,
+          333
+        ],
+        "chromeDiscBorderColor": [
+          41,
+          0,
+          0,
+          0
+        ],
+        "chromeDiscCornerRadius": 70.0,
+        "chromeDiscShadowBlur": 0.0,
+        "chromeDiscShadowColor": [
+          162,
+          16,
+          16,
+          0
+        ],
+        "chromeDiscShadowOffset": [
+          0.0,
+          0.0
+        ],
         "deadZoneRadius": 40.0,
         "disabledColor": [
           0,
@@ -669,12 +972,19 @@
           0,
           0
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
           0,
           0
         ],
+        "hudUseChrome": true,
         "id": "dpad",
         "opacity": 0.8500000238418579,
         "pressedColor": [
@@ -683,7 +993,6 @@
           0,
           0
         ],
-        "showBounds": true,
         "type": "dpad",
         "uiShadowColor": [
           0,
@@ -739,6 +1048,84 @@
           0,
           0
         ],
+        "chromeAttackBgColor": [
+          7,
+          37,
+          63,
+          255
+        ],
+        "chromeAttackBorderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "chromeAttackGradientTopColor": [
+          30,
+          0,
+          90,
+          330
+        ],
+        "chromeEmptySlotBgColor": [
+          38,
+          38,
+          46,
+          89
+        ],
+        "chromeEmptySlotBorderColor": [
+          128,
+          122,
+          148,
+          140
+        ],
+        "chromeFilledSlotBgColor": [
+          46,
+          41,
+          56,
+          224
+        ],
+        "chromeFilledSlotBorderColor": [
+          153,
+          140,
+          184,
+          242
+        ],
+        "chromeFilledSlotGradientTopColor": [
+          46,
+          41,
+          56,
+          224
+        ],
+        "chromePageActiveBgColor": [
+          7,
+          37,
+          63,
+          255
+        ],
+        "chromePageInactiveBgColor": [
+          76,
+          76,
+          101,
+          179
+        ],
+        "chromePickUpBgColor": [
+          7,
+          37,
+          63,
+          255
+        ],
+        "chromePickUpBorderColor": [
+          191,
+          166,
+          115,
+          0
+        ],
+        "chromePickUpGradientTopColor": [
+          30,
+          0,
+          63,
+          255
+        ],
         "cooldownFontSize": 30.0,
         "cooldownOverlayColor": [
           0,
@@ -789,6 +1176,7 @@
           24,
           242
         ],
+        "flickAngularVelocityDegPerSec": 90.0,
         "gradientBottom": [
           0,
           0,
@@ -801,12 +1189,19 @@
           0,
           0
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
           0,
           0
         ],
+        "hudUseChrome": true,
         "id": "skill_arc",
         "lvFontSize": 22.0,
         "lvTextColor": [
@@ -832,6 +1227,7 @@
           0,
           242
         ],
+        "pageCommitAngleDeg": 15.0,
         "pageDotRadius": 15.0,
         "pageFontSize": 35.0,
         "pageInactiveBgColor": [
@@ -874,6 +1270,7 @@
           0,
           0
         ],
+        "scrollEnabled": true,
         "skillArcOffset": [
           0.0,
           0.0
@@ -887,7 +1284,9 @@
         "slotArcStartDeg": 200.0,
         "slotCount": 5,
         "slotSize": 90.0,
+        "snapAnimationMs": 180.0,
         "startAngleDeg": 170.0,
+        "tapAngleDeadzoneDeg": 3.0,
         "type": "skill_arc",
         "uiShadowColor": [
           0,
@@ -905,7 +1304,7 @@
           "preset": "BottomLeft",
           "size": [
             0.0,
-            40.0
+            28.0
           ],
           "sizePercent": [
             1.0,
@@ -925,6 +1324,31 @@
           230
         ],
         "borderWidth": 1.0,
+        "chromeBgColor": [
+          40,
+          15,
+          53,
+          240
+        ],
+        "chromeBorderColor": [
+          177,
+          0,
+          218,
+          220
+        ],
+        "chromeBorderWidth": 0.800000011920929,
+        "chromeCornerRadius": 20.0,
+        "chromeShadowBlur": 10.0,
+        "chromeShadowColor": [
+          0,
+          0,
+          0,
+          115
+        ],
+        "chromeShadowOffset": [
+          0.0,
+          1.0
+        ],
         "disabledColor": [
           0,
           0,
@@ -950,12 +1374,19 @@
           0,
           0
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
           0,
           0
         ],
+        "hudUseChrome": true,
         "id": "exp_bar",
         "pressedColor": [
           0,
@@ -981,7 +1412,7 @@
           0,
           0
         ],
-        "xp": 264.0,
+        "xp": 2320.0,
         "xpToLevel": 161739120.0
       },
       {
@@ -1002,12 +1433,19 @@
           0,
           0
         ],
+        "bgColor": [
+          26,
+          26,
+          33,
+          242
+        ],
         "borderColor": [
           0,
           0,
           0,
           0
         ],
+        "borderWidth": 2.0,
         "buttonColor": [
           140,
           115,
@@ -1043,6 +1481,12 @@
           0
         ],
         "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
           0,
           0,
           0,
@@ -1133,6 +1577,12 @@
           0
         ],
         "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
           0,
           0,
           0,
@@ -1282,6 +1732,12 @@
           0,
           0
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
@@ -1349,17 +1805,79 @@
           0,
           0
         ],
+        "bgColor": [
+          13,
+          13,
+          20,
+          217
+        ],
         "borderColor": [
           0,
           0,
           0,
           0
         ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleBarColor": [
+          41,
+          51,
+          77,
+          217
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
         "disabledColor": [
           0,
           0,
           0,
           0
+        ],
+        "fontSize": 16.0,
+        "goldColor": [
+          255,
+          214,
+          84,
+          255
         ],
         "gradientBottom": [
           0,
@@ -1373,18 +1891,31 @@
           0,
           0
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
           0,
           0
         ],
+        "hudUseChrome": true,
         "id": "gauntlet_hud",
         "pressedColor": [
           0,
           0,
           0,
           0
+        ],
+        "textColor": [
+          255,
+          255,
+          255,
+          255
         ],
         "type": "gauntlet_hud",
         "uiShadowColor": [
@@ -1422,15 +1953,52 @@
         "bgCornerRadius": 30.0,
         "bgHeight": 140.0,
         "bgOffset": [
-          345.0,
+          450.0,
           0.0
         ],
-        "bgWidth": 1220.0,
+        "bgWidth": 1050.0,
         "borderColor": [
           0,
           0,
           0,
           0
+        ],
+        "chromePanelBgColor": [
+          255,
+          255,
+          255,
+          220
+        ],
+        "chromePanelBorderColor": [
+          255,
+          14,
+          246,
+          0
+        ],
+        "chromePanelBorderWidth": 2.0,
+        "chromePanelCornerRadius": 20.0,
+        "chromePanelGradientBottom": [
+          18,
+          9,
+          52,
+          220
+        ],
+        "chromePanelGradientTop": [
+          50,
+          35,
+          75,
+          220
+        ],
+        "chromePanelShadowBlur": 4.0,
+        "chromePanelShadowColor": [
+          60,
+          64,
+          151,
+          80
+        ],
+        "chromePanelShadowOffset": [
+          10.0,
+          0.0
         ],
         "disabledColor": [
           0,
@@ -1451,16 +2019,23 @@
           0,
           0
         ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
         "hoverColor": [
           0,
           0,
           0,
           0
         ],
+        "hudUseChrome": true,
         "id": "chat_idle_overlay",
         "lineSpacing": 10.0,
         "maxLines": 3,
-        "padding": 350.0,
+        "padding": 450.0,
         "pressedColor": [
           0,
           0,
@@ -1503,6 +2078,12 @@
       0
     ],
     "gradientTop": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "headerColor": [
       0,
       0,
       0,

@@ -8,7 +8,7 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 15;  // v15: protected stones are physical items; CmdCraftProtectStone added (S134)
+constexpr uint8_t  PROTOCOL_VERSION  = 17;  // v17: CmdShopSellFromBag — NPC sell from bag sub-slot (S136)
 constexpr size_t   PACKET_HEADER_SIZE = 26;  // v9: ackBits widened 4→8 bytes (32→64 bit ACK window)
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
@@ -130,6 +130,7 @@ namespace PacketType {
     constexpr uint8_t CmdUnequipToBag           = 0x4D; // Phase C Batch 3 WU14a — atomic unequip into bag sub-slot
     constexpr uint8_t CmdEquipFromBag           = 0x4E; // Phase C Batch 3 WU14b — atomic equip from bag sub-slot
     constexpr uint8_t CmdSetPickupPreference    = 0x4F; // Client-side pickup routing preference (0=InvFirst, 1=BagFirst)
+    constexpr uint8_t CmdShopSellFromBag        = 0x50; // v17 — sell an item that lives in a bag sub-slot
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
