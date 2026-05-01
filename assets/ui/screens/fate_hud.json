@@ -199,38 +199,38 @@
           115,
           140,
           191,
-          204
+          0
         ],
         "chromePortraitFillColor": [
           46,
           56,
           82,
-          255
+          0
         ],
         "chromeStripBgColor": [
           20,
           26,
           41,
-          240
+          0
         ],
         "chromeStripBorderColor": [
           89,
           107,
           153,
-          140
+          0
         ],
         "chromeStripBorderWidth": 1.5,
         "chromeStripGradientBottom": [
           15,
           20,
           36,
-          240
+          0
         ],
         "chromeStripGradientTop": [
           33,
           41,
           61,
-          240
+          0
         ],
         "coordColor": [
           232,
@@ -242,7 +242,7 @@
         "coordFontSize": 30.0,
         "coordFormat": "(%d, %d)",
         "coordOffset": [
-          235.0,
+          220.0,
           40.0
         ],
         "coordStyle": "Normal",
@@ -477,7 +477,7 @@
           60,
           58,
           58,
-          3
+          0
         ],
         "stripBorderColor": [
           0,
@@ -546,7 +546,7 @@
           0,
           0,
           0,
-          115
+          0
         ],
         "chromeShadowOffset": [
           0.0,
@@ -586,7 +586,7 @@
           0,
           0,
           0,
-          115
+          0
         ],
         "chromeTooltipShadowOffset": [
           0.0,
@@ -836,7 +836,7 @@
           0,
           0
         ],
-        "targetName": "Squirrel",
+        "targetName": "Bram",
         "type": "target_frame",
         "uiShadowColor": [
           0,
@@ -852,7 +852,7 @@
           255,
           255,
           255,
-          217
+          0
         ],
         "activeLenRatio": 0.26499998569488525,
         "activeOffsetRatio": 0.28999999165534973,
@@ -871,7 +871,7 @@
           255,
           168,
           0,
-          217
+          0
         ],
         "armHeightRatio": 0.8500000238418579,
         "armWidthRatio": 0.3199999928474426,
@@ -879,7 +879,7 @@
           39,
           42,
           4,
-          217
+          0
         ],
         "arrowDistRatio": 0.3499999940395355,
         "arrowHeightRatio": 0.019999999552965164,
@@ -894,20 +894,20 @@
           40,
           28,
           0,
-          290
+          0
         ],
         "borderColor": [
           86,
           59,
           59,
-          333
+          0
         ],
         "borderWidth": 7.0,
         "centerColor": [
           153,
           146,
           48,
-          49
+          19
         ],
         "centerSizeRatio": 0.20000000298023224,
         "chromeActiveColor": [
@@ -932,7 +932,7 @@
           46,
           39,
           34,
-          333
+          30
         ],
         "chromeDiscBorderColor": [
           41,

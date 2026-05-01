@@ -36,8 +36,16 @@ public:
     void suppressHotReload(float = 1.5f) {}
     void addScreenReloadListener(std::function<void(const std::string&)>) {}
     UINode* getScreen(const std::string&) { return nullptr; }
+    bool loadScreen(const std::string&) { return false; }
     bool loadScreenFromString(const std::string&, const std::string&) { return false; }
     std::vector<std::string> screenIds() const { return {}; }
+    void reloadAllScreensForLayoutClass() {}
+    const std::string& screenBasePath(const std::string&) const {
+        static const std::string empty; return empty;
+    }
+    const std::string& screenResolvedPath(const std::string&) const {
+        static const std::string empty; return empty;
+    }
 };
 
 } // namespace fate

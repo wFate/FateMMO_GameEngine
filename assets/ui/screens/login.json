@@ -75,6 +75,97 @@
       1.0
     ],
     "checkboxSize": 20.0,
+    "chromeBackdropTintColor": [
+      0,
+      0,
+      0,
+      77
+    ],
+    "chromeButtonBgColor": [
+      46,
+      56,
+      82,
+      255
+    ],
+    "chromeButtonBorderColor": [
+      115,
+      140,
+      191,
+      204
+    ],
+    "chromeButtonRowBgColor": [
+      26,
+      33,
+      51,
+      0
+    ],
+    "chromeButtonTextColor": [
+      242,
+      247,
+      255,
+      255
+    ],
+    "chromeFormFieldBgColor": [
+      13,
+      18,
+      31,
+      235
+    ],
+    "chromeFormFieldBorderColor": [
+      77,
+      97,
+      140,
+      179
+    ],
+    "chromePanelBgColor": [
+      20,
+      26,
+      41,
+      240
+    ],
+    "chromePanelBorderColor": [
+      89,
+      107,
+      153,
+      140
+    ],
+    "chromePanelBorderWidth": 1.5,
+    "chromePanelCornerRadius": 14.0,
+    "chromePanelGradientBottom": [
+      15,
+      20,
+      36,
+      240
+    ],
+    "chromePanelGradientTop": [
+      33,
+      41,
+      61,
+      240
+    ],
+    "chromePanelShadowBlur": 12.0,
+    "chromePanelShadowColor": [
+      0,
+      0,
+      0,
+      140
+    ],
+    "chromePanelShadowOffset": [
+      0.0,
+      4.0
+    ],
+    "chromeTitleBarColor": [
+      41,
+      51,
+      77,
+      2
+    ],
+    "chromeTitleColor": [
+      255,
+      103,
+      0,
+      300
+    ],
     "cursorInset": 8.0,
     "cursorWidth": 1.0,
     "disabledColor": [
@@ -130,6 +221,12 @@
       0,
       0
     ],
+    "headerColor": [
+      0,
+      0,
+      0,
+      0
+    ],
     "hoverColor": [
       0,
       0,
@@ -144,6 +241,7 @@
       1.0
     ],
     "labelFontSize": 30.0,
+    "loginUseChrome": true,
     "maxScale": 2.5,
     "padding": 20.0,
     "panelBgColor": [
@@ -223,8 +321,8 @@
       0.20000000298023224,
       1.0
     ],
-    "titleFontSize": 40.0,
-    "titleHeight": 40.0,
+    "titleFontSize": 50.0,
+    "titleHeight": 50.0,
     "titleText": "FateMMO",
     "toggleFontSize": 40.0,
     "toggleLinkColor": [

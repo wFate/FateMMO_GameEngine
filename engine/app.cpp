@@ -36,6 +36,10 @@
 #ifdef FATE_HAS_GAME
 #include "engine/ui/ui_theme_global.h"
 #endif
+// LayoutClass lives outside the proprietary engine/ui/ tree so it is available
+// to demo builds (FATE_HAS_GAME undefined) too. The shipping render paths
+// auto-classify regardless of build flavor.
+#include "engine/render/layout_class.h"
 #include "engine/profiling/tracy_zones.h"
 #include "engine/job/job_system.h"
 #include "engine/asset/asset_source.h"
@@ -950,6 +954,12 @@ void App::render() {
         int vpH = config_.windowHeight;
         camera_.setViewportSize(vpW, vpH);
 
+        // Auto-classify the UI layout bucket from the real device viewport.
+        // See the OpenGL shipping branch for rationale.
+        if (LayoutClassRegistry::set(LayoutClassRegistry::classify(vpW, vpH))) {
+            uiManager_.reloadAllScreensForLayoutClass();
+        }
+
         if (isLoading_) {
             // Loading — skip render graph, render UI only
             gfx::CommandList uiCmdList;
@@ -1114,6 +1124,14 @@ void App::render() {
     int vpW = config_.windowWidth;
     int vpH = config_.windowHeight;
     camera_.setViewportSize(vpW, vpH);
+
+    // Auto-classify the UI layout bucket from the real device viewport. On a
+    // foldable / orientation change the aspect crosses a class boundary and
+    // this flips the loaded variants. set() returns true only when the class
+    // actually changed, so reload-on-resize cost is paid once per change.
+    if (LayoutClassRegistry::set(LayoutClassRegistry::classify(vpW, vpH))) {
+        uiManager_.reloadAllScreensForLayoutClass();
+    }
 
     if (isLoading_) {
         // Loading — skip render graph, render UI only

@@ -30,6 +30,7 @@
 #ifdef FATE_HAS_GAME
 #include "game/systems/combat_text_config.h"
 #include "game/systems/npc_nameplate_config.h"
+#include "game/systems/mob_nameplate_config.h"
 #endif // FATE_HAS_GAME
 #include <algorithm>
 #include <unordered_set>
@@ -475,6 +476,17 @@ void Editor::captureInspectorUndo() {
     if (ImGui::IsItemDeactivatedAfterEdit() && !pendingInspectorSnapshot_.is_null()) {
         auto newState = PrefabLibrary::entityToJson(selectedEntity_);
         if (newState != pendingInspectorSnapshot_) {
+            // Promote-on-edit: a replicated entity that the user actually
+            // changed in the inspector becomes save-eligible, so authored
+            // mutations (e.g. moving Tom in the editor) persist to the scene
+            // .json on Ctrl+S even though Tom on the client originated from a
+            // server SvEntityEnter and was tagged isReplicated() at spawn.
+            // The flag clears only on a real content change, never on simple
+            // selection or focus, so accidentally clicking a pet/mob/ghost
+            // doesn't promote it.
+            if (selectedEntity_->isReplicated()) {
+                selectedEntity_->setReplicated(false);
+            }
             auto cmd = std::make_unique<PropertyCommand>();
             cmd->entityHandle = pendingInspectorHandle_;
             cmd->oldState = std::move(pendingInspectorSnapshot_);
@@ -509,6 +521,17 @@ void Editor::drawInspector() {
         }
         captureInspectorUndo();
         if (fontHeading_) ImGui::PopFont();
+
+        // Replicated/authored badge --tells the user whether their next edit
+        // will persist on Ctrl+S. Replicated entities promote to authored on
+        // first edit (see captureInspectorUndo + handleMouseUp drag promote).
+        if (selectedEntity_->isReplicated()) {
+            ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.4f, 1.0f),
+                "[REPLICATED] server-controlled, edit to promote");
+        } else {
+            ImGui::TextColored(ImVec4(0.5f, 0.85f, 0.5f, 0.8f),
+                "[AUTHORED] saves to scene .json");
+        }
 
         // Tag + Active on same line
         {
@@ -1526,9 +1549,32 @@ void Editor::drawInspector() {
                     captureInspectorUndo();
                 }
 
-                // --- NPC Nameplate Preset ---
+                // --- Mob Nameplate Preset (global default for all spawned mobs) ---
                 ImGui::Separator();
-                ImGui::Text("NPC Nameplate Preset");
+                ImGui::Text("Mob Nameplate Preset (global)");
+                ImGui::TextDisabled("Applied to every mob spawned at runtime.");
+                if (ImGui::Button("Save as Mob Preset##mnp")) {
+                    auto& cfg = fate::MobNameplateConfig::instance();
+                    cfg.pullFrom(*mnp);
+                    cfg.save(fate::MobNameplateConfig::kDefaultPath);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Load Mob Preset##mnp")) {
+                    auto& cfg = fate::MobNameplateConfig::instance();
+                    cfg.load(fate::MobNameplateConfig::kDefaultPath);
+                    cfg.applyTo(*mnp);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Reset Defaults##mnpMobPreset")) {
+                    auto& cfg = fate::MobNameplateConfig::instance();
+                    cfg.loadDefaults();
+                    cfg.applyTo(*mnp);
+                }
+
+                // --- NPC Nameplate Preset (global default for all spawned NPCs) ---
+                ImGui::Separator();
+                ImGui::Text("NPC Nameplate Preset (global)");
+                ImGui::TextDisabled("Applied to every NPC spawned at runtime.");
                 if (ImGui::Button("Save as NPC Preset##mnp")) {
                     auto& cfg = fate::NPCNameplateConfig::instance();
                     cfg.pullFrom(*mnp);
@@ -1541,7 +1587,7 @@ void Editor::drawInspector() {
                     cfg.applyTo(*mnp);
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("Reset Defaults##mnpPreset")) {
+                if (ImGui::Button("Reset Defaults##mnpNpcPreset")) {
                     auto& cfg = fate::NPCNameplateConfig::instance();
                     cfg.loadDefaults();
                     cfg.applyTo(*mnp);

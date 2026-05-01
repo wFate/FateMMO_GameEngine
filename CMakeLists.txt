@@ -686,13 +686,14 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     file(GLOB_RECURSE SERVER_SHARED_SOURCES game/shared/*.cpp)
     # entity_factory.cpp is used by both game and server targets.
     # paper_doll_catalog / combat_text_config / npc_nameplate_config /
-    # animation_loader are pulled in to satisfy fate_engine.lib references
-    # from editor + widget code linked into FateServer.
+    # mob_nameplate_config / animation_loader are pulled in to satisfy
+    # fate_engine.lib references from editor + widget code linked into FateServer.
     set(SERVER_GAME_SOURCES
         game/entity_factory.cpp
         game/data/paper_doll_catalog.cpp
         game/systems/combat_text_config.cpp
         game/systems/npc_nameplate_config.cpp
+        game/systems/mob_nameplate_config.cpp
         game/animation_loader.cpp
     )
     if(SERVER_SOURCES AND PostgreSQL_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/game/entity_factory.cpp")
@@ -758,6 +759,10 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     if(EXISTS "${CMAKE_SOURCE_DIR}/game/systems/npc_nameplate_config.cpp")
         list(APPEND GAME_ANIM_TEST_SOURCES game/systems/npc_nameplate_config.cpp)
     endif()
+    # Mob nameplate config (needed by editor_inspector in fate_engine)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/game/systems/mob_nameplate_config.cpp")
+        list(APPEND GAME_ANIM_TEST_SOURCES game/systems/mob_nameplate_config.cpp)
+    endif()
     # Role nameplate config (needed by test_role_nameplate_config.cpp)
     if(EXISTS "${CMAKE_SOURCE_DIR}/game/systems/role_nameplate_config.cpp")
         list(APPEND GAME_ANIM_TEST_SOURCES game/systems/role_nameplate_config.cpp)
@@ -814,7 +819,9 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
             target_compile_definitions(fate_tests PRIVATE FATE_TESTS_HAS_DB=1)
         endif()
         if(MSVC)
-            target_compile_options(fate_tests PRIVATE /EHsc /W4 /wd4100 /wd4201 /wd4458 /MP)
+            # /bigobj — test_tile_layers.cpp exceeds the default 65536-section
+            # COFF limit when doctest macros expand under heavy templating.
+            target_compile_options(fate_tests PRIVATE /EHsc /W4 /wd4100 /wd4201 /wd4458 /MP /bigobj)
         endif()
     endif()
 

@@ -9,6 +9,7 @@
 #include "engine/editor/property_inspector.h"
 #include "engine/ui/ui_serializer.h"
 #include "engine/ui/ui_widget_registry.h"
+#include "engine/render/layout_class.h"
 #include "engine/render/font_registry.h"
 #include "engine/core/logger.h"
 #include "engine/ui/widgets/panel.h"
@@ -826,6 +827,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::ColorEdit4("Border Color##dpad", &dp->borderColor.r); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Border Width##dpad", &dp->borderWidth, 0.5f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Arm Color##dpad", &dp->armColor.r); checkUndoCapture(uiMgr);
+        ImGui::ColorEdit4("Arm Highlight##dpad", &dp->armHighlightColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Active Color##dpad", &dp->activeColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Center Color##dpad", &dp->centerColor.r); checkUndoCapture(uiMgr);
         ImGui::ColorEdit4("Arrow Color##dpad", &dp->arrowColor.r); checkUndoCapture(uiMgr);
@@ -1273,6 +1275,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::ColorEdit4("Page Dot Active##strip",    &s.pageDotColorActive.r);    checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Stack Count##strip",        &s.stackCountColor.r);       checkUndoCapture(uiMgr);
             ImGui::DragFloat("Stack Count Font##strip",    &s.stackCountFontSize, 0.5f, 6.0f, 32.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Slot Glyph Font##strip",     &s.slotGlyphFontSize, 0.5f, 6.0f, 64.0f); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Drop Highlight##strip",     &s.dropHighlightColor.r);    checkUndoCapture(uiMgr);
             ImGui::DragFloat("Drop High Thick##strip",     &s.dropHighlightThickness, 0.1f, 0.0f, 10.0f); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Cooldown Overlay##strip",   &s.cooldownOverlayColor.r);  checkUndoCapture(uiMgr);
@@ -1569,6 +1572,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
 
         if (ImGui::TreeNodeEx("Tab Circles##skp", 0)) {
+            ImGui::DragFloat2("Offset##sktc", &skp->tabOffset.x, 0.5f, -400.0f, 400.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Tab Radius", &skp->tabRadius, 0.5f, 4.0f, 40.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Tab Spacing Mul", &skp->tabSpacingMul, 0.1f, 1.0f, 5.0f); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Tab Bg Active", &skp->tabBgActive.r); checkUndoCapture(uiMgr);
@@ -1581,6 +1585,8 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         }
 
         if (ImGui::TreeNodeEx("Wheel Arc##skp", 0)) {
+            ImGui::DragFloat2("Offset##skwa", &skp->wheelOffset.x, 0.5f, -400.0f, 400.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Radius Override", &skp->wheelRadiusOverride, 0.5f, 0.0f, 400.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Start Angle", &skp->wheelStartDeg, 1.0f, 0.0f, 360.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("End Angle", &skp->wheelEndDeg, 1.0f, 0.0f, 360.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Slot Size Mul", &skp->wheelSlotSizeMul, 0.01f, 0.1f, 1.0f); checkUndoCapture(uiMgr);
@@ -1990,6 +1996,12 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Button##qsf", &qs->buttonFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
+        if (ImGui::TreeNodeEx("Y Offsets##qs", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat("Title Y##qsy",    &qs->titleYOffset,    0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Quantity Y##qsy", &qs->quantityYOffset, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Buttons Y##qsy",  &qs->buttonsYOffset,  0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
         if (ImGui::TreeNodeEx("Colors##qs", 0)) {
             ImGui::ColorEdit4("Button##qsc", &qs->buttonColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Button Hover##qsc", &qs->buttonHoverColor.r); checkUndoCapture(uiMgr);
@@ -2023,73 +2035,6 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             qs->cancelText = canBuf;
         }
         checkUndoCapture(uiMgr);
-    }
-    else if (auto* bv = dynamic_cast<BagViewPanel*>(selectedNode_)) {
-        ImGui::SeparatorText("BagViewPanel");
-        if (ImGui::TreeNodeEx("Panel##bvp", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat("BG Width##bvpp", &bv->bgWidth, 1.0f, 0.0f, 1000.0f, "%.0f (0=full)"); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("BG Height##bvpp", &bv->bgHeight, 1.0f, 0.0f, 1000.0f, "%.0f (0=full)"); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("BG Offset##bvpp", &bv->bgOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Background##bvpp", &bv->panelBgColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Border Color##bvpp", &bv->panelBorderColor.r); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Border Width##bvpp", &bv->panelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Title Text##bvpp", &bv->titleTextColor.r); checkUndoCapture(uiMgr);
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNodeEx("Layout##bvp", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat("Slot Size##bvp", &bv->slotSize, 1.0f, 16.0f, 100.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Slot Padding##bvp", &bv->slotPadding, 0.5f, 0.0f, 20.0f); checkUndoCapture(uiMgr);
-            ImGui::DragInt("Grid Columns##bvp", &bv->gridColumns, 1, 1, 10); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Content Padding##bvp", &bv->contentPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Title Height##bvp", &bv->titleHeight, 0.5f, 0.0f, 64.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Title Pad Top##bvp", &bv->titlePadTop, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Slot Border Width##bvp", &bv->slotBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNodeEx("Font Sizes##bvp", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::DragFloat("Title##bvpf", &bv->titleFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Slot Text##bvpf", &bv->slotFontSize, 0.5f, 4.0f, 48.0f); checkUndoCapture(uiMgr);
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNodeEx("Slot Colors##bvp", 0)) {
-            ImGui::ColorEdit4("Slot BG##bvpc", &bv->slotBgColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Slot Border##bvpc", &bv->slotBorderColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Empty Slot##bvpc", &bv->emptySlotColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Item Text##bvpc", &bv->itemTextColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Enchant Text##bvpc", &bv->enchantTextColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Quantity Text##bvpc", &bv->quantityTextColor.r); checkUndoCapture(uiMgr);
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNodeEx("Close Button##bvp", 0)) {
-            ImGui::DragFloat("Radius##bvpcb", &bv->closeBtnRadius, 0.5f, 4.0f, 32.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Offset##bvpcb", &bv->closeBtnOffset, 0.5f, 0.0f, 32.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Font Size##bvpcb", &bv->closeBtnFontSize, 0.5f, 6.0f, 32.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Border Width##bvpcb", &bv->closeBtnBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("BG Color##bvpcb", &bv->closeBtnBgColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Border Color##bvpcb", &bv->closeBtnBorderColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Text Color##bvpcb", &bv->closeBtnTextColor.r); checkUndoCapture(uiMgr);
-            ImGui::TreePop();
-        }
-
-        ImGui::Separator();
-        ImGui::Checkbox("Use Chrome Panel##bvppc", &bv->panelUseChrome_); checkUndoCapture(uiMgr);
-        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
-        if (ImGui::TreeNodeEx("Chrome Panel##bvp", 0)) {
-            ImGui::DragFloat("Border Width##bvpcp", &bv->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Corner Radius##bvpcp", &bv->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("Shadow Offset##bvpcp", &bv->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Shadow Blur##bvpcp", &bv->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Background##bvpcp", &bv->chromePanelBgColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Gradient Top##bvpcp", &bv->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Gradient Bottom##bvpcp", &bv->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Border##bvpcp", &bv->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Shadow##bvpcp", &bv->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Title Text##bvpcp", &bv->chromeTitleTextColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Close Btn Bg##bvpcp", &bv->chromeCloseBtnBgColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Close Btn Border##bvpcp", &bv->chromeCloseBtnBorderColor.r); checkUndoCapture(uiMgr);
-            ImGui::ColorEdit4("Close Btn Text##bvpcp", &bv->chromeCloseBtnTextColor.r); checkUndoCapture(uiMgr);
-            ImGui::TreePop();
-        }
     }
     else if (auto* ip = dynamic_cast<InvitePromptPanel*>(selectedNode_)) {
         ImGui::SeparatorText("InvitePromptPanel");
@@ -2224,42 +2169,6 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             checkUndoCapture(uiMgr);
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Space between the two parallel strokes (px).");
-        }
-    }
-    // login_screen: reflected properties drive the auto-inspector above. This
-    // branch only adds the S128 Tier E chrome rows (not in FATE_REFLECT).
-    else if (auto* ls = dynamic_cast<LoginScreen*>(selectedNode_)) {
-        ImGui::SeparatorText("LoginScreen Chrome (S128 Tier E)");
-        if (ImGui::TreeNode("Chrome LoginScreen##login_cp")) {
-            if (ImGui::TreeNode("Layout##login_l")) {
-                ImGui::Checkbox  ("Use Chrome##login_l",            &ls->loginUseChrome_);              checkUndoCapture(uiMgr);
-                ImGui::DragFloat ("Border Width##login_l",          &ls->chromePanelBorderWidth, 0.1f); checkUndoCapture(uiMgr);
-                ImGui::DragFloat ("Corner Radius##login_l",         &ls->chromePanelCornerRadius, 0.5f); checkUndoCapture(uiMgr);
-                ImGui::DragFloat2("Shadow Offset##login_l",         &ls->chromePanelShadowOffset.x, 0.1f); checkUndoCapture(uiMgr);
-                ImGui::DragFloat ("Shadow Blur##login_l",           &ls->chromePanelShadowBlur, 0.5f);  checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Bg Color##login_l",              &ls->chromePanelBgColor.r);          checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Gradient Top##login_l",          &ls->chromePanelGradientTop.r);      checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Gradient Bottom##login_l",       &ls->chromePanelGradientBottom.r);   checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Border Color##login_l",          &ls->chromePanelBorderColor.r);      checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Shadow Color##login_l",          &ls->chromePanelShadowColor.r);      checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Title Bar Color##login_l",       &ls->chromeTitleBarColor.r);         checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Title Color##login_l",           &ls->chromeTitleColor.r);            checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Backdrop Tint##login_l",         &ls->chromeBackdropTintColor.r);     checkUndoCapture(uiMgr);
-                ImGui::TreePop();
-            }
-            if (ImGui::TreeNode("Form##login_cp")) {
-                ImGui::ColorEdit4("Form Field Bg##login_f",         &ls->chromeFormFieldBgColor.r);      checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Form Field Border##login_f",     &ls->chromeFormFieldBorderColor.r);  checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Button Row Bg##login_f",         &ls->chromeButtonRowBgColor.r);      checkUndoCapture(uiMgr);
-                ImGui::TreePop();
-            }
-            if (ImGui::TreeNode("Buttons##login_cp")) {
-                ImGui::ColorEdit4("Button Bg##login_b",             &ls->chromeButtonBgColor.r);         checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Button Border##login_b",         &ls->chromeButtonBorderColor.r);     checkUndoCapture(uiMgr);
-                ImGui::ColorEdit4("Button Text##login_b",           &ls->chromeButtonTextColor.r);       checkUndoCapture(uiMgr);
-                ImGui::TreePop();
-            }
-            ImGui::TreePop();
         }
     }
     else if (auto* pf = dynamic_cast<PartyFrame*>(selectedNode_)) {
@@ -3080,7 +2989,10 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         if (ImGui::TreeNodeEx("Position Offsets##gp", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat2("Title##gpo", &gp->titleOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Emblem##gpo", &gp->emblemOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat2("Guild Info##gpo", &gp->guildInfoOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Guild Info (block)##gpo", &gp->guildInfoOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Guild Name##gpo", &gp->guildNameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Guild Level##gpo", &gp->guildLevelOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Member Count##gpo", &gp->memberCountOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Roster##gpo", &gp->rosterOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
@@ -3258,6 +3170,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Font Size##shpct", &sp2->categoryTabFontSize, 0.5f, 8.0f, 32.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Padding X##shpct", &sp2->categoryTabPaddingX, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Gap##shpct", &sp2->categoryTabGap, 0.5f, 0.0f, 24.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Offset##shpct", &sp2->categoryTabOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("BG##shpct",          &sp2->categoryTabBgColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Active BG##shpct",    &sp2->categoryTabActiveColor.r); checkUndoCapture(uiMgr);
             ImGui::ColorEdit4("Text##shpct",         &sp2->categoryTabTextColor.r); checkUndoCapture(uiMgr);
@@ -3271,6 +3184,7 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat2("Item Name##shpo", &sp2->itemNameOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Price##shpo", &sp2->priceOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat2("Stock##shpo", &sp2->stockOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Buy Button##shpo", &sp2->buyBtnOffset.x, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Font Sizes##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -3278,19 +3192,40 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::DragFloat("Sub-Header##shpf", &sp2->subHeaderFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Item Name##shpf", &sp2->itemFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Price##shpf", &sp2->priceFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Buy Btn##shpf", &sp2->buyBtnFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Gold Bar##shpf", &sp2->goldFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Stock##shpf", &sp2->stockFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Layout##shp", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat("Header Height##shpl", &sp2->headerHeight, 1.0f, 0.0f, 100.0f); checkUndoCapture(uiMgr);
-            ImGui::DragFloat("Row Height##shpl", &sp2->rowHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Row Height##shpl", &sp2->rowHeight, 1.0f, 10.0f, 200.0f); checkUndoCapture(uiMgr);
+            // Per-category row-height overrides (chrome path; one per category tab).
+            if (!sp2->categoryTabs.empty() && ImGui::TreeNodeEx("Per-Category Row Height##shpl", 0)) {
+                for (const auto& tab : sp2->categoryTabs) {
+                    float v = sp2->categoryRowHeights.count(tab.id)
+                        ? sp2->categoryRowHeights[tab.id] : sp2->rowHeight;
+                    std::string lbl = tab.label + "##shpl_crh_" + tab.id;
+                    if (ImGui::DragFloat(lbl.c_str(), &v, 1.0f, 10.0f, 200.0f)) {
+                        sp2->categoryRowHeights[tab.id] = v;
+                        checkUndoCapture(uiMgr);
+                    }
+                    ImGui::SameLine();
+                    std::string clr = "Clear##shpl_crh_clr_" + tab.id;
+                    if (ImGui::SmallButton(clr.c_str())) {
+                        sp2->categoryRowHeights.erase(tab.id);
+                        checkUndoCapture(uiMgr);
+                    }
+                }
+                ImGui::TreePop();
+            }
             ImGui::DragFloat("Gold Bar Height##shpl", &sp2->goldBarHeight, 1.0f, 0.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Buy Btn Width##shpl", &sp2->buyBtnWidth, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Buy Btn Height##shpl", &sp2->buyBtnHeight, 1.0f, 10.0f, 100.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Content Padding##shpl", &sp2->contentPadding, 0.5f, 0.0f, 30.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Sub-Header Height##shpl", &sp2->subHeaderHeight, 1.0f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
             ImGui::DragFloat("Border Width##shpl", &sp2->panelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::Checkbox("Show Stock##shpl", &sp2->showStock); checkUndoCapture(uiMgr);
             ImGui::TreePop();
         }
         if (ImGui::TreeNodeEx("Colors##shp", 0)) {
@@ -3361,6 +3296,43 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             snprintf(cancLblBuf, sizeof(cancLblBuf), "%s", sp2->cancelBtnLabel.c_str());
             if (ImGui::InputText("Cancel Label##shpsp", cancLblBuf, sizeof(cancLblBuf))) {
                 sp2->cancelBtnLabel = cancLblBuf;
+            }
+            checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Buy Confirm Popup##shpbcp", 0)) {
+            ImGui::DragFloat("Width##shpbcp", &sp2->buyConfirmPopupW, 1.0f, 100.0f, 800.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Height##shpbcp", &sp2->buyConfirmPopupH, 1.0f, 60.0f, 600.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Width##shpbcp", &sp2->buyConfirmBtnW, 1.0f, 30.0f, 300.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Height##shpbcp", &sp2->buyConfirmBtnH, 1.0f, 12.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Border Width##shpbcp", &sp2->buyConfirmBorderW, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Title Font##shpbcp", &sp2->buyConfirmTitleFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Cost Font##shpbcp", &sp2->buyConfirmCostFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Font##shpbcp", &sp2->buyConfirmBtnFontSize, 0.5f, 4.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Offset##shpbcp", &sp2->buyConfirmOffset.x, 0.5f, -500.0f, 500.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Title Y##shpbcp", &sp2->buyConfirmTitleY, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Cost Y##shpbcp", &sp2->buyConfirmCostY, 0.5f, -200.0f, 200.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Bottom Margin##shpbcp", &sp2->buyConfirmBtnBottomMargin, 0.5f, 0.0f, 80.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Btn Gap##shpbcp", &sp2->buyConfirmBtnGap, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Dim Overlay##shpbcp",    &sp2->buyConfirmDimColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg##shpbcp",             &sp2->buyConfirmBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##shpbcp",         &sp2->buyConfirmBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Confirm Btn##shpbcp",    &sp2->buyConfirmConfirmBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Cancel Btn##shpbcp",     &sp2->buyConfirmCancelBtnColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Text##shpbcp",     &sp2->buyConfirmTitleColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Cost Text##shpbcp",      &sp2->buyConfirmCostColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Confirm Text##shpbcp",   &sp2->buyConfirmBtnTextColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Cancel Text##shpbcp",    &sp2->buyConfirmCancelTextColor.r); checkUndoCapture(uiMgr);
+            char buyConfBuf[64] = {};
+            snprintf(buyConfBuf, sizeof(buyConfBuf), "%s", sp2->buyConfirmBtnLabel.c_str());
+            if (ImGui::InputText("Confirm Label##shpbcp", buyConfBuf, sizeof(buyConfBuf))) {
+                sp2->buyConfirmBtnLabel = buyConfBuf;
+            }
+            checkUndoCapture(uiMgr);
+            char buyCancBuf[64] = {};
+            snprintf(buyCancBuf, sizeof(buyCancBuf), "%s", sp2->buyCancelBtnLabel.c_str());
+            if (ImGui::InputText("Cancel Label##shpbcp", buyCancBuf, sizeof(buyCancBuf))) {
+                sp2->buyCancelBtnLabel = buyCancBuf;
             }
             checkUndoCapture(uiMgr);
             ImGui::TreePop();
@@ -4587,22 +4559,99 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
     }
 
     // --- Save ---
+    // Two buttons:
+    //   "Save Screen" writes to whatever file we're previewing right now —
+    //     base on Base class, foo.tablet.json on Tablet class, etc. This is
+    //     the natural workflow: pick device → tweak → save → file goes to
+    //     the right variant.
+    //   "Save as <Class> Variant" forces a save to the variant filename even
+    //     when we're previewing Base. Used to fork a new variant from the base
+    //     layout (load Base, click this, then switch to the variant device to
+    //     start tuning).
     ImGui::Separator();
-    if (ImGui::Button("Save Screen") && !selectedScreenId_.empty()) {
-        std::string relPath = "assets/ui/screens/" + selectedScreenId_ + ".json";
-        UISerializer::saveToFile(relPath, selectedScreenId_, uiMgr.getScreen(selectedScreenId_));
-        LOG_INFO("UI", "Saved screen: %s", relPath.c_str());
-        if (!sourceDir_.empty()) {
-            // sourceDir_ is FATE_SOURCE_DIR/assets/scenes — go up to project root
-            std::string projectRoot = sourceDir_;
-            auto pos = projectRoot.rfind("/assets/scenes");
-            if (pos == std::string::npos) pos = projectRoot.rfind("\\assets\\scenes");
-            if (pos != std::string::npos) projectRoot = projectRoot.substr(0, pos);
-            std::string srcPath = projectRoot + "/" + relPath;
-            UISerializer::saveToFile(srcPath, selectedScreenId_, uiMgr.getScreen(selectedScreenId_));
-            LOG_INFO("UI", "Saved screen (source): %s", srcPath.c_str());
+    if (!selectedScreenId_.empty()) {
+        const std::string& resolvedPath = uiMgr.screenResolvedPath(selectedScreenId_);
+        const std::string& basePath     = uiMgr.screenBasePath(selectedScreenId_);
+        fate::LayoutClass cls           = fate::LayoutClassRegistry::current();
+        const char* className           = fate::LayoutClassRegistry::name(cls);
+
+        // Save target rule:
+        //   Base class       -> base path (canonical foo.json)
+        //   Tablet/Compact   -> mangleVariantPath(basePath, cls), even when the
+        //                       variant file does not yet exist on disk.
+        // Without this rule, a missing variant means resolvedPath == basePath,
+        // and saving to resolvedPath would clobber the iPhone-17-Pro baseline
+        // on the very first tuning pass for a tablet/compact device.
+        std::string canonicalBase = !basePath.empty()
+            ? basePath
+            : (!resolvedPath.empty()
+                ? resolvedPath
+                : "assets/ui/screens/" + selectedScreenId_ + ".json");
+        std::string saveRelPath = (cls == fate::LayoutClass::Base)
+            ? canonicalBase
+            : fate::mangleVariantPath(canonicalBase, cls);
+
+        char saveLabel[80];
+        if (cls == fate::LayoutClass::Base) {
+            snprintf(saveLabel, sizeof(saveLabel), "Save Screen (Base)");
+        } else {
+            snprintf(saveLabel, sizeof(saveLabel), "Save Screen (%s)", className);
         }
-        uiMgr.suppressHotReload();
+
+        if (ImGui::Button(saveLabel)) {
+            UISerializer::saveToFile(saveRelPath, selectedScreenId_,
+                                     uiMgr.getScreen(selectedScreenId_));
+            LOG_INFO("UI", "Saved screen: %s", saveRelPath.c_str());
+            if (!sourceDir_.empty()) {
+                std::string projectRoot = sourceDir_;
+                auto pos = projectRoot.rfind("/assets/scenes");
+                if (pos == std::string::npos) pos = projectRoot.rfind("\\assets\\scenes");
+                if (pos != std::string::npos) projectRoot = projectRoot.substr(0, pos);
+                std::string srcPath = projectRoot + "/" + saveRelPath;
+                UISerializer::saveToFile(srcPath, selectedScreenId_,
+                                         uiMgr.getScreen(selectedScreenId_));
+                LOG_INFO("UI", "Saved screen (source): %s", srcPath.c_str());
+            }
+            uiMgr.suppressHotReload();
+        }
+
+        // Fork-from-base: write the *current* in-memory tree to the variant
+        // file for a class other than the one we're previewing. Visible only
+        // when we're on Base and a variant doesn't yet exist for the targets.
+        if (cls == fate::LayoutClass::Base && !basePath.empty()) {
+            ImGui::SameLine();
+            if (ImGui::Button("Fork → Tablet Variant")) {
+                std::string forkPath = fate::mangleVariantPath(basePath, fate::LayoutClass::Tablet);
+                UISerializer::saveToFile(forkPath, selectedScreenId_,
+                                         uiMgr.getScreen(selectedScreenId_));
+                LOG_INFO("UI", "Forked tablet variant: %s", forkPath.c_str());
+                if (!sourceDir_.empty()) {
+                    std::string projectRoot = sourceDir_;
+                    auto pos = projectRoot.rfind("/assets/scenes");
+                    if (pos == std::string::npos) pos = projectRoot.rfind("\\assets\\scenes");
+                    if (pos != std::string::npos) projectRoot = projectRoot.substr(0, pos);
+                    UISerializer::saveToFile(projectRoot + "/" + forkPath,
+                                             selectedScreenId_,
+                                             uiMgr.getScreen(selectedScreenId_));
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Fork → Compact Variant")) {
+                std::string forkPath = fate::mangleVariantPath(basePath, fate::LayoutClass::Compact);
+                UISerializer::saveToFile(forkPath, selectedScreenId_,
+                                         uiMgr.getScreen(selectedScreenId_));
+                LOG_INFO("UI", "Forked compact variant: %s", forkPath.c_str());
+                if (!sourceDir_.empty()) {
+                    std::string projectRoot = sourceDir_;
+                    auto pos = projectRoot.rfind("/assets/scenes");
+                    if (pos == std::string::npos) pos = projectRoot.rfind("\\assets\\scenes");
+                    if (pos != std::string::npos) projectRoot = projectRoot.substr(0, pos);
+                    UISerializer::saveToFile(projectRoot + "/" + forkPath,
+                                             selectedScreenId_,
+                                             uiMgr.getScreen(selectedScreenId_));
+                }
+            }
+        }
     }
     ImGui::SeparatorText("Bindings");
     if (ImGui::TreeNode("Event Bindings")) {
@@ -4686,6 +4735,66 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::TreePop();
     }
 
+#endif // FATE_HAS_GAME
+
+    // S128 Tier E chrome rows for widgets that have FATE_REFLECT — must run
+    // alongside the auto-inspector, not gated by the legacy `else` above.
+#ifdef FATE_HAS_GAME
+    if (auto* ls = dynamic_cast<LoginScreen*>(selectedNode_)) {
+        ImGui::SeparatorText("LoginScreen Chrome (S128 Tier E)");
+        ImGui::Checkbox("Use Chrome##login_uc", &ls->loginUseChrome_); checkUndoCapture(uiMgr);
+        if (ImGui::TreeNodeEx("Chrome Panel##login_l", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat ("Border Width##login_l",          &ls->chromePanelBorderWidth, 0.1f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##login_l",         &ls->chromePanelCornerRadius, 0.5f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##login_l",         &ls->chromePanelShadowOffset.x, 0.1f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##login_l",           &ls->chromePanelShadowBlur, 0.5f);  checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Bg Color##login_l",              &ls->chromePanelBgColor.r);          checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##login_l",          &ls->chromePanelGradientTop.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##login_l",       &ls->chromePanelGradientBottom.r);   checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border Color##login_l",          &ls->chromePanelBorderColor.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow Color##login_l",          &ls->chromePanelShadowColor.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Bar Color##login_l",       &ls->chromeTitleBarColor.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Color##login_l",           &ls->chromeTitleColor.r);            checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Backdrop Tint##login_l",         &ls->chromeBackdropTintColor.r);     checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Form##login_f", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::ColorEdit4("Form Field Bg##login_f",         &ls->chromeFormFieldBgColor.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Form Field Border##login_f",     &ls->chromeFormFieldBorderColor.r);  checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button Row Bg##login_f",         &ls->chromeButtonRowBgColor.r);      checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Buttons##login_b", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::ColorEdit4("Button Bg##login_b",             &ls->chromeButtonBgColor.r);         checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button Border##login_b",         &ls->chromeButtonBorderColor.r);     checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Button Text##login_b",           &ls->chromeButtonTextColor.r);       checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+    }
+    if (auto* bv = dynamic_cast<BagViewPanel*>(selectedNode_)) {
+        ImGui::SeparatorText("BagViewPanel Chrome");
+        ImGui::Checkbox("Use Chrome Panel##bvppc", &bv->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##bvpcp", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::DragFloat ("Border Width##bvpcp",        &bv->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f);  checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Corner Radius##bvpcp",       &bv->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##bvpcp",       &bv->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat ("Shadow Blur##bvpcp",         &bv->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f);   checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##bvpcp",          &bv->chromePanelBgColor.r);          checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##bvpcp",        &bv->chromePanelGradientTop.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##bvpcp",     &bv->chromePanelGradientBottom.r);   checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##bvpcp",              &bv->chromePanelBorderColor.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##bvpcp",              &bv->chromePanelShadowColor.r);      checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Title Text##bvpcp",          &bv->chromeTitleTextColor.r);        checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNodeEx("Chrome Close Btn##bvpcb", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::ColorEdit4("Bg##bvpcb",                  &bv->chromeCloseBtnBgColor.r);       checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##bvpcb",              &bv->chromeCloseBtnBorderColor.r);   checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Text##bvpcb",                &bv->chromeCloseBtnTextColor.r);     checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
+    }
 #endif // FATE_HAS_GAME
 
     ImGui::End();

@@ -45,6 +45,17 @@ bool NetSocket::open(uint16_t port) {
     // Try IPv6 dual-stack first (accepts both IPv4 and IPv6 connections)
     SOCKET s = ::socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     if (s != INVALID_SOCKET) {
+        // SO_EXCLUSIVEADDRUSE prevents a second instance from co-binding the
+        // same port. Without it, Windows happily lets two servers come up on
+        // 7777 — datagrams get split between them at random, which manifests
+        // as silent client disconnects when heartbeats land on the wrong one.
+        // Must be set BEFORE bind().
+        int exclusive = 1;
+        if (setsockopt(s, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+                       (const char*)&exclusive, sizeof(exclusive)) == SOCKET_ERROR) {
+            LOG_WARN("Net", "setsockopt(SO_EXCLUSIVEADDRUSE) failed: %d", WSAGetLastError());
+        }
+
         // Disable IPv6-only to allow IPv4-mapped addresses (dual-stack)
         int v6only = 0;
         setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&v6only, sizeof(v6only));
@@ -111,9 +122,19 @@ bool NetSocket::open(uint16_t port) {
             return true;
         }
 
-        // IPv6 bind failed, fall through to IPv4
+        // IPv6 bind failed, fall through to IPv4. Capture the bind error
+        // BEFORE closesocket — closesocket can reset WSAGetLastError to 0,
+        // which made earlier failure logs read as "(0)".
+        int bindErr = WSAGetLastError();
         closesocket(s);
-        LOG_WARN("Net", "IPv6 dual-stack bind failed (%d), falling back to IPv4", WSAGetLastError());
+        // WSAEADDRINUSE (10048) on the IPv6 path means another server already
+        // owns the port. Don't fall back to IPv4 — that fallback used to mask
+        // duplicate-server-on-same-port and cause split datagram delivery.
+        if (bindErr == WSAEADDRINUSE) {
+            LOG_ERROR("Net", "Port %d already in use (another server running?)", port);
+            return false;
+        }
+        LOG_WARN("Net", "IPv6 dual-stack bind failed (%d), falling back to IPv4", bindErr);
     }
 
     // Fallback: IPv4-only socket
@@ -121,6 +142,15 @@ bool NetSocket::open(uint16_t port) {
     if (s == INVALID_SOCKET) {
         LOG_ERROR("Net", "socket() failed: %d", WSAGetLastError());
         return false;
+    }
+
+    // SO_EXCLUSIVEADDRUSE — see IPv6 path above. Must be set BEFORE bind().
+    {
+        int exclusive = 1;
+        if (setsockopt(s, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+                       (const char*)&exclusive, sizeof(exclusive)) == SOCKET_ERROR) {
+            LOG_WARN("Net", "setsockopt(SO_EXCLUSIVEADDRUSE) failed: %d", WSAGetLastError());
+        }
     }
 
     // Prevent ICMP Port Unreachable from poisoning the UDP socket (same as IPv6 path)

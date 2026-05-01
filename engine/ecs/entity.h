@@ -30,6 +30,13 @@ public:
     EntityHandle handle() const { return handle_; }
     void setHandle(EntityHandle h) { handle_ = h; }
 
+    // Marks the entity as runtime-spawned (replicated from server, pet, etc).
+    // Editor::saveScene skips replicated entities so they don't get baked into
+    // scene .json files. Not serialized -- a fresh load always produces
+    // isReplicated()==false because authored entities aren't replicated.
+    bool isReplicated() const { return isReplicated_; }
+    void setReplicated(bool r) { isReplicated_ = r; }
+
     // Component access -- delegates to archetype storage via World
     // Implementations are in entity_inline.h (included after World is defined)
     template<typename T, typename... Args>
@@ -61,6 +68,7 @@ private:
     std::string name_;
     std::string tag_;
     bool active_ = true;
+    bool isReplicated_ = false;
 
     // Archetype location -- updated by World on migration/swap
     World* world_ = nullptr;

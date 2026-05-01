@@ -40,10 +40,14 @@ void Editor::drawRoleNameplatesPanel() {
         dirty |= ImGui::ColorEdit4("Outline Color",   &e.outlineColor.r);
         dirty |= ImGui::DragFloat ("Outline Thick",   &e.outlineThickness, 0.1f, 0.0f, 8.0f);
         dirty |= ImGui::Checkbox  ("Pill Enabled",    &e.pillEnabled);
+        ImGui::SameLine();
+        ImGui::TextDisabled("(or set Pill Color alpha to 0)");
         dirty |= ImGui::ColorEdit4("Pill Color",      &e.pillColor.r);
         dirty |= ImGui::DragFloat ("Pill Padding X",  &e.pillPaddingX, 0.5f, 0.0f, 32.0f);
         dirty |= ImGui::DragFloat ("Pill Padding Y",  &e.pillPaddingY, 0.5f, 0.0f, 32.0f);
         dirty |= ImGui::DragFloat ("Pill Radius",     &e.pillRadius,   0.5f, 0.0f, 32.0f);
+        dirty |= ImGui::DragFloat ("Offset X",        &e.offsetX, 0.5f, -200.0f, 200.0f);
+        dirty |= ImGui::DragFloat ("Offset Y",        &e.offsetY, 0.5f, -200.0f, 200.0f);
 
         ImGui::PopID();
     };
@@ -53,17 +57,33 @@ void Editor::drawRoleNameplatesPanel() {
     renderRole("Admin",  RoleTier::Admin);
 
     ImGui::Separator();
+    // Debounce disk writes: drag-style widgets (DragFloat, ColorEdit) return
+    // dirty every frame the slider is held, which would spam the log + IO.
+    // Defer the save until the user releases all widgets (no item active).
+    static bool pendingSave = false;
+
+    if (ImGui::Button("Save now")) {
+        cfg.save(RoleNameplateConfig::kDefaultPath);
+        pendingSave = false;
+    }
+    ImGui::SameLine();
     if (ImGui::Button("Reload from disk")) {
         cfg.load(RoleNameplateConfig::kDefaultPath);
+        pendingSave = false;
     }
     ImGui::SameLine();
     if (ImGui::Button("Reset to defaults")) {
         cfg.loadDefaults();
         dirty = true;
     }
+    ImGui::SameLine();
+    ImGui::TextDisabled(pendingSave ? "(unsaved)" : "(saved)");
+    ImGui::TextDisabled("Auto-saves on release of any slider.");
 
-    if (dirty) {
+    if (dirty) pendingSave = true;
+    if (pendingSave && !ImGui::IsAnyItemActive()) {
         cfg.save(RoleNameplateConfig::kDefaultPath);
+        pendingSave = false;
     }
 
     ImGui::End();

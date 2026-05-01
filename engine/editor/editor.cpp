@@ -2,6 +2,7 @@
 #include "engine/editor/combat_text_editor.h"
 #ifdef FATE_HAS_GAME
 #include "engine/ui/ui_safe_area.h"
+#include "engine/render/layout_class.h"
 #endif
 #include "engine/core/logger.h"
 #include "engine/core/atomic_write.h"
@@ -330,12 +331,17 @@ bool Editor::saveScene(World* world, const std::string& path) {
     nlohmann::json entitiesJson = nlohmann::json::array();
 
     world->forEachEntity([&](Entity* entity) {
-        // Skip transient runtime entities --these are not part of the scene:
-        // mob/boss: spawned by SpawnSystem, player: created on server connect,
-        // ghost: networked other-player entities, dropped_item: runtime loot
+        // Skip runtime-spawned entities so they never get baked into the
+        // scene .json. Two layers of protection:
+        //   1. isReplicated() flag: every createGhost*/spawnPet/createPlayer
+        //      path sets this. Authored content from JSON always loads with
+        //      isReplicated=false (the field isn't serialized).
+        //   2. Tag fallback: in case a future factory forgets to set the
+        //      flag, the legacy tag list still catches the obvious ones.
+        if (entity->isReplicated()) return;
         std::string tag = entity->tag();
         if (tag == "mob" || tag == "boss" || tag == "player" ||
-            tag == "ghost" || tag == "dropped_item") return;
+            tag == "ghost" || tag == "dropped_item" || tag == "pet") return;
 
         // Registry-based serialization --all registered components are handled
         entitiesJson.push_back(PrefabLibrary::entityToJson(entity));
@@ -467,7 +473,7 @@ void Editor::loadScene(World* world, const std::string& path) {
         if (inPlayMode_) {
             std::string tag = entity->tag();
             if (tag == "mob" || tag == "boss" || tag == "player" ||
-                tag == "ghost" || tag == "dropped_item") return;
+                tag == "ghost" || tag == "dropped_item" || tag == "pet") return;
         }
 #endif
         world->destroyEntity(entity->handle());
@@ -881,7 +887,7 @@ void Editor::drawDockSpace() {
             }
             ImGui::Separator();
             // Save --enabled when a scene path is set (from Open Scene or async load)
-            const bool canSaveScene = !currentScenePath_.empty() && (!inPlayMode_ || paused_);
+            const bool canSaveScene = !currentScenePath_.empty();
             if (ImGui::MenuItem("Save", "Ctrl+S", false, canSaveScene)) {
                 if (!saveScene(dockWorld_, currentScenePath_)) {
                     LOG_WARN("Editor", "Menu save did not complete: %s", lastSaveStatus_.c_str());
@@ -1169,10 +1175,9 @@ void Editor::drawSceneViewport() {
                     if (paused_) {
                         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
                         if (ImGui::Button("Resume", ImVec2(playBtnW, btnH))) {
-                            // Restore gameplay camera (discard editor zoom/pan from pause)
+                            // Snap gameplay zoom back to 1.0 — the player's view, not whatever the editor camera was at.
                             if (dockCamera_) {
-                                dockCamera_->setPosition(pausedCamPos_);
-                                dockCamera_->setZoom(pausedCamZoom_);
+                                dockCamera_->setZoom(1.0f);
                             }
                             paused_ = false;
                         }
@@ -1180,11 +1185,6 @@ void Editor::drawSceneViewport() {
                     } else {
                         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.50f, 0.20f, 1.00f));
                         if (ImGui::Button("Pause", ImVec2(playBtnW, btnH))) {
-                            // Save gameplay camera before editor takes over
-                            if (dockCamera_) {
-                                pausedCamPos_ = dockCamera_->position();
-                                pausedCamZoom_ = dockCamera_->zoom();
-                            }
                             paused_ = true;
                         }
                         ImGui::PopStyleColor();
@@ -1265,7 +1265,10 @@ void Editor::drawSceneViewport() {
                 }
 
 #ifdef FATE_HAS_GAME
-                // Update simulated safe area when device changes
+                // Update simulated safe area + UI layout class when device changes.
+                // Layout class drives variant JSON selection (foo.tablet.json /
+                // foo.compact.json); when it changes we reload every loaded screen
+                // so the editor preview matches what real players will see.
                 {
                     const auto& selected = kDeviceProfiles[displayPresetIdx_];
                     fate::SafeAreaInsets insets;
@@ -1274,6 +1277,18 @@ void Editor::drawSceneViewport() {
                     insets.left   = selected.safeLeft;
                     insets.right  = selected.safeRight;
                     fate::setSimulatedSafeArea(insets);
+
+                    // Free Aspect (no preset dimensions) classifies by panel aspect;
+                    // every other entry uses the explicit layoutClass tag.
+                    fate::LayoutClass cls;
+                    if (selected.width <= 0 || selected.height <= 0) {
+                        cls = fate::LayoutClass::Base;
+                    } else {
+                        cls = static_cast<fate::LayoutClass>(selected.layoutClass);
+                    }
+                    if (fate::LayoutClassRegistry::set(cls) && uiManager_) {
+                        uiManager_->reloadAllScreensForLayoutClass();
+                    }
                 }
 #endif
 
@@ -1918,6 +1933,11 @@ void Editor::handleMouseUp() {
         if (isDraggingEntity_) {
             auto* t = selectedEntity_->getComponent<Transform>();
             if (t && t->position != dragStartEntityPos_) {
+                // Promote-on-edit: scene-viewport drag mirrors inspector edit.
+                // See captureInspectorUndo for the reasoning.
+                if (selectedEntity_->isReplicated()) {
+                    selectedEntity_->setReplicated(false);
+                }
                 auto cmd = std::make_unique<MoveCommand>();
                 cmd->entityHandle = selectedEntity_->handle();
                 cmd->oldPos = dragStartEntityPos_;
@@ -2608,6 +2628,17 @@ void Editor::drawHierarchy(World* world) {
 
         std::string filter(searchBuf);
 
+        // Player anchor for distance sort + per-entry distance label.
+        // Found once per frame; groups sort by distance only when expanded.
+        Vec2 playerPos(0, 0);
+        bool hasPlayer = false;
+        if (Entity* player = world->findByTag("player")) {
+            if (auto* t = player->getComponent<Transform>()) {
+                playerPos = t->position;
+                hasPlayer = true;
+            }
+        }
+
         // Group entities by name+tag, show groups as collapsible tree nodes
         struct GroupInfo {
             std::string name;
@@ -2639,15 +2670,92 @@ void Editor::drawHierarchy(World* world) {
         });
 
         auto getTagColor = [](const std::string& tag) -> ImVec4 {
-            if (tag == "player") return {0.3f, 0.8f, 1.0f, 1.0f};
-            if (tag == "obstacle") return {1.0f, 0.6f, 0.3f, 1.0f};
-            if (tag == "ground") return {0.5f, 0.8f, 0.5f, 1.0f};
-            if (tag == "mob") return {1.0f, 0.4f, 0.4f, 1.0f};
-            if (tag == "boss") return {1.0f, 0.2f, 0.8f, 1.0f};
+            std::string t = tag;
+            std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+            if (t == "player") return {0.3f, 0.8f, 1.0f, 1.0f};
+            if (t == "obstacle") return {1.0f, 0.6f, 0.3f, 1.0f};
+            if (t == "ground") return {0.5f, 0.8f, 0.5f, 1.0f};
+            if (t == "mob") return {1.0f, 0.4f, 0.4f, 1.0f};
+            if (t == "boss") return {1.0f, 0.2f, 0.8f, 1.0f};
+            if (t == "npc") return {0.7f, 0.9f, 0.4f, 1.0f};
+            if (t == "interact_site") return {0.9f, 0.8f, 0.4f, 1.0f};
+            if (t == "portal") return {0.6f, 0.5f, 1.0f, 1.0f};
+            if (t == "spawn") return {0.5f, 0.7f, 0.9f, 1.0f};
+            if (t == "pet") return {0.9f, 0.6f, 0.9f, 1.0f};
             return {0.8f, 0.8f, 0.8f, 1.0f};
         };
 
-        for (auto& group : groups) {
+        // Bucket groups into categories so the panel reads top-down by purpose
+        // rather than spawn order. World defaults OFF -- tiles/obstacles drown
+        // out everything else when scenes have hundreds of them.
+        enum CatIdx { CAT_PLAYER = 0, CAT_BOSSES, CAT_NPCS, CAT_PORTALS, CAT_MOBS, CAT_WORLD, CAT_OTHER, CAT_COUNT };
+        static const char* kCatNames[CAT_COUNT] = { "Player", "Bosses", "NPCs & Sites", "Portals", "Mobs", "World", "Other" };
+        static const char* kCatTagSample[CAT_COUNT] = { "player", "boss", "npc", "portal", "mob", "obstacle", "" };
+        static bool kCatEnabled[CAT_COUNT] = { true, true, true, true, true, false, true };
+
+        auto categoryFor = [](const std::string& tag, const std::string& name) -> int {
+            // Lowercase compare -- scene files have both "Portal"/"portal", "Spawn"/"spawn"
+            std::string t = tag;
+            std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+            if (t == "player") return CAT_PLAYER;
+            if (t == "boss") return CAT_BOSSES;
+            if (t == "mob") return CAT_MOBS;
+            if (t == "obstacle" || t == "ground") return CAT_WORLD;
+            if (t == "portal") return CAT_PORTALS;
+            if (t == "npc" || t == "interact_site" ||
+                t == "spawn" || t == "pet") return CAT_NPCS;
+            // Defensive name-prefix fallback for entities with missing/wrong tags
+            // in scene data (e.g. Portal_To_SolisVillage shipped with tag="")
+            if (name.rfind("Portal_", 0) == 0) return CAT_PORTALS;
+            if (name == "MapSpawnPoint") return CAT_NPCS;
+            return CAT_OTHER;
+        };
+
+        std::vector<GroupInfo*> bucketed[CAT_COUNT];
+        size_t bucketTotals[CAT_COUNT] = {0};
+        for (auto& g : groups) {
+            int c = categoryFor(g.tag, g.name);
+            bucketed[c].push_back(&g);
+            bucketTotals[c] += g.entities.size();
+        }
+        for (auto& bucket : bucketed) {
+            std::sort(bucket.begin(), bucket.end(),
+                [](GroupInfo* a, GroupInfo* b) { return a->name < b->name; });
+        }
+
+        // Filter row: tinted checkbox label per category. Empty cats greyed out.
+        for (int i = 0; i < CAT_COUNT; ++i) {
+            if (i > 0) ImGui::SameLine(0, 8);
+            bool empty = bucketed[i].empty();
+            char id[16]; snprintf(id, sizeof(id), "##cat%d", i);
+            if (empty) ImGui::BeginDisabled();
+            ImGui::Checkbox(id, &kCatEnabled[i]);
+            ImGui::SameLine(0, 3);
+            ImVec4 col = getTagColor(kCatTagSample[i]);
+            if (empty) col.w = 0.4f;
+            ImGui::TextColored(col, "%s", kCatNames[i]);
+            if (empty) ImGui::EndDisabled();
+        }
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        for (int catIdx = 0; catIdx < CAT_COUNT; ++catIdx) {
+            if (!kCatEnabled[catIdx]) continue;
+            if (bucketed[catIdx].empty()) continue;
+
+            char header[128];
+            snprintf(header, sizeof(header), "%s  (%zu)##header%d",
+                kCatNames[catIdx], bucketTotals[catIdx], catIdx);
+
+            ImVec4 catCol = getTagColor(kCatTagSample[catIdx]);
+            ImGui::PushStyleColor(ImGuiCol_Text, catCol);
+            bool catOpen = ImGui::CollapsingHeader(header, ImGuiTreeNodeFlags_DefaultOpen);
+            ImGui::PopStyleColor();
+            if (!catOpen) continue;
+
+        for (auto* groupPtr : bucketed[catIdx]) {
+            auto& group = *groupPtr;
             bool hasTag = !group.tag.empty();
             ImVec4 color = getTagColor(group.tag);
 
@@ -2704,10 +2812,30 @@ void Editor::drawHierarchy(World* world) {
                 snprintf(groupLabel, sizeof(groupLabel), "%s (x%zu)",
                     group.name.c_str(), group.entities.size());
 
+                // Force-collapse fat groups by default so a 644-tile group
+                // doesn't blow up the panel on first paint. User can still open.
+                if (group.entities.size() > 40) {
+                    ImGui::SetNextItemOpen(false, ImGuiCond_FirstUseEver);
+                }
                 bool open = ImGui::TreeNodeEx(groupLabel, groupFlags);
                 if (hasTag) ImGui::PopStyleColor();
 
                 if (open) {
+                    // Sort children nearest-first relative to player. One std::sort per
+                    // expanded group per frame -- microseconds for any realistic count.
+                    if (hasPlayer) {
+                        std::sort(group.entities.begin(), group.entities.end(),
+                            [&playerPos](Entity* a, Entity* b) {
+                                auto* ta = a->getComponent<Transform>();
+                                auto* tb = b->getComponent<Transform>();
+                                if (!ta && !tb) return false;
+                                if (!ta) return false;
+                                if (!tb) return true;
+                                return (ta->position - playerPos).lengthSq()
+                                     < (tb->position - playerPos).lengthSq();
+                            });
+                    }
+
                     ImDrawList* dl = ImGui::GetWindowDrawList();
                     float indentX = ImGui::GetCursorScreenPos().x - ImGui::GetStyle().IndentSpacing * 0.5f + 4.0f;
                     float startY = ImGui::GetCursorScreenPos().y;
@@ -2717,7 +2845,21 @@ void Editor::drawHierarchy(World* world) {
                                                  | ImGuiTreeNodeFlags_SpanAvailWidth;
                         if (entity == selectedEntity_) flags |= ImGuiTreeNodeFlags_Selected;
 
-                        ImGui::TreeNodeEx((void*)(intptr_t)entity->id(), flags, "%s", entity->name().c_str());
+                        auto* t = entity->getComponent<Transform>();
+                        if (t && hasPlayer) {
+                            float distTiles = (t->position - playerPos).length() / 32.0f;
+                            ImGui::TreeNodeEx((void*)(intptr_t)entity->id(), flags,
+                                "%s  (%d, %d)  %.0ft",
+                                entity->name().c_str(),
+                                (int)t->position.x, (int)t->position.y, distTiles);
+                        } else if (t) {
+                            ImGui::TreeNodeEx((void*)(intptr_t)entity->id(), flags,
+                                "%s  (%d, %d)",
+                                entity->name().c_str(),
+                                (int)t->position.x, (int)t->position.y);
+                        } else {
+                            ImGui::TreeNodeEx((void*)(intptr_t)entity->id(), flags, "%s", entity->name().c_str());
+                        }
 
                         if (ImGui::IsItemClicked()) { selectedEntity_ = entity; selectedHandle_ = entity->handle(); }
 
@@ -2755,6 +2897,7 @@ void Editor::drawHierarchy(World* world) {
                     ImGui::TreePop();
                 }
             }
+        }
         }
     }
     ImGui::End();
@@ -2949,8 +3092,11 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
         if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
 #endif
     }
-    // Ctrl+S = Save current scene
-    if (ctrl && scancode == SDL_SCANCODE_S && (!inPlayMode_ || paused_)) {
+    // Ctrl+S = Save current scene. Allowed in play mode too — saveScene's
+    // isReplicated() + tag-fallback filter keeps runtime ghosts (mobs, pets,
+    // dropped items, server-replicated NPCs that haven't been promoted via
+    // an authored edit) out of the .json.
+    if (ctrl && scancode == SDL_SCANCODE_S) {
         if (!currentScenePath_.empty()) {
             if (saveScene(world, currentScenePath_)) {
                 LOG_INFO("Editor", "Ctrl+S: saved scene to %s", currentScenePath_.c_str());
@@ -2974,7 +3120,19 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
             std::string screenId = uiPanel.selectedScreenId();
             auto* root = uiManager_->getScreen(screenId);
             if (root) {
-                std::string relPath = "assets/ui/screens/" + screenId + ".json";
+                // Save target = base path mangled by current LayoutClass.
+                // Critical: do NOT use resolvedPath, because when a variant
+                // file is missing, resolvedPath is the base file, and saving
+                // there would clobber the iPhone-17-Pro baseline on the first
+                // tuning pass for a tablet/compact device.
+                const std::string& base = uiManager_->screenBasePath(screenId);
+                std::string canonicalBase = !base.empty()
+                    ? base
+                    : "assets/ui/screens/" + screenId + ".json";
+                fate::LayoutClass cls = fate::LayoutClassRegistry::current();
+                std::string relPath = (cls == fate::LayoutClass::Base)
+                    ? canonicalBase
+                    : fate::mangleVariantPath(canonicalBase, cls);
                 bool runtimeOk = UISerializer::saveToFile(relPath, screenId, root);
                 if (!runtimeOk) {
                     lastSaveStatus_ = "UI screen save FAILED: " + relPath;
@@ -3257,7 +3415,7 @@ void Editor::drawMenuBar(World*) {
             }
             ImGui::Separator();
             // Save -- enabled when a scene path is set (from Open Scene or async load)
-            const bool canSaveScene = !currentScenePath_.empty() && (!inPlayMode_ || paused_);
+            const bool canSaveScene = !currentScenePath_.empty();
             if (ImGui::MenuItem("Save", "Ctrl+S", false, canSaveScene)) {
                 if (!saveScene(dockWorld_, currentScenePath_)) {
                     LOG_WARN("Editor", "Menu save did not complete: %s", lastSaveStatus_.c_str());
@@ -3343,8 +3501,7 @@ void Editor::drawSceneViewport() {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.50f, 0.20f, 1.00f));
                     if (ImGui::Button("Resume", ImVec2(btnW, btnH))) {
                         if (dockCamera_) {
-                            dockCamera_->setPosition(pausedCamPos_);
-                            dockCamera_->setZoom(pausedCamZoom_);
+                            dockCamera_->setZoom(1.0f);
                         }
                         paused_ = false;
                     }
@@ -3352,10 +3509,6 @@ void Editor::drawSceneViewport() {
                 } else {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.50f, 0.20f, 1.00f));
                     if (ImGui::Button("Pause", ImVec2(btnW, btnH))) {
-                        if (dockCamera_) {
-                            pausedCamPos_ = dockCamera_->position();
-                            pausedCamZoom_ = dockCamera_->zoom();
-                        }
                         paused_ = true;
                     }
                     ImGui::PopStyleColor();
@@ -3551,7 +3704,7 @@ void Editor::enterPlayMode(World* world) {
             // Skip transient runtime entities -- same filter as saveScene
             std::string tag = e->tag();
             if (tag == "mob" || tag == "boss" || tag == "player" ||
-                tag == "ghost" || tag == "dropped_item") return;
+                tag == "ghost" || tag == "dropped_item" || tag == "pet") return;
             playModeSnapshot_.push_back(PrefabLibrary::entityToJson(e));
         });
     } catch (const std::exception& ex) {
