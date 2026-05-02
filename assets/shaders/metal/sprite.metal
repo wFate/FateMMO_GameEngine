@@ -38,6 +38,7 @@ struct SpriteUniforms {
     float4   uTextShadowColor;
     float4   uTextGlowColor;
     float    uTextGlowIntensity;
+    float    uSdfUseAlpha;
 
     // Rounded rect uniforms (renderType 7)
     float2   uRectSize;
@@ -57,6 +58,10 @@ struct SpriteUniforms {
 
 static float sprite_median(float r, float g, float b) {
     return max(min(r, g), min(max(r, g), b));
+}
+
+static float sprite_sdf_distance(float4 sample, float useAlpha) {
+    return (useAlpha > 0.5) ? sample.a : sprite_median(sample.r, sample.g, sample.b);
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +149,7 @@ fragment float4 sprite_fragment(SpriteOut in [[stage_in]],
     } else {
         // Modes 1-4: SDF text variants
         float4 sdf = uTexture.sample(samp, in.v_uv);
-        float sd = sprite_median(sdf.r, sdf.g, sdf.b);
+        float sd = sprite_sdf_distance(sdf, u.uSdfUseAlpha);
         float2 unitRange     = float2(u.uPxRange) / u.uAtlasSize;
         float2 screenTexSize = float2(1.0) / fwidth(in.v_uv);
         float screenPxRange  = max(0.5 * dot(unitRange, screenTexSize), 1.0);
@@ -163,7 +168,7 @@ fragment float4 sprite_fragment(SpriteOut in [[stage_in]],
 
             float2 shadowUV  = in.v_uv - u.uTextShadowOffset;
             float4 shadowSdf = uTexture.sample(samp, shadowUV);
-            float  shadowSd  = sprite_median(shadowSdf.r, shadowSdf.g, shadowSdf.b);
+            float  shadowSd  = sprite_sdf_distance(shadowSdf, u.uSdfUseAlpha);
             float  shadowDist = screenPxRange * (shadowSd - u.uOutlineThickness);
             float  shadowOp  = clamp(shadowDist + 0.5, 0.0, 1.0) * u.uTextShadowColor.a;
 
@@ -176,7 +181,7 @@ fragment float4 sprite_fragment(SpriteOut in [[stage_in]],
             fragColor = mix(fragColor, fill,    opacity);
         } else if (in.v_renderType < 3.5) {
             // Mode 3: Glow SDF text
-            float glowOp = smoothstep(0.0, 0.5, sdf.a);
+            float glowOp = smoothstep(0.0, 0.5, sd);
             float4 glow  = float4(u.uTextGlowColor.rgb, in.v_color.a * glowOp * u.uTextGlowIntensity);
             float4 fill  = float4(in.v_color.rgb, in.v_color.a * opacity);
             fragColor = mix(glow, fill, opacity);
@@ -184,7 +189,7 @@ fragment float4 sprite_fragment(SpriteOut in [[stage_in]],
             // Mode 4: Shadow SDF text
             float2 shadowUV  = in.v_uv - u.uTextShadowOffset;
             float4 shadowSdf = uTexture.sample(samp, shadowUV);
-            float shadowSd   = sprite_median(shadowSdf.r, shadowSdf.g, shadowSdf.b);
+            float shadowSd   = sprite_sdf_distance(shadowSdf, u.uSdfUseAlpha);
             float shadowDist = screenPxRange * (shadowSd - 0.5);
             float shadowOp   = clamp(shadowDist + 0.5, 0.0, 1.0) * u.uTextShadowColor.a;
             float4 shadow    = float4(u.uTextShadowColor.rgb, in.v_color.a * shadowOp);

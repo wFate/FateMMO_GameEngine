@@ -144,6 +144,9 @@ void FontRegistry::parseMSDFMetrics(SDFFont& font, const std::string& metricsPat
         font.atlasWidth  = atlas.value("width",  512.0f);
         font.atlasHeight = atlas.value("height", 512.0f);
         font.pxRange     = atlas.value("distanceRange", 4.0f);
+        font.useAlphaDistance =
+            atlas.value("type", std::string()) == "mtsdf" &&
+            atlas.contains("distanceRangeMiddle");
         std::string yOrig = atlas.value("yOrigin", std::string("top"));
         yOriginBottom = (yOrig == "bottom");
     }

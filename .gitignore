@@ -27,6 +27,8 @@ Release/
 
 # Logs
 *.log
+build_log.txt
+ship_log.txt
 
 # Secrets & environment
 .env

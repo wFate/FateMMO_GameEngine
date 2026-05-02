@@ -32,6 +32,7 @@ struct SDFFont {
     float atlasWidth  = 512.0f;
     float atlasHeight = 512.0f;
     float pxRange     = 4.0f;
+    bool useAlphaDistance = false;
 
     // Bitmap-specific (populated from manifest)
     int glyphWidth  = 0;

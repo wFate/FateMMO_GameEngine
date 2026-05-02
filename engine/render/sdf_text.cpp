@@ -27,7 +27,11 @@ bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath)
     SDFFontAtlas::generateIfMissing("C:/Windows/Fonts/consola.ttf", "assets/fonts", emSize_);
     SDFFontAtlas::generateIfMissing("assets/fonts/PressStart2P-Regular.ttf", "assets/fonts", emSize_, "press_start_2p");
     SDFFontAtlas::generateIfMissing("assets/fonts/PixelifySans-Regular.ttf", "assets/fonts", emSize_, "pixelify_sans");
-    SDFFontAtlas::generateIfMissing("assets/fonts/Fredoka-SemiBold.ttf", "assets/fonts", emSize_, "fredoka_semibold");
+    // fate_round_ui (Fredoka SemiBold) atlas is shipped on disk as a real MTSDF
+    // bake from msdf-atlas-gen v1.4 — match params: type=mtsdf, distanceRange=4,
+    // size=48, 512x512, yorigin=bottom. Do NOT route through generateIfMissing:
+    // that path is a bitmap-coverage placeholder, not a true SDF generator, and
+    // produces incorrect outline expansion for the chunky shader treatment.
 
     // Load atlas PNG via stb_image (4 channels: RGBA)
     int w = 0, h = 0, channels = 0;
@@ -104,6 +108,9 @@ void SDFText::loadMetrics(const std::string& jsonPath) {
         atlasWidth_  = atlas.value("width",  512.0f);
         atlasHeight_ = atlas.value("height", 512.0f);
         pxRange_     = atlas.value("distanceRange", 4.0f);
+        useAlphaDistance_ =
+            atlas.value("type", std::string()) == "mtsdf" &&
+            atlas.contains("distanceRangeMiddle");
         std::string yOrig = atlas.value("yOrigin", std::string("top"));
         yOriginBottom = (yOrig == "bottom");
     }
@@ -202,6 +209,8 @@ void SDFText::drawInternal(SpriteBatch& batch, const std::string& text, Vec2 pos
 #endif
 
     const auto& glyphs = *activeGlyphs_;
+    batch.setTextSdfUseAlpha(useAlphaDistance_);
+
     const float scale = fontSize;
     float penX = position.x;
     float penY = position.y;
@@ -315,6 +324,7 @@ bool SDFText::setDefaultFont(const std::string& name) {
     lineHeight_     = font->lineHeight;
     ascender_       = font->ascender;
     emSize_         = font->emSize;
+    useAlphaDistance_ = font->useAlphaDistance;
     LOG_INFO("SDFText", "Default UI font set to '%s' (%zu glyphs)",
              name.c_str(), font->glyphs.size());
     return true;
@@ -343,6 +353,7 @@ void SDFText::drawWithFont(SpriteBatch& batch, const std::string& text, Vec2 pos
             auto savedLineHeight  = lineHeight_;
             auto savedAscender    = ascender_;
             auto savedEmSize      = emSize_;
+            auto savedUseAlphaDistance = useAlphaDistance_;
 
             activeGlyphs_ = &font->glyphs;
 #ifndef FATEMMO_METAL
@@ -355,6 +366,7 @@ void SDFText::drawWithFont(SpriteBatch& batch, const std::string& text, Vec2 pos
             lineHeight_  = font->lineHeight;
             ascender_    = font->ascender;
             emSize_      = font->emSize;
+            useAlphaDistance_ = font->useAlphaDistance;
 
             drawInternal(batch, text, position, fontSize, color, depth, style, yDown, layout);
 
@@ -369,6 +381,7 @@ void SDFText::drawWithFont(SpriteBatch& batch, const std::string& text, Vec2 pos
             lineHeight_     = savedLineHeight;
             ascender_       = savedAscender;
             emSize_         = savedEmSize;
+            useAlphaDistance_ = savedUseAlphaDistance;
             return;
         }
     }

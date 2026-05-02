@@ -18,6 +18,7 @@ uniform vec2 u_textShadowOffset;
 uniform vec4 u_textShadowColor;
 uniform vec4 u_textGlowColor;
 uniform float u_textGlowIntensity;
+uniform float u_sdfUseAlpha;
 
 // Rounded rect uniforms (renderType 7)
 uniform vec2 u_rectSize;
@@ -32,6 +33,10 @@ uniform vec4 u_rrShadowColor;
 
 float median(float r, float g, float b) {
     return max(min(r, g), min(max(r, g), b));
+}
+
+float sdfDistance(vec4 sample) {
+    return (u_sdfUseAlpha > 0.5) ? sample.a : median(sample.r, sample.g, sample.b);
 }
 
 void main() {
@@ -92,7 +97,7 @@ void main() {
         if (fragColor.a < 0.01) discard;
     } else {
         vec4 sdf = texture(uTexture, v_uv);
-        float sd = median(sdf.r, sdf.g, sdf.b);
+        float sd = sdfDistance(sdf);
         vec2 unitRange = vec2(u_pxRange) / u_atlasSize;
         vec2 screenTexSize = vec2(1.0) / fwidth(v_uv);
         float screenPxRange = max(0.5 * dot(unitRange, screenTexSize), 1.0);
@@ -114,7 +119,7 @@ void main() {
             // the outline (rather than just the thin glyph stroke).
             vec2 shadowUV = v_uv - u_textShadowOffset;
             vec4 shadowSdf = texture(uTexture, shadowUV);
-            float shadowSd = median(shadowSdf.r, shadowSdf.g, shadowSdf.b);
+            float shadowSd = sdfDistance(shadowSdf);
             float shadowDist = screenPxRange * (shadowSd - u_outlineThickness);
             float shadowOp = clamp(shadowDist + 0.5, 0.0, 1.0) * u_textShadowColor.a;
 
@@ -127,14 +132,14 @@ void main() {
             fragColor = mix(fragColor, outline, outline.a);
             fragColor = mix(fragColor, fill,    opacity);
         } else if (v_renderType < 3.5) {
-            float glowOp = smoothstep(0.0, 0.5, sdf.a);
+            float glowOp = smoothstep(0.0, 0.5, sd);
             vec4 glow = vec4(u_textGlowColor.rgb, v_color.a * glowOp * u_textGlowIntensity);
             vec4 fill = vec4(v_color.rgb, v_color.a * opacity);
             fragColor = mix(glow, fill, opacity);
         } else {
             vec2 shadowUV = v_uv - u_textShadowOffset;
             vec4 shadowSdf = texture(uTexture, shadowUV);
-            float shadowSd = median(shadowSdf.r, shadowSdf.g, shadowSdf.b);
+            float shadowSd = sdfDistance(shadowSdf);
             float shadowDist = screenPxRange * (shadowSd - 0.5);
             float shadowOp = clamp(shadowDist + 0.5, 0.0, 1.0) * u_textShadowColor.a;
             vec4 shadow = vec4(u_textShadowColor.rgb, v_color.a * shadowOp);

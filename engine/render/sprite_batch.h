@@ -139,6 +139,7 @@ public:
     void setTextEffectUniforms(const TextEffectUniforms& fx);
     // Restore engine defaults. No-op when defaults are already active.
     void resetTextEffectUniforms();
+    void setTextSdfUseAlpha(bool useAlpha);
 
 #ifndef FATEMMO_METAL
     // Draw a quad with a raw GL texture ID (for font atlas, custom textures)
@@ -235,6 +236,7 @@ private:
     // Active text-effect uniforms applied at flush time. setTextEffectUniforms /
     // resetTextEffectUniforms write these; flush() forwards them to the shader.
     TextEffectUniforms textEffectUniforms_{};
+    float sdfUseAlpha_ = 0.0f;
 
     // Palette state. Held as members so flush() can write the palette slots in
     // their proper position inside the Metal SpriteUniforms struct (Metal uses

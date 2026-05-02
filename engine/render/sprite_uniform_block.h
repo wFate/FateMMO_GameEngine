@@ -34,7 +34,7 @@ struct alignas(16) SpriteUniformBlock {
     static constexpr size_t kTextShadowColorOff   = 384;
     static constexpr size_t kTextGlowColorOff     = 400;
     static constexpr size_t kTextGlowIntensityOff = 416;
-    // float glowIntensity (4) + 4 bytes padding → float2 rectSize aligned 8.
+    static constexpr size_t kSdfUseAlphaOff       = 420;
     static constexpr size_t kRectSizeOff          = 424;
     static constexpr size_t kCornerRadiusOff      = 432;
     static constexpr size_t kRRBorderWidthOff     = 436;
@@ -66,6 +66,7 @@ struct alignas(16) SpriteUniformBlock {
     void setTextShadowColor(const Color& c)      { writeAt(kTextShadowColorOff, c); }
     void setTextGlowColor(const Color& c)        { writeAt(kTextGlowColorOff, c); }
     void setTextGlowIntensity(float v)           { writeAt(kTextGlowIntensityOff, v); }
+    void setSdfUseAlpha(float v)                  { writeAt(kSdfUseAlphaOff, v); }
     void setRectSize(const Vec2& v)              { writeAt(kRectSizeOff, v); }
     void setCornerRadius(float v)                { writeAt(kCornerRadiusOff, v); }
     void setRRBorderWidth(float v)               { writeAt(kRRBorderWidthOff, v); }
