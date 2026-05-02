@@ -102,11 +102,30 @@ void main() {
         if (v_renderType < 1.5) {
             fragColor = vec4(v_color.rgb, v_color.a * opacity);
         } else if (v_renderType < 2.5) {
+            // Outlined SDF text. When u_textShadowColor.a > 0 the same branch
+            // also lays a drop-shadow underneath the outline+fill — TWOM-style
+            // chunky text needs both at once, so we composite here rather than
+            // making the caller pick mutually-exclusive Outlined/Shadow modes.
             float outlineDist = screenPxRange * (sd - u_outlineThickness);
             float outlineOp = clamp(outlineDist + 0.5, 0.0, 1.0);
-            vec4 outline = vec4(u_outlineColor.rgb, v_color.a * outlineOp * u_outlineColor.a);
-            vec4 fill = vec4(v_color.rgb, v_color.a * opacity);
-            fragColor = mix(outline, fill, opacity);
+
+            // Drop-shadow silhouette: sample the SDF at an offset and use the
+            // outline threshold so the shadow has the same chunky shape as
+            // the outline (rather than just the thin glyph stroke).
+            vec2 shadowUV = v_uv - u_textShadowOffset;
+            vec4 shadowSdf = texture(uTexture, shadowUV);
+            float shadowSd = median(shadowSdf.r, shadowSdf.g, shadowSdf.b);
+            float shadowDist = screenPxRange * (shadowSd - u_outlineThickness);
+            float shadowOp = clamp(shadowDist + 0.5, 0.0, 1.0) * u_textShadowColor.a;
+
+            vec4 shadow  = vec4(u_textShadowColor.rgb, v_color.a * shadowOp);
+            vec4 outline = vec4(u_outlineColor.rgb,    v_color.a * outlineOp * u_outlineColor.a);
+            vec4 fill    = vec4(v_color.rgb,           v_color.a * opacity);
+
+            // Back-to-front composite: shadow, outline, fill.
+            fragColor = shadow;
+            fragColor = mix(fragColor, outline, outline.a);
+            fragColor = mix(fragColor, fill,    opacity);
         } else if (v_renderType < 3.5) {
             float glowOp = smoothstep(0.0, 0.5, sdf.a);
             vec4 glow = vec4(u_textGlowColor.rgb, v_color.a * glowOp * u_textGlowIntensity);

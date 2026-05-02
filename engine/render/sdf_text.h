@@ -44,6 +44,15 @@ public:
 
     void setFontRegistry(FontRegistry* registry);
 
+    // Swap the global default font that drawScreen / drawWorld (the non-Ex
+    // variants) render with. Looks up `name` in the registry and copies its
+    // glyph table + atlas handle into the active font slot. Call this once
+    // after the registry is loaded to upgrade every drawScreen-based bespoke
+    // widget (menu tab bar, status bar, inventory, skill panels, etc.) to a
+    // chosen UI font without editing each call site. Returns false if the
+    // font isn't registered yet (no state change).
+    bool setDefaultFont(const std::string& name);
+
     void drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 position,
                       float fontSize, Color color = Color::white(), float depth = 50.0f,
                       TextStyle style = TextStyle::Normal,
@@ -59,6 +68,16 @@ public:
                            TextStyle style, const std::string& fontName,
                            const TextEffects& fx,
                            const TextLayout& layout = {});
+
+    // World-space variant — same contract, but the text is drawn in world
+    // (y-up) coordinates. Used by nameplates, world-anchored quest markers,
+    // and any other in-world text that wants real shader-side outline+shadow
+    // compositing instead of the legacy 8-directional offset hack.
+    void drawWorldEffects(SpriteBatch& batch, const std::string& text, Vec2 position,
+                          float fontSize, Color color, float depth,
+                          TextStyle style, const std::string& fontName,
+                          const TextEffects& fx,
+                          const TextLayout& layout = {});
 
     void drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 position,
                      float fontSize, Color color = Color::white(), float depth = 50.0f,
@@ -95,6 +114,13 @@ private:
     void loadMetrics(const std::string& jsonPath);
     void drawInternal(SpriteBatch& batch, const std::string& text, Vec2 position,
                       float fontSize, Color color, float depth, TextStyle style, bool yDown,
+                      const TextLayout& layout = {});
+    // Resolves fontName via the registry, swaps font state, calls drawInternal,
+    // then restores. Does NOT touch text-effect uniforms — callers (public
+    // drawScreenEx, drawScreenEffects) are responsible for that contract.
+    void drawWithFont(SpriteBatch& batch, const std::string& text, Vec2 position,
+                      float fontSize, Color color, float depth, TextStyle style,
+                      const std::string& fontName, bool yDown,
                       const TextLayout& layout = {});
     void drawBitmap(SpriteBatch& batch, const SDFFont& font, const std::string& text,
                     Vec2 position, float fontSize, Color color, float depth, bool yDown,

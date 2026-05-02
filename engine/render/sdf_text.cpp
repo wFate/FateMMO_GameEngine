@@ -27,6 +27,7 @@ bool SDFText::init(const std::string& atlasPath, const std::string& metricsPath)
     SDFFontAtlas::generateIfMissing("C:/Windows/Fonts/consola.ttf", "assets/fonts", emSize_);
     SDFFontAtlas::generateIfMissing("assets/fonts/PressStart2P-Regular.ttf", "assets/fonts", emSize_, "press_start_2p");
     SDFFontAtlas::generateIfMissing("assets/fonts/PixelifySans-Regular.ttf", "assets/fonts", emSize_, "pixelify_sans");
+    SDFFontAtlas::generateIfMissing("assets/fonts/Fredoka-SemiBold.ttf", "assets/fonts", emSize_, "fredoka_semibold");
 
     // Load atlas PNG via stb_image (4 channels: RGBA)
     int w = 0, h = 0, channels = 0;
@@ -167,12 +168,19 @@ void SDFText::loadMetrics(const std::string& jsonPath) {
 void SDFText::drawWorld(SpriteBatch& batch, const std::string& text, Vec2 position,
                         float fontSize, Color color, float depth, TextStyle style,
                         const TextLayout& layout) {
+    // Leak gate: any non-Normal style draw that did NOT come through
+    // drawScreenEffects/drawWorldEffects gets the engine-default outline /
+    // shadow / glow uniforms. Otherwise the previous drawScreenEffects state
+    // would silently bleed onto this caller (e.g. a status-bar label inheriting
+    // a dialogue-pill's lavender outline).
+    if (style != TextStyle::Normal) batch.resetTextEffectUniforms();
     drawInternal(batch, text, position, fontSize, color, depth, style, false, layout);
 }
 
 void SDFText::drawScreen(SpriteBatch& batch, const std::string& text, Vec2 position,
                          float fontSize, Color color, float depth, TextStyle style,
                          const TextLayout& layout) {
+    if (style != TextStyle::Normal) batch.resetTextEffectUniforms();
     drawInternal(batch, text, position, fontSize, color, depth, style, true, layout);
 }
 
@@ -284,14 +292,43 @@ void SDFText::setFontRegistry(FontRegistry* registry) {
     fontRegistry_ = registry;
 }
 
-void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 position,
+bool SDFText::setDefaultFont(const std::string& name) {
+    if (!fontRegistry_) {
+        LOG_WARN("SDFText", "setDefaultFont('%s'): no font registry attached", name.c_str());
+        return false;
+    }
+    SDFFont* font = fontRegistry_->getFont(name);
+    if (!font || !font->atlas || font->glyphs.empty()
+        || font->type != SDFFont::Type::MSDF) {
+        LOG_WARN("SDFText", "setDefaultFont('%s'): font missing or empty in registry",
+                 name.c_str());
+        return false;
+    }
+    activeGlyphs_   = &font->glyphs;
+#ifndef FATEMMO_METAL
+    atlasTexId_     = font->atlas->id();
+#endif
+    atlasGfxHandle_ = font->atlas->gfxHandle();
+    atlasWidth_     = font->atlasWidth;
+    atlasHeight_    = font->atlasHeight;
+    pxRange_        = font->pxRange;
+    lineHeight_     = font->lineHeight;
+    ascender_       = font->ascender;
+    emSize_         = font->emSize;
+    LOG_INFO("SDFText", "Default UI font set to '%s' (%zu glyphs)",
+             name.c_str(), font->glyphs.size());
+    return true;
+}
+
+void SDFText::drawWithFont(SpriteBatch& batch, const std::string& text, Vec2 position,
                            float fontSize, Color color, float depth, TextStyle style,
-                           const std::string& fontName, const TextLayout& layout) {
+                           const std::string& fontName, bool yDown,
+                           const TextLayout& layout) {
     if (fontRegistry_) {
         SDFFont* font = fontRegistry_->getFont(fontName);
         if (font && font->atlas && !font->glyphs.empty()) {
             if (font->type == SDFFont::Type::Bitmap) {
-                drawBitmap(batch, *font, text, position, fontSize, color, depth, true, layout);
+                drawBitmap(batch, *font, text, position, fontSize, color, depth, yDown, layout);
                 return;
             }
             // MSDF font from registry: temporarily swap in the font's data
@@ -319,7 +356,7 @@ void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 pos
             ascender_    = font->ascender;
             emSize_      = font->emSize;
 
-            drawInternal(batch, text, position, fontSize, color, depth, style, true, layout);
+            drawInternal(batch, text, position, fontSize, color, depth, style, yDown, layout);
 
             activeGlyphs_   = savedActiveGlyphs;
 #ifndef FATEMMO_METAL
@@ -336,7 +373,15 @@ void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 pos
         }
     }
     // Fallback: use default font
-    drawInternal(batch, text, position, fontSize, color, depth, style, true, layout);
+    drawInternal(batch, text, position, fontSize, color, depth, style, yDown, layout);
+}
+
+void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 position,
+                           float fontSize, Color color, float depth, TextStyle style,
+                           const std::string& fontName, const TextLayout& layout) {
+    // See drawScreen() leak-gate comment.
+    if (style != TextStyle::Normal) batch.resetTextEffectUniforms();
+    drawWithFont(batch, text, position, fontSize, color, depth, style, fontName, true, layout);
 }
 
 void SDFText::drawScreenEffects(SpriteBatch& batch, const std::string& text, Vec2 position,
@@ -350,7 +395,7 @@ void SDFText::drawScreenEffects(SpriteBatch& batch, const std::string& text, Vec
     if (fx.outlineColor.a > 0.0f) {
         u.outlineColor      = fx.outlineColor;
         const float w = fx.outlineWidth;
-        u.outlineThickness  = (w > 0.0f) ? std::max(0.5f - w, 0.05f) : 0.5f;
+        u.outlineThickness  = (w > 0.0f) ? (std::max)(0.5f - w, 0.05f) : 0.5f;
     } else {
         // No outline requested — push fill all the way to the glyph edge.
         u.outlineColor      = Color{0.0f, 0.0f, 0.0f, 0.0f};
@@ -365,64 +410,46 @@ void SDFText::drawScreenEffects(SpriteBatch& batch, const std::string& text, Vec
     u.glowColor      = fx.glowColor;
     u.glowIntensity  = (fx.glowColor.a > 0.0f) ? fx.glowRadius : 0.0f;
 
+    // Sticky state: setTextEffectUniforms is a no-op when uniforms already
+    // match, so adjacent styled labels with identical effects collapse into a
+    // single batch. We bypass drawScreenEx (which has a leak-gate that would
+    // reset our caller-supplied uniforms back to defaults) and call drawWithFont
+    // directly — drawWithFont does NOT touch text-effect uniforms. We don't
+    // reset afterward — TextStyle::Normal text never reads outline/shadow/glow
+    // uniforms, so leaving them set is harmless until the next styled draw.
     batch.setTextEffectUniforms(u);
-    drawScreenEx(batch, text, position, fontSize, color, depth, style, fontName, layout);
-    batch.resetTextEffectUniforms();
+    drawWithFont(batch, text, position, fontSize, color, depth, style, fontName, true, layout);
 }
 
 void SDFText::drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 position,
                           float fontSize, Color color, float depth, TextStyle style,
                           const std::string& fontName, const TextLayout& layout) {
-    if (fontRegistry_) {
-        SDFFont* font = fontRegistry_->getFont(fontName);
-        if (font && font->atlas && !font->glyphs.empty()) {
-            if (font->type == SDFFont::Type::Bitmap) {
-                drawBitmap(batch, *font, text, position, fontSize, color, depth, false, layout);
-                return;
-            }
-            // MSDF font from registry: temporarily swap in the font's data
-            auto savedActiveGlyphs = activeGlyphs_;
-#ifndef FATEMMO_METAL
-            auto savedAtlasTexId  = atlasTexId_;
-#endif
-            auto savedAtlasGfx    = atlasGfxHandle_;
-            auto savedAtlasWidth  = atlasWidth_;
-            auto savedAtlasHeight = atlasHeight_;
-            auto savedPxRange     = pxRange_;
-            auto savedLineHeight  = lineHeight_;
-            auto savedAscender    = ascender_;
-            auto savedEmSize      = emSize_;
+    // See drawScreen() leak-gate comment.
+    if (style != TextStyle::Normal) batch.resetTextEffectUniforms();
+    drawWithFont(batch, text, position, fontSize, color, depth, style, fontName, false, layout);
+}
 
-            activeGlyphs_ = &font->glyphs;
-#ifndef FATEMMO_METAL
-            atlasTexId_  = font->atlas->id();
-#endif
-            atlasGfxHandle_ = font->atlas->gfxHandle();
-            atlasWidth_  = font->atlasWidth;
-            atlasHeight_ = font->atlasHeight;
-            pxRange_     = font->pxRange;
-            lineHeight_  = font->lineHeight;
-            ascender_    = font->ascender;
-            emSize_      = font->emSize;
-
-            drawInternal(batch, text, position, fontSize, color, depth, style, false, layout);
-
-            activeGlyphs_   = savedActiveGlyphs;
-#ifndef FATEMMO_METAL
-            atlasTexId_     = savedAtlasTexId;
-#endif
-            atlasGfxHandle_ = savedAtlasGfx;
-            atlasWidth_     = savedAtlasWidth;
-            atlasHeight_    = savedAtlasHeight;
-            pxRange_        = savedPxRange;
-            lineHeight_     = savedLineHeight;
-            ascender_       = savedAscender;
-            emSize_         = savedEmSize;
-            return;
-        }
+void SDFText::drawWorldEffects(SpriteBatch& batch, const std::string& text, Vec2 position,
+                               float fontSize, Color color, float depth,
+                               TextStyle style, const std::string& fontName,
+                               const TextEffects& fx, const TextLayout& layout) {
+    // Mirror of drawScreenEffects — same conversion math, world-space yDown=false.
+    TextEffectUniforms u{};
+    if (fx.outlineColor.a > 0.0f) {
+        u.outlineColor      = fx.outlineColor;
+        const float w = fx.outlineWidth;
+        u.outlineThickness  = (w > 0.0f) ? (std::max)(0.5f - w, 0.05f) : 0.5f;
+    } else {
+        u.outlineColor      = Color{0.0f, 0.0f, 0.0f, 0.0f};
+        u.outlineThickness  = 0.5f;
     }
-    // Fallback: use default font
-    drawInternal(batch, text, position, fontSize, color, depth, style, false, layout);
+    u.shadowOffsetUv = (fx.shadowColor.a > 0.0f) ? fx.shadowOffset : Vec2{0.0f, 0.0f};
+    u.shadowColor    = fx.shadowColor;
+    u.glowColor      = fx.glowColor;
+    u.glowIntensity  = (fx.glowColor.a > 0.0f) ? fx.glowRadius : 0.0f;
+
+    batch.setTextEffectUniforms(u);
+    drawWithFont(batch, text, position, fontSize, color, depth, style, fontName, false, layout);
 }
 
 Vec2 SDFText::measureEx(const std::string& text, float fontSize,

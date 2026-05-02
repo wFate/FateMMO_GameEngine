@@ -161,6 +161,12 @@ void CommandList::setUniform(const char* name, const fate::Mat4& value) {
     if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_FALSE, value.data());
 }
 
+void CommandList::setUniformBlock(const void* /*data*/, std::size_t /*bytes*/) {
+    // GL: no-op. The sprite shader is wired through named per-field setUniform
+    // calls; a future UBO migration can revisit this. Kept on the API so
+    // SpriteBatch can call it unconditionally and let Metal pick it up.
+}
+
 void CommandList::draw(PrimitiveType type, int vertexCount, int firstVertex) {
     glDrawArrays(toGLPrimitive(type), firstVertex, vertexCount);
 }

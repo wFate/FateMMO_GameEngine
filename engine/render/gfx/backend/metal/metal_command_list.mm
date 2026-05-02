@@ -370,6 +370,23 @@ void CommandList::setUniform(const char* name, const fate::Mat4& value) {
     writeUniform(value.data(), sizeof(float) * 16);
 }
 
+void CommandList::setUniformBlock(const void* data, std::size_t bytes) {
+    // Overwrite the scratch buffer wholesale. Caller is responsible for laying
+    // out `data` to exactly match the bound shader's MSL constant struct
+    // (alignment + padding included). Any setUniform calls preceding this in
+    // the same draw are effectively replaced — that's intentional, because
+    // the per-field positional writer cannot produce MSL-correct padding for
+    // structs containing float2/float3 fields.
+    if (bytes > sizeof(s_uniformData)) {
+        LOG_ERROR("metal", "CommandList::setUniformBlock: %zu bytes exceeds scratch size %zu",
+                  bytes, sizeof(s_uniformData));
+        return;
+    }
+    std::memcpy(s_uniformData, data, bytes);
+    s_uniformOffset = bytes;
+    s_uniformsDirty = true;
+}
+
 // ---------------------------------------------------------------------------
 // Draw calls
 // ---------------------------------------------------------------------------

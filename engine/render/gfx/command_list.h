@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/render/gfx/types.h"
 #include "engine/core/types.h"
+#include <cstddef>
 
 namespace gfx {
 
@@ -27,6 +28,15 @@ public:
     void setUniform(const char* name, const fate::Vec3& value);
     void setUniform(const char* name, const fate::Color& value);
     void setUniform(const char* name, const fate::Mat4& value);
+
+    // Upload an entire uniform-buffer-shaped block in one shot.
+    //
+    // Metal: memcpy the bytes into the scratch buffer, replacing whatever
+    //   per-field setUniform calls preceded this. Use for shaders whose MSL
+    //   struct has alignment padding the per-field writer cannot infer (the
+    //   sprite shader is the canonical case — see sprite_uniform_block.h).
+    // GL: no-op. Named per-field uniforms still apply.
+    void setUniformBlock(const void* data, std::size_t bytes);
 
     // Draw
     void draw(PrimitiveType type, int vertexCount, int firstVertex = 0);

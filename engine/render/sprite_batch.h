@@ -61,6 +61,19 @@ struct TextEffectUniforms {
     Color shadowColor       = {0.0f, 0.0f, 0.0f, 0.5f};
     Color glowColor         = {1.0f, 1.0f, 1.0f, 0.6f};
     float glowIntensity     = 0.6f;
+
+    bool operator==(const TextEffectUniforms& o) const {
+        return outlineColor.r == o.outlineColor.r && outlineColor.g == o.outlineColor.g &&
+               outlineColor.b == o.outlineColor.b && outlineColor.a == o.outlineColor.a &&
+               outlineThickness == o.outlineThickness &&
+               shadowOffsetUv.x == o.shadowOffsetUv.x && shadowOffsetUv.y == o.shadowOffsetUv.y &&
+               shadowColor.r == o.shadowColor.r && shadowColor.g == o.shadowColor.g &&
+               shadowColor.b == o.shadowColor.b && shadowColor.a == o.shadowColor.a &&
+               glowColor.r == o.glowColor.r && glowColor.g == o.glowColor.g &&
+               glowColor.b == o.glowColor.b && glowColor.a == o.glowColor.a &&
+               glowIntensity == o.glowIntensity;
+    }
+    bool operator!=(const TextEffectUniforms& o) const { return !(*this == o); }
 };
 
 // Batched 2D sprite renderer
@@ -117,10 +130,14 @@ public:
     // Draw an SDF rounded rectangle with optional gradient, border, and shadow
     void drawRoundedRect(const RoundedRectParams& params);
 
-    // Push text-effect uniforms for subsequent MSDF text draws. Forces a flush
-    // of any pending sprites so the new uniforms only affect draws after the
-    // call. resetTextEffectUniforms() restores the engine defaults.
+    // Push text-effect uniforms for subsequent MSDF text draws. Only flushes
+    // pending sprites if the new uniforms actually differ from the active set
+    // — repeat calls with the same effects (e.g. dozens of labels sharing a
+    // theme) collapse into a single batch. State is sticky across calls;
+    // renderType=Normal text ignores these uniforms so no reset is required
+    // before drawing un-styled text.
     void setTextEffectUniforms(const TextEffectUniforms& fx);
+    // Restore engine defaults. No-op when defaults are already active.
     void resetTextEffectUniforms();
 
 #ifndef FATEMMO_METAL
@@ -218,6 +235,13 @@ private:
     // Active text-effect uniforms applied at flush time. setTextEffectUniforms /
     // resetTextEffectUniforms write these; flush() forwards them to the shader.
     TextEffectUniforms textEffectUniforms_{};
+
+    // Palette state. Held as members so flush() can write the palette slots in
+    // their proper position inside the Metal SpriteUniforms struct (Metal uses
+    // positional buffer layout). setPalette/clearPalette only update these; the
+    // actual uniform write happens in flush() in struct order.
+    Color paletteColors_[16] = {};
+    float paletteSize_ = 0.0f;
 
     // Get the pipeline handle for the current blend mode
     gfx::PipelineHandle currentPipeline() const;

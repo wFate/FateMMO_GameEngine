@@ -24,7 +24,11 @@ struct SpriteUniforms {
     float    uPxRange;
     float2   uAtlasSize;
     float2   uShadowOffset;
-    int      uPaletteCount;
+    // float, not int: SpriteBatch writes paletteSize as a float (matches the
+    // GLSL `uniform float u_paletteSize` in assets/shaders/sprite.frag), and
+    // CommandList::setUniform(name,int) is a deliberate no-op on Metal — so
+    // an `int` field here would never be populated.
+    float    uPaletteCount;
     float4   uPalette[16];
 
     // Configurable text effect uniforms
@@ -86,7 +90,7 @@ fragment float4 sprite_fragment(SpriteOut in [[stage_in]],
         float4 texel = uTexture.sample(samp, in.v_uv);
         if (texel.a < 0.01) discard_fragment();
         int index = int(texel.r * 15.0 + 0.5); // 16-color palette (0-15)
-        index = clamp(index, 0, u.uPaletteCount - 1);
+        index = clamp(index, 0, int(u.uPaletteCount) - 1);
         fragColor = u.uPalette[index];
         fragColor.a *= texel.a * in.v_color.a;
         return fragColor;
@@ -151,12 +155,25 @@ fragment float4 sprite_fragment(SpriteOut in [[stage_in]],
             // Mode 1: Normal SDF text
             fragColor = float4(in.v_color.rgb, in.v_color.a * opacity);
         } else if (in.v_renderType < 2.5) {
-            // Mode 2: Outlined SDF text
+            // Mode 2: Outlined SDF text. When uTextShadowColor.a > 0 we also
+            // lay a drop-shadow under the outline+fill so TWOM-style chunky
+            // text gets both at once in a single render pass.
             float outlineDist = screenPxRange * (sd - u.uOutlineThickness);
             float outlineOp   = clamp(outlineDist + 0.5, 0.0, 1.0);
-            float4 outline    = float4(u.uOutlineColor.rgb, in.v_color.a * outlineOp * u.uOutlineColor.a);
-            float4 fill       = float4(in.v_color.rgb, in.v_color.a * opacity);
-            fragColor = mix(outline, fill, opacity);
+
+            float2 shadowUV  = in.v_uv - u.uTextShadowOffset;
+            float4 shadowSdf = uTexture.sample(samp, shadowUV);
+            float  shadowSd  = sprite_median(shadowSdf.r, shadowSdf.g, shadowSdf.b);
+            float  shadowDist = screenPxRange * (shadowSd - u.uOutlineThickness);
+            float  shadowOp  = clamp(shadowDist + 0.5, 0.0, 1.0) * u.uTextShadowColor.a;
+
+            float4 shadow  = float4(u.uTextShadowColor.rgb, in.v_color.a * shadowOp);
+            float4 outline = float4(u.uOutlineColor.rgb,    in.v_color.a * outlineOp * u.uOutlineColor.a);
+            float4 fill    = float4(in.v_color.rgb,         in.v_color.a * opacity);
+
+            fragColor = shadow;
+            fragColor = mix(fragColor, outline, outline.a);
+            fragColor = mix(fragColor, fill,    opacity);
         } else if (in.v_renderType < 3.5) {
             // Mode 3: Glow SDF text
             float glowOp = smoothstep(0.0, 0.5, sdf.a);

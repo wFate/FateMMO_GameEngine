@@ -4448,27 +4448,27 @@
         ],
         "borderWidth": 0.0,
         "chromeActiveTabBgColor": [
-          200,
-          168,
-          50,
+          82,
+          128,
+          219,
           255
         ],
         "chromeActiveTabBorderColor": [
-          89,
-          66,
-          36,
+          46,
+          77,
+          148,
           255
         ],
         "chromeArrowBgColor": [
-          56,
-          48,
-          36,
-          255
+          26,
+          33,
+          51,
+          217
         ],
         "chromeArrowTextColor": [
-          230,
-          209,
-          140,
+          245,
+          247,
+          255,
           255
         ],
         "chromeInactiveTabBgColor": [
@@ -4478,28 +4478,28 @@
           0
         ],
         "chromeStripBgColor": [
-          74,
-          63,
-          47,
-          255
+          41,
+          51,
+          77,
+          245
         ],
         "chromeStripBorderColor": [
-          89,
-          66,
-          36,
-          255
+          140,
+          153,
+          199,
+          217
         ],
-        "chromeStripCornerRadius": 0.0,
-        "chromeStripShadowBlur": 0.0,
+        "chromeStripCornerRadius": 8.0,
+        "chromeStripShadowBlur": 6.0,
         "chromeStripShadowColor": [
-          0,
-          0,
-          0,
-          0
+          5,
+          10,
+          26,
+          102
         ],
         "chromeStripShadowOffset": [
           0.0,
-          0.0
+          2.0
         ],
         "disabledColor": [
           0,

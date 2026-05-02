@@ -1,4 +1,5 @@
 #include "engine/render/sprite_batch.h"
+#include "engine/render/sprite_uniform_block.h"
 #ifndef FATEMMO_METAL
 #include "engine/render/gfx/backend/gl/gl_loader.h"
 #endif
@@ -127,11 +128,25 @@ void main() {
         if (v_renderType < 1.5) {
             fragColor = vec4(v_color.rgb, v_color.a * opacity);
         } else if (v_renderType < 2.5) {
+            // Outlined SDF text. When u_textShadowColor.a > 0 we also lay a
+            // drop-shadow underneath the outline+fill so TWOM-style chunky
+            // text gets both at once.
             float outlineDist = screenPxRange * (sd - u_outlineThickness);
             float outlineOp = clamp(outlineDist + 0.5, 0.0, 1.0);
-            vec4 outline = vec4(u_outlineColor.rgb, v_color.a * outlineOp * u_outlineColor.a);
-            vec4 fill = vec4(v_color.rgb, v_color.a * opacity);
-            fragColor = mix(outline, fill, opacity);
+
+            vec2 shadowUV = v_uv - u_textShadowOffset;
+            vec4 shadowSdf = texture(uTexture, shadowUV);
+            float shadowSd = median(shadowSdf.r, shadowSdf.g, shadowSdf.b);
+            float shadowDist = screenPxRange * (shadowSd - u_outlineThickness);
+            float shadowOp = clamp(shadowDist + 0.5, 0.0, 1.0) * u_textShadowColor.a;
+
+            vec4 shadow  = vec4(u_textShadowColor.rgb, v_color.a * shadowOp);
+            vec4 outline = vec4(u_outlineColor.rgb,    v_color.a * outlineOp * u_outlineColor.a);
+            vec4 fill    = vec4(v_color.rgb,           v_color.a * opacity);
+
+            fragColor = shadow;
+            fragColor = mix(fragColor, outline, outline.a);
+            fragColor = mix(fragColor, fill,    opacity);
         } else if (v_renderType < 3.5) {
             float glowOp = smoothstep(0.0, 0.5, sdf.a);
             vec4 glow = vec4(u_textGlowColor.rgb, v_color.a * glowOp * u_textGlowIntensity);
@@ -508,11 +523,35 @@ void SpriteBatch::flush() {
         auto& device = gfx::Device::instance();
 
         cmdList_->bindPipeline(currentPipeline());
+
+        // CRITICAL: uniform write order MUST match the MSL SpriteUniforms field
+        // order (assets/shaders/metal/sprite.metal). Metal uses positional
+        // buffer layout — names are ignored on the Metal command list. The
+        // direct GL fallback uses named uniforms so order is irrelevant there,
+        // but we keep one canonical order to make any future drift obvious.
+        //
+        // SpriteUniforms layout (must match exactly):
+        //   uViewProjection, uPxRange, uAtlasSize, uShadowOffset,
+        //   uPaletteCount, uPalette[16],
+        //   uOutlineColor, uOutlineThickness,
+        //   uTextShadowOffset, uTextShadowColor,
+        //   uTextGlowColor, uTextGlowIntensity,
+        //   uRectSize, uCornerRadius, uRRBorderWidth, uRRBorderColor,
+        //   uGradientTop, uGradientBottom,
+        //   uRRShadowOffset, uRRShadowBlur, uRRShadowColor.
         cmdList_->setUniform("uViewProjection", viewProjection_);
-        cmdList_->setUniform("uTexture", 0);
+        cmdList_->setUniform("uTexture", 0);  // GL named-only; Metal no-op
         cmdList_->setUniform("u_pxRange", 4.0f);
         cmdList_->setUniform("u_atlasSize", Vec2{512.0f, 512.0f});
         cmdList_->setUniform("u_shadowOffset", textEffectUniforms_.shadowOffsetUv);
+
+        // Palette slot — MUST be written every flush so Metal's struct stays
+        // consistent. paletteSize_ defaults to 0 (palette branch inactive).
+        cmdList_->setUniform("u_paletteSize", paletteSize_);
+        for (int i = 0; i < 16; ++i) {
+            const std::string name = "u_palette[" + std::to_string(i) + "]";
+            cmdList_->setUniform(name.c_str(), paletteColors_[i]);
+        }
 
         // Text effect uniforms — driven by setTextEffectUniforms()
         cmdList_->setUniform("u_outlineColor",      textEffectUniforms_.outlineColor);
@@ -522,6 +561,9 @@ void SpriteBatch::flush() {
         cmdList_->setUniform("u_textGlowColor",     textEffectUniforms_.glowColor);
         cmdList_->setUniform("u_textGlowIntensity", textEffectUniforms_.glowIntensity);
 
+        // Rounded-rect slot — written every flush even when inactive so the
+        // Metal struct layout stays stable. Defaulted values produce no visible
+        // rounded-rect output (renderType != 7 ignores them).
         if (hasRoundedRect_) {
             auto& rr = pendingRoundedRect_;
             cmdList_->setUniform("u_rectSize", rr.size);
@@ -533,6 +575,53 @@ void SpriteBatch::flush() {
             cmdList_->setUniform("u_rrShadowOffset", rr.shadowOffset);
             cmdList_->setUniform("u_rrShadowBlur", rr.shadowBlur);
             cmdList_->setUniform("u_rrShadowColor", rr.shadowColor);
+        } else {
+            cmdList_->setUniform("u_rectSize", Vec2{0.0f, 0.0f});
+            cmdList_->setUniform("u_cornerRadius", 0.0f);
+            cmdList_->setUniform("u_rrBorderWidth", 0.0f);
+            cmdList_->setUniform("u_rrBorderColor", Color{0.0f, 0.0f, 0.0f, 0.0f});
+            cmdList_->setUniform("u_gradientTop", Color{0.0f, 0.0f, 0.0f, 0.0f});
+            cmdList_->setUniform("u_gradientBottom", Color{0.0f, 0.0f, 0.0f, 0.0f});
+            cmdList_->setUniform("u_rrShadowOffset", Vec2{0.0f, 0.0f});
+            cmdList_->setUniform("u_rrShadowBlur", 0.0f);
+            cmdList_->setUniform("u_rrShadowColor", Color{0.0f, 0.0f, 0.0f, 0.0f});
+        }
+
+        // Metal-safe rebuild of the entire SpriteUniforms struct. The per-field
+        // setUniform calls above wired up GL named uniforms; on Metal those
+        // calls land at running-offset positions that DO NOT match MSL natural
+        // alignment (float2 fields need 8-byte alignment, float4 arrays need
+        // 16-byte alignment, etc.). setUniformBlock overwrites the Metal
+        // scratch buffer with a properly-padded layout from sprite_uniform_block.h
+        // — it's a no-op on GL where the named uniforms above already did the
+        // work. See engine/render/sprite_uniform_block.h for the offset table.
+        {
+            SpriteUniformBlock block{};
+            block.setViewProjection(viewProjection_);
+            block.setPxRange(4.0f);
+            block.setAtlasSize(Vec2{512.0f, 512.0f});
+            block.setShadowOffset(textEffectUniforms_.shadowOffsetUv);
+            block.setPaletteCount(paletteSize_);
+            for (int i = 0; i < 16; ++i) block.setPaletteEntry(i, paletteColors_[i]);
+            block.setOutlineColor(textEffectUniforms_.outlineColor);
+            block.setOutlineThickness(textEffectUniforms_.outlineThickness);
+            block.setTextShadowOffset(textEffectUniforms_.shadowOffsetUv);
+            block.setTextShadowColor(textEffectUniforms_.shadowColor);
+            block.setTextGlowColor(textEffectUniforms_.glowColor);
+            block.setTextGlowIntensity(textEffectUniforms_.glowIntensity);
+            if (hasRoundedRect_) {
+                const auto& rr = pendingRoundedRect_;
+                block.setRectSize(rr.size);
+                block.setCornerRadius(rr.cornerRadius);
+                block.setRRBorderWidth(rr.borderWidth);
+                block.setRRBorderColor(rr.borderColor);
+                block.setGradientTop(rr.fillTop);
+                block.setGradientBottom(rr.fillBottom);
+                block.setRRShadowOffset(rr.shadowOffset);
+                block.setRRShadowBlur(rr.shadowBlur);
+                block.setRRShadowColor(rr.shadowColor);
+            }
+            cmdList_->setUniformBlock(&block, sizeof(block));
         }
 
         cmdList_->bindVertexBuffer(vboHandle_);
@@ -695,6 +784,15 @@ void SpriteBatch::flush() {
     shader_.setVec2("u_atlasSize", {512.0f, 512.0f});
     shader_.setVec2("u_shadowOffset", textEffectUniforms_.shadowOffsetUv);
 
+    // Palette uniforms (mirrors the cmdList path; named bindings on GL so
+    // ordering doesn't matter, but we write every flush for parity).
+    shader_.setFloat("u_paletteSize", paletteSize_);
+    for (int i = 0; i < 16; ++i) {
+        const std::string name = "u_palette[" + std::to_string(i) + "]";
+        shader_.setVec4(name, paletteColors_[i].r, paletteColors_[i].g,
+                              paletteColors_[i].b, paletteColors_[i].a);
+    }
+
     // Text effect uniforms — driven by setTextEffectUniforms()
     {
         const auto& tfx = textEffectUniforms_;
@@ -817,6 +915,12 @@ void SpriteBatch::flush() {
 }
 
 void SpriteBatch::setTextEffectUniforms(const TextEffectUniforms& fx) {
+    // Skip the flush entirely when the active state already matches — without
+    // this short-circuit, every styled label would force a flush even when N
+    // siblings share the same chrome style, which collapses batching for chat
+    // rooms / dialogue panels / NPC lists.
+    if (textEffectUniforms_ == fx) return;
+
     // Pending sprites must flush before the new uniforms apply, otherwise the
     // active batch would render with whichever uniforms happen to win at flush.
     flushPending();
@@ -824,8 +928,7 @@ void SpriteBatch::setTextEffectUniforms(const TextEffectUniforms& fx) {
 }
 
 void SpriteBatch::resetTextEffectUniforms() {
-    flushPending();
-    textEffectUniforms_ = TextEffectUniforms{};
+    setTextEffectUniforms(TextEffectUniforms{});
 }
 
 void SpriteBatch::setBlendMode(BlendMode mode) {
@@ -863,29 +966,17 @@ void SpriteBatch::setBlendMode(BlendMode mode) {
 
 void SpriteBatch::setPalette(const Color* colors, int count) {
     count = (std::min)(count, 16);
-    if (cmdList_) {
-        cmdList_->setUniform("u_paletteSize", static_cast<float>(count));
-        for (int i = 0; i < count; ++i) {
-            std::string name = "u_palette[" + std::to_string(i) + "]";
-            cmdList_->setUniform(name.c_str(), colors[i]);
-        }
-    } else {
-        shader_.bind();
-        shader_.setFloat("u_paletteSize", static_cast<float>(count));
-        for (int i = 0; i < count; ++i) {
-            std::string name = "u_palette[" + std::to_string(i) + "]";
-            shader_.setVec4(name, colors[i].r, colors[i].g, colors[i].b, colors[i].a);
-        }
-    }
+    flushPending();  // pending palette draws must use the previous palette
+    paletteSize_ = static_cast<float>(count);
+    for (int i = 0; i < count; ++i) paletteColors_[i] = colors[i];
+    for (int i = count; i < 16; ++i) paletteColors_[i] = Color{0.0f, 0.0f, 0.0f, 0.0f};
 }
 
 void SpriteBatch::clearPalette() {
-    if (cmdList_) {
-        cmdList_->setUniform("u_paletteSize", 0.0f);
-    } else {
-        shader_.bind();
-        shader_.setFloat("u_paletteSize", 0.0f);
-    }
+    if (paletteSize_ == 0.0f) return;
+    flushPending();
+    paletteSize_ = 0.0f;
+    for (int i = 0; i < 16; ++i) paletteColors_[i] = Color{0.0f, 0.0f, 0.0f, 0.0f};
 }
 
 void SpriteBatch::drawPaletteSwapped(std::shared_ptr<Texture>& texture,

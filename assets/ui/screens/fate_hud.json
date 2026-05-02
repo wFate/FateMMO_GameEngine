@@ -199,38 +199,38 @@
           115,
           140,
           191,
-          0
+          204
         ],
         "chromePortraitFillColor": [
           46,
           56,
           82,
-          0
+          255
         ],
         "chromeStripBgColor": [
           20,
           26,
           41,
-          0
+          240
         ],
         "chromeStripBorderColor": [
           89,
           107,
           153,
-          0
+          140
         ],
         "chromeStripBorderWidth": 1.5,
         "chromeStripGradientBottom": [
           15,
           20,
           36,
-          0
+          240
         ],
         "chromeStripGradientTop": [
           33,
           41,
           61,
-          0
+          240
         ],
         "coordColor": [
           232,
