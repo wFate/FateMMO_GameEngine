@@ -12,6 +12,40 @@
 namespace fate {
 
 #ifdef FATE_HAS_GAME
+
+// S143-C.1 — critical-change probe used by sendDiffs to skip buildCurrentState
+// on tier-cadence-skipped entities that have NO HP/death change. Returns false
+// (no critical change, allow skip) for entities lacking BOTH stat components,
+// so non-combat replicated entities (NPCs, dropped items) fall through to the
+// normal tier cadence rather than being forced through buildCurrentState every
+// tick.
+//
+// HARD CONTRACT: the encoding here MUST match buildCurrentState's currentHP +
+// deathState assignments below. If buildCurrentState changes either field's
+// derivation, this probe must change in lockstep — otherwise a far-tier mob
+// could go silent on death because the probe and the canonical encoding
+// disagree about what counts as "deathState changed". Cross-reference comments
+// are placed at both sites.
+namespace {
+inline bool hasCriticalEntityChange(Entity* entity, const SvEntityUpdateMsg& last) {
+    if (auto* charStats = entity->getComponent<CharacterStatsComponent>()) {
+        // Mirrors buildCurrentState lines 587-588 and 612-613 (player branch).
+        int32_t currentHP = static_cast<int32_t>(charStats->stats.currentHP);
+        uint8_t deathState = charStats->stats.isAlive()
+            ? 0
+            : static_cast<uint8_t>(charStats->stats.lifeState);
+        return currentHP != last.currentHP || deathState != last.deathState;
+    }
+    if (auto* enemyStats = entity->getComponent<EnemyStatsComponent>()) {
+        // Mirrors buildCurrentState lines 595 and 615-617 (mob branch).
+        int32_t currentHP = static_cast<int32_t>(enemyStats->stats.currentHP);
+        uint8_t deathState = enemyStats->stats.isAlive ? 0 : static_cast<uint8_t>(2);
+        return currentHP != last.currentHP || deathState != last.deathState;
+    }
+    return false; // non-combat entity (NPC, dropped item) — no HP/death to track
+}
+} // namespace
+
 void ReplicationManager::update(World& world, NetServer& server) {
     ++tickCounter_;
     // NOTE: Spatial index rebuild is commented out — it was rebuilt every tick but
@@ -333,33 +367,33 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         Entity* entity = world.getEntity(handle);
         if (!entity) continue;
 
-        SvEntityUpdateMsg current = buildCurrentState(world, entity, pid);
-
-        // Compare against last sent state to build delta
+        // Look up last sent state up front — needed by both the cadence-skip
+        // probe and the post-build dirtyMask comparison. First-tick entities
+        // (no last state yet) shouldn't be reaching the stayed set; bail.
         auto lastIt = client.lastSentState.find(pid.value());
         if (lastIt == client.lastSentState.end()) continue;
-
         const SvEntityUpdateMsg& last = lastIt->second;
 
-        // Tiered update frequency — skip if not this entity's turn
+        // S143-C.1 — tier-cadence skip BEFORE buildCurrentState. The probe
+        // mirrors buildCurrentState's HP+deathState encoding so death/HP
+        // updates always escape the cadence skip (without that override, a
+        // dead mob on Mid/Far/Edge would stay alive on the client until the
+        // next eligible tick — see the prior in-line override that this
+        // hoist replaces). Non-combat entities (no stat components) fall
+        // through to the cadence skip via hasCriticalEntityChange()=false.
         auto* entityTransform = entity->getComponent<Transform>();
         if (entityTransform && !isObserverClient) {
             float dx = entityTransform->position.x - clientPos.x;
             float dy = entityTransform->position.y - clientPos.y;
             float dist = std::sqrt(dx * dx + dy * dy);
             UpdateTier tier = getUpdateTier(dist);
-
-            // Always send critical state changes regardless of tier. HP is
-            // already covered; deathState is added because player lifeState
-            // transitions (dying→dead at game_app.cpp ~524) can fire without
-            // an HP delta, and missing a death update leaves a stuck sprite
-            // on clients viewing the entity from Mid/Far/Edge tiers.
-            bool hasHPChange    = (current.currentHP  != last.currentHP);
-            bool hasDeathChange = (current.deathState != last.deathState);
-            if (!hasHPChange && !hasDeathChange && !shouldSendUpdate(tier, tickCounter_)) {
-                continue;
+            if (!shouldSendUpdate(tier, tickCounter_)) {
+                if (!hasCriticalEntityChange(entity, last)) continue;
             }
         }
+
+        SvEntityUpdateMsg current = buildCurrentState(world, entity, pid);
+
         uint32_t dirtyMask = 0;
 
         if (current.position.x != last.position.x || current.position.y != last.position.y)
@@ -581,7 +615,11 @@ SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* en
         msg.flipX = sprite->flipX ? 1 : 0;
     }
 
-    // HP, maxHP, level
+    // HP, maxHP, level. NOTE: hasCriticalEntityChange() in the anonymous
+    // namespace above mirrors the currentHP + deathState encoding from this
+    // method. Any change here MUST be reflected there, or the cadence-skip
+    // probe will go out of sync with the canonical encoding and dropped HP/
+    // death transitions on Mid/Far/Edge entities will reappear.
     auto* charStats = entity->getComponent<CharacterStatsComponent>();
     if (charStats) {
         msg.currentHP = charStats->stats.currentHP;

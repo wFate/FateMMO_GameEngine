@@ -161,10 +161,22 @@ private:
 // Returns true if the packet type is a system packet that must NOT be encrypted.
 inline bool isSystemPacket(uint8_t packetType) {
     // System packets: Connect (0x01), Disconnect (0x02), Heartbeat (0x03),
-    // ConnectAccept (0x80), ConnectReject (0x81), KeyExchange (0x82), Rekey (0x83)
+    // ConnectAccept (0x80), ConnectReject (0x81), KeyExchange (0x82), Rekey (0x83),
+    // CmdAckExtended (0xE1).
+    //
+    // S143 audit fix — CmdAckExtended carries only uint16 sequence numbers
+    // (no game secrets) and the server special-cases it before the
+    // decryption block in handleRawPacket. Without this entry the client
+    // encrypted the payload + appended a 16-byte AEAD tag, the server
+    // read ciphertext bytes as `count`, hit the `count > 512` guard
+    // silently 99%+ of the time, and the stranded-seq drain never fired —
+    // pending 0xE0 EntityEnterBatch packets stayed unacked forever (telemetry:
+    // Q:0xE0=172 plateau, retx=3440/5s sustained, rx:0xE1=42/window arriving
+    // but never parsed). Session-token validation in handleRawPacket still
+    // gates this, so a forged CmdAckExtended requires the session token.
     return packetType == 0x01 || packetType == 0x02 || packetType == 0x03 ||
            packetType == 0x80 || packetType == 0x81 || packetType == 0x82 ||
-           packetType == 0x83;
+           packetType == 0x83 || packetType == 0xE1;
 }
 
 // Critical-lane packets MUST bypass the reliability-queue congestion drop.

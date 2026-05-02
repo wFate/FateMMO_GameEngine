@@ -47,6 +47,22 @@ struct RoundedRectParams {
     float depth            = 0.0f;
 };
 
+// Per-batch text effect uniforms applied to MSDF text draws (renderType 2/3/4).
+// Values are in shader-native units so widgets that already speak shader-space
+// can pass them through unchanged. Convenience builders convert from the
+// pixel-space TextEffects struct.
+struct TextEffectUniforms {
+    Color outlineColor      = {0.0f, 0.0f, 0.0f, 1.0f};
+    // SDF distance threshold for the outline edge (0.5 = no expansion past
+    // glyph edge; lower = thicker outline). Roughly 0.5 - desired_outlineWidth.
+    float outlineThickness  = 0.35f;
+    // UV-space offset (typically ~0.002 on a 512px atlas = ~1px shadow).
+    Vec2  shadowOffsetUv    = {0.002f, 0.002f};
+    Color shadowColor       = {0.0f, 0.0f, 0.0f, 0.5f};
+    Color glowColor         = {1.0f, 1.0f, 1.0f, 0.6f};
+    float glowIntensity     = 0.6f;
+};
+
 // Batched 2D sprite renderer
 // Collects sprites, sorts by texture+depth, renders in minimal draw calls
 class SpriteBatch {
@@ -100,6 +116,12 @@ public:
 
     // Draw an SDF rounded rectangle with optional gradient, border, and shadow
     void drawRoundedRect(const RoundedRectParams& params);
+
+    // Push text-effect uniforms for subsequent MSDF text draws. Forces a flush
+    // of any pending sprites so the new uniforms only affect draws after the
+    // call. resetTextEffectUniforms() restores the engine defaults.
+    void setTextEffectUniforms(const TextEffectUniforms& fx);
+    void resetTextEffectUniforms();
 
 #ifndef FATEMMO_METAL
     // Draw a quad with a raw GL texture ID (for font atlas, custom textures)
@@ -192,6 +214,10 @@ private:
 
     bool hasRoundedRect_ = false;
     RoundedRectParams pendingRoundedRect_;
+
+    // Active text-effect uniforms applied at flush time. setTextEffectUniforms /
+    // resetTextEffectUniforms write these; flush() forwards them to the shader.
+    TextEffectUniforms textEffectUniforms_{};
 
     // Get the pipeline handle for the current blend mode
     gfx::PipelineHandle currentPipeline() const;

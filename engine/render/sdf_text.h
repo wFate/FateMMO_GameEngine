@@ -50,6 +50,16 @@ public:
                       const std::string& fontName = "default",
                       const TextLayout& layout = {});
 
+    // Draw screen-space text with configurable outline / shadow / glow.
+    // Pushes shader-side text-effect uniforms via SpriteBatch, draws, then
+    // resets. Use this from widgets that have a UIStyle and want the chrome's
+    // textEffects to actually affect rendering.
+    void drawScreenEffects(SpriteBatch& batch, const std::string& text, Vec2 position,
+                           float fontSize, Color color, float depth,
+                           TextStyle style, const std::string& fontName,
+                           const TextEffects& fx,
+                           const TextLayout& layout = {});
+
     void drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 position,
                      float fontSize, Color color = Color::white(), float depth = 50.0f,
                      TextStyle style = TextStyle::Normal,

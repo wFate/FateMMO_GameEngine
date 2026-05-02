@@ -48,6 +48,25 @@ uniform vec2 u_shadowOffset;
 uniform vec4 u_palette[16];
 uniform float u_paletteSize;
 
+// Configurable text effect uniforms (mirror assets/shaders/sprite.frag).
+uniform vec4 u_outlineColor;
+uniform float u_outlineThickness;
+uniform vec2 u_textShadowOffset;
+uniform vec4 u_textShadowColor;
+uniform vec4 u_textGlowColor;
+uniform float u_textGlowIntensity;
+
+// Rounded rect uniforms (renderType 7)
+uniform vec2 u_rectSize;
+uniform float u_cornerRadius;
+uniform float u_rrBorderWidth;
+uniform vec4 u_rrBorderColor;
+uniform vec4 u_gradientTop;
+uniform vec4 u_gradientBottom;
+uniform vec2 u_rrShadowOffset;
+uniform float u_rrShadowBlur;
+uniform vec4 u_rrShadowColor;
+
 float median(float r, float g, float b) {
     return max(min(r, g), min(max(r, g), b));
 }
@@ -61,6 +80,35 @@ void main() {
         index = clamp(index, 0, int(u_paletteSize) - 1);
         fragColor = u_palette[index];
         fragColor.a *= texel.a * v_color.a;
+        return;
+    }
+
+    // RenderType 7: SDF rounded rectangle
+    if (v_renderType > 6.5 && v_renderType < 7.5) {
+        vec2 p = (v_uv - 0.5) * u_rectSize;
+        vec2 q = abs(p) - u_rectSize * 0.5 + u_cornerRadius;
+        float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - u_cornerRadius;
+
+        vec2 pShadow = p - u_rrShadowOffset;
+        vec2 qShadow = abs(pShadow) - u_rectSize * 0.5 + u_cornerRadius;
+        float shadowDist = length(max(qShadow, 0.0)) + min(max(qShadow.x, qShadow.y), 0.0) - u_cornerRadius;
+        float shadowAlpha = 1.0 - smoothstep(-u_rrShadowBlur, u_rrShadowBlur, shadowDist);
+        vec4 shadow = vec4(u_rrShadowColor.rgb, u_rrShadowColor.a * shadowAlpha);
+
+        vec4 fill = mix(u_gradientTop, u_gradientBottom, v_uv.y);
+        float fillAlpha = 1.0 - smoothstep(-1.0, 0.0, dist);
+        float borderOuter = 1.0 - smoothstep(-1.0, 0.0, dist);
+        float borderInner = 1.0 - smoothstep(-1.0, 0.0, dist + u_rrBorderWidth);
+        float borderAlpha = borderOuter - borderInner;
+        vec4 border = vec4(u_rrBorderColor.rgb, u_rrBorderColor.a * borderAlpha);
+        fill.a *= (fillAlpha - borderAlpha);
+
+        fragColor = shadow;
+        fragColor = mix(fragColor, fill, fill.a);
+        fragColor = mix(fragColor, border, border.a);
+        fragColor.a *= v_color.a;
+
+        if (fragColor.a < 0.01) discard;
         return;
     }
 
@@ -79,23 +127,23 @@ void main() {
         if (v_renderType < 1.5) {
             fragColor = vec4(v_color.rgb, v_color.a * opacity);
         } else if (v_renderType < 2.5) {
-            float outlineDist = screenPxRange * (sd - 0.35);
+            float outlineDist = screenPxRange * (sd - u_outlineThickness);
             float outlineOp = clamp(outlineDist + 0.5, 0.0, 1.0);
-            vec4 outline = vec4(0.0, 0.0, 0.0, v_color.a * outlineOp);
+            vec4 outline = vec4(u_outlineColor.rgb, v_color.a * outlineOp * u_outlineColor.a);
             vec4 fill = vec4(v_color.rgb, v_color.a * opacity);
             fragColor = mix(outline, fill, opacity);
         } else if (v_renderType < 3.5) {
             float glowOp = smoothstep(0.0, 0.5, sdf.a);
-            vec4 glow = vec4(v_color.rgb, v_color.a * glowOp * 0.6);
+            vec4 glow = vec4(u_textGlowColor.rgb, v_color.a * glowOp * u_textGlowIntensity);
             vec4 fill = vec4(v_color.rgb, v_color.a * opacity);
             fragColor = mix(glow, fill, opacity);
         } else {
-            vec2 shadowUV = v_uv - u_shadowOffset;
+            vec2 shadowUV = v_uv - u_textShadowOffset;
             vec4 shadowSdf = texture(uTexture, shadowUV);
             float shadowSd = median(shadowSdf.r, shadowSdf.g, shadowSdf.b);
             float shadowDist = screenPxRange * (shadowSd - 0.5);
-            float shadowOp = clamp(shadowDist + 0.5, 0.0, 1.0) * 0.5;
-            vec4 shadow = vec4(0.0, 0.0, 0.0, v_color.a * shadowOp);
+            float shadowOp = clamp(shadowDist + 0.5, 0.0, 1.0) * u_textShadowColor.a;
+            vec4 shadow = vec4(u_textShadowColor.rgb, v_color.a * shadowOp);
             vec4 fill = vec4(v_color.rgb, v_color.a * opacity);
             fragColor = mix(shadow, fill, opacity);
         }
@@ -464,15 +512,15 @@ void SpriteBatch::flush() {
         cmdList_->setUniform("uTexture", 0);
         cmdList_->setUniform("u_pxRange", 4.0f);
         cmdList_->setUniform("u_atlasSize", Vec2{512.0f, 512.0f});
-        cmdList_->setUniform("u_shadowOffset", Vec2{0.002f, 0.002f});
+        cmdList_->setUniform("u_shadowOffset", textEffectUniforms_.shadowOffsetUv);
 
-        // Text effect defaults (match previous hardcoded values)
-        cmdList_->setUniform("u_outlineColor", Color{0.0f, 0.0f, 0.0f, 1.0f});
-        cmdList_->setUniform("u_outlineThickness", 0.35f);
-        cmdList_->setUniform("u_textShadowOffset", Vec2{0.002f, 0.002f});
-        cmdList_->setUniform("u_textShadowColor", Color{0.0f, 0.0f, 0.0f, 0.5f});
-        cmdList_->setUniform("u_textGlowColor", Color{1.0f, 1.0f, 1.0f, 0.6f});
-        cmdList_->setUniform("u_textGlowIntensity", 0.6f);
+        // Text effect uniforms — driven by setTextEffectUniforms()
+        cmdList_->setUniform("u_outlineColor",      textEffectUniforms_.outlineColor);
+        cmdList_->setUniform("u_outlineThickness",  textEffectUniforms_.outlineThickness);
+        cmdList_->setUniform("u_textShadowOffset",  textEffectUniforms_.shadowOffsetUv);
+        cmdList_->setUniform("u_textShadowColor",   textEffectUniforms_.shadowColor);
+        cmdList_->setUniform("u_textGlowColor",     textEffectUniforms_.glowColor);
+        cmdList_->setUniform("u_textGlowIntensity", textEffectUniforms_.glowIntensity);
 
         if (hasRoundedRect_) {
             auto& rr = pendingRoundedRect_;
@@ -645,15 +693,18 @@ void SpriteBatch::flush() {
     shader_.setInt("uTexture", 0);
     shader_.setFloat("u_pxRange", 4.0f);
     shader_.setVec2("u_atlasSize", {512.0f, 512.0f});
-    shader_.setVec2("u_shadowOffset", {0.002f, 0.002f});
+    shader_.setVec2("u_shadowOffset", textEffectUniforms_.shadowOffsetUv);
 
-    // Text effect defaults (match previous hardcoded values)
-    shader_.setVec4("u_outlineColor", 0.0f, 0.0f, 0.0f, 1.0f);
-    shader_.setFloat("u_outlineThickness", 0.35f);
-    shader_.setVec2("u_textShadowOffset", {0.002f, 0.002f});
-    shader_.setVec4("u_textShadowColor", 0.0f, 0.0f, 0.0f, 0.5f);
-    shader_.setVec4("u_textGlowColor", 1.0f, 1.0f, 1.0f, 0.6f);
-    shader_.setFloat("u_textGlowIntensity", 0.6f);
+    // Text effect uniforms — driven by setTextEffectUniforms()
+    {
+        const auto& tfx = textEffectUniforms_;
+        shader_.setVec4("u_outlineColor",      tfx.outlineColor.r, tfx.outlineColor.g, tfx.outlineColor.b, tfx.outlineColor.a);
+        shader_.setFloat("u_outlineThickness", tfx.outlineThickness);
+        shader_.setVec2("u_textShadowOffset",  tfx.shadowOffsetUv);
+        shader_.setVec4("u_textShadowColor",   tfx.shadowColor.r,  tfx.shadowColor.g,  tfx.shadowColor.b,  tfx.shadowColor.a);
+        shader_.setVec4("u_textGlowColor",     tfx.glowColor.r,    tfx.glowColor.g,    tfx.glowColor.b,    tfx.glowColor.a);
+        shader_.setFloat("u_textGlowIntensity", tfx.glowIntensity);
+    }
 
     if (hasRoundedRect_) {
         auto& rr = pendingRoundedRect_;
@@ -763,6 +814,18 @@ void SpriteBatch::flush() {
     glBindVertexArray(0);
     shader_.unbind();
 #endif // !FATEMMO_METAL
+}
+
+void SpriteBatch::setTextEffectUniforms(const TextEffectUniforms& fx) {
+    // Pending sprites must flush before the new uniforms apply, otherwise the
+    // active batch would render with whichever uniforms happen to win at flush.
+    flushPending();
+    textEffectUniforms_ = fx;
+}
+
+void SpriteBatch::resetTextEffectUniforms() {
+    flushPending();
+    textEffectUniforms_ = TextEffectUniforms{};
 }
 
 void SpriteBatch::setBlendMode(BlendMode mode) {

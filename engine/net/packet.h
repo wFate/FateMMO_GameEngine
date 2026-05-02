@@ -8,7 +8,7 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 19;  // v19: SvEntityLeaveBatch — coalesces leave-storms (mass deaths/pickups/despawns) into one packet (S141)
+constexpr uint8_t  PROTOCOL_VERSION  = 20;  // v20: CmdAckExtended (0xE1) added to isSystemPacket — envelope-compatibility bump so old/new client-server mixes refuse to handshake instead of silently regressing the stranded-ACK failure (S143)
 constexpr size_t   PACKET_HEADER_SIZE = 26;  // v9: ackBits widened 4→8 bytes (32→64 bit ACK window)
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;

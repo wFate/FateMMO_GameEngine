@@ -339,6 +339,37 @@ void SDFText::drawScreenEx(SpriteBatch& batch, const std::string& text, Vec2 pos
     drawInternal(batch, text, position, fontSize, color, depth, style, true, layout);
 }
 
+void SDFText::drawScreenEffects(SpriteBatch& batch, const std::string& text, Vec2 position,
+                                float fontSize, Color color, float depth,
+                                TextStyle style, const std::string& fontName,
+                                const TextEffects& fx, const TextLayout& layout) {
+    // Convert the pixel-space TextEffects into shader-space uniforms. The
+    // outlineWidth field is the SDF expansion past the glyph edge (0..0.5);
+    // the shader expects the threshold (0.5 = no outline, lower = thicker).
+    TextEffectUniforms u{};
+    if (fx.outlineColor.a > 0.0f) {
+        u.outlineColor      = fx.outlineColor;
+        const float w = fx.outlineWidth;
+        u.outlineThickness  = (w > 0.0f) ? std::max(0.5f - w, 0.05f) : 0.5f;
+    } else {
+        // No outline requested — push fill all the way to the glyph edge.
+        u.outlineColor      = Color{0.0f, 0.0f, 0.0f, 0.0f};
+        u.outlineThickness  = 0.5f;
+    }
+    // shadowOffset on TextEffects is already in UV space (matches the editor's
+    // 0.001 step / +/-0.01 range — see ui_editor_panel.cpp:5096).
+    u.shadowOffsetUv = (fx.shadowColor.a > 0.0f)
+        ? fx.shadowOffset
+        : Vec2{0.0f, 0.0f};
+    u.shadowColor    = fx.shadowColor;
+    u.glowColor      = fx.glowColor;
+    u.glowIntensity  = (fx.glowColor.a > 0.0f) ? fx.glowRadius : 0.0f;
+
+    batch.setTextEffectUniforms(u);
+    drawScreenEx(batch, text, position, fontSize, color, depth, style, fontName, layout);
+    batch.resetTextEffectUniforms();
+}
+
 void SDFText::drawWorldEx(SpriteBatch& batch, const std::string& text, Vec2 position,
                           float fontSize, Color color, float depth, TextStyle style,
                           const std::string& fontName, const TextLayout& layout) {
