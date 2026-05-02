@@ -117,10 +117,21 @@ bool PrefabLibrary::save(const std::string& name, Entity* entity) {
         return false;
     }
 
-    // Atomic write to source directory (persists across rebuilds)
+    // Atomic write to source directory (persists across rebuilds). The source
+    // copy is the authoritative one — a successful runtime write that's NOT
+    // mirrored to source will be silently overwritten on the next rebuild,
+    // making it indistinguishable from a lost edit. So a source failure is
+    // a hard save failure, not a soft one. Callers (e.g. the editor's
+    // playerPrefabDirty flush) rely on the bool return to decide whether
+    // to clear their dirty bit; lying here re-creates the source-write bug
+    // that the UI save path already had to fix.
     if (!sourceDirectory_.empty() && sourceDirectory_ != directory_) {
         std::string srcPath = sourceDirectory_ + "/" + name + ".json";
-        atomicWriteJson(srcPath, jsonStr);
+        if (!atomicWriteJson(srcPath, jsonStr)) {
+            LOG_ERROR("Prefab", "Source write FAILED: %s (runtime ok, source stale)",
+                      srcPath.c_str());
+            return false;
+        }
     }
 
     // Cache it

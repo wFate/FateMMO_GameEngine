@@ -418,6 +418,9 @@ void ContentBrowserPanel::drawMobsTab() {
             {"is_boss", false}, {"is_elite", false},
             {"respawn_seconds", 60}, {"min_spawn_level", 1}, {"max_spawn_level", 5}, {"spawn_weight", 10},
             {"hp_regen_per_sec", 0},
+            // Section 4 / 5 (Phase 2b) — null = inherit/disabled, true = mobile.
+            {"hard_leash_radius", nullptr},
+            {"can_move_in_combat", true},
             {"min_opal_drop", 0}, {"max_opal_drop", 0}, {"opal_drop_chance", 0.0f},
             {"equipped_weapon_id", ""}, {"equipped_armor_id", ""}, {"equipped_hat_id", ""}
         };
@@ -520,6 +523,29 @@ void ContentBrowserPanel::drawMobsTab() {
                 // WU7: HP regen per second when out of combat (Idle/Roam/ReturnHome
                 // AND no damage in last 5s). 0 = no regen (default for all existing mobs).
                 drawIntField("HP Regen / sec", editingMob_, "hp_regen_per_sec", 0, 9999999);
+
+                // Section 4 (Phase 2b): nullable hard-leash radius. Stored as
+                // JSON null when "inherit" — a separate checkbox toggles the
+                // null vs explicit-value state so the UI distinguishes inherit
+                // from explicit-zero (which means "disable hard leash").
+                {
+                    bool inherit = editingMob_["hard_leash_radius"].is_null();
+                    if (ImGui::Checkbox("Hard Leash: inherit (NULL)", &inherit)) {
+                        if (inherit) editingMob_["hard_leash_radius"] = nullptr;
+                        else         editingMob_["hard_leash_radius"] = 0.0f;
+                    }
+                    if (!inherit) {
+                        float v = editingMob_["hard_leash_radius"].is_number()
+                                  ? editingMob_["hard_leash_radius"].get<float>()
+                                  : 0.0f;
+                        if (ImGui::DragFloat("Hard Leash Radius (tiles)", &v, 0.5f, -1.0f, 999.0f)) {
+                            editingMob_["hard_leash_radius"] = v;
+                        }
+                    }
+                }
+                // Section 5 (Phase 2b): canMoveInCombat. False = stationary
+                // attacker (Chase + Attack velocity gated to zero by MobAI).
+                drawBoolField("Can Move in Combat", editingMob_, "can_move_in_combat");
             }
 
             if (ImGui::CollapsingHeader("Scaling")) {
@@ -1298,6 +1324,14 @@ void ContentBrowserPanel::drawSpawnsTab() {
                         float mobLeash = linkedMob ? linkedMob->value("leash_radius", 6.0f) : 6.0f;
                         int mobRespawn = linkedMob ? linkedMob->value("respawn_seconds", 60) : 60;
                         int mobRegen = linkedMob ? linkedMob->value("hp_regen_per_sec", 0) : 0;  // WU7
+                        // Section 4 (Phase 2b): show the inherited mob_def value as the
+                        // floatOverride default. The override semantics mirror floatOverride's
+                        // existing inherit-via-absence pattern: unchecked = inherit from mob_def;
+                        // checked + value > 0 = enable; checked + value <= 0 = explicit disable.
+                        float mobHardLeash = (linkedMob && linkedMob->contains("hard_leash_radius")
+                                              && !(*linkedMob)["hard_leash_radius"].is_null())
+                            ? (*linkedMob)["hard_leash_radius"].get<float>()
+                            : 0.0f;
 
                         intOverride  ("HP",             "hp",              mobHP,       1, 99999999);
                         intOverride  ("Damage",         "damage",          mobDmg,      0, 99999999);
@@ -1305,6 +1339,7 @@ void ContentBrowserPanel::drawSpawnsTab() {
                         floatOverride("Leash Radius",   "leash_radius",    mobLeash,    0.0f, 9999.0f);
                         floatOverride("Respawn Seconds","respawn_seconds", (float)mobRespawn, 1.0f, 86400.0f);
                         intOverride  ("HP Regen",       "hp_regen_per_sec", mobRegen,   0, 9999999);  // WU7
+                        floatOverride("Hard Leash (tiles)", "hard_leash_radius", mobHardLeash, -1.0f, 999.0f);
 
                         if (ImGui::SmallButton("Remove Instance")) removeInst = ii;
                         ImGui::TreePop();

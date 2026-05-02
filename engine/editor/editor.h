@@ -216,19 +216,35 @@ public:
         }
         return false;
     }
-    // Wipe every dirty bucket. Called from loadScene() after validation
-    // succeeds so a follow-up Ctrl+S can't write the previous scene's
-    // pending edits onto the freshly-loaded one.
-    void clearAllDirty() {
-        sceneDirty_ = false;
-        playerPrefabDirty_ = false;
-        dirtyScreens_.clear();
-    }
+    // Drop only scene-local dirty state (the entity diff for the current
+    // scene file). UI screens and the player prefab are cross-scene
+    // documents — they live in their own files, not in any scene.json —
+    // so their dirty bits MUST survive a scene switch. Without that
+    // distinction, editing a UI offset and then opening a different scene
+    // would silently discard the UI edit.
+    void clearSceneDirty() { sceneDirty_ = false; }
+    // Drop the entire UI dirty set. Used by tests and by cleanup paths
+    // that have no UIManager to flush against. Production save paths use
+    // flushDirtyUIScreens() which clears per-screen on success only.
+    void clearUIScreenDirty() { dirtyScreens_.clear(); }
+    // Drop the player-prefab dirty bit without saving. Used by tests and
+    // by stale-bit recovery when the player entity is gone.
+    void clearPlayerPrefabDirty() { playerPrefabDirty_ = false; }
+    // Save the dirty player prefab using the currently-alive world before
+    // it is destroyed by a scene reload. Returns true if there is nothing
+    // to save, the save succeeded, or the dirty bit was stale (player
+    // already gone — bit gets dropped). Returns false only on an actual
+    // PrefabLibrary::save() failure; loadScene treats that as a hard
+    // load-abort so unsaved edits never silently disappear with the world.
+    bool flushDirtyPlayerPrefab(World* world);
     // Save every (screenId, class) currently in dirtyScreens_ at its
     // recorded variant path. Wired to UIManager::beforeReloadCallback so a
     // device-class change can't strand pending edits in an in-memory tree
-    // that's about to be reloaded.
-    void flushDirtyUIScreens();
+    // that's about to be reloaded. Returns true iff every dirty screen was
+    // FULLY persisted (runtime + source). A return of false means at least
+    // one screen kept its dirty bit and the in-memory tree must NOT be
+    // replaced — the layout-class reload should refuse to proceed.
+    bool flushDirtyUIScreens();
 
     // Called when a scene is loaded during play mode (for spectator integration)
     std::function<void(const std::string& sceneName)> onSceneLoadedInPlayMode;
@@ -329,9 +345,11 @@ public:
             // A device-class change reloads every screen tree in place; if
             // the user has unsaved edits in the outgoing class, persist
             // them at the recorded variant path BEFORE the trees are
-            // replaced. Otherwise the dirty bit would survive but point at
-            // a tree the user can no longer see.
-            mgr->setBeforeReloadCallback([this]() { flushDirtyUIScreens(); });
+            // replaced. flushDirtyUIScreens returns false on any partial
+            // write failure; UIManager treats that as "abort the reload"
+            // so the dirty bit cannot end up pointing at a tree the user
+            // can no longer see.
+            mgr->setBeforeReloadCallback([this]() { return flushDirtyUIScreens(); });
         }
 #endif
     }
@@ -419,6 +437,11 @@ private:
     float savedCamZoom_ = 1.0f;
 
     bool openSavePrefab_ = false;
+    // Modal-local error message for the SavePrefabPopup. Kept separate
+    // from lastSaveStatus_ so the popup's own failures don't bleed into
+    // the dirty-domain HUD strip (and vice versa). Cleared whenever the
+    // popup re-opens, on Cancel, or after a successful save.
+    std::string prefabPopupError_;
     bool resetLayout_ = false;  // Set via View > Reset Layout
     std::string currentScenePath_;  // Path of currently loaded/saved scene
 

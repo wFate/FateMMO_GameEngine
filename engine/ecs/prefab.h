@@ -29,6 +29,24 @@ public:
     // sourceDir is the project source (persists across builds)
     void setDirectory(const std::string& dir) { directory_ = dir; }
     void setSourceDirectory(const std::string& dir) { sourceDirectory_ = dir; }
+    // Accessors so tests can snapshot/restore the singleton state, plus a
+    // way to drop a single cached prefab (save() populates the cache, so
+    // a test that calls save() must also be able to forget the entry).
+    const std::string& directory() const { return directory_; }
+    const std::string& sourceDirectory() const { return sourceDirectory_; }
+    void forgetPrefab(const std::string& name) {
+        prefabs_.erase(name);
+        composedVariantCache_.erase(name);
+    }
+    // Inverse of forgetPrefab: re-install a previously-snapshot JSON into
+    // the cache. Tests use this together with getJson() to restore a
+    // pre-existing cached entry that the test temporarily overwrote, so
+    // later tests still see the entry that was loaded by app init or
+    // prior test cases.
+    void setCached(const std::string& name, nlohmann::json data) {
+        prefabs_[name] = std::move(data);
+        composedVariantCache_.erase(name);
+    }
 
     // Scan the prefab directory and load all .json files
     void loadAll();

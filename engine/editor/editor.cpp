@@ -340,9 +340,49 @@ std::string Editor::currentSceneId() const {
     return currentScenePath_.substr(start);
 }
 
-void Editor::flushDirtyUIScreens() {
+bool Editor::flushDirtyPlayerPrefab(World* world) {
+    if (!playerPrefabDirty_) return true;
+    // Find the player FIRST. The has("player") check is unreliable as a
+    // gate because PrefabLibrary::save() itself populates the cache — a
+    // first-ever save would short-circuit here and silently drop the
+    // bit, losing the user's edit. Only the absence of a live player
+    // entity is grounds for dropping the dirty bit, since at that point
+    // the data is genuinely unrecoverable.
+    Entity* player = nullptr;
+    if (world) {
+        world->forEachEntity([&](Entity* e) {
+            if (!player && e->tag() == "player") player = e;
+        });
+    }
+    if (!player) {
+        // Stale dirty bit — the entity carrying the unsaved edits is gone
+        // (e.g. user explicitly deleted the player). The unsaved data is
+        // unrecoverable, but blocking subsequent ops would be worse than
+        // dropping the bit. Log so the user has a breadcrumb.
+        LOG_WARN("Editor", "Player prefab dirty but no player entity; dropping stale bit");
+        playerPrefabDirty_ = false;
+        return true;
+    }
+    // Attempt the save unconditionally. PrefabLibrary::save now treats a
+    // source-dir write failure as a hard failure (returns false), so any
+    // false return here means at least one of {runtime, source} is stale
+    // and we MUST keep playerPrefabDirty_ set so the caller (loadScene
+    // etc.) can refuse to proceed.
+    if (PrefabLibrary::instance().save("player", player)) {
+        LOG_INFO("Editor", "Auto-saved player prefab before scene transition");
+        playerPrefabDirty_ = false;
+        return true;
+    }
+    lastSaveStatus_ = "Player prefab save FAILED before scene transition";
+    lastSaveSucceeded_ = false;
+    LOG_ERROR("Editor", "Player prefab save FAILED before scene transition");
+    return false;
+}
+
+bool Editor::flushDirtyUIScreens() {
 #ifdef FATE_HAS_GAME
-    if (!uiManager_ || dirtyScreens_.empty()) return;
+    if (!uiManager_ || dirtyScreens_.empty()) return true;
+    bool allOk = true;
     // Snapshot first; we mutate dirtyScreens_ inside the loop on success.
     std::vector<std::pair<std::string, fate::LayoutClass>> pending(
         dirtyScreens_.begin(), dirtyScreens_.end());
@@ -371,6 +411,7 @@ void Editor::flushDirtyUIScreens() {
             lastSaveStatus_ = "UI screen save FAILED: " + relPath;
             lastSaveSucceeded_ = false;
             LOG_ERROR("Editor", "UI screen save FAILED: %s", relPath.c_str());
+            allOk = false;
             continue;  // leave dirty bit set so the user can retry
         }
         LOG_INFO("Editor", "Saved UI screen: %s", relPath.c_str());
@@ -389,6 +430,7 @@ void Editor::flushDirtyUIScreens() {
                 lastSaveStatus_ = "UI screen source save FAILED: " + srcPath;
                 lastSaveSucceeded_ = false;
                 LOG_ERROR("Editor", "UI screen source save FAILED: %s", srcPath.c_str());
+                allOk = false;
             } else {
                 LOG_INFO("Editor", "Saved UI screen (source): %s", srcPath.c_str());
             }
@@ -399,6 +441,9 @@ void Editor::flushDirtyUIScreens() {
             dirtyScreens_.erase({screenId, recordedCls});
         }
     }
+    return allOk;
+#else
+    return true;
 #endif // FATE_HAS_GAME
 }
 
@@ -546,15 +591,30 @@ void Editor::loadScene(World* world, const std::string& path) {
         return;
     }
 
-    // Validation passed — committing to the load. Adopt the path now so that
-    // a follow-up Ctrl+S targets this scene, and clear any stale failure
-    // status from a prior load attempt.
+    // Validation passed. Before mutating any state, flush the dirty player
+    // prefab using the still-alive prior world — the entity carrying the
+    // unsaved edits is about to be destroyed by the entity-clear loop
+    // below, so this is the last chance to persist it. If the save fails
+    // we abort the load entirely (do NOT swap currentScenePath_, do NOT
+    // touch the world); the user can retry once they've fixed the cause
+    // of the write failure.
+    if (!flushDirtyPlayerPrefab(world)) {
+        reportLoadFailure("aborted: pending player-prefab save failed");
+        return;
+    }
+
+    // Committing to the load. Adopt the path now so that a follow-up
+    // Ctrl+S targets this scene, and clear any stale failure status from
+    // a prior load attempt.
     currentScenePath_ = path;
-    // Drop every dirty bit. The pending edits belonged to the prior scene
-    // (and prior world entities); without this, Ctrl+S would write the new
-    // scene's path with sceneDirty_ left over from scene A. Done AFTER
-    // validation so a failed load doesn't erase pending work.
-    clearAllDirty();
+    // Drop scene-local dirty only. The pending entity diff belonged to
+    // the prior scene; without this, Ctrl+S would write the new scene's
+    // path with sceneDirty_ left over from scene A. UI screen dirty is
+    // a cross-scene document and keeps its bits — those edits target
+    // their own files, not the scene .json. Player prefab dirty was
+    // either saved by flushDirtyPlayerPrefab above (clearing its bit) or
+    // dropped as stale.
+    clearSceneDirty();
     if (!lastSaveSucceeded_ && lastSaveStatus_.find("load FAILED") != std::string::npos) {
         lastSaveStatus_.clear();
         lastSaveSucceeded_ = true;
@@ -1353,8 +1413,37 @@ void Editor::drawSceneViewport() {
                         else
                             snprintf(itemLabel, sizeof(itemLabel), "  %s  %dx%d", d.name, d.width, d.height);
 
-                        if (ImGui::Selectable(itemLabel, i == displayPresetIdx_))
-                            displayPresetIdx_ = i;
+                        if (ImGui::Selectable(itemLabel, i == displayPresetIdx_)) {
+                            // Pre-commit flush: if the new preset implies a
+                            // different LayoutClass, persist any pending UI
+                            // edits at their RECORDED variant path BEFORE we
+                            // commit displayPresetIdx_ / safe area / registry.
+                            // flushDirtyUIScreens uses each entry's recorded
+                            // class (not current()), so this works without
+                            // touching the registry. On failure we leave the
+                            // preset where it was — the user keeps editing
+                            // the existing tree, and the registry/safe-area
+                            // block below stays consistent with the unchanged
+                            // preset because it reads displayPresetIdx_.
+                            fate::LayoutClass targetCls;
+                            const auto& d = kDeviceProfiles[i];
+                            if (d.width <= 0 || d.height <= 0) {
+                                targetCls = fate::LayoutClass::Base;
+                            } else {
+                                targetCls = static_cast<fate::LayoutClass>(d.layoutClass);
+                            }
+                            bool flushOk = true;
+                            if (targetCls != fate::LayoutClassRegistry::current()) {
+                                flushOk = flushDirtyUIScreens();
+                            }
+                            if (flushOk) {
+                                displayPresetIdx_ = i;
+                            } else {
+                                LOG_WARN("Editor",
+                                    "Device switch refused: pending UI saves failed (%s)",
+                                    lastSaveStatus_.c_str());
+                            }
+                        }
                     }
                     ImGui::EndCombo();
                 }
@@ -2672,6 +2761,10 @@ void Editor::drawMenuBar(World* world) {
 
     if (openSavePrefab_) {
         ImGui::OpenPopup("SavePrefabPopup");
+        // Clear any stale popup-local error from a prior open. Each
+        // open-popup cycle starts fresh; failures only persist while the
+        // modal is on screen.
+        prefabPopupError_.clear();
         openSavePrefab_ = false;
     }
 
@@ -2683,14 +2776,41 @@ void Editor::drawMenuBar(World* world) {
             strncpy(prefabNameBuf, selectedEntity_->name().c_str(), sizeof(prefabNameBuf) - 1);
         }
         ImGui::InputText("Name", prefabNameBuf, sizeof(prefabNameBuf));
+        // Modal-local error display. Belongs to this popup only — kept
+        // separate from lastSaveStatus_ / lastSaveSucceeded_ so:
+        //   (a) a popup success doesn't silently clear a stale dirty-domain
+        //       failure (UI screen / scene / player prefab) left by an
+        //       earlier Ctrl+S;
+        //   (b) a popup failure doesn't get stuck in the HUD strip after
+        //       the user retries successfully — when retry runs, we just
+        //       clear prefabPopupError_ and the modal closes.
+        if (!prefabPopupError_.empty()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s",
+                               prefabPopupError_.c_str());
+        }
         ImGui::Spacing();
         if (ImGui::Button("Save", ImVec2(120, 0)) && isValidAssetName(prefabNameBuf)) {
-            PrefabLibrary::instance().save(prefabNameBuf, selectedEntity_);
-            prefabNameBuf[0] = '\0';
-            ImGui::CloseCurrentPopup();
+            // PrefabLibrary::save() reports source-write failure via its
+            // bool return. Success closes the popup; failure keeps it
+            // open and shows the cause in prefabPopupError_ so the
+            // designer can fix the underlying issue and retry.
+            if (PrefabLibrary::instance().save(prefabNameBuf, selectedEntity_)) {
+                LOG_INFO("Editor", "Prefab saved: %s", prefabNameBuf);
+                prefabPopupError_.clear();
+                prefabNameBuf[0] = '\0';
+                ImGui::CloseCurrentPopup();
+            } else {
+                LOG_ERROR("Editor", "Prefab save FAILED: %s", prefabNameBuf);
+                prefabPopupError_ = std::string("Save FAILED: ") + prefabNameBuf +
+                                    " (runtime or source write rejected)";
+                // Modal stays open; lastSaveStatus_ untouched so any
+                // pending dirty-domain failure from Ctrl+S remains
+                // visible in the HUD strip.
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            prefabPopupError_.clear();
             prefabNameBuf[0] = '\0';
             ImGui::CloseCurrentPopup();
         }
@@ -3182,39 +3302,49 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     // saves on every keystroke; that's the bug that wrote unrelated prefab +
     // scene + UI files when only a UI offset had changed.
     if (ctrl && scancode == SDL_SCANCODE_S) {
+        // Track per-domain success across all three branches. A later
+        // success must NOT overwrite an earlier failure's status — the
+        // designer needs to see that *something* didn't get to disk, even
+        // if other domains did. We also need `attempted` so an aggregate
+        // success on retry can clear a stale failure HUD: once a Ctrl+S
+        // touches at least one dirty domain and every domain it touched
+        // succeeded, the prior failure is no longer current.
+        bool overallOk = true;
+        bool attempted = false;
+        std::string firstFailureStatus;
+
+        auto recordFailure = [&](const std::string& status) {
+            if (overallOk) firstFailureStatus = status;
+            overallOk = false;
+        };
+
 #ifdef FATE_HAS_GAME
         // UI: save *every* dirty (screenId, class) pair, regardless of the
-        // current selection or active device class. flushDirtyUIScreens does
-        // the actual write so the same logic also runs from
-        // UIManager::beforeReloadCallback when the user changes device.
+        // current selection or active device class. flushDirtyUIScreens
+        // also runs from UIManager::beforeReloadCallback on device switch.
         // Note: UISerializer::serializeScreen still emits the entire live
         // screen tree — runtime-only fields like `visible` and `activeTab`
         // therefore appear in the diff alongside authored offset changes.
         // That's a UISerializer concern, not gating; tracked separately.
-        flushDirtyUIScreens();
+        if (!dirtyScreens_.empty()) {
+            attempted = true;
+            if (!flushDirtyUIScreens()) {
+                // Capture the per-screen failure that flushDirtyUIScreens
+                // already wrote into lastSaveStatus_ before any later
+                // branch can overwrite it. The dirty bits for failed
+                // screens stay set so the next Ctrl+S retries.
+                recordFailure(lastSaveStatus_);
+            }
+        }
 #endif // FATE_HAS_GAME
 
-        // Player prefab: independent of scene save. Marked at edit time
-        // (cmd->isPlayerPrefab=true) so Ctrl+S after switching selection
-        // still writes the right prefab. Scan world for the player tag —
-        // PropertyCommand::redo recreates the entity, so a stored handle
-        // would be stale; the tag is stable.
-        if (playerPrefabDirty_ && PrefabLibrary::instance().has("player")) {
-            Entity* playerEntity = nullptr;
-            world->forEachEntity([&](Entity* e) {
-                if (!playerEntity && e->tag() == "player") playerEntity = e;
-            });
-            if (playerEntity) {
-                if (PrefabLibrary::instance().save("player", playerEntity)) {
-                    LOG_INFO("Editor", "Ctrl+S: saved player prefab");
-                    playerPrefabDirty_ = false;
-                } else {
-                    lastSaveStatus_ = "Player prefab save FAILED";
-                    lastSaveSucceeded_ = false;
-                    LOG_ERROR("Editor", "Ctrl+S: player prefab save FAILED");
-                }
-            } else {
-                LOG_WARN("Editor", "Ctrl+S: player prefab dirty but no player entity in world");
+        // Player prefab: independent of scene save. Use flushDirtyPlayerPrefab
+        // for symmetry with the scene-load path — same logic, same failure
+        // semantics (false return means dirty bit stays set).
+        if (playerPrefabDirty_) {
+            attempted = true;
+            if (!flushDirtyPlayerPrefab(world)) {
+                recordFailure(lastSaveStatus_);
             }
         }
 
@@ -3222,23 +3352,43 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
         // tag-fallback filter keeps runtime ghosts (mobs, pets, dropped
         // items, server-replicated NPCs) out of the .json.
         if (sceneDirty_) {
+            attempted = true;
             if (!currentScenePath_.empty()) {
                 if (saveScene(world, currentScenePath_)) {
                     LOG_INFO("Editor", "Ctrl+S: saved scene to %s", currentScenePath_.c_str());
                     sceneDirty_ = false;
                 } else {
                     LOG_ERROR("Editor", "Ctrl+S: scene save did not complete — %s", lastSaveStatus_.c_str());
+                    recordFailure(lastSaveStatus_);
                 }
             } else {
                 // New scene with no path — surface in HUD too so it's not just a
                 // log line the user has to dig for. Reuses the save-error HUD.
-                lastSaveStatus_ = "Save As required: this scene has no path yet (File > Save As...)";
-                lastSaveSucceeded_ = false;
-                LOG_WARN("Editor", "Ctrl+S: %s", lastSaveStatus_.c_str());
+                std::string status = "Save As required: this scene has no path yet (File > Save As...)";
+                LOG_WARN("Editor", "Ctrl+S: %s", status.c_str());
+                recordFailure(status);
             }
         }
-        // Nothing dirty? Silent no-op — designers press Ctrl+S reflexively
-        // and a HUD message every time would be worse than nothing.
+
+        // Commit the aggregate result.
+        // - Aggregate failure: capture the first-failure status (so the
+        //   designer sees the domain that actually broke) and mark
+        //   lastSaveSucceeded_ false. A later success in this same Ctrl+S
+        //   cannot overwrite the failure.
+        // - Aggregate success after at least one attempt: clear any stale
+        //   failure HUD from a previous Ctrl+S. Without this, a one-time
+        //   I/O glitch would leave the HUD red even after the user
+        //   successfully retried and every dirty domain saved.
+        // - No domain attempted (nothing dirty): leave HUD alone. Silent
+        //   no-op — designers press Ctrl+S reflexively and a HUD message
+        //   every time would be worse than nothing.
+        if (!overallOk) {
+            lastSaveStatus_ = firstFailureStatus;
+            lastSaveSucceeded_ = false;
+        } else if (attempted) {
+            lastSaveStatus_.clear();
+            lastSaveSucceeded_ = true;
+        }
     }
     // Ctrl+D = Duplicate
     if (ctrl && scancode == SDL_SCANCODE_D && selectedEntity_) {
