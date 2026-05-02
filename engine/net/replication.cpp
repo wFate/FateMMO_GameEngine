@@ -230,6 +230,30 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
     }
     flushEnterBatch();
 
+    // S141 Phase B.1 — coalesce leaves into SvEntityLeaveBatch. Pre-batch, a
+    // respawn cycle of 99 mobs in a single tick fanned out 99 individual
+    // ReliableOrdered SvEntityLeave packets — each ~12 bytes after AEAD but
+    // each consumed a pending-queue slot. Format: u16 count + N × u64 pid.
+    // Per-leave footprint = 8 bytes; with MAX_PAYLOAD_SIZE the batch can
+    // carry ~146 leaves at once.
+    constexpr size_t kPerLeaveBytes = 8;
+    uint8_t  leaveBuf[MAX_PAYLOAD_SIZE];
+    ByteWriter leaveWriter(leaveBuf, sizeof(leaveBuf));
+    leaveWriter.writeU16(0);  // count placeholder, patched at flush time
+    uint16_t leaveCount = 0;
+
+    auto flushLeaveBatch = [&]() {
+        if (leaveCount == 0) return;
+        leaveBuf[0] = static_cast<uint8_t>(leaveCount & 0xFF);
+        leaveBuf[1] = static_cast<uint8_t>((leaveCount >> 8) & 0xFF);
+        server.sendTo(client.clientId, Channel::ReliableOrdered,
+                      PacketType::SvEntityLeaveBatch,
+                      leaveWriter.data(), leaveWriter.size());
+        leaveWriter = ByteWriter(leaveBuf, sizeof(leaveBuf));
+        leaveWriter.writeU16(0);
+        leaveCount = 0;
+    };
+
     // Process left entities
     for (const auto& handle : client.aoi.left) {
         PersistentId pid = getPersistentId(handle);
@@ -240,18 +264,17 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         }
         if (pid.isNull()) continue;
 
-        SvEntityLeaveMsg leaveMsg;
-        leaveMsg.persistentId = pid.value();
-
-        uint8_t buf[MAX_PAYLOAD_SIZE];
-        ByteWriter writer(buf, sizeof(buf));
-        leaveMsg.write(writer);
-        server.sendTo(client.clientId, Channel::ReliableOrdered,
-                      PacketType::SvEntityLeave,
-                      writer.data(), writer.size());
+        // Flush before appending if next entry would overflow.
+        if (leaveWriter.size() + kPerLeaveBytes > sizeof(leaveBuf)) {
+            flushLeaveBatch();
+        }
+        // Inline-encode the persistent id (matches SvEntityLeaveMsg::write).
+        detail::writeU64(leaveWriter, pid.value());
+        ++leaveCount;
 
         client.lastSentState.erase(pid.value());
     }
+    flushLeaveBatch();
 
     // Process stayed entities (delta updates) — batched into single packets
 

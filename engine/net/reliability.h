@@ -8,6 +8,8 @@ namespace fate {
 
 struct PendingPacket {
     uint16_t sequence = 0;
+    uint8_t  packetType = 0;          // S141 — recorded so hard-eviction telemetry
+                                      //        can attribute drops back to opcodes.
     std::vector<uint8_t> data;
     float timeSent = 0.0f;
     float lastRetransmit = 0.0f;
@@ -33,7 +35,12 @@ public:
     uint16_t nextLocalSequence() { return localSequence_++; }
     uint16_t currentLocalSequence() const { return localSequence_; }
 
-    void trackReliable(uint16_t sequence, const uint8_t* data, size_t size, float currentTime = 0.0f);
+    // Returns the opcode of the evicted oldest packet if the queue was full
+    // (so the caller can attribute the hard-eviction to that opcode in
+    // telemetry), or 0 if no eviction happened.
+    uint8_t trackReliable(uint16_t sequence, uint8_t packetType,
+                          const uint8_t* data, size_t size,
+                          float currentTime = 0.0f);
     /// Returns true if this is a NEW packet, false if duplicate.
     bool onReceive(uint16_t remoteSequence);
     void buildAckFields(uint16_t& ack, uint64_t& ackBits) const;
@@ -52,6 +59,45 @@ public:
 
     size_t pendingReliableCount() const { return pending_.size(); }
     float rtt() const { return rtt_; }
+
+    // S143 audit — bucket the current pending reliable queue by packetType
+    // into the caller's 256-entry array. Used by NetServer::sampleMaxPendingDepth
+    // to prove which opcode is hogging the queue under retx storms. Reads
+    // pending_.packetType only — no header re-parse, cheap.
+    template <typename Array256>
+    void tallyPendingByOpcode(Array256& out) const {
+        for (const auto& pkt : pending_) {
+            ++out[pkt.packetType];
+        }
+    }
+
+    // S143 audit — for each opcode currently in pending_, find the oldest
+    // (smallest timeSent) and update out[opcode] = max(out[opcode], age_ms).
+    // age_ms is computed against the caller-supplied currentTime. Lets the
+    // 5s stats line surface "0xE0 oldest is 8.4s" — direct evidence of
+    // queue-stuck packets vs fast churn.
+    template <typename Array256u32>
+    void tallyOldestPendingAgeMs(float currentTime, Array256u32& out) const {
+        // First pass: find oldest timeSent per opcode in this client's queue.
+        float oldestPerOp[256];
+        bool  hasOp[256] = {};
+        for (auto& f : oldestPerOp) f = 0.0f;
+        for (const auto& pkt : pending_) {
+            uint8_t op = pkt.packetType;
+            if (!hasOp[op] || pkt.timeSent < oldestPerOp[op]) {
+                oldestPerOp[op] = pkt.timeSent;
+                hasOp[op] = true;
+            }
+        }
+        // Second pass: convert to ages, update window max.
+        for (size_t i = 0; i < 256; ++i) {
+            if (!hasOp[i]) continue;
+            float ageSec = currentTime - oldestPerOp[i];
+            if (ageSec < 0.0f) ageSec = 0.0f;
+            uint32_t ageMs = static_cast<uint32_t>(ageSec * 1000.0f);
+            if (ageMs > out[i]) out[i] = ageMs;
+        }
+    }
 
     // True when the pending queue is >75% full — client is likely dead or
     // severely lagged. Callers should skip sending new reliable packets

@@ -488,6 +488,30 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onEntityLeave) onEntityLeave(msg);
             break;
         }
+        case PacketType::SvEntityLeaveBatch: {
+            // v19: coalesced entity-leave burst (S141 Phase B.1). Format:
+            // u16 count, then `count` × u64 persistentId. Fires the same
+            // onEntityLeave callback as the single-entity path so downstream
+            // ghost-cleanup logic doesn't fork.
+            //
+            // Malformed-frame handling: a hostile/corrupt packet can claim
+            // a count larger than its payload. Bound everything by the
+            // ByteReader's actual progress — bump pendingLeft_ per
+            // successful read (not by the claimed count, which would
+            // inflate the 1s left/sec telemetry), and check payload.ok()
+            // AFTER each read so a partial read doesn't fan out a synthetic
+            // persistentId=0 to downstream cleanup.
+            ByteReader payload(payloadData, payloadLen);
+            uint16_t count = payload.readU16();
+            if (payload.overflowed()) break;
+            for (uint16_t i = 0; i < count && payload.ok(); ++i) {
+                SvEntityLeaveMsg msg = SvEntityLeaveMsg::read(payload);
+                if (!payload.ok()) break;
+                ++pendingLeft_;
+                if (onEntityLeave) onEntityLeave(msg);
+            }
+            break;
+        }
         case PacketType::SvEntityUpdate: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvEntityUpdateMsg::read(payload);
@@ -710,6 +734,21 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvSkillResultMsg::read(payload);
             if (onSkillResult) onSkillResult(msg);
+            break;
+        }
+        case PacketType::SvSkillResultBatch: {
+            // v18 — AOE coalesced result. Decode the batch and let
+            // SvSkillResultBatchMsg::fanOut() emit one synthetic SvSkillResult
+            // per target through onSkillResult, with cooldownMs applied only
+            // to the first synthetic message so startCooldown() doesn't fire
+            // N times. The fan-out helper lives on the message struct so the
+            // contract is testable from unit tests without standing up a
+            // NetClient.
+            ByteReader payload(payloadData, payloadLen);
+            auto batch = SvSkillResultBatchMsg::read(payload);
+            if (onSkillResult) {
+                batch.fanOut(onSkillResult);
+            }
             break;
         }
         case PacketType::SvLevelUp: {
@@ -1424,7 +1463,7 @@ void NetClient::sendPacket(Channel channel, uint8_t packetType,
     noteBytesOut(w.size());
 
     if (channel != Channel::Unreliable) {
-        reliability_.trackReliable(hdr.sequence, stackBuf, w.size(), lastPollTime_);
+        reliability_.trackReliable(hdr.sequence, packetType, stackBuf, w.size(), lastPollTime_);
     }
 }
 

@@ -1,7 +1,10 @@
 #include "engine/net/net_server.h"
 #include "engine/net/protocol.h"
 #include "engine/net/packet_crypto.h"
+#include <algorithm>
+#include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace fate {
 
@@ -53,6 +56,13 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
 
     // Any valid packet from a known client resets the heartbeat timeout
     client->lastHeartbeat = currentTime;
+
+    // S143 audit — count inbound traffic per opcode after session validation,
+    // before any further processing. Lets the 5s stats line prove whether
+    // CmdAckExtended (0xE1) is actually arriving during a retransmit storm
+    // and whether CmdMove/Heartbeat are flowing (i.e. client is alive).
+    ++opcodeStats_.receivedPackets[hdr.packetType];
+    opcodeStats_.receivedBytes[hdr.packetType] += static_cast<uint64_t>(size);
 
     // Process acks on client's reliability layer
     client->reliability.processAck(hdr.ack, hdr.ackBits, currentTime);
@@ -287,6 +297,7 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
     if (channel != Channel::Unreliable && client.reliability.isCongested()) {
         if (!isCriticalLane(packetType)) {
             client.reliability.noteNonCriticalDrop();
+            ++opcodeStats_.backpressureDrops[packetType]; // S141 Phase A
             constexpr float kBackpressureLogIntervalSec = 30.0f;
             if (lastPollTime_ - client.lastBackpressureLogTime >= kBackpressureLogIntervalSec) {
                 size_t pending = client.reliability.pendingReliableCount();
@@ -297,6 +308,14 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
                          client.reliability.droppedNonCritical(),
                          client.reliability.preservedCritical(),
                          kBackpressureLogIntervalSec);
+                // S141 Phase A — dump in-window opcode stats alongside the
+                // congestion log so we can see WHICH opcodes are filling the
+                // queue at the moment of saturation. No reset here; the 5s
+                // tick-stats flush still owns the window.
+                std::string netLine = formatOpcodeStats();
+                if (!netLine.empty()) {
+                    LOG_WARN("Reliability", "%s", netLine.c_str());
+                }
                 client.reliability.resetBackpressureCounters();
                 client.lastBackpressureLogTime = lastPollTime_;
             }
@@ -364,8 +383,27 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
 
     socket_.sendTo(stackBuf, w.size(), client.address);
 
+    // S141 Phase A — count successful sends per opcode (on-wire bytes incl.
+    // PacketHeader + AEAD tag). Reliable packets are also tracked so their
+    // potential eviction can be attributed back to this opcode.
+    ++opcodeStats_.sentPackets[packetType];
+    opcodeStats_.sentBytes[packetType] += w.size();
+
     if (channel != Channel::Unreliable) {
-        client.reliability.trackReliable(hdr.sequence, stackBuf, w.size(), lastPollTime_);
+        uint8_t evicted = client.reliability.trackReliable(
+            hdr.sequence, packetType, stackBuf, w.size(), lastPollTime_);
+        if (evicted != 0) {
+            ++opcodeStats_.hardEvictions[evicted];
+        }
+        // S141 Phase A — sample maxPendingDepth at every enqueue, not just
+        // once per tick. The tick-boundary sample (sampleMaxPendingDepth)
+        // misses sub-tick spikes that fill and drain inside a single frame,
+        // which is exactly the AOE-burst pattern we want the stats line to
+        // surface. Per-enqueue check is one branch and one load — cheap.
+        size_t pending = client.reliability.pendingReliableCount();
+        if (pending > opcodeStats_.maxPendingDepth) {
+            opcodeStats_.maxPendingDepth = pending;
+        }
     }
 }
 
@@ -394,6 +432,18 @@ void NetServer::processRetransmits(float currentTime) {
                 std::memcpy(const_cast<uint8_t*>(pkt->data.data()) + 14, &freshAckBits, sizeof(freshAckBits));
             }
             socket_.sendTo(pkt->data.data(), pkt->data.size(), client.address);
+            // S141 Phase A / S143 audit — attribute retransmits to the
+            // originating opcode. Header v9 layout puts packetType at offset
+            // 23 (after channel byte at 22). Stored buffer is the same one
+            // we sent; safe to read. retransmitBytes carries the retx wire
+            // bytes separately from sentBytes (which is fresh-only), so the
+            // 5s stats line shows fresh vs retx ratio directly. Total wire
+            // load for an opcode = sentBytes + retransmitBytes.
+            if (pkt->data.size() > 23) {
+                uint8_t opcode = pkt->data[23];
+                ++opcodeStats_.retransmits[opcode];
+                opcodeStats_.retransmitBytes[opcode] += pkt->data.size();
+            }
             client.reliability.markRetransmitted(pkt->sequence, currentTime);
         }
     });
@@ -401,6 +451,287 @@ void NetServer::processRetransmits(float currentTime) {
 
 std::vector<uint16_t> NetServer::checkTimeouts(float currentTime, float timeoutSec) {
     return connections_.getTimedOutClients(currentTime, timeoutSec);
+}
+
+// S141 Phase A — sample the deepest reliable pending queue across all clients
+// into the current window. Called once per tick by ServerApp before the 5s
+// flush so the worst spike is captured even if it recovers within the window.
+//
+// S143 audit — also tally the pending queue by opcode and update the per-
+// opcode window max + oldest-age max. Without this we could see "queue is
+// 200 deep" but not "of those 200, 198 are SvEntityEnterBatch and the
+// oldest is 8.4s old" — the latter is the exact stuck-queue evidence the
+// EntityEnterBatch retx=3440 audit needs.
+void NetServer::sampleMaxPendingDepth(float currentTime) {
+    std::array<uint64_t, 256> tickTally{};
+    connections_.forEach([&](ClientConnection& client) {
+        size_t pending = client.reliability.pendingReliableCount();
+        if (pending > opcodeStats_.maxPendingDepth) {
+            opcodeStats_.maxPendingDepth = pending;
+        }
+        client.reliability.tallyPendingByOpcode(tickTally);
+        client.reliability.tallyOldestPendingAgeMs(currentTime, opcodeStats_.oldestPendingAgeMsMax);
+    });
+    for (size_t i = 0; i < 256; ++i) {
+        if (tickTally[i] > opcodeStats_.pendingByOpcodeMax[i]) {
+            opcodeStats_.pendingByOpcodeMax[i] = tickTally[i];
+        }
+    }
+}
+
+namespace {
+const char* opcodeName(uint8_t op) {
+    // Table covers the heavyweights; everything else returns nullptr and the
+    // formatter falls back to "0xNN" alone. Add entries here as new traffic
+    // sources show up in the telemetry.
+    switch (op) {
+        case PacketType::SvEntityEnter:        return "EntityEnter";
+        case PacketType::SvEntityLeave:        return "EntityLeave";
+        case PacketType::SvEntityUpdate:       return "EntityUpdate";
+        case PacketType::SvEntityUpdateBatch:  return "EntityUpdateBatch";
+        case PacketType::SvEntityEnterBatch:   return "EntityEnterBatch";
+        case PacketType::SvCombatEvent:        return "CombatEvent";
+        case PacketType::SvSkillResult:        return "SkillResult";
+        case PacketType::SvSkillResultBatch:   return "SkillResultBatch";
+        case PacketType::SvLootPickup:         return "LootPickup";
+        case PacketType::SvInventorySync:      return "InventorySync";
+        case PacketType::SvPlayerState:        return "PlayerState";
+        case PacketType::SvBuffSync:           return "BuffSync";
+        case PacketType::SvBagContents:        return "BagContents";
+        case PacketType::SvChatMessage:        return "ChatMessage";
+        case PacketType::SvDeathNotify:        return "DeathNotify";
+        case PacketType::SvRespawn:            return "Respawn";
+        case PacketType::SvScenePopulated:     return "ScenePopulated";
+        case PacketType::SvZoneTransition:     return "ZoneTransition";
+        case PacketType::Heartbeat:            return "Heartbeat";
+        // S143 audit — inbound opcodes worth surfacing in the rx: section so
+        // we can see whether the ACK pipeline is alive during a retx storm.
+        case PacketType::CmdAckExtended:       return "AckExt";
+        case PacketType::CmdMove:              return "Move";
+        case PacketType::CmdUseSkill:          return "UseSkill";
+        case PacketType::CmdAuthProof:         return "AuthProof";
+        default:                               return nullptr;
+    }
+}
+} // namespace
+
+std::string NetServer::formatOpcodeStats() const {
+    // Aggregate totals + collect non-zero opcodes.
+    // S143 audit: fresh (sentPackets/sentBytes) and retx (retransmits/
+    // retransmitBytes) tracked separately. Total wire load = fresh + retx.
+    uint64_t totalFreshPackets = 0;
+    uint64_t totalFreshBytes = 0;
+    uint64_t totalRetxBytes = 0;
+    uint64_t totalDrops = 0;
+    uint64_t totalEvict = 0;
+    uint64_t totalRetx  = 0;
+    struct Row {
+        uint8_t opcode;
+        uint64_t freshBytes;
+        uint64_t freshPkts;
+        uint64_t retxBytes;
+        uint64_t retxCount;
+        uint64_t drops;
+        uint64_t evict;
+    };
+    std::vector<Row> rows;
+    rows.reserve(64);
+    for (size_t i = 0; i < 256; ++i) {
+        uint64_t pkts      = opcodeStats_.sentPackets[i];
+        uint64_t bytes     = opcodeStats_.sentBytes[i];
+        uint64_t drops     = opcodeStats_.backpressureDrops[i];
+        uint64_t evict     = opcodeStats_.hardEvictions[i];
+        uint64_t retx      = opcodeStats_.retransmits[i];
+        uint64_t retxBytes = opcodeStats_.retransmitBytes[i];
+        totalFreshPackets += pkts;
+        totalFreshBytes   += bytes;
+        totalRetxBytes    += retxBytes;
+        totalDrops        += drops;
+        totalEvict        += evict;
+        totalRetx         += retx;
+        if (pkts || drops || evict || retx) {
+            rows.push_back({static_cast<uint8_t>(i), bytes, pkts, retxBytes, retx, drops, evict});
+        }
+    }
+
+    size_t maxQ = opcodeStats_.maxPendingDepth;
+
+    if (totalFreshPackets == 0 && totalDrops == 0 && totalEvict == 0 && totalRetx == 0 && maxQ == 0) {
+        return {};
+    }
+
+    // Top 6 opcodes by total wire bytes (fresh + retx) — the actual bandwidth hogs.
+    std::sort(rows.begin(), rows.end(),
+              [](const Row& a, const Row& b) {
+                  return (a.freshBytes + a.retxBytes) > (b.freshBytes + b.retxBytes);
+              });
+    const size_t kTop = (std::min)(static_cast<size_t>(6), rows.size());
+
+    // Clamping append: snprintf returns the count it *would have* written, not
+    // bytes actually written. Naively adding that to `n` lets it exceed
+    // sizeof(buf), and the next call's `sizeof(buf) - n` size argument
+    // underflows to a huge size_t — at that point snprintf scribbles past the
+    // stack buffer. Clamp after every call so once the buffer fills we
+    // silently truncate instead of corrupting the stack.
+    // Buffer bumped 1024→2048 in S143 audit since rx: + Q: sections add
+    // ~6 opcodes worth of breakdown.
+    char buf[2048];
+    size_t n = 0;
+    auto append = [&](const char* fmt, auto... args) {
+        if (n >= sizeof(buf) - 1) return;
+        int w = std::snprintf(buf + n, sizeof(buf) - n, fmt, args...);
+        if (w < 0) return;
+        n += static_cast<size_t>(w);
+        if (n > sizeof(buf) - 1) n = sizeof(buf) - 1;
+    };
+
+    // Header now shows fresh and retx wire bytes separately — under loss the
+    // retx fraction can dominate the wire and that ratio is the signal we
+    // want, not the conflated number.
+    append("Net stats (5s): fresh=%llu pkts/%llu B | retxB=%llu B | drops=%llu | evict=%llu | retx=%llu | maxQ=%zu/%zu",
+           static_cast<unsigned long long>(totalFreshPackets),
+           static_cast<unsigned long long>(totalFreshBytes),
+           static_cast<unsigned long long>(totalRetxBytes),
+           static_cast<unsigned long long>(totalDrops),
+           static_cast<unsigned long long>(totalEvict),
+           static_cast<unsigned long long>(totalRetx),
+           maxQ, ReliabilityLayer::MAX_PENDING_PACKETS);
+
+    if (kTop > 0) {
+        append("%s", " | top:");
+        for (size_t i = 0; i < kTop; ++i) {
+            const Row& r = rows[i];
+            const char* nm = opcodeName(r.opcode);
+            // Each entry: opcode(name)=freshBytes/freshPkts +retxBytes/retxCount
+            if (nm) {
+                append(" 0x%02X(%s)=%lluB/%llup +%lluB/%llur",
+                       r.opcode, nm,
+                       static_cast<unsigned long long>(r.freshBytes),
+                       static_cast<unsigned long long>(r.freshPkts),
+                       static_cast<unsigned long long>(r.retxBytes),
+                       static_cast<unsigned long long>(r.retxCount));
+            } else {
+                append(" 0x%02X=%lluB/%llup +%lluB/%llur",
+                       r.opcode,
+                       static_cast<unsigned long long>(r.freshBytes),
+                       static_cast<unsigned long long>(r.freshPkts),
+                       static_cast<unsigned long long>(r.retxBytes),
+                       static_cast<unsigned long long>(r.retxCount));
+            }
+        }
+    }
+    // Always surface drops/evictions even if they're not in the top-bytes set.
+    if (totalDrops || totalEvict || totalRetx) {
+        append("%s", " | hot:");
+        for (const Row& r : rows) {
+            if (r.drops == 0 && r.evict == 0 && r.retxCount == 0) continue;
+            const char* nm = opcodeName(r.opcode);
+            append(" 0x%02X%s%s%s",
+                   r.opcode, nm ? "(" : "", nm ? nm : "", nm ? ")" : "");
+            if (r.drops)     append(" d=%llu", (unsigned long long)r.drops);
+            if (r.evict)     append(" e=%llu", (unsigned long long)r.evict);
+            if (r.retxCount) append(" r=%llu", (unsigned long long)r.retxCount);
+        }
+    }
+
+    // S143 audit — rx: section. Surfaces inbound packet counts for the
+    // opcodes that determine whether the ACK pipeline is alive. Most
+    // important: 0xE1 CmdAckExtended — if this is 0 during a retx storm
+    // the client isn't sending the stranded-seq ACKs and the server's
+    // pending queue cannot drain. CmdMove + Heartbeat tell us whether the
+    // client is broadly responsive at all.
+    bool anyRx = false;
+    for (size_t i = 0; i < 256; ++i) {
+        if (opcodeStats_.receivedPackets[i] > 0) { anyRx = true; break; }
+    }
+    if (anyRx) {
+        append("%s", " | rx:");
+        // Always print a fixed set of audit-relevant opcodes (even if zero)
+        // plus anything else with non-zero rx.
+        const uint8_t kAlwaysShow[] = {
+            PacketType::CmdAckExtended,
+            PacketType::CmdMove,
+            PacketType::Heartbeat,
+        };
+        bool printed[256] = {};
+        for (uint8_t op : kAlwaysShow) {
+            uint64_t cnt = opcodeStats_.receivedPackets[op];
+            const char* nm = opcodeName(op);
+            if (nm) append(" 0x%02X(%s)=%llu", op, nm, (unsigned long long)cnt);
+            else    append(" 0x%02X=%llu", op, (unsigned long long)cnt);
+            printed[op] = true;
+        }
+        for (size_t i = 0; i < 256; ++i) {
+            if (printed[i]) continue;
+            uint64_t cnt = opcodeStats_.receivedPackets[i];
+            if (cnt == 0) continue;
+            const char* nm = opcodeName(static_cast<uint8_t>(i));
+            if (nm) append(" 0x%02zX(%s)=%llu", i, nm, (unsigned long long)cnt);
+            else    append(" 0x%02zX=%llu", i, (unsigned long long)cnt);
+        }
+    }
+
+    // S143 audit — Q: section. Worst per-opcode pending depth observed in
+    // the window. With this we can prove "EntityEnterBatch is hogging 200
+    // slots" vs "the queue cycles fast" — the former points to ACK drain
+    // failure, the latter to producer rate.
+    bool anyQ = false;
+    for (size_t i = 0; i < 256; ++i) {
+        if (opcodeStats_.pendingByOpcodeMax[i] > 0) { anyQ = true; break; }
+    }
+    if (anyQ) {
+        append("%s", " | Q:");
+        // Top 6 by depth.
+        struct QRow { uint8_t op; uint64_t depth; };
+        std::vector<QRow> qrows;
+        qrows.reserve(32);
+        for (size_t i = 0; i < 256; ++i) {
+            uint64_t d = opcodeStats_.pendingByOpcodeMax[i];
+            if (d == 0) continue;
+            qrows.push_back({static_cast<uint8_t>(i), d});
+        }
+        std::sort(qrows.begin(), qrows.end(),
+                  [](const QRow& a, const QRow& b) { return a.depth > b.depth; });
+        const size_t kQTop = (std::min)(static_cast<size_t>(6), qrows.size());
+        for (size_t i = 0; i < kQTop; ++i) {
+            const QRow& q = qrows[i];
+            const char* nm = opcodeName(q.op);
+            if (nm) append(" 0x%02X(%s)=%llu", q.op, nm, (unsigned long long)q.depth);
+            else    append(" 0x%02X=%llu", q.op, (unsigned long long)q.depth);
+        }
+    }
+
+    // S143 audit — age: section. Worst observed pending age (ms) per opcode
+    // that had any pending depth in the window. Direct evidence of
+    // queue-stuck packets: 0xE0(EntityEnterBatch) age=8400ms means the
+    // oldest enter has been parked unacked for 8.4 seconds — confirms the
+    // ACK pipeline isn't draining it.
+    bool anyAge = false;
+    for (size_t i = 0; i < 256; ++i) {
+        if (opcodeStats_.oldestPendingAgeMsMax[i] > 0) { anyAge = true; break; }
+    }
+    if (anyAge) {
+        append("%s", " | age:");
+        struct AgeRow { uint8_t op; uint32_t ageMs; };
+        std::vector<AgeRow> arows;
+        arows.reserve(32);
+        for (size_t i = 0; i < 256; ++i) {
+            uint32_t a = opcodeStats_.oldestPendingAgeMsMax[i];
+            if (a == 0) continue;
+            arows.push_back({static_cast<uint8_t>(i), a});
+        }
+        std::sort(arows.begin(), arows.end(),
+                  [](const AgeRow& a, const AgeRow& b) { return a.ageMs > b.ageMs; });
+        const size_t kATop = (std::min)(static_cast<size_t>(6), arows.size());
+        for (size_t i = 0; i < kATop; ++i) {
+            const AgeRow& a = arows[i];
+            const char* nm = opcodeName(a.op);
+            if (nm) append(" 0x%02X(%s)=%ums", a.op, nm, a.ageMs);
+            else    append(" 0x%02X=%ums", a.op, a.ageMs);
+        }
+    }
+
+    return std::string(buf, n);
 }
 
 } // namespace fate

@@ -695,6 +695,99 @@ struct SvSkillResultMsg {
 };
 
 // ============================================================================
+// Server -> Client: SvSkillResultBatch (v18 — AOE coalesced result)
+// Common fields (casterId, skillId, cooldownMs, casterNewMP, resourceCost) are
+// hoisted out of the per-target payload so a 200-target Inferno emits ~4 batch
+// packets instead of 200 reliables. Builder is in combat_handler.cpp AOE
+// branch; receiver in net_client.cpp dispatches each entry through the same
+// callback as SvSkillResult so client-side handlers don't fork.
+// ============================================================================
+struct SvSkillResultBatchMsg {
+    uint64_t    casterId     = 0;
+    std::string skillId;
+    uint16_t    cooldownMs   = 0;  // applied to caster's skill cooldown (0 = no cooldown poke)
+    uint16_t    casterNewMP  = 0;
+    uint16_t    resourceCost = 0;
+
+    struct PerTarget {
+        uint64_t targetId    = 0;
+        int32_t  damage      = 0;
+        int32_t  overkill    = 0;
+        int32_t  targetNewHP = 0;
+        uint8_t  hitFlags    = 0;
+
+        void write(ByteWriter& w) const {
+            detail::writeU64(w, targetId);
+            w.writeI32(damage);
+            w.writeI32(overkill);
+            w.writeI32(targetNewHP);
+            w.writeU8(hitFlags);
+        }
+        static PerTarget read(ByteReader& r) {
+            PerTarget t;
+            t.targetId    = detail::readU64(r);
+            t.damage      = r.readI32();
+            t.overkill    = r.readI32();
+            t.targetNewHP = r.readI32();
+            t.hitFlags    = r.readU8();
+            return t;
+        }
+    };
+    std::vector<PerTarget> targets;
+
+    void write(ByteWriter& w) const {
+        detail::writeU64(w, casterId);
+        w.writeString(skillId);
+        w.writeU16(cooldownMs);
+        w.writeU16(casterNewMP);
+        w.writeU16(resourceCost);
+        w.writeU16(static_cast<uint16_t>(targets.size()));
+        for (const auto& t : targets) t.write(w);
+    }
+    static SvSkillResultBatchMsg read(ByteReader& r) {
+        SvSkillResultBatchMsg m;
+        m.casterId     = detail::readU64(r);
+        m.skillId      = r.readString();
+        m.cooldownMs   = r.readU16();
+        m.casterNewMP  = r.readU16();
+        m.resourceCost = r.readU16();
+        uint16_t count = r.readU16();
+        if (r.overflowed()) return m;
+        m.targets.reserve(count);
+        for (uint16_t i = 0; i < count && !r.overflowed(); ++i) {
+            m.targets.push_back(PerTarget::read(r));
+        }
+        return m;
+    }
+
+    // Fan a decoded batch out into N synthetic SvSkillResultMsg objects and
+    // dispatch each through the given callback. Cooldown is applied only on
+    // the FIRST reconstructed message — this matches the pre-batch behaviour
+    // where the AOE server path set cooldownMs only on i==0 to avoid the
+    // client double-firing startCooldown(). Both NetClient and the unit
+    // tests call this helper so the contract is enforced in one place.
+    template <typename Callback>
+    void fanOut(const Callback& onSkillResult) const {
+        bool firstEntry = true;
+        for (const auto& t : targets) {
+            SvSkillResultMsg msg;
+            msg.casterId     = casterId;
+            msg.targetId     = t.targetId;
+            msg.skillId      = skillId;
+            msg.damage       = t.damage;
+            msg.overkill     = t.overkill;
+            msg.targetNewHP  = t.targetNewHP;
+            msg.hitFlags     = t.hitFlags;
+            msg.resourceCost = resourceCost;
+            msg.cooldownMs   = firstEntry ? cooldownMs : 0;
+            msg.casterNewMP  = casterNewMP;
+            onSkillResult(msg);
+            firstEntry = false;
+        }
+    }
+};
+
+// ============================================================================
 // Client -> Server: CmdEquip (equip or unequip an item)
 // ============================================================================
 struct CmdEquipMsg {

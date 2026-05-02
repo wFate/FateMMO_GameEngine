@@ -4,20 +4,26 @@
 
 namespace fate {
 
-void ReliabilityLayer::trackReliable(uint16_t sequence, const uint8_t* data, size_t size, float currentTime) {
+uint8_t ReliabilityLayer::trackReliable(uint16_t sequence, uint8_t packetType,
+                                        const uint8_t* data, size_t size, float currentTime) {
+    uint8_t evictedOpcode = 0;
     if (pending_.size() >= MAX_PENDING_PACKETS) {
-        LOG_WARN("Reliability", "Dropping oldest unacked reliable packet (seq=%u) — pending queue full (%d)",
-                 pending_.begin()->sequence, static_cast<int>(MAX_PENDING_PACKETS));
+        evictedOpcode = pending_.begin()->packetType;
+        LOG_WARN("Reliability",
+                 "Dropping oldest unacked reliable packet (seq=%u, opcode=0x%02X) — pending queue full (%d)",
+                 pending_.begin()->sequence, evictedOpcode, static_cast<int>(MAX_PENDING_PACKETS));
         pending_.erase(pending_.begin());
     }
 
     PendingPacket pkt;
     pkt.sequence = sequence;
+    pkt.packetType = packetType;
     pkt.data.assign(data, data + size);
     pkt.timeSent = currentTime;
     pkt.lastRetransmit = currentTime;
     pkt.retransmitCount = 0;
     pending_.push_back(std::move(pkt));
+    return evictedOpcode;
 }
 
 bool ReliabilityLayer::onReceive(uint16_t remoteSequence) {

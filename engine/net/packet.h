@@ -8,7 +8,7 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 17;  // v17: CmdShopSellFromBag — NPC sell from bag sub-slot (S136)
+constexpr uint8_t  PROTOCOL_VERSION  = 19;  // v19: SvEntityLeaveBatch — coalesces leave-storms (mass deaths/pickups/despawns) into one packet (S141)
 constexpr size_t   PACKET_HEADER_SIZE = 26;  // v9: ackBits widened 4→8 bytes (32→64 bit ACK window)
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
@@ -232,6 +232,23 @@ namespace PacketType {
     // item id, not in client state.
     constexpr uint8_t CmdCraftProtectStone     = 0xEA;
     constexpr uint8_t SvCraftProtectStoneResult = 0xEB;
+
+    // v18 — SvSkillResultBatch (S141). Coalesces AOE per-target SvSkillResult
+    // payloads into one MAX_PAYLOAD_SIZE-bounded packet so a 200-target Inferno
+    // doesn't fan out 200 ReliableOrdered packets and saturate the pending
+    // queue (2048 slots) within seconds. Pattern mirrors SvEntityEnterBatch:
+    // common header (caster + skillId + cooldown + caster MP) once, then a
+    // u16 count + per-target stripped payloads back-to-back. Builder lives in
+    // server/handlers/combat_handler.cpp AOE branch.
+    constexpr uint8_t SvSkillResultBatch       = 0xEC;
+
+    // v19 — SvEntityLeaveBatch (S141 Phase B.1). Coalesces SvEntityLeave bursts
+    // (respawn cycles, mass loot pickups, dungeon despawns) into one packet.
+    // Format: u16 count, then count × u64 persistentId. Receiver dispatches
+    // each through the same onEntityLeave callback as the unbatched path.
+    // Critical-lane (same semantics as 0x91 SvEntityLeave) — losing a leave
+    // strands a dead mob as a visible ghost on the client.
+    constexpr uint8_t SvEntityLeaveBatch       = 0xED;
 
     // Pet panel seed on login (silent). Distinct from SvPetGranted which
     // fires on mid-session hatch and shows a "Hatched: X" chat toast.

@@ -177,14 +177,19 @@ inline bool isCriticalLane(uint8_t packetType) {
     // 0x91 SvEntityLeave       — without it, dead mob stays as a ghost
     // 0x95 SvPlayerState       — authoritative self-state (HP/XP/level/stats)
     // 0x97 SvZoneTransition    — without it, client stuck on old scene
+    // 0x98 SvLootPickup        — drives [Loot] chat + pickup SFX + scalar gold
+    //                            mirror; without it, players think loot vanished
+    //                            even though the server granted it (S141)
     // 0xA0 SvDeathNotify       — without it, no death overlay on player death
     // 0xA1 SvRespawn           — without it, respawn never completes
     // 0xCC SvKick              — disciplinary/shutdown message must arrive
     // 0xCE SvScenePopulated    — without it, client never exits loading
     // 0xE0 SvEntityEnterBatch  — v9 coalesced entity-enters; same semantics as 0x90
+    // 0xED SvEntityLeaveBatch  — v19 coalesced entity-leaves; same semantics as 0x91
     return packetType == 0x90 || packetType == 0x91 || packetType == 0x95 ||
-           packetType == 0x97 || packetType == 0xA0 || packetType == 0xA1 ||
-           packetType == 0xCC || packetType == 0xCE || packetType == 0xE0;
+           packetType == 0x97 || packetType == 0x98 || packetType == 0xA0 ||
+           packetType == 0xA1 || packetType == 0xCC || packetType == 0xCE ||
+           packetType == 0xE0 || packetType == 0xED;
 }
 
 } // namespace fate

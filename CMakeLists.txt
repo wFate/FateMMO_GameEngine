@@ -779,6 +779,10 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     if(EXISTS "${CMAKE_SOURCE_DIR}/server/handlers/interact_site_handler.cpp")
         list(APPEND SERVER_TEST_SOURCES server/handlers/interact_site_handler.cpp)
     endif()
+    # AOE gather/cap helpers used by test_aoe_cap.cpp (S143 #1).
+    if(EXISTS "${CMAKE_SOURCE_DIR}/server/handlers/aoe_helpers.cpp")
+        list(APPEND SERVER_TEST_SOURCES server/handlers/aoe_helpers.cpp)
+    endif()
     # F2 contract test (test_persistence_contract.cpp) needs the DB repos and libpqxx.
     # Pull these in only when PostgreSQL is available; otherwise the test file is
     # excluded from the build (the test itself also skips at runtime when env vars
