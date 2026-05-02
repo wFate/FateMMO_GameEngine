@@ -88,6 +88,32 @@ bool Editor::init(SDL_Window* window, void* metalLayer) {
 #else
 bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
 #endif
+    // Route every undo-stack push/undo/redo through our dirty bookkeeping.
+    // Domains: UIScreen → markUIScreenDirty(screenId), PlayerPrefab →
+    // markPlayerPrefabDirty, Scene → markSceneDirty. Wired here (init runs
+    // once before any editor input) instead of per-call-site so all push
+    // sites stay narrow.
+    UndoSystem::instance().setDirtyCallback([](UndoCommand* cmd) {
+        if (!cmd) return;
+        auto& ed = Editor::instance();
+        switch (cmd->domain()) {
+            case UndoDomain::Scene:
+                ed.markSceneDirty();
+                break;
+            case UndoDomain::PlayerPrefab:
+                ed.markPlayerPrefabDirty();
+                break;
+            case UndoDomain::UIScreen:
+#ifdef FATE_HAS_GAME
+                if (auto* p = dynamic_cast<UIPropertyCommand*>(cmd))
+                    ed.markUIScreenDirty(p->screenId);
+                else if (auto* p = dynamic_cast<UIWidgetMoveCommand*>(cmd))
+                    ed.markUIScreenDirty(p->screenId);
+#endif
+                break;
+        }
+    });
+
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 #if defined(ENGINE_MEMORY_DEBUG)
@@ -314,6 +340,68 @@ std::string Editor::currentSceneId() const {
     return currentScenePath_.substr(start);
 }
 
+void Editor::flushDirtyUIScreens() {
+#ifdef FATE_HAS_GAME
+    if (!uiManager_ || dirtyScreens_.empty()) return;
+    // Snapshot first; we mutate dirtyScreens_ inside the loop on success.
+    std::vector<std::pair<std::string, fate::LayoutClass>> pending(
+        dirtyScreens_.begin(), dirtyScreens_.end());
+    for (const auto& [screenId, recordedCls] : pending) {
+        auto* root = uiManager_->getScreen(screenId);
+        if (!root) {
+            // Screen was unloaded after being marked dirty; nothing to
+            // write. Drop the bit so it doesn't linger.
+            dirtyScreens_.erase({screenId, recordedCls});
+            continue;
+        }
+        // Use the class recorded at edit time, NOT current(). If the user
+        // edited Tablet then switched to Base, this still writes the
+        // foo.tablet.json file rather than clobbering foo.json with a tree
+        // that's about to be reloaded.
+        const std::string& base = uiManager_->screenBasePath(screenId);
+        std::string canonicalBase = !base.empty()
+            ? base
+            : "assets/ui/screens/" + screenId + ".json";
+        std::string relPath = (recordedCls == fate::LayoutClass::Base)
+            ? canonicalBase
+            : fate::mangleVariantPath(canonicalBase, recordedCls);
+
+        bool runtimeOk = UISerializer::saveToFile(relPath, screenId, root);
+        if (!runtimeOk) {
+            lastSaveStatus_ = "UI screen save FAILED: " + relPath;
+            lastSaveSucceeded_ = false;
+            LOG_ERROR("Editor", "UI screen save FAILED: %s", relPath.c_str());
+            continue;  // leave dirty bit set so the user can retry
+        }
+        LOG_INFO("Editor", "Saved UI screen: %s", relPath.c_str());
+
+        // Source-dir copy is the one that survives rebuilds; if it fails
+        // we MUST keep the screen dirty so the user can retry.
+        bool sourceOk = true;
+        if (!sourceDir_.empty()) {
+            std::string projectRoot = sourceDir_;
+            auto pos = projectRoot.rfind("/assets/scenes");
+            if (pos == std::string::npos) pos = projectRoot.rfind("\\assets\\scenes");
+            if (pos != std::string::npos) projectRoot = projectRoot.substr(0, pos);
+            std::string srcPath = projectRoot + "/" + relPath;
+            sourceOk = UISerializer::saveToFile(srcPath, screenId, root);
+            if (!sourceOk) {
+                lastSaveStatus_ = "UI screen source save FAILED: " + srcPath;
+                lastSaveSucceeded_ = false;
+                LOG_ERROR("Editor", "UI screen source save FAILED: %s", srcPath.c_str());
+            } else {
+                LOG_INFO("Editor", "Saved UI screen (source): %s", srcPath.c_str());
+            }
+        }
+        uiManager_->suppressHotReload();
+        // Only drop the dirty bit when both writes succeeded.
+        if (runtimeOk && sourceOk) {
+            dirtyScreens_.erase({screenId, recordedCls});
+        }
+    }
+#endif // FATE_HAS_GAME
+}
+
 bool Editor::saveScene(World* world, const std::string& path) {
     if (!world) {
         lastSaveStatus_ = "Scene save FAILED: no world";
@@ -462,6 +550,11 @@ void Editor::loadScene(World* world, const std::string& path) {
     // a follow-up Ctrl+S targets this scene, and clear any stale failure
     // status from a prior load attempt.
     currentScenePath_ = path;
+    // Drop every dirty bit. The pending edits belonged to the prior scene
+    // (and prior world entities); without this, Ctrl+S would write the new
+    // scene's path with sceneDirty_ left over from scene A. Done AFTER
+    // validation so a failed load doesn't erase pending work.
+    clearAllDirty();
     if (!lastSaveSucceeded_ && lastSaveStatus_.find("load FAILED") != std::string::npos) {
         lastSaveStatus_.clear();
         lastSaveSucceeded_ = true;
@@ -889,7 +982,9 @@ void Editor::drawDockSpace() {
             // Save --enabled when a scene path is set (from Open Scene or async load)
             const bool canSaveScene = !currentScenePath_.empty();
             if (ImGui::MenuItem("Save", "Ctrl+S", false, canSaveScene)) {
-                if (!saveScene(dockWorld_, currentScenePath_)) {
+                if (saveScene(dockWorld_, currentScenePath_)) {
+                    sceneDirty_ = false;
+                } else {
                     LOG_WARN("Editor", "Menu save did not complete: %s", lastSaveStatus_.c_str());
                 }
             }
@@ -1942,6 +2037,7 @@ void Editor::handleMouseUp() {
                 cmd->entityHandle = selectedEntity_->handle();
                 cmd->oldPos = dragStartEntityPos_;
                 cmd->newPos = t->position;
+                cmd->isPlayerPrefab = (selectedEntity_->tag() == "player");
                 UndoSystem::instance().push(std::move(cmd));
             }
         }
@@ -1957,6 +2053,7 @@ void Editor::handleMouseUp() {
                 cmd->entityHandle = selectedEntity_->handle();
                 cmd->oldSize = dragStartEntitySize_;
                 cmd->newSize = currentSize;
+                cmd->isPlayerPrefab = (selectedEntity_->tag() == "player");
                 UndoSystem::instance().push(std::move(cmd));
             }
         }
@@ -2470,11 +2567,13 @@ void Editor::drawImGuizmo(Camera* camera) {
         t->rotation = matRotation[2] * 0.0174532925f;
 
         // Record undo if transform changed
+        const bool selIsPlayer = (selectedEntity_->tag() == "player");
         if (t->position != oldPos) {
             auto cmd = std::make_unique<MoveCommand>();
             cmd->entityHandle = selectedEntity_->handle();
             cmd->oldPos = oldPos;
             cmd->newPos = t->position;
+            cmd->isPlayerPrefab = selIsPlayer;
             UndoSystem::instance().push(std::move(cmd));
         }
         if (t->rotation != oldRot) {
@@ -2482,6 +2581,7 @@ void Editor::drawImGuizmo(Camera* camera) {
             cmd->entityHandle = selectedEntity_->handle();
             cmd->oldRotation = oldRot;
             cmd->newRotation = t->rotation;
+            cmd->isPlayerPrefab = selIsPlayer;
             UndoSystem::instance().push(std::move(cmd));
         }
         if (t->scale != oldScale) {
@@ -2489,6 +2589,7 @@ void Editor::drawImGuizmo(Camera* camera) {
             cmd->entityHandle = selectedEntity_->handle();
             cmd->oldScale = oldScale;
             cmd->newScale = t->scale;
+            cmd->isPlayerPrefab = selIsPlayer;
             UndoSystem::instance().push(std::move(cmd));
         }
     }
@@ -3036,23 +3137,6 @@ void Editor::executeCommand(World* world, const std::string& cmd) {
 void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
     if (!world) return;
 
-    // Ctrl+S prefab save works even when editor panels are hidden,
-    // so designers can tweak values in play mode and save without
-    // needing the full editor open.
-    {
-        auto scancode = event.key.keysym.scancode;
-        bool ctrl = (event.key.keysym.mod & KMOD_CTRL) != 0;
-        if (ctrl && scancode == SDL_SCANCODE_S) {
-            world->forEachEntity([](Entity* e) {
-                if (e->tag() != "player") return;
-                if (PrefabLibrary::instance().has("player")) {
-                    PrefabLibrary::instance().save("player", e);
-                    LOG_INFO("Editor", "Ctrl+S: saved player entity to prefab 'player'");
-                }
-            });
-        }
-    }
-
     if (!open_) return;
 
     auto scancode = event.key.keysym.scancode;
@@ -3092,75 +3176,70 @@ void Editor::handleKeyShortcuts(World* world, const SDL_Event& event) {
         if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
 #endif
     }
-    // Ctrl+S = Save current scene. Allowed in play mode too — saveScene's
-    // isReplicated() + tag-fallback filter keeps runtime ghosts (mobs, pets,
-    // dropped items, server-replicated NPCs that haven't been promoted via
-    // an authored edit) out of the .json.
+    // Ctrl+S = save every dirty domain (UI / scene / player prefab) as
+    // independent branches, each clearing its own dirty state only after the
+    // intended write actually succeeded. Pre-fix this block fired all three
+    // saves on every keystroke; that's the bug that wrote unrelated prefab +
+    // scene + UI files when only a UI offset had changed.
     if (ctrl && scancode == SDL_SCANCODE_S) {
-        if (!currentScenePath_.empty()) {
-            if (saveScene(world, currentScenePath_)) {
-                LOG_INFO("Editor", "Ctrl+S: saved scene to %s", currentScenePath_.c_str());
-            } else {
-                LOG_ERROR("Editor", "Ctrl+S: save did not complete — %s", lastSaveStatus_.c_str());
-            }
-        } else {
-            // New scene with no path — surface in HUD too so it's not just a
-            // log line the user has to dig for. Reuses the save-error HUD.
-            lastSaveStatus_ = "Save As required: this scene has no path yet (File > Save As...)";
-            lastSaveSucceeded_ = false;
-            LOG_WARN("Editor", "Ctrl+S: %s", lastSaveStatus_.c_str());
-        }
-    }
 #ifdef FATE_HAS_GAME
-    // Also save the focused UI screen if a UI widget is selected
-    if (ctrl && scancode == SDL_SCANCODE_S) {
-        auto& uiPanel = uiEditorPanel_;
-        auto* selNode = uiPanel.selectedNode();
-        if (selNode && !uiPanel.selectedScreenId().empty() && uiManager_) {
-            std::string screenId = uiPanel.selectedScreenId();
-            auto* root = uiManager_->getScreen(screenId);
-            if (root) {
-                // Save target = base path mangled by current LayoutClass.
-                // Critical: do NOT use resolvedPath, because when a variant
-                // file is missing, resolvedPath is the base file, and saving
-                // there would clobber the iPhone-17-Pro baseline on the first
-                // tuning pass for a tablet/compact device.
-                const std::string& base = uiManager_->screenBasePath(screenId);
-                std::string canonicalBase = !base.empty()
-                    ? base
-                    : "assets/ui/screens/" + screenId + ".json";
-                fate::LayoutClass cls = fate::LayoutClassRegistry::current();
-                std::string relPath = (cls == fate::LayoutClass::Base)
-                    ? canonicalBase
-                    : fate::mangleVariantPath(canonicalBase, cls);
-                bool runtimeOk = UISerializer::saveToFile(relPath, screenId, root);
-                if (!runtimeOk) {
-                    lastSaveStatus_ = "UI screen save FAILED: " + relPath;
-                    lastSaveSucceeded_ = false;
+        // UI: save *every* dirty (screenId, class) pair, regardless of the
+        // current selection or active device class. flushDirtyUIScreens does
+        // the actual write so the same logic also runs from
+        // UIManager::beforeReloadCallback when the user changes device.
+        // Note: UISerializer::serializeScreen still emits the entire live
+        // screen tree — runtime-only fields like `visible` and `activeTab`
+        // therefore appear in the diff alongside authored offset changes.
+        // That's a UISerializer concern, not gating; tracked separately.
+        flushDirtyUIScreens();
+#endif // FATE_HAS_GAME
+
+        // Player prefab: independent of scene save. Marked at edit time
+        // (cmd->isPlayerPrefab=true) so Ctrl+S after switching selection
+        // still writes the right prefab. Scan world for the player tag —
+        // PropertyCommand::redo recreates the entity, so a stored handle
+        // would be stale; the tag is stable.
+        if (playerPrefabDirty_ && PrefabLibrary::instance().has("player")) {
+            Entity* playerEntity = nullptr;
+            world->forEachEntity([&](Entity* e) {
+                if (!playerEntity && e->tag() == "player") playerEntity = e;
+            });
+            if (playerEntity) {
+                if (PrefabLibrary::instance().save("player", playerEntity)) {
+                    LOG_INFO("Editor", "Ctrl+S: saved player prefab");
+                    playerPrefabDirty_ = false;
                 } else {
-                    LOG_INFO("Editor", "Saved UI screen: %s", relPath.c_str());
-                    // Also save to source directory so changes survive rebuilds
-                    // sourceDir_ is FATE_SOURCE_DIR/assets/scenes --go up to project root
-                    if (!sourceDir_.empty()) {
-                        std::string projectRoot = sourceDir_;
-                        auto pos = projectRoot.rfind("/assets/scenes");
-                        if (pos == std::string::npos) pos = projectRoot.rfind("\\assets\\scenes");
-                        if (pos != std::string::npos) projectRoot = projectRoot.substr(0, pos);
-                        std::string srcPath = projectRoot + "/" + relPath;
-                        if (!UISerializer::saveToFile(srcPath, screenId, root)) {
-                            lastSaveStatus_ = "UI screen source save FAILED: " + srcPath;
-                            lastSaveSucceeded_ = false;
-                        } else {
-                            LOG_INFO("Editor", "Saved UI screen (source): %s", srcPath.c_str());
-                        }
-                    }
-                    uiManager_->suppressHotReload();
+                    lastSaveStatus_ = "Player prefab save FAILED";
+                    lastSaveSucceeded_ = false;
+                    LOG_ERROR("Editor", "Ctrl+S: player prefab save FAILED");
                 }
+            } else {
+                LOG_WARN("Editor", "Ctrl+S: player prefab dirty but no player entity in world");
             }
         }
-        // Player prefab save is handled above (before the !open_ guard)
+
+        // Scene. Allowed in play mode too — saveScene's isReplicated() +
+        // tag-fallback filter keeps runtime ghosts (mobs, pets, dropped
+        // items, server-replicated NPCs) out of the .json.
+        if (sceneDirty_) {
+            if (!currentScenePath_.empty()) {
+                if (saveScene(world, currentScenePath_)) {
+                    LOG_INFO("Editor", "Ctrl+S: saved scene to %s", currentScenePath_.c_str());
+                    sceneDirty_ = false;
+                } else {
+                    LOG_ERROR("Editor", "Ctrl+S: scene save did not complete — %s", lastSaveStatus_.c_str());
+                }
+            } else {
+                // New scene with no path — surface in HUD too so it's not just a
+                // log line the user has to dig for. Reuses the save-error HUD.
+                lastSaveStatus_ = "Save As required: this scene has no path yet (File > Save As...)";
+                lastSaveSucceeded_ = false;
+                LOG_WARN("Editor", "Ctrl+S: %s", lastSaveStatus_.c_str());
+            }
+        }
+        // Nothing dirty? Silent no-op — designers press Ctrl+S reflexively
+        // and a HUD message every time would be worse than nothing.
     }
-#endif // FATE_HAS_GAME
     // Ctrl+D = Duplicate
     if (ctrl && scancode == SDL_SCANCODE_D && selectedEntity_) {
         auto json = PrefabLibrary::entityToJson(selectedEntity_);
@@ -3417,7 +3496,9 @@ void Editor::drawMenuBar(World*) {
             // Save -- enabled when a scene path is set (from Open Scene or async load)
             const bool canSaveScene = !currentScenePath_.empty();
             if (ImGui::MenuItem("Save", "Ctrl+S", false, canSaveScene)) {
-                if (!saveScene(dockWorld_, currentScenePath_)) {
+                if (saveScene(dockWorld_, currentScenePath_)) {
+                    sceneDirty_ = false;
+                } else {
                     LOG_WARN("Editor", "Menu save did not complete: %s", lastSaveStatus_.c_str());
                 }
             }

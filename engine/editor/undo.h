@@ -8,9 +8,18 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <functional>
 #include <nlohmann/json.hpp>
 
 namespace fate {
+
+// Domain a command mutates. Drives the editor's dirty bookkeeping so Ctrl+S
+// can write only the file(s) that actually changed.
+enum class UndoDomain {
+    Scene,         // generic entity edit that lands in the scene .json
+    PlayerPrefab,  // entity edit on the player; saveScene filters players out
+    UIScreen       // UI widget edit; target is the screen .json
+};
 
 // Base undo command
 struct UndoCommand {
@@ -20,6 +29,17 @@ struct UndoCommand {
     virtual std::string description() const = 0;
     // Update any stored EntityHandles that match oldH to newH (used by PropertyCommand fixup)
     virtual void remapEntityHandle(EntityHandle oldH, EntityHandle newH) { (void)oldH; (void)newH; }
+
+    // Per-instance flag set by the call site when the command targets the
+    // player entity. Lets PropertyCommand/MoveCommand/etc. route to the
+    // PlayerPrefab dirty bucket without a tag lookup at save time (the tag
+    // would be unreachable after PropertyCommand recreated the entity).
+    bool isPlayerPrefab = false;
+
+    // UI commands override to UIScreen. Default routes via isPlayerPrefab.
+    virtual UndoDomain domain() const {
+        return isPlayerPrefab ? UndoDomain::PlayerPrefab : UndoDomain::Scene;
+    }
 };
 
 // Move entity
@@ -176,6 +196,7 @@ struct UIPropertyCommand : UndoCommand {
     void undo(World* w) override;
     void redo(World* w) override;
     std::string description() const override { return desc; }
+    UndoDomain domain() const override { return UndoDomain::UIScreen; }
 };
 
 // Lightweight UI widget move — patches offset in-place instead of replacing
@@ -189,6 +210,7 @@ struct UIWidgetMoveCommand : UndoCommand {
     void undo(World*) override;
     void redo(World*) override;
     std::string description() const override { return "Move UI Widget"; }
+    UndoDomain domain() const override { return UndoDomain::UIScreen; }
 };
 #endif // FATE_HAS_GAME
 
@@ -200,9 +222,17 @@ public:
         return s;
     }
 
+    // Editor wires this in init(). Fires on push, undo, AND redo so that the
+    // editor's dirty bookkeeping reflects the live state of the world rather
+    // than just the last user-initiated edit. Without this, a Ctrl+S followed
+    // by a Ctrl+Z would leave the reverted state unsavable.
+    using DirtyCallback = std::function<void(UndoCommand*)>;
+    void setDirtyCallback(DirtyCallback cb) { dirtyCb_ = std::move(cb); }
+
     void push(std::unique_ptr<UndoCommand> cmd) {
         // Clear redo stack when new action is performed
         redoStack_.clear();
+        if (dirtyCb_) dirtyCb_(cmd.get());
         undoStack_.push_back(std::move(cmd));
         // Limit stack size
         if (undoStack_.size() > maxHistory_) {
@@ -218,6 +248,9 @@ public:
         auto cmd = std::move(undoStack_.back());
         undoStack_.pop_back();
         cmd->undo(w);
+        // Re-mark the same domain as dirty: the world now diverges from disk
+        // again, just in the opposite direction from the original edit.
+        if (dirtyCb_) dirtyCb_(cmd.get());
         redoStack_.push_back(std::move(cmd));
     }
 
@@ -226,10 +259,14 @@ public:
         auto cmd = std::move(redoStack_.back());
         redoStack_.pop_back();
         cmd->redo(w);
+        if (dirtyCb_) dirtyCb_(cmd.get());
         undoStack_.push_back(std::move(cmd));
     }
 
-    void clear() { undoStack_.clear(); redoStack_.clear(); }
+    void clear() {
+        undoStack_.clear();
+        redoStack_.clear();
+    }
 
     // After a command recreates an entity (new handle), update all other commands
     // in both stacks so they reference the new handle instead of the stale one.
@@ -252,6 +289,7 @@ private:
     std::vector<std::unique_ptr<UndoCommand>> undoStack_;
     std::vector<std::unique_ptr<UndoCommand>> redoStack_;
     size_t maxHistory_ = 200;
+    DirtyCallback dirtyCb_;
 };
 
 } // namespace fate

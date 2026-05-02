@@ -1,6 +1,9 @@
 #pragma once
 #include <functional>
+#include <set>
+#include <utility>
 #include "engine/ecs/world.h"
+#include "engine/render/layout_class.h"
 #include "engine/ecs/entity.h"
 #include "engine/ecs/entity_handle.h"
 #include "engine/render/camera.h"
@@ -191,6 +194,42 @@ public:
     const std::string& currentScenePath() const { return currentScenePath_; }
     void setCurrentScenePath(const std::string& p) { currentScenePath_ = p; }
 
+    // Dirty-domain bookkeeping. Wired to UndoSystem in init() so every push
+    // / undo / redo flips the right flag. Ctrl+S reads these to save only
+    // the file(s) that actually diverged from disk; each branch clears its
+    // own bit only after the corresponding write succeeded.
+    void markSceneDirty() { sceneDirty_ = true; }
+    void markPlayerPrefabDirty() { playerPrefabDirty_ = true; }
+    // UI dirtiness is keyed by (screenId, LayoutClass-at-edit-time). When a
+    // user edits Tablet then switches device, the recorded class pins the
+    // save target to the variant file that was actually authored — Ctrl+S
+    // never writes the in-memory tree to a different class's path.
+    void markUIScreenDirty(const std::string& screenId) {
+        if (screenId.empty()) return;
+        dirtyScreens_.insert({screenId, fate::LayoutClassRegistry::current()});
+    }
+    bool sceneDirty() const { return sceneDirty_; }
+    bool playerPrefabDirty() const { return playerPrefabDirty_; }
+    bool isUIScreenDirty(const std::string& screenId) const {
+        for (const auto& kv : dirtyScreens_) {
+            if (kv.first == screenId) return true;
+        }
+        return false;
+    }
+    // Wipe every dirty bucket. Called from loadScene() after validation
+    // succeeds so a follow-up Ctrl+S can't write the previous scene's
+    // pending edits onto the freshly-loaded one.
+    void clearAllDirty() {
+        sceneDirty_ = false;
+        playerPrefabDirty_ = false;
+        dirtyScreens_.clear();
+    }
+    // Save every (screenId, class) currently in dirtyScreens_ at its
+    // recorded variant path. Wired to UIManager::beforeReloadCallback so a
+    // device-class change can't strand pending edits in an in-memory tree
+    // that's about to be reloaded.
+    void flushDirtyUIScreens();
+
     // Called when a scene is loaded during play mode (for spectator integration)
     std::function<void(const std::string& sceneName)> onSceneLoadedInPlayMode;
 
@@ -287,6 +326,12 @@ public:
             mgr->addScreenReloadListener([this](const std::string&) {
                 if (uiManager_) uiEditorPanel_.revalidateSelection(*uiManager_);
             });
+            // A device-class change reloads every screen tree in place; if
+            // the user has unsaved edits in the outgoing class, persist
+            // them at the recorded variant path BEFORE the trees are
+            // replaced. Otherwise the dirty bit would survive but point at
+            // a tree the user can no longer see.
+            mgr->setBeforeReloadCallback([this]() { flushDirtyUIScreens(); });
         }
 #endif
     }
@@ -376,6 +421,17 @@ private:
     bool openSavePrefab_ = false;
     bool resetLayout_ = false;  // Set via View > Reset Layout
     std::string currentScenePath_;  // Path of currently loaded/saved scene
+
+    // Dirty-domain state. See markSceneDirty / markPlayerPrefabDirty /
+    // markUIScreenDirty above. UI dirtiness is keyed by (screenId, class)
+    // so editing screen A then switching selection to screen B (or device)
+    // still writes A at the variant file it was authored against; the
+    // prefab flag is set when an authored edit lands on the player entity
+    // (saveScene filters players out so a scene save alone would lose
+    // those tweaks).
+    bool sceneDirty_ = false;
+    bool playerPrefabDirty_ = false;
+    std::set<std::pair<std::string, fate::LayoutClass>> dirtyScreens_;
 
     // Populated by saveScene() so the editor HUD / hotkey-bind can surface
     // write failures. Prior to this flag a failed atomic write was silently

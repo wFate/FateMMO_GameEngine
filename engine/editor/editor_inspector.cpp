@@ -492,6 +492,7 @@ void Editor::captureInspectorUndo() {
             cmd->oldState = std::move(pendingInspectorSnapshot_);
             cmd->newState = std::move(newState);
             cmd->desc = "Inspector edit";
+            cmd->isPlayerPrefab = (selectedEntity_->tag() == "player");
             UndoSystem::instance().push(std::move(cmd));
         }
         pendingInspectorSnapshot_ = nlohmann::json();
@@ -646,6 +647,7 @@ void Editor::drawInspector() {
                             cmd->oldState = std::move(beforeTexCombo);
                             cmd->newState = std::move(afterTexCombo);
                             cmd->desc = "Inspector combo change";
+                            cmd->isPlayerPrefab = (selectedEntity_->tag() == "player");
                             UndoSystem::instance().push(std::move(cmd));
                         }
                     }
@@ -1004,6 +1006,7 @@ void Editor::drawInspector() {
                             cmd->oldState = std::move(beforeZoneType);
                             cmd->newState = std::move(afterZoneType);
                             cmd->desc = "Inspector combo change";
+                            cmd->isPlayerPrefab = (selectedEntity_->tag() == "player");
                             UndoSystem::instance().push(std::move(cmd));
                         }
                     }
@@ -1166,6 +1169,7 @@ void Editor::drawInspector() {
                             cmd->oldState = std::move(beforeClassCombo);
                             cmd->newState = std::move(afterClassCombo);
                             cmd->desc = "Inspector combo change";
+                            cmd->isPlayerPrefab = (selectedEntity_->tag() == "player");
                             UndoSystem::instance().push(std::move(cmd));
                         }
                     }
@@ -1205,6 +1209,7 @@ void Editor::drawInspector() {
                             cmd->oldState = std::move(beforePkCombo);
                             cmd->newState = std::move(afterPkCombo);
                             cmd->desc = "Inspector combo change";
+                            cmd->isPlayerPrefab = (selectedEntity_->tag() == "player");
                             UndoSystem::instance().push(std::move(cmd));
                         }
                     }
@@ -2084,6 +2089,7 @@ void Editor::drawInspector() {
                         cmd->oldState = std::move(beforeFactionCombo);
                         cmd->newState = std::move(afterFactionCombo);
                         cmd->desc = "Inspector combo change";
+                        cmd->isPlayerPrefab = (selectedEntity_->tag() == "player");
                         UndoSystem::instance().push(std::move(cmd));
                     }
                 }

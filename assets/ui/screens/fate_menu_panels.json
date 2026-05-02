@@ -708,7 +708,7 @@
           255
         ],
         "goldOffsetX": 0.0,
-        "goldOffsetY": 0.0,
+        "goldOffsetY": -20.0,
         "goldValueColor": [
           255,
           250,
@@ -764,7 +764,7 @@
           255
         ],
         "opalOffsetX": 370.0,
-        "opalOffsetY": 0.0,
+        "opalOffsetY": -20.0,
         "opalValueColor": [
           179,
           217,
@@ -1014,8 +1014,7 @@
           0,
           0,
           0
-        ],
-        "visible": false
+        ]
       },
       {
         "activeSetPage": 0,
@@ -2274,7 +2273,8 @@
           0,
           0,
           0
-        ]
+        ],
+        "visible": false
       },
       {
         "anchor": {
@@ -4384,7 +4384,7 @@
         "zOrder": 200
       },
       {
-        "activeTab": 5,
+        "activeTab": 1,
         "activeTabBg": [
           34,
           2,
