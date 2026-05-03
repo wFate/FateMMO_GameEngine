@@ -434,8 +434,39 @@ void HotReloadManager::processPendingReload(float currentTime) {
     reloadRequestedAt_ = -1.0f;
 
     if (!performSwap(currentTime)) {
-        ++failureCount_;
-        LOG_WARN("HotReload", "Reload failed: %s (current module preserved)", lastError_.c_str());
+        // performSwap re-arms reloadPending_ when the failure is a transient
+        // build-state condition (DLL temporarily missing, LoadLibrary races
+        // a still-finalizing link). In that case we keep retrying without
+        // bumping failureCount_ or screaming a warn, until kMaxTransientRetries
+        // is hit and we escalate to a hard failure.
+        const bool transient = reloadPending_.load(std::memory_order_acquire);
+        if (transient) {
+            ++transientRetries_;
+            if (transientRetries_ > kMaxTransientRetries) {
+                reloadPending_.store(false, std::memory_order_release);
+                reloadRequestedAt_ = -1.0f;
+                ++failureCount_;
+                transientRetries_ = 0;
+                transientWarned_ = false;
+                LOG_WARN("HotReload",
+                    "Reload gave up after %d transient retries: %s (current module preserved)",
+                    kMaxTransientRetries, lastError_.c_str());
+            } else if (!transientWarned_) {
+                LOG_INFO("HotReload", "Swap deferred (build still in progress): %s",
+                         lastError_.c_str());
+                transientWarned_ = true;
+            }
+        } else {
+            ++failureCount_;
+            transientRetries_ = 0;
+            transientWarned_ = false;
+            LOG_WARN("HotReload", "Reload failed: %s (current module preserved)",
+                     lastError_.c_str());
+        }
+    } else {
+        // Successful swap — clear transient throttle state.
+        transientRetries_ = 0;
+        transientWarned_ = false;
     }
 }
 
@@ -456,7 +487,13 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
     std::string shadow = shadowDir_ + "/" + moduleNameBase_ + buf + ".dll";
 
     if (!fs::exists(sourcePath_)) {
-        lastError_ = "Source DLL missing: " + sourcePath_;
+        // Build artifact temporarily missing during a link transition (linker
+        // deletes/rewrites the .dll, watcher fires mid-write). Re-arm pending
+        // so we retry once the linker finishes; caller observes the re-armed
+        // flag and treats this as a transient retry, NOT a hard failure.
+        lastError_ = "Source DLL missing during build transition (will retry)";
+        reloadPending_.store(true, std::memory_order_release);
+        reloadRequestedAt_ = -1.0f;
         return false;
     }
 
@@ -477,6 +514,11 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
         DWORD err = GetLastError();
         lastError_ = "LoadLibrary(" + shadow + ") failed: error " + std::to_string(err);
         fs::remove(shadow, ec);
+        // Treat as transient — DLL may still be mid-write or AV-locked. Re-arm
+        // pending so we retry; caller observes re-armed flag and skips
+        // bumping failureCount_ until the retry cap escalates.
+        reloadPending_.store(true, std::memory_order_release);
+        reloadRequestedAt_ = -1.0f;
         return false;
     }
 

@@ -683,6 +683,17 @@ if(FATE_BUILD_GAME_RUNTIME
         if(MSVC)
             target_compile_options(FateGameRuntime PRIVATE /W4 /wd4100 /wd4201 /wd4458 /MP)
             target_compile_definitions(FateGameRuntime PRIVATE _CRT_SECURE_NO_WARNINGS)
+
+            # Hot-reload target must be rebuildable while FateEngine.exe is
+            # running. /Zi emits a separate PDB (and /INCREMENTAL emits an
+            # .ilk) that mspdbsrv/devenv hold open via the loaded shadow
+            # DLL's embedded debug record, producing LNK1201 on re-link.
+            # /Z7 keeps CodeView in OBJ, /DEBUG:NONE skips PDB emission, and
+            # /INCREMENTAL:NO skips the ILK. Per-generation shadow PDBs +
+            # /PDBALTPATH would be the full fix; this is the minimal
+            # contract that lets the actual swap iterate reliably.
+            target_compile_options(FateGameRuntime PRIVATE /Z7)
+            target_link_options(FateGameRuntime PRIVATE /DEBUG:NONE /INCREMENTAL:NO)
         else()
             target_compile_options(FateGameRuntime PRIVATE -Wall -Wextra -Wpedantic -fvisibility=hidden)
         endif()

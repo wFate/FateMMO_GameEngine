@@ -200,6 +200,9 @@ private:
 
     bool     allowPlayModeReload_ = false;
     bool     playModeWarned_      = false;  // throttle the "deferred" log
+    bool     transientWarned_     = false;  // throttle "build still in progress" log
+    int      transientRetries_    = 0;      // consecutive transient swap aborts (DLL missing / mid-link)
+    static constexpr int kMaxTransientRetries = 30;  // ~30s at 1s debounce; then escalate
     uint32_t reloadCount_  = 0;
     uint32_t failureCount_ = 0;
 
