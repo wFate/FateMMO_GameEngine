@@ -1,5 +1,8 @@
 #include "engine/scene/scene_manager.h"
 #include "engine/core/logger.h"
+#if FATE_ENABLE_HOT_RELOAD
+#include "engine/module/hot_reload_manager.h"
+#endif
 
 namespace fate {
 
@@ -9,6 +12,12 @@ namespace fate {
 
 void SceneManager::setCurrentScene(std::unique_ptr<Scene> scene, const std::string& name) {
     if (currentScene_) {
+#if FATE_ENABLE_HOT_RELOAD
+        // Tear down any behaviors bound to the outgoing world BEFORE the
+        // unique_ptr destroys it. Otherwise the next reload's roster sweep
+        // would dereference dead World pointers.
+        HotReloadManager::instance().onWorldUnload(currentScene_->world());
+#endif
         currentScene_->onExit();
     }
     currentScene_ = std::move(scene);
@@ -17,6 +26,9 @@ void SceneManager::setCurrentScene(std::unique_ptr<Scene> scene, const std::stri
 
 void SceneManager::unloadScene() {
     if (currentScene_) {
+#if FATE_ENABLE_HOT_RELOAD
+        HotReloadManager::instance().onWorldUnload(currentScene_->world());
+#endif
         currentScene_->onExit();
         currentScene_.reset();
         currentSceneName_.clear();
@@ -46,6 +58,12 @@ bool SceneManager::loadScene(const std::string& name, const std::string& jsonPat
     }
 
     if (currentScene_) {
+#if FATE_ENABLE_HOT_RELOAD
+        // Roster has raw World* entries for the outgoing scene; tear them
+        // down before the unique_ptr destroys the World, otherwise a later
+        // tick or reload would dereference a freed pointer.
+        HotReloadManager::instance().onWorldUnload(currentScene_->world());
+#endif
         currentScene_->onExit();
     }
 
@@ -69,6 +87,10 @@ bool SceneManager::switchScene(const std::string& name) {
 
     // Exit old scene
     if (currentScene_) {
+#if FATE_ENABLE_HOT_RELOAD
+        // Same dangling-World guard as loadScene() / setCurrentScene().
+        HotReloadManager::instance().onWorldUnload(currentScene_->world());
+#endif
         currentScene_->onExit();
     }
 

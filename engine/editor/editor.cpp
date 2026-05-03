@@ -6,6 +6,9 @@
 #endif
 #include "engine/core/logger.h"
 #include "engine/core/atomic_write.h"
+#if FATE_ENABLE_HOT_RELOAD
+#include "engine/module/hot_reload_manager.h"
+#endif
 #ifndef FATEMMO_METAL
 // Editor uses direct GL for ImGui integration --intentionally outside RHI
 #include "engine/render/gfx/backend/gl/gl_loader.h"
@@ -902,6 +905,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch* batch, FrameAre
         drawCombatTextEditorWindow(&showCombatTextEditor_);
     }
     if (showRoleNameplatesPanel_) drawRoleNameplatesPanel();
+    if (showHotReloadPanel_) drawHotReloadPanel();
     LogViewer::instance().draw();
     drawTilePalette(world, camera);
     drawAssetBrowser(world, camera);
@@ -1095,6 +1099,11 @@ void Editor::drawDockSpace() {
             ImGui::MenuItem("Show Grid", nullptr, &showGrid_);
             ImGui::MenuItem("Show Colliders", nullptr, &showCollisionDebug_);
             ImGui::MenuItem("Show Spawn Zones", nullptr, &showSpawnDebug_);
+#ifdef FATE_HAS_GAME
+            ImGui::MenuItem("Show AI Radii",      nullptr, &MobAIComponent::showAIRadiiGlobal);
+            ImGui::MenuItem("Show Aggro Ledger",  nullptr, &MobAIComponent::showAggroLedgerGlobal);
+            ImGui::MenuItem("Show Guard Patrol",  nullptr, &GuardComponent::showGuardPatrolGlobal);
+#endif
             ImGui::Separator();
             ImGui::MenuItem("Post Process", nullptr, &showPostProcessPanel_);
             ImGui::Separator();
@@ -1186,6 +1195,7 @@ void Editor::drawDockSpace() {
             if (ImGui::MenuItem("Content Browser", nullptr, &cbOpen)) {
                 contentBrowserPanel_.setOpen(cbOpen);
             }
+            ImGui::MenuItem("Hot Reload", nullptr, &showHotReloadPanel_);
             ImGui::EndMenu();
         }
 
@@ -3516,6 +3526,7 @@ void Editor::renderUI(World* world, Camera* camera, SpriteBatch*, FrameArena* fr
         if (showTilePalette_) {
             drawTilePalette(world, dockCamera_);
         }
+        if (showHotReloadPanel_) drawHotReloadPanel();
 
 #ifdef FATE_HAS_GAME
         if (uiManager_) {
@@ -3682,6 +3693,7 @@ void Editor::drawMenuBar(World*) {
             ImGui::Separator();
             if (ImGui::MenuItem("Reset Layout")) { resetLayout_ = true; }
             ImGui::Separator();
+            ImGui::MenuItem("Hot Reload", nullptr, &showHotReloadPanel_);
             ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow_);
 #if defined(ENGINE_MEMORY_DEBUG)
             ImGui::MenuItem("Memory", nullptr, &showMemoryPanel_);
@@ -3962,6 +3974,14 @@ void Editor::enterPlayMode(World* world) {
 
 void Editor::exitPlayMode(World* world) {
     if (!inPlayMode_ || !world) return;
+
+#if FATE_ENABLE_HOT_RELOAD
+    // Snapshot restore destroys every entity in this world and recreates
+    // them from JSON. Tear down any bound behaviors first so the module
+    // sees onDestroy with valid handles + state pointers, before the
+    // archetype storage is reorganized.
+    HotReloadManager::instance().onWorldUnload(*world);
+#endif
 
     // Destroy all current entities
     std::vector<EntityHandle> toDestroy;

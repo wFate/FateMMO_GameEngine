@@ -57,7 +57,7 @@ App::~App() {
 bool App::init(const AppConfig& config) {
     config_ = config;
 
-    Logger::instance().init("fate_engine.log");
+    Logger::instance().init("logs/fate_engine.log");
     // Default to Info so per-frame/per-packet diagnostics stay quiet.
     // Set FATE_LOG_DEBUG=1 to re-enable debug output.
     {
@@ -387,6 +387,41 @@ bool App::init(const AppConfig& config) {
         .getReserved = [this]() -> size_t { return frameArena_.current().reserved(); },
     });
 #endif
+
+    // Hot-reloadable game module. Compile-time gated by FATE_ENABLE_HOT_RELOAD
+    // (defaults ON in dev, FORCED OFF in shipping). Looks for
+    // FateGameRuntime.dll next to the running executable. If absent (demo
+    // build, fresh checkout) this is a clean no-op — the engine simply runs
+    // without behavior dispatch. The watcher always starts so a later build
+    // of the module picks up automatically.
+#if FATE_ENABLE_HOT_RELOAD
+    {
+        std::string exeDir;
+#ifdef _WIN32
+        wchar_t exePathW[MAX_PATH];
+        DWORD len = GetModuleFileNameW(nullptr, exePathW, MAX_PATH);
+        if (len > 0 && len < MAX_PATH) {
+            std::filesystem::path p(exePathW);
+            exeDir = p.parent_path().string();
+        }
+#endif
+        if (!exeDir.empty()) {
+            HotReloadManager::instance().initialize(exeDir, "FateGameRuntime");
+
+            // Optional source-side rebuild trigger. Wires up only when both
+            // env vars are set so a fresh checkout default is "manual
+            // rebuild + auto reload"; opt-in to "save -> auto build -> auto
+            // reload" by exporting the two below. Typical dev shell:
+            //   set FATE_HOTRELOAD_SOURCE_DIR=C:\path\to\repo\game\runtime
+            //   set FATE_HOTRELOAD_BUILD_CMD=cmake --build "C:\path\to\repo\out\build\x64-Release" --target FateGameRuntime
+            const char* srcDir   = std::getenv("FATE_HOTRELOAD_SOURCE_DIR");
+            const char* buildCmd = std::getenv("FATE_HOTRELOAD_BUILD_CMD");
+            if (srcDir && buildCmd && srcDir[0] && buildCmd[0]) {
+                HotReloadManager::instance().enableSourceWatch(srcDir, buildCmd);
+            }
+        }
+    }
+#endif // FATE_ENABLE_HOT_RELOAD
 
     running_ = true;
     LOG_INFO("App", "Engine initialized successfully");
@@ -769,6 +804,16 @@ void App::update() {
     elapsedTime_ += deltaTime_;
     AssetRegistry::instance().processReloads(elapsedTime_);
 
+    // Hot-reloadable game module. Runs at the safest possible point: BEFORE
+    // any system tick, ECS iteration, render callback, or network packet
+    // dispatch this frame. processPendingReload internally honors the
+    // play-mode guard, so a swap that would happen mid-combat sits in the
+    // queue until the user exits play mode (unless explicitly allowed).
+    // No-op when FATE_ENABLE_HOT_RELOAD is off (shipping).
+#if FATE_ENABLE_HOT_RELOAD
+    HotReloadManager::instance().processPendingReload(elapsedTime_);
+#endif
+
 #ifdef FATE_HAS_GAME
     // Debounced UI theme reload — watcher only raises a flag; we drain here
     // on the main thread after 0.5s of quiescence so editor save bursts are
@@ -860,6 +905,14 @@ void App::update() {
 
     auto* scene = SceneManager::instance().currentScene();
     if (scene) {
+        // Tick reloadable behaviors against the active scene's world. Sits
+        // alongside the world's own update() so any in-place transform edits
+        // from a behavior are visible to subsequent systems and rendering.
+        // No-op when no module is loaded.
+#if FATE_ENABLE_HOT_RELOAD
+        HotReloadManager::instance().tickBehaviors(scene->world(), deltaTime_);
+#endif
+
         scene->world().update(deltaTime_);
         scene->world().lateUpdate(deltaTime_);
         // Scope: client-side end-of-frame flush after update + lateUpdate.
@@ -1239,6 +1292,9 @@ void App::shutdown() {
 #endif
     spriteBatch_.shutdown();
     fileWatcher_.stop();
+#if FATE_ENABLE_HOT_RELOAD
+    HotReloadManager::instance().shutdown();
+#endif
     TextureCache::instance().clear();
     AssetRegistry::instance().clear();
 

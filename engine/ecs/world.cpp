@@ -1,5 +1,8 @@
 #include "engine/ecs/world.h"
 #include "engine/core/logger.h"
+#if FATE_ENABLE_HOT_RELOAD
+#include "engine/module/hot_reload_manager.h"
+#endif
 #include <algorithm>
 #include <cassert>
 #include <string>
@@ -293,6 +296,17 @@ void World::processDestroyQueue(const char* scope) {
 
         Entity* entity = slot.entity;
         if (entity) {
+#if FATE_ENABLE_HOT_RELOAD
+            // Eager hot-reload teardown: fire onDestroy on any bound behavior
+            // BEFORE the archetype storage destroys the BehaviorComponent.
+            // The roster's per-tick sweep would catch this on the next tick,
+            // but only if tickBehaviors actually runs — editor pause skips
+            // it, so without this hook a paused-edit-then-delete leaks
+            // module-owned scratch until the next play session. Cheap (linear
+            // scan over a small roster) and fully no-op when the manager
+            // hasn't been initialized.
+            HotReloadManager::instance().onEntityDestroyed(*this, entity->handle());
+#endif
             // Remove from archetype storage (swap-and-pop)
             if (entity->archetypeId_ != UINT32_MAX) {
                 ArchetypeId archId = entity->archetypeId_;

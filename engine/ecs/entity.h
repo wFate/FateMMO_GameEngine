@@ -57,6 +57,13 @@ public:
     // This is expensive -- iterates archetype columns
     void forEachComponent(const std::function<void(void*, CompId)>& fn);
 
+    // World accessor — returns the ECS world this entity lives in. Used by
+    // server-side helpers that need to spawn additional entities into the
+    // same world as a given entity (e.g. boss-script summonAdds, which must
+    // route to the dungeon-instance world when the boss is in a dungeon and
+    // to the main server world otherwise).
+    World* world() const { return world_; }
+
     // Preserves JSON for components whose types weren't registered at load time.
     // Key = component type name string, Value = raw JSON object for that component.
     std::unordered_map<std::string, nlohmann::json> unknownComponents_;

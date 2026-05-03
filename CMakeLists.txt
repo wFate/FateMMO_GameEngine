@@ -293,6 +293,18 @@ endif()
 # ImGui is not a cmake project - build it as a static library
 # Shipping builds have no ImGui dependency — skip the entire lib.
 if(NOT FATE_SHIPPING)
+# imguizmo upstream restructured: ImGuizmo.cpp/.h moved from the repo root into
+# a src/ subdir on master. FetchContent pulls master so different build dirs
+# can have either layout depending on when each one was first configured.
+# Probe at configure time and pick the path that actually exists on disk.
+if(EXISTS "${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp")
+    set(IMGUIZMO_CPP "${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp")
+    set(IMGUIZMO_INC "${imguizmo_SOURCE_DIR}/src")
+else()
+    set(IMGUIZMO_CPP "${imguizmo_SOURCE_DIR}/ImGuizmo.cpp")
+    set(IMGUIZMO_INC "${imguizmo_SOURCE_DIR}")
+endif()
+
 add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -301,7 +313,7 @@ add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
     ${implot_SOURCE_DIR}/implot.cpp
     ${implot_SOURCE_DIR}/implot_items.cpp
-    ${imguizmo_SOURCE_DIR}/ImGuizmo.cpp
+    ${IMGUIZMO_CPP}
     ${imnodes_SOURCE_DIR}/imnodes.cpp
     ${imgui_SOURCE_DIR}/misc/freetype/imgui_freetype.cpp
 )
@@ -310,7 +322,7 @@ target_include_directories(imgui_lib PUBLIC
     ${imgui_SOURCE_DIR}/backends
     ${imgui_SOURCE_DIR}/misc/freetype
     ${implot_SOURCE_DIR}
-    ${imguizmo_SOURCE_DIR}
+    ${IMGUIZMO_INC}
     ${imnodes_SOURCE_DIR}
 )
 if(APPLE)
@@ -529,6 +541,12 @@ file(GLOB_RECURSE GAME_SOURCES
     game/*.h
 )
 
+# game/runtime/* compiles into the reloadable FateGameRuntime DLL, NOT into
+# FateEngine.exe. Excluding these from GAME_SOURCES is critical: if they were
+# linked into both targets, we'd have duplicate exported symbols and the host
+# could call old-baked-in versions instead of the freshly-loaded module.
+list(FILTER GAME_SOURCES EXCLUDE REGEX "game/runtime/")
+
 # Lets developers validate the open-source demo build (FATE_HAS_GAME undefined,
 # FateDemo target instead of FateEngine) on a checkout that still has game/
 # sources. Without this you'd have to rename game/ to test the demo path.
@@ -594,6 +612,85 @@ if(GAME_SOURCES)
     endif()
 else()
     message(STATUS "game/ sources not found — skipping FateEngine target")
+endif()
+
+# =============================================================================
+# Reloadable Game Runtime (FateGameRuntime.dll)
+#
+# Built as a separate SHARED library so gameplay behaviors can be edited,
+# rebuilt in seconds, and live-reloaded by the running FateEngine.exe via
+# engine/module/hot_reload_manager.cpp. The module talks to the host through
+# the pure-C ABI in engine/module/fate_module_abi.h — it does NOT link
+# fate_engine. Symbols flow only through the C ABI.
+#
+# CONFIGURE_DEPENDS makes Ninja re-run cmake when files appear/disappear under
+# game/runtime, so adding a brand-new behavior .cpp picks up automatically on
+# the next build. (Existing engine/game GLOBs do not use CONFIGURE_DEPENDS;
+# this is the one place the convention diverges, intentionally.)
+# =============================================================================
+# Default ON in dev, FORCE OFF in shipping. The DLL machinery has no place in
+# a production client — production hot-swap is an attack surface (LoadLibrary
+# of arbitrary path, file watcher) and the shipping bar already strips editor.
+if(FATE_SHIPPING)
+    option(FATE_ENABLE_HOT_RELOAD "Enable runtime DLL hot reload (FateGameRuntime)" OFF)
+    set(FATE_ENABLE_HOT_RELOAD OFF CACHE BOOL "" FORCE)
+else()
+    option(FATE_ENABLE_HOT_RELOAD "Enable runtime DLL hot reload (FateGameRuntime)" ON)
+endif()
+if(FATE_ENABLE_HOT_RELOAD)
+    target_compile_definitions(fate_engine PUBLIC FATE_ENABLE_HOT_RELOAD=1)
+    message(STATUS "FATE_ENABLE_HOT_RELOAD=ON — HotReloadManager active, FateGameRuntime DLL will be built")
+else()
+    message(STATUS "FATE_ENABLE_HOT_RELOAD=OFF — HotReloadManager compiled as no-op, no DLL target")
+endif()
+
+option(FATE_BUILD_GAME_RUNTIME "Build the reloadable FateGameRuntime DLL" ON)
+if(FATE_BUILD_GAME_RUNTIME
+   AND FATE_ENABLE_HOT_RELOAD
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/game/runtime"
+   AND NOT FATE_FORCE_DEMO_BUILD
+   AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS"
+   AND NOT ANDROID)
+
+    file(GLOB_RECURSE GAME_RUNTIME_SOURCES CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/game/runtime/*.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/game/runtime/*.h
+    )
+
+    if(GAME_RUNTIME_SOURCES)
+        add_library(FateGameRuntime SHARED ${GAME_RUNTIME_SOURCES})
+
+        # The module sees ONLY engine/module/fate_module_abi.h. No fate_engine
+        # link, no nlohmann_json, no SDL, no spdlog. Keeps the boundary honest.
+        target_include_directories(FateGameRuntime PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+        target_compile_features(FateGameRuntime PRIVATE cxx_std_23)
+        target_compile_definitions(FateGameRuntime PRIVATE
+            FATE_GAME_RUNTIME_BUILD=1
+        )
+
+        # Land the DLL next to FateEngine.exe so default search-path picks it
+        # up at first launch. HotReloadManager also looks here for subsequent
+        # rebuilds.
+        if(TARGET FateEngine)
+            set_target_properties(FateGameRuntime PROPERTIES
+                RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:FateEngine>
+                LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:FateEngine>
+            )
+        endif()
+
+        if(MSVC)
+            target_compile_options(FateGameRuntime PRIVATE /W4 /wd4100 /wd4201 /wd4458 /MP)
+            target_compile_definitions(FateGameRuntime PRIVATE _CRT_SECURE_NO_WARNINGS)
+        else()
+            target_compile_options(FateGameRuntime PRIVATE -Wall -Wextra -Wpedantic -fvisibility=hidden)
+        endif()
+
+        message(STATUS "FateGameRuntime configured (sources: ${CMAKE_CURRENT_SOURCE_DIR}/game/runtime)")
+    else()
+        message(STATUS "game/runtime/ exists but contains no sources — skipping FateGameRuntime")
+    endif()
 endif()
 
 # =============================================================================
@@ -782,6 +879,21 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     # AOE gather/cap helpers used by test_aoe_cap.cpp (S143 #1).
     if(EXISTS "${CMAKE_SOURCE_DIR}/server/handlers/aoe_helpers.cpp")
         list(APPEND SERVER_TEST_SOURCES server/handlers/aoe_helpers.cpp)
+    endif()
+    # Boss-script registry + lifecycle (Phase 7.1) — used by
+    # test_boss_script_phase71.cpp. No DB / replication deps; pure containers
+    # plus the lifecycle hook that walks Entity->getComponent. The hooks
+    # adapter (boss_script_hooks.cpp) and spawn seam (boss_script_spawn.cpp)
+    # are server-only and intentionally NOT linked into tests — those wire
+    # against ServerSpawnManager + ReplicationManager, which the unit tests
+    # do not pull in. T34 / T35 install lightweight stubs via the public
+    # setMobDamageHookAdapter / setBossScriptSummonAdds entry points.
+    if(EXISTS "${CMAKE_SOURCE_DIR}/server/bosses/boss_script_registry.cpp")
+        list(APPEND SERVER_TEST_SOURCES
+            server/bosses/boss_script_registry.cpp
+            server/bosses/boss_scripts_register_all.cpp
+            server/bosses/boss_script_lifecycle.cpp
+        )
     endif()
     # F2 contract test (test_persistence_contract.cpp) needs the DB repos and libpqxx.
     # Pull these in only when PostgreSQL is available; otherwise the test file is

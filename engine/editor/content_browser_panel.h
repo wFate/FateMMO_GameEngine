@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <functional>
@@ -23,6 +24,15 @@ public:
     // Spawn zone overlay access (used by Editor viewport)
     const nlohmann::json& spawnList() const { return spawnList_; }
     nlohmann::json& spawnListMut() { return spawnList_; }
+    // Generation counter consumed by the Phase 6 patrol overlay (and any
+    // future cache that mirrors spawnList_). Bumped automatically only on
+    // admin-driven refreshes through onContentListReceived. Direct
+    // mutations through spawnListMut() do NOT auto-bump -- callers that
+    // mutate spawnList_ in place (e.g. future scene-view authoring) MUST
+    // call markSpawnListChanged() afterward, otherwise downstream caches
+    // will go stale.
+    uint64_t spawnListVersion() const { return spawnListVersion_; }
+    void markSpawnListChanged() { ++spawnListVersion_; }
     void saveSpawnZone(const nlohmann::json& zone);
     void ensureSpawnListLoaded();
     int selectedSpawnIndex() const { return selectedSpawnIndex_; }
@@ -59,6 +69,9 @@ private:
     std::string selectedSpawnScene_;
     nlohmann::json editingSpawn_;
     bool spawnListDirty_ = true;
+    // Bumped automatically on admin-driven page ingest (onContentListReceived)
+    // and via markSpawnListChanged() for direct spawnListMut() callers.
+    uint64_t spawnListVersion_ = 0;
 
     // Validation
     std::vector<std::pair<uint8_t, std::string>> validationIssues_;

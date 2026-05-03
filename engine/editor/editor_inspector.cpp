@@ -3,6 +3,8 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "engine/ecs/component_meta.h"
+#include "engine/module/behavior_component.h"
+#include "engine/module/behavior_registry.h"
 #ifdef FATE_HAS_GAME
 #include "engine/components/transform.h"
 #include "engine/components/sprite_component.h"
@@ -1287,7 +1289,14 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Mob AI");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmMobAI")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<MobAIComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) {
+                    if (ai->ai.showAggroRadius
+                        && MobAIComponent::perMobAggroOverlayCount > 0) {
+                        --MobAIComponent::perMobAggroOverlayCount;
+                    }
+                    selectedEntity_->removeComponent<MobAIComponent>();
+                    ImGui::EndPopup(); goto endInspectorComponents;
+                }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<MobAIComponent>()) {
@@ -1295,35 +1304,303 @@ void Editor::drawInspector() {
                 const char* mN[] = {"Idle","Roam","Chase","ChaseMem","Attack","ReturnHome"};
                 const char* dN[] = {"None","Up","Down","Left","Right"};
                 ImGui::Text("Mode: %s  Facing: %s", mN[(int)a.getMode()], dN[(int)a.getFacingDirection()]);
-                ImGui::DragFloat("Aggro Radius##ai", &a.acquireRadius, 1.0f, 0.0f, 1000.0f);
+                ImGui::Text("Reason: %s", a.getLastTransitionReason() ? a.getLastTransitionReason() : "(null)");
+
+                // --- Radii (read-only display; sourced from mob_definitions /
+                // prefab data and consumed by the AI tick + debug overlay).
+                // Phase 3 spec: read-only except dominantHysteresisPx (live
+                // tuning). Hard leash is also read-only here -- it's
+                // DB/definition-derived and any edit would be silently lost
+                // on respawn or scene reload. Use the migration-117 source
+                // (mob_definitions.hard_leash_radius) for authoring; flip
+                // the sentinel via a temporary debug build if you need to
+                // probe behaviour without touching the DB.
+                ImGui::Text("Aggro Radius:  %.1f px", a.acquireRadius);
+                ImGui::Text("Soft Leash:    %.1f px", a.contactRadius);
+                ImGui::Text("Hard Leash:    %.1f px  %s",
+                            a.hardLeashRadius,
+                            a.hardLeashEnabled() ? "(enabled)" : "(disabled, sentinel -1)");
+                ImGui::Text("Attack Range:  %.1f px", a.attackRange);
+                ImGui::Text("Roam Radius:   %.1f px", a.roamRadius);
+                ImGui::DragFloat("Dominant Hyst (px)##ai", &a.dominantHysteresisPx, 0.5f, 0.0f, 64.0f, "%.1f");
                 captureInspectorUndo();
-                ImGui::DragFloat("Leash Radius##ai", &a.contactRadius, 1.0f, 0.0f, 1000.0f);
+
+                // --- Speeds & cadence (read-only; DB-derived) ---
+                ImGui::Text("Chase / Return / Roam Speed: %.1f / %.1f / %.1f",
+                            a.baseChaseSpeed, a.baseReturnSpeed, a.baseRoamSpeed);
+                ImGui::Text("Attack CD: %.2fs   Think: %.2fs",
+                            a.attackCooldown, a.serverTickInterval);
+
+                // --- Behavior flags (read-only; DB/prefab driven) ---
+                ImGui::Text("Passive: %s   Can Roam: %s   Can Chase: %s",
+                            a.isPassive       ? "Y" : "N",
+                            a.canRoam         ? "Y" : "N",
+                            a.canChase        ? "Y" : "N");
+                ImGui::Text("Can Move In Combat: %s   Roam While Idle: %s",
+                            a.canMoveInCombat ? "Y" : "N",
+                            a.roamWhileIdle   ? "Y" : "N");
+
+                // Per-mob debug overlay toggle stays editable -- it's a
+                // debugger surface, not a live behavior knob. Maintain the
+                // global counter so the renderer can skip its forEach scan
+                // when no mob has the flag and no global is on.
+                bool showRadiusBefore = a.showAggroRadius;
+                if (ImGui::Checkbox("Show Aggro Radius (this mob)##ai", &a.showAggroRadius)) {
+                    if (a.showAggroRadius && !showRadiusBefore) {
+                        ++MobAIComponent::perMobAggroOverlayCount;
+                    } else if (!a.showAggroRadius && showRadiusBefore) {
+                        if (MobAIComponent::perMobAggroOverlayCount > 0)
+                            --MobAIComponent::perMobAggroOverlayCount;
+                    }
+                }
                 captureInspectorUndo();
-                ImGui::DragFloat("Attack Range##ai", &a.attackRange, 1.0f, 0.0f, 500.0f);
-                captureInspectorUndo();
-                ImGui::DragFloat("Roam Radius##ai", &a.roamRadius, 1.0f, 0.0f, 500.0f);
-                captureInspectorUndo();
-                ImGui::DragFloat("Chase Speed##ai", &a.baseChaseSpeed, 1.0f, 0.0f, 500.0f);
-                captureInspectorUndo();
-                ImGui::DragFloat("Return Speed##ai", &a.baseReturnSpeed, 1.0f, 0.0f, 500.0f);
-                captureInspectorUndo();
-                ImGui::DragFloat("Roam Speed##ai", &a.baseRoamSpeed, 1.0f, 0.0f, 500.0f);
-                captureInspectorUndo();
-                ImGui::DragFloat("Attack CD##ai", &a.attackCooldown, 0.05f, 0.1f, 10.0f, "%.2fs");
-                captureInspectorUndo();
-                ImGui::DragFloat("Think Interval##ai", &a.serverTickInterval, 0.01f, 0.05f, 1.0f, "%.2fs");
-                captureInspectorUndo();
-                ImGui::Checkbox("Passive##ai", &a.isPassive);
-                captureInspectorUndo();
-                ImGui::Checkbox("Can Roam##ai", &a.canRoam);
-                captureInspectorUndo();
+
+                // --- DEAR cache + grace countdown ---
+                ImGui::Separator();
+                ImGui::Text("Tick Accum: %.3fs   Cached: %.3fs",
+                            ai->tickAccumulator, ai->lastTickInterval);
+                if (ai->hardLeashGraceUntil > 0.0f) {
+                    ImGui::Text("Hard Leash Grace until: t=%.2f", ai->hardLeashGraceUntil);
+                } else {
+                    ImGui::TextDisabled("Hard Leash Grace: inactive");
+                }
+
+                // --- Aggro Ledger panel (Section 3 final) ---
+                if (ImGui::TreeNodeEx("Aggro Ledger", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    const auto& L = ai->aggro;
+                    ImGui::Text("Entries: %d / %d", L.count, AggroLedger::kMaxEntries);
+                    if (L.currentTarget.value != 0) {
+                        ImGui::Text("Current Target: 0x%08X (lock until t=%.2f)",
+                                    L.currentTarget.value, L.currentTargetLockedUntil);
+                    } else {
+                        ImGui::TextDisabled("Current Target: <none>");
+                    }
+                    if (ImGui::BeginTable("##ledger", 3,
+                            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg
+                            | ImGuiTableFlags_SizingStretchSame)) {
+                        ImGui::TableSetupColumn("Player");
+                        ImGui::TableSetupColumn("Score");
+                        ImGui::TableSetupColumn("LastDmg t");
+                        ImGui::TableHeadersRow();
+                        for (int i = 0; i < L.count; ++i) {
+                            const auto& e = L.entries[i];
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0); ImGui::Text("0x%08X", e.player.value);
+                            ImGui::TableSetColumnIndex(1); ImGui::Text("%.1f", e.score);
+                            ImGui::TableSetColumnIndex(2); ImGui::Text("%.2f", e.lastDamageAt);
+                        }
+                        ImGui::EndTable();
+                    }
+                    ImGui::TreePop();
+                }
+            }
+        }
+
+        // ====================================================================
+        // Phase 7.1 #16: BossScriptComponent inspector
+        //
+        // Component is runtime-only — attached at spawn by ServerSpawnManager
+        // when the mob's script_id resolves in BossScriptRegistry. The panel
+        // surfaces the runtime fields (phase, deathHookFired, addsSpawned,
+        // selector, hpThresholds) plus three debug buttons for testing
+        // phase-transition scripts in-place.
+        // ====================================================================
+        if (auto* bsc = selectedEntity_->getComponent<BossScriptComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Boss Script (Phase 7.1)");
+            if (fontHeading_) ImGui::PopFont();
+            if (open && selectedEntity_->hasComponent<BossScriptComponent>()) {
+                ImGui::Text("Script ID: %s",
+                            bsc->scriptId.empty() ? "<none>" : bsc->scriptId.c_str());
+                ImGui::Text("Phase: %d   nextThresholdIdx: %d",
+                            bsc->phase, bsc->nextThresholdIdx);
+                ImGui::Text("Last Tick: t=%.2f   deathHookFired: %s",
+                            bsc->lastTickAt, bsc->deathHookFired ? "Y" : "N");
+                ImGui::Text("Adds Spawned: %d / %d",
+                            bsc->addsSpawnedCount, kSummonAddsPerLifetimeMax);
+
+                static const char* selectorNames[] = {
+                    "HighestThreat", "Closest", "Furthest", "LastAttacker",
+                    "Random", "LowestHP", "HighestHP", "ClassPreference",
+                };
+                int selIdx = static_cast<int>(bsc->targetSelector);
+                if (selIdx < 0 || selIdx >= 8) selIdx = 0;
+                ImGui::Text("Selector: %s", selectorNames[selIdx]);
+                if (!bsc->selectorArgs.preferredClass.empty()) {
+                    ImGui::Text("Preferred Class: %s", bsc->selectorArgs.preferredClass.c_str());
+                }
+                if (bsc->selectorArgs.randomReselect > 0.0f) {
+                    ImGui::Text("Random Reselect: %.1fs (last @ t=%.2f)",
+                                bsc->selectorArgs.randomReselect,
+                                bsc->selectorArgs.lastReselectAt);
+                }
+
+                if (!bsc->hpThresholds.empty()) {
+                    ImGui::Text("HP Thresholds (descending): ");
+                    ImGui::SameLine();
+                    for (size_t i = 0; i < bsc->hpThresholds.size(); ++i) {
+                        ImGui::SameLine();
+                        if (int(i) < bsc->nextThresholdIdx) {
+                            ImGui::TextDisabled("%.2f", bsc->hpThresholds[i]);
+                        } else {
+                            ImGui::Text("%.2f", bsc->hpThresholds[i]);
+                        }
+                    }
+                }
+
+                ImGui::Separator();
+                ImGui::Text("Hook bindings:");
+                ImGui::Text("  onSpawn=%s  onTick=%s  onDeath=%s",
+                            bsc->onSpawn ? "Y" : "-",
+                            bsc->onTick  ? "Y" : "-",
+                            bsc->onDeath ? "Y" : "-");
+                ImGui::Text("  onAggro=%s  onTargetLost=%s  onSoftLeash=%s  onHealthThresh=%s",
+                            bsc->onAggro       ? "Y" : "-",
+                            bsc->onTargetLost  ? "Y" : "-",
+                            bsc->onSoftLeash   ? "Y" : "-",
+                            bsc->onHealthThresh ? "Y" : "-");
+
+                ImGui::Separator();
+                if (ImGui::SmallButton("Force Advance Phase##bsc")) {
+                    bsc->phase++;
+                }
                 ImGui::SameLine();
-                ImGui::Checkbox("Can Chase##ai", &a.canChase);
-                captureInspectorUndo();
-                ImGui::Checkbox("Roam While Idle##ai", &a.roamWhileIdle);
-                captureInspectorUndo();
-                ImGui::Checkbox("Show Aggro Radius##ai", &a.showAggroRadius);
-                captureInspectorUndo();
+                if (ImGui::SmallButton("Reset Thresholds##bsc")) {
+                    bsc->nextThresholdIdx = 0;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Grant Invuln 5s##bsc")) {
+                    if (auto* es = selectedEntity_->getComponent<EnemyStatsComponent>()) {
+                        // Inspector has no real game-time clock, but we can use
+                        // the EnemyStats::lastDamageTime as a recent reference;
+                        // when zero, fall back to the existing field + 5s so the
+                        // window is observable for at least one applyMobDamage
+                        // call. Production scripts call grantBossScriptInvulnerability
+                        // through BossScriptCtx (which has gameTime), this button
+                        // is a manual-test convenience.
+                        const float ref = std::max(es->stats.lastDamageTime,
+                                                   es->stats.bossScriptInvulnerableUntil);
+                        es->stats.bossScriptInvulnerableUntil = ref + 5.0f;
+                    }
+                }
+            }
+        }
+
+        // ====================================================================
+        // Phase 6 #17: GuardComponent inspector
+        //
+        // Authoring stays on the SpawnInstance (Content Browser); this panel
+        // is purely the runtime view + a couple of debug buttons that make
+        // the FSM testable without a server restart cycle. All patrol state
+        // here is the runtime copy populated by applyPatrolToGuard at spawn.
+        // ====================================================================
+        if (auto* gc = selectedEntity_->getComponent<GuardComponent>()) {
+            if (fontHeading_) ImGui::PushFont(fontHeading_);
+            bool open = ImGui::CollapsingHeader("Guard (Phase 6)");
+            if (fontHeading_) ImGui::PopFont();
+            if (ImGui::BeginPopupContextItem("##rmGuard")) {
+                if (ImGui::MenuItem("Remove Component")) {
+                    selectedEntity_->removeComponent<GuardComponent>();
+                    ImGui::EndPopup(); goto endInspectorComponents;
+                }
+                ImGui::EndPopup();
+            }
+            if (open && selectedEntity_->hasComponent<GuardComponent>()) {
+                const char* modeNames[] = {"Stationary", "PatrolRoute", "PatrolArea"};
+                const char* dirNames[]  = {"None", "Up", "Down", "Left", "Right"};
+                ImGui::Text("Class: %s   Mode: %s",
+                            gc->className.c_str(),
+                            modeNames[(int)gc->mode]);
+                ImGui::Text("Anchor: (%.1f, %.1f)   Facing on Dwell: %s",
+                            gc->patrolAnchorWorld.x, gc->patrolAnchorWorld.y,
+                            dirNames[(int)gc->facingOnDwell]);
+
+                // Runtime patrol state -- read-only. Editing any of these
+                // would silently desync from the FSM step in advancePatrol*
+                // and the GuardSystem combat-yield gate.
+                if (gc->mode == GuardBehaviorMode::PatrolRoute) {
+                    ImGui::Text("Route: %d points   Loop: %s   Speed: %.2f tiles/s",
+                                (int)gc->routePoints.size(),
+                                gc->routeLoop ? "Y" : "N",
+                                gc->patrolMoveSpeed);
+                    ImGui::Text("Current Index: %d   Ping-Pong Dir: %+d",
+                                gc->currentIndex, gc->pingPongDirection);
+                } else if (gc->mode == GuardBehaviorMode::PatrolArea) {
+                    ImGui::Text("Area: %d cells   Dwell: %.2fs..%.2fs   Speed: %.2f tiles/s",
+                                (int)gc->areaCells.size(),
+                                gc->areaDwellMin, gc->areaDwellMax,
+                                gc->patrolMoveSpeed);
+                    ImGui::Text("Current Index: %d", gc->currentIndex);
+                } else {
+                    ImGui::TextDisabled("Stationary -- no patrol footprint.");
+                }
+
+                // FSM gate state -- the two flags GuardSystem reads at the
+                // top of every tick to decide yield-vs-advance.
+                ImGui::Separator();
+                ImGui::Text("In Patrol Move: %s    Was In Combat Last Tick: %s",
+                            gc->inPatrolMove        ? "Y" : "N",
+                            gc->wasInCombatLastTick ? "Y" : "N");
+                ImGui::Text("Segment Ends At: t=%.2f", gc->segmentEndsAt);
+
+                // Cardinal-helper memory shared with MobAI -- surfaced so
+                // the dominant-axis hysteresis can be inspected mid-patrol.
+                const char* axisNames[] = {"None", "Horizontal", "Vertical"};
+                ImGui::Text("Last Lock Axis: %s   Last Dominant: %c",
+                            axisNames[(int)gc->lastLockAxis],
+                            gc->lastDominant);
+
+                // Skill timers -- existing authored fields, read-only here
+                // because the cooldowns are class-defined.
+                if (gc->skillIds[0].length() || gc->skillIds[1].length() || gc->skillIds[2].length()) {
+                    ImGui::Separator();
+                    for (int i = 0; i < 3; ++i) {
+                        if (gc->skillIds[i].empty()) continue;
+                        ImGui::Text("Skill %d: %s   CD: %.2fs   Timer: %.2fs",
+                                    i, gc->skillIds[i].c_str(),
+                                    gc->skillCooldowns[i],
+                                    gc->skillTimers[i]);
+                    }
+                }
+
+                // ----------------------------------------------------------
+                // Debug actions. These poke runtime state directly; the
+                // safe pattern is to flip flags GuardSystem already reads,
+                // not to bypass its branches.
+                // ----------------------------------------------------------
+                ImGui::Separator();
+                if (ImGui::SmallButton("Force Resume Patrol##guard_resume")) {
+                    // P2 fix: drive the existing combat-exit branch in
+                    // tickGuard instead of zeroing fields directly. Setting
+                    // wasInCombatLastTick=true makes the next GuardSystem
+                    // tick run the resume gate (physical-arrival check ->
+                    // findIndexNearestToAnchor -> kCombatExitDwell).
+                    // Bypassing that gate would let the guard re-enter
+                    // route progression from a stale currentIndex while
+                    // off-anchor and walk an unvalidated segment.
+                    gc->wasInCombatLastTick = true;
+                }
+                ImGui::SameLine();
+                // P3 fix: segmentEndsAt is only honored during dwells.
+                // While inPatrolMove the deadline is ignored, so this
+                // button was a no-op mid-move. Relabel + gate to make the
+                // contract explicit: it skips the *current dwell* and
+                // immediately advances to the next move.
+                const bool canSkipDwell = (!gc->inPatrolMove
+                    && (gc->mode == GuardBehaviorMode::PatrolRoute
+                     || gc->mode == GuardBehaviorMode::PatrolArea));
+                ImGui::BeginDisabled(!canSkipDwell);
+                if (ImGui::SmallButton("Skip Dwell##guard_skip_dwell")) {
+                    // Honored only when GuardSystem is in the dwell branch.
+                    // The button is disabled otherwise so the contract is
+                    // visible in the UI.
+                    gc->segmentEndsAt = 0.0f;
+                }
+                ImGui::EndDisabled();
+                if (gc->inPatrolMove) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("(disabled mid-move)");
+                }
             }
         }
 
@@ -1965,6 +2242,30 @@ void Editor::drawInspector() {
                                     drawFloatOv("Respawn (s)", inst.overrides.respawnSeconds, rule.respawnSeconds, 1.0f, 86400.0f);
                                     drawIntOv("HP Regen",      inst.overrides.hpRegenPerSec,  rule.hpRegenPerSec, 0, 999999);  // WU7
 
+                                    // Phase 7.1 WU#1: per-instance boss-script override.
+                                    // Mirrors the content_browser path; absent = inherit
+                                    // mob_def.script_id, empty = explicit clear, non-empty
+                                    // = rebind to a different registered script.
+                                    {
+                                        bool en = inst.overrides.scriptId.has_value();
+                                        if (ImGui::Checkbox("##enScriptId", &en)) {
+                                            if (en) inst.overrides.scriptId = std::string{};
+                                            else    inst.overrides.scriptId.reset();
+                                        }
+                                        ImGui::SameLine();
+                                        if (en) {
+                                            char buf[128];
+                                            std::snprintf(buf, sizeof(buf), "%s",
+                                                          inst.overrides.scriptId->c_str());
+                                            if (ImGui::InputText("Script ID##ovScriptId", buf, sizeof(buf))) {
+                                                inst.overrides.scriptId = std::string(buf);
+                                            }
+                                        } else {
+                                            ImGui::TextDisabled("Script ID (use mob default)");
+                                        }
+                                        captureInspectorUndo();
+                                    }
+
                                     if (ImGui::SmallButton("Remove Instance##inst")) {
                                         instRemoveIdx = ii;
                                     }
@@ -2594,7 +2895,137 @@ void Editor::drawInspector() {
             selectedEntity_->forEachComponent([&](void* data, CompId id) {
                 if (manuallyInspected.count(id)) return;
                 auto* meta = ComponentMetaRegistry::instance().findById(id);
-                if (!meta || meta->fields.empty()) return;
+                if (!meta) return;
+
+                // BehaviorComponent has empty reflection (its data is JSON,
+                // not a fixed-layout struct). Render a custom drawer that
+                // exposes behavior name + per-field type-detected widgets.
+                if (id == componentId<BehaviorComponent>()) {
+                    auto* bc = static_cast<BehaviorComponent*>(data);
+                    if (fontHeading_) ImGui::PushFont(fontHeading_);
+                    bool open = ImGui::CollapsingHeader("BehaviorComponent",
+                                                       ImGuiTreeNodeFlags_DefaultOpen);
+                    if (fontHeading_) ImGui::PopFont();
+                    if (!open) return;
+
+                    ImGui::PushID(static_cast<int>(id));
+
+                    // Behavior name combo: enumerates registered behaviors.
+                    char behaviorBuf[64];
+                    std::strncpy(behaviorBuf, bc->behavior.c_str(), sizeof(behaviorBuf));
+                    behaviorBuf[sizeof(behaviorBuf) - 1] = '\0';
+                    if (ImGui::InputText("Behavior", behaviorBuf, sizeof(behaviorBuf),
+                                         ImGuiInputTextFlags_EnterReturnsTrue)) {
+                        bc->behavior = behaviorBuf;
+                        Editor::instance().markSceneDirty();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Pick##bhpick")) {
+                        ImGui::OpenPopup("##behavior_pick");
+                    }
+                    if (ImGui::BeginPopup("##behavior_pick")) {
+                        bool any = false;
+                        BehaviorRegistry::instance().forEach(
+                            [&](const std::string& name, const FateBehaviorVTable&) {
+                                any = true;
+                                if (ImGui::MenuItem(name.c_str())) {
+                                    if (bc->behavior != name) {
+                                        bc->behavior = name;
+                                        Editor::instance().markSceneDirty();
+                                    }
+                                }
+                            });
+                        if (!any) {
+                            ImGui::TextDisabled("(no module loaded)");
+                        }
+                        ImGui::EndPopup();
+                    }
+
+                    if (ImGui::Checkbox("Enabled", &bc->enabled)) {
+                        Editor::instance().markSceneDirty();
+                    }
+
+                    ImGui::Separator();
+                    ImGui::TextColored(ImVec4(0.7f, 0.85f, 1.0f, 1.0f),
+                                       "Authoring fields (serialized):");
+
+                    // Render each field with a type-detected widget. Float and
+                    // int get drag widgets; bool gets a checkbox. Strings/
+                    // arrays/objects fall through to a read-only label —
+                    // designers edit raw JSON via a future drawer.
+                    if (!bc->fields.is_object()) bc->fields = nlohmann::json::object();
+                    std::string keyToErase;
+                    for (auto it = bc->fields.begin(); it != bc->fields.end(); ++it) {
+                        const std::string& key = it.key();
+                        ImGui::PushID(key.c_str());
+                        if (it.value().is_number_float()) {
+                            float v = it.value().get<float>();
+                            if (ImGui::DragFloat(key.c_str(), &v, 0.05f)) {
+                                bc->fields[key] = v;
+                                Editor::instance().markSceneDirty();
+                            }
+                        } else if (it.value().is_number_integer()) {
+                            int v = it.value().get<int>();
+                            if (ImGui::DragInt(key.c_str(), &v)) {
+                                bc->fields[key] = v;
+                                Editor::instance().markSceneDirty();
+                            }
+                        } else if (it.value().is_boolean()) {
+                            bool v = it.value().get<bool>();
+                            if (ImGui::Checkbox(key.c_str(), &v)) {
+                                bc->fields[key] = v;
+                                Editor::instance().markSceneDirty();
+                            }
+                        } else {
+                            ImGui::Text("%s = (%s, edit in JSON)", key.c_str(),
+                                        it.value().type_name());
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton("X")) keyToErase = key;
+                        ImGui::PopID();
+                    }
+                    if (!keyToErase.empty()) {
+                        bc->fields.erase(keyToErase);
+                        Editor::instance().markSceneDirty();
+                    }
+
+                    // Add-field row (designer types name, picks type).
+                    static char newFieldName[32] = "";
+                    static int  newFieldType    = 0; // 0=float 1=int 2=bool
+                    ImGui::SetNextItemWidth(120);
+                    ImGui::InputText("##nfname", newFieldName, sizeof(newFieldName));
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(60);
+                    const char* tnames[] = {"float", "int", "bool"};
+                    ImGui::Combo("##nftype", &newFieldType, tnames, 3);
+                    ImGui::SameLine();
+                    if (ImGui::Button("+ Add Field") && newFieldName[0] != '\0') {
+                        switch (newFieldType) {
+                            case 0: bc->fields[newFieldName] = 0.0f; break;
+                            case 1: bc->fields[newFieldName] = 0;    break;
+                            case 2: bc->fields[newFieldName] = false;break;
+                        }
+                        newFieldName[0] = '\0';
+                        Editor::instance().markSceneDirty();
+                    }
+
+                    if (!bc->runtimeFields.empty()) {
+                        ImGui::Separator();
+                        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+                                           "Runtime fields (NOT serialized, %zu keys):",
+                                           bc->runtimeFields.size());
+                        for (auto it = bc->runtimeFields.begin();
+                             it != bc->runtimeFields.end(); ++it) {
+                            ImGui::BulletText("%s = %s", it.key().c_str(),
+                                              it.value().dump().c_str());
+                        }
+                    }
+
+                    ImGui::PopID();
+                    return;
+                }
+
+                if (meta->fields.empty()) return;
 
                 if (fontHeading_) ImGui::PushFont(fontHeading_);
                 bool reflOpen = ImGui::CollapsingHeader(meta->name);
@@ -2638,6 +3069,16 @@ void Editor::drawInspector() {
                 selectedEntity_->addComponent<PlayerController>();
             if (!selectedEntity_->hasComponent<Animator>() && ImGui::MenuItem("Animator"))
                 selectedEntity_->addComponent<Animator>();
+            if (!selectedEntity_->hasComponent<BehaviorComponent>() && ImGui::MenuItem("Behavior (hot reload)")) {
+                auto* bc = selectedEntity_->addComponent<BehaviorComponent>();
+                // Default to a known module behavior so the entity does
+                // something visible immediately. User edits the behavior
+                // string in the inspector to point at a different one.
+                bc->behavior = "ExampleIdle";
+                bc->fields = nlohmann::json::object();
+                bc->fields["radius"]         = 32.0f;
+                bc->fields["speedRadPerSec"] = 1.0f;
+            }
 
             ImGui::Separator();
             if (!selectedEntity_->hasComponent<ZoneComponent>() && ImGui::MenuItem("Zone")) {

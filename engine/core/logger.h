@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstdarg>
 #include <mutex>
+#include <filesystem>
+#include <system_error>
 
 namespace fate {
 
@@ -35,6 +37,9 @@ public:
     void init(const std::string& logFilePath = "fate_engine.log",
               const std::string& jsonlFilePath = "") {
         if (initialized_) return;
+
+        ensureLogParentDirectory(logFilePath);
+        ensureLogParentDirectory(jsonlFilePath);
 
         auto consoleSink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         auto fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
@@ -77,7 +82,36 @@ public:
     }
 
     void shutdown() {
-        spdlog::shutdown();
+        // Drop OUR owned loggers from the spdlog registry and reset our
+        // shared_ptr handles. Do NOT call spdlog::shutdown() here — that is
+        // a process-global destructor for spdlog's registry + thread pool,
+        // and is unsafe when other call sites (engine/render/palette.cpp,
+        // libpqxx adapters, etc.) still expect to call free spdlog::error()
+        // later in the same process. spdlog::shutdown is for atexit-style
+        // end-of-process cleanup; tests that re-init the logger MUST NOT
+        // use it.
+        //
+        // drop_all() also clears spdlog's cached default-logger pointer.
+        // After that, free `spdlog::error(...)` calls dereference a null
+        // default_logger_raw() — SIGSEGV in any caller that didn't re-init.
+        // Re-install a minimal stderr fallback default so the global free
+        // logging API stays callable.
+        spdlog::drop_all();
+        try {
+            auto fallback = std::make_shared<spdlog::logger>(
+                "fate_fallback",
+                std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+            fallback->set_level(spdlog::level::warn);
+            spdlog::set_default_logger(fallback);
+        } catch (...) {
+            // Best-effort: if even the fallback fails to construct (allocator
+            // failure, etc.) leave spdlog as-is. A subsequent free call may
+            // still segfault, but that is a strictly worse outcome we can't
+            // prevent without re-init.
+        }
+        defaultLogger_.reset();
+        callbackSink_.reset();
+        logCallback_ = nullptr;
         initialized_ = false;
     }
 
@@ -136,6 +170,17 @@ public:
 
 private:
     Logger() = default;
+
+    static void ensureLogParentDirectory(const std::string& logFilePath) {
+        if (logFilePath.empty()) return;
+
+        const std::filesystem::path parent = std::filesystem::path(logFilePath).parent_path();
+        if (parent.empty()) return;
+
+        std::error_code ec;
+        std::filesystem::create_directories(parent, ec);
+    }
+
     bool initialized_ = false;
     std::shared_ptr<spdlog::logger> defaultLogger_;
     std::shared_ptr<spdlog::sinks::callback_sink_mt> callbackSink_;

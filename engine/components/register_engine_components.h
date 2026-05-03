@@ -18,6 +18,7 @@
 #include "engine/components/transform.h"
 #include "engine/components/sprite_component.h"
 #include "engine/components/tile_layer_component.h"
+#include "engine/module/behavior_component.h"
 
 #include <nlohmann/json.hpp>
 
@@ -85,6 +86,10 @@ inline void registerEngineComponents() {
     );
 
     reg.registerComponent<TileLayerComponent>();
+
+    // Hot-reloadable behavior shell — body lives in engine/module so the demo
+    // (no game/) and the full game share the same registration.
+    registerBehaviorComponent();
 
     // Backward-compat alias so old scene JSON written before the rename
     // still loads.

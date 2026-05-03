@@ -568,6 +568,12 @@ private:
     bool showRoleNameplatesPanel_ = false;
     void drawRoleNameplatesPanel();
 
+    // Hot-reload status panel (Window menu). Surfaces the active game module
+    // name + build id, last reload error, manual reload trigger, and a
+    // play-mode-reload toggle for advanced workflows.
+    bool showHotReloadPanel_ = false;
+    void drawHotReloadPanel();
+
     // Tile palette panel (demo build wires this through View menu)
     bool showTilePalette_ = false;
 

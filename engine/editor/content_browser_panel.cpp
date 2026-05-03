@@ -2,10 +2,19 @@
 #include "engine/net/net_client.h"
 #include "engine/net/admin_messages.h"
 #include "engine/net/packet.h"
+#ifdef FATE_HAS_GAME
+// Pulls in game/shared/spawn_instance_patrol.h + GuardComponent/MobAI types
+// for the Phase 6 patrol-authoring sub-panel. These collide with engine
+// auth_protocol.h forward-declared enums in the demo standalone build, so
+// gate them on FATE_HAS_GAME — the patrol panel is admin-only anyway.
+#include "game/shared/guard_patrol_apply.h"
+#include "game/shared/spawn_instance_patrol_json.h"
+#endif
 #include <imgui.h>
 #include <algorithm>
 #include <cstring>
 #include <cmath>
+#include <optional>
 #include <set>
 #include <unordered_map>
 
@@ -86,6 +95,15 @@ void ContentBrowserPanel::onContentListReceived(uint8_t contentType, uint16_t pa
         for (auto& entry : parsed) {
             target->push_back(std::move(entry));
         }
+    }
+
+    // Bump version on admin-driven spawn-list refresh so the patrol
+    // overlay's cache (and any other downstream consumer of
+    // spawnListVersion()) re-decodes once per ingest rather than every
+    // frame. Direct mutations through spawnListMut() bypass this and must
+    // call markSpawnListChanged() themselves -- see the header comment.
+    if (target == &spawnList_) {
+        ++spawnListVersion_;
     }
 
     // Mark complete only after last page, then sort
@@ -421,6 +439,8 @@ void ContentBrowserPanel::drawMobsTab() {
             // Section 4 / 5 (Phase 2b) — null = inherit/disabled, true = mobile.
             {"hard_leash_radius", nullptr},
             {"can_move_in_combat", true},
+            // Phase 7.1 WU#1 — empty = no boss script (the default).
+            {"script_id", ""},
             {"min_opal_drop", 0}, {"max_opal_drop", 0}, {"opal_drop_chance", 0.0f},
             {"equipped_weapon_id", ""}, {"equipped_armor_id", ""}, {"equipped_hat_id", ""}
         };
@@ -546,6 +566,12 @@ void ContentBrowserPanel::drawMobsTab() {
                 // Section 5 (Phase 2b): canMoveInCombat. False = stationary
                 // attacker (Chase + Attack velocity gated to zero by MobAI).
                 drawBoolField("Can Move in Combat", editingMob_, "can_move_in_combat");
+
+                // Phase 7.1 WU#1: optional boss-script identifier. Empty = no
+                // script (the 99.9% case). Non-empty values must match an entry
+                // in BossScriptRegistry (registered server-side at startup).
+                // Free-text for now — registry validation happens at spawn time.
+                drawStringField("Boss Script ID (empty = none)", editingMob_, "script_id");
             }
 
             if (ImGui::CollapsingHeader("Scaling")) {
@@ -1340,6 +1366,281 @@ void ContentBrowserPanel::drawSpawnsTab() {
                         floatOverride("Respawn Seconds","respawn_seconds", (float)mobRespawn, 1.0f, 86400.0f);
                         intOverride  ("HP Regen",       "hp_regen_per_sec", mobRegen,   0, 9999999);  // WU7
                         floatOverride("Hard Leash (tiles)", "hard_leash_radius", mobHardLeash, -1.0f, 999.0f);
+
+                        // Phase 7.1 WU#1: per-instance boss-script override.
+                        // Absent = inherit mob_def.script_id (the common case).
+                        // Empty string explicitly clears the script for this
+                        // instance; non-empty rebinds to a different script.
+                        std::string mobScript = linkedMob ? linkedMob->value("script_id", std::string{}) : std::string{};
+                        {
+                            bool enabled = ov.contains("script_id") && ov["script_id"].is_string();
+                            if (ImGui::Checkbox("##en_script_id", &enabled)) {
+                                if (enabled) ov["script_id"] = mobScript; else ov.erase("script_id");
+                            }
+                            ImGui::SameLine();
+                            if (enabled) {
+                                char buf[128];
+                                std::string cur = ov.value("script_id", std::string{});
+                                std::snprintf(buf, sizeof(buf), "%s", cur.c_str());
+                                if (ImGui::InputText("Boss Script ID##ov_script_id", buf, sizeof(buf))) {
+                                    ov["script_id"] = std::string(buf);
+                                }
+                            } else {
+                                ImGui::TextDisabled("Boss Script ID (use mob default: '%s')",
+                                                    mobScript.empty() ? "<none>" : mobScript.c_str());
+                            }
+                        }
+
+                        // ====================================================
+                        // Phase 6 (#16): Patrol authoring sub-panel
+                        //
+                        // Per-instance patrol JSON. Server side already:
+                        //   * Parses inst["patrol"] in spawn_zone_cache.cpp.
+                        //   * Validates + collapses-on-violation in
+                        //     applyPatrolToGuard (axis alignment, cardinal
+                        //     adjacency, BFS connectivity, hard-leash extent).
+                        //   * Round-trips through admin_handler unchanged
+                        //     because serializeInstancesField is opaque.
+                        //
+                        // The editor's job is to produce well-formed JSON and
+                        // call out the same authoring rules at write time so
+                        // a bad shape doesn't silently collapse to Stationary
+                        // at server load. Save still works either way -- the
+                        // server is authoritative on validation; this panel
+                        // just makes the contract visible to the designer.
+                        // ====================================================
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::TextColored({0.7f, 1.0f, 0.7f, 1.0f}, "Patrol (Phase 6)");
+
+                        bool patrolEnabled = inst.contains("patrol") && inst["patrol"].is_object();
+                        if (ImGui::Checkbox("Enable Patrol##patrol_en", &patrolEnabled)) {
+                            if (patrolEnabled) {
+                                inst["patrol"] = {
+                                    {"mode", "Stationary"},
+                                    {"facingOnDwell", "Down"},
+                                    {"patrolMoveSpeed", 1.5f}
+                                };
+                            } else {
+                                inst.erase("patrol");
+                            }
+                        }
+
+                        if (patrolEnabled) {
+                            auto& pat = inst["patrol"];
+
+                            // ---- Mode dropdown ----
+                            const char* modes[] = {"Stationary", "PatrolRoute", "PatrolArea"};
+                            std::string curMode = jstr(pat, "mode", "Stationary");
+                            int modeIdx = 0;
+                            if (curMode == "PatrolRoute") modeIdx = 1;
+                            else if (curMode == "PatrolArea")  modeIdx = 2;
+                            if (ImGui::Combo("Mode##patrol_mode", &modeIdx, modes, 3)) {
+                                pat["mode"] = modes[modeIdx];
+                                // Initialize empty route/area arrays for the
+                                // new mode so the JSON shape matches the
+                                // spawn_zone_cache parser expectations on
+                                // first save.
+                                if (modeIdx == 1 && !pat.contains("routePoints")) {
+                                    pat["routePoints"] = nlohmann::json::array({{{"x", 0}, {"y", 0}}});
+                                    pat["routeDwell"]  = nlohmann::json::array({2.0f});
+                                    pat["routeLoop"]   = true;
+                                }
+                                if (modeIdx == 2 && !pat.contains("areaCells")) {
+                                    pat["areaCells"]    = nlohmann::json::array({{{"x", 0}, {"y", 0}}});
+                                    pat["areaDwellMin"] = 2.0f;
+                                    pat["areaDwellMax"] = 5.0f;
+                                }
+                            }
+
+                            // ---- Common: speed + facing on dwell ----
+                            float spd = pat.value("patrolMoveSpeed", 1.5f);
+                            if (ImGui::DragFloat("Move Speed (tiles/s)##patrol_spd",
+                                                 &spd, 0.05f, 0.1f, 10.0f, "%.2f")) {
+                                pat["patrolMoveSpeed"] = spd;
+                            }
+                            const char* facings[] = {"Up", "Down", "Left", "Right"};
+                            std::string curFace = jstr(pat, "facingOnDwell", "Down");
+                            int faceIdx = 1;
+                            if (curFace == "Up")    faceIdx = 0;
+                            if (curFace == "Left")  faceIdx = 2;
+                            if (curFace == "Right") faceIdx = 3;
+                            if (ImGui::Combo("Facing on Dwell##patrol_face", &faceIdx, facings, 4)) {
+                                pat["facingOnDwell"] = facings[faceIdx];
+                            }
+
+                            // ---- PatrolRoute: ordered points + dwells + loop flag ----
+                            if (modeIdx == 1) {
+                                if (!pat.contains("routePoints") || !pat["routePoints"].is_array()) {
+                                    pat["routePoints"] = nlohmann::json::array();
+                                }
+                                if (!pat.contains("routeDwell") || !pat["routeDwell"].is_array()) {
+                                    pat["routeDwell"] = nlohmann::json::array();
+                                }
+                                bool loop = pat.value("routeLoop", true);
+                                if (ImGui::Checkbox("Route Loop (else ping-pong)##patrol_loop", &loop)) {
+                                    pat["routeLoop"] = loop;
+                                }
+                                ImGui::TextColored({0.85f, 0.85f, 0.6f, 1.0f},
+                                    "Hint: routePoints[0] must be {0,0}; consecutive pairs must share x or y.");
+                                if (loop) {
+                                    ImGui::TextColored({0.85f, 0.85f, 0.6f, 1.0f},
+                                        "Loop closure: last point must share x or y with {0,0}.");
+                                }
+
+                                auto& rp = pat["routePoints"];
+                                auto& rd = pat["routeDwell"];
+
+                                // Keep dwell array length matched to points
+                                while (rd.size() < rp.size()) rd.push_back(2.0f);
+                                while (rd.size() > rp.size()) rd.erase(rd.size() - 1);
+
+                                int removeIdx = -1;
+                                for (size_t k = 0; k < rp.size(); ++k) {
+                                    ImGui::PushID((int)k);
+                                    int xy[2] = {
+                                        rp[k].value("x", 0),
+                                        rp[k].value("y", 0)
+                                    };
+                                    char rpLabel[32];
+                                    std::snprintf(rpLabel, sizeof(rpLabel), "Pt %zu (tile)##rp", k);
+                                    if (ImGui::DragInt2(rpLabel, xy, 1.0f, -64, 64)) {
+                                        rp[k]["x"] = xy[0];
+                                        rp[k]["y"] = xy[1];
+                                    }
+                                    ImGui::SameLine();
+                                    float dwell = rd[k].is_number() ? rd[k].get<float>() : 2.0f;
+                                    if (ImGui::DragFloat("Dwell##rd", &dwell, 0.05f, 0.05f, 60.0f, "%.2fs")) {
+                                        rd[k] = dwell;
+                                    }
+                                    ImGui::SameLine();
+                                    if (ImGui::SmallButton("X##rp_del")) removeIdx = (int)k;
+                                    ImGui::PopID();
+                                }
+                                if (removeIdx >= 0) {
+                                    rp.erase(rp.begin() + removeIdx);
+                                    rd.erase(rd.begin() + removeIdx);
+                                }
+                                if (ImGui::Button("+ Add Point##rp_add")) {
+                                    int newX = 0, newY = 0;
+                                    if (!rp.empty()) {
+                                        newX = rp.back().value("x", 0);
+                                        newY = rp.back().value("y", 0) + 1; // axis-aligned by default
+                                    }
+                                    rp.push_back({{"x", newX}, {"y", newY}});
+                                    rd.push_back(2.0f);
+                                }
+                            }
+
+                            // ---- PatrolArea: cell set + dwell window ----
+                            if (modeIdx == 2) {
+                                if (!pat.contains("areaCells") || !pat["areaCells"].is_array()) {
+                                    pat["areaCells"] = nlohmann::json::array();
+                                }
+                                ImGui::TextColored({0.85f, 0.85f, 0.6f, 1.0f},
+                                    "Hint: include {0,0} and ensure every cell is cardinal-reachable from origin.");
+
+                                float dMin = pat.value("areaDwellMin", 2.0f);
+                                float dMax = pat.value("areaDwellMax", 5.0f);
+                                float dwellRange[2] = { dMin, dMax };
+                                if (ImGui::DragFloat2("Dwell Min/Max##patrol_area_dwell",
+                                                      dwellRange, 0.05f, 0.05f, 60.0f, "%.2fs")) {
+                                    pat["areaDwellMin"] = dwellRange[0];
+                                    pat["areaDwellMax"] = dwellRange[1];
+                                }
+
+                                auto& ac = pat["areaCells"];
+                                int removeIdx = -1;
+                                bool hasOrigin = false;
+                                for (size_t k = 0; k < ac.size(); ++k) {
+                                    ImGui::PushID((int)k);
+                                    int xy[2] = {
+                                        ac[k].value("x", 0),
+                                        ac[k].value("y", 0)
+                                    };
+                                    if (xy[0] == 0 && xy[1] == 0) hasOrigin = true;
+                                    char acLabel[32];
+                                    std::snprintf(acLabel, sizeof(acLabel), "Cell %zu (tile)##ac", k);
+                                    if (ImGui::DragInt2(acLabel, xy, 1.0f, -64, 64)) {
+                                        ac[k]["x"] = xy[0];
+                                        ac[k]["y"] = xy[1];
+                                    }
+                                    ImGui::SameLine();
+                                    if (ImGui::SmallButton("X##ac_del")) removeIdx = (int)k;
+                                    ImGui::PopID();
+                                }
+                                if (removeIdx >= 0) ac.erase(ac.begin() + removeIdx);
+                                if (ImGui::Button("+ Add Cell##ac_add")) {
+                                    int newX = 0, newY = 0;
+                                    if (!ac.empty()) {
+                                        newX = ac.back().value("x", 0);
+                                        newY = ac.back().value("y", 0) + 1;
+                                    }
+                                    ac.push_back({{"x", newX}, {"y", newY}});
+                                }
+                                (void)hasOrigin;  // origin warning now comes from validatePatrolEditTime
+                            }
+
+                            // ====================================================
+                            // Phase 6 (#16 P3): centralized validation surface.
+                            //
+                            // Decode the JSON we just built into a SpawnInstance
+                            // Patrol and run the same structural checks the server
+                            // uses inside applyPatrolToGuard. Issues are rendered
+                            // in-line so the designer sees, before saving, exactly
+                            // what would silently collapse to Stationary at server
+                            // load: diagonal route segments, broken loop closure,
+                            // disconnected PatrolArea components, hard-leash too
+                            // small, missing origin, etc.
+                            //
+                            // Hard-leash context: prefer the per-instance override
+                            // when checked, else the mob_def column. Acquire radius
+                            // pulls from mob_def.aggro_range (default 4 tiles).
+                            //
+                            // Gated on FATE_HAS_GAME because SpawnInstancePatrol +
+                            // patrolFromJson + validatePatrolEditTime live in
+                            // game/shared. Demo standalone builds skip the
+                            // structural validator and just write the raw JSON;
+                            // the server is still authoritative on validation.
+                            // ====================================================
+#ifdef FATE_HAS_GAME
+                            SpawnInstancePatrol decoded;
+                            if (patrolFromJson(inst["patrol"], decoded)) {
+                                // Pass the configured override through with its
+                                // actual sign (S150 P2 fix). An explicit <=0
+                                // is NOT an effective disable on patrolling
+                                // guards: the spawn-manager post-override clamp
+                                // re-extends the leash to the required footprint.
+                                // The validator surfaces that as a distinct
+                                // "disabled here, server will auto-extend"
+                                // message. nullopt is the only path that
+                                // genuinely skips the leash check (no override
+                                // and mob_def column NULL).
+                                std::optional<float> leashTiles;
+                                if (ov.contains("hard_leash_radius") && ov["hard_leash_radius"].is_number()) {
+                                    leashTiles = ov["hard_leash_radius"].get<float>();
+                                } else if (linkedMob && linkedMob->contains("hard_leash_radius")
+                                           && !(*linkedMob)["hard_leash_radius"].is_null()) {
+                                    leashTiles = (*linkedMob)["hard_leash_radius"].get<float>();
+                                }
+                                float acquireTiles = 4.0f;
+                                if (linkedMob && linkedMob->contains("aggro_range")
+                                    && (*linkedMob)["aggro_range"].is_number()) {
+                                    acquireTiles = (*linkedMob)["aggro_range"].get<float>();
+                                }
+                                const auto issues =
+                                    validatePatrolEditTime(decoded, leashTiles, acquireTiles);
+                                if (issues.empty()) {
+                                    ImGui::TextColored({0.5f, 0.9f, 0.5f, 1.0f},
+                                        "Patrol authoring is valid (will survive server load).");
+                                } else {
+                                    for (const auto& msg : issues) {
+                                        ImGui::TextColored({1.0f, 0.6f, 0.4f, 1.0f}, "%s", msg.c_str());
+                                    }
+                                }
+                            }
+#endif // FATE_HAS_GAME
+                        }
 
                         if (ImGui::SmallButton("Remove Instance")) removeInst = ii;
                         ImGui::TreePop();
