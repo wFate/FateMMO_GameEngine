@@ -31,8 +31,18 @@
  *   2 — fateGameModuleQueryVersion now also reports sizeof(FateHostApi) +
  *       sizeof(FateGameModuleApi) so layout drift between host and module
  *       is rejected even when the version constant matches (catches packing
- *       or ODR mismatch from a stale checkout). */
-#define FATE_MODULE_ABI_VERSION 2u
+ *       or ODR mismatch from a stale checkout).
+ *   3 — FateBehaviorVTable adds an OPTIONAL describeFields() entry
+ *       returning a FateBehaviorSchema*. The inspector uses the schema to
+ *       render descriptor-driven widgets (typed defaults + bounds +
+ *       tooltips) instead of guessing from raw JSON values. May be null;
+ *       behaviors without a schema fall back to the freeform JSON drawer.
+ *       Schema this slice supports float/int/bool only (no string ABI).
+ *       NOTE: ABI-2 modules are rejected after this bump — the vtable is
+ *       larger by one function pointer and reading past the end of an
+ *       ABI-2 vtable would be UB. Recompile FateGameRuntime against this
+ *       header. */
+#define FATE_MODULE_ABI_VERSION 3u
 
 /* Protocol version: bump when the JSON wire format / field semantics for
  * BehaviorComponent change in a non-backwards-compatible way. Migrate
@@ -75,6 +85,53 @@ typedef enum FateLogLevel {
 } FateLogLevel;
 
 /* ---------------------------------------------------------------------------
+ * Behavior schema (ABI v3). A behavior may declare its expected authoring
+ * fields so the inspector can render descriptor-driven widgets (typed
+ * defaults + bounds + tooltips) instead of guessing from raw JSON.
+ *
+ * Lifetime: the FateFieldDescriptor and FateBehaviorSchema structs returned
+ * from describeFields() must have STATIC storage duration in the module —
+ * the host holds the pointers for as long as the module is loaded.
+ *
+ * String fields are NOT supported in ABI v3: there are no string getters or
+ * setters in FateHostApi. Future bump can add (FateFieldType_String + a
+ * proper string ABI with caller-owned buffers + truncation semantics).
+ * ------------------------------------------------------------------------- */
+typedef enum FateFieldType {
+    FATE_FIELD_FLOAT = 0,
+    FATE_FIELD_INT   = 1,
+    FATE_FIELD_BOOL  = 2
+} FateFieldType;
+
+typedef struct FateFieldDescriptor {
+    const char*    name;        /* stable JSON key */
+    FateFieldType  type;
+    /* Defaults — only the field matching `type` is read. The host uses
+     * these to seed bc->fields[name] when the inspector creates a new
+     * BehaviorComponent and to render the "reset to default" affordance. */
+    float          defaultF;
+    int32_t        defaultI;
+    int            defaultB;    /* 0 or 1 */
+    /* Optional bounds for slider/clamp widgets. For FLOAT/INT, set
+     * minF == maxF (or minI == maxI) to mean "unbounded — drag widget".
+     * For BOOL the bounds fields are ignored. */
+    float          minF;
+    float          maxF;
+    int32_t        minI;
+    int32_t        maxI;
+    /* Optional UTF-8 tooltip. May be null. */
+    const char*    tooltip;
+} FateFieldDescriptor;
+
+typedef struct FateBehaviorSchema {
+    const FateFieldDescriptor* fields;
+    uint32_t                   fieldCount;
+    /* Reserved for forward-compatibility (e.g. category groupings). Must be
+     * zero in ABI v3. Future bumps can repurpose. */
+    uint32_t                   reserved;
+} FateBehaviorSchema;
+
+/* ---------------------------------------------------------------------------
  * Host -> Module: behavior callbacks.
  *
  * All callbacks are invoked on the host main thread between frames. They must
@@ -98,6 +155,13 @@ typedef struct FateBehaviorVTable {
      * success; on failure the host keeps the original fields and logs a
      * warning. */
     FateModuleResult (*migrate)(FateBehaviorCtx* ctx, uint32_t fromVersion);
+
+    /* ABI v3: optional schema accessor. Returns a STATIC FateBehaviorSchema
+     * describing the behavior's authoring fields, or null. The inspector
+     * renders descriptor-driven widgets when non-null and falls back to the
+     * freeform JSON drawer otherwise. Caller must not free the returned
+     * pointer; the module owns the lifetime. */
+    const FateBehaviorSchema* (*describeFields)(void);
 } FateBehaviorVTable;
 
 /* ---------------------------------------------------------------------------

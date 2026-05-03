@@ -11,7 +11,19 @@ namespace fate {
 
 template<typename T, typename... Args>
 T* Entity::addComponent(Args&&... args) {
-    return world_->addComponentToEntity<T>(this, std::forward<Args>(args)...);
+    T* result = world_->addComponentToEntity<T>(this, std::forward<Args>(args)...);
+#if FATE_ENABLE_HOT_RELOAD
+    // Eager bind hook for BehaviorComponent. The per-frame dispatch loop
+    // iterates the dense active_ roster directly (no world.forEachEntity
+    // scan), so newly-added components MUST be announced here. Name and
+    // fields aren't populated yet at this point — that's fine; the tick's
+    // lazy-resolve picks the vtable up once bc->behavior is non-empty
+    // and matches a registered name.
+    if constexpr (std::string_view(T::COMPONENT_NAME) == std::string_view("BehaviorComponent")) {
+        if (world_) hotReloadNotifyBehaviorComponentAdded(*world_, handle_);
+    }
+#endif
+    return result;
 }
 
 template<typename T>

@@ -123,7 +123,15 @@ FetchContent_Declare(
     GIT_TAG        master
     GIT_SHALLOW    TRUE
 )
-FetchContent_MakeAvailable(imguizmo)
+# Don't use FetchContent_MakeAvailable: recent imguizmo master ships a
+# top-level CMakeLists.txt that defines its own `imguizmo` library target
+# without an imgui include path, which fails to compile on fresh clones
+# (CI / Linux). We only need the source — ImGuizmo.cpp is added directly
+# to imgui_lib below.
+FetchContent_GetProperties(imguizmo)
+if(NOT imguizmo_POPULATED)
+    FetchContent_Populate(imguizmo)
+endif()
 
 FetchContent_Declare(
     imnodes

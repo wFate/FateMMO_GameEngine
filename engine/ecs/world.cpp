@@ -184,7 +184,17 @@ void* World::addComponentById(EntityHandle handle, CompId id, size_t size, size_
     void* columnBase = archetypes_.getColumnRaw(newArchId, id);
     if (!columnBase) return nullptr;
     size_t elemSize = archetypes_.getColumnElemSize(newArchId, id);
-    return static_cast<uint8_t*>(columnBase) + static_cast<size_t>(newRow) * elemSize;
+    void* result = static_cast<uint8_t*>(columnBase) + static_cast<size_t>(newRow) * elemSize;
+
+#if FATE_ENABLE_HOT_RELOAD
+    // Deserialization-path bind hook (P2, S153). The dense-roster dispatch
+    // loop won't see components added via this path otherwise. Manager
+    // filters internally — only BehaviorComponent additions enter the
+    // roster; every other CompId is a no-op call.
+    HotReloadManager::instance().onComponentAddedNotification(*this, handle, id);
+#endif
+
+    return result;
 }
 
 // --- Frame updates ---

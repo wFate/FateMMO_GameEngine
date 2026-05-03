@@ -94,6 +94,42 @@ public:
     // the component / mutating the name afterwards.
     void onBehaviorComponentRemoved(World& world, EntityHandle handle);
 
+    // Lifecycle hook: call AFTER a BehaviorComponent is constructed on an
+    // entity. Adds a deferred-bind row to the roster (vtable=nullptr).
+    // The next tick lazy-resolves the vtable from the registry once
+    // bc->behavior is set. Idempotent — duplicate calls are no-ops.
+    // P2 (S153): the dense-roster dispatch loop relies on this hook firing
+    // for every BehaviorComponent. Missed hooks are caught by the safety-
+    // net sweep (loud warn, recovery), but the contract is "always fire".
+    void onBehaviorComponentAdded(World& world, EntityHandle handle);
+
+    // Optional rebind hint: call when bc->behavior or bc->enabled was
+    // edited at runtime (inspector, gameplay swap). The next tick already
+    // auto-detects via behaviorName/bc->behavior comparison, so this is
+    // strictly a no-latency path for callers that want immediate rebind
+    // semantics. Equivalent to "next tick will rebind" today.
+    void notifyBehaviorRebind(World& world, EntityHandle handle);
+
+    // Type-erased component-added forwarder used by World::addComponentById
+    // (the deserialization / prefab / scene-load path). World does not
+    // include behavior_component.h, so it dispatches through here; the
+    // manager checks the CompId and routes BehaviorComponent additions to
+    // onBehaviorComponentAdded. Other CompIds are no-ops.
+    void onComponentAddedNotification(World& world, EntityHandle handle, uint32_t compId);
+
+    // Reload-cycle teardown: fires onDestroy on every active entry's CACHED
+    // vtable (so module-owned scratch is freed BEFORE the old DLL is
+    // unloaded), clears bc->state + bc->runtimeFields + boundGeneration,
+    // nulls a.vtable, but KEEPS the roster entry. The next tickBehaviors
+    // call's lazy-resolve picks the new vtable up from the post-commit
+    // registry. Used by performSwap and exposed publicly so tests can
+    // simulate module reload without going through the full DLL pipeline.
+    //
+    // Distinct from onWorldUnload (which destroys roster entries because
+    // the World itself is going away) and from shutdown's
+    // teardownActiveBehaviors (which drains the roster entirely).
+    void teardownActiveBindings();
+
     // Manual reload trigger (editor menu / hotkey). Sets the pending flag with
     // the current time so processPendingReload's debounce treats it as a fresh
     // edit. Reason is for diagnostics.
@@ -108,6 +144,36 @@ public:
     uint32_t    reloadCount()  const { return reloadCount_; }
     uint32_t    failureCount() const { return failureCount_; }
 
+    // P4 (S153) fault diagnostics.
+    bool        moduleDegraded() const { return moduleDegraded_; }
+    const std::string& moduleDegradedReason() const { return moduleDegradedReason_; }
+
+    // P3 (S153) safe-point contract. True only during the narrow window
+    // where processPendingReload is actively running on the main thread.
+    // performSwap refuses to run when this is false — catches any future
+    // code path that tries to drive a structural swap from inside a system
+    // tick, network handler, render callback, or worker thread.
+    bool        inSafePoint() const { return inSafePoint_; }
+    // Snapshot of currently-quarantined behavior instances. Each pair is
+    // (entity-id-as-uint, behavior-name + fault detail string). Used by
+    // the editor Hot Reload panel to render a "Faulted" subsection. The
+    // returned vector is a copy — cheap (faults are rare, and the caller
+    // would otherwise need a mutex against in-flight fault flagging).
+    struct FaultedRow {
+        uint32_t    entityId;
+        std::string behaviorName;
+        std::string detail;
+    };
+    std::vector<FaultedRow> faultedBehaviors() const;
+    // Editor "Re-arm" action: clears every Active::faulted flag so the
+    // next tick re-attempts dispatch on previously-quarantined instances.
+    // Module-degraded flag is cleared by a successful subsequent reload.
+    void clearAllFaults();
+    // Module-degraded clear (manual, for cases where the developer has
+    // verified the underlying issue is fixed). A successful reload also
+    // clears it automatically.
+    void clearModuleDegraded();
+
     // Play-mode safety knob. Default OFF — play-mode reload is unsafe until
     // every play-mode subsystem (combat, network packet dispatch on game
     // thread, AOI iteration) is proven quiesced at the safe-frame point.
@@ -118,6 +184,23 @@ public:
 #if defined(FATE_HOTRELOAD_EXPERIMENTAL_PLAYMODE) && FATE_HOTRELOAD_EXPERIMENTAL_PLAYMODE
     void setPlayModeReloadAllowed(bool v) { allowPlayModeReload_ = v; }
 #endif
+
+    // Single source of truth for "what currently has a vtable bound and may
+    // own module-side scratch via state". One entry per (World, EntityHandle)
+    // pair. Public so the cpp's translation unit (and tests) can inspect /
+    // mutate via friends-equivalent free functions in P4 fault containment;
+    // direct mutation outside the manager is not supported.
+    struct Active {
+        World*                    world         = nullptr;
+        EntityHandle              handle        = {};
+        BehaviorComponent*        component     = nullptr;
+        const FateBehaviorVTable* vtable        = nullptr;
+        std::string               behaviorName;
+        void*                     cachedState   = nullptr;
+        bool                      seenThisTick  = false;
+        bool                      faulted       = false;
+        std::string               faultMessage;
+    };
 
 private:
     HotReloadManager() = default;
@@ -139,20 +222,11 @@ private:
     void onWatchEvent(const std::string& relPath);
 
     // ---- Active-behavior roster --------------------------------------------
-    // Single source of truth for "what currently has a vtable bound and may
-    // own module-side scratch via state". One entry per (World, EntityHandle)
-    // pair. Maintained by tickBehaviors — adds on first sight, removes on
-    // sweep (entity dead / component gone / behavior name changed) or on
-    // explicit lifecycle hooks (world unload, entity destroy).
-    struct Active {
-        World*                    world         = nullptr;
-        EntityHandle              handle        = {};
-        BehaviorComponent*        component     = nullptr;       // re-resolved each tick; do not trust across frames
-        const FateBehaviorVTable* vtable        = nullptr;       // cached at bind time; nulled on reload
-        std::string               behaviorName;                  // last-bound name (detect runtime rename)
-        void*                     cachedState   = nullptr;       // mirror of bc->state, survives component destruction
-        bool                      seenThisTick  = false;         // sweep flag
-    };
+    // Maintained by tickBehaviors / lifecycle hooks. One entry per (World,
+    // EntityHandle) pair carrying a BehaviorComponent. The struct is public
+    // (above) so P4 fault helpers in hot_reload_manager.cpp's anonymous
+    // namespace can mutate Active::faulted + Active::faultMessage. Outside
+    // the manager: read-only via faultedBehaviors() snapshots.
     std::vector<Active> active_;
 
     // Linear scan; roster is small (active behaviors only). If this becomes
@@ -163,9 +237,30 @@ private:
     // Caller owns the vtable validity check window.
     void destroyOne(int idx);
 
+    // P2 (S153) safety-net sweep. Runs from inside tickBehaviors at a
+    // throttled cadence. Walks `world` once and asserts every entity
+    // carrying an enabled, non-replicated BehaviorComponent is in active_.
+    // Recovers + warn-once on any stragglers (catches missed bind hooks).
+    void runSafetyNetSweep(World& world);
+
     // Throttle bookkeeping for "BehaviorComponent on a replicated entity"
     // log lines. Cleared on shutdown so a fresh session re-warns.
     std::vector<EntityHandle> replicatedWarnedHandles_;
+
+    // Throttle bookkeeping for "missed bind hook" warnings emitted by the
+    // dev-only safety-net sweep when it finds an entity carrying a
+    // BehaviorComponent that's not in active_. We warn once per offending
+    // handle to keep dev logs informative without spamming.
+    std::vector<EntityHandle> missedBindWarnedHandles_;
+
+    // Safety-net sweep cadence. Pure-event-driven dispatch trusts that
+    // every component-mutation path fires the bind hook. The sweep is
+    // invariant validation: every kSafetyNetTickInterval frames, do a
+    // single world.forEachEntity scan and flag any BehaviorComponent
+    // that's not in active_. Cheap (one walk per second-ish at 60 FPS),
+    // editor/non-shipping only via FATE_ENABLE_HOT_RELOAD already-set.
+    int frameCounterForSafetyNet_ = 0;
+    static constexpr int kSafetyNetTickInterval = 60;
 
 #ifdef _WIN32
     void* currentHandle_  = nullptr;   // HMODULE; current live module
@@ -203,6 +298,21 @@ private:
     bool     transientWarned_     = false;  // throttle "build still in progress" log
     int      transientRetries_    = 0;      // consecutive transient swap aborts (DLL missing / mid-link)
     static constexpr int kMaxTransientRetries = 30;  // ~30s at 1s debounce; then escalate
+    // P4 (S153) module-level fault flag. Set when any module lifecycle
+    // callback (Init, BeginReload, EndReload, Shutdown) faults under SEH
+    // or throws. The editor surfaces this so the developer knows the
+    // module DLL itself misbehaved during reload-handshake plumbing,
+    // distinct from "a single behavior instance crashed in onUpdate".
+    bool     moduleDegraded_      = false;
+    std::string moduleDegradedReason_;
+    // P3 (S153) safe-point bookkeeping. Set true at the top of
+    // processPendingReload, cleared on return (via RAII guard so early
+    // returns don't leak the flag). performSwap reads this to refuse
+    // execution outside the safe-point window. mainThreadId_ is captured
+    // on the first processPendingReload call so subsequent calls from
+    // worker threads are rejected with a loud LOG_ERROR.
+    bool                inSafePoint_  = false;
+    std::thread::id     mainThreadId_;
     uint32_t reloadCount_  = 0;
     uint32_t failureCount_ = 0;
 

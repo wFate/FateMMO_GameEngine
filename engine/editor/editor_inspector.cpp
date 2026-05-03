@@ -2949,41 +2949,176 @@ void Editor::drawInspector() {
                     ImGui::TextColored(ImVec4(0.7f, 0.85f, 1.0f, 1.0f),
                                        "Authoring fields (serialized):");
 
-                    // Render each field with a type-detected widget. Float and
-                    // int get drag widgets; bool gets a checkbox. Strings/
-                    // arrays/objects fall through to a read-only label —
-                    // designers edit raw JSON via a future drawer.
+                    // P5 (S153): if the bound behavior provides a schema via
+                    // describeFields(), render descriptor-driven widgets:
+                    // typed defaults + bounds + tooltips. Fields not in the
+                    // schema appear under an "Extra fields" expander (with
+                    // a warning) so designer-edited JSON or schema-evolution
+                    // residue isn't silently dropped.
                     if (!bc->fields.is_object()) bc->fields = nlohmann::json::object();
+                    const FateBehaviorVTable* boundVt =
+                        BehaviorRegistry::instance().find(bc->behavior);
+                    const FateBehaviorSchema* schema =
+                        (boundVt && boundVt->describeFields) ? boundVt->describeFields() : nullptr;
+
                     std::string keyToErase;
-                    for (auto it = bc->fields.begin(); it != bc->fields.end(); ++it) {
-                        const std::string& key = it.key();
-                        ImGui::PushID(key.c_str());
-                        if (it.value().is_number_float()) {
-                            float v = it.value().get<float>();
-                            if (ImGui::DragFloat(key.c_str(), &v, 0.05f)) {
-                                bc->fields[key] = v;
+
+                    // Track which JSON keys are covered by the schema so the
+                    // "Extra fields" expander below only shows the rest.
+                    std::vector<std::string> schemaKeys;
+
+                    if (schema && schema->fields && schema->fieldCount > 0) {
+                        schemaKeys.reserve(schema->fieldCount);
+                        for (uint32_t fi = 0; fi < schema->fieldCount; ++fi) {
+                            const FateFieldDescriptor& fd = schema->fields[fi];
+                            if (!fd.name) continue;
+                            schemaKeys.emplace_back(fd.name);
+                            ImGui::PushID(fd.name);
+
+                            // Seed the field if missing (schema default).
+                            auto it = bc->fields.find(fd.name);
+                            if (it == bc->fields.end()) {
+                                switch (fd.type) {
+                                    case FATE_FIELD_FLOAT: bc->fields[fd.name] = fd.defaultF; break;
+                                    case FATE_FIELD_INT:   bc->fields[fd.name] = fd.defaultI; break;
+                                    case FATE_FIELD_BOOL:  bc->fields[fd.name] = (fd.defaultB != 0); break;
+                                }
                                 Editor::instance().markSceneDirty();
                             }
-                        } else if (it.value().is_number_integer()) {
-                            int v = it.value().get<int>();
-                            if (ImGui::DragInt(key.c_str(), &v)) {
-                                bc->fields[key] = v;
-                                Editor::instance().markSceneDirty();
+
+                            switch (fd.type) {
+                                case FATE_FIELD_FLOAT: {
+                                    float v = bc->fields[fd.name].is_number()
+                                              ? bc->fields[fd.name].get<float>()
+                                              : fd.defaultF;
+                                    bool changed;
+                                    if (fd.minF < fd.maxF) {
+                                        changed = ImGui::SliderFloat(fd.name, &v, fd.minF, fd.maxF);
+                                    } else {
+                                        changed = ImGui::DragFloat(fd.name, &v, 0.05f);
+                                    }
+                                    if (changed) {
+                                        bc->fields[fd.name] = v;
+                                        Editor::instance().markSceneDirty();
+                                    }
+                                    break;
+                                }
+                                case FATE_FIELD_INT: {
+                                    int v = bc->fields[fd.name].is_number_integer()
+                                            ? bc->fields[fd.name].get<int>()
+                                            : (int)fd.defaultI;
+                                    bool changed;
+                                    if (fd.minI < fd.maxI) {
+                                        changed = ImGui::SliderInt(fd.name, &v, (int)fd.minI, (int)fd.maxI);
+                                    } else {
+                                        changed = ImGui::DragInt(fd.name, &v);
+                                    }
+                                    if (changed) {
+                                        bc->fields[fd.name] = v;
+                                        Editor::instance().markSceneDirty();
+                                    }
+                                    break;
+                                }
+                                case FATE_FIELD_BOOL: {
+                                    bool v = bc->fields[fd.name].is_boolean()
+                                             ? bc->fields[fd.name].get<bool>()
+                                             : (fd.defaultB != 0);
+                                    if (ImGui::Checkbox(fd.name, &v)) {
+                                        bc->fields[fd.name] = v;
+                                        Editor::instance().markSceneDirty();
+                                    }
+                                    break;
+                                }
                             }
-                        } else if (it.value().is_boolean()) {
-                            bool v = it.value().get<bool>();
-                            if (ImGui::Checkbox(key.c_str(), &v)) {
-                                bc->fields[key] = v;
-                                Editor::instance().markSceneDirty();
+                            // Tooltip surfaces the schema's docstring.
+                            if (fd.tooltip && fd.tooltip[0] && ImGui::IsItemHovered()) {
+                                ImGui::SetTooltip("%s", fd.tooltip);
                             }
-                        } else {
-                            ImGui::Text("%s = (%s, edit in JSON)", key.c_str(),
-                                        it.value().type_name());
+                            ImGui::PopID();
                         }
-                        ImGui::SameLine();
-                        if (ImGui::SmallButton("X")) keyToErase = key;
-                        ImGui::PopID();
+
+                        // "Extra fields" expander — JSON keys NOT in the schema.
+                        // Shown with a warning icon so designer-edited or stale
+                        // residue isn't silently dropped, but doesn't clutter the
+                        // primary inspector. User can manually delete via X.
+                        std::vector<std::string> extras;
+                        for (auto it = bc->fields.begin(); it != bc->fields.end(); ++it) {
+                            bool covered = false;
+                            for (const auto& sk : schemaKeys) {
+                                if (sk == it.key()) { covered = true; break; }
+                            }
+                            if (!covered) extras.push_back(it.key());
+                        }
+                        if (!extras.empty()) {
+                            ImGui::Spacing();
+                            ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.4f, 1.0f),
+                                "[!] Extra fields (%zu) not in schema:", extras.size());
+                            if (ImGui::TreeNode("##extrafields", "show / edit")) {
+                                for (const auto& key : extras) {
+                                    ImGui::PushID(key.c_str());
+                                    auto& val = bc->fields[key];
+                                    if (val.is_number_float()) {
+                                        float v = val.get<float>();
+                                        if (ImGui::DragFloat(key.c_str(), &v, 0.05f)) {
+                                            bc->fields[key] = v;
+                                            Editor::instance().markSceneDirty();
+                                        }
+                                    } else if (val.is_number_integer()) {
+                                        int v = val.get<int>();
+                                        if (ImGui::DragInt(key.c_str(), &v)) {
+                                            bc->fields[key] = v;
+                                            Editor::instance().markSceneDirty();
+                                        }
+                                    } else if (val.is_boolean()) {
+                                        bool v = val.get<bool>();
+                                        if (ImGui::Checkbox(key.c_str(), &v)) {
+                                            bc->fields[key] = v;
+                                            Editor::instance().markSceneDirty();
+                                        }
+                                    } else {
+                                        ImGui::Text("%s = (%s, edit in JSON)", key.c_str(),
+                                                    val.type_name());
+                                    }
+                                    ImGui::SameLine();
+                                    if (ImGui::SmallButton("X")) keyToErase = key;
+                                    ImGui::PopID();
+                                }
+                                ImGui::TreePop();
+                            }
+                        }
+                    } else {
+                        // Fallback: no schema. Original freeform JSON drawer.
+                        for (auto it = bc->fields.begin(); it != bc->fields.end(); ++it) {
+                            const std::string& key = it.key();
+                            ImGui::PushID(key.c_str());
+                            if (it.value().is_number_float()) {
+                                float v = it.value().get<float>();
+                                if (ImGui::DragFloat(key.c_str(), &v, 0.05f)) {
+                                    bc->fields[key] = v;
+                                    Editor::instance().markSceneDirty();
+                                }
+                            } else if (it.value().is_number_integer()) {
+                                int v = it.value().get<int>();
+                                if (ImGui::DragInt(key.c_str(), &v)) {
+                                    bc->fields[key] = v;
+                                    Editor::instance().markSceneDirty();
+                                }
+                            } else if (it.value().is_boolean()) {
+                                bool v = it.value().get<bool>();
+                                if (ImGui::Checkbox(key.c_str(), &v)) {
+                                    bc->fields[key] = v;
+                                    Editor::instance().markSceneDirty();
+                                }
+                            } else {
+                                ImGui::Text("%s = (%s, edit in JSON)", key.c_str(),
+                                            it.value().type_name());
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::SmallButton("X")) keyToErase = key;
+                            ImGui::PopID();
+                        }
                     }
+
                     if (!keyToErase.empty()) {
                         bc->fields.erase(keyToErase);
                         Editor::instance().markSceneDirty();

@@ -106,6 +106,40 @@ void Editor::drawHotReloadPanel() {
 
         ImGui::Separator();
 
+        // P4 (S153) Module-degraded banner. Surfaces when a module lifecycle
+        // callback (Init/BeginReload/EndReload/Shutdown) faulted under SEH
+        // or threw a C++ exception. The module is still live but its
+        // handshake plumbing is unreliable; surface this visibly so the
+        // developer doesn't trust subsequent reloads silently.
+        if (mgr.moduleDegraded()) {
+            ImGui::TextColored(ImVec4(0.95f, 0.55f, 0.4f, 1.0f), "Module DEGRADED:");
+            ImGui::TextWrapped("%s", mgr.moduleDegradedReason().c_str());
+            if (ImGui::SmallButton("Clear degraded flag")) {
+                mgr.clearModuleDegraded();
+            }
+            ImGui::Separator();
+        }
+
+        // P4 (S153) Faulted instances. Per-behavior quarantine — shows every
+        // BehaviorComponent instance whose onStart/onUpdate faulted. The
+        // entry stays bound (vtable still cached) but the dispatch loop
+        // skips it. "Re-arm all" clears every faulted flag in one click.
+        const auto faulted = mgr.faultedBehaviors();
+        if (!faulted.empty()) {
+            ImGui::TextColored(ImVec4(0.95f, 0.4f, 0.4f, 1.0f),
+                "Faulted instances (%d):", (int)faulted.size());
+            ImGui::BeginChild("##faulted", ImVec2(0, 90), true);
+            for (const auto& row : faulted) {
+                ImGui::BulletText("entity=%u behavior='%s'", row.entityId, row.behaviorName.c_str());
+                ImGui::TextWrapped("  %s", row.detail.c_str());
+            }
+            ImGui::EndChild();
+            if (ImGui::Button("Re-arm all##rearm")) {
+                mgr.clearAllFaults();
+            }
+            ImGui::Separator();
+        }
+
         // Registered behaviors
         ImGui::Text("Registered behaviors (gen %u):", reg.generation());
         ImGui::BeginChild("##behaviors", ImVec2(0, 140), true);
