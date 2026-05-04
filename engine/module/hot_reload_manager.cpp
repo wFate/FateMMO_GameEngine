@@ -199,6 +199,24 @@ void hostSetState(FateBehaviorCtx* ctx, void* state) {
 // declarations of fault helpers below the anonymous namespace can see it.)
 // ---------------------------------------------------------------------------
 
+// Plain-old-data shape carrying one validated, copied-out descriptor.
+// Used as the SEH leaf's per-field output on Windows so __try only ever
+// touches primitives (the leaf cannot construct std::string). Declared
+// outside the _WIN32 block because hrCallDescribeFields uses it on every
+// platform — the non-Windows path validates and copies into the same POD.
+struct HrCopiedField {
+    char          name[256];        // NUL-terminated; bounded copy from module
+    char          tooltip[256];     // NUL-terminated; "" when module passes null
+    FateFieldType type;
+    float         defaultF;
+    int32_t       defaultI;
+    int           defaultB;
+    float         minF;
+    float         maxF;
+    int32_t       minI;
+    int32_t       maxI;
+};
+
 #ifdef _WIN32
 // Forward decls so the C++-only wrapper can call the SEH-only leaf.
 static int hr_seh_call_void(void(*fn)(FateBehaviorCtx*), FateBehaviorCtx* ctx,
@@ -214,21 +232,6 @@ static int hr_seh_call_init(int(*fn)(const FateHostApi*, FateGameModuleApi*),
                             int* outResult, uint32_t* outCode, void** outAddr);
 static int hr_seh_call_module_tick(void(*fn)(float), float dt,
                                    uint32_t* outCode, void** outAddr);
-// Plain-old-data shape carrying one validated, copied-out descriptor.
-// Used as the SEH leaf's per-field output so __try only ever touches
-// primitives (the leaf cannot construct std::string).
-struct HrCopiedField {
-    char          name[256];        // NUL-terminated; bounded copy from module
-    char          tooltip[256];     // NUL-terminated; "" when module passes null
-    FateFieldType type;
-    float         defaultF;
-    int32_t       defaultI;
-    int           defaultB;
-    float         minF;
-    float         maxF;
-    int32_t       minI;
-    int32_t       maxI;
-};
 // Returns:
 //   0 = success: header valid, all descriptors copied + validated; *outCount set
 //   1 = SEH fault during call OR any read
