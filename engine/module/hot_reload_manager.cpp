@@ -212,6 +212,38 @@ static int hr_seh_call_reload(int(*fn)(FateReloadContext*), FateReloadContext* c
 static int hr_seh_call_init(int(*fn)(const FateHostApi*, FateGameModuleApi*),
                             const FateHostApi* host, FateGameModuleApi* out,
                             int* outResult, uint32_t* outCode, void** outAddr);
+static int hr_seh_call_module_tick(void(*fn)(float), float dt,
+                                   uint32_t* outCode, void** outAddr);
+// Plain-old-data shape carrying one validated, copied-out descriptor.
+// Used as the SEH leaf's per-field output so __try only ever touches
+// primitives (the leaf cannot construct std::string).
+struct HrCopiedField {
+    char          name[256];        // NUL-terminated; bounded copy from module
+    char          tooltip[256];     // NUL-terminated; "" when module passes null
+    FateFieldType type;
+    float         defaultF;
+    int32_t       defaultI;
+    int           defaultB;
+    float         minF;
+    float         maxF;
+    int32_t       minI;
+    int32_t       maxI;
+};
+// Returns:
+//   0 = success: header valid, all descriptors copied + validated; *outCount set
+//   1 = SEH fault during call OR any read
+//   2 = clean call but schema pointer is nullptr (legitimate "no schema")
+//   3 = clean call but malformed (over-cap fieldCount, reserved != 0, null
+//       fields with count > 0, invalid type enum, unbounded/missing-NUL
+//       name or tooltip)
+// outCopied[] must hold at least maxFields entries; the leaf writes
+// *outCount entries on success.
+static int hr_seh_call_describe_fields(const FateBehaviorSchema* (*fn)(void),
+                                       HrCopiedField* outCopied,
+                                       uint32_t maxFields,
+                                       uint32_t* outCount,
+                                       int* outSchemaWasNull,
+                                       uint32_t* outCode, void** outAddr);
 #endif
 
 // Public-to-the-cpp helper: invoke the function pointer with both SEH and
@@ -337,6 +369,139 @@ static int hrCallInit(int(*fn)(const FateHostApi*, FateGameModuleApi*),
     }
 }
 
+// Module-global tick (FateGameModuleApi::tick). Same shape as
+// hrCallUpdate but no FateBehaviorCtx; called once per frame from the
+// host before the per-behavior dispatch loop. Returns 1 on fault.
+static int hrCallModuleTick(void(*fn)(float), float dt, HrFaultInfo* fi) {
+    if (!fn) { return 0; }
+    try {
+#ifdef _WIN32
+        if (hr_seh_call_module_tick(fn, dt, &fi->exceptionCode, &fi->exceptionAddr)) {
+            fi->caught = 1;
+            return 1;
+        }
+        return 0;
+#else
+        fn(dt);
+        return 0;
+#endif
+    } catch (const std::exception& ex) {
+        fi->caught = -1;
+        std::strncpy(fi->cppWhat, ex.what(), sizeof(fi->cppWhat) - 1);
+        return 1;
+    } catch (...) {
+        fi->caught = -1;
+        std::strncpy(fi->cppWhat, "unknown C++ exception", sizeof(fi->cppWhat) - 1);
+        return 1;
+    }
+}
+
+// Schema accessor + copy-out. Calls the module's describeFields(),
+// validates header, walks descriptors, validates type enum, probes
+// name/tooltip as NUL-terminated bounded strings, and copies everything
+// into caller-provided HrCopiedField[] storage. The host then converts
+// the POD copies into std::string-bearing SafeBehaviorField entries
+// OUTSIDE __try.
+//
+// Returns 0 success / 1 fault / 0 (with *wasNull=1) for legitimate
+// no-schema / 1 with descriptive cppWhat for malformed.
+static int hrCallDescribeFields(const FateBehaviorSchema* (*fn)(void),
+                                HrCopiedField* outCopied,
+                                uint32_t maxFields,
+                                uint32_t* outCount,
+                                int* outSchemaWasNull,
+                                HrFaultInfo* fi) {
+    *outCount = 0;
+    *outSchemaWasNull = 0;
+    if (!fn) { *outSchemaWasNull = 1; return 0; }
+    try {
+#ifdef _WIN32
+        int rc = hr_seh_call_describe_fields(fn, outCopied, maxFields,
+                                             outCount, outSchemaWasNull,
+                                             &fi->exceptionCode, &fi->exceptionAddr);
+        if (rc == 0) return 0;                       // valid
+        if (rc == 2) { *outSchemaWasNull = 1; return 0; }  // legit no-schema
+        if (rc == 3) {
+            fi->caught = -1;
+            std::strncpy(fi->cppWhat,
+                "schema malformed (header cap/reserved/null-fields, bad type enum, "
+                "or unbounded/missing-NUL name/tooltip)",
+                sizeof(fi->cppWhat) - 1);
+            return 1;
+        }
+        // rc == 1: SEH
+        fi->caught = 1;
+        return 1;
+#else
+        // Non-Windows: no SEH. Apply the same validation in plain C++.
+        const FateBehaviorSchema* s = fn();
+        if (!s) { *outSchemaWasNull = 1; return 0; }
+        if (s->fieldCount > maxFields || s->reserved != 0 ||
+            (s->fieldCount > 0 && !s->fields)) {
+            fi->caught = -1;
+            std::strncpy(fi->cppWhat,
+                "schema header malformed (fieldCount > cap, reserved != 0, "
+                "or null fields with non-zero count)",
+                sizeof(fi->cppWhat) - 1);
+            return 1;
+        }
+        for (uint32_t i = 0; i < s->fieldCount; ++i) {
+            const FateFieldDescriptor& fd = s->fields[i];
+            if (fd.type != FATE_FIELD_FLOAT && fd.type != FATE_FIELD_INT && fd.type != FATE_FIELD_BOOL) {
+                fi->caught = -1;
+                std::strncpy(fi->cppWhat, "schema descriptor has invalid type enum", sizeof(fi->cppWhat) - 1);
+                return 1;
+            }
+            // Bounded copy of name (required) and tooltip (optional).
+            HrCopiedField& dst = outCopied[i];
+            dst.type     = fd.type;
+            dst.defaultF = fd.defaultF;
+            dst.defaultI = fd.defaultI;
+            dst.defaultB = fd.defaultB ? 1 : 0;
+            dst.minF     = fd.minF;
+            dst.maxF     = fd.maxF;
+            dst.minI     = fd.minI;
+            dst.maxI     = fd.maxI;
+            if (!fd.name) {
+                fi->caught = -1;
+                std::strncpy(fi->cppWhat, "schema descriptor has null name", sizeof(fi->cppWhat) - 1);
+                return 1;
+            }
+            size_t nlen = strnlen(fd.name, sizeof(dst.name));
+            if (nlen >= sizeof(dst.name)) {
+                fi->caught = -1;
+                std::strncpy(fi->cppWhat, "schema descriptor name unbounded / missing NUL", sizeof(fi->cppWhat) - 1);
+                return 1;
+            }
+            std::memcpy(dst.name, fd.name, nlen);
+            dst.name[nlen] = '\0';
+            if (fd.tooltip) {
+                size_t tlen = strnlen(fd.tooltip, sizeof(dst.tooltip));
+                if (tlen >= sizeof(dst.tooltip)) {
+                    fi->caught = -1;
+                    std::strncpy(fi->cppWhat, "schema descriptor tooltip unbounded / missing NUL", sizeof(fi->cppWhat) - 1);
+                    return 1;
+                }
+                std::memcpy(dst.tooltip, fd.tooltip, tlen);
+                dst.tooltip[tlen] = '\0';
+            } else {
+                dst.tooltip[0] = '\0';
+            }
+        }
+        *outCount = s->fieldCount;
+        return 0;
+#endif
+    } catch (const std::exception& ex) {
+        fi->caught = -1;
+        std::strncpy(fi->cppWhat, ex.what(), sizeof(fi->cppWhat) - 1);
+        return 1;
+    } catch (...) {
+        fi->caught = -1;
+        std::strncpy(fi->cppWhat, "unknown C++ exception", sizeof(fi->cppWhat) - 1);
+        return 1;
+    }
+}
+
 #ifdef _WIN32
 // SEH-only leaf functions. /EHsc requires that __try not coexist with C++
 // destructors — these only touch primitive types + function pointers.
@@ -409,6 +574,122 @@ static int hr_seh_call_init(int(*fn)(const FateHostApi*, FateGameModuleApi*),
     EXCEPTION_POINTERS* xp = nullptr;
     __try {
         *outResult = fn(host, out);
+        return 0;
+    } __except (xp = GetExceptionInformation(), EXCEPTION_EXECUTE_HANDLER) {
+        if (xp && xp->ExceptionRecord) {
+            *outCode = xp->ExceptionRecord->ExceptionCode;
+            *outAddr = xp->ExceptionRecord->ExceptionAddress;
+        }
+        return 1;
+    }
+}
+
+static int hr_seh_call_module_tick(void(*fn)(float), float dt,
+                                   uint32_t* outCode, void** outAddr) {
+    EXCEPTION_POINTERS* xp = nullptr;
+    __try {
+        fn(dt);
+        return 0;
+    } __except (xp = GetExceptionInformation(), EXCEPTION_EXECUTE_HANDLER) {
+        if (xp && xp->ExceptionRecord) {
+            *outCode = xp->ExceptionRecord->ExceptionCode;
+            *outAddr = xp->ExceptionRecord->ExceptionAddress;
+        }
+        return 1;
+    }
+}
+
+// Bounded strnlen replacement usable inside __try (strnlen is documented
+// safe but we want a tight POD-only loop with explicit bounds checking
+// behavior so reads past the cap can't fault). Returns the index of the
+// terminating NUL, or `cap` if no NUL is present in the first `cap` chars.
+static size_t hr_seh_bounded_strlen(const char* s, size_t cap) {
+    size_t i = 0;
+    while (i < cap && s[i] != '\0') { ++i; }
+    return i;
+}
+
+static int hr_seh_call_describe_fields(const FateBehaviorSchema* (*fn)(void),
+                                       HrCopiedField* outCopied,
+                                       uint32_t maxFields,
+                                       uint32_t* outCount,
+                                       int* outSchemaWasNull,
+                                       uint32_t* outCode, void** outAddr) {
+    EXCEPTION_POINTERS* xp = nullptr;
+    __try {
+        const FateBehaviorSchema* s = fn();
+        if (!s) {
+            *outSchemaWasNull = 1;
+            return 2;  // legit no-schema
+        }
+        // Header reads — force page-in so a bad schema pointer faults here.
+        uint32_t cnt = s->fieldCount;
+        uint32_t res = s->reserved;
+        const FateFieldDescriptor* fields = s->fields;
+        if (cnt > maxFields) return 3;
+        if (res != 0) return 3;
+        if (cnt > 0 && !fields) return 3;
+
+        // Walk + copy every descriptor under SEH. All reads / writes are
+        // primitive; no STL types touch __try.
+        const size_t kStrCap = sizeof(outCopied[0].name);  // 256
+        for (uint32_t i = 0; i < cnt; ++i) {
+            const FateFieldDescriptor* fd = &fields[i];
+
+            // Type enum validation. Cast through int to avoid relying on
+            // the enum's underlying type semantics.
+            int t = (int)fd->type;
+            if (t != (int)FATE_FIELD_FLOAT &&
+                t != (int)FATE_FIELD_INT   &&
+                t != (int)FATE_FIELD_BOOL) {
+                return 3;
+            }
+
+            // Read every primitive the inspector might consume. Forces
+            // page-in for the entire descriptor backing.
+            float    df = fd->defaultF;
+            int32_t  di = fd->defaultI;
+            int      db = fd->defaultB;
+            float    mnF = fd->minF;
+            float    mxF = fd->maxF;
+            int32_t  mnI = fd->minI;
+            int32_t  mxI = fd->maxI;
+            const char* nm = fd->name;
+            const char* tt = fd->tooltip;
+
+            // name is required; null is malformed.
+            if (!nm) return 3;
+            // Bounded strlen probe. Reading past the cap returns cap and
+            // we reject as malformed. Reading IN-bounds of unmapped page
+            // would fault here, caught by __except below.
+            size_t nlen = hr_seh_bounded_strlen(nm, kStrCap);
+            if (nlen >= kStrCap) return 3;  // missing NUL within cap
+
+            // tooltip optional — null means "no tooltip" (empty string).
+            size_t tlen = 0;
+            if (tt) {
+                tlen = hr_seh_bounded_strlen(tt, kStrCap);
+                if (tlen >= kStrCap) return 3;
+            }
+
+            HrCopiedField* dst = &outCopied[i];
+            // Copy the validated payload. Use char-by-char copy (no
+            // memcpy) to keep it inside the simple POD subset of __try-
+            // safe operations; the loop is bounded by the validated nlen.
+            for (size_t c = 0; c < nlen; ++c) dst->name[c] = nm[c];
+            dst->name[nlen] = '\0';
+            for (size_t c = 0; c < tlen; ++c) dst->tooltip[c] = tt[c];
+            dst->tooltip[tlen] = '\0';
+            dst->type     = (FateFieldType)t;
+            dst->defaultF = df;
+            dst->defaultI = di;
+            dst->defaultB = db ? 1 : 0;
+            dst->minF     = mnF;
+            dst->maxF     = mxF;
+            dst->minI     = mnI;
+            dst->maxI     = mxI;
+        }
+        *outCount = cnt;
         return 0;
     } __except (xp = GetExceptionInformation(), EXCEPTION_EXECUTE_HANDLER) {
         if (xp && xp->ExceptionRecord) {
@@ -663,6 +944,9 @@ void HotReloadManager::shutdown() {
     moduleNameStr_.clear();
     moduleBuildIdStr_.clear();
     activeShadowPath_.clear();
+    // Drop any cached schema copy — its strings are host-owned but the
+    // entries describe a module that no longer exists.
+    safeSchemaCache_.fields.clear();
     replicatedWarnedHandles_.clear();
     missedBindWarnedHandles_.clear();
     frameCounterForSafetyNet_ = 0;
@@ -841,13 +1125,47 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
     HMODULE newHandle = LoadLibraryA(shadow.c_str());
     if (!newHandle) {
         DWORD err = GetLastError();
-        lastError_ = "LoadLibrary(" + shadow + ") failed: error " + std::to_string(err);
         fs::remove(shadow, ec);
-        // Treat as transient — DLL may still be mid-write or AV-locked. Re-arm
-        // pending so we retry; caller observes re-armed flag and skips
-        // bumping failureCount_ until the retry cap escalates.
-        reloadPending_.store(true, std::memory_order_release);
-        reloadRequestedAt_ = -1.0f;
+
+        // Distinguish transient from hard failures.
+        // Transient = the build/AV race: file briefly inaccessible, gets
+        // re-tried under the kMaxTransientRetries cap WITHOUT bumping
+        // failureCount_ or screaming a warn until the cap escalates.
+        // Hard = the new DLL is genuinely broken (bad PE, missing
+        // dependent DLL, invalid imports, init-failure). Re-trying these
+        // is pointless — the linker is done, the artifact is the artifact.
+        // Surface them as a real reload failure immediately so the
+        // developer sees the cause without waiting through the transient
+        // retry cap (~30s at 1s debounce).
+        const bool transient =
+            err == ERROR_SHARING_VIOLATION ||   // 32 — linker still holds the file
+            err == ERROR_LOCK_VIOLATION    ||   // 33 — same shape
+            err == ERROR_ACCESS_DENIED     ||   // 5  — AV scanner brief lock
+            err == ERROR_FILE_NOT_FOUND    ||   // 2  — file was deleted mid-call
+            err == ERROR_PATH_NOT_FOUND;        // 3  — same shape
+
+        if (transient) {
+            lastError_ = "LoadLibrary(" + shadow + ") failed (transient): error " + std::to_string(err);
+            reloadPending_.store(true, std::memory_order_release);
+            reloadRequestedAt_ = -1.0f;
+        } else {
+            // Hard failure. Classify common cases for a useful message.
+            const char* hint = "loader error";
+            switch (err) {
+                case ERROR_BAD_EXE_FORMAT:    hint = "invalid PE / not a valid Win32 module"; break;  // 193
+                case ERROR_MOD_NOT_FOUND:     hint = "dependent DLL missing"; break;                   // 126
+                case ERROR_PROC_NOT_FOUND:    hint = "import resolution failed (missing export)"; break; // 127
+                case ERROR_DLL_INIT_FAILED:   hint = "module DllMain returned FALSE"; break;           // 1114
+                case ERROR_INVALID_DLL:       hint = "DLL is invalid"; break;                          // 482
+                case ERROR_NOACCESS:          hint = "module crashed during DllMain"; break;           // 998
+                default: break;
+            }
+            lastError_ = "LoadLibrary(" + shadow + ") failed: " + hint
+                       + " (error " + std::to_string(err) + ", old module preserved)";
+            // Do NOT re-arm reloadPending_. Caller takes the !transient
+            // branch and surfaces this as a real failure on the next
+            // process call — old module stays live and dispatchable.
+        }
         return false;
     }
 
@@ -929,12 +1247,21 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
         newApi.moduleProtocolVersion != FATE_MODULE_PROTOCOL_VERSION) {
         // Belt-and-suspenders: should already be caught by queryFn, but the
         // module owner of these fields might mismatch the static query.
-        // POST-INIT path: shutdownFn MUST run so the new module can release
-        // anything it allocated during init() (scratch buffers, registered
-        // resources, host pointers it cached).
+        // POST-INIT path: shutdownFn MUST run so the new module can
+        // release anything it allocated during init() (scratch buffers,
+        // registered resources, host pointers it cached). Route through
+        // hrCallShutdown so a faulting shutdown can't take the editor
+        // down — module is about to be FreeLibrary'd anyway, so we just
+        // flag degraded.
         lastError_ = "module API struct version disagrees with QueryVersion";
         BehaviorRegistry::instance().abortStaging();
-        if (shutdownFn) shutdownFn();
+        if (shutdownFn) {
+            HrFaultInfo fi;
+            if (hrCallShutdown(shutdownFn, &fi)) {
+                hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
+                                    "fateGameModuleShutdown (post-init abort: API version disagree)", fi);
+            }
+        }
         FreeLibrary(newHandle);
         fs::remove(shadow, ec);
         return false;
@@ -968,7 +1295,17 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
                 // no longer reliable, so honor the abort path.
                 lastError_ = "outgoing module's fateGameModuleBeginReload faulted (swap aborted; old module marked degraded)";
                 BehaviorRegistry::instance().abortStaging();
-                if (shutdownFn) shutdownFn();
+                // Route the new module's shutdown through the fault wrapper:
+                // if the new module's shutdown also faults during its init-
+                // cleanup, we don't want to compound the original BeginReload
+                // crash by SEH-trapping the editor.
+                if (shutdownFn) {
+                    HrFaultInfo fi2;
+                    if (hrCallShutdown(shutdownFn, &fi2)) {
+                        hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
+                                            "fateGameModuleShutdown (post-init abort: BeginReload faulted)", fi2);
+                    }
+                }
                 FreeLibrary(newHandle);
                 fs::remove(shadow, ec);
                 return false;
@@ -979,7 +1316,13 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
                 // it owns scratch we have to give it a chance to free.
                 lastError_ = "outgoing module's fateGameModuleBeginReload returned 0 (swap aborted; old module + roster preserved)";
                 BehaviorRegistry::instance().abortStaging();
-                if (shutdownFn) shutdownFn();
+                if (shutdownFn) {
+                    HrFaultInfo shutdownFi;
+                    if (hrCallShutdown(shutdownFn, &shutdownFi)) {
+                        hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
+                                            "fateGameModuleShutdown (post-init abort: BeginReload veto)", shutdownFi);
+                    }
+                }
                 FreeLibrary(newHandle);
                 fs::remove(shadow, ec);
                 return false;
@@ -1301,6 +1644,54 @@ std::vector<HotReloadManager::FaultedRow> HotReloadManager::faultedBehaviors() c
     return out;
 }
 
+const HotReloadManager::SafeBehaviorSchema*
+HotReloadManager::safeDescribeFields(const FateBehaviorVTable* vt) {
+    safeSchemaCache_.fields.clear();
+    if (!vt || !vt->describeFields) return nullptr;
+
+    // Heap buffer for the SEH leaf to fill. kMaxSchemaFields is 256 and
+    // HrCopiedField is ~600 bytes, so a stack array would be ~150 KB —
+    // too large for the editor's main-thread stack. The vector lives
+    // entirely in C++ scope (resize/destroy outside __try); the SEH leaf
+    // only sees the raw POD pointer it returns.
+    std::vector<HrCopiedField> copied(kMaxSchemaFields);
+    uint32_t      count        = 0;
+    int           wasNull      = 0;
+    HrFaultInfo   fi;
+
+    if (hrCallDescribeFields(vt->describeFields, copied.data(), kMaxSchemaFields,
+                             &count, &wasNull, &fi)) {
+        // SEH/C++ fault OR malformed schema. Route through the existing
+        // module-degraded path so the editor's Hot Reload panel surfaces
+        // it; hrSetModuleDegraded dedupes on reason string so per-frame
+        // inspector polling won't spam the log.
+        hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
+                            "FateBehaviorVTable::describeFields", fi);
+        return nullptr;
+    }
+    if (wasNull) return nullptr;  // legitimate "no schema"
+
+    // Move the validated POD copies into host-owned std::string-bearing
+    // entries OUTSIDE __try / SEH. The inspector then iterates these
+    // exclusively — no further reads into module memory.
+    safeSchemaCache_.fields.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        SafeBehaviorField f;
+        f.name     = copied[i].name;     // bounded, NUL-terminated
+        f.tooltip  = copied[i].tooltip;  // may be empty
+        f.type     = copied[i].type;
+        f.defaultF = copied[i].defaultF;
+        f.defaultI = copied[i].defaultI;
+        f.defaultB = copied[i].defaultB;
+        f.minF     = copied[i].minF;
+        f.maxF     = copied[i].maxF;
+        f.minI     = copied[i].minI;
+        f.maxI     = copied[i].maxI;
+        safeSchemaCache_.fields.push_back(std::move(f));
+    }
+    return &safeSchemaCache_;
+}
+
 void HotReloadManager::clearAllFaults() {
     int cleared = 0;
     for (Active& a : active_) {
@@ -1368,9 +1759,19 @@ void HotReloadManager::onComponentAddedNotification(
 // recovered + warn-once-per-handle.
 // ---------------------------------------------------------------------------
 void HotReloadManager::tickBehaviors(World& world, float dt) {
-    // Module-global tick (optional).
+    // Module-global tick (optional). Routed through the SEH + C++ fault
+    // wrapper so a faulting global tick can't take down the editor. On
+    // fault: mark the module degraded AND null the function pointer so
+    // subsequent frames silently skip — the next reload re-populates
+    // moduleApi_ with a fresh pointer (or a still-faulting one, which
+    // re-degrades the same way).
     if (moduleApi_.tick) {
-        moduleApi_.tick(dt);
+        HrFaultInfo fi;
+        if (hrCallModuleTick(moduleApi_.tick, dt, &fi)) {
+            hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
+                                "FateGameModuleApi::tick", fi);
+            moduleApi_.tick = nullptr;
+        }
     }
 
     auto& reg = BehaviorRegistry::instance();

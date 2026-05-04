@@ -117,6 +117,33 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
         }
     });
 
+    // Selection survival across PropertyCommand-style entity recreation.
+    // Without this, undo/redo on an inspector edit minted a fresh
+    // EntityHandle, the editor kept holding the OLD handle in
+    // selectedHandle_, refreshSelection's getEntity returned nullptr, and
+    // the user lost both the hierarchy highlight AND the scene-view
+    // bounding box — the entity was still in the world but invisible to
+    // the editor. UndoSystem::remapHandle now fires this callback after
+    // patching the other commands' stored handles; we patch the editor's
+    // selection state with the same mapping. Multi-select is covered too.
+    UndoSystem::instance().setHandleRemapCallback(
+        [](EntityHandle oldH, EntityHandle newH) {
+            auto& ed = Editor::instance();
+            if (ed.selectedHandle_ == oldH) {
+                ed.selectedHandle_ = newH;
+                LOG_INFO("Undo", "Selection re-bound: %u -> %u",
+                         oldH.index(), newH.index());
+            }
+            // Multi-select: re-key the entry in place.
+            auto it = ed.selectedEntities_.find(oldH);
+            if (it != ed.selectedEntities_.end()) {
+                ed.selectedEntities_.erase(it);
+                ed.selectedEntities_.insert(newH);
+            }
+            // refreshSelection reruns next renderUI tick when world is
+            // available; nothing to do synchronously here.
+        });
+
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 #if defined(ENGINE_MEMORY_DEBUG)

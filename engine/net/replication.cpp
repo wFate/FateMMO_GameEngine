@@ -644,7 +644,17 @@ SvEntityUpdateMsg ReplicationManager::buildCurrentState(World& world, Entity* en
 
     // Status effect mask from active effects
     auto* seComp = entity->getComponent<StatusEffectComponent>();
-    msg.statusEffectMask = seComp ? seComp->effects.getActiveEffectMask() : 0;
+    // Phase 7.2b.0: getActiveEffectMask returns uint64; the wire field is
+    // uint32 (currently unconsumed client-side — only TODO references in
+    // game_app.cpp). Truncate to the low 32 bits — high-bit EffectType values
+    // (Silence, Blind, AttackSpeedSlow, ...) won't appear in this wire field.
+    // SvBuffSync (vector-based, no truncation) carries the full set to the
+    // owning client's buff bar, so the truncation only impacts the
+    // not-yet-consumed nameplate-icon path. When that path goes live, widen
+    // the wire field too — that's a PROTOCOL_VERSION bump.
+    msg.statusEffectMask = seComp
+        ? static_cast<uint32_t>(seComp->effects.getActiveEffectMask() & 0xFFFFFFFFu)
+        : 0;
 
     // Death state from character/enemy stats
     if (charStats) {

@@ -43,6 +43,8 @@ void PropertyCommand::undo(World* w) {
     w->destroyEntity(entityHandle);
     w->processDestroyQueue("editor_undo_property");
     entityHandle = restored->handle();
+    LOG_INFO("Undo", "PropertyCommand::undo '%s' rebuilt '%s' handle %u -> %u",
+             desc.c_str(), restored->name().c_str(), oldH.index(), entityHandle.index());
     if (entityHandle != oldH)
         UndoSystem::instance().remapHandle(oldH, entityHandle);
 }
@@ -59,6 +61,8 @@ void PropertyCommand::redo(World* w) {
     w->destroyEntity(entityHandle);
     w->processDestroyQueue("editor_redo_property");
     entityHandle = restored->handle();
+    LOG_INFO("Undo", "PropertyCommand::redo '%s' rebuilt '%s' handle %u -> %u",
+             desc.c_str(), restored->name().c_str(), oldH.index(), entityHandle.index());
     if (entityHandle != oldH)
         UndoSystem::instance().remapHandle(oldH, entityHandle);
 }

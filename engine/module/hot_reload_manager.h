@@ -154,6 +154,48 @@ public:
     // code path that tries to drive a structural swap from inside a system
     // tick, network handler, render callback, or worker thread.
     bool        inSafePoint() const { return inSafePoint_; }
+
+    // SEH-+ C++-guarded copy-out of a behavior's optional describeFields()
+    // schema. Walks every descriptor under SEH, validates the type enum,
+    // probes name/tooltip as bounded NUL-terminated strings, and copies
+    // all primitive + string fields into host-owned storage. Inspector
+    // iterates SafeBehaviorField entries exclusively — never touches
+    // module-owned memory after this call.
+    //
+    // Returns nullptr on fault, malformed schema, or legitimate "no
+    // schema". Faults flag the module degraded with a deduped log.
+    // Inspector callers should fall back to the freeform JSON drawer
+    // when this returns nullptr.
+    //
+    // Lifetime: the returned pointer is owned by the manager and stable
+    // until the next safeDescribeFields call OR the next module reload,
+    // whichever comes first.
+    struct SafeBehaviorField {
+        std::string   name;         // copied + bounded; never empty for valid entries
+        FateFieldType type;         // validated enum
+        float         defaultF;
+        int32_t       defaultI;
+        int           defaultB;     // 0 or 1
+        float         minF;
+        float         maxF;
+        int32_t       minI;
+        int32_t       maxI;
+        std::string   tooltip;      // copied + bounded; empty when absent
+    };
+    struct SafeBehaviorSchema {
+        std::vector<SafeBehaviorField> fields;
+    };
+    const SafeBehaviorSchema* safeDescribeFields(const FateBehaviorVTable* vt);
+
+    // Cap to reject obviously-uninitialized field counts. Real schemas
+    // carry a handful of fields (ExampleIdle has 2). Anything past this
+    // is rejected as a malformed header.
+    static constexpr uint32_t kMaxSchemaFields = 256;
+    // Cap on probed C-string length (name, tooltip). Anything longer is
+    // treated as malformed (likely missing NUL or a wild pointer that
+    // happens to point at readable memory). Keeps the bounded-strlen
+    // probe O(1) under SEH.
+    static constexpr size_t   kMaxSchemaStringLen = 256;
     // Snapshot of currently-quarantined behavior instances. Each pair is
     // (entity-id-as-uint, behavior-name + fault detail string). Used by
     // the editor Hot Reload panel to render a "Faulted" subsection. The
@@ -281,6 +323,12 @@ private:
     FateGameModuleApi moduleApi_{};
     std::string       moduleNameStr_;
     std::string       moduleBuildIdStr_;
+
+    // Host-owned schema cache. safeDescribeFields populates this on each
+    // successful copy-out and returns its address. Reset on shutdown / on
+    // any subsequent safeDescribeFields call. Holding the result by value
+    // means inspector iteration never re-enters module code.
+    SafeBehaviorSchema safeSchemaCache_;
 
     // Host-side vtable handed to fateGameModuleInit. Stable address for the
     // lifetime of the manager; module copies pointers into its own statics.

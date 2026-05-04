@@ -4,6 +4,7 @@
 #include "engine/ecs/entity_handle.h"
 #include "engine/ecs/prefab.h"
 #include "engine/core/types.h"
+#include "engine/core/logger.h"
 #include "engine/components/transform.h"
 #include <vector>
 #include <memory>
@@ -229,15 +230,28 @@ public:
     using DirtyCallback = std::function<void(UndoCommand*)>;
     void setDirtyCallback(DirtyCallback cb) { dirtyCb_ = std::move(cb); }
 
+    // Editor wires this in init(). Fires inside remapHandle, AFTER any
+    // PropertyCommand-style entity recreation that mints a new handle.
+    // The editor uses it to patch its `selectedHandle_` so hierarchy
+    // selection and the scene-view bounding box survive an undo/redo
+    // (without it, the editor keeps holding the old handle and quietly
+    // drops selection because getEntity returns nullptr).
+    using HandleRemapCallback = std::function<void(EntityHandle oldH, EntityHandle newH)>;
+    void setHandleRemapCallback(HandleRemapCallback cb) { handleRemapCb_ = std::move(cb); }
+
     void push(std::unique_ptr<UndoCommand> cmd) {
         // Clear redo stack when new action is performed
         redoStack_.clear();
+        const std::string desc = cmd->description();
+        const UndoDomain domain = cmd->domain();
         if (dirtyCb_) dirtyCb_(cmd.get());
         undoStack_.push_back(std::move(cmd));
         // Limit stack size
         if (undoStack_.size() > maxHistory_) {
             undoStack_.erase(undoStack_.begin());
         }
+        LOG_INFO("Undo", "push: '%s' domain=%s undo_depth=%zu",
+                 desc.c_str(), domainName_(domain), undoStack_.size());
     }
 
     bool canUndo() const { return !undoStack_.empty(); }
@@ -247,20 +261,28 @@ public:
         if (undoStack_.empty()) return;
         auto cmd = std::move(undoStack_.back());
         undoStack_.pop_back();
+        const std::string desc = cmd->description();
+        const UndoDomain domain = cmd->domain();
         cmd->undo(w);
         // Re-mark the same domain as dirty: the world now diverges from disk
         // again, just in the opposite direction from the original edit.
         if (dirtyCb_) dirtyCb_(cmd.get());
         redoStack_.push_back(std::move(cmd));
+        LOG_INFO("Undo", "undo: '%s' domain=%s undo_depth=%zu redo_depth=%zu",
+                 desc.c_str(), domainName_(domain), undoStack_.size(), redoStack_.size());
     }
 
     void redo(World* w) {
         if (redoStack_.empty()) return;
         auto cmd = std::move(redoStack_.back());
         redoStack_.pop_back();
+        const std::string desc = cmd->description();
+        const UndoDomain domain = cmd->domain();
         cmd->redo(w);
         if (dirtyCb_) dirtyCb_(cmd.get());
         undoStack_.push_back(std::move(cmd));
+        LOG_INFO("Undo", "redo: '%s' domain=%s undo_depth=%zu redo_depth=%zu",
+                 desc.c_str(), domainName_(domain), undoStack_.size(), redoStack_.size());
     }
 
     void clear() {
@@ -275,6 +297,7 @@ public:
             cmd->remapEntityHandle(oldH, newH);
         for (auto& cmd : redoStack_)
             cmd->remapEntityHandle(oldH, newH);
+        if (handleRemapCb_) handleRemapCb_(oldH, newH);
     }
 
     size_t undoCount() const { return undoStack_.size(); }
@@ -286,10 +309,19 @@ public:
 
 private:
     UndoSystem() = default;
+    static const char* domainName_(UndoDomain d) {
+        switch (d) {
+            case UndoDomain::Scene:        return "Scene";
+            case UndoDomain::PlayerPrefab: return "PlayerPrefab";
+            case UndoDomain::UIScreen:     return "UIScreen";
+        }
+        return "?";
+    }
     std::vector<std::unique_ptr<UndoCommand>> undoStack_;
     std::vector<std::unique_ptr<UndoCommand>> redoStack_;
     size_t maxHistory_ = 200;
     DirtyCallback dirtyCb_;
+    HandleRemapCallback handleRemapCb_;
 };
 
 } // namespace fate

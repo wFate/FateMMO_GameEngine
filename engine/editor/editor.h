@@ -376,6 +376,32 @@ public:
     // Inspector undo capture (call after each editable ImGui widget)
     void captureInspectorUndo();
 
+    // Pure baseline-selection logic extracted from captureInspectorUndo so
+    // tests can exercise the fallback paths without a live ImGui context.
+    // Returns a pointer to whichever of {pending, preFrame, nullptr} is
+    // the correct undo baseline. Each candidate must clear three gates:
+    //   - non-null
+    //   - its handle matches the current entity (rules out cross-entity
+    //     baselines from selection changes mid-frame)
+    //   - differs from the post-edit state (rules out no-op pushes and
+    //     the single-frame Checkbox/Combo/MenuItem case where pending
+    //     was captured AFTER the value already changed)
+    // Pending takes priority when valid (multi-frame drag/text widget).
+    // Pre-frame is the fallback (covers single-frame widgets, one-shot
+    // buttons that never fire IsItemActivated, and stale-pending cases).
+    // Returns nullptr if neither baseline is usable — caller skips push.
+    struct InspectorBaselinePick {
+        const nlohmann::json* baseline = nullptr;
+        EntityHandle          handle{};
+    };
+    static InspectorBaselinePick pickInspectorBaseline(
+        const nlohmann::json& pendingSnapshot,
+        EntityHandle          pendingHandle,
+        const nlohmann::json& preFrameSnapshot,
+        EntityHandle          preFrameHandle,
+        EntityHandle          currentEntityHandle,
+        const nlohmann::json& currentState);
+
     // Entity locking (ground tiles locked by default, toggleable via toolbar)
     bool groundLocked_ = true;
     bool isEntityLocked(Entity* e) const { return groundLocked_ && e && e->tag() == "ground"; }
@@ -527,6 +553,19 @@ private:
     // Inspector undo capture (snapshot before/after field edit)
     nlohmann::json pendingInspectorSnapshot_;
     EntityHandle pendingInspectorHandle_;
+    // Pre-frame snapshot captured at the top of drawInspector before any
+    // widgets run. Used as the undo baseline by captureInspectorUndo
+    // whenever pendingInspectorSnapshot_ is unusable: empty (no
+    // IsItemActivated fired this edit), already matches the post-edit
+    // state (single-frame Checkbox/Combo/MenuItem case where ImGui
+    // mutated the value before the activation event fired), or its
+    // handle no longer matches the current entity (selection shifted
+    // mid-frame). Populated each frame in drawInspector with the entity
+    // selected when that frame began — same handle gate applies on
+    // read-out so a snapshot for entity A can't be returned as the
+    // baseline for an edit that landed on entity B.
+    nlohmann::json preFrameInspectorSnapshot_;
+    EntityHandle preFrameInspectorHandle_;
 
     // Delete confirmation state
     bool pendingDeleteFile_ = false;

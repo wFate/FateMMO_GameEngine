@@ -5,6 +5,7 @@
 #include "engine/ecs/component_meta.h"
 #include "engine/module/behavior_component.h"
 #include "engine/module/behavior_registry.h"
+#include "engine/module/hot_reload_manager.h"
 #ifdef FATE_HAS_GAME
 #include "engine/components/transform.h"
 #include "engine/components/sprite_component.h"
@@ -469,29 +470,78 @@ namespace fate {
 // Inspector undo capture
 // ============================================================================
 
+Editor::InspectorBaselinePick Editor::pickInspectorBaseline(
+    const nlohmann::json& pendingSnapshot,
+    EntityHandle          pendingHandle,
+    const nlohmann::json& preFrameSnapshot,
+    EntityHandle          preFrameHandle,
+    EntityHandle          currentEntityHandle,
+    const nlohmann::json& currentState)
+{
+    InspectorBaselinePick out;
+    // Pending wins for multi-frame widgets (drag, slider, text). It is
+    // the true pre-edit state captured on IsItemActivated. Three gates:
+    //   1. Non-null (widget actually fired IsItemActivated this edit).
+    //   2. Handle matches the current entity. Selection can shift between
+    //      activation and IsItemDeactivatedAfterEdit (hierarchy click,
+    //      hot-reload, undo/redo); using a stale pending here would
+    //      build a PropertyCommand whose oldState is from entity A and
+    //      newState is from entity B — a cross-entity undo entry that
+    //      corrupts B on undo and leaves A with phantom redo state.
+    //   3. Differs from current — single-frame widget case (Checkbox,
+    //      Combo, MenuItem) mutates the value BEFORE the activation
+    //      event fires, leaving pendingSnapshot holding post-edit data.
+    if (!pendingSnapshot.is_null() &&
+        pendingHandle == currentEntityHandle &&
+        pendingSnapshot != currentState) {
+        out.baseline = &pendingSnapshot;
+        out.handle   = pendingHandle;
+        return out;
+    }
+    // Pre-frame fallback. Reached when pending is unusable (null,
+    // post-edit no-op, or stale handle from mid-frame selection change).
+    // Captured at the top of drawInspector BEFORE any widget ran, so it
+    // always holds true pre-edit state for whichever entity was selected
+    // when that frame began. Same handle gate applies — a pre-frame
+    // snapshot for a different entity is just as cross-wired as a stale
+    // pending one.
+    if (!preFrameSnapshot.is_null() &&
+        preFrameHandle == currentEntityHandle &&
+        preFrameSnapshot != currentState) {
+        out.baseline = &preFrameSnapshot;
+        out.handle   = preFrameHandle;
+        return out;
+    }
+    return out;  // both baselines unusable; caller skips push
+}
+
 void Editor::captureInspectorUndo() {
     if (!selectedEntity_) return;
     if (ImGui::IsItemActivated()) {
         pendingInspectorSnapshot_ = PrefabLibrary::entityToJson(selectedEntity_);
         pendingInspectorHandle_ = selectedEntity_->handle();
     }
-    if (ImGui::IsItemDeactivatedAfterEdit() && !pendingInspectorSnapshot_.is_null()) {
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
         auto newState = PrefabLibrary::entityToJson(selectedEntity_);
-        if (newState != pendingInspectorSnapshot_) {
-            // Promote-on-edit: a replicated entity that the user actually
-            // changed in the inspector becomes save-eligible, so authored
-            // mutations (e.g. moving Tom in the editor) persist to the scene
-            // .json on Ctrl+S even though Tom on the client originated from a
-            // server SvEntityEnter and was tagged isReplicated() at spawn.
-            // The flag clears only on a real content change, never on simple
-            // selection or focus, so accidentally clicking a pet/mob/ghost
-            // doesn't promote it.
+        auto pick = pickInspectorBaseline(
+            pendingInspectorSnapshot_, pendingInspectorHandle_,
+            preFrameInspectorSnapshot_, preFrameInspectorHandle_,
+            selectedEntity_->handle(), newState);
+        if (pick.baseline) {
+            // Promote-on-edit: a replicated entity the user actually
+            // changed in the inspector becomes save-eligible so
+            // authored mutations persist on Ctrl+S. Clears only on a
+            // real content change — accidentally clicking a pet/mob/
+            // ghost doesn't promote it.
             if (selectedEntity_->isReplicated()) {
                 selectedEntity_->setReplicated(false);
             }
             auto cmd = std::make_unique<PropertyCommand>();
-            cmd->entityHandle = pendingInspectorHandle_;
-            cmd->oldState = std::move(pendingInspectorSnapshot_);
+            cmd->entityHandle = pick.handle;
+            // Copy (not move) — the source may be preFrameInspector-
+            // Snapshot_ which is refreshed every frame and must remain
+            // intact for subsequent widgets in the same frame.
+            cmd->oldState = *pick.baseline;
             cmd->newState = std::move(newState);
             cmd->desc = "Inspector edit";
             cmd->isPlayerPrefab = (selectedEntity_->tag() == "player");
@@ -501,6 +551,34 @@ void Editor::captureInspectorUndo() {
     }
 }
 
+namespace {
+// One-shot inspector mutation helper. Captures entity JSON before and
+// after `mutate` runs; if state changed, pushes a PropertyCommand AND
+// promotes replicated→authored exactly like captureInspectorUndo. Use
+// for one-shot edits that don't fit the IsItemActivated/Deactivated
+// dance: Add/Remove Component menu items, "+ Add Field" button clicks,
+// "X" delete buttons, schema default-seeding on first open.
+template <class Fn>
+void runInspectorMutation(Entity* entity, const char* desc, Fn&& mutate) {
+    if (!entity) { mutate(); return; }
+    auto before = PrefabLibrary::entityToJson(entity);
+    auto handle = entity->handle();
+    bool wasReplicated = entity->isReplicated();
+    bool wasPlayer     = (entity->tag() == "player");
+    mutate();
+    auto after = PrefabLibrary::entityToJson(entity);
+    if (after == before) return;
+    if (wasReplicated) entity->setReplicated(false);
+    auto cmd = std::make_unique<PropertyCommand>();
+    cmd->entityHandle  = handle;
+    cmd->oldState      = std::move(before);
+    cmd->newState      = std::move(after);
+    cmd->desc          = desc;
+    cmd->isPlayerPrefab = wasPlayer;
+    UndoSystem::instance().push(std::move(cmd));
+}
+} // namespace
+
 // ============================================================================
 // Inspector
 // ============================================================================
@@ -509,9 +587,18 @@ void Editor::drawInspector() {
     if (ImGui::Begin("Inspector")) {
         if (!selectedEntity_) {
             ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Select an entity");
+            preFrameInspectorSnapshot_ = nlohmann::json();
             ImGui::End();
             return;
         }
+
+        // Pre-frame snapshot for single-frame widgets (Checkbox, Combo,
+        // MenuItem). captureInspectorUndo falls back to this baseline
+        // when ImGui's IsItemActivated fires after the value has already
+        // changed. Refreshed every frame so it always reflects the
+        // pre-edit state for the upcoming user interaction.
+        preFrameInspectorSnapshot_ = PrefabLibrary::entityToJson(selectedEntity_);
+        preFrameInspectorHandle_   = selectedEntity_->handle();
 
         // -- Entity name (prominent input at top) --
         char nameBuf[128];
@@ -740,7 +827,7 @@ void Editor::drawInspector() {
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmBoxCollider")) {
                 if (ImGui::MenuItem("Remove Component")) {
-                    selectedEntity_->removeComponent<BoxCollider>();
+                    runInspectorMutation(selectedEntity_, "Remove BoxCollider", [&]{ selectedEntity_->removeComponent<BoxCollider>(); });
                     ImGui::EndPopup();
                     goto endInspectorComponents;
                 }
@@ -785,7 +872,7 @@ void Editor::drawInspector() {
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmPolyCollider")) {
                 if (ImGui::MenuItem("Remove Component")) {
-                    selectedEntity_->removeComponent<PolygonCollider>();
+                    runInspectorMutation(selectedEntity_, "Remove PolygonCollider", [&]{ selectedEntity_->removeComponent<PolygonCollider>(); });
                     ImGui::EndPopup();
                     goto endInspectorComponents;
                 }
@@ -852,7 +939,7 @@ void Editor::drawInspector() {
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmPlayerCtrl")) {
                 if (ImGui::MenuItem("Remove Component")) {
-                    selectedEntity_->removeComponent<PlayerController>();
+                    runInspectorMutation(selectedEntity_, "Remove PlayerController", [&]{ selectedEntity_->removeComponent<PlayerController>(); });
                     ImGui::EndPopup();
                     goto endInspectorComponents;
                 }
@@ -887,7 +974,7 @@ void Editor::drawInspector() {
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmAnimator")) {
                 if (ImGui::MenuItem("Remove Component")) {
-                    selectedEntity_->removeComponent<Animator>();
+                    runInspectorMutation(selectedEntity_, "Remove Animator", [&]{ selectedEntity_->removeComponent<Animator>(); });
                     ImGui::EndPopup();
                     goto endInspectorComponents;
                 }
@@ -961,7 +1048,7 @@ void Editor::drawInspector() {
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmZone")) {
                 if (ImGui::MenuItem("Remove Component")) {
-                    selectedEntity_->removeComponent<ZoneComponent>();
+                    runInspectorMutation(selectedEntity_, "Remove ZoneComponent", [&]{ selectedEntity_->removeComponent<ZoneComponent>(); });
                     ImGui::EndPopup();
                     goto endInspectorComponents;
                 }
@@ -1042,7 +1129,7 @@ void Editor::drawInspector() {
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmPortal")) {
                 if (ImGui::MenuItem("Remove Component")) {
-                    selectedEntity_->removeComponent<PortalComponent>();
+                    runInspectorMutation(selectedEntity_, "Remove PortalComponent", [&]{ selectedEntity_->removeComponent<PortalComponent>(); });
                     ImGui::EndPopup();
                     goto endInspectorComponents;
                 }
@@ -1107,7 +1194,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Character Stats");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmCharStats")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<CharacterStatsComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove CharacterStatsComponent", [&]{ selectedEntity_->removeComponent<CharacterStatsComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<CharacterStatsComponent>()) {
@@ -1236,7 +1323,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Enemy Stats");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmEnemyStats")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<EnemyStatsComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove EnemyStatsComponent", [&]{ selectedEntity_->removeComponent<EnemyStatsComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<EnemyStatsComponent>()) {
@@ -1290,11 +1377,13 @@ void Editor::drawInspector() {
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmMobAI")) {
                 if (ImGui::MenuItem("Remove Component")) {
-                    if (ai->ai.showAggroRadius
-                        && MobAIComponent::perMobAggroOverlayCount > 0) {
-                        --MobAIComponent::perMobAggroOverlayCount;
-                    }
-                    selectedEntity_->removeComponent<MobAIComponent>();
+                    runInspectorMutation(selectedEntity_, "Remove MobAIComponent", [&]{
+                        if (ai->ai.showAggroRadius
+                            && MobAIComponent::perMobAggroOverlayCount > 0) {
+                            --MobAIComponent::perMobAggroOverlayCount;
+                        }
+                        selectedEntity_->removeComponent<MobAIComponent>();
+                    });
                     ImGui::EndPopup(); goto endInspectorComponents;
                 }
                 ImGui::EndPopup();
@@ -1500,7 +1589,9 @@ void Editor::drawInspector() {
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmGuard")) {
                 if (ImGui::MenuItem("Remove Component")) {
-                    selectedEntity_->removeComponent<GuardComponent>();
+                    runInspectorMutation(selectedEntity_, "Remove GuardComponent", [&]{
+                        selectedEntity_->removeComponent<GuardComponent>();
+                    });
                     ImGui::EndPopup(); goto endInspectorComponents;
                 }
                 ImGui::EndPopup();
@@ -1610,7 +1701,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Combat Controller");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmCombat")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<CombatControllerComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove CombatControllerComponent", [&]{ selectedEntity_->removeComponent<CombatControllerComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<CombatControllerComponent>()) {
@@ -1654,7 +1745,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Inventory");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmInv")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<InventoryComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove InventoryComponent", [&]{ selectedEntity_->removeComponent<InventoryComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<InventoryComponent>()) {
@@ -1669,7 +1760,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Skill Manager");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmSkill")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<SkillManagerComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove SkillManagerComponent", [&]{ selectedEntity_->removeComponent<SkillManagerComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<SkillManagerComponent>()) {
@@ -1683,7 +1774,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Status Effects");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmSE")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<StatusEffectComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove StatusEffectComponent", [&]{ selectedEntity_->removeComponent<StatusEffectComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<StatusEffectComponent>()) {
@@ -1699,11 +1790,11 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Crowd Control");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmCC")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<CrowdControlComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove CrowdControlComponent", [&]{ selectedEntity_->removeComponent<CrowdControlComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<CrowdControlComponent>()) {
-                const char* ccN[] = {"None","Stunned","Frozen","Rooted","Taunted"};
+                const char* ccN[] = {"None","Stunned","Frozen","Rooted","Taunted","Feared"};
                 ImGui::Text("CC: %s  Time: %.1f", ccN[(int)ccC->cc.getCurrentCC()], ccC->cc.getRemainingTime());
                 ImGui::Text("CanMove: %s  CanAct: %s", ccC->cc.canMove()?"Y":"N", ccC->cc.canAct()?"Y":"N");
                 if (ccC->cc.getCurrentCC() != CCType::None && ImGui::Button("Clear CC##cc")) ccC->cc.endCC();
@@ -1716,7 +1807,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Nameplate");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmNP")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<NameplateComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove NameplateComponent", [&]{ selectedEntity_->removeComponent<NameplateComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<NameplateComponent>()) {
@@ -1782,7 +1873,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Mob Nameplate");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmMNP")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<MobNameplateComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove MobNameplateComponent", [&]{ selectedEntity_->removeComponent<MobNameplateComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<MobNameplateComponent>()) {
@@ -1883,7 +1974,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Targeting");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmTgt")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<TargetingComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove TargetingComponent", [&]{ selectedEntity_->removeComponent<TargetingComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<TargetingComponent>()) {
@@ -2014,7 +2105,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Damageable");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmDmg")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<DamageableComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove DamageableComponent", [&]{ selectedEntity_->removeComponent<DamageableComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open) ImGui::Text("(marker - entity can take damage)");
@@ -2026,7 +2117,7 @@ void Editor::drawInspector() {
             ImGui::CollapsingHeader("Party Manager");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmParty")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<PartyComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove PartyComponent", [&]{ selectedEntity_->removeComponent<PartyComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
         }
@@ -2035,7 +2126,7 @@ void Editor::drawInspector() {
             ImGui::CollapsingHeader("Guild Manager");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmGuild")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<GuildComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove GuildComponent", [&]{ selectedEntity_->removeComponent<GuildComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
         }
@@ -2044,7 +2135,7 @@ void Editor::drawInspector() {
             ImGui::CollapsingHeader("Chat Manager");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmChat")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<ChatComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove ChatComponent", [&]{ selectedEntity_->removeComponent<ChatComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
         }
@@ -2053,7 +2144,7 @@ void Editor::drawInspector() {
             ImGui::CollapsingHeader("Friends Manager");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmFriends")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<FriendsComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove FriendsComponent", [&]{ selectedEntity_->removeComponent<FriendsComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
         }
@@ -2062,7 +2153,7 @@ void Editor::drawInspector() {
             ImGui::CollapsingHeader("Trade Manager");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmTrade")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<TradeComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove TradeComponent", [&]{ selectedEntity_->removeComponent<TradeComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
         }
@@ -2071,7 +2162,7 @@ void Editor::drawInspector() {
             ImGui::CollapsingHeader("Market Manager");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmMarket")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<MarketComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove MarketComponent", [&]{ selectedEntity_->removeComponent<MarketComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
         }
@@ -2082,7 +2173,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Spawn Zone");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmSpawnZone")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<SpawnZoneComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove SpawnZoneComponent", [&]{ selectedEntity_->removeComponent<SpawnZoneComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<SpawnZoneComponent>()) {
@@ -2374,7 +2465,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Faction");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmFaction")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<FactionComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove FactionComponent", [&]{ selectedEntity_->removeComponent<FactionComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<FactionComponent>()) {
@@ -2403,7 +2494,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Pet");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmPet")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<PetComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove PetComponent", [&]{ selectedEntity_->removeComponent<PetComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<PetComponent>()) {
@@ -2426,7 +2517,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("NPC");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmNPC")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<NPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove NPCComponent", [&]{ selectedEntity_->removeComponent<NPCComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<NPCComponent>()) {
@@ -2508,7 +2599,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Quest Giver");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmQG")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<QuestGiverComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove QuestGiverComponent", [&]{ selectedEntity_->removeComponent<QuestGiverComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<QuestGiverComponent>()) {
@@ -2523,7 +2614,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Quest Marker");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmQM")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<QuestMarkerComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove QuestMarkerComponent", [&]{ selectedEntity_->removeComponent<QuestMarkerComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<QuestMarkerComponent>()) {
@@ -2548,7 +2639,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Shop");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmShop")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<ShopComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove ShopComponent", [&]{ selectedEntity_->removeComponent<ShopComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<ShopComponent>()) {
@@ -2569,7 +2660,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Banker");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmBanker")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<BankerComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove BankerComponent", [&]{ selectedEntity_->removeComponent<BankerComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<BankerComponent>()) {
@@ -2585,7 +2676,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Guild NPC");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmGuildNPC")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<GuildNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove GuildNPCComponent", [&]{ selectedEntity_->removeComponent<GuildNPCComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<GuildNPCComponent>()) {
@@ -2604,7 +2695,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Teleporter");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmTeleporter")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<TeleporterComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove TeleporterComponent", [&]{ selectedEntity_->removeComponent<TeleporterComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<TeleporterComponent>()) {
@@ -2620,7 +2711,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Story NPC");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmStoryNPC")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<StoryNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove StoryNPCComponent", [&]{ selectedEntity_->removeComponent<StoryNPCComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<StoryNPCComponent>()) {
@@ -2644,7 +2735,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Interact Site");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmInteractSite")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<InteractSiteComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove InteractSiteComponent", [&]{ selectedEntity_->removeComponent<InteractSiteComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<InteractSiteComponent>()) {
@@ -2690,7 +2781,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Dungeon NPC");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmDungeonNPC")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<DungeonNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove DungeonNPCComponent", [&]{ selectedEntity_->removeComponent<DungeonNPCComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<DungeonNPCComponent>()) {
@@ -2707,7 +2798,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Arena NPC");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmArenaNPC")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<ArenaNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove ArenaNPCComponent", [&]{ selectedEntity_->removeComponent<ArenaNPCComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open) {
@@ -2721,7 +2812,7 @@ void Editor::drawInspector() {
             bool open = ImGui::CollapsingHeader("Battlefield NPC");
             if (fontHeading_) ImGui::PopFont();
             if (ImGui::BeginPopupContextItem("##rmBattlefieldNPC")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<BattlefieldNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove BattlefieldNPCComponent", [&]{ selectedEntity_->removeComponent<BattlefieldNPCComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open) {
@@ -2733,7 +2824,7 @@ void Editor::drawInspector() {
         if (auto* mktNpc = selectedEntity_->getComponent<MarketplaceNPCComponent>()) {
             bool open = ImGui::CollapsingHeader("Marketplace NPC");
             if (ImGui::BeginPopupContextItem("##rmMarketplaceNPC")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<MarketplaceNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove MarketplaceNPCComponent", [&]{ selectedEntity_->removeComponent<MarketplaceNPCComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open) {
@@ -2745,7 +2836,7 @@ void Editor::drawInspector() {
         if (auto* lbNpc = selectedEntity_->getComponent<LeaderboardNPCComponent>()) {
             bool open = ImGui::CollapsingHeader("Leaderboard NPC");
             if (ImGui::BeginPopupContextItem("##rmLeaderboardNPC")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<LeaderboardNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove LeaderboardNPCComponent", [&]{ selectedEntity_->removeComponent<LeaderboardNPCComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<LeaderboardNPCComponent>()) {
@@ -2763,7 +2854,7 @@ void Editor::drawInspector() {
         if (auto* craftNpc = selectedEntity_->getComponent<CraftingNPCComponent>()) {
             bool open = ImGui::CollapsingHeader("Crafting NPC");
             if (ImGui::BeginPopupContextItem("##rmCraftingNPC")) {
-                if (ImGui::MenuItem("Remove Component")) { selectedEntity_->removeComponent<CraftingNPCComponent>(); ImGui::EndPopup(); goto endInspectorComponents; }
+                if (ImGui::MenuItem("Remove Component")) { runInspectorMutation(selectedEntity_, "Remove CraftingNPCComponent", [&]{ selectedEntity_->removeComponent<CraftingNPCComponent>(); }); ImGui::EndPopup(); goto endInspectorComponents; }
                 ImGui::EndPopup();
             }
             if (open && selectedEntity_->hasComponent<CraftingNPCComponent>()) {
@@ -2892,6 +2983,13 @@ void Editor::drawInspector() {
                 componentId<CraftingNPCComponent>(),
             };
 
+            // Deferred-removal flag for the BehaviorComponent drawer. It
+            // lives inside the forEachComponent lambda below, where a
+            // direct `goto endInspectorComponents` is illegal (the label
+            // is outside the lambda). The lambda flips this flag; the
+            // wrap after the loop performs the undoable removal.
+            bool removeBehaviorRequested = false;
+
             selectedEntity_->forEachComponent([&](void* data, CompId id) {
                 if (manuallyInspected.count(id)) return;
                 auto* meta = ComponentMetaRegistry::instance().findById(id);
@@ -2906,19 +3004,31 @@ void Editor::drawInspector() {
                     bool open = ImGui::CollapsingHeader("BehaviorComponent",
                                                        ImGuiTreeNodeFlags_DefaultOpen);
                     if (fontHeading_) ImGui::PopFont();
+                    // Right-click on the header to remove the component.
+                    // The actual removal runs after forEachComponent (see
+                    // removeBehaviorRequested) wrapped in runInspector-
+                    // Mutation for undo + replicated→authored promotion.
+                    if (ImGui::BeginPopupContextItem("##rmBehaviorComponent")) {
+                        if (ImGui::MenuItem("Remove Component")) {
+                            removeBehaviorRequested = true;
+                        }
+                        ImGui::EndPopup();
+                    }
                     if (!open) return;
 
                     ImGui::PushID(static_cast<int>(id));
 
-                    // Behavior name combo: enumerates registered behaviors.
+                    // Behavior name input (multi-frame text widget;
+                    // captureInspectorUndo handles via the standard
+                    // Activated/Deactivated dance).
                     char behaviorBuf[64];
                     std::strncpy(behaviorBuf, bc->behavior.c_str(), sizeof(behaviorBuf));
                     behaviorBuf[sizeof(behaviorBuf) - 1] = '\0';
                     if (ImGui::InputText("Behavior", behaviorBuf, sizeof(behaviorBuf),
                                          ImGuiInputTextFlags_EnterReturnsTrue)) {
                         bc->behavior = behaviorBuf;
-                        Editor::instance().markSceneDirty();
                     }
+                    Editor::instance().captureInspectorUndo();
                     ImGui::SameLine();
                     if (ImGui::SmallButton("Pick##bhpick")) {
                         ImGui::OpenPopup("##behavior_pick");
@@ -2929,10 +3039,11 @@ void Editor::drawInspector() {
                             [&](const std::string& name, const FateBehaviorVTable&) {
                                 any = true;
                                 if (ImGui::MenuItem(name.c_str())) {
-                                    if (bc->behavior != name) {
-                                        bc->behavior = name;
-                                        Editor::instance().markSceneDirty();
-                                    }
+                                    // MenuItem is one-shot; explicit
+                                    // before/after via runInspectorMutation.
+                                    runInspectorMutation(selectedEntity_, "Pick Behavior", [&]{
+                                        if (bc->behavior != name) bc->behavior = name;
+                                    });
                                 }
                             });
                         if (!any) {
@@ -2941,9 +3052,10 @@ void Editor::drawInspector() {
                         ImGui::EndPopup();
                     }
 
-                    if (ImGui::Checkbox("Enabled", &bc->enabled)) {
-                        Editor::instance().markSceneDirty();
-                    }
+                    // Checkbox is single-frame; captureInspectorUndo's
+                    // pre-frame snapshot fallback is the baseline.
+                    ImGui::Checkbox("Enabled", &bc->enabled);
+                    Editor::instance().captureInspectorUndo();
 
                     ImGui::Separator();
                     ImGui::TextColored(ImVec4(0.7f, 0.85f, 1.0f, 1.0f),
@@ -2958,8 +3070,15 @@ void Editor::drawInspector() {
                     if (!bc->fields.is_object()) bc->fields = nlohmann::json::object();
                     const FateBehaviorVTable* boundVt =
                         BehaviorRegistry::instance().find(bc->behavior);
-                    const FateBehaviorSchema* schema =
-                        (boundVt && boundVt->describeFields) ? boundVt->describeFields() : nullptr;
+                    // The manager validates AND copies the entire schema
+                    // (including bounded name/tooltip strings) into host-
+                    // owned storage under SEH. Inspector iterates host
+                    // strings exclusively — never re-enters module memory.
+                    // Null return means fault / malformed / legitimate
+                    // no-schema; fall through to the freeform JSON drawer
+                    // in any case.
+                    const HotReloadManager::SafeBehaviorSchema* schema =
+                        HotReloadManager::instance().safeDescribeFields(boundVt);
 
                     std::string keyToErase;
 
@@ -2967,24 +3086,50 @@ void Editor::drawInspector() {
                     // "Extra fields" expander below only shows the rest.
                     std::vector<std::string> schemaKeys;
 
-                    if (schema && schema->fields && schema->fieldCount > 0) {
-                        schemaKeys.reserve(schema->fieldCount);
-                        for (uint32_t fi = 0; fi < schema->fieldCount; ++fi) {
-                            const FateFieldDescriptor& fd = schema->fields[fi];
-                            if (!fd.name) continue;
-                            schemaKeys.emplace_back(fd.name);
-                            ImGui::PushID(fd.name);
-
-                            // Seed the field if missing (schema default).
-                            auto it = bc->fields.find(fd.name);
-                            if (it == bc->fields.end()) {
-                                switch (fd.type) {
-                                    case FATE_FIELD_FLOAT: bc->fields[fd.name] = fd.defaultF; break;
-                                    case FATE_FIELD_INT:   bc->fields[fd.name] = fd.defaultI; break;
-                                    case FATE_FIELD_BOOL:  bc->fields[fd.name] = (fd.defaultB != 0); break;
-                                }
-                                Editor::instance().markSceneDirty();
+                    if (schema && !schema->fields.empty()) {
+                        // Seed missing schema defaults in one pass, wrapped
+                        // in a single runInspectorMutation. Fires at most
+                        // once per missing field per session — after the
+                        // write the field exists and the loop body is a
+                        // no-op next frame. Grouping into one command means
+                        // undoing seeding takes one Ctrl+Z, not N.
+                        bool anyMissing = false;
+                        for (const auto& fd : schema->fields) {
+                            if (fd.name.empty()) continue;
+                            if (bc->fields.find(fd.name) == bc->fields.end()) {
+                                anyMissing = true;
+                                break;
                             }
+                        }
+                        if (anyMissing) {
+                            runInspectorMutation(selectedEntity_, "Seed schema defaults", [&]{
+                                for (const auto& fd : schema->fields) {
+                                    if (fd.name.empty()) continue;
+                                    if (bc->fields.find(fd.name) != bc->fields.end()) continue;
+                                    switch (fd.type) {
+                                        case FATE_FIELD_FLOAT: bc->fields[fd.name] = fd.defaultF; break;
+                                        case FATE_FIELD_INT:   bc->fields[fd.name] = fd.defaultI; break;
+                                        case FATE_FIELD_BOOL:  bc->fields[fd.name] = (fd.defaultB != 0); break;
+                                    }
+                                }
+                            });
+                        }
+
+                        schemaKeys.reserve(schema->fields.size());
+                        for (const auto& fd : schema->fields) {
+                            if (fd.name.empty()) continue;
+                            const char* nameCstr = fd.name.c_str();
+                            schemaKeys.push_back(fd.name);
+                            ImGui::PushID(nameCstr);
+
+                            // Captured BEFORE the SameLine/reset button so the
+                            // schema-field tooltip (emitted after the switch)
+                            // attaches to the field widget rather than the
+                            // reset button. ImGui's "last item" advances with
+                            // every widget call; IsItemHovered() at the bottom
+                            // would otherwise refer to whichever element ran
+                            // most recently.
+                            bool fieldHovered = false;
 
                             switch (fd.type) {
                                 case FATE_FIELD_FLOAT: {
@@ -2993,13 +3138,31 @@ void Editor::drawInspector() {
                                               : fd.defaultF;
                                     bool changed;
                                     if (fd.minF < fd.maxF) {
-                                        changed = ImGui::SliderFloat(fd.name, &v, fd.minF, fd.maxF);
+                                        changed = ImGui::SliderFloat(nameCstr, &v, fd.minF, fd.maxF);
                                     } else {
-                                        changed = ImGui::DragFloat(fd.name, &v, 0.05f);
+                                        changed = ImGui::DragFloat(nameCstr, &v, 0.05f);
                                     }
-                                    if (changed) {
-                                        bc->fields[fd.name] = v;
-                                        Editor::instance().markSceneDirty();
+                                    fieldHovered = ImGui::IsItemHovered();
+                                    if (changed) bc->fields[fd.name] = v;
+                                    Editor::instance().captureInspectorUndo();
+                                    // Reset-to-default affordance. Typed
+                                    // check on the JSON value so a malformed
+                                    // (wrong-type) field still surfaces the
+                                    // button — the coerced display value
+                                    // would silently equal default and hide
+                                    // the only escape hatch.
+                                    bool atDefault = bc->fields[fd.name].is_number()
+                                                     && bc->fields[fd.name].get<float>() == fd.defaultF;
+                                    if (!atDefault) {
+                                        ImGui::SameLine();
+                                        if (ImGui::SmallButton("reset##reset")) {
+                                            runInspectorMutation(selectedEntity_, "Reset to default", [&]{
+                                                bc->fields[fd.name] = fd.defaultF;
+                                            });
+                                        }
+                                        if (ImGui::IsItemHovered()) {
+                                            ImGui::SetTooltip("Reset to schema default (%.3f)", fd.defaultF);
+                                        }
                                     }
                                     break;
                                 }
@@ -3009,13 +3172,25 @@ void Editor::drawInspector() {
                                             : (int)fd.defaultI;
                                     bool changed;
                                     if (fd.minI < fd.maxI) {
-                                        changed = ImGui::SliderInt(fd.name, &v, (int)fd.minI, (int)fd.maxI);
+                                        changed = ImGui::SliderInt(nameCstr, &v, (int)fd.minI, (int)fd.maxI);
                                     } else {
-                                        changed = ImGui::DragInt(fd.name, &v);
+                                        changed = ImGui::DragInt(nameCstr, &v);
                                     }
-                                    if (changed) {
-                                        bc->fields[fd.name] = v;
-                                        Editor::instance().markSceneDirty();
+                                    fieldHovered = ImGui::IsItemHovered();
+                                    if (changed) bc->fields[fd.name] = v;
+                                    Editor::instance().captureInspectorUndo();
+                                    bool atDefault = bc->fields[fd.name].is_number_integer()
+                                                     && bc->fields[fd.name].get<int>() == (int)fd.defaultI;
+                                    if (!atDefault) {
+                                        ImGui::SameLine();
+                                        if (ImGui::SmallButton("reset##reset")) {
+                                            runInspectorMutation(selectedEntity_, "Reset to default", [&]{
+                                                bc->fields[fd.name] = (int)fd.defaultI;
+                                            });
+                                        }
+                                        if (ImGui::IsItemHovered()) {
+                                            ImGui::SetTooltip("Reset to schema default (%d)", (int)fd.defaultI);
+                                        }
                                     }
                                     break;
                                 }
@@ -3023,16 +3198,34 @@ void Editor::drawInspector() {
                                     bool v = bc->fields[fd.name].is_boolean()
                                              ? bc->fields[fd.name].get<bool>()
                                              : (fd.defaultB != 0);
-                                    if (ImGui::Checkbox(fd.name, &v)) {
-                                        bc->fields[fd.name] = v;
-                                        Editor::instance().markSceneDirty();
+                                    if (ImGui::Checkbox(nameCstr, &v)) bc->fields[fd.name] = v;
+                                    fieldHovered = ImGui::IsItemHovered();
+                                    Editor::instance().captureInspectorUndo();
+                                    bool atDefault = bc->fields[fd.name].is_boolean()
+                                                     && bc->fields[fd.name].get<bool>() == (fd.defaultB != 0);
+                                    if (!atDefault) {
+                                        ImGui::SameLine();
+                                        if (ImGui::SmallButton("reset##reset")) {
+                                            runInspectorMutation(selectedEntity_, "Reset to default", [&]{
+                                                bc->fields[fd.name] = (fd.defaultB != 0);
+                                            });
+                                        }
+                                        if (ImGui::IsItemHovered()) {
+                                            ImGui::SetTooltip("Reset to schema default (%s)",
+                                                              fd.defaultB != 0 ? "true" : "false");
+                                        }
                                     }
                                     break;
                                 }
                             }
-                            // Tooltip surfaces the schema's docstring.
-                            if (fd.tooltip && fd.tooltip[0] && ImGui::IsItemHovered()) {
-                                ImGui::SetTooltip("%s", fd.tooltip);
+                            // Schema-field tooltip — fires off the captured
+                            // hover state of the field widget (NOT IsItem-
+                            // Hovered, which now refers to the reset button
+                            // or its tooltip). Host-owned string copied at
+                            // safeDescribeFields time; module memory never
+                            // reached from here.
+                            if (fieldHovered && !fd.tooltip.empty()) {
+                                ImGui::SetTooltip("%s", fd.tooltip.c_str());
                             }
                             ImGui::PopID();
                         }
@@ -3059,22 +3252,16 @@ void Editor::drawInspector() {
                                     auto& val = bc->fields[key];
                                     if (val.is_number_float()) {
                                         float v = val.get<float>();
-                                        if (ImGui::DragFloat(key.c_str(), &v, 0.05f)) {
-                                            bc->fields[key] = v;
-                                            Editor::instance().markSceneDirty();
-                                        }
+                                        if (ImGui::DragFloat(key.c_str(), &v, 0.05f)) bc->fields[key] = v;
+                                        Editor::instance().captureInspectorUndo();
                                     } else if (val.is_number_integer()) {
                                         int v = val.get<int>();
-                                        if (ImGui::DragInt(key.c_str(), &v)) {
-                                            bc->fields[key] = v;
-                                            Editor::instance().markSceneDirty();
-                                        }
+                                        if (ImGui::DragInt(key.c_str(), &v)) bc->fields[key] = v;
+                                        Editor::instance().captureInspectorUndo();
                                     } else if (val.is_boolean()) {
                                         bool v = val.get<bool>();
-                                        if (ImGui::Checkbox(key.c_str(), &v)) {
-                                            bc->fields[key] = v;
-                                            Editor::instance().markSceneDirty();
-                                        }
+                                        if (ImGui::Checkbox(key.c_str(), &v)) bc->fields[key] = v;
+                                        Editor::instance().captureInspectorUndo();
                                     } else {
                                         ImGui::Text("%s = (%s, edit in JSON)", key.c_str(),
                                                     val.type_name());
@@ -3093,22 +3280,16 @@ void Editor::drawInspector() {
                             ImGui::PushID(key.c_str());
                             if (it.value().is_number_float()) {
                                 float v = it.value().get<float>();
-                                if (ImGui::DragFloat(key.c_str(), &v, 0.05f)) {
-                                    bc->fields[key] = v;
-                                    Editor::instance().markSceneDirty();
-                                }
+                                if (ImGui::DragFloat(key.c_str(), &v, 0.05f)) bc->fields[key] = v;
+                                Editor::instance().captureInspectorUndo();
                             } else if (it.value().is_number_integer()) {
                                 int v = it.value().get<int>();
-                                if (ImGui::DragInt(key.c_str(), &v)) {
-                                    bc->fields[key] = v;
-                                    Editor::instance().markSceneDirty();
-                                }
+                                if (ImGui::DragInt(key.c_str(), &v)) bc->fields[key] = v;
+                                Editor::instance().captureInspectorUndo();
                             } else if (it.value().is_boolean()) {
                                 bool v = it.value().get<bool>();
-                                if (ImGui::Checkbox(key.c_str(), &v)) {
-                                    bc->fields[key] = v;
-                                    Editor::instance().markSceneDirty();
-                                }
+                                if (ImGui::Checkbox(key.c_str(), &v)) bc->fields[key] = v;
+                                Editor::instance().captureInspectorUndo();
                             } else {
                                 ImGui::Text("%s = (%s, edit in JSON)", key.c_str(),
                                             it.value().type_name());
@@ -3120,8 +3301,11 @@ void Editor::drawInspector() {
                     }
 
                     if (!keyToErase.empty()) {
-                        bc->fields.erase(keyToErase);
-                        Editor::instance().markSceneDirty();
+                        // X click is one-shot; wrap in runInspectorMutation
+                        // so the delete is undoable.
+                        runInspectorMutation(selectedEntity_, "Delete custom field", [&]{
+                            bc->fields.erase(keyToErase);
+                        });
                     }
 
                     // Add-field row (designer types name, picks type).
@@ -3135,13 +3319,16 @@ void Editor::drawInspector() {
                     ImGui::Combo("##nftype", &newFieldType, tnames, 3);
                     ImGui::SameLine();
                     if (ImGui::Button("+ Add Field") && newFieldName[0] != '\0') {
-                        switch (newFieldType) {
-                            case 0: bc->fields[newFieldName] = 0.0f; break;
-                            case 1: bc->fields[newFieldName] = 0;    break;
-                            case 2: bc->fields[newFieldName] = false;break;
-                        }
+                        // Button click is one-shot; wrap in runInspector-
+                        // Mutation so the new field is undoable.
+                        runInspectorMutation(selectedEntity_, "Add custom field", [&]{
+                            switch (newFieldType) {
+                                case 0: bc->fields[newFieldName] = 0.0f; break;
+                                case 1: bc->fields[newFieldName] = 0;    break;
+                                case 2: bc->fields[newFieldName] = false;break;
+                            }
+                        });
                         newFieldName[0] = '\0';
-                        Editor::instance().markSceneDirty();
                     }
 
                     if (!bc->runtimeFields.empty()) {
@@ -3169,6 +3356,17 @@ void Editor::drawInspector() {
                     drawReflectedComponent(*meta, data);
                 }
             });
+
+            // Deferred BehaviorComponent removal (the popup inside the
+            // forEach lambda can only set a flag because `goto` cannot
+            // cross lambda boundaries). Wrapped in runInspectorMutation
+            // so the removal is undoable.
+            if (removeBehaviorRequested) {
+                runInspectorMutation(selectedEntity_, "Remove BehaviorComponent", [&]{
+                    selectedEntity_->removeComponent<BehaviorComponent>();
+                });
+                goto endInspectorComponents;
+            }
         }
 
         endInspectorComponents:;
@@ -3190,6 +3388,13 @@ void Editor::drawInspector() {
             ImGui::PopStyleColor(3);
         }
         if (ImGui::BeginPopup("AddComponent")) {
+            // Wrap the entire menu body in one mutation so a clicked
+            // MenuItem (a one-shot widget) is captured before/after into
+            // a single PropertyCommand. Most frames the popup is open the
+            // user hasn't clicked anything — before == after, no command
+            // pushed. The frame the user clicks: addComponent runs, after
+            // differs, push.
+            runInspectorMutation(selectedEntity_, "Add Component", [&]{
             if (!selectedEntity_->hasComponent<Transform>() && ImGui::MenuItem("Transform"))
                 selectedEntity_->addComponent<Transform>();
             if (!selectedEntity_->hasComponent<SpriteComponent>() && ImGui::MenuItem("Sprite"))
@@ -3313,6 +3518,7 @@ void Editor::drawInspector() {
                 selectedEntity_->addComponent<FactionComponent>();
             if (!selectedEntity_->hasComponent<PetComponent>() && ImGui::MenuItem("Pet"))
                 selectedEntity_->addComponent<PetComponent>();
+            }); // runInspectorMutation("Add Component")
 
             ImGui::EndPopup();
         }

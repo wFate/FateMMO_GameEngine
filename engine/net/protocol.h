@@ -279,7 +279,14 @@ struct SvEntityUpdateMsg {
     uint8_t moveState = 0;
     // Bit 6: animId (uint16, 2B) — current skill/animation ID
     uint16_t animId = 0;
-    // Bit 7: statusEffectMask (uint32, 4B) — bitfield of up to 32 status effects
+    // Bit 7: statusEffectMask (uint32, 4B) — low 32 wire mask of active status
+    // effects. NOT the same as the server-side dirty mask (uint64) used by
+    // server_app's SvBuffSync gate; this wire field stays uint32 because the
+    // current client only references it via a TODO at game_app.cpp:600. When
+    // the nameplate-icon path goes live, widen this field too — that's a
+    // PROTOCOL_VERSION bump. SvBuffSync sends per-effect BuffEntry vectors
+    // (no mask), so high-bit EffectType values (Silence, Blind, ...) reach
+    // the owning client's buff bar regardless of this truncation.
     uint32_t statusEffectMask = 0;
     // Bit 8: deathState (uint8, 1B) — alive/dying/dead/ghost
     uint8_t deathState = 0;

@@ -74,7 +74,11 @@ public:
         defaultLogger_ = std::make_shared<spdlog::logger>("fate", sinks.begin(), sinks.end());
         defaultLogger_->set_pattern("[%H:%M:%S.%e] [%^%l%$] [%n] %v");
         defaultLogger_->set_level(spdlog::level::debug);
-        defaultLogger_->flush_on(spdlog::level::warn);
+        // Flush on INFO so logs/fate_engine.log is tailable in real time
+        // (smoke-pass copy-paste workflow, hot-reload swap traces, etc.).
+        // INFO is not high-frequency on the editor side; the cost is a
+        // per-line fflush which is dwarfed by spdlog's mutex + format work.
+        defaultLogger_->flush_on(spdlog::level::info);
         spdlog::set_default_logger(defaultLogger_);
 
         spdlog::enable_backtrace(64);
