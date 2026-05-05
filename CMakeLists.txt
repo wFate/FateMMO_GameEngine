@@ -906,6 +906,22 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     if(EXISTS "${CMAKE_SOURCE_DIR}/server/handlers/aoe_helpers.cpp")
         list(APPEND SERVER_TEST_SOURCES server/handlers/aoe_helpers.cpp)
     endif()
+    # Phase 7.2b.4 Session 2 — telegraph foundation. server_authored_damage
+    # is the locked modifier-order helper; telegraph_runtime is the queue +
+    # validate/enqueue/cancel state. Both are dependency-light (no DB / Server
+    # App / NetServer) so test_telegraph_resolve.cpp links them directly.
+    # The client-side overlay (game/render/telegraph_overlay.cpp) lives
+    # outside game/shared/ so GAME_SHARED_SOURCES doesn't pick it up — list
+    # it here so the wire roundtrip + overlay-promote tests compile in fate_tests.
+    if(EXISTS "${CMAKE_SOURCE_DIR}/server/handlers/server_authored_damage.cpp")
+        list(APPEND SERVER_TEST_SOURCES server/handlers/server_authored_damage.cpp)
+    endif()
+    if(EXISTS "${CMAKE_SOURCE_DIR}/server/handlers/telegraph_runtime.cpp")
+        list(APPEND SERVER_TEST_SOURCES server/handlers/telegraph_runtime.cpp)
+    endif()
+    if(EXISTS "${CMAKE_SOURCE_DIR}/game/render/telegraph_overlay.cpp")
+        list(APPEND SERVER_TEST_SOURCES game/render/telegraph_overlay.cpp)
+    endif()
     # Boss-script registry + lifecycle (Phase 7.1) — used by
     # test_boss_script_phase71.cpp. No DB / replication deps; pure containers
     # plus the lifecycle hook that walks Entity->getComponent. The hooks

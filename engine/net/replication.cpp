@@ -48,20 +48,26 @@ inline bool hasCriticalEntityChange(Entity* entity, const SvEntityUpdateMsg& las
 
 void ReplicationManager::update(World& world, NetServer& server) {
     ++tickCounter_;
-    // NOTE: Spatial index rebuild is commented out — it was rebuilt every tick but
-    // never queried, wasting CPU. Scene-based filtering (buildVisibility iterates all
-    // entities in the same scene) is sufficient at current scale. Distance-based AOI
-    // was removed because a 128px hysteresis gap caused entity flickering at boundaries
-    // (activate 640px / deactivate 768px was too narrow for moving mobs). Re-enable
-    // distance-based AOI with wider hysteresis (e.g. 500/900 + min visibility duration)
-    // only when zone populations exceed ~200 entities and bandwidth becomes a bottleneck.
+    ++stats_.ticks;
+    // NOTE: Spatial index rebuild is commented out — it was rebuilt every tick
+    // but never queried, wasting CPU. Phase 3a/3b re-enable scene + distance
+    // AOI with 640/1280 hysteresis and a min-visible-time floor
+    // (AOIConfig::minVisibleTicks) that prevents flicker at the boundary. The
+    // previous 640/768 (128 px gap) was disabled in production for ~6 weeks
+    // because it flickered. Phase 3c will bring the spatial index back online
+    // for the candidate sweep — this commit keeps the linear handleToPid_
+    // scan so the behavior fix ships before the perf change.
     // rebuildSpatialIndex(world);
 
     server.connections().forEach([&](ClientConnection& client) {
         // Admin observers authenticate without selecting a character, so
         // playerEntityId stays 0 but spectateScene drives what they see.
         // Skip only when neither path applies.
-        if (client.playerEntityId == 0 && client.spectateScene.empty()) return;
+        if (client.playerEntityId == 0 && client.spectateScene.empty()) {
+            ++stats_.clientSkippedNotPlaying;
+            return;
+        }
+        ++stats_.clientsServed;
         buildVisibility(world, client);
         sendDiffs(world, server, client);
 
@@ -130,23 +136,39 @@ EntityHandle ReplicationManager::getEntityHandle(PersistentId pid) const {
 }
 
 void ReplicationManager::buildVisibility(World& world, ClientConnection& client) {
-    // Scene-filtered visibility: only replicate entities that share the client's
-    // current scene. Without this filter, mobs from other zones leak through
-    // as ghost entities (visible but non-interactive).
+    // Scene + distance filtered visibility. Phase 2 added the scene gate plus
+    // the unclassified-leak counter; Phase 3a re-enables distance gating with
+    // sticky hysteresis (640 / 1280); Phase 3b adds a min-visible floor that
+    // suppresses boundary flicker.
     client.aoi.current.clear();
 
-    // Determine the client's current scene from their player entity
-    // (spectateScene overrides: replication shows the spectated scene instead)
+    // Resolve client scene + player position together — one player-entity
+    // lookup feeds both the scene filter and the distance gate.
+    // spectateScene (admin observer) overrides scene and bypasses distance.
     std::string clientScene;
-    if (!client.spectateScene.empty()) {
+    const bool isSpectator =
+        (client.playerEntityId == 0 && !client.spectateScene.empty());
+    bool bypassDistance = isSpectator;
+    bool clientPositionResolved = false;
+    Vec2 clientPos{};
+    if (isSpectator) {
         clientScene = client.spectateScene;
     } else if (client.playerEntityId != 0) {
         auto pit = pidToHandle_.find(client.playerEntityId);
         if (pit != pidToHandle_.end()) {
             Entity* playerEntity = world.getEntity(pit->second);
             if (playerEntity) {
-                auto* cs = playerEntity->getComponent<CharacterStatsComponent>();
-                if (cs) clientScene = cs->stats.currentScene;
+                if (auto* cs = playerEntity->getComponent<CharacterStatsComponent>()) {
+                    clientScene = cs->stats.currentScene;
+                    // Dead players have a frozen camera at the corpse. Bypass
+                    // distance so the death-cam stays scene-wide and matches
+                    // the sendDiffs isObserverClient tier handling.
+                    if (cs->stats.isDead) bypassDistance = true;
+                }
+                if (auto* pt = playerEntity->getComponent<Transform>()) {
+                    clientPos = pt->position;
+                    clientPositionResolved = true;
+                }
             }
         }
     }
@@ -155,47 +177,143 @@ void ReplicationManager::buildVisibility(World& world, ClientConnection& client)
     // something went wrong (entity destroyed, PID evicted). Send nothing
     // rather than bypassing the scene filter and flooding all entities.
     if (clientScene.empty() && client.playerEntityId != 0 && client.spectateScene.empty()) {
+        ++stats_.clientSkippedNoScene;
         client.aoi.computeDiff();
         client.aoi.advance();
         return;
     }
 
     for (const auto& [handleValue, pid] : handleToPid_) {
+        ++stats_.scanned;
+
         // Exclude the client's own player entity
-        if (pid.value() == client.playerEntityId) continue;
+        if (pid.value() == client.playerEntityId) {
+            ++stats_.selfExcluded;
+            continue;
+        }
 
         // Verify entity still exists and is active
         Entity* entity = world.getEntity(EntityHandle(handleValue));
-        if (!entity || !entity->isActive()) continue;
+        if (!entity || !entity->isActive()) {
+            ++stats_.entityMissingOrInactive;
+            continue;
+        }
 
         // Scene filter: only include entities in the same scene as the client.
         // Every entity MUST have a scene — empty sceneId means it was never
-        // placed in a scene and must NOT leak to any client.
+        // placed in a scene and must NOT leak to any client. NOTE: only
+        // *scene-bearing* components gate by scene. A registered entity with
+        // none of these four components currently passes the filter — the
+        // unclassifiedSceneEntity counter measures the leak. Classification
+        // policy is a separate decision (telemetry first).
+        bool hadSceneComponent = false;
+        bool sceneCulled       = false;
         if (!clientScene.empty()) {
             // Check mob scene (EnemyStatsComponent::sceneId)
-            auto* es = entity->getComponent<EnemyStatsComponent>();
-            if (es && es->stats.sceneId != clientScene) continue;
+            if (auto* es = entity->getComponent<EnemyStatsComponent>()) {
+                hadSceneComponent = true;
+                if (es->stats.sceneId != clientScene) sceneCulled = true;
+            }
 
             // Check player scene (CharacterStatsComponent::currentScene)
-            auto* otherCs = entity->getComponent<CharacterStatsComponent>();
-            if (otherCs && otherCs->stats.currentScene != clientScene) continue;
+            if (!sceneCulled) {
+                if (auto* otherCs = entity->getComponent<CharacterStatsComponent>()) {
+                    hadSceneComponent = true;
+                    if (otherCs->stats.currentScene != clientScene) sceneCulled = true;
+                }
+            }
 
             // Check NPC scene (NPCComponent::sceneId)
-            auto* npc = entity->getComponent<NPCComponent>();
-            if (npc && npc->sceneId != clientScene) continue;
+            if (!sceneCulled) {
+                if (auto* npc = entity->getComponent<NPCComponent>()) {
+                    hadSceneComponent = true;
+                    if (npc->sceneId != clientScene) sceneCulled = true;
+                }
+            }
 
             // Check dropped item scene (DroppedItemComponent::sceneId)
-            auto* drop = entity->getComponent<DroppedItemComponent>();
-            if (drop && drop->sceneId != clientScene) continue;
+            if (!sceneCulled) {
+                if (auto* drop = entity->getComponent<DroppedItemComponent>()) {
+                    hadSceneComponent = true;
+                    if (drop->sceneId != clientScene) sceneCulled = true;
+                }
+            }
+        }
+        if (sceneCulled) {
+            ++stats_.sceneCulled;
+            continue;
+        }
+        if (!hadSceneComponent) ++stats_.unclassifiedSceneEntity;
+
+        // Phase 3a — distance gate (after scene, before visibility filter).
+        // Spectators and dead players bypass entirely; normal clients with
+        // no resolved Transform fail CLOSED so we never silent-fall back to
+        // a scene-wide flood.
+        if (!bypassDistance) {
+            if (!clientPositionResolved) {
+                ++stats_.missingPlayerPosition;
+                continue;
+            }
+            auto* etrans = entity->getComponent<Transform>();
+            if (!etrans) {
+                ++stats_.missingEntityPosition;
+                continue;
+            }
+            const float dx = etrans->position.x - clientPos.x;
+            const float dy = etrans->position.y - clientPos.y;
+            const float d2 = dx * dx + dy * dy;
+            // aoi.previous is sorted by the prior computeDiff() — binary
+            // search is the cheap way to read the sticky bit.
+            const bool wasVisible = std::binary_search(
+                client.aoi.previous.begin(),
+                client.aoi.previous.end(),
+                EntityHandle(handleValue));
+            const float r = wasVisible ? aoiConfig_.deactivationRadius
+                                       : aoiConfig_.activationRadius;
+            if (d2 > r * r) {
+                if (wasVisible) {
+                    // Phase 3b — anti-flap floor. Hold the entity if it has
+                    // not been visible long enough yet. Distance-driven leave
+                    // is suppressed; the entity falls through and is admitted.
+                    auto fsi = client.firstSeenTick.find(handleValue);
+                    if (fsi != client.firstSeenTick.end() &&
+                        tickCounter_ - fsi->second < aoiConfig_.minVisibleTicks) {
+                        ++stats_.minVisibleHeld;
+                        // fall-through: admit anyway
+                    } else {
+                        ++stats_.distanceCulledHadPrevious;
+                        continue;
+                    }
+                } else {
+                    ++stats_.distanceCulledNoPrevious;
+                    continue;
+                }
+            } else if (wasVisible &&
+                       d2 > aoiConfig_.activationRadius * aoiConfig_.activationRadius) {
+                // Strictly in [activation, deactivation] — sticky bit kept the
+                // entity admitted across the band. wasVisible entities still
+                // inside activation are not "sticky"; they would be admitted
+                // by the activation radius alone, so they do NOT increment
+                // this counter (otherwise /aoi_stats sticky drowns in noise
+                // from normal near entities).
+                ++stats_.stickyHeld;
+            }
         }
 
         // Custom visibility filter (e.g. GM invisibility)
-        if (visibilityFilter && visibilityFilter(pid.value(), client)) continue;
+        if (visibilityFilter && visibilityFilter(pid.value(), client)) {
+            ++stats_.visibilityFilterCulled;
+            continue;
+        }
 
+        ++stats_.admitted;
         client.aoi.current.push_back(EntityHandle(handleValue));
     }
 
     client.aoi.computeDiff();
+    stats_.entered += client.aoi.entered.size();
+    stats_.left    += client.aoi.left.size();
+    stats_.stayed  += client.aoi.stayed.size();
     client.aoi.advance();
 }
 
@@ -261,6 +379,11 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         auto state = buildCurrentState(world, entity, pid);
         state.updateSeq = entitySeqCounters_[handle.value];
         client.lastSentState[pid.value()] = state;
+
+        // Phase 3b — record first-seen tick for the min-visible floor.
+        // buildVisibility consults this map to suppress distance-driven
+        // leaves until the floor elapses.
+        client.firstSeenTick[handle.value] = tickCounter_;
     }
     flushEnterBatch();
 
@@ -291,11 +414,32 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
     // Process left entities
     for (const auto& handle : client.aoi.left) {
         PersistentId pid = getPersistentId(handle);
+        const bool wasUnregistered = pid.isNull();
         // Fallback: entity was unregistered this tick (pickup/despawn) — PID already erased
         if (pid.isNull()) {
             auto uit = recentlyUnregistered_.find(handle.value);
-            if (uit != recentlyUnregistered_.end()) pid = uit->second;
+            if (uit != recentlyUnregistered_.end()) {
+                pid = uit->second;
+                ++stats_.recentlyUnregisteredFallback;
+            }
         }
+
+        // Phase 3b — when an unregistered-leave fires for an entity that was
+        // still inside its min-visible window, count it. Despawn always
+        // bypasses the floor (handle vanishes from handleToPid_ and never
+        // reaches the buildVisibility distance branch); this counter surfaces
+        // the operator-meaningful subset where the floor would have applied.
+        if (wasUnregistered) {
+            auto fsi = client.firstSeenTick.find(handle.value);
+            if (fsi != client.firstSeenTick.end() &&
+                tickCounter_ - fsi->second < aoiConfig_.minVisibleTicks) {
+                ++stats_.forcedLeaveDespawn;
+            }
+        }
+        // Always erase firstSeenTick on leave so a re-registered handle
+        // starts a fresh window.
+        client.firstSeenTick.erase(handle.value);
+
         if (pid.isNull()) continue;
 
         // Flush before appending if next entry would overflow.

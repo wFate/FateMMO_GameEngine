@@ -81,8 +81,17 @@ void FileWatcher::start(const std::string& directory, Callback onFileChanged) {
 
             auto* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(ioBuffer_);
             while (true) {
+                // Editors save in three flavors: in-place write (MODIFIED),
+                // create-new (ADDED), and atomic write-temp-then-rename
+                // (RENAMED_NEW_NAME — the temp's rename to the target file
+                // appears as the *new* name landing in this dir). Without
+                // RENAMED_NEW_NAME, VS Code / Vim / our own atomic Edit
+                // tooling silently bypass the watcher. We do NOT fire on
+                // REMOVED / RENAMED_OLD_NAME — those represent the file
+                // leaving its old identity, not a new payload to react to.
                 if (info->Action == FILE_ACTION_MODIFIED ||
-                    info->Action == FILE_ACTION_ADDED) {
+                    info->Action == FILE_ACTION_ADDED    ||
+                    info->Action == FILE_ACTION_RENAMED_NEW_NAME) {
                     std::wstring wname(info->FileName, info->FileNameLength / sizeof(WCHAR));
                     int utf8len = WideCharToMultiByte(CP_UTF8, 0, wname.c_str(), (int)wname.size(), nullptr, 0, nullptr, nullptr);
                     std::string name(utf8len, 0);

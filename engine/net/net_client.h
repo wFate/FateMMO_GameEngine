@@ -322,6 +322,14 @@ public:
     std::function<void(MoveRejectReason reason)> onMoveReject; // Phase C Batch 3 WU14c
     std::function<void(const SvSpectateAckMsg&)> onSpectateAck;
 
+    // v21 — Phase 7.2b.4 Session 2 telegraph foundation. Server announces /
+    // cancels server-authored AOE telegraphs in batched packets. The client
+    // overlay (game/render/telegraph_overlay) consumes the batches as a unit
+    // so a multi-pillar boss transition processes one packet → N visual
+    // entries without fanning out to N separate callbacks.
+    std::function<void(const SvAOETelegraphStartBatchMsg&)>  onAOETelegraphStartBatch;
+    std::function<void(const SvAOETelegraphCancelBatchMsg&)> onAOETelegraphCancelBatch;
+
     // Admin content pipeline callbacks
     std::function<void(const SvAdminResultMsg&)>      onAdminResult;
     std::function<void(const SvAdminContentListMsg&)>  onAdminContentList;

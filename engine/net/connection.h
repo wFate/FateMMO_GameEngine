@@ -35,6 +35,14 @@ struct ClientConnection {
     ReliabilityLayer reliability;
 
     VisibilitySet aoi;
+    // Phase 3b — per-client tick at which each entity became visible.
+    // Anti-flap floor (AOIConfig::minVisibleTicks) blocks distance-driven
+    // leaves until tickCounter_ - firstSeenTick[handle] >= minVisibleTicks.
+    // Despawn (handle missing from handleToPid_) bypasses this floor — the
+    // leave fires unconditionally so SvEntityLeaveBatch is delivered.
+    // Cleared by resetReplication() so a zone transition does not leak stale
+    // entries that would block the first ticks of the new scene.
+    std::unordered_map<uint32_t, uint32_t> firstSeenTick; // EntityHandle.value -> tick
     std::unordered_map<uint64_t, SvEntityUpdateMsg> lastSentState; // keyed by PersistentId value
     uint64_t playerEntityId = 0; // PersistentId of this client's player entity
     std::string spectateScene;   // non-empty = replication uses this scene instead of player's
@@ -100,6 +108,7 @@ struct ClientConnection {
         aoi.left.clear();
         aoi.stayed.clear();
         lastSentState.clear();
+        firstSeenTick.clear();
         pendingScenePopulated = true;
     }
 

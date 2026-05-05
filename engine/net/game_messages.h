@@ -2758,4 +2758,171 @@ struct SvRecallResultMsg {
     }
 };
 
+// ============================================================================
+// Server -> Client: SvAOETelegraphStartBatch (v21 — Phase 7.2b.4 Session 2)
+// ============================================================================
+// Server-authored AOE telegraph announcement. One packet carries N starts;
+// receiver fans each out into the client overlay so a multi-pillar boss
+// transition emits one reliable packet instead of N. Mirrors the
+// SvEntityEnterBatch / SvSkillResultBatch shape (u16 count + per-entry
+// payloads back-to-back).
+//
+// Bounded-read posture (v21 contract):
+//   The reader DOES NOT reserve based on `count`. A hostile/corrupt frame
+//   that claims `count = 65535` would otherwise force a 65535-entry
+//   default construction in front of the read loop. Every per-entry read
+//   is gated on `r.ok()` AFTER the read so a partial decode doesn't fan
+//   out a half-zeroed payload.
+//
+// The per-entry payload mirrors TelegraphRequest fields except for
+// ReplicationManager-internal sceneId and casterEntityId — both are
+// included so the overlay can attribute "who launched this" without a
+// secondary lookup.
+// ============================================================================
+struct SvAOETelegraphStartBatchMsg {
+    struct Entry {
+        uint32_t    instanceId      = 0;
+        uint8_t     scope           = 0;   // WorldScope cast (0=Overworld, 1=Dungeon)
+        uint8_t     shape           = 0;   // TelegraphShape cast
+        uint8_t     policy          = 0;   // TelegraphTargetPolicy cast
+        uint32_t    casterEntityId  = 0;
+        std::string sceneId;
+        std::string sourceLabel;
+        Vec2        origin;
+        Vec2        toward;
+        float       radius           = 0.0f;
+        float       length           = 0.0f;
+        float       width            = 0.0f;
+        float       halfAngleRadians = 0.0f;
+        float       windupSeconds    = 0.0f;
+        float       lifetimeSeconds  = 0.0f;
+        uint32_t    maxTargets       = 0;
+        // damage spec
+        int32_t     baseDamage       = 0;
+        uint8_t     damageType       = 0;     // TelegraphDamageType cast
+        uint8_t     damageFlags      = 0;     // bit0=ignoresMitigation, bit1=ignoresShield, bit2=bypassesBossScriptInvuln
+        // visual spec
+        uint32_t    fillColorRgba   = 0;
+        uint32_t    edgeColorRgba   = 0;
+        float       edgeThicknessPx = 0.0f;
+        uint8_t     pulseDuringWindup = 0;
+
+        void write(ByteWriter& w) const {
+            w.writeU32(instanceId);
+            w.writeU8(scope);
+            w.writeU8(shape);
+            w.writeU8(policy);
+            w.writeU32(casterEntityId);
+            w.writeString(sceneId);
+            w.writeString(sourceLabel);
+            w.writeVec2(origin);
+            w.writeVec2(toward);
+            w.writeFloat(radius);
+            w.writeFloat(length);
+            w.writeFloat(width);
+            w.writeFloat(halfAngleRadians);
+            w.writeFloat(windupSeconds);
+            w.writeFloat(lifetimeSeconds);
+            w.writeU32(maxTargets);
+            w.writeI32(baseDamage);
+            w.writeU8(damageType);
+            w.writeU8(damageFlags);
+            w.writeU32(fillColorRgba);
+            w.writeU32(edgeColorRgba);
+            w.writeFloat(edgeThicknessPx);
+            w.writeU8(pulseDuringWindup);
+        }
+        static Entry read(ByteReader& r) {
+            Entry e;
+            e.instanceId       = r.readU32();
+            e.scope            = r.readU8();
+            e.shape            = r.readU8();
+            e.policy           = r.readU8();
+            e.casterEntityId   = r.readU32();
+            e.sceneId          = r.readString();
+            e.sourceLabel      = r.readString();
+            e.origin           = r.readVec2();
+            e.toward           = r.readVec2();
+            e.radius           = r.readFloat();
+            e.length           = r.readFloat();
+            e.width            = r.readFloat();
+            e.halfAngleRadians = r.readFloat();
+            e.windupSeconds    = r.readFloat();
+            e.lifetimeSeconds  = r.readFloat();
+            e.maxTargets       = r.readU32();
+            e.baseDamage       = r.readI32();
+            e.damageType       = r.readU8();
+            e.damageFlags      = r.readU8();
+            e.fillColorRgba    = r.readU32();
+            e.edgeColorRgba    = r.readU32();
+            e.edgeThicknessPx  = r.readFloat();
+            e.pulseDuringWindup = r.readU8();
+            return e;
+        }
+    };
+    std::vector<Entry> entries;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(entries.size()));
+        for (const auto& e : entries) e.write(w);
+    }
+    static SvAOETelegraphStartBatchMsg read(ByteReader& r) {
+        SvAOETelegraphStartBatchMsg m;
+        uint16_t count = r.readU16();
+        if (r.overflowed()) return m;
+        // NO reserve(count) — defends against `count=65535` malformed frames
+        // forcing a 65535-entry default-construction. Each successful read
+        // pushes; a partial read terminates the loop without fanning a
+        // half-zeroed entry to the overlay.
+        for (uint16_t i = 0; i < count; ++i) {
+            Entry e = Entry::read(r);
+            if (!r.ok()) break;
+            m.entries.push_back(std::move(e));
+        }
+        return m;
+    }
+};
+
+// ============================================================================
+// Server -> Client: SvAOETelegraphCancelBatch (v21 — Phase 7.2b.4 Session 2)
+// ============================================================================
+// Cancels N active telegraphs in one packet. Same bounded-read posture as
+// the start batch above. Per-entry payload is intentionally tight (u32 +
+// u8 = 5 bytes) so a 200-entry instance-teardown burst fits in one packet.
+// ============================================================================
+struct SvAOETelegraphCancelBatchMsg {
+    struct Entry {
+        uint32_t instanceId = 0;
+        uint8_t  scope      = 0;   // WorldScope cast
+
+        void write(ByteWriter& w) const {
+            w.writeU32(instanceId);
+            w.writeU8(scope);
+        }
+        static Entry read(ByteReader& r) {
+            Entry e;
+            e.instanceId = r.readU32();
+            e.scope      = r.readU8();
+            return e;
+        }
+    };
+    std::vector<Entry> entries;
+
+    void write(ByteWriter& w) const {
+        w.writeU16(static_cast<uint16_t>(entries.size()));
+        for (const auto& e : entries) e.write(w);
+    }
+    static SvAOETelegraphCancelBatchMsg read(ByteReader& r) {
+        SvAOETelegraphCancelBatchMsg m;
+        uint16_t count = r.readU16();
+        if (r.overflowed()) return m;
+        for (uint16_t i = 0; i < count; ++i) {
+            Entry e = Entry::read(r);
+            if (!r.ok()) break;
+            m.entries.push_back(e);
+        }
+        return m;
+    }
+};
+
 } // namespace fate

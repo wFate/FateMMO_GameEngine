@@ -751,6 +751,26 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             }
             break;
         }
+        case PacketType::SvAOETelegraphStartBatch: {
+            // v21 — server announces N new active AOE telegraphs. Pass the
+            // decoded batch through to the overlay; the read path is bounded
+            // by the per-entry r.ok() check, so a malformed count does NOT
+            // fan out a half-zeroed entry. Empty batches (count==0) deliver
+            // an empty `entries` vector to the callback — overlays should
+            // tolerate this gracefully (no-op).
+            ByteReader payload(payloadData, payloadLen);
+            auto batch = SvAOETelegraphStartBatchMsg::read(payload);
+            if (onAOETelegraphStartBatch) onAOETelegraphStartBatch(batch);
+            break;
+        }
+        case PacketType::SvAOETelegraphCancelBatch: {
+            // v21 — server cancels N active telegraphs. Same bounded-read
+            // contract as the start batch.
+            ByteReader payload(payloadData, payloadLen);
+            auto batch = SvAOETelegraphCancelBatchMsg::read(payload);
+            if (onAOETelegraphCancelBatch) onAOETelegraphCancelBatch(batch);
+            break;
+        }
         case PacketType::SvLevelUp: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvLevelUpMsg::read(payload);

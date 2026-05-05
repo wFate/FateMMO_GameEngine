@@ -8,7 +8,7 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 20;  // v20: CmdAckExtended (0xE1) added to isSystemPacket — envelope-compatibility bump so old/new client-server mixes refuse to handshake instead of silently regressing the stranded-ACK failure (S143)
+constexpr uint8_t  PROTOCOL_VERSION  = 21;  // v21: SvAOETelegraphStartBatch (0xEE) + SvAOETelegraphCancelBatch (0xEF) added — Phase 7.2b.4 Session 2 telegraph foundation. Old clients drop the unknown packet types; the bump prevents silent visual desync between mismatched clients/servers when a boss telegraph fires.
 constexpr size_t   PACKET_HEADER_SIZE = 26;  // v9: ackBits widened 4→8 bytes (32→64 bit ACK window)
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
@@ -249,6 +249,23 @@ namespace PacketType {
     // Critical-lane (same semantics as 0x91 SvEntityLeave) — losing a leave
     // strands a dead mob as a visible ghost on the client.
     constexpr uint8_t SvEntityLeaveBatch       = 0xED;
+
+    // v21 — Phase 7.2b.4 Session 2 telegraph foundation.
+    //
+    // SvAOETelegraphStartBatch: server announces N new active telegraphs in
+    // one packet. Each entry carries the full TelegraphRequest snapshot so
+    // the client overlay can render the danger zone with no cross-reference
+    // lookup. Sent ReliableOrdered — losing a start would surface a hit
+    // from nowhere when the resolve fires.
+    // Format: u16 count, then `count` × telegraph-start payload (see
+    // SvAOETelegraphStartBatchMsg in game_messages.h for field layout).
+    //
+    // SvAOETelegraphCancelBatch: server cancels N active telegraphs in one
+    // packet (boss died mid-windup, instance teardown, GM-clear). Format:
+    // u16 count, then `count` × {u32 instanceId, u8 scope}. Receiver fans
+    // each out to the overlay's cancel handler.
+    constexpr uint8_t SvAOETelegraphStartBatch  = 0xEE;
+    constexpr uint8_t SvAOETelegraphCancelBatch = 0xEF;
 
     // Pet panel seed on login (silent). Distinct from SvPetGranted which
     // fires on mid-session hatch and shows a "Hatched: X" chat toast.
