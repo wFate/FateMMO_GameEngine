@@ -647,6 +647,13 @@ else()
 endif()
 if(FATE_ENABLE_HOT_RELOAD)
     target_compile_definitions(fate_engine PUBLIC FATE_ENABLE_HOT_RELOAD=1)
+    # Bake the repo root into the engine so App::init can default the
+    # source-watch path + build command without env-var setup. FateEngine and
+    # FateDemo also receive this define for save paths; the engine library
+    # gets it here so engine/app.cpp resolves the right repo at runtime.
+    target_compile_definitions(fate_engine PUBLIC
+        FATE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    )
     message(STATUS "FATE_ENABLE_HOT_RELOAD=ON — HotReloadManager active, FateGameRuntime DLL will be built")
 else()
     message(STATUS "FATE_ENABLE_HOT_RELOAD=OFF — HotReloadManager compiled as no-op, no DLL target")

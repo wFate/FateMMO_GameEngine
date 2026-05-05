@@ -518,8 +518,23 @@ Editor::InspectorBaselinePick Editor::pickInspectorBaseline(
 void Editor::captureInspectorUndo() {
     if (!selectedEntity_) return;
     if (ImGui::IsItemActivated()) {
-        pendingInspectorSnapshot_ = PrefabLibrary::entityToJson(selectedEntity_);
-        pendingInspectorHandle_ = selectedEntity_->handle();
+        // Pending must lock in TRUE pre-edit state — but ImGui's
+        // IsItemActivated is queried AFTER the widget call, by which
+        // point click-snap widgets (SliderFloat) have already mutated
+        // their bound value on the activation frame, and the schema
+        // drawer has already copied that snapped value into bc->fields.
+        // entityToJson here would capture post-snap state (e.g. radius
+        // jumped from 32 to 50 on the click frame, before drag began);
+        // Ctrl+Z would then "restore" to 50, not 32. preFrameInspector-
+        // Snapshot_ is captured at the TOP of drawInspector each frame,
+        // BEFORE any widget runs, so on the activation frame it still
+        // holds true pre-edit state. Single-frame widgets (Checkbox,
+        // Combo) work the same way: preFrame on the activation frame
+        // is pre-edit; on subsequent frames pending stays locked while
+        // preFrame drifts to mid-edit, and the deactivation branch
+        // picks pending — preserving the activation-time baseline.
+        pendingInspectorSnapshot_ = preFrameInspectorSnapshot_;
+        pendingInspectorHandle_   = preFrameInspectorHandle_;
     }
     if (ImGui::IsItemDeactivatedAfterEdit()) {
         auto newState = PrefabLibrary::entityToJson(selectedEntity_);

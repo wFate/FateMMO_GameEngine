@@ -232,6 +232,13 @@ static int hr_seh_call_init(int(*fn)(const FateHostApi*, FateGameModuleApi*),
                             int* outResult, uint32_t* outCode, void** outAddr);
 static int hr_seh_call_module_tick(void(*fn)(float), float dt,
                                    uint32_t* outCode, void** outAddr);
+// S163 Tier 2 (module-driven schema-evolution callback). Same shape as
+// hr_seh_call_reload but the module returns FateModuleResult and gets
+// (ctx, fromVersion) rather than a FateReloadContext*.
+static int hr_seh_call_migrate(FateModuleResult(*fn)(FateBehaviorCtx*, uint32_t),
+                               FateBehaviorCtx* ctx, uint32_t fromVersion,
+                               int* outResult,
+                               uint32_t* outCode, void** outAddr);
 // Returns:
 //   0 = success: header valid, all descriptors copied + validated; *outCount set
 //   1 = SEH fault during call OR any read
@@ -386,6 +393,37 @@ static int hrCallModuleTick(void(*fn)(float), float dt, HrFaultInfo* fi) {
         return 0;
 #else
         fn(dt);
+        return 0;
+#endif
+    } catch (const std::exception& ex) {
+        fi->caught = -1;
+        std::strncpy(fi->cppWhat, ex.what(), sizeof(fi->cppWhat) - 1);
+        return 1;
+    } catch (...) {
+        fi->caught = -1;
+        std::strncpy(fi->cppWhat, "unknown C++ exception", sizeof(fi->cppWhat) - 1);
+        return 1;
+    }
+}
+
+// S163 Tier 2 wrapper. Returns 0 on clean execution and writes the
+// module's FateModuleResult to *outResult; returns 1 on fault. The
+// migrate slot is documented optional in fate_module_abi.h, so a null
+// fn is treated as a successful no-op (FATE_MODULE_OK).
+static int hrCallMigrate(FateModuleResult(*fn)(FateBehaviorCtx*, uint32_t),
+                         FateBehaviorCtx* ctx, uint32_t fromVersion,
+                         int* outResult, HrFaultInfo* fi) {
+    if (!fn) { *outResult = (int)FATE_MODULE_OK; return 0; }
+    try {
+#ifdef _WIN32
+        if (hr_seh_call_migrate(fn, ctx, fromVersion, outResult,
+                                &fi->exceptionCode, &fi->exceptionAddr)) {
+            fi->caught = 1;
+            return 1;
+        }
+        return 0;
+#else
+        *outResult = (int)fn(ctx, fromVersion);
         return 0;
 #endif
     } catch (const std::exception& ex) {
@@ -592,6 +630,23 @@ static int hr_seh_call_module_tick(void(*fn)(float), float dt,
     EXCEPTION_POINTERS* xp = nullptr;
     __try {
         fn(dt);
+        return 0;
+    } __except (xp = GetExceptionInformation(), EXCEPTION_EXECUTE_HANDLER) {
+        if (xp && xp->ExceptionRecord) {
+            *outCode = xp->ExceptionRecord->ExceptionCode;
+            *outAddr = xp->ExceptionRecord->ExceptionAddress;
+        }
+        return 1;
+    }
+}
+
+static int hr_seh_call_migrate(FateModuleResult(*fn)(FateBehaviorCtx*, uint32_t),
+                               FateBehaviorCtx* ctx, uint32_t fromVersion,
+                               int* outResult,
+                               uint32_t* outCode, void** outAddr) {
+    EXCEPTION_POINTERS* xp = nullptr;
+    __try {
+        *outResult = (int)fn(ctx, fromVersion);
         return 0;
     } __except (xp = GetExceptionInformation(), EXCEPTION_EXECUTE_HANDLER) {
         if (xp && xp->ExceptionRecord) {
@@ -814,6 +869,39 @@ void HotReloadManager::enableSourceWatch(const std::string& sourceDir, const std
              sourceDir_.c_str(), buildCmd_.c_str());
 }
 
+bool HotReloadManager::isReloadDeferredByPlayMode() const {
+    if (!reloadPending_.load(std::memory_order_acquire)) return false;
+    if (allowPlayModeReload_) return false;
+#ifndef FATE_SHIPPING
+    return Editor::instance().inPlayMode();
+#else
+    return false;
+#endif
+}
+
+void HotReloadManager::requestBuildNow(const char* reason) {
+    if (buildCmd_.empty()) {
+        LOG_WARN("HotReload",
+            "requestBuildNow ignored: source-watch not configured (%s)",
+            reason ? reason : "(no reason)");
+        return;
+    }
+    if (buildStatus_.load(std::memory_order_acquire) == BuildStatus::Running) {
+        // Latch a fresh request so the next processPendingReload re-kicks
+        // the build once the in-flight one finishes. Without this, an edit
+        // that lands during a long build (or a manual click during one)
+        // gets lost. Mirrors the source-event drop-prevention path.
+        buildPending_.store(true, std::memory_order_release);
+        LOG_INFO("HotReload",
+            "requestBuildNow latched (build in progress): %s",
+            reason ? reason : "(no reason)");
+        return;
+    }
+    LOG_INFO("HotReload", "Manual build requested: %s",
+             reason ? reason : "(no reason)");
+    runBuildAsync();
+}
+
 void HotReloadManager::joinBuildThread() {
     if (buildThread_.joinable()) buildThread_.join();
 }
@@ -869,6 +957,16 @@ void HotReloadManager::runBuildAsync() {
         // a coherent snapshot.
         buildStatus_.store(rc == 0 ? BuildStatus::Succeeded : BuildStatus::Failed,
                            std::memory_order_release);
+        if (rc == 0) {
+            // Don't rely on the artifact watcher catching the DLL write —
+            // filesystem notifications can race the linker's flush, and a
+            // missed event would silently leave the user clicking "Reload
+            // Now". Setting the flag here makes a successful build always
+            // request a swap; the next processPendingReload tick picks it
+            // up under the same debounce window. Failure path leaves the
+            // flag untouched — current module stays live.
+            reloadPending_.store(true, std::memory_order_release);
+        }
         LOG_INFO("HotReload", "Build finished rc=%d", rc);
     });
 }
@@ -960,6 +1058,35 @@ void HotReloadManager::shutdown() {
     inSafePoint_  = false;
     moduleDegraded_ = false;
     moduleDegradedReason_.clear();
+
+    // Source-watch + reload-queue state. Production calls shutdown() once
+    // at exit and never re-initializes, so clearing here is always safe;
+    // the unit-test runner re-uses the singleton across TEST_CASEs and
+    // depends on a clean slate. Atomics + scalars get explicit resets so
+    // a subsequent initialize() / enableSourceWatch() boots from a known
+    // good state.
+    moduleDir_.clear();
+    moduleNameBase_.clear();
+    sourcePath_.clear();
+    shadowDir_.clear();
+    sourceDir_.clear();
+    buildCmd_.clear();
+    reloadPending_.store(false, std::memory_order_release);
+    reloadRequestedAt_ = -1.0f;
+    buildPending_.store(false, std::memory_order_release);
+    buildRequestedAt_  = -1.0f;
+    buildStatus_.store(BuildStatus::Idle, std::memory_order_release);
+    buildExitCode_.store(0, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lk(buildLogMutex_);
+        buildLogTail_.clear();
+    }
+    transientRetries_ = 0;
+    transientWarned_  = false;
+    playModeWarned_   = false;
+    lastError_.clear();
+    reloadCount_  = 0;
+    failureCount_ = 0;
 }
 
 void HotReloadManager::requestManualReload(const char* reason) {
@@ -1345,6 +1472,12 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
         // commit registry. Draining active_ here would orphan the bound
         // entities (they still carry BehaviorComponent), which would only
         // be recovered by the safety-net sweep ~60 ticks later.
+        //
+        // S163: snapshot each Active entry's outgoing schema +
+        // payload protocol BEFORE teardown nulls a.vtable. The
+        // captured copies live on the Active struct itself and feed
+        // applyMigrations after the new module's EndReload returns.
+        captureOldSchemasForMigration();
         teardownActiveBindings();
 
         // Old module gets a chance to fully shut down its statics. Note that
@@ -1419,6 +1552,26 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
         moduleDegraded_ = false;
         moduleDegradedReason_.clear();
     }
+
+    // S163 + S164: run schema-evolution migrations AFTER fateGameModuleEndReload
+    // returns. Per the design doc, the new module's migrate() callback
+    // may legitimately depend on EndReload-installed setup (registered
+    // statics, lazily-built tables, etc.) so the host MUST NOT call
+    // migrate before EndReload completes.
+    //
+    // Two policy regimes inside applyMigrations:
+    //   * Schema-only (no protocol bump or no migrate slot): Tier 1 runs
+    //     regardless of moduleDegraded_ — Tier 1 is pure policy on
+    //     bc->fields and doesn't re-enter the module.
+    //   * Tier-2-required (protocol differs AND migrate slot exists):
+    //     when moduleDegraded_ is true OR migrate faults / returns
+    //     non-OK, applyMigrations rolls back any partial host-API
+    //     writes, SKIPS Tier 1, SKIPS the protocol stamp, and marks
+    //     the Active row faulted so per-frame dispatch refuses to
+    //     run v2 onStart/onUpdate against a v1-shaped payload until
+    //     a later healthy reload re-attempts the migration. See the
+    //     ORDERING RATIONALE block inside applyMigrations.
+    applyMigrations();
 
     ++reloadCount_;
     LOG_INFO("HotReload", "Loaded module '%s' build=[%s] gen=%u (shadow=%s)",
@@ -1530,6 +1683,189 @@ void HotReloadManager::teardownActiveBindings() {
         // chance. Persistent module bugs will re-fault on the new vtable.
         a.faulted      = false;
         a.faultMessage.clear();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// S163 schema-evolution migration plumbing. Two methods, called once per
+// reload. captureOldSchemasForMigration runs BEFORE teardownActiveBindings
+// (cached vtables are still valid). applyMigrations runs AFTER the new
+// module's fateGameModuleEndReload returns (the module is post-init and
+// safe to call back into).
+// ---------------------------------------------------------------------------
+void HotReloadManager::captureOldSchemasForMigration() {
+    for (Active& a : active_) {
+        // Default capture state — these are also reset at the end of
+        // applyMigrations, but be defensive against a partial flow.
+        a.migrationOldFields.clear();
+        a.migrationOldProtocolVersion = 1;
+
+        if (!a.world || !a.world->isAlive(a.handle)) continue;
+        Entity* e = a.world->getEntity(a.handle);
+        if (!e) continue;
+        BehaviorComponent* bc = e->getComponent<BehaviorComponent>();
+        if (!bc) continue;
+
+        // Always snapshot the protocol stamp, even if we can't get
+        // the schema (e.g. behavior has no describeFields). Tier 2
+        // migrate() may still want to run on a schemaless behavior.
+        a.migrationOldProtocolVersion = bc->payloadProtocolVersion;
+
+        if (!a.vtable || !a.vtable->describeFields) continue;
+        const SafeBehaviorSchema* old = safeDescribeFields(a.vtable);
+        if (!old) continue;
+
+        // Copy out of the SEH-probed cache into the per-entry vector
+        // — the next safeDescribeFields call (during applyMigrations
+        // for the NEW schema, or another Active during this loop)
+        // will clobber the cache. std::string copies survive the
+        // overwrite because they own their storage.
+        a.migrationOldFields.reserve(old->fields.size());
+        for (const auto& sf : old->fields) {
+            MigrationField mf;
+            mf.name     = sf.name;
+            mf.type     = sf.type;
+            mf.defaultF = sf.defaultF;
+            mf.defaultI = sf.defaultI;
+            mf.defaultB = sf.defaultB;
+            a.migrationOldFields.push_back(std::move(mf));
+        }
+    }
+}
+
+void HotReloadManager::applyMigrations() {
+    auto& reg = BehaviorRegistry::instance();
+    const uint32_t currentProtocol = FATE_MODULE_PROTOCOL_VERSION;
+
+    for (Active& a : active_) {
+        // World / entity / component validity — applyMigrations runs
+        // late in performSwap; entities can be gone by now (rare, but
+        // the editor can destroy entities anytime). On any miss, just
+        // drop the capture and continue.
+        if (!a.world || !a.world->isAlive(a.handle)) {
+            a.migrationOldFields.clear();
+            continue;
+        }
+        Entity* e = a.world->getEntity(a.handle);
+        if (!e) { a.migrationOldFields.clear(); continue; }
+        BehaviorComponent* bc = e->getComponent<BehaviorComponent>();
+        if (!bc || bc->behavior.empty()) {
+            a.migrationOldFields.clear();
+            continue;
+        }
+
+        const FateBehaviorVTable* newVt = reg.find(bc->behavior);
+        if (!newVt) {
+            // Behavior name no longer registered post-reload. Leave
+            // bc->fields untouched — the lazy-resolve in tickBehaviors
+            // will keep retrying, and a future reload that re-adds
+            // the binding picks the migration up next swap. The
+            // protocol stamp also stays unchanged so a re-add reaches
+            // the right migrate(fromVersion) branch.
+            a.migrationOldFields.clear();
+            continue;
+        }
+
+        // Build old + new schema descriptors up-front. Both tiers consume
+        // them; only the captured-old half varies between the two paths
+        // below (Tier 2 may have rewritten bc->fields before Tier 1 runs,
+        // but the schema metadata itself is independent of bc->fields).
+        MigrationSchema oldS;
+        oldS.fields = a.migrationOldFields;
+        MigrationSchema newS;
+        if (newVt->describeFields) {
+            const SafeBehaviorSchema* fresh = safeDescribeFields(newVt);
+            if (fresh) {
+                newS.fields.reserve(fresh->fields.size());
+                for (const auto& sf : fresh->fields) {
+                    MigrationField mf;
+                    mf.name     = sf.name;
+                    mf.type     = sf.type;
+                    mf.defaultF = sf.defaultF;
+                    mf.defaultI = sf.defaultI;
+                    mf.defaultB = sf.defaultB;
+                    newS.fields.push_back(std::move(mf));
+                }
+            }
+        }
+
+        // Build the per-entity input and SEH-wrapped Tier 2 runner. The
+        // helper itself is editor-free and DLL-free; this is the seam
+        // where HotReloadManager hands off the module callback to the
+        // SEH guard (hrCallMigrate) so the helper's pure logic can
+        // observe the outcome via Tier2Result instead of dealing with
+        // platform-specific exception machinery directly.
+        OneEntityMigrationInput in;
+        in.migrationOldProtocolVersion = a.migrationOldProtocolVersion;
+        in.currentProtocol             = currentProtocol;
+        in.hasMigrateSlot              = (newVt->migrate != nullptr);
+        in.moduleDegraded              = moduleDegraded_;
+        in.oldSchema                   = &oldS;
+        in.newSchema                   = &newS;
+        in.behaviorName                = bc->behavior;
+        in.runTier2 =
+            [newVt, &a, e, bc](nlohmann::json& /*fields*/, uint32_t fromVersion) {
+                FateBehaviorCtx ctx{a.world, e, bc, nullptr};
+                HrFaultInfo fi;
+                int outResult = (int)FATE_MODULE_OK;
+                Tier2Result tr;
+                if (hrCallMigrate(newVt->migrate, &ctx, fromVersion,
+                                  &outResult, &fi)) {
+                    tr.outcome = (fi.caught == 1) ? Tier2RunOutcome::FaultedSEH
+                                                  : Tier2RunOutcome::FaultedCpp;
+                    if (fi.caught == 1) {
+                        char buf[256];
+                        std::snprintf(buf, sizeof(buf),
+                            "SEH code=0x%08X addr=%p", fi.exceptionCode, fi.exceptionAddr);
+                        tr.faultDetail = buf;
+                    } else {
+                        tr.faultDetail = fi.cppWhat;
+                    }
+                } else if (outResult != (int)FATE_MODULE_OK) {
+                    tr.outcome    = Tier2RunOutcome::NonOk;
+                    tr.resultCode = outResult;
+                } else {
+                    tr.outcome = Tier2RunOutcome::Ok;
+                }
+                return tr;
+            };
+
+        OneEntityMigrationOutcome outcome = runOneEntityMigration(bc->fields, in);
+
+        // Fan diagnostics out to the project logger.
+        for (const auto& line : outcome.infoLines)  LOG_INFO ("HotReload", "%s", line.c_str());
+        for (const auto& line : outcome.warnLines)  LOG_WARN ("HotReload", "%s", line.c_str());
+        for (const auto& line : outcome.errorLines) LOG_ERROR("HotReload", "%s", line.c_str());
+
+        // ----- Apply outcome -----
+        // S164.P1.C: failed required migration suppresses dispatch via
+        // a.faulted until a later healthy reload runs teardownActive-
+        // Bindings (which clears the fault bit) followed by a
+        // successful applyMigrations (which doesn't re-set it). See
+        // the helper contract in behavior_migration.h for the full
+        // failure-path rationale.
+        if (outcome.markFaulted) {
+            a.faulted      = true;
+            a.faultMessage = outcome.faultMessage;
+            // Intentionally NOT clearing a.migrationOldFields here —
+            // captureOldSchemasForMigration() runs on every swap and
+            // overwrites it with whatever the OUTGOING module reports
+            // anyway, so we don't risk a stale capture. Leaving it
+            // populated for symmetry with migrationOldProtocolVersion.
+            continue;
+        }
+
+        if (outcome.stampNewProtocol) {
+            bc->payloadProtocolVersion = currentProtocol;
+        }
+
+        if (outcome.fireDirtySeam && authoredDataChangedCb_) {
+            authoredDataChangedCb_(a.world, a.handle, "behavior migration");
+        }
+
+        // Clear capture for the next swap cycle.
+        a.migrationOldFields.clear();
+        a.migrationOldProtocolVersion = currentProtocol;
     }
 }
 

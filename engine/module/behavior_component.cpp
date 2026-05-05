@@ -13,6 +13,7 @@ void registerBehaviorComponent() {
         [](const void* data, nlohmann::json& j) {
             const auto* bc = static_cast<const BehaviorComponent*>(data);
             j["behavior"] = bc->behavior;
+            j["protocol"] = bc->payloadProtocolVersion;
             j["fields"]   = bc->fields;
             j["enabled"]  = bc->enabled;
         },
@@ -24,6 +25,16 @@ void registerBehaviorComponent() {
             auto* bc = static_cast<BehaviorComponent*>(data);
             if (j.contains("behavior") && j["behavior"].is_string()) {
                 bc->behavior = j["behavior"].get<std::string>();
+            }
+            // Protocol stamp: missing or non-numeric → 1 (pre-stamp scenes
+            // wrote the v1 payload shape; 0 would imply something even
+            // older which doesn't exist). Future protocol bumps will
+            // trigger the module's migrate callback at next reload.
+            if (j.contains("protocol") && j["protocol"].is_number_unsigned()) {
+                bc->payloadProtocolVersion = j["protocol"].get<uint32_t>();
+                if (bc->payloadProtocolVersion == 0) bc->payloadProtocolVersion = 1;
+            } else {
+                bc->payloadProtocolVersion = 1;
             }
             if (j.contains("fields") && j["fields"].is_object()) {
                 bc->fields = j["fields"];

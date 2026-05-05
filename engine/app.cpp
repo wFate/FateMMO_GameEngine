@@ -408,16 +408,58 @@ bool App::init(const AppConfig& config) {
         if (!exeDir.empty()) {
             HotReloadManager::instance().initialize(exeDir, "FateGameRuntime");
 
-            // Optional source-side rebuild trigger. Wires up only when both
-            // env vars are set so a fresh checkout default is "manual
-            // rebuild + auto reload"; opt-in to "save -> auto build -> auto
-            // reload" by exporting the two below. Typical dev shell:
-            //   set FATE_HOTRELOAD_SOURCE_DIR=C:\path\to\repo\game\runtime
-            //   set FATE_HOTRELOAD_BUILD_CMD=cmake --build "C:\path\to\repo\out\build\x64-Release" --target FateGameRuntime
-            const char* srcDir   = std::getenv("FATE_HOTRELOAD_SOURCE_DIR");
-            const char* buildCmd = std::getenv("FATE_HOTRELOAD_BUILD_CMD");
-            if (srcDir && buildCmd && srcDir[0] && buildCmd[0]) {
+            // Source-side rebuild trigger. The default path uses the
+            // FATE_SOURCE_DIR macro baked in at CMake time to find
+            // <repo>/game/runtime + <repo>/scripts/check_shipping.ps1, so
+            // a fresh dev checkout gets save→build→reload with zero env
+            // setup. Env vars override either side for non-default repos
+            // or alternate build wrappers.
+            std::string srcDir;
+            std::string buildCmd;
+
+            if (const char* env = std::getenv("FATE_HOTRELOAD_SOURCE_DIR"); env && env[0]) {
+                srcDir = env;
+            }
+            if (const char* env = std::getenv("FATE_HOTRELOAD_BUILD_CMD"); env && env[0]) {
+                buildCmd = env;
+            }
+
+#ifdef FATE_SOURCE_DIR
+            std::error_code se;
+            const std::filesystem::path repoRoot(FATE_SOURCE_DIR);
+            if (srcDir.empty()) {
+                std::filesystem::path autoSrc = repoRoot / "game" / "runtime";
+                if (std::filesystem::exists(autoSrc, se)) {
+                    srcDir = autoSrc.string();
+                }
+            }
+            if (buildCmd.empty()) {
+                std::filesystem::path script = repoRoot / "scripts" / "check_shipping.ps1";
+                if (std::filesystem::exists(script, se)) {
+                    // PowerShell wrapper handles VsDevCmd setup + cmake
+                    // preset/target invocation. Quote the file path so spaces
+                    // in the repo path survive cmd.exe's tokenizer.
+                    buildCmd = "powershell -NoProfile -ExecutionPolicy Bypass -File \""
+                             + script.string()
+                             + "\" -Preset x64-Release -Target FateGameRuntime";
+                }
+            }
+#endif
+
+            if (!srcDir.empty() && !buildCmd.empty()) {
+                LOG_INFO("HotReload",
+                    "Source-watch auto-enabled (src=%s)", srcDir.c_str());
                 HotReloadManager::instance().enableSourceWatch(srcDir, buildCmd);
+            } else {
+                // Surface a precise reason in the log so the editor panel's
+                // "source watch off" line has a paired explanation.
+                LOG_INFO("HotReload",
+                    "Source-watch disabled (srcDir=%s, buildCmd=%s) — set "
+                    "FATE_HOTRELOAD_SOURCE_DIR + FATE_HOTRELOAD_BUILD_CMD or "
+                    "rebuild from a checkout where game/runtime + "
+                    "scripts/check_shipping.ps1 exist.",
+                    srcDir.empty() ? "(unset)" : srcDir.c_str(),
+                    buildCmd.empty() ? "(unset)" : "(set)");
             }
         }
     }

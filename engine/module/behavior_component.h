@@ -8,9 +8,18 @@
 // Persistence shape (matches the user-facing JSON contract):
 //   {
 //     "behavior": "GuardPatrol",
+//     "protocol": 1,
 //     "fields":   { ... behavior-specific scalars ... },
 //     "enabled":  true
 //   }
+//
+// `protocol` is the FateModule protocol version that wrote the payload. It
+// is HOST metadata — kept as a sibling of `fields`, NOT inside `fields`,
+// because `fields` belongs to the behavior schema and must not collide
+// with reserved keys. On scene load, missing `protocol` defaults to 1
+// (the version that wrote today's existing payload shape — pre-stamp
+// scenes); future protocol bumps then trigger the module's migrate
+// callback via FateBehaviorVTable::migrate(ctx, fromVersion).
 //
 // Lifetime: every field that survives reload lives here. The module's
 // `void* state` scratch hangs off `state` and is owned/freed by module code
@@ -65,7 +74,27 @@ struct BehaviorComponent {
     // when they diverge, dispatch calls onStart on the new vtable before the
     // first onUpdate.
     uint32_t boundGeneration = 0;
+
+    // Protocol version that wrote bc->fields. Compared against the module's
+    // FATE_MODULE_PROTOCOL_VERSION at swap time: when they differ, the
+    // host calls vtable->migrate(ctx, fromVersion) to let the module
+    // bridge older payloads. Pre-stamp scenes default to 1 on load (NOT
+    // 0) — the JSON shape in those scenes IS protocol 1; only the stamp
+    // is missing. Bumped to the current protocol after migration runs.
+    uint32_t payloadProtocolVersion = 1;
 };
+
+// Reserved authored-field keys. Behavior schemas may NOT declare fields
+// with these names — the host owns this namespace.
+//
+// `__fate_migrated` is a nested object under bc->fields populated when
+// the schema diff at reload time finds an authored field that no longer
+// exists in the new schema (or has changed type). The original value is
+// moved under this object keyed by its old field name, so the designer
+// can recover or manually drop it from the inspector. Survives save/
+// reload cycles; persists in the scene .json. After designer cleanup
+// the key disappears naturally.
+inline constexpr const char* kBehaviorReservedKey_FateMigrated = "__fate_migrated";
 
 // Custom (de)serializer that writes "behavior" + "fields" + "enabled" only.
 // `state` and `boundGeneration` are deliberately skipped: scratch pointers are

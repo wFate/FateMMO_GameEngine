@@ -11,9 +11,11 @@
 
 #include "engine/module/fate_module_abi.h"
 #include "engine/module/behavior_registry.h"
+#include "engine/module/behavior_migration.h"
 #include "engine/asset/file_watcher.h"
 #include "engine/ecs/entity_handle.h"
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -55,6 +57,31 @@ public:
     // caller is never holding a reference into a string the worker thread
     // could be reallocating mid-frame. Cheap (small buffer, ~4 KB max).
     std::string buildLogTailSnapshot() const;
+
+    // Source-watch diagnostics for the Hot Reload panel. sourceWatchEnabled
+    // means enableSourceWatch() received a non-empty path + command; the
+    // watcher thread is up and edits will trigger builds. sourceWatchPath
+    // is the watched directory (typically <repo>/game/runtime).
+    bool sourceWatchEnabled() const { return !sourceDir_.empty() && !buildCmd_.empty(); }
+    const std::string& sourceWatchPath() const { return sourceDir_; }
+
+    // Reload-queue diagnostics. isReloadPending: a reload is queued (either
+    // from a successful build, an artifact-watcher event, or a manual
+    // request) but processPendingReload has not committed it yet — usually
+    // because debounce hasn't elapsed or play-mode is gating it.
+    // isReloadDeferredByPlayMode: same flag is set AND the editor is in
+    // play mode AND playModeReloadAllowed() is false. Surfaced so the
+    // panel can say "queued until play mode exits" instead of looking
+    // silently broken.
+    bool isReloadPending() const { return reloadPending_.load(std::memory_order_acquire); }
+    bool isReloadDeferredByPlayMode() const;
+
+    // Manual build trigger. Editor "Build Runtime Now" button calls this
+    // when the developer wants to rebuild without modifying a source file
+    // (e.g., to verify a clean rebuild after a CMake change). No-op when
+    // source-watch is not configured or a build is already running.
+    // Reason is logged for diagnostics.
+    void requestBuildNow(const char* reason);
 
     // Stops watcher, calls fateGameModuleShutdown, FreeLibrary's both the
     // current and any deferred-previous handle. Idempotent.
@@ -211,6 +238,24 @@ public:
     // next tick re-attempts dispatch on previously-quarantined instances.
     // Module-degraded flag is cleared by a successful subsequent reload.
     void clearAllFaults();
+
+    // Dirty-seam callback. Fired from applyMigrations when a schema
+    // diff or module migrate() callback CHANGED a behavior's authored
+    // payload (rules 2/3 or a non-empty before/after diff in Tier 2).
+    // The host's own pure save state stays in HotReloadManager; the
+    // editor wires this to Editor::markSceneDirty so reload-induced
+    // payload changes round-trip through the existing Ctrl+S flow.
+    // Reason is a short human-readable tag used in editor logging.
+    //
+    // Default callback is null — no editor coupling unless explicitly
+    // wired. This is the one decoupling concession the user demanded
+    // when 7.3a was scoped: HotReloadManager does NOT include
+    // engine/editor/editor.h.
+    using BehaviorAuthoredDataChangedCallback =
+        std::function<void(World*, EntityHandle, const std::string& reason)>;
+    void setBehaviorAuthoredDataChangedCallback(BehaviorAuthoredDataChangedCallback cb) {
+        authoredDataChangedCb_ = std::move(cb);
+    }
     // Module-degraded clear (manual, for cases where the developer has
     // verified the underlying issue is fixed). A successful reload also
     // clears it automatically.
@@ -242,6 +287,23 @@ public:
         bool                      seenThisTick  = false;
         bool                      faulted       = false;
         std::string               faultMessage;
+
+        // Migration capture (S163). Populated by
+        // captureOldSchemasForMigration() right before a reload's
+        // teardownActiveBindings runs, consumed by applyMigrations()
+        // after the new module's EndReload returns. Cleared at the
+        // end of applyMigrations.
+        //
+        // `migrationOldFields` is the snapshot of the OUTGOING
+        // behavior's schema at swap time (copied out of the SEH-
+        // probed cache so the new safeDescribeFields call doesn't
+        // clobber it). `migrationOldProtocolVersion` is the
+        // bc->payloadProtocolVersion observed at capture time —
+        // routed through the module's migrate() callback as the
+        // `fromVersion` argument when it differs from the running
+        // module's FATE_MODULE_PROTOCOL_VERSION.
+        std::vector<MigrationField> migrationOldFields;
+        uint32_t                    migrationOldProtocolVersion = 1;
     };
 
 private:
@@ -250,6 +312,24 @@ private:
 
     // Performs the full swap pipeline. Returns true on success.
     bool performSwap(float currentTime);
+
+    // Capture every Active entry's outgoing schema + payload protocol
+    // version BEFORE teardownActiveBindings nulls the cached vtable.
+    // Stores into Active::migrationOldFields /
+    // ::migrationOldProtocolVersion for applyMigrations to consume.
+    // Idempotent — safe to call from anywhere in performSwap before
+    // teardown runs.
+    void captureOldSchemasForMigration();
+
+    // Walks every Active entry AFTER fateGameModuleEndReload returns
+    // (the module is now both live and post-init), runs the four
+    // schema-evolution rules from behavior_migration.h, fires the
+    // optional vtable->migrate callback when the payload protocol
+    // version is older than the module's current version, stamps the
+    // new protocol on the component, and notifies
+    // authoredDataChangedCb_ when authored fields actually changed.
+    // Clears Active::migrationOldFields after each entry is handled.
+    void applyMigrations();
 
     // Internal: builds the host-side FateHostApi vtable (idempotent).
     void ensureHostApi();
@@ -388,6 +468,10 @@ private:
     void onSourceWatchEvent(const std::string& relPath);
     void runBuildAsync();
     void joinBuildThread();
+
+    // Editor-wired dirty-seam callback. See setBehaviorAuthoredData-
+    // ChangedCallback above for contract. Null by default.
+    BehaviorAuthoredDataChangedCallback authoredDataChangedCb_;
 };
 
 } // namespace fate

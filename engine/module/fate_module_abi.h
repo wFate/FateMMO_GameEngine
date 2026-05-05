@@ -46,8 +46,18 @@
 
 /* Protocol version: bump when the JSON wire format / field semantics for
  * BehaviorComponent change in a non-backwards-compatible way. Migrate
- * callbacks (FateBehaviorVTable::migrate) bridge older payloads up. */
-#define FATE_MODULE_PROTOCOL_VERSION 1u
+ * callbacks (FateBehaviorVTable::migrate) bridge older payloads up.
+ *
+ * Version history:
+ *   1 — initial slice; all behaviors carry whatever schema they ship
+ *       with. Protocol stamp on bc->payloadProtocolVersion is implicit
+ *       (loaders default missing stamps to 1).
+ *   2 — InteractSite behavior renames v1 oneShot:bool to v2
+ *       interactPolicy:int. Host runs Tier 2 migrate() before Tier 1
+ *       quarantine for protocol mismatches (see hot_reload_manager.cpp
+ *       applyMigrations / S163.P1). All other behaviors are unchanged
+ *       and simply re-stamp to 2 on next reload via Tier 1 no-op. */
+#define FATE_MODULE_PROTOCOL_VERSION 2u
 
 #if defined(_WIN32)
 #  if defined(FATE_GAME_RUNTIME_BUILD)

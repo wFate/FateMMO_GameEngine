@@ -324,6 +324,18 @@ public:
     void clearToolStatus() { lastToolStatus_.clear(); }
     void loadScene(World* world, const std::string& path);
 
+    // Save-before-switch gate. UI scene-switch paths (File > Open Scene
+    // menus, toolbar Scene combos) MUST go through this rather than
+    // calling `loadScene` directly. When `sceneDirty_` is false this
+    // forwards to `loadScene` immediately. When dirty it stashes the
+    // target path in `pendingScenePath_` and raises the modal — the
+    // user picks Save & Switch, Discard, or Cancel from
+    // `drawSceneSwitchModal`. Empty `path` is a no-op (defensive
+    // against stray clicks). Programmatic load paths (async server
+    // load, play-mode entry, tests) keep using `loadScene` directly so
+    // they never hit the modal.
+    void requestLoadScene(World* world, const std::string& path);
+
     // Play-in-editor: snapshot/restore ECS state
     void enterPlayMode(World* world);
     void exitPlayMode(World* world);
@@ -468,6 +480,17 @@ private:
     // the dirty-domain HUD strip (and vice versa). Cleared whenever the
     // popup re-opens, on Cancel, or after a successful save.
     std::string prefabPopupError_;
+
+    // Save-before-switch state. `pendingScenePath_` is the target the
+    // user picked while the current scene was dirty; the modal owns
+    // its own dismiss path so this stays empty otherwise.
+    // `showSceneSwitchModal_` is the one-shot OpenPopup trigger,
+    // mirroring `openSavePrefab_`'s pattern. The modal itself reads
+    // `currentScenePath_` to decide whether Save & Switch is reachable
+    // (an in-memory boot scene with no path forces Discard / Cancel /
+    // File > Save As...).
+    std::string pendingScenePath_;
+    bool showSceneSwitchModal_ = false;
     bool resetLayout_ = false;  // Set via View > Reset Layout
     std::string currentScenePath_;  // Path of currently loaded/saved scene
 
@@ -612,6 +635,12 @@ private:
     // play-mode-reload toggle for advanced workflows.
     bool showHotReloadPanel_ = false;
     void drawHotReloadPanel();
+
+    // Modal renderer for the save-before-switch gate. Drawn from
+    // `drawMenuBar` (next to the SavePrefabPopup) so it survives
+    // both renderUI dispatch paths. Reads/writes `pendingScenePath_`,
+    // `showSceneSwitchModal_`, and the dirty / lastSave state.
+    void drawSceneSwitchModal(World* world);
 
     // Tile palette panel (demo build wires this through View menu)
     bool showTilePalette_ = false;

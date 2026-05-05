@@ -144,6 +144,22 @@ bool Editor::init(SDL_Window* window, SDL_GLContext glContext) {
             // available; nothing to do synchronously here.
         });
 
+#if FATE_ENABLE_HOT_RELOAD
+    // S163 schema-evolution dirty seam. HotReloadManager fires this
+    // callback when a behavior migration changes authored data
+    // (rules 2/3 in behavior_migration.h, or a non-empty before/after
+    // diff in the module's migrate() callback). The migration logic
+    // is host-pure and editor-agnostic; this lambda is the only place
+    // editor-side dirty bookkeeping is wired in.
+    HotReloadManager::instance().setBehaviorAuthoredDataChangedCallback(
+        [](World* /*world*/, EntityHandle handle, const std::string& reason) {
+            auto& ed = Editor::instance();
+            ed.markSceneDirty();
+            LOG_INFO("HotReload", "Scene marked dirty: entity=%u (%s)",
+                     handle.index(), reason.c_str());
+        });
+#endif
+
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 #if defined(ENGINE_MEMORY_DEBUG)
@@ -489,7 +505,15 @@ bool Editor::saveScene(World* world, const std::string& path) {
     root["version"]   = SCENE_FORMAT_VERSION;
     root["gridSize"]  = gridSize_;
     root["sceneName"] = SceneManager::instance().currentSceneName();
-    root["metadata"]  = sceneMetadata_;
+    // Default-constructed nlohmann::json is `null`, which the loader's
+    // validator (below) treats as a hard failure. Coerce to an empty
+    // object on save so a scene that never had metadata authored still
+    // round-trips cleanly. Pre-S160 saves wrote `metadata: null` for the
+    // entire scene corpus — those files load via the null-tolerance fix
+    // in the loader assignment block.
+    root["metadata"]  = sceneMetadata_.is_null()
+                          ? nlohmann::json::object()
+                          : sceneMetadata_;
 
     nlohmann::json entitiesJson = nlohmann::json::array();
 
@@ -610,7 +634,13 @@ void Editor::loadScene(World* world, const std::string& path) {
                           root["gridSize"].type_name() + ")");
         return;
     }
-    if (root.contains("metadata") && !root["metadata"].is_object()) {
+    // Accept `null` as equivalent to missing — pre-S160 saves wrote
+    // `metadata: null` whenever the scene had no authored metadata
+    // (default-constructed nlohmann::json serializes as null). The
+    // assignment block below normalizes null to an empty object.
+    if (root.contains("metadata") &&
+        !root["metadata"].is_null() &&
+        !root["metadata"].is_object()) {
         reportLoadFailure(std::string("metadata must be an object (got ") +
                           root["metadata"].type_name() + ")");
         return;
@@ -645,6 +675,30 @@ void Editor::loadScene(World* world, const std::string& path) {
     // either saved by flushDirtyPlayerPrefab above (clearing its bit) or
     // dropped as stale.
     clearSceneDirty();
+    // S161: drop undo history at the scene boundary. UndoCommands hold
+    // EntityHandle references + entity-JSON snapshots tied to scene A's
+    // world. A Ctrl+Z after the swap would call DeleteCommand::undo /
+    // CreateCommand::redo / PropertyCommand::undo against scene B's
+    // world via the same World*, resurrecting scene-A entities into
+    // scene B (PrefabLibrary::jsonToEntity). dirtyCb_ also re-fires on
+    // every undo/redo, so a Scene-domain command undone after the
+    // boundary would mark scene B's sceneDirty_ for an edit that
+    // belonged to scene A. Cross-scene undo is not supported — the
+    // simpler "clear all" beats per-scene scoping (which would require
+    // a sceneTag on UndoCommand, an ABI-shaped change). UI screens are
+    // cross-scene documents, but UIPropertyCommand keys by screenId so
+    // dropping their undo entries here is acceptable: edits to a UI
+    // screen are saved on Ctrl+S regardless, and undo over a scene
+    // switch is rare. **Placement constraint:** this MUST be after load
+    // validation succeeds AND flushDirtyPlayerPrefab succeeds. A failed
+    // scene-load attempt (missing file, malformed JSON, version
+    // mismatch, prefab save failure) returns early via reportLoad-
+    // Failure without reaching here, leaving the user's scene-A undo
+    // history intact while they're still in scene A. Verified
+    // empirically (S161 smoke pass step 11): Beach.json load at 17:18:49
+    // followed by Ctrl+Z at 17:19:12 produced `undo: 'Inspector edit'
+    // undo_depth=7` — proving the prior scene's stack was reachable.
+    UndoSystem::instance().clear();
     if (!lastSaveSucceeded_ && lastSaveStatus_.find("load FAILED") != std::string::npos) {
         lastSaveStatus_.clear();
         lastSaveSucceeded_ = true;
@@ -667,8 +721,10 @@ void Editor::loadScene(World* world, const std::string& path) {
         gridSize_ = root["gridSize"].get<float>();
     }
 
-    // Preserve scene metadata for round-trip (sceneType, minLevel, maxLevel, etc.)
-    if (root.contains("metadata")) {
+    // Preserve scene metadata for round-trip (sceneType, minLevel, maxLevel, etc.).
+    // Normalize null → empty object so downstream code (which expects an
+    // object for `.contains()`/`.value()` calls) doesn't have to special-case.
+    if (root.contains("metadata") && !root["metadata"].is_null()) {
         sceneMetadata_ = root["metadata"];
     } else {
         sceneMetadata_ = nlohmann::json::object();
@@ -710,6 +766,109 @@ void Editor::loadScene(World* world, const std::string& path) {
 
     LOG_INFO("Editor", "Scene loaded v%d from %s (%zu entities)",
              version, path.c_str(), world->entityCount());
+}
+
+void Editor::requestLoadScene(World* world, const std::string& path) {
+    // Defensive: stray clicks on an empty entry shouldn't trigger
+    // anything. The Open Scene menu and toolbar combo both filter to
+    // ".json" files before reaching here, but `path.empty()` is the
+    // contract guard.
+    if (path.empty()) return;
+    // Clean state — load directly, modal is unnecessary.
+    if (!sceneDirty_) {
+        loadScene(world, path);
+        return;
+    }
+    // Stash the target and raise the modal. The modal owns the actual
+    // load decision (Save & Switch / Discard / Cancel) and calls
+    // loadScene itself once the user chooses. Setting the flag mid-
+    // frame is safe — `drawSceneSwitchModal` consumes the trigger on
+    // its next visit (drawMenuBar runs after this in renderUI).
+    pendingScenePath_ = path;
+    showSceneSwitchModal_ = true;
+}
+
+void Editor::drawSceneSwitchModal(World* world) {
+    // One-shot trigger pattern, mirrors `openSavePrefab_`.
+    if (showSceneSwitchModal_) {
+        ImGui::OpenPopup("SceneSwitchModal");
+        showSceneSwitchModal_ = false;
+    }
+    if (!ImGui::BeginPopupModal("SceneSwitchModal", nullptr,
+                                ImGuiWindowFlags_AlwaysAutoResize)) {
+        return;
+    }
+
+    ImGui::Text("Scene has unsaved changes.");
+    if (!pendingScenePath_.empty()) {
+        ImGui::Text("Switch target: %s", pendingScenePath_.c_str());
+    }
+    ImGui::Separator();
+
+    // Save & Switch is unreachable when the current scene has no path —
+    // there's nowhere to save to. The user must Discard, Cancel, or
+    // back out and use File > Save As... before they can preserve
+    // these edits. This is the boot-scene `Default` case (registered
+    // in-memory in `game_app.cpp`, no `.json` file).
+    const bool canSaveAndSwitch = !currentScenePath_.empty();
+    if (!canSaveAndSwitch) {
+        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f),
+            "Save As required: current scene has no path yet.");
+        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f),
+            "Discard to lose changes, or Cancel + File > Save As...");
+    }
+    // If a prior Save & Switch attempt failed, surface the cause inline
+    // so the user sees why the modal is still up. saveScene populates
+    // these fields; we don't clear them here — the next successful
+    // Ctrl+S or Save & Switch clears them via the existing logic.
+    if (!lastSaveSucceeded_ && !lastSaveStatus_.empty()) {
+        ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+                           "%s", lastSaveStatus_.c_str());
+    }
+    ImGui::Spacing();
+
+    // Save & Switch: persist current scene, then load target. On save
+    // failure we keep the modal open so the user can read the cause
+    // and retry / pick a different action. Capture pendingScenePath_
+    // BEFORE loadScene runs because loadScene may reuse the field
+    // through future code paths (defensive).
+    if (!canSaveAndSwitch) ImGui::BeginDisabled();
+    if (ImGui::Button("Save && Switch", ImVec2(140, 0))) {
+        if (saveScene(world, currentScenePath_)) {
+            sceneDirty_ = false;
+            std::string target = pendingScenePath_;
+            pendingScenePath_.clear();
+            ImGui::CloseCurrentPopup();
+            loadScene(world, target);
+        }
+        // On failure: loop continues; saveScene already populated
+        // lastSaveStatus_/lastSaveSucceeded_ which the modal renders
+        // above. Do NOT close the popup — the user needs the chance to
+        // read the failure cause and pick Discard or Cancel.
+    }
+    if (!canSaveAndSwitch) ImGui::EndDisabled();
+
+    ImGui::SameLine();
+    // Discard: load target directly. loadScene already drops scene-
+    // local dirty + UndoSystem state (S161 fix at editor.cpp:685), so
+    // the in-memory diff is gone before scene B's first frame.
+    if (ImGui::Button("Discard", ImVec2(120, 0))) {
+        std::string target = pendingScenePath_;
+        pendingScenePath_.clear();
+        ImGui::CloseCurrentPopup();
+        loadScene(world, target);
+    }
+
+    ImGui::SameLine();
+    // Cancel: drop the pending target, leave current scene + dirty +
+    // undo intact. The user resumes editing scene A as if the click
+    // had never happened.
+    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+        pendingScenePath_.clear();
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
 }
 
 #ifdef FATE_HAS_GAME
@@ -1063,7 +1222,7 @@ void Editor::drawDockSpace() {
                         if (entry.path().extension() != ".json") continue;
                         std::string name = entry.path().stem().string();
                         if (ImGui::MenuItem(name.c_str())) {
-                            loadScene(dockWorld_, entry.path().string());
+                            requestLoadScene(dockWorld_, entry.path().string());
                         }
                     }
                 }
@@ -1178,16 +1337,28 @@ void Editor::drawDockSpace() {
                     e->addComponent<Transform>();
                     selectedEntity_ = e;
                     selectedHandle_ = e ? e->handle() : EntityHandle{};
+                    if (e) {
+                        auto cmd = std::make_unique<CreateCommand>();
+                        cmd->entityData = PrefabLibrary::entityToJson(e);
+                        cmd->createdHandle = e->handle();
+                        UndoSystem::instance().push(std::move(cmd));
+                    }
                 }
             }
             if (ImGui::MenuItem("Duplicate Selected", "Ctrl+D", false, selectedEntity_ != nullptr)) {
                 if (dockWorld_ && selectedEntity_) {
                     auto json = PrefabLibrary::entityToJson(selectedEntity_);
                     Entity* copy = PrefabLibrary::jsonToEntity(json, *dockWorld_);
-                    auto* t = copy->getComponent<Transform>();
-                    if (t) t->position += Vec2(32.0f, 0.0f);
-                    selectedEntity_ = copy;
-                    selectedHandle_ = copy ? copy->handle() : EntityHandle{};
+                    if (copy) {
+                        auto* t = copy->getComponent<Transform>();
+                        if (t) t->position += Vec2(32.0f, 0.0f);
+                        selectedEntity_ = copy;
+                        selectedHandle_ = copy->handle();
+                        auto cmd = std::make_unique<CreateCommand>();
+                        cmd->entityData = PrefabLibrary::entityToJson(copy);
+                        cmd->createdHandle = copy->handle();
+                        UndoSystem::instance().push(std::move(cmd));
+                    }
                 }
             }
             if (ImGui::MenuItem("Save as Prefab", nullptr, false, selectedEntity_ != nullptr)) {
@@ -1195,6 +1366,10 @@ void Editor::drawDockSpace() {
             }
             if (ImGui::MenuItem("Delete Selected", "Delete", false, selectedEntity_ != nullptr && !isEntityLocked(selectedEntity_))) {
                 if (dockWorld_ && selectedEntity_) {
+                    auto cmd = std::make_unique<DeleteCommand>();
+                    cmd->entityData = PrefabLibrary::entityToJson(selectedEntity_);
+                    cmd->deletedHandle = selectedEntity_->handle();
+                    UndoSystem::instance().push(std::move(cmd));
                     dockWorld_->destroyEntity(selectedEntity_->handle());
                     selectedEntity_ = nullptr;
                     selectedHandle_ = {};
@@ -1521,7 +1696,13 @@ void Editor::drawSceneViewport() {
 
             // Scene dropdown (quick scene switcher)
             {
-                // Extract current scene name from path
+                // Extract current scene name from path. When `currentScenePath_`
+                // is empty (boot scene `Default`, or any in-memory scene
+                // registered without a `.json` file), fall back to the
+                // SceneManager's logical name with an `(unsaved)` suffix so
+                // designers see what they're actually editing instead of
+                // `(none)`. Pre-S163 the empty-path branch fell straight to
+                // `(none)`, which made the boot scene look orphaned.
                 std::string sceneName = "(none)";
                 if (!currentScenePath_.empty()) {
                     size_t slash = currentScenePath_.find_last_of("/\\");
@@ -1531,6 +1712,9 @@ void Editor::drawSceneViewport() {
                         sceneName = currentScenePath_.substr(start, dot - start);
                     else
                         sceneName = currentScenePath_.substr(start);
+                } else if (SceneManager::instance().currentScene()) {
+                    const std::string& nm = SceneManager::instance().currentSceneName();
+                    if (!nm.empty()) sceneName = nm + " (unsaved)";
                 }
 
                 bool canSwitch = !inPlayMode_ || paused_ || isObserving_;
@@ -1544,7 +1728,7 @@ void Editor::drawSceneViewport() {
                             std::string name = entry.path().stem().string();
                             bool selected = (name == sceneName);
                             if (ImGui::Selectable(name.c_str(), selected)) {
-                                loadScene(dockWorld_, entry.path().string());
+                                requestLoadScene(dockWorld_, entry.path().string());
                             }
                         }
                     }
@@ -2853,6 +3037,12 @@ void Editor::drawMenuBar(World* world) {
         }
         ImGui::EndPopup();
     }
+
+    // Save-before-switch modal lives here so it survives both renderUI
+    // dispatch paths (FATE_HAS_GAME and the fallback). It only renders
+    // when `showSceneSwitchModal_` was set this frame by
+    // `requestLoadScene` — otherwise it's a cheap no-op.
+    drawSceneSwitchModal(world);
 }
 
 // ============================================================================
@@ -3042,6 +3232,10 @@ void Editor::drawHierarchy(World* world) {
                 if (ImGui::BeginPopupContextItem()) {
                     if (ImGui::MenuItem("Delete", "Del", false, !isEntityLocked(entity))) {
                         if (dockWorld_) {
+                            auto cmd = std::make_unique<DeleteCommand>();
+                            cmd->entityData = PrefabLibrary::entityToJson(entity);
+                            cmd->deletedHandle = entity->handle();
+                            UndoSystem::instance().push(std::move(cmd));
                             dockWorld_->destroyEntity(entity->handle());
                             if (selectedEntity_ == entity) { selectedEntity_ = nullptr; selectedHandle_ = {}; }
                         }
@@ -3055,6 +3249,10 @@ void Editor::drawHierarchy(World* world) {
                                 if (t) t->position += Vec2(32.0f, 0.0f);
                                 selectedEntity_ = copy;
                                 selectedHandle_ = copy->handle();
+                                auto cmd = std::make_unique<CreateCommand>();
+                                cmd->entityData = PrefabLibrary::entityToJson(copy);
+                                cmd->createdHandle = copy->handle();
+                                UndoSystem::instance().push(std::move(cmd));
                             }
                         }
                     }
@@ -3125,6 +3323,10 @@ void Editor::drawHierarchy(World* world) {
                         if (ImGui::BeginPopupContextItem()) {
                             if (ImGui::MenuItem("Delete", "Del", false, !isEntityLocked(entity))) {
                                 if (dockWorld_) {
+                                    auto cmd = std::make_unique<DeleteCommand>();
+                                    cmd->entityData = PrefabLibrary::entityToJson(entity);
+                                    cmd->deletedHandle = entity->handle();
+                                    UndoSystem::instance().push(std::move(cmd));
                                     dockWorld_->destroyEntity(entity->handle());
                                     if (selectedEntity_ == entity) { selectedEntity_ = nullptr; selectedHandle_ = {}; }
                                 }
@@ -3138,6 +3340,10 @@ void Editor::drawHierarchy(World* world) {
                                         if (t) t->position += Vec2(32.0f, 0.0f);
                                         selectedEntity_ = copy;
                                         selectedHandle_ = copy->handle();
+                                        auto cmd = std::make_unique<CreateCommand>();
+                                        cmd->entityData = PrefabLibrary::entityToJson(copy);
+                                        cmd->createdHandle = copy->handle();
+                                        UndoSystem::instance().push(std::move(cmd));
                                     }
                                 }
                             }
@@ -3674,7 +3880,7 @@ void Editor::drawMenuBar(World*) {
                         if (entry.path().extension() != ".json") continue;
                         std::string name = entry.path().stem().string();
                         if (ImGui::MenuItem(name.c_str())) {
-                            loadScene(dockWorld_, entry.path().string());
+                            requestLoadScene(dockWorld_, entry.path().string());
                         }
                     }
                 }
@@ -3827,6 +4033,8 @@ void Editor::drawSceneViewport() {
 
             // Scene dropdown
             {
+                // Same fallback policy as the FATE_HAS_GAME toolbar — show
+                // `<sceneName> (unsaved)` for in-memory scenes with no path.
                 std::string sceneName = "(none)";
                 if (!currentScenePath_.empty()) {
                     size_t slash = currentScenePath_.find_last_of("/\\");
@@ -3836,6 +4044,9 @@ void Editor::drawSceneViewport() {
                         sceneName = currentScenePath_.substr(start, dot - start);
                     else
                         sceneName = currentScenePath_.substr(start);
+                } else if (SceneManager::instance().currentScene()) {
+                    const std::string& nm = SceneManager::instance().currentSceneName();
+                    if (!nm.empty()) sceneName = nm + " (unsaved)";
                 }
                 bool canSwitch = !inPlayMode_ || paused_ || isObserving_;
                 if (!canSwitch) ImGui::BeginDisabled();
@@ -3848,7 +4059,7 @@ void Editor::drawSceneViewport() {
                             std::string name = entry.path().stem().string();
                             bool selected = (name == sceneName);
                             if (ImGui::Selectable(name.c_str(), selected)) {
-                                loadScene(dockWorld_, entry.path().string());
+                                requestLoadScene(dockWorld_, entry.path().string());
                             }
                         }
                     }
