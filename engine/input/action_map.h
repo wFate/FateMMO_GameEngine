@@ -26,6 +26,7 @@ enum class ActionId : uint8_t {
     ToggleInventory,
     ToggleSkillBar,
     ToggleQuestLog,
+    ToggleAdminPanel,    // v22 — admin-only; gated server-side. Default F11.
     OpenChat,
     SubmitChat,
     Confirm,
@@ -164,6 +165,11 @@ private:
         // bind(ActionId::ToggleInventory, SDL_SCANCODE_I);
         // bind(ActionId::ToggleSkillBar,  SDL_SCANCODE_K);
         // bind(ActionId::ToggleQuestLog,  SDL_SCANCODE_L);
+
+        // v22 — Admin Tools panel. Opens for clients whose local-player
+        // AdminRole >= Admin (server still re-validates every grant). F11 is
+        // unbound elsewhere so it's a safe default for live play.
+        bind(ActionId::ToggleAdminPanel, SDL_SCANCODE_F11);
 
         // Chat / confirm / cancel
         bind(ActionId::OpenChat,   SDL_SCANCODE_RETURN);

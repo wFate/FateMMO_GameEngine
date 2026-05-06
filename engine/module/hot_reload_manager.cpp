@@ -5,10 +5,16 @@
 #include "engine/components/transform.h"
 #include "engine/ecs/world.h"
 #include "engine/core/logger.h"
+#include "engine/core/atomic_write.h"
 #ifndef FATE_SHIPPING
 #include "engine/editor/editor.h"
 #endif
 
+#include <nlohmann/json.hpp>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
 #include <filesystem>
 #include <cstring>
 #include <cstdio>
@@ -880,6 +886,12 @@ bool HotReloadManager::isReloadDeferredByPlayMode() const {
 }
 
 void HotReloadManager::requestBuildNow(const char* reason) {
+    // Phase 0: emit a BuildRequested status event BEFORE any early-return
+    // guard. Semantically correct ("the user requested a build, here's the
+    // status update for that request") and decouples the status emit from
+    // whether the request actually gets serviced.
+    writeStatusFile(EventType::BuildRequested);
+
     if (buildCmd_.empty()) {
         LOG_WARN("HotReload",
             "requestBuildNow ignored: source-watch not configured (%s)",
@@ -906,19 +918,245 @@ void HotReloadManager::joinBuildThread() {
     if (buildThread_.joinable()) buildThread_.join();
 }
 
+// ---------------------------------------------------------------------------
+// Phase 0 status-writer helpers. ISO-8601 UTC stamps, EventType / BuildStatus
+// stringifiers, and a script-build-lock presence probe. All in an anonymous
+// namespace so they're TU-private; visible to writeStatusFile + initialize +
+// shutdown without leaking out of the file.
+// ---------------------------------------------------------------------------
+namespace {
+
+// ISO-8601 UTC timestamp string for the status file's "timestamp" field.
+std::string nowIso8601() {
+    using namespace std::chrono;
+    const auto now = system_clock::now();
+    const auto t   = system_clock::to_time_t(now);
+    std::tm     tm_utc{};
+#if defined(_WIN32)
+    gmtime_s(&tm_utc, &t);
+#else
+    gmtime_r(&t, &tm_utc);
+#endif
+    std::ostringstream os;
+    os << std::put_time(&tm_utc, "%Y-%m-%dT%H:%M:%SZ");
+    return os.str();
+}
+
+const char* eventTypeToString(HotReloadManager::EventType e) {
+    using E = HotReloadManager::EventType;
+    switch (e) {
+        case E::BuildStarted:                    return "build_started";
+        case E::BuildSucceededArtifactChanged:   return "build_succeeded_artifact_changed";
+        case E::BuildSucceededNoArtifactChange:  return "build_succeeded_no_artifact_change";
+        case E::BuildFailed:                     return "build_failed";
+        case E::BuildRequested:                  return "build_requested";
+        case E::BuildSkippedLocked:              return "build_skipped_locked";
+        case E::ReloadDeferredPlayMode:          return "reload_deferred_play_mode";
+        case E::ReloadSucceeded:                 return "reload_succeeded";
+        case E::ReloadFailedTransient:           return "reload_failed_transient";
+        case E::ReloadFailedHard:                return "reload_failed_hard";
+        case E::ModuleDegraded:                  return "module_degraded";
+    }
+    return "unknown";
+}
+
+const char* buildStatusToString(HotReloadManager::BuildStatus s) {
+    using S = HotReloadManager::BuildStatus;
+    switch (s) {
+        case S::Idle:      return "Idle";
+        case S::Running:   return "Running";
+        case S::Succeeded: return "Succeeded";
+        case S::Failed:    return "Failed";
+    }
+    return "Unknown";
+}
+
+bool scriptBuildLockFilePresent() {
+    std::error_code ec;
+    return std::filesystem::exists("logs/.script_build.lock", ec);
+}
+
+} // namespace
+
+void HotReloadManager::drainPendingBuildEndEvent() {
+    // Codex P1 round-3 follow-up: drain MUST be main-thread only. The
+    // recursive writeStatusFile call this dispatches reads main-thread-owned
+    // PLAIN fields (reloadCount_, failureCount_, moduleDegraded_, lastError_,
+    // moduleBuildIdStr_) without synchronization. writeStatusFile is callable
+    // from worker threads via the public requestBuildNow path (the writer-
+    // concurrency test was the original trigger; any future test or future
+    // production path that calls requestBuildNow off-thread reintroduces the
+    // hazard). Without this gate, a worker-thread BuildRequested emit would
+    // claim a pending BuildSucceeded* via the atomic exchange and re-issue
+    // writeStatusFile from the wrong thread, undoing the very marshaling this
+    // helper exists to provide.
+    //
+    // mainThreadId_ default-id (std::thread::id{}) means "not yet captured"
+    // — we proceed in that very early window because no worker thread can
+    // exist before HotReloadManager::initialize() returns, and initialize()
+    // captures mainThreadId_ before any subsystem (file watcher / build
+    // worker) is allowed to run. After capture this gate is load-bearing.
+    if (mainThreadId_ != std::thread::id{} &&
+        mainThreadId_ != std::this_thread::get_id()) {
+        // Defer: leave the event in pendingBuildEndEvent_ for the next
+        // main-thread caller. processPendingReload runs every frame in
+        // production (App::update) and at the top of every test that uses
+        // processPendingReload(0.0f) to drive drains, so the event is
+        // observed within at most one frame / one test step.
+        return;
+    }
+
+    // Atomically claim any pending build-end event published by the worker
+    // thread and re-emit it from the main thread. Sentinel -1 means
+    // "nothing pending"; other values are static_cast<int>(EventType). The
+    // exchange ensures only ONE call per published event drains it —
+    // concurrent main-thread calls (drain in writeStatusFile and drain in
+    // processPendingReload during the same frame) collapse cleanly.
+    //
+    // Calling writeStatusFile recursively is safe: the recursive call's
+    // own drainPendingBuildEndEvent sees -1 (we just cleared it) and
+    // returns immediately. statusMutex_ is non-recursive but the inner
+    // scoped_lock unlocks before the outer call acquires it — sequential
+    // acquire/release on the same thread, which std::mutex permits.
+    const int raw = pendingBuildEndEvent_.exchange(-1, std::memory_order_acq_rel);
+    if (raw != -1) {
+        writeStatusFile(static_cast<EventType>(raw));
+    }
+}
+
+void HotReloadManager::writeStatusFile(EventType eventType) {
+    // Drain a worker-published build-end event BEFORE emitting our own,
+    // so the script's polled JSON observes the build's BuildSucceeded*/
+    // BuildFailed event ahead of any subsequent main-thread emit (such
+    // as a fresh BuildRequested triggered by a UI click that lands in
+    // the same frame). See drainPendingBuildEndEvent above.
+    drainPendingBuildEndEvent();
+
+    std::scoped_lock lock(statusMutex_);
+
+    ++statusEventId_;
+
+    nlohmann::json j;
+    j["schema_version"]               = 1;
+    j["engine_session_id"]            = engineSessionId_;
+    j["process_start_timestamp"]      = processStartTimestamp_;
+    j["status_event_id"]              = statusEventId_;
+    j["timestamp"]                    = nowIso8601();
+    j["last_event_type"]              = eventTypeToString(eventType);
+    j["generation"]                   = reloadCount_;
+    j["reload_count"]                 = reloadCount_;
+    j["reload_pending"]               = pendingDllSwap_.load(std::memory_order_acquire);
+    j["reload_deferred_by_play_mode"] = isReloadDeferredByPlayMode();
+    j["failure_count"]                = failureCount_;
+    j["module_degraded"]              = moduleDegraded_;
+    j["last_error"]                   = lastError_;
+    j["build_status"]                 = buildStatusToString(buildStatus_.load(std::memory_order_acquire));
+    j["build_exit_code"]              = buildExitCode_.load(std::memory_order_acquire);
+    j["build_id"]                     = moduleBuildIdStr_;
+    j["script_build_lock_present"]    = scriptBuildLockFilePresent();
+
+    std::string err;
+    if (!fate::writeFileAtomic("logs/hot_reload_status.json", j.dump(2), &err)) {
+        // Best-effort: a status emit failure is captured in the engine log
+        // but does not affect any other reload/build behavior.
+        LOG_WARN("HotReload", "writeStatusFile failed: %s", err.c_str());
+    }
+}
+
 std::string HotReloadManager::buildLogTailSnapshot() const {
     std::lock_guard<std::mutex> lk(buildLogMutex_);
     return buildLogTail_;
 }
 
+bool HotReloadManager::isScriptBuildLockActive() {
+    const std::filesystem::path lockPath = "logs/.script_build.lock";
+    std::error_code ec;
+    if (!std::filesystem::exists(lockPath, ec)) return false;
+
+    // Check age. Stale threshold = 10 min per spec. If the lock file is
+    // older than that, assume the script that wrote it crashed without
+    // cleaning up; reap it and proceed normally.
+    const auto now      = std::filesystem::file_time_type::clock::now();
+    const auto lockTime = std::filesystem::last_write_time(lockPath, ec);
+    if (ec) return false;  // best-effort: if we can't stat, assume not present
+
+    const auto ageSec = std::chrono::duration_cast<std::chrono::seconds>(now - lockTime).count();
+    constexpr int kStaleThresholdSeconds = 600;  // 10 minutes per spec
+    if (ageSec >= kStaleThresholdSeconds) {
+        std::filesystem::remove(lockPath, ec);
+        LOG_WARN("HotReload", "Reaped stale script_build.lock (age %lld s)", (long long)ageSec);
+        return false;
+    }
+    return true;
+}
+
 void HotReloadManager::runBuildAsync() {
+    // Phase 1 (Task 8): respect script-owned build lock. If a script is
+    // running its own build (e.g., scripts/fate_ai_loop.ps1 -Build), it
+    // writes logs/.script_build.lock; engine source-watch must skip its
+    // own build so we don't race two cmake invocations on the same target.
+    // Clear buildPending_ on skip so we don't wake up the moment the lock
+    // clears — script's own build will produce the new DLL, artifact
+    // watcher will trigger reload from there.
+    if (isScriptBuildLockActive()) {
+        buildPending_.store(false, std::memory_order_release);
+        writeStatusFile(EventType::BuildSkippedLocked);
+        return;
+    }
+
     // Don't queue a second build on top of a running one; the artifact
     // watcher will fire reload as soon as the in-flight build finishes.
-    if (buildStatus_.load(std::memory_order_acquire) == BuildStatus::Running) return;
+    //
+    // Phase 0 (Task 6): use a CAS loop to atomically claim the
+    // Idle/Succeeded/Failed -> Running transition. Production call sites are
+    // single-threaded (requestBuildNow on main / processPendingReload on
+    // main), but the writeStatusFile concurrency test exercises requestBuildNow
+    // from many threads — and the BuildStarted emit + DLL pre-snapshot widen
+    // the previous "load-then-store" window past a tipping point where two
+    // racers could both reach `buildThread_ = std::thread(...)`. Assigning
+    // to a still-joinable thread terminates the process. CAS makes only one
+    // thread proceed past this point; losers see Running and bail just like
+    // the original early-return contract.
+    BuildStatus expected = buildStatus_.load(std::memory_order_acquire);
+    while (expected != BuildStatus::Running) {
+        if (buildStatus_.compare_exchange_weak(expected, BuildStatus::Running,
+                                               std::memory_order_acq_rel,
+                                               std::memory_order_acquire)) {
+            break;
+        }
+        // expected refreshed by compare_exchange_weak; loop until either we
+        // win the CAS or observe Running.
+    }
+    if (expected == BuildStatus::Running) return;
 
     joinBuildThread();  // reap a finished prior thread before launching the next.
-    buildStatus_.store(BuildStatus::Running, std::memory_order_release);
+
+    // Phase 0 (Task 6): snapshot the current DLL's last_write_time + size
+    // BEFORE launching the build. The lambda compares against this on the
+    // success path to discriminate BuildSucceededArtifactChanged vs
+    // BuildSucceededNoArtifactChange (cmake no-op / comment-only edit). If
+    // the DLL doesn't exist yet (first build), reset to defaults so any
+    // post-build artifact counts as "changed".
+    {
+        std::error_code ec;
+        const auto dllPath = std::filesystem::path(moduleDir_) / (moduleNameBase_ + ".dll");
+        if (std::filesystem::exists(dllPath, ec)) {
+            dllPreBuildMtime_ = std::filesystem::last_write_time(dllPath, ec);
+            dllPreBuildSize_  = std::filesystem::file_size(dllPath, ec);
+        } else {
+            dllPreBuildMtime_ = std::filesystem::file_time_type{};
+            dllPreBuildSize_  = 0;
+        }
+    }
+
+    // buildStatus_ already flipped to Running by the CAS above.
     buildExitCode_.store(0, std::memory_order_release);
+
+    // Phase 0 (Task 6): emit BuildStarted on the calling (main) thread, after
+    // buildStatus_ flips to Running so a status reader sees the coherent
+    // running snapshot. Synchronous emit — must NOT go inside the lambda.
+    writeStatusFile(EventType::BuildStarted);
+
     {
         std::lock_guard<std::mutex> lk(buildLogMutex_);
         buildLogTail_ = "(building...)";
@@ -958,20 +1196,89 @@ void HotReloadManager::runBuildAsync() {
         buildStatus_.store(rc == 0 ? BuildStatus::Succeeded : BuildStatus::Failed,
                            std::memory_order_release);
         if (rc == 0) {
-            // Don't rely on the artifact watcher catching the DLL write —
-            // filesystem notifications can race the linker's flush, and a
-            // missed event would silently leave the user clicking "Reload
-            // Now". Setting the flag here makes a successful build always
-            // request a swap; the next processPendingReload tick picks it
-            // up under the same debounce window. Failure path leaves the
-            // flag untouched — current module stays live.
-            reloadPending_.store(true, std::memory_order_release);
+            // Phase 0 (Task 6): post-build DLL snapshot vs the pre-build
+            // (mtime, size) tuple captured by runBuildAsync's caller frame.
+            // artifactChanged drives BOTH the EventType discriminator AND
+            // the new pendingDllSwap_ status field (reported as
+            // reload_pending in the status JSON).
+            std::error_code ec2;
+            const auto dllPath = std::filesystem::path(moduleDir_) / (moduleNameBase_ + ".dll");
+            bool artifactChanged = false;
+            if (std::filesystem::exists(dllPath, ec2)) {
+                const auto post_mtime = std::filesystem::last_write_time(dllPath, ec2);
+                const auto post_size  = std::filesystem::file_size(dllPath, ec2);
+                artifactChanged = (post_mtime != dllPreBuildMtime_)
+                               || (post_size != dllPreBuildSize_);
+            }
+            pendingDllSwap_.store(artifactChanged, std::memory_order_release);
+
+            if (artifactChanged) {
+                // Don't rely on the artifact watcher catching the DLL write —
+                // filesystem notifications can race the linker's flush, and a
+                // missed event would silently leave the user clicking "Reload
+                // Now". Setting the flag here makes a successful artifact-
+                // changing build always request a swap; the next
+                // processPendingReload tick picks it up under the same
+                // debounce window. No-artifact-change builds (comment-only
+                // edits, header-only changes producing identical output)
+                // leave reloadPending_ untouched so the script's "no-op"
+                // classification matches engine reality.
+                reloadPending_.store(true, std::memory_order_release);
+            }
+
+            // Codex P1 follow-up #3: do NOT call writeStatusFile from this
+            // worker thread — it reads main-thread-owned fields without
+            // synchronization. Publish the event type instead; the main
+            // thread's processPendingReload (or the next writeStatusFile
+            // call) drains and emits. pendingBuildEndEvent_ is the LAST
+            // store in this branch so the main thread's acquire-load on
+            // the drain sees pendingDllSwap_ + reloadPending_ as well.
+            pendingBuildEndEvent_.store(static_cast<int>(
+                artifactChanged
+                    ? EventType::BuildSucceededArtifactChanged
+                    : EventType::BuildSucceededNoArtifactChange),
+                std::memory_order_release);
+        } else {
+            // Failure path: clear pendingDllSwap_ (no swap will happen) but
+            // do NOT touch reloadPending_ — the current module stays live.
+            pendingDllSwap_.store(false, std::memory_order_release);
+            pendingBuildEndEvent_.store(static_cast<int>(EventType::BuildFailed),
+                                        std::memory_order_release);
         }
         LOG_INFO("HotReload", "Build finished rc=%d", rc);
     });
 }
 
 bool HotReloadManager::initialize(const std::string& moduleDir, const std::string& moduleName) {
+    // Phase 0: stable per-process IDs for the status writer. Generated once
+    // per initialize() call; survive across reloads but reset on shutdown +
+    // re-init. The script uses (engineSessionId_, statusEventId_) as the
+    // event-boundary tuple — see spec.
+    //
+    // INVARIANT: do NOT call writeStatusFile() (or any code path that
+    // recurses into it) while holding statusMutex_ here. statusMutex_ is a
+    // non-recursive std::mutex; reentry would self-deadlock. The lock is
+    // defensive against a hypothetical concurrent emitter, but no caller in
+    // this scope currently emits — keep it that way. If a future Phase 1+
+    // task wants to fire an "engine_started" event from initialize, do it
+    // OUTSIDE this scoped_lock block, after the closing brace.
+    {
+        std::scoped_lock lock(statusMutex_);
+        using namespace std::chrono;
+        const auto now_us = duration_cast<microseconds>(
+            system_clock::now().time_since_epoch()).count();
+#if defined(_WIN32)
+        const uint64_t pid = static_cast<uint64_t>(GetCurrentProcessId());
+#else
+        const uint64_t pid = static_cast<uint64_t>(::getpid());
+#endif
+        engineSessionId_         = static_cast<uint64_t>(now_us) ^ (pid << 32);
+        processStartTimestamp_   = nowIso8601();
+        statusEventId_           = 0;  // reset for fresh session
+        pendingDllSwap_.store(false, std::memory_order_release);
+        pendingBuildEndEvent_.store(-1, std::memory_order_release);
+    }
+
     moduleDir_       = moduleDir;
     moduleNameBase_  = moduleName;
     sourcePath_      = moduleDir + "/" + moduleName + ".dll";
@@ -1016,6 +1323,19 @@ void HotReloadManager::shutdown() {
     sourceWatcher_.stop();
     joinBuildThread();
 
+    // Phase 0: reset session-scoped state. joinBuildThread() above drained any
+    // in-flight worker, so no concurrent writeStatusFile is possible from this
+    // point on. Subsequent initialize() generates a fresh engineSessionId_ so
+    // the status reader can detect engine restarts.
+    {
+        std::scoped_lock lock(statusMutex_);
+        engineSessionId_       = 0;
+        processStartTimestamp_.clear();
+        statusEventId_         = 0;
+        pendingDllSwap_.store(false, std::memory_order_release);
+        pendingBuildEndEvent_.store(-1, std::memory_order_release);
+    }
+
     // Tear down every active behavior BEFORE we drop the module handles, so
     // the cached vtable pointers that destroyOne dispatches against are
     // still valid. teardownActiveBehaviors drains the entire roster.
@@ -1027,6 +1347,14 @@ void HotReloadManager::shutdown() {
         if (shutdownFn) {
             HrFaultInfo fi;
             if (hrCallShutdown(shutdownFn, &fi)) {
+                // Phase 0 (Task 7): intentionally call the static helper
+                // here, NOT setModuleDegraded(). The session-state reset
+                // above (engineSessionId_ = 0, statusEventId_ = 0) has
+                // already torn down the per-process status identity, so
+                // a status emit at this point would record a zeroed
+                // session — misleading to the script consumer. The flag
+                // + reason still update for any in-flight inspector poll
+                // that hasn't yet observed the shutdown.
                 hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
                                     "fateGameModuleShutdown (manager shutdown)", fi);
             }
@@ -1112,6 +1440,14 @@ void HotReloadManager::processPendingReload(float currentTime) {
     }
     SafePointGuard sg(inSafePoint_);
 
+    // Codex P1 follow-up #3: drain any worker-published build-end event at
+    // the top of every frame. Production drives this every 16 ms via
+    // App::update; tests must call processPendingReload(0.0f) explicitly
+    // after waiting for buildStatus()==Succeeded/Failed to observe the
+    // resulting status JSON. writeStatusFile also self-drains for the
+    // case where a UI handler emits before the next processPendingReload.
+    drainPendingBuildEndEvent();
+
     // Source-side build trigger — kicks BEFORE the artifact-reload check so
     // a save-and-rebuild round trip happens entirely under one frame's
     // process call. The artifact watcher will fire reloadPending_ when the
@@ -1156,6 +1492,13 @@ void HotReloadManager::processPendingReload(float currentTime) {
         if (!playModeWarned_) {
             LOG_WARN("HotReload", "Module changed but play-mode reload is disabled — will retry when play mode exits.");
             playModeWarned_ = true;
+            // Phase 0 (Task 7): emit ReloadDeferredPlayMode exactly once per
+            // entry into the deferred state. The reload is still PENDING
+            // (we don't clear reloadPending_), only the swap is deferred —
+            // so do NOT touch pendingDllSwap_ here. Once play mode exits,
+            // playModeWarned_ resets below and the next frame will perform
+            // the swap, emitting a ReloadSucceeded/Failed event then.
+            writeStatusFile(EventType::ReloadDeferredPlayMode);
         }
         return;  // keep flag set; don't clear timestamp so we don't re-debounce
     }
@@ -1183,6 +1526,12 @@ void HotReloadManager::processPendingReload(float currentTime) {
                 LOG_WARN("HotReload",
                     "Reload gave up after %d transient retries: %s (current module preserved)",
                     kMaxTransientRetries, lastError_.c_str());
+                // Phase 0 (Task 7): the transient retry cap escalates to a
+                // hard failure — the swap will not happen, so clear
+                // pendingDllSwap_ before the emit so the status file
+                // reports reload_pending=false alongside the failure.
+                pendingDllSwap_.store(false, std::memory_order_release);
+                writeStatusFile(EventType::ReloadFailedTransient);
             } else if (!transientWarned_) {
                 LOG_INFO("HotReload", "Swap deferred (build still in progress): %s",
                          lastError_.c_str());
@@ -1194,6 +1543,14 @@ void HotReloadManager::processPendingReload(float currentTime) {
             transientWarned_ = false;
             LOG_WARN("HotReload", "Reload failed: %s (current module preserved)",
                      lastError_.c_str());
+            // Phase 0 (Task 7): hard failure path — performSwap returned
+            // false without re-arming reloadPending_, meaning the new DLL
+            // is genuinely broken (bad PE, init returned 0, ABI mismatch,
+            // BeginReload veto, etc.). The swap will not happen; clear
+            // pendingDllSwap_ before emitting so the status file's
+            // reload_pending = false matches the failure semantics.
+            pendingDllSwap_.store(false, std::memory_order_release);
+            writeStatusFile(EventType::ReloadFailedHard);
         }
     } else {
         // Successful swap — clear transient throttle state.
@@ -1356,8 +1713,7 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
             // Note: we have NOT called shutdownFn yet because init never
             // returned cleanly — calling shutdown on a half-initialized
             // module is itself unsafe, so we just FreeLibrary.
-            hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
-                                "fateGameModuleInit", fi);
+            setModuleDegraded("fateGameModuleInit", fi);
             lastError_ = "fateGameModuleInit faulted (see degraded reason)";
             BehaviorRegistry::instance().abortStaging();
             FreeLibrary(newHandle);
@@ -1388,8 +1744,7 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
         if (shutdownFn) {
             HrFaultInfo fi;
             if (hrCallShutdown(shutdownFn, &fi)) {
-                hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
-                                    "fateGameModuleShutdown (post-init abort: API version disagree)", fi);
+                setModuleDegraded("fateGameModuleShutdown (post-init abort: API version disagree)", fi);
             }
         }
         FreeLibrary(newHandle);
@@ -1419,8 +1774,7 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
                 // didn't get a clean handshake from the old one. We still
                 // need to call shutdownFn on the new module if we abort,
                 // but here we let the swap continue.
-                hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
-                                    "outgoing fateGameModuleBeginReload", fi);
+                setModuleDegraded("outgoing fateGameModuleBeginReload", fi);
                 // Treat as "veto" semantically — the outgoing module is
                 // no longer reliable, so honor the abort path.
                 lastError_ = "outgoing module's fateGameModuleBeginReload faulted (swap aborted; old module marked degraded)";
@@ -1432,8 +1786,7 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
                 if (shutdownFn) {
                     HrFaultInfo fi2;
                     if (hrCallShutdown(shutdownFn, &fi2)) {
-                        hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
-                                            "fateGameModuleShutdown (post-init abort: BeginReload faulted)", fi2);
+                        setModuleDegraded("fateGameModuleShutdown (post-init abort: BeginReload faulted)", fi2);
                     }
                 }
                 FreeLibrary(newHandle);
@@ -1449,8 +1802,7 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
                 if (shutdownFn) {
                     HrFaultInfo shutdownFi;
                     if (hrCallShutdown(shutdownFn, &shutdownFi)) {
-                        hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
-                                            "fateGameModuleShutdown (post-init abort: BeginReload veto)", shutdownFi);
+                        setModuleDegraded("fateGameModuleShutdown (post-init abort: BeginReload veto)", shutdownFi);
                     }
                 }
                 FreeLibrary(newHandle);
@@ -1491,8 +1843,7 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
                 // Old module's shutdown faulted. It's about to be
                 // FreeLibrary'd anyway, so we just log + flag degraded
                 // and continue.
-                hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
-                                    "outgoing fateGameModuleShutdown", fi);
+                setModuleDegraded("outgoing fateGameModuleShutdown", fi);
             }
         }
     }
@@ -1529,8 +1880,7 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
         if (hrCallReload(endFn, &endCtx, &endOk, &fi)) {
             // EndReload faulted. New module is live (we already promoted
             // handles), but its post-swap setup is broken. Mark degraded.
-            hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
-                                "fateGameModuleEndReload", fi);
+            setModuleDegraded("fateGameModuleEndReload", fi);
             lastError_ = "fateGameModuleEndReload faulted (module live but degraded)";
             ++failureCount_;
             endOk = 0;
@@ -1577,6 +1927,17 @@ bool HotReloadManager::performSwap(float /*currentTime*/) {
     LOG_INFO("HotReload", "Loaded module '%s' build=[%s] gen=%u (shadow=%s)",
              moduleNameStr_.c_str(), moduleBuildIdStr_.c_str(),
              reloadCount_, shadow.c_str());
+    // Phase 0 (Task 7): success path — the swap landed and reloadCount_ has
+    // advanced. Clear pendingDllSwap_ (the swap happened, so the status
+    // reader should see reload_pending = false) and emit ReloadSucceeded.
+    // Note: this also fires for the EndReload-faulted-but-still-live
+    // branch above, where moduleDegraded_ is true. That's intentional —
+    // the swap technically completed (new module is dispatching), so
+    // ReloadSucceeded reports the swap; the prior ModuleDegraded emit
+    // (fired from inside setModuleDegraded on the EndReload fault) lets
+    // the script disambiguate "live but degraded" from a clean reload.
+    pendingDllSwap_.store(false, std::memory_order_release);
+    writeStatusFile(EventType::ReloadSucceeded);
     return true;
 #endif
 }
@@ -1967,6 +2328,23 @@ static void hrSetModuleDegraded(std::string& reasonOut, bool& flagOut,
     reasonOut  = buf;
 }
 
+// Phase 0 (Task 7) wrapper that adds state-transition detection + status
+// event emit on top of the existing static helper. Captures the pre-call
+// value of moduleDegraded_; on a false -> true transition emits a single
+// ModuleDegraded status event. Already-degraded re-entries update the
+// reason string + refresh the static helper's log dedup, but do NOT emit
+// a duplicate event (the script consumes monotonic event_id, so a single
+// transition emit is the desired contract). Unconditionally delegates to
+// hrSetModuleDegraded for the underlying flag + reason mutation so log
+// dedup behavior is preserved bit-for-bit.
+void HotReloadManager::setModuleDegraded(const char* phase, const HrFaultInfo& fi) {
+    const bool wasDegraded = moduleDegraded_;
+    hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_, phase, fi);
+    if (!wasDegraded && moduleDegraded_) {
+        writeStatusFile(EventType::ModuleDegraded);
+    }
+}
+
 std::vector<HotReloadManager::FaultedRow> HotReloadManager::faultedBehaviors() const {
     std::vector<FaultedRow> out;
     out.reserve(active_.size());
@@ -2002,10 +2380,11 @@ HotReloadManager::safeDescribeFields(const FateBehaviorVTable* vt) {
                              &count, &wasNull, &fi)) {
         // SEH/C++ fault OR malformed schema. Route through the existing
         // module-degraded path so the editor's Hot Reload panel surfaces
-        // it; hrSetModuleDegraded dedupes on reason string so per-frame
-        // inspector polling won't spam the log.
-        hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
-                            "FateBehaviorVTable::describeFields", fi);
+        // it; setModuleDegraded dedupes on reason string for the LOG and
+        // emits a single ModuleDegraded status event on transition so
+        // per-frame inspector polling won't spam the log OR the status
+        // file.
+        setModuleDegraded("FateBehaviorVTable::describeFields", fi);
         return nullptr;
     }
     if (wasNull) return nullptr;  // legitimate "no schema"
@@ -2107,8 +2486,7 @@ void HotReloadManager::tickBehaviors(World& world, float dt) {
     if (moduleApi_.tick) {
         HrFaultInfo fi;
         if (hrCallModuleTick(moduleApi_.tick, dt, &fi)) {
-            hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_,
-                                "FateGameModuleApi::tick", fi);
+            setModuleDegraded("FateGameModuleApi::tick", fi);
             moduleApi_.tick = nullptr;
         }
     }

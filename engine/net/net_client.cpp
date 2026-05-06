@@ -2055,6 +2055,39 @@ void NetClient::sendAdminRequestContentList(uint8_t contentType) {
     sendPacket(Channel::ReliableOrdered, PacketType::CmdAdminRequestContentList, w.data(), w.size());
 }
 
+void NetClient::sendAdminGrantItem(const std::string& targetName, const std::string& itemId,
+                                    uint32_t quantity, bool bagFirst) {
+    CmdAdminGrantItemMsg msg;
+    msg.targetName = targetName;
+    msg.itemId     = itemId;
+    msg.quantity   = quantity;
+    msg.bagFirst   = bagFirst ? 1 : 0;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdAdminGrantItem, w.data(), w.size());
+}
+
+void NetClient::sendAdminSetLevel(const std::string& targetName, uint16_t level) {
+    CmdAdminSetLevelMsg msg;
+    msg.targetName = targetName;
+    msg.level      = level;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdAdminSetLevel, w.data(), w.size());
+}
+
+void NetClient::sendAdminAddSkillPoints(const std::string& targetName, uint16_t points) {
+    CmdAdminAddSkillPointsMsg msg;
+    msg.targetName = targetName;
+    msg.points     = points;
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdAdminAddSkillPoints, w.data(), w.size());
+}
+
 // ============================================================================
 // Phase 104 — Network panel instrumentation (Batches A + B)
 // ============================================================================

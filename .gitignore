@@ -27,8 +27,12 @@ Release/
 
 # Logs
 *.log
+logs/**/*.txt
 build_log.txt
 ship_log.txt
+logs/run/
+logs/.script_build.lock
+logs/hot_reload_status.json*
 
 # Secrets & environment
 .env

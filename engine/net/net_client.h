@@ -126,6 +126,11 @@ public:
     void sendAdminReloadCache(uint8_t cacheType);
     void sendAdminValidate();
     void sendAdminRequestContentList(uint8_t contentType);
+    // v22 — typed admin grants (Admin Tools panel + /additem fallback)
+    void sendAdminGrantItem(const std::string& targetName, const std::string& itemId,
+                            uint32_t quantity, bool bagFirst);
+    void sendAdminSetLevel(const std::string& targetName, uint16_t level);
+    void sendAdminAddSkillPoints(const std::string& targetName, uint16_t points);
 
     // Bounty actions
     void sendBountyGetBoard();

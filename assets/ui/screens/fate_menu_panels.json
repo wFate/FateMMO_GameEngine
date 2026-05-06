@@ -4384,6 +4384,20 @@
         "zOrder": 200
       },
       {
+        "anchor": {
+          "preset": "Center",
+          "size": [
+            720.0,
+            900.0
+          ]
+        },
+        "id": "admin_panel",
+        "type": "admin_panel",
+        "panelUseChrome": true,
+        "visible": false,
+        "zOrder": 50
+      },
+      {
         "activeTab": 1,
         "activeTabBg": [
           34,

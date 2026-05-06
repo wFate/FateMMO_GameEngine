@@ -906,6 +906,12 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     if(EXISTS "${CMAKE_SOURCE_DIR}/server/handlers/aoe_helpers.cpp")
         list(APPEND SERVER_TEST_SOURCES server/handlers/aoe_helpers.cpp)
     endif()
+    # Phase 8 / S169.B — respawn burst budget helper. Dependency-light pure
+    # cursor + selection logic so test_respawn_drain.cpp can link it without
+    # pulling in ServerSpawnManager (which depends on world/replication/DB).
+    if(EXISTS "${CMAKE_SOURCE_DIR}/server/respawn_drain.cpp")
+        list(APPEND SERVER_TEST_SOURCES server/respawn_drain.cpp)
+    endif()
     # Phase 7.2b.4 Session 2 — telegraph foundation. server_authored_damage
     # is the locked modifier-order helper; telegraph_runtime is the queue +
     # validate/enqueue/cancel state. Both are dependency-light (no DB / Server

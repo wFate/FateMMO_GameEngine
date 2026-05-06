@@ -525,15 +525,77 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         // next eligible tick — see the prior in-line override that this
         // hoist replaces). Non-combat entities (no stat components) fall
         // through to the cadence skip via hasCriticalEntityChange()=false.
+        //
+        // Stage D.1 — under production AOI (deactivationRadius=1280, all
+        // visible entities are Near tier so the tier-cadence is dead code
+        // here) we add a sticky-band sub-tier AFTER this block. The dead
+        // tier-cadence is preserved as-is because test_replication_tier_skip
+        // widens AOI to exercise it; touching it here would force those
+        // tests to be rewritten without buying anything in production.
+        // Critical override semantics for the sub-tier:
+        //   * HP + deathState are the only fields that always bypass.
+        //     statusEffectMask, casting fields, targetEntityId all ride this
+        //     packet but are non-critical at 20-40 tile range:
+        //       statusEffectMask wire field is currently unconsumed client-
+        //         side (TODO @ game_app.cpp:600); SvBuffSync (0xC1)
+        //         carries the owning client's full mask separately.
+        //       castingSkillId / castingProgress are deferred (always 0).
+        //       targetEntityId for distant mobs is non-critical.
+        //     Telegraphs ride SvSkillResultBatch (0xEC) /
+        //     SvAOETelegraph (0xEE/0xEF), combat events ride
+        //     SvCombatEventMsg (0x93) — sub-tier never throttles those.
         auto* entityTransform = entity->getComponent<Transform>();
+        bool cadenceOverridden = false;
         if (entityTransform && !isObserverClient) {
             float dx = entityTransform->position.x - clientPos.x;
             float dy = entityTransform->position.y - clientPos.y;
-            float dist = std::sqrt(dx * dx + dy * dy);
+            float d2 = dx * dx + dy * dy;
+            float dist = std::sqrt(d2);
             UpdateTier tier = getUpdateTier(dist);
             if (!shouldSendUpdate(tier, tickCounter_)) {
-                if (!hasCriticalEntityChange(entity, last)) continue;
+                if (!hasCriticalEntityChange(entity, last)) {
+                    ++stats_.stayedThrottled;
+                    continue;
+                }
+                ++stats_.stayedCriticalOverride;
+                cadenceOverridden = true;
             }
+
+            // Stage D.1 — sticky-band sub-tier. Inside activationRadius =
+            // full-rate. In [activation, deactivation] = every kStickyInterval
+            // -th tick, with deterministic per-handle offset so band entities
+            // de-herd into different frames. HP/death bypass via the same
+            // probe used by tier-cadence above. Skipped if tier-cadence
+            // already overrode (we don't want to re-throttle an emit that
+            // was already promoted via the dead path under widened-AOI tests).
+            if (!cadenceOverridden) {
+                const float actR = aoiConfig_.activationRadius;
+                const float actR2 = actR * actR;
+                if (d2 > actR2) {
+                    constexpr uint32_t kStickyInterval = 3u;
+                    const uint32_t offset = handle.value % kStickyInterval;
+                    if ((tickCounter_ % kStickyInterval) != offset) {
+                        if (!hasCriticalEntityChange(entity, last)) {
+                            ++stats_.stayedThrottled;
+                            continue;
+                        }
+                        ++stats_.stayedCriticalOverride;
+                    } else {
+                        // On-offset: cadence permits emit consideration this
+                        // tick. The post-build dirtyMask check downstream still
+                        // decides whether bytes go on the wire — see AOIStats
+                        // doc-comment in replication.h.
+                        ++stats_.stayedFullRate;
+                    }
+                } else {
+                    // Inside activation radius — full-rate.
+                    ++stats_.stayedFullRate;
+                }
+            }
+        } else {
+            // No Transform OR observer/dead-camera client. Both bypass the
+            // cadence pipeline by design; count as full-rate emit.
+            ++stats_.stayedFullRate;
         }
 
         SvEntityUpdateMsg current = buildCurrentState(world, entity, pid);

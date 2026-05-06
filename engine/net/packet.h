@@ -8,7 +8,7 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 21;  // v21: SvAOETelegraphStartBatch (0xEE) + SvAOETelegraphCancelBatch (0xEF) added — Phase 7.2b.4 Session 2 telegraph foundation. Old clients drop the unknown packet types; the bump prevents silent visual desync between mismatched clients/servers when a boss telegraph fires.
+constexpr uint8_t  PROTOCOL_VERSION  = 22;  // v22: CmdAdminGrantItem (0x51) + CmdAdminSetLevel (0x52) + CmdAdminAddSkillPoints (0x53) — typed admin grant pipeline replacing chat-mediated /additem flow. Result rides existing SvAdminResult (0xC3). Bump rejects mismatched clients at handshake. v21: SvAOETelegraphStartBatch (0xEE) + SvAOETelegraphCancelBatch (0xEF) — telegraph foundation.
 constexpr size_t   PACKET_HEADER_SIZE = 26;  // v9: ackBits widened 4→8 bytes (32→64 bit ACK window)
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
@@ -131,6 +131,14 @@ namespace PacketType {
     constexpr uint8_t CmdEquipFromBag           = 0x4E; // Phase C Batch 3 WU14b — atomic equip from bag sub-slot
     constexpr uint8_t CmdSetPickupPreference    = 0x4F; // Client-side pickup routing preference (0=InvFirst, 1=BagFirst)
     constexpr uint8_t CmdShopSellFromBag        = 0x50; // v17 — sell an item that lives in a bag sub-slot
+
+    // v22 — typed admin grants. Each carries targetName + payload; result returns
+    // on existing SvAdminResult (0xC3) with requestType echoing the Cmd opcode.
+    // Server validates AdminRole::Admin per call; chat /additem is refactored to
+    // use the same shared helper so the slash-command fallback is also fixed.
+    constexpr uint8_t CmdAdminGrantItem         = 0x51;
+    constexpr uint8_t CmdAdminSetLevel          = 0x52;
+    constexpr uint8_t CmdAdminAddSkillPoints    = 0x53;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;

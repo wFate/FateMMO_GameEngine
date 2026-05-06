@@ -115,6 +115,76 @@ struct CmdAdminRequestContentListMsg {
 };
 
 // ============================================================================
+// Client -> Server: Grant a single item to a target player (v22)
+// ----------------------------------------------------------------------------
+// targetName empty = grant to self. quantity is clamped >= 1 server-side.
+// bagFirst routes the addItem call through the bag-first slot policy so the
+// admin panel's "Bag First" checkbox plumbs end-to-end. Server-side helper
+// (ServerApp::performAdminGrantItem) does the full correctness recipe:
+// AdminRole gate, ItemInstance build with isBag for Container, bag capacity
+// init if landed in a bag, dirty + IMMEDIATE persist + inv/bag sync.
+// ============================================================================
+struct CmdAdminGrantItemMsg {
+    std::string targetName;     // empty = self
+    std::string itemId;
+    uint32_t    quantity = 1;
+    uint8_t     bagFirst = 0;   // 0/1
+
+    void write(ByteWriter& w) const {
+        w.writeString(targetName);
+        w.writeString(itemId);
+        w.writeU32(quantity);
+        w.writeU8(bagFirst);
+    }
+    static CmdAdminGrantItemMsg read(ByteReader& r) {
+        CmdAdminGrantItemMsg m;
+        m.targetName = r.readString();
+        m.itemId     = r.readString();
+        m.quantity   = r.readU32();
+        m.bagFirst   = r.readU8();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: Set a target player's level (v22)
+// ============================================================================
+struct CmdAdminSetLevelMsg {
+    std::string targetName;     // empty = self
+    uint16_t    level = 1;
+
+    void write(ByteWriter& w) const {
+        w.writeString(targetName);
+        w.writeU16(level);
+    }
+    static CmdAdminSetLevelMsg read(ByteReader& r) {
+        CmdAdminSetLevelMsg m;
+        m.targetName = r.readString();
+        m.level      = r.readU16();
+        return m;
+    }
+};
+
+// ============================================================================
+// Client -> Server: Add skill points to a target player (v22)
+// ============================================================================
+struct CmdAdminAddSkillPointsMsg {
+    std::string targetName;     // empty = self
+    uint16_t    points = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeString(targetName);
+        w.writeU16(points);
+    }
+    static CmdAdminAddSkillPointsMsg read(ByteReader& r) {
+        CmdAdminAddSkillPointsMsg m;
+        m.targetName = r.readString();
+        m.points     = r.readU16();
+        return m;
+    }
+};
+
+// ============================================================================
 // Server -> Client: Admin operation result
 // ============================================================================
 struct SvAdminResultMsg {

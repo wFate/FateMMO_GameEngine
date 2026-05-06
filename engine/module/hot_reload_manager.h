@@ -15,6 +15,7 @@
 #include "engine/asset/file_watcher.h"
 #include "engine/ecs/entity_handle.h"
 #include <atomic>
+#include <filesystem>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -25,6 +26,10 @@ namespace fate {
 
 class World;
 struct BehaviorComponent;
+// Defined in hot_reload_manager.cpp (TU-internal P4 fault info POD).
+// Forward-declared here so the private setModuleDegraded() member can take
+// it by const-ref without exposing the type publicly.
+struct HrFaultInfo;
 
 class HotReloadManager {
 public:
@@ -50,6 +55,25 @@ public:
 
     // Build status surfacer for the editor panel.
     enum class BuildStatus { Idle, Running, Succeeded, Failed };
+
+    // Status-emission event categories. One event-type per writeStatusFile()
+    // call site. The script reads `last_event_type` from logs/hot_reload_status.json
+    // to classify outcomes by event boundary (not by snapshot of reload_count
+    // alone, which is ambiguous at build-end).
+    enum class EventType {
+        BuildStarted,                   // runBuildAsync entered
+        BuildSucceededArtifactChanged,  // build OK, DLL on disk differs from pre-build snapshot
+        BuildSucceededNoArtifactChange, // build OK, DLL identical (cmake no-op or comment-only edit)
+        BuildFailed,                    // build returned non-zero exit code
+        BuildRequested,                 // requestBuildNow accepted (queued or kicked)
+        BuildSkippedLocked,             // build dispatcher skipped runBuildAsync because logs/.script_build.lock present
+        ReloadDeferredPlayMode,         // processPendingReload saw play-mode gate; reload still pending
+        ReloadSucceeded,                // performSwap returned true; reload_count advanced
+        ReloadFailedTransient,          // processPendingReload gave up after kMaxTransientRetries
+        ReloadFailedHard,               // performSwap returned false, non-transient
+        ModuleDegraded                  // module_degraded_ flipped to true
+    };
+
     BuildStatus buildStatus()  const { return buildStatus_.load(std::memory_order_acquire); }
     int         buildExitCode() const { return buildExitCode_.load(std::memory_order_acquire); }
     const std::string& buildCommand() const { return buildCmd_; }
@@ -468,6 +492,93 @@ private:
     void onSourceWatchEvent(const std::string& relPath);
     void runBuildAsync();
     void joinBuildThread();
+
+    // Drain pendingBuildEndEvent_: if a build worker thread published a
+    // build-end event type, call writeStatusFile from the main thread so
+    // every status-visible field read is sequenced with its main-thread
+    // writer. Idempotent — multiple calls in the same frame collapse via
+    // the atomic exchange. See pendingBuildEndEvent_ above for rationale.
+    void drainPendingBuildEndEvent();
+
+    // Phase 0: emits logs/hot_reload_status.json atomically. ALL callers must
+    // go through this helper so statusEventId_ stays monotonic and
+    // statusMutex_ serializes against the buildThread_/main-thread race.
+    // See spec docs/superpowers/specs/2026-05-06-ai-hot-reload-behavior-loop-design.md.
+    void writeStatusFile(EventType eventType);
+
+    // Phase 0 (Task 7) module-degraded set + emit wrapper. ALL hot-reload
+    // call sites that previously called the file-scope hrSetModuleDegraded
+    // free helper must route through this member instead so a clean
+    // false -> true transition fires exactly one ModuleDegraded status
+    // event. Repeated faults on an already-degraded module update the
+    // reason string (and refresh the LOG_ERROR dedup) but do NOT emit a
+    // duplicate status event.
+    //
+    // CONTRACT: main thread only. moduleDegraded_ is a plain bool (not
+    // atomic); transition detection here reads-then-writes without a
+    // mutex. All current callers reach this from inside the
+    // processPendingReload safe-point window, tickBehaviors (main thread),
+    // or safeDescribeFields (editor inspector main thread). Do NOT call
+    // from buildThread_ or any other worker — would torn-read the bool
+    // and could double-emit. If a future task needs an off-thread path,
+    // promote moduleDegraded_ to std::atomic<bool> first.
+    void setModuleDegraded(const char* phase, const HrFaultInfo& fi);
+
+    // Phase 1: returns true when logs/.script_build.lock is present and
+    // fresh (< 10 min). Caller (runBuildAsync) checks this BEFORE invoking
+    // cmake and bails early on true, emitting BuildSkippedLocked. Stale
+    // locks (>= 10 min) are deleted and false is returned (proceed normally).
+    // See spec for ownership rule rationale.
+    bool isScriptBuildLockActive();
+
+    // Phase 0 status writer state. statusMutex_ protects the trio:
+    // (statusEventId_ increment, JSON snapshot, writeFileAtomic call).
+    // writeFileAtomic uses a fixed <path>.tmp filename so concurrent writers
+    // would race even though each individual rename is atomic to readers.
+    // engineSessionId_ + processStartTimestamp_ are session-scoped: captured
+    // in initialize(), stable for the process lifetime, reset on shutdown +
+    // re-init. The script uses (engineSessionId_, statusEventId_) as the
+    // event-boundary tuple so it can detect engine restart mid-run.
+    mutable std::mutex statusMutex_;
+    uint64_t    statusEventId_         = 0;
+    uint64_t    engineSessionId_       = 0;   // generated in initialize(); 0 = uninitialized
+    std::string processStartTimestamp_;        // ISO-8601 UTC, captured in initialize()
+
+    // Phase 0 DLL-change detection. runBuildAsync snapshots the DLL's
+    // last_write_time + size BEFORE invoking cmake; on success it compares
+    // AFTER, then emits BuildSucceededArtifactChanged (sets pendingDllSwap_)
+    // or BuildSucceededNoArtifactChange (clears pendingDllSwap_).
+    // Stored on the manager so the helper can be called from runBuildAsync
+    // without re-statting in the emit path.
+    //
+    // pendingDllSwap_ is std::atomic<bool> because it crosses the build
+    // worker thread and the main thread. The script consumer reads
+    // reload_pending out of writeStatusFile's JSON and classifies on it,
+    // so we cannot tolerate a torn read. Codex audit P2 follow-up: prior
+    // to this change the field was a plain bool and only the JSON write
+    // was guarded by statusMutex_, leaving every other write/read pair
+    // racy in formal C++23 terms.
+    std::filesystem::file_time_type dllPreBuildMtime_{};
+    uintmax_t                       dllPreBuildSize_ = 0;
+    std::atomic<bool>               pendingDllSwap_{false};
+
+    // Codex audit P1 follow-up #3: writeStatusFile reads main-thread-owned
+    // fields (reloadCount_, failureCount_, moduleDegraded_, lastError_,
+    // moduleBuildIdStr_) without any synchronization that pairs with the
+    // writes on those fields. The build worker used to call writeStatusFile
+    // directly to emit BuildSucceeded*/BuildFailed, which made every such
+    // read formally racy and could produce incoherent JSON if the main
+    // thread happened to be in the middle of a degrade or error update.
+    //
+    // Fix: the build worker now publishes the EVENT TYPE it wants emitted
+    // into pendingBuildEndEvent_ (atomic release), and the main thread
+    // drains it at the top of processPendingReload + writeStatusFile,
+    // re-issuing writeStatusFile from the main thread where every field
+    // read is sequenced with its main-thread writer. Sentinel -1 means
+    // "no pending event"; other values are static_cast<int>(EventType).
+    // EventType has no None enumerator, so we can't store the enum
+    // directly without a separate "valid" flag.
+    std::atomic<int>                pendingBuildEndEvent_{-1};
 
     // Editor-wired dirty-seam callback. See setBehaviorAuthoredData-
     // ChangedCallback above for contract. Null by default.

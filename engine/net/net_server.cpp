@@ -493,6 +493,8 @@ const char* opcodeName(uint8_t op) {
         case PacketType::SvCombatEvent:        return "CombatEvent";
         case PacketType::SvSkillResult:        return "SkillResult";
         case PacketType::SvSkillResultBatch:   return "SkillResultBatch";
+        case PacketType::SvAOETelegraphStartBatch:  return "AOETelegraphStart";
+        case PacketType::SvAOETelegraphCancelBatch: return "AOETelegraphCancel";
         case PacketType::SvLootPickup:         return "LootPickup";
         case PacketType::SvInventorySync:      return "InventorySync";
         case PacketType::SvPlayerState:        return "PlayerState";

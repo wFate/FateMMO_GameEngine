@@ -2063,6 +2063,44 @@
           0
         ],
         "zOrder": 50
+      },
+      {
+        "anchor": {
+          "offset": [
+            -16.0,
+            16.0
+          ],
+          "preset": "TopRight",
+          "size": [
+            72.0,
+            28.0
+          ]
+        },
+        "backgroundColor": [
+          110,
+          70,
+          140,
+          230
+        ],
+        "borderColor": [
+          200,
+          175,
+          235,
+          240
+        ],
+        "borderWidth": 1.0,
+        "fontSize": 12.0,
+        "id": "admin_open_button",
+        "text": "ADMIN",
+        "textColor": [
+          240,
+          235,
+          255,
+          255
+        ],
+        "type": "button",
+        "visible": false,
+        "zOrder": 60
       }
     ],
     "disabledColor": [

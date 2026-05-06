@@ -54,6 +54,34 @@ struct AOIStats {
     // Phase 3b — min-visible-time anti-flap.
     uint64_t minVisibleHeld = 0;               // would-have-distance-culled, kept by min-visible floor
     uint64_t forcedLeaveDespawn = 0;           // leave bypassed min-visible because handle vanished from handleToPid_
+    // Stage D.1 — sticky-band sub-tier (sendDiffs cadence). These are
+    // PRE-DIRTY cadence-disposition counters: they are incremented at the
+    // cadence gate BEFORE buildCurrentState() and the dirtyMask==0 filter
+    // downstream. A stationary entity can therefore be counted as
+    // stayedFullRate (or stayedCriticalOverride) and still produce zero
+    // bytes on the wire because the post-build dirtyMask check drops it.
+    //
+    // Source of truth for actual byte savings is NetServer per-opcode
+    // stats on 0xBA (SvEntityUpdateBatch); these counters describe how
+    // often the cadence allowed/denied an emit candidate, not how many
+    // packets were emitted. Sums together describe each tick's stayed-set
+    // cadence disposition:
+    //   stayedFullRate: cadence allowed full-rate consideration this tick
+    //     (inside activation, OR sticky-band on its scheduled offset
+    //     frame, OR no Transform / observer client where cadence is
+    //     bypassed by design). Whether bytes hit the wire still depends
+    //     on dirtyMask.
+    //   stayedThrottled: cadence skipped this tick (sticky band on an
+    //     off-offset frame and no critical HP/death change). buildCurrent
+    //     State did not run, so this entity contributes zero 0xBA bytes
+    //     this tick by construction. Note: a throttled entity is not
+    //     guaranteed savings — it may have been dirtyMask==0 anyway.
+    //   stayedCriticalOverride: cadence would have skipped, but the
+    //     HP/death probe forced the entity through to the build stage.
+    //     dirtyMask still decides whether bytes go on the wire.
+    uint64_t stayedFullRate = 0;
+    uint64_t stayedThrottled = 0;
+    uint64_t stayedCriticalOverride = 0;
     void reset() { *this = AOIStats{}; }
 };
 
