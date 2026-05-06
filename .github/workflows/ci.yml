@@ -7,28 +7,56 @@ on:
     branches: [main]
 
 jobs:
-  windows-msvc:
+  static-checks:
+    name: "📊 Static checks / CI guardrails"
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache build
+      - name: Run CI guardrail checks
+        shell: pwsh
+        run: ./tools/test_ci_preflight.ps1
+
+  windows-msvc:
+    name: "🏁 Windows / Demo MSVC"
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache vcpkg artifacts
         uses: actions/cache@v4
         with:
-          path: build
-          key: windows-msvc-${{ hashFiles('CMakeLists.txt') }}
-          restore-keys: windows-msvc-
+          path: |
+            C:\vcpkg\downloads
+            ~\AppData\Local\vcpkg\archives
+          key: windows-msvc-vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: windows-msvc-vcpkg-${{ runner.os }}-
 
-      - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug
+      - name: Run windows-msvc preflight
+        shell: pwsh
+        run: ./tools/pre_push_windows_msvc.ps1 -Ci
 
-      - name: Build engine library
-        run: cmake --build build --config Debug --target fate_engine -j4
+  windows-msvc-shipping:
+    name: "🏁 Windows / Shipping Demo MSVC"
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Build demo
-        run: cmake --build build --config Debug --target FateDemo -j4
+      - name: Cache vcpkg artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:\vcpkg\downloads
+            ~\AppData\Local\vcpkg\archives
+          key: windows-msvc-vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: windows-msvc-vcpkg-${{ runner.os }}-
+
+      - name: Run windows-msvc shipping preflight
+        shell: pwsh
+        run: ./tools/pre_push_windows_msvc.ps1 -Ci -Shipping
 
   linux-gcc:
+    name: "🐧 Linux / Demo GCC 14"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -57,6 +85,7 @@ jobs:
         run: cmake --build build -j$(nproc)
 
   linux-clang:
+    name: "🐧 Linux / Demo Clang 18"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

@@ -105,6 +105,15 @@ public:
     // (e.g., to verify a clean rebuild after a CMake change). No-op when
     // source-watch is not configured or a build is already running.
     // Reason is logged for diagnostics.
+    //
+    // CONTRACT: refused unless BOTH (a) initialize() has run and
+    // shutdown() has not, and (b) the caller is the main thread that
+    // initialize() captured. The first action inside is writeStatusFile,
+    // which reads plain main-thread-owned fields; refusing closes both
+    // the off-thread race and the "processPendingReload's default-id
+    // fallback captured the thread id but initialize never ran" window.
+    // Refused calls produce a loud LOG_ERROR — no status emit, no
+    // buildPending_ latch, no buildThread_ kick.
     void requestBuildNow(const char* reason);
 
     // Stops watcher, calls fateGameModuleShutdown, FreeLibrary's both the
@@ -457,14 +466,29 @@ private:
     // distinct from "a single behavior instance crashed in onUpdate".
     bool     moduleDegraded_      = false;
     std::string moduleDegradedReason_;
-    // P3 (S153) safe-point bookkeeping. Set true at the top of
-    // processPendingReload, cleared on return (via RAII guard so early
-    // returns don't leak the flag). performSwap reads this to refuse
+    // P3 (S153) safe-point bookkeeping. inSafePoint_ is set true at the
+    // top of processPendingReload, cleared on return (via RAII guard so
+    // early returns don't leak the flag); performSwap reads it to refuse
     // execution outside the safe-point window. mainThreadId_ is captured
-    // on the first processPendingReload call so subsequent calls from
-    // worker threads are rejected with a loud LOG_ERROR.
+    // at the top of initialize(), before any subsystem can spawn a worker.
+    // Every gate that compares against mainThreadId_ — requestBuildNow,
+    // processPendingReload, drainPendingBuildEndEvent — refuses calls
+    // from any other thread.
+    //
+    // initialized_ separates "main thread id captured" from "session is
+    // active". processPendingReload tolerates pre-init calls by capturing
+    // mainThreadId_ on first call, but that does NOT make the manager
+    // initialized — engineSessionId_ is still 0, processStartTimestamp_
+    // is empty, and writeStatusFile would emit an incoherent status.
+    // requestBuildNow checks initialized_ AND mainThreadId_ to refuse the
+    // "processPendingReload captured the id, but initialize never ran"
+    // window. Set true at the end of initialize()'s session-id setup,
+    // cleared at the very top of shutdown(). std::atomic<bool> because
+    // worker-thread refusal tests read it from off-main; relaxed-style
+    // acquire/release on writes, acquire on reads.
     bool                inSafePoint_  = false;
     std::thread::id     mainThreadId_;
+    std::atomic<bool>   initialized_{false};
     uint32_t reloadCount_  = 0;
     uint32_t failureCount_ = 0;
 
@@ -554,28 +578,23 @@ private:
     // pendingDllSwap_ is std::atomic<bool> because it crosses the build
     // worker thread and the main thread. The script consumer reads
     // reload_pending out of writeStatusFile's JSON and classifies on it,
-    // so we cannot tolerate a torn read. Codex audit P2 follow-up: prior
-    // to this change the field was a plain bool and only the JSON write
-    // was guarded by statusMutex_, leaving every other write/read pair
-    // racy in formal C++23 terms.
+    // so we cannot tolerate a torn read. A plain bool here would leave
+    // every write/read pair across the worker/main boundary racy in
+    // formal C++23 terms even though only the JSON write is mutex-guarded.
     std::filesystem::file_time_type dllPreBuildMtime_{};
     uintmax_t                       dllPreBuildSize_ = 0;
     std::atomic<bool>               pendingDllSwap_{false};
 
-    // Codex audit P1 follow-up #3: writeStatusFile reads main-thread-owned
-    // fields (reloadCount_, failureCount_, moduleDegraded_, lastError_,
-    // moduleBuildIdStr_) without any synchronization that pairs with the
-    // writes on those fields. The build worker used to call writeStatusFile
-    // directly to emit BuildSucceeded*/BuildFailed, which made every such
-    // read formally racy and could produce incoherent JSON if the main
-    // thread happened to be in the middle of a degrade or error update.
-    //
-    // Fix: the build worker now publishes the EVENT TYPE it wants emitted
-    // into pendingBuildEndEvent_ (atomic release), and the main thread
-    // drains it at the top of processPendingReload + writeStatusFile,
-    // re-issuing writeStatusFile from the main thread where every field
-    // read is sequenced with its main-thread writer. Sentinel -1 means
-    // "no pending event"; other values are static_cast<int>(EventType).
+    // writeStatusFile reads main-thread-owned plain fields (reloadCount_,
+    // failureCount_, moduleDegraded_, lastError_, moduleBuildIdStr_)
+    // without synchronization that pairs with the writes on those fields.
+    // To preserve "main thread is the only writeStatusFile caller", the
+    // build worker publishes the EVENT TYPE it wants emitted into
+    // pendingBuildEndEvent_ (atomic release), and the main thread drains
+    // it at the top of processPendingReload + writeStatusFile, re-issuing
+    // writeStatusFile from the main thread where every field read is
+    // sequenced with its main-thread writer. Sentinel -1 means "no
+    // pending event"; other values are static_cast<int>(EventType).
     // EventType has no None enumerator, so we can't store the enum
     // directly without a separate "valid" flag.
     std::atomic<int>                pendingBuildEndEvent_{-1};

@@ -1,0 +1,16 @@
+#!/bin/sh
+set -u
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+cd "$repo_root" || exit 1
+
+if command -v pwsh >/dev/null 2>&1; then
+    exec pwsh -NoProfile -ExecutionPolicy Bypass -File tools/pre_push_windows_msvc.ps1
+fi
+
+if command -v powershell.exe >/dev/null 2>&1; then
+    exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/pre_push_windows_msvc.ps1
+fi
+
+echo "pre-push failed: PowerShell was not found." >&2
+exit 1

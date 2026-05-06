@@ -886,10 +886,32 @@ bool HotReloadManager::isReloadDeferredByPlayMode() const {
 }
 
 void HotReloadManager::requestBuildNow(const char* reason) {
-    // Phase 0: emit a BuildRequested status event BEFORE any early-return
-    // guard. Semantically correct ("the user requested a build, here's the
-    // status update for that request") and decouples the status emit from
-    // whether the request actually gets serviced.
+    // Strict main-thread + session-active contract. The body's first
+    // action is writeStatusFile(BuildRequested), which reads plain main-
+    // thread-owned fields (reloadCount_, failureCount_, moduleDegraded_,
+    // lastError_, moduleBuildIdStr_) without synchronization paired with
+    // their writers. Refuse unless BOTH:
+    //   * initialized_ — initialize() ran and shutdown() has not. Closes
+    //     the gap where processPendingReload's default-id fallback may
+    //     have captured mainThreadId_ on a thread that then tries to
+    //     request a build before initialize ever ran (engineSessionId_
+    //     would still be 0, the JSON would be incoherent).
+    //   * caller == mainThreadId_ — only the main thread. Off-thread
+    //     callers are refused even within an initialized session.
+    // Production has one caller, the editor "Build Runtime Now" button on
+    // the ImGui main thread; the guard costs zero behavior there.
+    if (!initialized_.load(std::memory_order_acquire) ||
+        std::this_thread::get_id() != mainThreadId_) {
+        LOG_ERROR("HotReload",
+            "requestBuildNow refused (%s): HotReloadManager is not "
+            "initialized, or caller is not the main thread.",
+            reason ? reason : "(no reason)");
+        return;
+    }
+
+    // Emit a BuildRequested status event BEFORE any early-return guard so
+    // the status reader observes "the user requested a build" regardless
+    // of whether the request actually gets serviced.
     writeStatusFile(EventType::BuildRequested);
 
     if (buildCmd_.empty()) {
@@ -979,25 +1001,20 @@ bool scriptBuildLockFilePresent() {
 } // namespace
 
 void HotReloadManager::drainPendingBuildEndEvent() {
-    // Codex P1 round-3 follow-up: drain MUST be main-thread only. The
-    // recursive writeStatusFile call this dispatches reads main-thread-owned
-    // PLAIN fields (reloadCount_, failureCount_, moduleDegraded_, lastError_,
-    // moduleBuildIdStr_) without synchronization. writeStatusFile is callable
-    // from worker threads via the public requestBuildNow path (the writer-
-    // concurrency test was the original trigger; any future test or future
-    // production path that calls requestBuildNow off-thread reintroduces the
-    // hazard). Without this gate, a worker-thread BuildRequested emit would
-    // claim a pending BuildSucceeded* via the atomic exchange and re-issue
-    // writeStatusFile from the wrong thread, undoing the very marshaling this
-    // helper exists to provide.
+    // Drain MUST be main-thread only. The recursive writeStatusFile call
+    // this dispatches reads plain main-thread-owned fields (reloadCount_,
+    // failureCount_, moduleDegraded_, lastError_, moduleBuildIdStr_) without
+    // synchronization. requestBuildNow already enforces the main-thread
+    // contract at the public entry; this gate stays as defense in depth so
+    // any future code path that publishes pendingBuildEndEvent_ from off-
+    // main and then re-enters writeStatusFile is still deflected.
     //
-    // mainThreadId_ default-id (std::thread::id{}) means "not yet captured"
-    // — we proceed in that very early window because no worker thread can
-    // exist before HotReloadManager::initialize() returns, and initialize()
-    // captures mainThreadId_ before any subsystem (file watcher / build
-    // worker) is allowed to run. After capture this gate is load-bearing.
-    if (mainThreadId_ != std::thread::id{} &&
-        mainThreadId_ != std::this_thread::get_id()) {
+    // mainThreadId_ is captured at the top of initialize(), before any
+    // subsystem can spawn a worker. Default-id states (pre-init and
+    // post-shutdown / pre-reinit) are also covered by this gate because
+    // pendingBuildEndEvent_ is -1 in both states; the early return is
+    // semantically a "drain a no-op."
+    if (mainThreadId_ != std::this_thread::get_id()) {
         // Defer: leave the event in pendingBuildEndEvent_ for the next
         // main-thread caller. processPendingReload runs every frame in
         // production (App::update) and at the top of every test that uses
@@ -1107,16 +1124,13 @@ void HotReloadManager::runBuildAsync() {
     // Don't queue a second build on top of a running one; the artifact
     // watcher will fire reload as soon as the in-flight build finishes.
     //
-    // Phase 0 (Task 6): use a CAS loop to atomically claim the
-    // Idle/Succeeded/Failed -> Running transition. Production call sites are
-    // single-threaded (requestBuildNow on main / processPendingReload on
-    // main), but the writeStatusFile concurrency test exercises requestBuildNow
-    // from many threads — and the BuildStarted emit + DLL pre-snapshot widen
-    // the previous "load-then-store" window past a tipping point where two
-    // racers could both reach `buildThread_ = std::thread(...)`. Assigning
-    // to a still-joinable thread terminates the process. CAS makes only one
-    // thread proceed past this point; losers see Running and bail just like
-    // the original early-return contract.
+    // CAS the Idle/Succeeded/Failed -> Running transition atomically.
+    // requestBuildNow + processPendingReload are both main-thread-only by
+    // contract, so production never races here. The CAS stays as defense
+    // in depth: assigning to a still-joinable buildThread_ terminates the
+    // process, so any future off-main caller that bypasses the main-thread
+    // contract (e.g. an artifact-watcher path that wants to force a clean
+    // rebuild) is held to one winner. Losers see Running and bail.
     BuildStatus expected = buildStatus_.load(std::memory_order_acquire);
     while (expected != BuildStatus::Running) {
         if (buildStatus_.compare_exchange_weak(expected, BuildStatus::Running,
@@ -1226,13 +1240,13 @@ void HotReloadManager::runBuildAsync() {
                 reloadPending_.store(true, std::memory_order_release);
             }
 
-            // Codex P1 follow-up #3: do NOT call writeStatusFile from this
-            // worker thread — it reads main-thread-owned fields without
-            // synchronization. Publish the event type instead; the main
-            // thread's processPendingReload (or the next writeStatusFile
-            // call) drains and emits. pendingBuildEndEvent_ is the LAST
-            // store in this branch so the main thread's acquire-load on
-            // the drain sees pendingDllSwap_ + reloadPending_ as well.
+            // Do NOT call writeStatusFile from this worker thread — it
+            // reads main-thread-owned fields without synchronization.
+            // Publish the event type instead; the main thread's
+            // processPendingReload (or the next writeStatusFile call)
+            // drains and emits. pendingBuildEndEvent_ is the LAST store
+            // in this branch so the main thread's acquire-load on the
+            // drain sees pendingDllSwap_ + reloadPending_ as well.
             pendingBuildEndEvent_.store(static_cast<int>(
                 artifactChanged
                     ? EventType::BuildSucceededArtifactChanged
@@ -1250,6 +1264,17 @@ void HotReloadManager::runBuildAsync() {
 }
 
 bool HotReloadManager::initialize(const std::string& moduleDir, const std::string& moduleName) {
+    // Capture mainThreadId_ FIRST, before any subsystem in this function
+    // spawns a worker (watcher_.start below launches a FileWatcher worker
+    // on success, and the headless no-DLL path returns early below without
+    // ever reaching the watcher). initialize() OWNS the active-session
+    // main thread identity: assign unconditionally so any stale id left
+    // by processPendingReload's pre-init fallback (which may have run on
+    // a different thread that has since exited) is overwritten by the
+    // actual initializing thread. From here until shutdown(),
+    // mainThreadId_ is the thread that called initialize.
+    mainThreadId_ = std::this_thread::get_id();
+
     // Phase 0: stable per-process IDs for the status writer. Generated once
     // per initialize() call; survive across reloads but reset on shutdown +
     // re-init. The script uses (engineSessionId_, statusEventId_) as the
@@ -1279,6 +1304,14 @@ bool HotReloadManager::initialize(const std::string& moduleDir, const std::strin
         pendingBuildEndEvent_.store(-1, std::memory_order_release);
     }
 
+    // Mark the session active. Sequencing point: every status field above
+    // is now coherent (engineSessionId_ != 0, processStartTimestamp_ set),
+    // so requestBuildNow's strict guard can safely accept main-thread
+    // calls past this line. initialize()'s subsequent failure paths
+    // (headless no-DLL return, performSwap returning false) intentionally
+    // leave this flag true — the manager is initialized, just module-less.
+    initialized_.store(true, std::memory_order_release);
+
     moduleDir_       = moduleDir;
     moduleNameBase_  = moduleName;
     sourcePath_      = moduleDir + "/" + moduleName + ".dll";
@@ -1307,18 +1340,24 @@ bool HotReloadManager::initialize(const std::string& moduleDir, const std::strin
     }
 
     // Treat the initial load as a reload-from-nothing; the swap pipeline
-    // already handles "no current module" cleanly.
-    // P3 (S153): initialize is structurally a safe point (App::initialize
-    // runs before any system tick / network / render). Set the flag for
-    // the duration of the first-load swap so performSwap's gate accepts.
-    if (mainThreadId_ == std::thread::id{}) {
-        mainThreadId_ = std::this_thread::get_id();
-    }
+    // already handles "no current module" cleanly. initialize is
+    // structurally a safe point (App::initialize runs before any system
+    // tick / network / render). Set the flag for the duration of the
+    // first-load swap so performSwap's gate accepts. (mainThreadId_ was
+    // captured at the top of this function.)
     SafePointGuard sg(inSafePoint_);
     return performSwap(0.0f);
 }
 
 void HotReloadManager::shutdown() {
+    // Clear initialized_ FIRST so any in-flight requestBuildNow attempt
+    // (production: editor button on the main thread; tests: contract
+    // probes from worker threads) is refused for the rest of the
+    // lifecycle. Production shutdown is main-thread; the editor button
+    // can't fire after the editor itself has been torn down. Defensive
+    // ordering anyway.
+    initialized_.store(false, std::memory_order_release);
+
     watcher_.stop();
     sourceWatcher_.stop();
     joinBuildThread();
@@ -1424,11 +1463,16 @@ void HotReloadManager::requestManualReload(const char* reason) {
 }
 
 void HotReloadManager::processPendingReload(float currentTime) {
-    // P3 (S153) main-thread + safe-point contract. The caller (App::update)
-    // must invoke this once per frame at the top, before any system tick,
-    // network dispatch, render callback, or input handler. We capture the
-    // thread on first call; subsequent calls from any other thread are
-    // refused with a loud error (no swap can race the main loop).
+    // Main-thread + safe-point contract. The caller (App::update) must
+    // invoke this once per frame at the top, before any system tick,
+    // network dispatch, render callback, or input handler. mainThreadId_
+    // is normally captured by initialize(); the default-id fallback below
+    // is a PROVISIONAL capture for unit tests that drive this function
+    // without booting the manager first. The next initialize() call
+    // overwrites it unconditionally, so a worker that probed pre-init
+    // does not leave a stale id poisoning the active session. Calls from
+    // any other thread (after the id is captured by either path) are
+    // refused with a loud error — no swap can race the main loop.
     const auto tid = std::this_thread::get_id();
     if (mainThreadId_ == std::thread::id{}) {
         mainThreadId_ = tid;
@@ -1440,12 +1484,12 @@ void HotReloadManager::processPendingReload(float currentTime) {
     }
     SafePointGuard sg(inSafePoint_);
 
-    // Codex P1 follow-up #3: drain any worker-published build-end event at
-    // the top of every frame. Production drives this every 16 ms via
-    // App::update; tests must call processPendingReload(0.0f) explicitly
-    // after waiting for buildStatus()==Succeeded/Failed to observe the
-    // resulting status JSON. writeStatusFile also self-drains for the
-    // case where a UI handler emits before the next processPendingReload.
+    // Drain any worker-published build-end event at the top of every
+    // frame. Production drives this every 16 ms via App::update; tests
+    // must call processPendingReload(0.0f) explicitly after waiting for
+    // buildStatus()==Succeeded/Failed to observe the resulting status
+    // JSON. writeStatusFile also self-drains for the case where a UI
+    // handler emits before the next processPendingReload.
     drainPendingBuildEndEvent();
 
     // Source-side build trigger — kicks BEFORE the artifact-reload check so
