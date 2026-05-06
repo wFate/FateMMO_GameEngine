@@ -11,6 +11,7 @@
 #endif
 
 #include <nlohmann/json.hpp>
+#include <cassert>
 #include <chrono>
 #include <ctime>
 #include <iomanip>
@@ -790,6 +791,29 @@ struct SafePointGuard {
 } // namespace
 
 // ---------------------------------------------------------------------------
+// Test-only path overrides. Function-local statics (Meyers singletons) so
+// they are safe to set from another TU's static initializer — sidesteps
+// the cross-TU init-order fiasco class statics would create. Empty =
+// production default for both.
+namespace {
+std::string& statusFilePathOverride() {
+    static std::string s;
+    return s;
+}
+std::string& scriptBuildLockPathOverride() {
+    static std::string s;
+    return s;
+}
+} // namespace
+
+void HotReloadManager::setStatusFilePathOverrideForTesting(std::string path) {
+    statusFilePathOverride() = std::move(path);
+}
+
+void HotReloadManager::setScriptBuildLockPathOverrideForTesting(std::string path) {
+    scriptBuildLockPathOverride() = std::move(path);
+}
+
 HotReloadManager& HotReloadManager::instance() {
     static HotReloadManager s_instance;
     return s_instance;
@@ -993,9 +1017,16 @@ const char* buildStatusToString(HotReloadManager::BuildStatus s) {
     return "Unknown";
 }
 
+// Resolve the lock path through the override singleton declared near
+// the top of this TU. Empty override = production default.
+std::string scriptBuildLockPath() {
+    const auto& override = scriptBuildLockPathOverride();
+    return override.empty() ? std::string("logs/.script_build.lock") : override;
+}
+
 bool scriptBuildLockFilePresent() {
     std::error_code ec;
-    return std::filesystem::exists("logs/.script_build.lock", ec);
+    return std::filesystem::exists(scriptBuildLockPath(), ec);
 }
 
 } // namespace
@@ -1073,7 +1104,7 @@ void HotReloadManager::writeStatusFile(EventType eventType) {
     j["script_build_lock_present"]    = scriptBuildLockFilePresent();
 
     std::string err;
-    if (!fate::writeFileAtomic("logs/hot_reload_status.json", j.dump(2), &err)) {
+    if (!fate::writeFileAtomic(statusFilePath_, j.dump(2), &err)) {
         // Best-effort: a status emit failure is captured in the engine log
         // but does not affect any other reload/build behavior.
         LOG_WARN("HotReload", "writeStatusFile failed: %s", err.c_str());
@@ -1086,7 +1117,7 @@ std::string HotReloadManager::buildLogTailSnapshot() const {
 }
 
 bool HotReloadManager::isScriptBuildLockActive() {
-    const std::filesystem::path lockPath = "logs/.script_build.lock";
+    const std::filesystem::path lockPath = scriptBuildLockPath();
     std::error_code ec;
     if (!std::filesystem::exists(lockPath, ec)) return false;
 
@@ -1311,6 +1342,17 @@ bool HotReloadManager::initialize(const std::string& moduleDir, const std::strin
     // (headless no-DLL return, performSwap returning false) intentionally
     // leave this flag true — the manager is initialized, just module-less.
     initialized_.store(true, std::memory_order_release);
+
+    // Resolve the status file destination once per session. Tests set the
+    // override BEFORE initialize() to a per-process path so concurrent
+    // fate_tests.exe runs don't race on the shared production path or its
+    // .tmp staging file. Production never sets the override.
+    {
+        const auto& override = statusFilePathOverride();
+        statusFilePath_ = override.empty()
+            ? std::string("logs/hot_reload_status.json")
+            : override;
+    }
 
     moduleDir_       = moduleDir;
     moduleNameBase_  = moduleName;
@@ -2382,6 +2424,16 @@ static void hrSetModuleDegraded(std::string& reasonOut, bool& flagOut,
 // hrSetModuleDegraded for the underlying flag + reason mutation so log
 // dedup behavior is preserved bit-for-bit.
 void HotReloadManager::setModuleDegraded(const char* phase, const HrFaultInfo& fi) {
+    // Lifecycle contract (mirror of requestBuildNow): main thread only after
+    // initialize(). Assertion-mode — all current callers (performSwap chain /
+    // tickBehaviors / safeDescribeFields) are call-site-audited as main-thread,
+    // so a runtime LOG_ERROR + return guard would risk silently dropping a real
+    // fault flag if it ever tripped. Release builds trust the call-site audit;
+    // debug builds catch regressions when a new caller is added off-thread.
+    assert(initialized_.load(std::memory_order_acquire) &&
+           std::this_thread::get_id() == mainThreadId_ &&
+           "setModuleDegraded called off main-thread or before initialize()");
+
     const bool wasDegraded = moduleDegraded_;
     hrSetModuleDegraded(moduleDegradedReason_, moduleDegraded_, phase, fi);
     if (!wasDegraded && moduleDegraded_) {

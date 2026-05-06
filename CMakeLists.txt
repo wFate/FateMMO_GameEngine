@@ -942,6 +942,12 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
             server/bosses/boss_scripts_register_all.cpp
             server/bosses/boss_script_lifecycle.cpp
         )
+        # Phase 7.2b.4 Session 4 — bridge proof script. boss_scripts_register_all
+        # references registerSampleTelegraphBoss, so this cpp must be in the test
+        # link too. Pure boss-script content; no DB / replication deps.
+        if(EXISTS "${CMAKE_SOURCE_DIR}/server/bosses/sample_telegraph_boss.cpp")
+            list(APPEND SERVER_TEST_SOURCES server/bosses/sample_telegraph_boss.cpp)
+        endif()
     endif()
     # F2 contract test (test_persistence_contract.cpp) needs the DB repos and libpqxx.
     # Pull these in only when PostgreSQL is available; otherwise the test file is

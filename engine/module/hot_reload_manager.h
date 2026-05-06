@@ -294,6 +294,26 @@ public:
     // clears it automatically.
     void clearModuleDegraded();
 
+    // Test-only: override the destination path used by writeStatusFile.
+    // Default (empty) = production "logs/hot_reload_status.json". Tests
+    // set a per-process path (PID suffix) BEFORE initialize() so concurrent
+    // fate_tests.exe runs (Debug + Release in parallel, ctest -j N) do not
+    // collide on the shared status file or its .tmp staging file. The
+    // override is captured into statusFilePath_ at initialize() time;
+    // production never sets it. Sticky across init/shutdown cycles within
+    // a single process — pass an empty string to revert.
+    static void setStatusFilePathOverrideForTesting(std::string path);
+
+    // Test-only: override the script-build-lock path read by
+    // isScriptBuildLockActive (and surfaced via writeStatusFile's
+    // script_build_lock_present field). Default (empty) = production
+    // "logs/.script_build.lock". Tests set a per-process path so a lock
+    // created by one test process does not silently force another
+    // process's runBuildAsync to emit BuildSkippedLocked. Production
+    // never sets it; the engine + scripts/fate_ai_loop.ps1 keep the
+    // shared fixed path. Sticky; pass an empty string to revert.
+    static void setScriptBuildLockPathOverrideForTesting(std::string path);
+
     // Play-mode safety knob. Default OFF — play-mode reload is unsafe until
     // every play-mode subsystem (combat, network packet dispatch on game
     // thread, AOI iteration) is proven quiesced at the safe-frame point.
@@ -546,6 +566,11 @@ private:
     // from buildThread_ or any other worker — would torn-read the bool
     // and could double-emit. If a future task needs an off-thread path,
     // promote moduleDegraded_ to std::atomic<bool> first.
+    //
+    // Enforced by a debug assert at the function entry; release builds
+    // rely on the call-site audit. A full LOG_ERROR + return guard
+    // (cf. requestBuildNow) was rejected because a silently-dropped
+    // fault flag is worse than a debug-build trap.
     void setModuleDegraded(const char* phase, const HrFaultInfo& fi);
 
     // Phase 1: returns true when logs/.script_build.lock is present and
@@ -554,6 +579,14 @@ private:
     // locks (>= 10 min) are deleted and false is returned (proceed normally).
     // See spec for ownership rule rationale.
     bool isScriptBuildLockActive();
+
+    // Resolved status JSON destination. Production default = the fixed
+    // "logs/hot_reload_status.json"; tests set the override (TU-local
+    // Meyers singleton inside hot_reload_manager.cpp) before initialize()
+    // to a per-process path. writeFileAtomic derives <path>.tmp from this,
+    // so isolating the destination also isolates the staging file.
+    // Captured once at initialize() time.
+    std::string statusFilePath_ = "logs/hot_reload_status.json";
 
     // Phase 0 status writer state. statusMutex_ protects the trio:
     // (statusEventId_ increment, JSON snapshot, writeFileAtomic call).

@@ -26,7 +26,7 @@ enum class ActionId : uint8_t {
     ToggleInventory,
     ToggleSkillBar,
     ToggleQuestLog,
-    ToggleAdminPanel,    // v22 — admin-only; gated server-side. Default F11.
+    ToggleAdminPanel,    // v22 — DEPRECATED: admin tools open via HUD ADMIN button only (touch-first). Enum slot retained so static_cast<size_t> indices into pressed_/held_/released_ arrays don't shift.
     OpenChat,
     SubmitChat,
     Confirm,
@@ -166,10 +166,10 @@ private:
         // bind(ActionId::ToggleSkillBar,  SDL_SCANCODE_K);
         // bind(ActionId::ToggleQuestLog,  SDL_SCANCODE_L);
 
-        // v22 — Admin Tools panel. Opens for clients whose local-player
-        // AdminRole >= Admin (server still re-validates every grant). F11 is
-        // unbound elsewhere so it's a safe default for live play.
-        bind(ActionId::ToggleAdminPanel, SDL_SCANCODE_F11);
+        // v22 — Admin Tools panel: HUD ADMIN button only. No keyboard
+        // hotkey — touch-first input model, and avoids accidental opens
+        // on shared keyboards. (ToggleAdminPanel enum slot kept to avoid
+        // shifting array indices for the other actions.)
 
         // Chat / confirm / cancel
         bind(ActionId::OpenChat,   SDL_SCANCODE_RETURN);
