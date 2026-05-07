@@ -196,7 +196,6 @@ void ContentBrowserPanel::onContentListReceived(uint8_t contentType, uint16_t pa
 }
 
 void ContentBrowserPanel::onAdminResult(uint8_t requestType, bool success, const std::string& message) {
-    (void)requestType;
     toastMessage_ = message;
     toastTimer_ = 4.0f;
     toastSuccess_ = success;
@@ -207,6 +206,19 @@ void ContentBrowserPanel::onAdminResult(uint8_t requestType, bool success, const
         itemListDirty_ = true;
         lootListDirty_ = true;
         spawnListDirty_ = true;
+    }
+
+    // Validation failure surface: when the server aborts a validate-report
+    // send (e.g. the admin_handler.cpp overflow path), an SvAdminResult with
+    // requestType=CmdAdminValidate and success=false arrives. Clear stale
+    // partial issues so the validation tab doesn't keep showing a previous
+    // run's results (or a half-finished current run) as if they were the
+    // authoritative live report. validationPendingClear_ is reset because no
+    // chunks will arrive to consume it; leaving it true would silently drop
+    // the *next* run's first chunk.
+    if (!success && requestType == PacketType::CmdAdminValidate) {
+        validationIssues_.clear();
+        validationPendingClear_ = false;
     }
 }
 

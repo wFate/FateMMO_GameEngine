@@ -49,7 +49,11 @@ struct CmdAdminSaveContentMsg {
         CmdAdminSaveContentMsg m;
         m.contentType  = r.readU8();
         m.isNew        = r.readU8();
-        m.jsonPayload  = r.readString();
+        // Single content definition can be large (mob_def with full loot table,
+        // item with long descriptions). Match the server's 16K send buffer
+        // ceiling rather than the 4096 readString default — large saves
+        // otherwise come through empty and fail validation server-side.
+        m.jsonPayload  = r.readString(16384);
         return m;
     }
 };
@@ -226,7 +230,10 @@ struct SvAdminContentListMsg {
         m.contentType = r.readU8();
         m.pageIndex   = r.readU16();
         m.totalPages  = r.readU16();
-        m.jsonPayload = r.readString();
+        // Server paginates to MAX_PAGE_BYTES=12000 (admin_handler.cpp); the
+        // 4096 readString default would silently truncate every full page to
+        // an empty string. Match the server's 16K send buffer ceiling.
+        m.jsonPayload = r.readString(16384);
         return m;
     }
 };

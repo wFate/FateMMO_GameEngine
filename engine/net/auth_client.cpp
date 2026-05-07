@@ -153,6 +153,7 @@ namespace fate
             std::lock_guard<std::mutex> lock(cmdMutex_);
             std::queue<AuthCommand> empty;
             cmdQueue_.swap(empty);
+            cmdInFlight_ = false;
         }
     }
 
@@ -162,14 +163,41 @@ namespace fate
         result_ = std::move(result);
     }
 
+    // Maps the post-login command kind onto its matching result kind so a
+    // mid-session disconnect can publish a typed Transport failure for the
+    // in-flight command instead of silently dropping it.
+    static AuthResultType cmdToResultType(AuthCommandType ct)
+    {
+        switch (ct)
+        {
+        case AuthCommandType::Create: return AuthResultType::Create;
+        case AuthCommandType::Delete: return AuthResultType::Delete;
+        case AuthCommandType::Select: return AuthResultType::Select;
+        default:                      return AuthResultType::Login;
+        }
+    }
+
+    void AuthClient::pushTransportFailure(AuthResultType type, const std::string &reason)
+    {
+        AuthClientResult res;
+        res.type = type;
+        res.success = false;
+        res.failureKind = AuthFailureKind::Transport;
+        res.errorMessage = reason;
+        pushResult(std::move(res));
+    }
+
     // ---------------------------------------------------------------------------
     // loginAsync
     // ---------------------------------------------------------------------------
-    void AuthClient::loginAsync(const std::string &host, uint16_t port,
+    bool AuthClient::loginAsync(const std::string &host, uint16_t port,
                                 const std::string &username, const std::string &password)
     {
         if (busy_.load())
-            return;
+        {
+            LOG_WARN("AuthClient", "loginAsync: another request is already in flight");
+            return false;
+        }
 
         // Serialize LoginRequest (including the type byte from write())
         LoginRequest req;
@@ -184,7 +212,7 @@ namespace fate
         if (w.overflowed())
         {
             LOG_ERROR("AuthClient", "LoginRequest serialization overflow");
-            return;
+            return false;
         }
 
         std::vector<uint8_t> requestData(w.data(), w.data() + w.size());
@@ -200,19 +228,23 @@ namespace fate
         pendingRequestType_ = AuthResultType::Login;
         busy_.store(true);
         worker_ = std::thread(&AuthClient::workerLoop, this, host, port, requestData);
+        return true;
     }
 
     // ---------------------------------------------------------------------------
     // registerAsync
     // ---------------------------------------------------------------------------
-    void AuthClient::registerAsync(const std::string &host, uint16_t port,
+    bool AuthClient::registerAsync(const std::string &host, uint16_t port,
                                    const std::string &username, const std::string &password,
                                    const std::string &email,
                                    const std::string &characterName, const std::string &className,
                                    uint8_t faction, uint8_t gender, uint8_t hairstyle)
     {
         if (busy_.load())
-            return;
+        {
+            LOG_WARN("AuthClient", "registerAsync: another request is already in flight");
+            return false;
+        }
 
         // Serialize RegisterRequest (including the type byte from write())
         RegisterRequest req;
@@ -233,7 +265,7 @@ namespace fate
         if (w.overflowed())
         {
             LOG_ERROR("AuthClient", "RegisterRequest serialization overflow");
-            return;
+            return false;
         }
 
         std::vector<uint8_t> requestData(w.data(), w.data() + w.size());
@@ -249,20 +281,42 @@ namespace fate
         pendingRequestType_ = AuthResultType::Register;
         busy_.store(true);
         worker_ = std::thread(&AuthClient::workerLoop, this, host, port, requestData);
+        return true;
     }
 
     // ---------------------------------------------------------------------------
     // Command queue methods (post-login operations on persistent connection)
     // ---------------------------------------------------------------------------
+    // Returns true if the gate dropped the cmd because a prior result is
+    // still waiting for the UI to consume. Caller must already hold cmdMutex_.
+    // The check briefly acquires resultMutex_ -- lock order cmdMutex_ ->
+    // resultMutex_ matches the pre-existing fast-fail path (which calls
+    // pushTransportFailure under cmdMutex_) and the disconnect drain.
+    //
+    // The race this closes: worker pushes result1 then clears cmdInFlight_=
+    // false before the UI's poll runs. A duplicate click landing in that gap
+    // would otherwise pass the cmdInFlight_ check, enqueue cmd2, and have
+    // cmd2's eventual pushResult overwrite result1 in the single std::optional
+    // slot -- OR pass to the !connected_ fast-fail below and have the
+    // synthetic Transport failure overwrite result1. Either way, the awaited
+    // response is lost and the UI either gets the wrong cmd's result or sits
+    // forever on a stale "creating..." status.
+    static bool dropIfResultPending(std::mutex& resultMutex,
+                                    const std::optional<AuthClientResult>& result,
+                                    const char* methodName)
+    {
+        std::lock_guard<std::mutex> rlock(resultMutex);
+        if (result.has_value())
+        {
+            LOG_WARN("AuthClient", "%s dropped: prior result not yet consumed", methodName);
+            return true;
+        }
+        return false;
+    }
+
     void AuthClient::createCharacterAsync(const std::string &name, const std::string &className,
                                           uint8_t faction, uint8_t gender, uint8_t hairstyle)
     {
-        if (!connected_.load())
-        {
-            LOG_WARN("AuthClient", "createCharacterAsync called but not connected");
-            return;
-        }
-
         AuthCommand cmd;
         cmd.type = AuthCommandType::Create;
         cmd.characterName = name;
@@ -272,7 +326,34 @@ namespace fate
         cmd.hairstyle = hairstyle;
 
         {
+            // Hold cmdMutex_ across the gates + push so we can't race with the
+            // worker's exit drain. Otherwise the main thread could see
+            // connected_=true, push a cmd, and only afterwards have the
+            // worker tear down without ever processing it.
             std::lock_guard<std::mutex> lock(cmdMutex_);
+            // FIRST gate: drop if a prior result is still pending. Must run
+            // before the !connected_ branch -- that branch publishes a
+            // Transport failure and would clobber the unconsumed prior.
+            if (dropIfResultPending(resultMutex_, result_, "createCharacterAsync"))
+                return;
+            if (!connected_.load())
+            {
+                LOG_WARN("AuthClient", "createCharacterAsync called but not connected");
+                pushTransportFailure(AuthResultType::Create, "Auth connection lost");
+                return;
+            }
+            if (cmdInFlight_)
+            {
+                // Drop the duplicate WITHOUT publishing a result. The first
+                // command is still in flight and owns result_'s single slot;
+                // overwriting it with a synthetic "already in flight" failure
+                // would poison the UI's awaited consume and could bounce a
+                // pending Create/Delete/Select to the error path while the
+                // server response is still on the wire.
+                LOG_WARN("AuthClient", "createCharacterAsync dropped: another cmd is in flight");
+                return;
+            }
+            cmdInFlight_ = true;
             cmdQueue_.push(std::move(cmd));
         }
         cmdCv_.notify_one();
@@ -280,18 +361,26 @@ namespace fate
 
     void AuthClient::deleteCharacterAsync(const std::string &characterId)
     {
-        if (!connected_.load())
-        {
-            LOG_WARN("AuthClient", "deleteCharacterAsync called but not connected");
-            return;
-        }
-
         AuthCommand cmd;
         cmd.type = AuthCommandType::Delete;
         cmd.characterId = characterId;
 
         {
             std::lock_guard<std::mutex> lock(cmdMutex_);
+            if (dropIfResultPending(resultMutex_, result_, "deleteCharacterAsync"))
+                return;
+            if (!connected_.load())
+            {
+                LOG_WARN("AuthClient", "deleteCharacterAsync called but not connected");
+                pushTransportFailure(AuthResultType::Delete, "Auth connection lost");
+                return;
+            }
+            if (cmdInFlight_)
+            {
+                LOG_WARN("AuthClient", "deleteCharacterAsync dropped: another cmd is in flight");
+                return;
+            }
+            cmdInFlight_ = true;
             cmdQueue_.push(std::move(cmd));
         }
         cmdCv_.notify_one();
@@ -299,18 +388,26 @@ namespace fate
 
     void AuthClient::selectCharacterAsync(const std::string &characterId)
     {
-        if (!connected_.load())
-        {
-            LOG_WARN("AuthClient", "selectCharacterAsync called but not connected");
-            return;
-        }
-
         AuthCommand cmd;
         cmd.type = AuthCommandType::Select;
         cmd.characterId = characterId;
 
         {
             std::lock_guard<std::mutex> lock(cmdMutex_);
+            if (dropIfResultPending(resultMutex_, result_, "selectCharacterAsync"))
+                return;
+            if (!connected_.load())
+            {
+                LOG_WARN("AuthClient", "selectCharacterAsync called but not connected");
+                pushTransportFailure(AuthResultType::Select, "Auth connection lost");
+                return;
+            }
+            if (cmdInFlight_)
+            {
+                LOG_WARN("AuthClient", "selectCharacterAsync dropped: another cmd is in flight");
+                return;
+            }
+            cmdInFlight_ = true;
             cmdQueue_.push(std::move(cmd));
         }
         cmdCv_.notify_one();
@@ -340,16 +437,81 @@ namespace fate
     }
 
     // ---------------------------------------------------------------------------
+    // performDisconnectDrainLocked
+    // ---------------------------------------------------------------------------
+    // Caller MUST hold cmdMutex_. Three responsibilities:
+    //   1. Flip connected_=false so any subsequent enqueue takes the
+    //      not-connected branch instead of pushing onto a dead queue.
+    //   2. Drain orphan commands -- but only on connection-loss exits. On
+    //      orderly shutdown via cleanup()/disconnectAuth(), shouldStop_ is
+    //      true and the caller swap-empties cmdQueue_ itself; we don't want
+    //      to publish spurious Transport failures for cmds the caller
+    //      legitimately abandoned.
+    //   3. Clear cmdInFlight_ unconditionally so a future reconnect's first
+    //      enqueue isn't gated by a stale flag.
+    //
+    // Publish policy on connection-loss:
+    //   - At most ONE Transport failure is published (result_ is a single
+    //     std::optional slot; the new pending-result gate keeps cmdQueue_ at
+    //     size <= 1 in normal flow but the loop is defensive for that).
+    //   - The publish is SUPPRESSED entirely if result_ already holds an
+    //     unconsumed prior result. Overwriting it would lose the legitimate
+    //     response (e.g. a successful Create whose UI-visible flow hasn't
+    //     run yet) in favor of an orphan-failure for a cmd that, with the
+    //     pending-result gate in place, should not have been enqueued at
+    //     all. Defense-in-depth: if the gate ever fails, the worse outcome
+    //     (silent orphan) is preferred over the worst outcome (clobbered
+    //     legitimate result).
+    //   - Disconnect cmds in the queue are skipped (control messages).
+    void AuthClient::performDisconnectDrainLocked()
+    {
+        connected_.store(false);
+        if (!shouldStop_.load())
+        {
+            // Snapshot result_ presence under resultMutex_ so the suppression
+            // decision can't race with a concurrent UI consume(). Lock order
+            // cmdMutex_ -> resultMutex_ matches the enqueue gates.
+            bool resultAlreadyPending;
+            {
+                std::lock_guard<std::mutex> rlock(resultMutex_);
+                resultAlreadyPending = result_.has_value();
+            }
+            // Seeding published=true when a prior result exists makes the
+            // loop drain the queue without publishing -- same shape as the
+            // "already published our one slot" exit.
+            bool published = resultAlreadyPending;
+            while (!cmdQueue_.empty())
+            {
+                AuthCommand orphan = std::move(cmdQueue_.front());
+                cmdQueue_.pop();
+                if (orphan.type == AuthCommandType::Disconnect) continue;
+                if (!published)
+                {
+                    pushTransportFailure(cmdToResultType(orphan.type),
+                                         "Auth connection lost");
+                    published = true;
+                }
+            }
+        }
+        cmdInFlight_ = false;
+    }
+
+    // ---------------------------------------------------------------------------
     // workerLoop --runs on background thread, maintains persistent TLS connection
     // ---------------------------------------------------------------------------
     void AuthClient::workerLoop(const std::string &host, uint16_t port,
                                 const std::vector<uint8_t> &initialData)
     {
+        // Every fail() callsite below corresponds to a transport / availability
+        // failure (DNS, TCP, TLS, send/recv before the AuthResponse). Server-
+        // returned validation errors take a separate path (see authResp.success
+        // check below) and are tagged Validation.
         auto fail = [this](const std::string &reason)
         {
             AuthClientResult res;
             res.type = pendingRequestType_;
             res.success = false;
+            res.failureKind = AuthFailureKind::Transport;
             res.errorMessage = reason;
             pushResult(std::move(res));
             busy_.store(false);
@@ -501,8 +663,20 @@ namespace fate
         }
 
         ByteReader reader(respBuf.data(), respBuf.size());
-        uint8_t typeByte = reader.readU8(); // consume the type byte
-        (void)typeByte;                     // AuthResponse type
+        uint8_t typeByte = reader.readU8();
+        // Validate the opcode before decoding. A wrong-type payload could
+        // otherwise be force-decoded as AuthResponse and yield a fake
+        // success/validation result -- this needs to be a transport-level
+        // protocol failure so the UI bounces to login.
+        if (typeByte != static_cast<uint8_t>(AuthMessageType::AuthResponse))
+        {
+            SSL_shutdown(ssl);
+            SSL_free(ssl);
+            closeSocket(sockFd);
+            SSL_CTX_free(ctx);
+            fail("Unexpected auth response type");
+            return;
+        }
 
         AuthResponse authResp = AuthResponse::read(reader);
         if (reader.overflowed())
@@ -520,6 +694,7 @@ namespace fate
             AuthClientResult res;
             res.type = pendingRequestType_;
             res.success = false;
+            res.failureKind = AuthFailureKind::Validation;
             res.errorMessage = authResp.errorReason;
             pushResult(std::move(res));
             LOG_WARN("AuthClient", "Auth failed: %s", authResp.errorReason.c_str());
@@ -619,12 +794,24 @@ namespace fate
                 break;
             }
             default:
+                // Defensive: unknown cmd type slipped past the enum-closed
+                // switch above. Drop it AND clear the in-flight gate so the
+                // UI isn't permanently locked out by a stuck flag.
+                {
+                    std::lock_guard<std::mutex> lock(cmdMutex_);
+                    cmdInFlight_ = false;
+                }
                 continue;
             }
 
             if (w.overflowed())
             {
                 LOG_ERROR("AuthClient", "Command serialization overflow");
+                // Same as above: clear the gate before skipping this cmd.
+                {
+                    std::lock_guard<std::mutex> lock(cmdMutex_);
+                    cmdInFlight_ = false;
+                }
                 continue;
             }
 
@@ -632,6 +819,8 @@ namespace fate
             if (!sslSendMessage(ssl, w.data(), static_cast<uint32_t>(w.size())))
             {
                 LOG_ERROR("AuthClient", "Failed to send command --connection lost");
+                pushTransportFailure(cmdToResultType(cmd.type),
+                                     "Auth connection lost");
                 break;
             }
 
@@ -640,14 +829,54 @@ namespace fate
             if (!sslRecvMessage(ssl, respBuf))
             {
                 LOG_ERROR("AuthClient", "Failed to read response --connection lost");
+                pushTransportFailure(cmdToResultType(cmd.type),
+                                     "Auth connection lost");
                 break;
             }
 
             // Parse based on command type
             ByteReader rdr(respBuf.data(), respBuf.size());
-            uint8_t respType = rdr.readU8(); // type byte
-            (void)respType;
+            uint8_t respType = rdr.readU8();
 
+            // Validate the opcode matches the request kind before decoding.
+            // A mismatched type means the server returned the wrong message
+            // shape (or the stream desynced) -- decoding the wrong struct
+            // would produce a fake validation/success result. Surface as a
+            // transport / protocol failure so the UI bounces to login.
+            uint8_t expectedRespType = 0;
+            switch (cmd.type)
+            {
+            case AuthCommandType::Create:
+                expectedRespType = static_cast<uint8_t>(AuthMessageType::CharCreateResponse);
+                break;
+            case AuthCommandType::Delete:
+                expectedRespType = static_cast<uint8_t>(AuthMessageType::CharDeleteResponse);
+                break;
+            case AuthCommandType::Select:
+                expectedRespType = static_cast<uint8_t>(AuthMessageType::SelectCharResponse);
+                break;
+            default:
+                break;
+            }
+            if (respType != expectedRespType)
+            {
+                LOG_ERROR("AuthClient",
+                          "Unexpected response type %u (expected %u)",
+                          static_cast<unsigned>(respType),
+                          static_cast<unsigned>(expectedRespType));
+                pushTransportFailure(cmdToResultType(cmd.type),
+                                     "Unexpected response type");
+                break;
+            }
+
+            // Tracks whether a malformed-response branch fired. The stream is
+            // desynced once a response fails to decode -- the next sslRecvMessage
+            // would either read garbage as a length prefix (most likely return
+            // false) or, worse, succeed and decode the wrong shape into the next
+            // cmd's response. Tear down the connection after publishing the
+            // Transport failure rather than continuing the cmd loop, matching
+            // the "Unexpected response type" branch above.
+            bool malformedFailure = false;
             switch (cmd.type)
             {
             case AuthCommandType::Create:
@@ -658,6 +887,8 @@ namespace fate
                     AuthClientResult res;
                     res.type = AuthResultType::Create;
                     res.success = resp.success;
+                    res.failureKind = resp.success ? AuthFailureKind::None
+                                                   : AuthFailureKind::Validation;
                     res.errorMessage = resp.errorMessage;
                     res.characters = std::move(resp.characters);
                     pushResult(std::move(res));
@@ -665,6 +896,9 @@ namespace fate
                 else
                 {
                     LOG_ERROR("AuthClient", "Malformed CharCreateResponse");
+                    pushTransportFailure(AuthResultType::Create,
+                                         "Malformed server response");
+                    malformedFailure = true;
                 }
                 break;
             }
@@ -676,6 +910,8 @@ namespace fate
                     AuthClientResult res;
                     res.type = AuthResultType::Delete;
                     res.success = resp.success;
+                    res.failureKind = resp.success ? AuthFailureKind::None
+                                                   : AuthFailureKind::Validation;
                     res.errorMessage = resp.errorMessage;
                     res.characters = std::move(resp.characters);
                     pushResult(std::move(res));
@@ -683,6 +919,9 @@ namespace fate
                 else
                 {
                     LOG_ERROR("AuthClient", "Malformed CharDeleteResponse");
+                    pushTransportFailure(AuthResultType::Delete,
+                                         "Malformed server response");
+                    malformedFailure = true;
                 }
                 break;
             }
@@ -694,6 +933,8 @@ namespace fate
                     AuthClientResult res;
                     res.type = AuthResultType::Select;
                     res.success = resp.success;
+                    res.failureKind = resp.success ? AuthFailureKind::None
+                                                   : AuthFailureKind::Validation;
                     res.errorMessage = resp.errorMessage;
                     res.selectData = std::move(resp);
                     pushResult(std::move(res));
@@ -701,12 +942,43 @@ namespace fate
                 else
                 {
                     LOG_ERROR("AuthClient", "Malformed SelectCharResponse");
+                    pushTransportFailure(AuthResultType::Select,
+                                         "Malformed server response");
+                    malformedFailure = true;
                 }
                 break;
             }
             default:
                 break;
             }
+
+            // Cmd processing complete (success / validation reject / malformed
+            // response). Clear the in-flight gate so the next cmd from the UI
+            // can enqueue. Send/recv failure paths above break out of the loop
+            // and rely on the drain block below to clear this.
+            {
+                std::lock_guard<std::mutex> lock(cmdMutex_);
+                cmdInFlight_ = false;
+            }
+
+            // Malformed responses indicate a desynced stream -- continuing the
+            // loop would risk decoding garbage as a valid response on the next
+            // cmd. Break out so the drain block + SSL_shutdown below close the
+            // connection cleanly. The Transport failure was already pushed
+            // above; the drain will see result_ pending and suppress publishing
+            // any further orphan failure.
+            if (malformedFailure) break;
+        }
+
+        // -----------------------------------------------------------------------
+        // Atomic disconnect transition. Pairs with the create/delete/select
+        // enqueue gates so a main-thread command can never observe
+        // connected_=true, push a cmd, and then have the worker exit without
+        // ever responding. See performDisconnectDrainLocked() for the policy
+        // (skip on orderly shutdown, never overwrite an unconsumed result).
+        {
+            std::lock_guard<std::mutex> lock(cmdMutex_);
+            performDisconnectDrainLocked();
         }
 
         // -----------------------------------------------------------------------
@@ -716,7 +988,6 @@ namespace fate
         SSL_free(ssl);
         closeSocket(sockFd);
         SSL_CTX_free(ctx);
-        connected_.store(false);
         busy_.store(false);
 
         LOG_INFO("AuthClient", "Persistent auth connection closed");

@@ -1980,6 +1980,22 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
         ImGui::DragFloat("Button Width##cd", &cd->buttonWidth, 1.0f, 40.0f, 300.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Button Height##cd", &cd->buttonHeight, 1.0f, 16.0f, 80.0f); checkUndoCapture(uiMgr);
         ImGui::DragFloat("Button Spacing##cd", &cd->buttonSpacing, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+
+        ImGui::Separator();
+        ImGui::Checkbox("Use Chrome Panel##cdpc", &cd->panelUseChrome_); checkUndoCapture(uiMgr);
+        ImGui::TextDisabled("Driven by View > Panel Chrome (Checkpoint 3) toggle.");
+        if (ImGui::TreeNodeEx("Chrome Panel##cd", 0)) {
+            ImGui::DragFloat("Border Width##cdcp", &cd->chromePanelBorderWidth, 0.25f, 0.0f, 8.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Corner Radius##cdcp", &cd->chromePanelCornerRadius, 0.5f, 0.0f, 60.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat2("Shadow Offset##cdcp", &cd->chromePanelShadowOffset.x, 0.5f, -30.0f, 30.0f); checkUndoCapture(uiMgr);
+            ImGui::DragFloat("Shadow Blur##cdcp", &cd->chromePanelShadowBlur, 0.5f, 0.0f, 40.0f); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Background##cdcp", &cd->chromePanelBgColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Top##cdcp", &cd->chromePanelGradientTop.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Gradient Bottom##cdcp", &cd->chromePanelGradientBottom.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Border##cdcp", &cd->chromePanelBorderColor.r); checkUndoCapture(uiMgr);
+            ImGui::ColorEdit4("Shadow##cdcp", &cd->chromePanelShadowColor.r); checkUndoCapture(uiMgr);
+            ImGui::TreePop();
+        }
     }
     else if (auto* qs = dynamic_cast<QuantitySelector*>(selectedNode_)) {
         ImGui::SeparatorText("QuantitySelector");
@@ -3824,16 +3840,17 @@ void UIEditorPanel::drawInspector(UIManager& uiMgr) {
             ImGui::TreePop();
         }
 
+        ImGui::Separator();
+        ImGui::TextDisabled("Runtime preview (not saved to layout)");
         char pnameBuf[128] = {};
         snprintf(pnameBuf, sizeof(pnameBuf), "%s", tw->partnerName.c_str());
         if (ImGui::InputText("Partner Name", pnameBuf, sizeof(pnameBuf))) {
             tw->partnerName = pnameBuf;
         }
-        checkUndoCapture(uiMgr);
-        ImGui::DragInt("My Gold##tw", &tw->myGold, 1.0f, 0, 999999); checkUndoCapture(uiMgr);
-        ImGui::DragInt("Their Gold##tw", &tw->theirGold, 1.0f, 0, 999999); checkUndoCapture(uiMgr);
-        ImGui::Checkbox("My Locked##tw", &tw->myLocked); checkUndoCapture(uiMgr);
-        ImGui::Checkbox("Their Locked##tw", &tw->theirLocked); checkUndoCapture(uiMgr);
+        ImGui::DragInt("My Gold##tw", &tw->myGold, 1.0f, 0, 999999);
+        ImGui::DragInt("Their Gold##tw", &tw->theirGold, 1.0f, 0, 999999);
+        ImGui::Checkbox("My Locked##tw", &tw->myLocked);
+        ImGui::Checkbox("Their Locked##tw", &tw->theirLocked);
     }
     else if (auto* col = dynamic_cast<CollectionPanel*>(selectedNode_)) {
         ImGui::SeparatorText("CollectionPanel");

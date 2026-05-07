@@ -128,18 +128,18 @@ public:
     bool tryPushFireAndForget(const Job& j);
     void waitForCounter(Counter* counter, int target = 0);
 
-    // Test-only: pop every Job currently in the queue without executing it.
-    // Returns the count drained. Tests that fill the queue (to force
-    // DbDispatcher backlog routing) call this on cleanup so the singleton
-    // queue is left clean — without it, the next JobSystem-using test would
-    // see queue-full / backpressure warnings from leftover dummy jobs.
-    int drainQueueForTest() {
-        int count = 0;
-        while (jobQueue_.tryPop().has_value()) ++count;
-        return count;
-    }
-
     Arena* fiberScratchArena();
+
+    // ---- Test seam ----
+    //
+    // Free function declared as friend so the class definition stays
+    // token-identical in every translation unit (production and test). The
+    // function itself is defined ONLY in a fate_tests translation unit;
+    // production binaries never link it because no production TU references
+    // the symbol. Implementation refuses to run while workers are live and
+    // calls std::abort if misused, so a test that forgot JobSystem::shutdown()
+    // fails loudly in every build config (NDEBUG strips assert).
+    friend int testDrainJobQueue(JobSystem& js);
 
 private:
     JobSystem() = default;

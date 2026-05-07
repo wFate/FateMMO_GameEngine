@@ -126,3 +126,7 @@ engine/platform/ad_service_ios.mm
 # Android platform files (proprietary)
 android/app/src/main/AndroidManifest.xml
 android/app/src/main/java/com/fatemmo/game/AdBridge.java
+
+# Local-only artifacts
+design.plugin
+tmp_test_run/json_clone_probe

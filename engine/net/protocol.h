@@ -144,6 +144,20 @@ struct SvEntityEnterMsg {
     uint64_t costumeVisuals = 0; // packed costume visual indices (only for entityType == 0)
     std::string guildName;      // guild name (empty if not in guild, only for entityType == 0)
     std::string guildIconPath;  // guild icon asset path (only for entityType == 0)
+    // Player equipment visual styles (only serialized when entityType == 0). v23.
+    // Without these on enter, remote ghosts render with no equipment because
+    // the SvEntityUpdate delta gate sees current==last (server pre-populates
+    // lastSentState at enter via replication.cpp's enter path) and bit 13
+    // never fires. Mirrors the mob* fields above for guard paper-dolls.
+    std::string armorStyle;
+    std::string hatStyle;
+    std::string weaponStyle;
+    // Player persistent character_id (DB id, e.g. "chr_38_1778118774372"). v24.
+    // Required for context-menu actions (trade/party/whisper/friend/guild) —
+    // the server-side handlers resolve targets by character_id, not display
+    // name, so a v23 client that sent the name in CmdTrade silently failed
+    // every faction-friendly social action.
+    std::string characterId;
 
     void write(ByteWriter& w) const {
         detail::writeU64(w, persistentId);
@@ -163,6 +177,10 @@ struct SvEntityEnterMsg {
             w.writeString(guildName);
             w.writeString(guildIconPath);
             w.writeU8(adminRole);   // v16
+            w.writeString(armorStyle);   // v23
+            w.writeString(hatStyle);     // v23
+            w.writeString(weaponStyle);  // v23
+            w.writeString(characterId);  // v24
         }
         if (entityType == 3) {
             w.writeString(itemId);
@@ -214,6 +232,10 @@ struct SvEntityEnterMsg {
             m.adminRole     = r.readU8();   // v16
             // Defensive clamp: only 0/1/2 are defined AdminRole values.
             if (m.adminRole > 2) m.adminRole = 0;
+            m.armorStyle  = r.readString(); // v23
+            m.hatStyle    = r.readString(); // v23
+            m.weaponStyle = r.readString(); // v23
+            m.characterId = r.readString(); // v24
         }
         if (m.entityType == 3) {
             m.itemId       = r.readString();
@@ -395,6 +417,82 @@ struct SvCombatEventMsg {
         m.isMiss     = r.readU8();
         m.absorbedAmount = r.readU32();
         m.isShielded = r.readU8();
+        return m;
+    }
+};
+
+// v25 — SvTradeState slot wire format. Mirrors the fields a TradeWindow
+// renders (itemId for icon, displayName, quantity, rarity, enchantLevel) so
+// the receiver can populate without further item-cache lookups. hasItem=0
+// means empty slot (the rest of the fields are wire-zeroed).
+struct SvTradeStateSlotWire {
+    uint8_t     hasItem = 0;
+    std::string itemId;
+    std::string instanceId;
+    std::string displayName;
+    std::string rarity;
+    int32_t     quantity = 0;
+    int32_t     enchantLevel = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeU8(hasItem);
+        if (hasItem) {
+            w.writeString(itemId);
+            w.writeString(instanceId);
+            w.writeString(displayName);
+            w.writeString(rarity);
+            w.writeI32(quantity);
+            w.writeI32(enchantLevel);
+        }
+    }
+    static SvTradeStateSlotWire read(ByteReader& r) {
+        SvTradeStateSlotWire s;
+        s.hasItem = r.readU8();
+        if (s.hasItem) {
+            s.itemId       = r.readString();
+            s.instanceId   = r.readString();
+            s.displayName  = r.readString();
+            s.rarity       = r.readString();
+            s.quantity     = r.readI32();
+            s.enchantLevel = r.readI32();
+        }
+        return s;
+    }
+};
+
+// v25 — Authoritative trade snapshot (per-recipient view). owner = recipient.
+// Sent on session-start, AddItem, RemoveItem, SetGold, Lock, Unlock so the
+// client can render mySlots/theirSlots from server state instead of optimistic
+// guesses. Slot count fixed at 8 to match TradeWindow::mySlots/theirSlots.
+struct SvTradeStateMsg {
+    static constexpr int kSlotCount = 8;
+
+    int32_t sessionId = 0;
+    SvTradeStateSlotWire ownerSlots[kSlotCount];
+    SvTradeStateSlotWire partnerSlots[kSlotCount];
+    int64_t ownerGold = 0;
+    int64_t partnerGold = 0;
+    uint8_t ownerLocked = 0;
+    uint8_t partnerLocked = 0;
+
+    void write(ByteWriter& w) const {
+        w.writeI32(sessionId);
+        for (const auto& s : ownerSlots)   s.write(w);
+        for (const auto& s : partnerSlots) s.write(w);
+        detail::writeI64(w, ownerGold);
+        detail::writeI64(w, partnerGold);
+        w.writeU8(ownerLocked);
+        w.writeU8(partnerLocked);
+    }
+    static SvTradeStateMsg read(ByteReader& r) {
+        SvTradeStateMsg m;
+        m.sessionId = r.readI32();
+        for (auto& s : m.ownerSlots)   s = SvTradeStateSlotWire::read(r);
+        for (auto& s : m.partnerSlots) s = SvTradeStateSlotWire::read(r);
+        m.ownerGold     = detail::readI64(r);
+        m.partnerGold   = detail::readI64(r);
+        m.ownerLocked   = r.readU8();
+        m.partnerLocked = r.readU8();
         return m;
     }
 };

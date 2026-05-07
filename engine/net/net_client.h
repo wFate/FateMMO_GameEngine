@@ -155,6 +155,7 @@ public:
     void sendTradeAction(uint8_t action, const std::string& data);
     void sendTradeConfirm();
     void sendTradeAddItem(uint8_t slotIdx, int32_t sourceSlot, const std::string& instanceId, int32_t quantity);
+    void sendTradeRemoveItem(uint8_t slotIdx);
     void sendTradeSetGold(int64_t gold);
     void sendMarketBuy(int32_t listingId);
     void sendMarketList(const std::string& instanceId, int64_t priceGold);
@@ -262,6 +263,9 @@ public:
     std::function<void(const SvMovementCorrectionMsg&)> onMovementCorrection;
     std::function<void(const SvLootPickupMsg&)> onLootPickup;
     std::function<void(const SvTradeUpdateMsg&)> onTradeUpdate;
+    // v25 — authoritative trade slot snapshot. Fires on session-start /
+    // AddItem / RemoveItem / SetGold / Lock / Unlock from the server.
+    std::function<void(const SvTradeStateMsg&)> onTradeState;
     std::function<void(const SvMarketResultMsg&)> onMarketResult;
     std::function<void(const SvBountyUpdateMsg&)> onBountyUpdate;
     std::function<void(const SvBountyBoardMsg&)>        onBountyBoard;

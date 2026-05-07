@@ -44,6 +44,58 @@ inline bool hasCriticalEntityChange(Entity* entity, const SvEntityUpdateMsg& las
     }
     return false; // non-combat entity (NPC, dropped item) — no HP/death to track
 }
+
+// Stage D.1b Phase 1 — distance bucket assignment from squared distance.
+// Uses ≤ comparisons so each upper bound stays in the lower bucket; the
+// boundary at 640 matches D.1's `d2 > actR2` semantics (640 stays in B3,
+// 640.001 falls to B4). Production AOI deactivation is 1280 px so entries
+// with d² > 1280² (=1,638,400) won't reach this loop; the final bucket
+// returns 4 for any d² > 409600 without an explicit upper guard.
+//   B0 = [0, 256]    px   d² ≤ 65536
+//   B1 = (256, 384]  px   d² ≤ 147456
+//   B2 = (384, 512]  px   d² ≤ 262144
+//   B3 = (512, 640]  px   d² ≤ 409600
+//   B4 = (640, 1280] px   d² >  409600
+constexpr int distanceBucketFromD2(float d2) {
+    if (d2 <= 65536.0f)  return 0;
+    if (d2 <= 147456.0f) return 1;
+    if (d2 <= 262144.0f) return 2;
+    if (d2 <= 409600.0f) return 3;
+    return 4;
+}
+
+// Stage D.1b Phase 1 — per-bucket hot-reason classifier. Order mirrors
+// game/shared/mobai_scheduler.cpp::classifyMobLane exactly so the counters
+// are reusable for the Phase 2 design conversation:
+//   1. combat AIMode (Chase/ChaseMemory/Attack) → bucketHot
+//   2. taunt active or pending decrement         → bucketForcedTarget
+//   3. dearWarmedUp + lastTickInterval ≤ 0.001   → bucketHotProximity
+//   4. mob with none of the above                → bucketCold
+//   * no MobAIComponent (player, NPC, drop)      → bucketNonMob
+// Each call increments exactly ONE counter; sums close to bucketStayed[i].
+inline void incrementHotReasonBucketCounter(AOIStats& stats, int bucket, Entity* entity) {
+    auto* aiComp = entity->getComponent<MobAIComponent>();
+    if (!aiComp) {
+        ++stats.bucketNonMob[bucket];
+        return;
+    }
+    AIMode mode = aiComp->ai.getMode();
+    if (mode == AIMode::Chase || mode == AIMode::ChaseMemory || mode == AIMode::Attack) {
+        ++stats.bucketHot[bucket];
+        return;
+    }
+    auto* esComp = entity->getComponent<EnemyStatsComponent>();
+    if (esComp && (esComp->stats.forcedTarget != 0 || esComp->stats.forcedTargetTimer > 0.0f)) {
+        ++stats.bucketForcedTarget[bucket];
+        return;
+    }
+    if (aiComp->dearWarmedUp && aiComp->lastTickInterval <= 0.001f) {
+        ++stats.bucketHotProximity[bucket];
+        return;
+    }
+    ++stats.bucketCold[bucket];
+}
+
 } // namespace
 
 void ReplicationManager::update(World& world, NetServer& server) {
@@ -451,6 +503,7 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         ++leaveCount;
 
         client.lastSentState.erase(pid.value());
+        client.lastEmittedBucket.erase(pid.value());
     }
     flushLeaveBatch();
 
@@ -546,18 +599,30 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         //     SvCombatEventMsg (0x93) — sub-tier never throttles those.
         auto* entityTransform = entity->getComponent<Transform>();
         bool cadenceOverridden = false;
+        // D.1b Phase 1 — bucket sentinel. -1 means the observer / no-Transform
+        // branch took the entry; bucket counters and POST-DIRTY counters skip
+        // those entries because there is no anchor distance to bucket against.
+        int bucket = -1;
         if (entityTransform && !isObserverClient) {
             float dx = entityTransform->position.x - clientPos.x;
             float dy = entityTransform->position.y - clientPos.y;
             float d2 = dx * dx + dy * dy;
             float dist = std::sqrt(d2);
             UpdateTier tier = getUpdateTier(dist);
+            // D.1b Phase 1 — bucket assignment + per-entity hot-reason counter,
+            // BEFORE the cadence gate so a tier-cadence-throttled entity still
+            // contributes to bucketStayed and the hot-reason mix.
+            bucket = distanceBucketFromD2(d2);
+            ++stats_.bucketStayed[bucket];
+            incrementHotReasonBucketCounter(stats_, bucket, entity);
             if (!shouldSendUpdate(tier, tickCounter_)) {
                 if (!hasCriticalEntityChange(entity, last)) {
                     ++stats_.stayedThrottled;
+                    ++stats_.bucketCadenceThrottled[bucket];
                     continue;
                 }
                 ++stats_.stayedCriticalOverride;
+                ++stats_.bucketCadenceCriticalOverride[bucket];
                 cadenceOverridden = true;
             }
 
@@ -577,24 +642,29 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
                     if ((tickCounter_ % kStickyInterval) != offset) {
                         if (!hasCriticalEntityChange(entity, last)) {
                             ++stats_.stayedThrottled;
+                            ++stats_.bucketCadenceThrottled[bucket];
                             continue;
                         }
                         ++stats_.stayedCriticalOverride;
+                        ++stats_.bucketCadenceCriticalOverride[bucket];
                     } else {
                         // On-offset: cadence permits emit consideration this
                         // tick. The post-build dirtyMask check downstream still
                         // decides whether bytes go on the wire — see AOIStats
                         // doc-comment in replication.h.
                         ++stats_.stayedFullRate;
+                        ++stats_.bucketCadenceFullRate[bucket];
                     }
                 } else {
                     // Inside activation radius — full-rate.
                     ++stats_.stayedFullRate;
+                    ++stats_.bucketCadenceFullRate[bucket];
                 }
             }
         } else {
             // No Transform OR observer/dead-camera client. Both bypass the
-            // cadence pipeline by design; count as full-rate emit.
+            // cadence pipeline by design; count as full-rate emit. Bucket
+            // counters skipped (bucket == -1) — no anchor distance.
             ++stats_.stayedFullRate;
         }
 
@@ -641,6 +711,36 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
 
         if (dirtyMask == 0) continue; // Nothing changed
 
+        // D.1b Phase 1 — POST-DIRTY bucket counter. Increments only after
+        // the dirtyMask filter passes; the next site (after tmpWriter is
+        // built) accumulates the actual serialized payload contribution to
+        // 0xBA SvEntityUpdateBatch. observer/no-Transform skipped (bucket=-1).
+        if (bucket >= 0) {
+            ++stats_.bucketDirtyMaskNonzero[bucket];
+            // D.1b Phase 2 (Fork B) — per-field histogram. Each set bit in
+            // the SvEntityUpdate fieldMask increments its bucket slot,
+            // identifying which fields contribute to the per-bucket byte
+            // share. Bit indices match SvEntityUpdateMsg's protocol.h
+            // layout (0=position, ..., 16=costumeVisuals).
+            for (int bit = 0; bit < 17; ++bit) {
+                if (dirtyMask & (1u << bit)) {
+                    ++stats_.bucketDirtyByField[bucket][bit];
+                }
+            }
+            // D.1b Phase 2 (Fork D) — band->inner cascade telemetry. Record
+            // the transition from the entity's previous emit bucket to the
+            // current emit bucket so the operator can spot D.1's sticky-band
+            // refresh-stalling cascading into fat inner-bucket emits.
+            auto lbIt = client.lastEmittedBucket.find(pid.value());
+            if (lbIt != client.lastEmittedBucket.end()) {
+                uint8_t prev = lbIt->second;
+                if (prev < 5) {
+                    ++stats_.bucketTransitions[prev][bucket];
+                }
+            }
+            client.lastEmittedBucket[pid.value()] = static_cast<uint8_t>(bucket);
+        }
+
         uint8_t& seq = entitySeqCounters_[handle.value];
         seq++; // wraps naturally at 255->0
 
@@ -673,6 +773,12 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         uint8_t tmpBuf[MAX_PAYLOAD_SIZE];
         ByteWriter tmpWriter(tmpBuf, sizeof(tmpBuf));
         deltaMsg.write(tmpWriter);
+
+        // D.1b Phase 1 — POST-DIRTY bucket emitted-bytes counter. tmpWriter
+        // size is the per-entry serialized payload contribution to
+        // 0xBA SvEntityUpdateBatch (excluding batch headers added at flush).
+        // observer/no-Transform skipped (bucket=-1).
+        if (bucket >= 0) stats_.bucketEmittedBytes[bucket] += tmpWriter.size();
 
         // If this delta won't fit in the current batch, flush first
         if (deltaWriter.size() + tmpWriter.size() > MAX_PAYLOAD_SIZE) {
@@ -715,6 +821,12 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
         msg.maxHP = charStats->stats.maxHP;
         msg.pkStatus  = static_cast<uint8_t>(charStats->stats.pkStatus);
         msg.honorRank = static_cast<uint8_t>(HonorSystem::getHonorRank(charStats->stats.honor));
+        // v24 — persistent DB id for context-menu action targeting. Server
+        // handlers (CmdTrade/CmdParty/CmdSocial/CmdGuild) resolve targets by
+        // character_id; without this on enter the client could only send
+        // display name, which never matched the server-side equality test
+        // and silently dropped every social action.
+        msg.characterId = charStats->stats.characterId;
 
         auto* appearance = entity->getComponent<AppearanceComponent>();
         if (appearance) {
@@ -751,6 +863,24 @@ SvEntityEnterMsg ReplicationManager::buildEnterMessage(World& world, Entity* ent
                 }
             }
             msg.costumeVisuals = packCostumeVisuals(cW, cA, cH, cS, cG, cB);
+        }
+
+        // v23 — equipment visual styles from inventory. Same lookup as
+        // buildCurrentState's bit-13 path; needed on enter because the delta
+        // path's first dirtyMask compare (current vs lastSentState seeded
+        // here at enter) sees no change and never emits these strings.
+        auto* invComp = entity->getComponent<InventoryComponent>();
+        if (invComp && itemDefCache_) {
+            const auto& equip = invComp->inventory.getEquipmentMap();
+            auto getStyle = [&](EquipmentSlot slot) -> std::string {
+                auto it = equip.find(slot);
+                if (it != equip.end() && it->second.isValid())
+                    return itemDefCache_->getVisualStyle(it->second.itemId);
+                return "";
+            };
+            msg.weaponStyle = getStyle(EquipmentSlot::Weapon);
+            msg.armorStyle  = getStyle(EquipmentSlot::Armor);
+            msg.hatStyle    = getStyle(EquipmentSlot::Hat);
         }
     } else if (enemyStats) {
         msg.entityType = 1; // mob

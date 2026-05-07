@@ -890,6 +890,12 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     if(EXISTS "${CMAKE_SOURCE_DIR}/game/systems/role_nameplate_config.cpp")
         list(APPEND GAME_ANIM_TEST_SOURCES game/systems/role_nameplate_config.cpp)
     endif()
+    # Entity factory (used by ghost-player parity tests in test_appearance.cpp).
+    # Same source server/game runtime targets compile; the factory itself only
+    # depends on engine + game/shared + nameplate config already linked above.
+    if(EXISTS "${CMAKE_SOURCE_DIR}/game/entity_factory.cpp")
+        list(APPEND GAME_ANIM_TEST_SOURCES game/entity_factory.cpp)
+    endif()
     # Server sources needed by tests (persistence queue, etc.)
     set(SERVER_TEST_SOURCES "")
     if(EXISTS "${CMAKE_SOURCE_DIR}/server/db/persistence_priority.cpp")
@@ -928,6 +934,14 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     if(EXISTS "${CMAKE_SOURCE_DIR}/game/render/telegraph_overlay.cpp")
         list(APPEND SERVER_TEST_SOURCES game/render/telegraph_overlay.cpp)
     endif()
+    # boss_script_telegraph_seam.cpp installs the production EnqueueTelegraphFn
+    # used by ctx.enqueueTelegraphedAOE. Linking it into the test exe lets the
+    # bridge tests exercise the real resolveQueueForWorld + persistentId-stamp
+    # + validateTelegraphRequest path against a live TelegraphQueue, instead
+    # of a function-pointer spy. Pure header deps (no DB / NetServer).
+    if(EXISTS "${CMAKE_SOURCE_DIR}/server/bosses/boss_script_telegraph_seam.cpp")
+        list(APPEND SERVER_TEST_SOURCES server/bosses/boss_script_telegraph_seam.cpp)
+    endif()
     # Boss-script registry + lifecycle (Phase 7.1) — used by
     # test_boss_script_phase71.cpp. No DB / replication deps; pure containers
     # plus the lifecycle hook that walks Entity->getComponent. The hooks
@@ -942,9 +956,9 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
             server/bosses/boss_scripts_register_all.cpp
             server/bosses/boss_script_lifecycle.cpp
         )
-        # Phase 7.2b.4 Session 4 — bridge proof script. boss_scripts_register_all
-        # references registerSampleTelegraphBoss, so this cpp must be in the test
-        # link too. Pure boss-script content; no DB / replication deps.
+        # boss_scripts_register_all references registerSampleTelegraphBoss,
+        # so this cpp must be in the test link too. Pure boss-script content;
+        # no DB / replication deps.
         if(EXISTS "${CMAKE_SOURCE_DIR}/server/bosses/sample_telegraph_boss.cpp")
             list(APPEND SERVER_TEST_SOURCES server/bosses/sample_telegraph_boss.cpp)
         endif()

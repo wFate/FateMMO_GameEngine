@@ -8,7 +8,7 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 22;  // v22: CmdAdminGrantItem (0x51) + CmdAdminSetLevel (0x52) + CmdAdminAddSkillPoints (0x53) — typed admin grant pipeline replacing chat-mediated /additem flow. Result rides existing SvAdminResult (0xC3). Bump rejects mismatched clients at handshake. v21: SvAOETelegraphStartBatch (0xEE) + SvAOETelegraphCancelBatch (0xEF) — telegraph foundation.
+constexpr uint8_t  PROTOCOL_VERSION  = 25;  // v25: SvTradeState (0xF0) — server-authoritative trade slot snapshot. Server pushes the full owner/partner offer state on session-start / AddItem / RemoveItem / SetGold / Lock / Unlock so both clients see authoritative slot contents. Pre-fix the only post-AddItem signal was SvTradeUpdate type=2 with no payload, so the partner never saw offered items and the sender's UI had to paint optimistically. v24: SvEntityEnterMsg now carries characterId for entityType==0 (player). Required because Cmd{Trade,Party,Social,Guild} handlers resolve targets by character_id (DB id), not display name; previously the client passed the display name as charId and every social action silently failed at the server's name-equality check. Also fixes server-side population of armorStyle/hatStyle/weaponStyle for players (the v23 wire fields were declared but buildEnterMessage never populated them). v23: SvEntityEnterMsg now carries armorStyle/hatStyle/weaponStyle for entityType==0 (player). Required because server initializes lastSentState to current state at enter, so the SvEntityUpdate bit-13 delta gate never fires for newly-entered ghosts and remote players rendered without equipment until they re-equipped. Mirrors mob* fields on the same struct. v22: CmdAdminGrantItem (0x51) + CmdAdminSetLevel (0x52) + CmdAdminAddSkillPoints (0x53) — typed admin grant pipeline replacing chat-mediated /additem flow. Result rides existing SvAdminResult (0xC3). Bump rejects mismatched clients at handshake. v21: SvAOETelegraphStartBatch (0xEE) + SvAOETelegraphCancelBatch (0xEF) — telegraph foundation.
 constexpr size_t   PACKET_HEADER_SIZE = 26;  // v9: ackBits widened 4→8 bytes (32→64 bit ACK window)
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
@@ -274,6 +274,15 @@ namespace PacketType {
     // each out to the overlay's cancel handler.
     constexpr uint8_t SvAOETelegraphStartBatch  = 0xEE;
     constexpr uint8_t SvAOETelegraphCancelBatch = 0xEF;
+
+    // v25 — SvTradeState. Authoritative trade-slot snapshot pushed by the
+    // server on session-start / AddItem / RemoveItem / SetGold / Lock /
+    // Unlock. Pre-fix the only post-AddItem signal was SvTradeUpdate type=2
+    // (no payload), so the partner never saw offered items and the sender's
+    // UI had to paint optimistically. Per-recipient layout: owner = the
+    // recipient, partner = the other side, so each client just renders the
+    // mySlots/theirSlots arrays as received.
+    constexpr uint8_t SvTradeState              = 0xF0;
 
     // Pet panel seed on login (silent). Distinct from SvPetGranted which
     // fires on mid-session hatch and shows a "Hatched: X" chat toast.

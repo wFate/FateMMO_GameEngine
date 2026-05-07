@@ -198,16 +198,16 @@ inline bool isCriticalLane(uint8_t packetType) {
     // 0xCE SvScenePopulated    — without it, client never exits loading
     // 0xE0 SvEntityEnterBatch  — v9 coalesced entity-enters; same semantics as 0x90
     // 0xED SvEntityLeaveBatch  — v19 coalesced entity-leaves; same semantics as 0x91
-    // 0xEE SvAOETelegraphStartBatch  — v21 telegraph windup announcement; if
+    // 0xEE SvAOETelegraphStartBatch  — telegraph windup announcement; if
     //                            dropped, client never paints the danger zone
     //                            but the server still resolves damage on
     //                            schedule, violating the warning-before-damage
-    //                            contract. S168.B.
-    // 0xEF SvAOETelegraphCancelBatch — v21 telegraph cancel. If dropped while
-    //                            the start was delivered, the client overlay
-    //                            keeps showing a phantom danger zone forever.
+    //                            contract.
+    // 0xEF SvAOETelegraphCancelBatch — telegraph cancel. If dropped while the
+    //                            start was delivered, the client overlay keeps
+    //                            showing a phantom danger zone forever.
     //                            Critical for visual coherence with server
-    //                            queue state. S168.B.
+    //                            queue state.
     return packetType == 0x90 || packetType == 0x91 || packetType == 0x95 ||
            packetType == 0x97 || packetType == 0x98 || packetType == 0xA0 ||
            packetType == 0xA1 || packetType == 0xCC || packetType == 0xCE ||

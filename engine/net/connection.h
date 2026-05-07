@@ -44,6 +44,11 @@ struct ClientConnection {
     // entries that would block the first ticks of the new scene.
     std::unordered_map<uint32_t, uint32_t> firstSeenTick; // EntityHandle.value -> tick
     std::unordered_map<uint64_t, SvEntityUpdateMsg> lastSentState; // keyed by PersistentId value
+    // D.1b Phase 2 (Fork D) telemetry. Last bucket each entity emitted in
+    // for this client. Drives the bucketTransitions[from][to] matrix in
+    // AOIStats. 0xFF sentinel means "no prior emit recorded". Cleared by
+    // resetReplication() so a zone transition does not leak stale entries.
+    std::unordered_map<uint64_t, uint8_t> lastEmittedBucket;
     uint64_t playerEntityId = 0; // PersistentId of this client's player entity
     std::string spectateScene;   // non-empty = replication uses this scene instead of player's
 
@@ -109,6 +114,7 @@ struct ClientConnection {
         aoi.stayed.clear();
         lastSentState.clear();
         firstSeenTick.clear();
+        lastEmittedBucket.clear();
         pendingScenePopulated = true;
     }
 

@@ -15,6 +15,7 @@
 #include "game/components/player_controller.h"
 #include "game/components/animator.h"
 #endif // FATE_HAS_GAME
+#include <array>
 #include <unordered_map>
 #include <functional>
 
@@ -82,6 +83,78 @@ struct AOIStats {
     uint64_t stayedFullRate = 0;
     uint64_t stayedThrottled = 0;
     uint64_t stayedCriticalOverride = 0;
+
+    // Stage D.1b Phase 1 — bucketed telemetry. Distance bucket boundaries
+    // (squared-distance comparisons match D.1's `d2 > actR2` semantics so
+    // d == 640 stays in B3, d == 640.001 falls to B4):
+    //   B0 = [0, 256]    px   d² ≤ 65536
+    //   B1 = (256, 384]  px   d² ≤ 147456
+    //   B2 = (384, 512]  px   d² ≤ 262144
+    //   B3 = (512, 640]  px   d² ≤ 409600   (current sticky-band boundary)
+    //   B4 = (640, 1280] px   d² >  409600  (sticky band, throttled by D.1)
+    //
+    // Counters apply only to stayed entries with a Transform AND a non-
+    // observer client (the cadence/distance branch). Observer / no-Transform
+    // entries take the `else` branch and bypass bucket accounting by design
+    // (no anchor distance to bucket against).
+    //
+    // bucketStayed[i] is the total stayed entries that landed in bucket i;
+    // bucketCadence{FullRate,Throttled,CriticalOverride}[i] partitions that
+    // total by cadence disposition (sum across the three == bucketStayed[i]).
+    // bucketDirtyMaskNonzero[i] and bucketEmittedBytes[i] are POST-DIRTY:
+    // they increment only after the dirtyMask != 0 filter and capture the
+    // actual byte contribution to 0xBA SvEntityUpdateBatch (via tmpWriter
+    // size at serialize time). These two are the byte-truth axis the
+    // pre-dirty cadence counters above explicitly do not provide.
+    //
+    // Per-bucket hot-reason counters mirror Stage C MobAILane classification
+    // order from game/shared/mobai_scheduler.cpp; mutually exclusive within
+    // a bucket. Sum of hot-reason counters == bucketStayed[i] when all
+    // entities are mobs; bucketNonMob[i] tracks players/NPCs/drops (no
+    // MobAIComponent) so the sum still closes:
+    //   bucketHot[i]           — combat AIMode (Chase/ChaseMemory/Attack)
+    //   bucketHotProximity[i]  — dearWarmedUp + lastTickInterval ≤ 0.001
+    //   bucketForcedTarget[i]  — taunt active or pending decrement
+    //   bucketCold[i]          — has MobAIComponent, none of the above
+    //   bucketNonMob[i]        — no MobAIComponent
+    std::array<uint64_t, 5> bucketStayed{};
+    std::array<uint64_t, 5> bucketCadenceFullRate{};
+    std::array<uint64_t, 5> bucketCadenceThrottled{};
+    std::array<uint64_t, 5> bucketCadenceCriticalOverride{};
+    std::array<uint64_t, 5> bucketDirtyMaskNonzero{};
+    std::array<uint64_t, 5> bucketEmittedBytes{};
+    std::array<uint64_t, 5> bucketHot{};
+    std::array<uint64_t, 5> bucketHotProximity{};
+    std::array<uint64_t, 5> bucketForcedTarget{};
+    std::array<uint64_t, 5> bucketCold{};
+    std::array<uint64_t, 5> bucketNonMob{};
+
+    // D.1b Phase 2 telemetry (Fork B). Per-bucket dirty-bit histogram. Bit
+    // indices match the SvEntityUpdateMsg fieldMask layout (bit 0 = position,
+    // bit 1 = animFrame, ..., bit 16 = costumeVisuals). Increments only at
+    // POST-DIRTY (one increment per set bit per emit), so the sum of all 17
+    // entries in row bucket[i] is >= bucketDirtyMaskNonzero[i] (each emit
+    // contributes between 1 and 17 increments depending on field count).
+    //
+    // Prior smoke showed B0..B2 carry ~77% of 0xBA bytes with a flat ~21 B
+    // per entry; this histogram identifies which fields drive that share so
+    // the regime decision (position quantization vs. cadence throttle vs.
+    // field-specific change) has data. No behavior change.
+    std::array<std::array<uint64_t, 17>, 5> bucketDirtyByField{};
+
+    // D.1b Phase 2 telemetry (Fork D). Bucket-to-bucket transition matrix.
+    // bucketTransitions[from][to] increments when an entity that emitted in
+    // bucket=from on its previous emit now emits in bucket=to. Detects the
+    // band->inner cascade hypothesis: D.1's sticky-band 1/3 cadence holds
+    // lastSentState stale for up to 3 ticks, so when the player walks the
+    // entity into the inner buckets the entity emits a fat dirtyMask
+    // covering every change since the last full-rate emit. If
+    // bucketTransitions[4][0..3] dominates and bucketEmittedBytes[0..3] is
+    // significantly higher per-emit than bucketEmittedBytes[4] would
+    // suggest, the cascade is real and the fix is to refresh lastSentState
+    // on cadence-throttle even when not emitting.
+    std::array<std::array<uint64_t, 5>, 5> bucketTransitions{};
+
     void reset() { *this = AOIStats{}; }
 };
 

@@ -630,6 +630,12 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             if (onTradeUpdate) onTradeUpdate(msg);
             break;
         }
+        case PacketType::SvTradeState: {
+            ByteReader payload(payloadData, payloadLen);
+            auto msg = SvTradeStateMsg::read(payload);
+            if (onTradeState) onTradeState(msg);
+            break;
+        }
         case PacketType::SvMarketResult: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvMarketResultMsg::read(payload);
@@ -1518,6 +1524,14 @@ void NetClient::sendTradeAddItem(uint8_t slotIdx, int32_t sourceSlot, const std:
     w.writeI32(sourceSlot);
     w.writeString(instanceId);
     w.writeI32(quantity);
+    sendPacket(Channel::ReliableOrdered, PacketType::CmdTrade, w.data(), w.size());
+}
+
+void NetClient::sendTradeRemoveItem(uint8_t slotIdx) {
+    uint8_t buf[MAX_PAYLOAD_SIZE];
+    ByteWriter w(buf, sizeof(buf));
+    w.writeU8(TradeAction::RemoveItem);
+    w.writeU8(slotIdx);
     sendPacket(Channel::ReliableOrdered, PacketType::CmdTrade, w.data(), w.size());
 }
 
