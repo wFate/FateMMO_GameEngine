@@ -9,6 +9,7 @@
 #include "engine/net/dialogue_messages.h"
 #include "engine/net/interact_site_messages.h"
 #include "engine/net/admin_messages.h"
+#include "engine/net/mob_ai_tuning_messages.h"
 #include "engine/net/packet_crypto.h"
 #include <functional>
 #include <string>
@@ -131,6 +132,14 @@ public:
                             uint32_t quantity, bool bagFirst);
     void sendAdminSetLevel(const std::string& targetName, uint16_t level);
     void sendAdminAddSkillPoints(const std::string& targetName, uint16_t points);
+
+    // v26 — MobAI live inspector tuning (admin/dev-only). Subscribe sends a
+    // 5Hz diagnostic snapshot stream for the given pid (pid==0 unsubscribes).
+    // Apply streams a full tunable snapshot at up to ~10Hz during slider drag
+    // with finalApply=1 on mouse-up. Both go on ReliableOrdered.
+    void sendMobAITuneSubscribe(uint64_t persistentId);
+    void sendMobAITuneApply(uint64_t persistentId, uint32_t applySeq,
+                            bool finalApply, const MobAITuningDTO& tuning);
 
     // Bounty actions
     void sendBountyGetBoard();
@@ -263,8 +272,9 @@ public:
     std::function<void(const SvMovementCorrectionMsg&)> onMovementCorrection;
     std::function<void(const SvLootPickupMsg&)> onLootPickup;
     std::function<void(const SvTradeUpdateMsg&)> onTradeUpdate;
-    // v25 — authoritative trade slot snapshot. Fires on session-start /
-    // AddItem / RemoveItem / SetGold / Lock / Unlock from the server.
+    // Authoritative trade slot snapshot pushed by the server on session-start
+    // / AddItem / RemoveItem / SetGold / Lock / Unlock. The TradeWindow renders
+    // mySlots/theirSlots straight from this payload.
     std::function<void(const SvTradeStateMsg&)> onTradeState;
     std::function<void(const SvMarketResultMsg&)> onMarketResult;
     std::function<void(const SvBountyUpdateMsg&)> onBountyUpdate;
@@ -343,6 +353,7 @@ public:
     std::function<void(const SvAdminResultMsg&)>      onAdminResult;
     std::function<void(const SvAdminContentListMsg&)>  onAdminContentList;
     std::function<void(const SvValidationReportMsg&)>  onValidationReport;
+    std::function<void(const SvAdminMobAITuneStateMsg&)> onAdminMobAITuneState;
 
 private:
     NetSocket socket_;
@@ -356,6 +367,12 @@ private:
     bool waitingForAccept_ = false;
     float lastHeartbeatSent_ = 0.0f;
     float lastPacketReceived_ = 0.0f;
+    // Snapshot of lastPacketReceived_ taken BEFORE the current packet's
+    // update, so classifyGap()/pushGapEvent() can compute "time since the
+    // *previous* packet, at the moment this one arrived" instead of
+    // "time since the packet I'm currently processing", which is always 0
+    // and biased every >150ms gap toward PacketLossLikely.
+    float prevLastPacketReceived_ = 0.0f;
     float lastPollTime_ = 0.0f;  // cached from poll() for RTT tracking
     // Diagnostic for "all mobs hiccup" — tracks the last time a mob-position
     // batch arrived. Gaps >150ms get logged so we can tell whether the stutter

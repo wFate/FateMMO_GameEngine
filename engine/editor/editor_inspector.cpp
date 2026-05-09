@@ -23,6 +23,9 @@
 #include "engine/scene/scene.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/editor/undo.h"
+#include "engine/editor/mobai_tune_panel.h"
+#include "engine/net/net_client.h"
+#include "engine/net/mob_ai_tuning_messages.h"
 #include "engine/ecs/prefab.h"
 #ifdef FATE_HAS_GAME
 #include "game/animation_loader.h"
@@ -599,6 +602,15 @@ void runInspectorMutation(Entity* entity, const char* desc, Fn&& mutate) {
 // ============================================================================
 
 void Editor::drawInspector() {
+    // Release any stale MobAI tuning subscription whenever no entity is
+    // selected. This is the catch-all backstop for the ~10 direct
+    // selectedEntity_ = nullptr sites scattered through editor.cpp that
+    // bypass clearSelection(); on the next inspector frame, the helper
+    // sees subscribedPid != 0 with a null selection and unsubscribes.
+    // Lives outside the ImGui::Begin block so a collapsed/hidden
+    // inspector window still releases (the deeper eligibility gate
+    // inside the inspector body cannot fire when Begin returns false).
+    if (!selectedEntity_) releaseMobAITuneSubscription_();
     if (ImGui::Begin("Inspector")) {
         if (!selectedEntity_) {
             ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Select an entity");
@@ -1457,6 +1469,11 @@ void Editor::drawInspector() {
                             --MobAIComponent::perMobAggroOverlayCount;
                     }
                 }
+                // Per-mob escape episode debug log. Emits one [MobEscape]
+                // LOG_DEBUG line per tick while the mob is escaping. Requires
+                // FATE_LOG_DEBUG=1 in Release. Toggle on a single mob only --
+                // leaving it on for many mobs floods the log.
+                ImGui::Checkbox("Debug Escape (this mob)##ai", &a.debugEscape);
                 captureInspectorUndo();
 
                 // --- DEAR cache + grace countdown ---
@@ -1496,6 +1513,57 @@ void Editor::drawInspector() {
                         ImGui::EndTable();
                     }
                     ImGui::TreePop();
+                }
+            }
+        }
+
+        // ====================================================================
+        // Server Mob AI (live, runtime-only) - replicated mob ghosts.
+        //
+        // Gate: replicated mob ghosts (EnemyStats + Nameplate, NO local
+        // MobAIComponent) when the editor has a NetClient and a PID lookup.
+        // NPCs (no EnemyStats) and authored scene mobs (have MobAIComponent)
+        // intentionally bypass this branch.
+        //
+        // No captureInspectorUndo / runInspectorMutation - we never promote
+        // a replicated entity to authored from this path. The body lives in
+        // Editor::drawServerMobAISection_ (engine/editor/editor.cpp) and
+        // streams DTOs to the server; the local replicated mirror stays
+        // owned by the replication layer, not by this inspector.
+        // ====================================================================
+        // Block-scoped so the local serverMobAIEligible / pid declarations
+        // don't run afoul of an earlier `goto endInspectorComponents` in the
+        // surrounding function (C2362: init-skipped-by-goto).
+        {
+            const bool serverMobAIEligible =
+                   selectedEntity_->isReplicated()
+                && selectedEntity_->hasComponent<EnemyStatsComponent>()
+                && selectedEntity_->hasComponent<MobNameplateComponent>()
+                && !selectedEntity_->hasComponent<MobAIComponent>()
+                && netClient_ != nullptr
+                && netClient_->isConnected()
+                && static_cast<bool>(ghostPidLookup_);
+
+            if (!serverMobAIEligible && mobAITunePanel_.subscribedPid != 0) {
+                // Section is hiding (deselected, lost connection, or lost
+                // gate eligibility). Send unsubscribe and reset.
+                sendMobAITuneSubscribe_(0);
+                mobAITunePanel_.resetForNewPid(0);
+            }
+
+            if (serverMobAIEligible) {
+                uint64_t pid = ghostPidLookup_(selectedEntity_->handle());
+                if (pid == 0) {
+                    if (fontHeading_) ImGui::PushFont(fontHeading_);
+                    ImGui::CollapsingHeader("Server Mob AI (live, runtime-only)");
+                    if (fontHeading_) ImGui::PopFont();
+                    ImGui::TextDisabled("Resolving server identity...");
+                } else {
+                    if (pid != mobAITunePanel_.subscribedPid) {
+                        sendMobAITuneSubscribe_(pid);
+                        mobAITunePanel_.resetForNewPid(pid);
+                    }
+                    drawServerMobAISection_();
                 }
             }
         }

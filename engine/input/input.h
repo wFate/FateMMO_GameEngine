@@ -4,6 +4,7 @@
 #include "engine/input/input_buffer.h"
 #include <SDL.h>
 #include <unordered_map>
+#include <vector>
 
 namespace fate {
 
@@ -35,10 +36,21 @@ public:
     bool isMousePressed(int button) const;
     bool isMouseReleased(int button) const;
 
-    // Touch (for mobile, index 0 = primary finger)
+    // Touch (for mobile). The integer is the SDL_FingerID cast to int — NOT a
+    // dense 0..N slot. SDL_FingerID is a Sint64 tracking ID assigned by the OS
+    // and on Android in particular is not guaranteed to be small or
+    // contiguous. Consumers MUST iterate trackedTouchIds() rather than
+    // looping 0..9, otherwise touches with non-zero finger IDs become
+    // invisible to the UI and combat targeting.
     bool isTouchDown(int finger = 0) const;
     bool isTouchPressed(int finger = 0) const;
+    bool isTouchReleased(int finger = 0) const;
     Vec2 touchPosition(int finger = 0) const;
+    // Touch IDs in any non-Up state for the current frame: covers Pressed
+    // (newly down), Down (held), and Released (newly up). Released must be
+    // included so UIManager can dispatch handleRelease() on captured touch
+    // pointers when SDL_FINGERUP arrives.
+    std::vector<int> trackedTouchIds() const;
 
     // Action-based API (game systems use these)
     bool isActionPressed(ActionId id) const { return actionMap_.isPressed(id); }

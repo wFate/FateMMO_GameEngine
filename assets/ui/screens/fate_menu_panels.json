@@ -4391,9 +4391,17 @@
             900.0
           ]
         },
+        "fieldHeight": 36.0,
+        "fontSize": 15.0,
         "id": "admin_panel",
-        "type": "admin_panel",
+        "padding": 8.0,
         "panelUseChrome": true,
+        "rowHeight": 44.0,
+        "smallFontSize": 12.0,
+        "tabHeight": 36.0,
+        "titleBarHeight": 40.0,
+        "titleFontSize": 20.0,
+        "type": "admin_panel",
         "visible": false,
         "zOrder": 50
       },

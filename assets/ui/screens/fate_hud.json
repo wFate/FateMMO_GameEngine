@@ -2101,6 +2101,62 @@
         "type": "button",
         "visible": false,
         "zOrder": 60
+      },
+      {
+        "anchor": {
+          "offset": [
+            -20.0,
+            75.0
+          ],
+          "preset": "TopRight",
+          "size": [
+            220.0,
+            32.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "crystalRadius": 12.0,
+        "crystalRingThk": 1.5,
+        "crystalSpacing": 6.0,
+        "emptyColor": [
+          26,
+          26,
+          33,
+          166
+        ],
+        "filledColor": [
+          255,
+          140,
+          51,
+          255
+        ],
+        "filledGlowColor": [
+          255,
+          217,
+          140,
+          140
+        ],
+        "id": "fury_bar",
+        "ringColor": [
+          230,
+          158,
+          77,
+          217
+        ],
+        "type": "fury_bar",
+        "visible": false,
+        "zOrder": 55
       }
     ],
     "disabledColor": [

@@ -15,9 +15,21 @@ void Input::beginFrame() {
         if (state == KeyState::Pressed) state = KeyState::Down;
         else if (state == KeyState::Released) state = KeyState::Up;
     }
-    for (auto& [id, touch] : touches_) {
-        if (touch.state == KeyState::Pressed) touch.state = KeyState::Down;
-        else if (touch.state == KeyState::Released) touch.state = KeyState::Up;
+    // Released → erased (and any stale Up entries too). Released touches must
+    // remain visible to consumers exactly for the frame the FINGERUP arrived;
+    // by the next beginFrame the touch is over and its slot can be reclaimed
+    // so that long sessions with sparse SDL fingerIds (Android can reuse or
+    // skip values across pointer streams) don't grow touches_ unbounded.
+    for (auto it = touches_.begin(); it != touches_.end(); ) {
+        if (it->second.state == KeyState::Pressed) {
+            it->second.state = KeyState::Down;
+            ++it;
+        } else if (it->second.state == KeyState::Released ||
+                   it->second.state == KeyState::Up) {
+            it = touches_.erase(it);
+        } else {
+            ++it;
+        }
     }
     mouseDelta_ = {0, 0};
 }
@@ -71,6 +83,13 @@ void Input::processEvent(const SDL_Event& event) {
 
         case SDL_FINGERUP: {
             int id = (int)event.tfinger.fingerId;
+            // Refresh position from the lift event before flagging Released.
+            // UIManager dispatches handleRelease() (and the drop hit-test)
+            // at touchPosition(id) for this frame, so without this the drop
+            // resolves at the last FINGERMOTION coordinate rather than where
+            // the finger actually came up — which can be a slot or two off
+            // for fast lifts and miss the intended target entirely.
+            touches_[id].position = {event.tfinger.x * windowWidth_, event.tfinger.y * windowHeight_};
             touches_[id].state = KeyState::Released;
             break;
         }
@@ -133,10 +152,24 @@ bool Input::isTouchPressed(int finger) const {
     return it != touches_.end() && it->second.state == KeyState::Pressed;
 }
 
+bool Input::isTouchReleased(int finger) const {
+    auto it = touches_.find(finger);
+    return it != touches_.end() && it->second.state == KeyState::Released;
+}
+
 Vec2 Input::touchPosition(int finger) const {
     auto it = touches_.find(finger);
     if (it == touches_.end()) return Vec2::zero();
     return it->second.position;
+}
+
+std::vector<int> Input::trackedTouchIds() const {
+    std::vector<int> out;
+    out.reserve(touches_.size());
+    for (const auto& [id, touch] : touches_) {
+        if (touch.state != KeyState::Up) out.push_back(id);
+    }
+    return out;
 }
 
 Direction Input::getCardinalDirection() const {

@@ -5,18 +5,19 @@
 [![CI](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml/badge.svg)](https://github.com/wFate/FateMMO_GameEngine/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/wFate/FateMMO_GameEngine?style=flat-square&label=🎮%20Release&color=gold)](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMOv2)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue?style=flat-square&logo=cplusplus)
-![Lines of Code](https://img.shields.io/badge/LOC-247%2C000%2B-brightgreen?style=flat-square)
-![Files](https://img.shields.io/badge/files-973%2B-2ea44f?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-2%2C298_passing-brightgreen?style=flat-square)
-![Protocol](https://img.shields.io/badge/protocol-v22-blueviolet?style=flat-square)
+![Lines of Code](https://img.shields.io/badge/LOC-263%2C000%2B-brightgreen?style=flat-square)
+![Files](https://img.shields.io/badge/files-1%2C022%2B-2ea44f?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-2%2C505_passing-brightgreen?style=flat-square)
+![Protocol](https://img.shields.io/badge/protocol-v26-blueviolet?style=flat-square)
 ![Hot Reload](https://img.shields.io/badge/⚡_hot--reload-FateGameRuntime-FF5722?style=flat-square)
-![Migrations](https://img.shields.io/badge/SQL_migrations-125-FF7043?style=flat-square)
+![Gameplay2D](https://img.shields.io/badge/🎮_gameplay2d-20_components_%2B_11_systems-00BCD4?style=flat-square)
+![Migrations](https://img.shields.io/badge/SQL_migrations-126-FF7043?style=flat-square)
 ![Security](https://img.shields.io/badge/security-Noise__NK%20%2B%20AuthProof%20%2B%20DB__sessions-critical?style=flat-square)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20iOS%20%7C%20Android%20%7C%20Linux%20%7C%20macOS-orange?style=flat-square)
 
-**A custom 2D MMORPG engine built entirely in C++23.** Engineered for mobile-first landscape gameplay with a fully integrated Unity-style editor, server-authoritative multiplayer architecture, **live C++ behavior hot-reload**, and Noise_NK encrypted custom networking — all from a single codebase, zero middleware, zero third-party game frameworks.
+**A custom 2D MMORPG engine built entirely in C++23.** Mobile-first landscape gameplay, a fully integrated Unity-style editor, server-authoritative multiplayer, **live C++ behavior hot-reload**, and a public **`engine/gameplay2d/` layer** that turns a fresh clone into a playable arena — all from a single codebase, zero middleware, zero third-party game frameworks, zero AAA framework license fees.
 
-> 🧱 **247,000+ lines** across **973+ source files** — engine (103K), game (49K), server (45K), tests (49K), shaders (~800)
+> 🧱 **263,000+ lines** across **1,022+ source files** — engine (110K, **incl. new public gameplay2d layer**), game (51K), server (47K), tests (56K), shaders (~800)
 
 🌐 [**www.FateMMO.com**](https://www.FateMMO.com) &nbsp;·&nbsp; 🎬 [**Watch the Showcase**](https://www.youtube.com/watch?v=9zS-RVbranE) &nbsp;·&nbsp; 📘 [**Demo Manuals**](Documents/Demo/README.md) &nbsp;·&nbsp; 🚀 [**Quick Start**](Documents/Demo/quick-start.md)
 
@@ -24,35 +25,33 @@
 
 ---
 
-### ⚡ Now Shipping — Hot-Reload, Telegraphs, Admin Tools, and a Hardened Drain Arc
+### 🚀 Demo v3 — On the Runway
 
-> **The demo engine keeps levelling up.** Live C++ behavior hot-reload now drives a save → auto-build → next-frame swap loop with state preserved across the reload. A new **boss-script telegraph foundation** (protocol v21) coalesces AOE windups into critical-lane batches, an **in-game Admin Tools panel + typed grant pipeline** (protocol v22) gives operators a real workbench instead of chat slash commands, and a continuous **Drain Arc** crushed clean shutdown from ~70s to ~2s. Pair that with a real MTSDF text pipeline, an AOI re-enablement campaign, mobile-first widget chrome — and Demo v3 is firmly on the runway.
+> **Clone, build, play.** The headline change for v3 is the new public **`engine/gameplay2d/`** layer — **20 demo-safe components + 11 systems** that turn a fresh checkout of the open-source repo into a playable top-down arena. Pair that with **live C++ behavior hot-reload** (`FateGameRuntime.dll`), an admin-only **MobAI live-tuning inspector** (protocol v26), a real MTSDF text pipeline, an AOI re-enablement campaign, and the demo engine has never been a more inviting starting point for a custom 2D MMORPG.
 >
 > 🎯 **Headline drops since v2:**
-> - ⚡ **Live C++ Hot-Reload — `FateGameRuntime.dll` (Stable C ABI)** — The biggest iteration win in months. A pure C ABI (`engine/module/fate_module_abi.h`) draws a hard line between `FateEngine.exe` (host) and a separately-compiled `FateGameRuntime.dll` (reloadable game module). Behaviors auto-register via `FATE_AUTO_BEHAVIOR(NAME, vtable)` — drop a new `.cpp` under `game/runtime/behaviors/`, save, and the source-watcher kicks `cmake --build … --target FateGameRuntime` for you. The next-frame swap preserves state (anchor positions, accumulated rotations, runtime fields), failed reloads roll back to the previous module, replicated entities are skipped, and ABI struct-size + version mismatches refuse to bind. **Editor surface:** Window menu → Hot Reload panel (module name, build id, reload count, last error, Reload-Now button, live build-tail log). **Forced OFF in shipping** so production binaries carry zero reload paths.
-> - 🛰️ **Boss-Script Telegraph Foundation (protocol v21)** — Two new critical-lane opcodes — `SvAOETelegraphStartBatch` (`0xEE`) and `SvAOETelegraphCancelBatch` (`0xEF`) — coalesce telegraphed AOE windups so an entire boss phase of overlapping circles, cones, and beams ships in a handful of packets instead of one-per-shape. A 4th boss-script queue (telegraphs) drains between summons and the start-flush at a quiescent tick-tail point; `ctx.enqueueTelegraphedAOE` auto-stamps caster + scene metadata; lethal-ordering rules cancel telegraphs the moment the caster dies. Sample script registered, designer-friendly, no engine touch required.
-> - 🛠️ **In-Game Admin Tools Panel + Typed Grant Pipeline (protocol v22)** — F11 or the HUD `ADMIN` button opens a full admin workbench. Three new typed wire packets — `CmdAdminGrantItem` (`0x51`), `CmdAdminSetLevel` (`0x52`), `CmdAdminAddSkillPoints` (`0x53`) — replace the brittle chat-mediated `/additem` flow; results ride the existing `SvAdminResult` (`0xC3`). Server-side validation goes through a shared `performAdmin*` helper that closes five long-standing bugs in the legacy path (bag capacity init, dirty flag, IMMEDIATE persist, weak instanceId, isBag detection). Initial-load wiring fixed so the button + F11 hotkey now bind on first login, not just on JSON reload.
-> - 🐉 **Boss-Script Foundation — Deferred-Everything Discipline** — `BossScriptComponent` + 8-variant `TargetSelector` enum + a `BossScriptVTable` (`onSpawn` / `onAggro` / `onTargetLost` / `onSoftLeash` / `onTick` / `onHealthThresh` / `onDeath`) let designers script encounters without touching engine code. Every hook routes through a deferred queue drained at a quiescent tick-tail point — no script body ever runs while ECS storage is iterating or damage is resolving. Threshold-walking is per-hit at enqueue time so two same-tick hits each get correct attribution. `mob_definitions.script_id` plugs scripts in via DB.
-> - ⚡ **Drain Arc — Clean Shutdown Hardening + JSONB Inventory Batch** — Pre-arc Ctrl-C took **70.6 seconds** with DB jobs orphaned and final scene saves skipped. Six sub-arcs shipped as one continuous push: per-character `AsyncSaveState` in-flight gate (31 stacked saves → max 1 in-flight + coalesced follow-up), JSONB-batched `character_inventory` UPSERT (89 per-row exec_params → one `jsonb_to_recordset` round-trip; ~6.2s → ~500ms), and a batched scene mob-death persistence pass (per-row INSERT loop → batched JSONB; 17–37s → 0.57s for 181 mobs). Plus a **shutdown honesty pass** — `bool` returns through every save lane, a tri-state `DbDispatcher::QuiesceResult { Clean, DrainedWithFailures, TimedOut }`, and a `dispatchVoidNonCritical` lane so telemetry writes never flip a clean drain to UNSAFE. **Final wall time: 70.6s → 2.06s.**
-> - 👁️ **AOI Re-Enablement Campaign — Distance Gate + Sticky Band + Stats** — The long-standing AOI flicker is being unwound in shipped, audited stages. Phase 2 added a `/aoi_stats` GM command + `AOIStats` counters (with PRE-DIRTY cadence wording so operators don't misread the numbers as byte savings). Phase 3 wired the 640 / 1280 px hysteresis gate with `MIN_VISIBLE_TICKS=10` (0.5s @ 20Hz). Stage D.1 added a sticky-band 640/1280 every-3rd-tick cadence sub-tier on top of `SvEntityUpdateBatch`. Audit-driven; truth for byte savings stays NetStats `0xBA`.
-> - 🔤 **Single-Pass Text-Effects Pipeline + Real MTSDF Atlas** — Nameplates were faking outline by stamping each string 9–25 times in 8-directional pixel offsets. Replaced with a single shader-side composite (outline + shadow + fill in one pass) routed through a real `msdf-atlas-gen v1.4` MTSDF bake (177 glyphs, 512×512, 4 px range) — outline expansion math now operates on actual signed distance data instead of bitmap coverage. Editor-authored 0..8 outline thickness pixel→SDF unit conversion fix so values no longer saturate at max.
-> - 🪡 **Polymorphic 20-Slot Loadout + Drag-Bind Repair** — Drag potions / recall scrolls / food onto any of 20 loadout slots (5 × 4 pages) from the inventory grid OR an open bag overlay. Bindings reference stable `instance_id`s, persist across logout via the polymorphic `character_skill_bar` schema, and auto-clear when the bound stack is destroyed via a 14-site stale-binding sweep. Two distinct root-cause fixes in the drop pipeline plus polish: page dots clickable, slots render as true circles, drop-highlight ring follows the cursor across slots.
-> - 🛒 **Bag-Item NPC Sell — `CmdShopSellFromBag` (`0x50`, protocol v17)** — Long-press any item *inside* a bag and sell directly to the shopkeeper. Dedicated wire packet plus a server handler that validates bag container + sub-slot + soulbound state + ownership. Closes the long-standing "only one item then sell vanishes" symptom cleanly, by adding the proper one-packet-per-source path rather than overloading the legacy struct.
-> - 🐾 **Pet Lifecycle Cache + Replay on Zone Transition** — Equipped pets vanished after every zone transition until the next discrete pet event. Two independent timing dropouts in the `LoadingScene → InGame → local-player-create` window were silently discarding the pet-state packet. Fixed with a cache-and-replay around the packet (mirroring `pendingPlayerState_` / `pendingRespawn_`) so every server-pushed snapshot persists across the deferred-creation window and replays the moment the local player is created in the new scene.
-> - 🌐 **Single-Instance UDP Port Exclusivity (Windows)** — Two server processes could co-bind UDP 7777 because IPv6-dual-stack + IPv4-only on the same port is allowed under default Windows semantics. Fix: `SO_EXCLUSIVEADDRUSE` set before `bind()` on both IPv6 dual-stack and IPv4 paths. Duplicate launches now fail loudly with `[Net] bind() failed: 10048` instead of silently splitting traffic.
+> - 🎮 **Public Gameplay2D Layer — `engine/gameplay2d/` (20 components + 11 systems)** — A fresh clone of the open-source repo now boots into a playable arena instead of an empty grid. **Components:** `Collider2D` (Box/Circle, layer/mask, trigger), `TriggerArea2D`, `CharacterController2D` (Local / ServerAuthoritative / AISimulated), `SpriteAnimator2D`, `CameraFollow2D`, `Health` / `Damageable` / `Attack` (faction-filtered), `Targetable`, `Nameplate`, `Interactable` / `NPC2D`, `Zone2D` / `Portal2D`, `SpawnPoint2D` / `SpawnZone2D`, `NetworkIdentity` / `ReplicatedTransform2D` / `InterestSource`, `Mob2D`. **Systems:** character controller (axis-by-axis sweep against `CollisionGrid` + `Collider2D`), sprite animator, camera follow, trigger overlap, F-to-interact, health/damage/regen + attack arcs, nameplate render, portal/zone tracking, spawn-zone respawn, click-target picker, mob aggro/chase/leash brain. **Demo:** `examples/demo_app.cpp` rewritten to wire the whole loop — WASD move, F interact, Space attack, walk-into portal, auto-respawning slime, HP-bar nameplates above every entity. Coexists cleanly with the proprietary `game/` layer thanks to distinct type names.
+> - 🛰️ **MobAI Live-Tuning Inspector (protocol v26)** — Three new admin/dev-only opcodes — `CmdAdminMobAITuneApply` (`0x54`), `CmdAdminMobAITuneSubscribe` (`0x55`), `SvAdminMobAITuneState` (`0xF1`) — let an authorized client live-tune a selected mob's `MobAIComponent` from the editor inspector. Slider drag streams at up to ~10 Hz with a `finalApply=1` mouse-up fence; subscribe pulls a 5 Hz read-only diagnostics snapshot. Runtime-only, no DB writes; failures route through `SvAdminResult` (`0xC3`). Bump rejects mismatched clients at handshake.
+> - 🤝 **Server-Authoritative Trade State (protocol v25)** — `SvTradeState` (`0xF0`) pushes the full owner / partner offer state on session-start / AddItem / RemoveItem / SetGold / Lock / Unlock so both clients render slot contents from server truth instead of painting optimistically off the legacy `SvTradeUpdate` ack (which carried no slot payload). Trade UX now matches the rest of the protocol's "server is the source of truth" stance.
+> - 👤 **Equipment Style Replication on Enter (protocol v23 → v24)** — `SvEntityEnterMsg` now carries `armorStyle` / `hatStyle` / `weaponStyle` for `entityType==0` (player) and a real `characterId` for social handler routing. Closes a window where remote players rendered without equipment until they re-equipped (the bit-13 delta gate never fired for newly-entered ghosts because `lastSentState` matched current state at enter), and fixes silent-no-op trade/party/social/guild commands targeting other players.
+> - ⚡ **Live C++ Hot-Reload — `FateGameRuntime.dll` (Stable C ABI)** — A pure C ABI (`engine/module/fate_module_abi.h`) draws a hard line between `FateEngine.exe` (host) and a separately-compiled `FateGameRuntime.dll` (reloadable behavior module). Behaviors auto-register via `FATE_AUTO_BEHAVIOR(NAME, vtable)` — drop a new `.cpp` under `game/runtime/behaviors/`, save, and the source-watcher kicks `cmake --build … --target FateGameRuntime`. The next-frame swap preserves state, failed reloads roll back to the previous module, replicated entities are skipped, and struct-size + version mismatches refuse to bind. **Editor surface:** Window menu → Hot Reload panel. **Forced OFF in shipping** so production binaries carry zero reload paths.
+> - 🛰️ **Boss-Script Telegraph Foundation (protocol v21)** — Two critical-lane opcodes — `SvAOETelegraphStartBatch` (`0xEE`) and `SvAOETelegraphCancelBatch` (`0xEF`) — coalesce telegraphed AOE windups so an entire boss phase of overlapping shapes ships in a handful of packets instead of one-per-shape. A 4th boss-script queue (telegraphs) drains between summons and the start-flush at a quiescent tick-tail point; `ctx.enqueueTelegraphedAOE` auto-stamps caster + scene metadata; lethal-ordering rules cancel telegraphs the moment the caster dies.
+> - 🛠️ **In-Game Admin Tools Panel + Typed Grant Pipeline (protocol v22)** — The HUD `ADMIN` button opens a full operator workbench. Three typed wire packets — `CmdAdminGrantItem` (`0x51`), `CmdAdminSetLevel` (`0x52`), `CmdAdminAddSkillPoints` (`0x53`) — replace the brittle chat-mediated `/additem` flow; results ride the existing `SvAdminResult` (`0xC3`). Shared `performAdmin*` helper closes five long-standing bugs in the legacy path.
+> - ⚡ **Drain Arc — Clean Shutdown Hardening + JSONB Inventory Batch** — Pre-arc Ctrl-C took **70.6 seconds** with DB jobs orphaned and final scene saves skipped. Six sub-arcs landed continuously: per-character `AsyncSaveState` in-flight gate (31 stacked saves → max 1 in-flight + coalesced follow-up), JSONB-batched `character_inventory` UPSERT (89 per-row exec_params → one `jsonb_to_recordset` round-trip; ~6.2s → ~500ms), batched scene mob-death persistence (17–37s → 0.57s for 181 mobs), tri-state `DbDispatcher::QuiesceResult { Clean, DrainedWithFailures, TimedOut }`, and a `dispatchVoidNonCritical` lane so telemetry never poisons a clean drain. **Final wall time: 70.6s → 2.06s.**
+> - 🐉 **Boss-Script Foundation — Deferred-Everything Discipline** — `BossScriptComponent` + 8-variant `TargetSelector` + a `BossScriptVTable` (`onSpawn` / `onAggro` / `onTargetLost` / `onSoftLeash` / `onTick` / `onHealthThresh` / `onDeath`) let designers script encounters without touching engine code. Every hook drains from a queue at a quiescent tick-tail point — no script body ever runs while ECS storage is iterating or damage is resolving. Threshold-walking is per-hit at enqueue time so two same-tick hits each get correct attribution.
+> - 🐾 **MobAI Polish — Random Escape Lanes + Drag-Leash Drop-Aggro** — Per-episode random side-lane offsets give pursued-then-evading mobs natural-looking arcs instead of pinned axes. Three-layer drag-leash drop-aggro fix at contact radius + `+32 px` hysteresis at both resolver sites kills 20-tile sticky aggro after a kited disengage.
+> - 👁️ **AOI Re-Enablement Campaign — Distance Gate + Sticky Band + Stats** — Long-standing AOI flicker is being unwound in shipped, audited stages. Phase 2 added `/aoi_stats` GM command + `AOIStats` counters (PRE-DIRTY cadence). Phase 3 wired the 640 / 1280 px hysteresis gate with `MIN_VISIBLE_TICKS=10` (0.5 s @ 20 Hz). Stage D.1 added a sticky-band 640/1280 every-3rd-tick cadence sub-tier on `SvEntityUpdateBatch`.
+> - 🔤 **Single-Pass Text-Effects Pipeline + Real MTSDF Atlas** — Nameplates were faking outline by stamping each string 9–25 times in 8 directions. Replaced with a single shader-side composite (outline + shadow + fill in one pass) over a real `msdf-atlas-gen v1.4` MTSDF bake (177 glyphs, 512×512, 4 px range) — outline expansion math operates on actual signed-distance data instead of bitmap coverage.
 > - 🛡️ **Patrol Layer for Stationary & Routed Guards** — `GuardComponent` gained a runtime patrol block (Stationary / PatrolRoute / PatrolArea) + a `GuardSystem` with proper FSM gating. Edit-time validator renders inline warnings for diagonal segments, broken loop closures, and hard-leash-too-small; scene-view overlay draws numbered anchor dots + polylines with frustum culling and a 256-mob-per-frame cap.
 > - ✨ **Bespoke Widget Chrome — Checkpoint 8** — Chromes the 4 widgets the previous arc skipped because they aren't rectangular shells: `MenuTabBar`, `SettingsPanel`, `DPad`, `SkillArc`. **49 new styled fields** routed through existing chrome propagation walks. Legacy paths preserved verbatim under `else` for instant rollback.
 
 ---
 
-### 🎉 v2 Release — Engine Demo Levels Up
+### 🎉 Demo v2 → v3 — From Editor Loop to Playable Arena
 
-> **Demo v2 is live.** The open-source `FateDemo` build ships with the full editor-runtime control loop the proprietary game uses every day:
+> **Demo v2** shipped the full editor-runtime control loop — ▶️ Play / Pause / Resume / Stop, 👁️ Observe, 🗺️ Scene dropdown, 📁 File menu + Ctrl+S, all routed through atomic-write JSON serialization.
 >
-> - ▶️ **Play / Pause / Resume / Stop** — green Play snapshots the ECS, red Stop restores it; Pause/Resume preserves camera state mid-session.
-> - 👁️ **Observe Mode** — blue **Observe** button runs the loaded scene live with editor chrome hidden, so you see exactly what the player sees. Wire your own handler via `AppConfig::onObserveStart` to swap in a network-spectate flow.
-> - 🗺️ **Scene Dropdown** — pick any `assets/scenes/*.json` from the viewport toolbar; transitions are gated against in-flight Play state.
-> - 📁 **File Menu + Ctrl+S** — New / Open / Save / Save As wired through atomic-write JSON serialization (`.tmp` + rename, parent-dir auto-create, cross-volume copy fallback).
+> **Demo v3** turns the editor into a *playable starting point*. The new public **`engine/gameplay2d/`** layer adds 20 demo-safe components and 11 systems that wire directly into the existing ECS — drop `Collider2D` + `CharacterController2D` on an entity and you have a moving body with collision; add `Mob2D` + `Health` + `Damageable` and you have a faction-filtered melee mob with aggro and leash. The rewritten `examples/demo_app.cpp` shows the full wiring on a single page. Build the engine, launch `FateDemo`, and you're playing a top-down arena before you've authored a single asset of your own.
 >
 > 📦 [**Download FateMMO_Demo_v2.zip**](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMOv2) &nbsp;·&nbsp; ⭐ [**Star the repo**](https://github.com/wFate/FateMMO_GameEngine) &nbsp;·&nbsp; 🌐 [**FateMMO.com**](https://www.FateMMO.com) &nbsp;·&nbsp; 🎬 [**YouTube Showcase**](https://www.youtube.com/watch?v=9zS-RVbranE)
 
@@ -60,15 +59,18 @@
 
 ## 💎 Key Highlights
 
-| 🏗️ | **247,000+ LOC** of hand-written C++23 across engine, game, server, tests, and shaders — no code generation, no middleware, no AAA framework license fees |
+| 🏗️ | **263,000+ LOC** of hand-written C++23 across engine, game, server, tests, and shaders — no code generation, no middleware, no AAA framework license fees |
 |:---:|:---|
+| 🎮 | **Public `engine/gameplay2d/` layer** — **20 demo-safe components + 11 systems** for the open-source build. `Collider2D`, `CharacterController2D`, `SpriteAnimator2D`, `CameraFollow2D`, `Health` / `Damageable` / `Attack`, `Targetable`, `Nameplate`, `Interactable` / `NPC2D`, `Zone2D` / `Portal2D`, `SpawnZone2D`, `Mob2D` (Idle/Chase/Attack/Return brain), and replication-shaped data (`NetworkIdentity`, `ReplicatedTransform2D`, `InterestSource`). A fresh clone boots into a playable arena |
 | ⚡ | **Live C++ Hot-Reload** — `FateGameRuntime.dll` swaps in next frame with state preserved. Pure C ABI between host and module, struct-size + version validation, automatic rollback on failure, replicated-entity skip, save → auto-build → next-frame swap with optional source-watcher |
-| 🛰️ | **Boss-Script Telegraph Foundation (protocol v21)** — `SvAOETelegraphStartBatch` (`0xEE`) + `SvAOETelegraphCancelBatch` (`0xEF`) coalesce telegraphed AOE windups into critical-lane batches. 4th boss-script queue drains at a quiescent tick-tail point; cancel-on-caster-death and idempotent start emission |
-| 🛠️ | **In-Game Admin Tools Panel + Typed Grant Pipeline (protocol v22)** — F11 / HUD `ADMIN` button opens the operator workbench. Three new typed packets (`CmdAdminGrantItem` / `CmdAdminSetLevel` / `CmdAdminAddSkillPoints`) replace chat-mediated `/additem`. Shared `performAdmin*` helper closes 5 long-standing legacy bugs |
+| 🛰️ | **MobAI Live-Tuning Inspector (protocol v26)** — `CmdAdminMobAITuneApply` (`0x54`) / `CmdAdminMobAITuneSubscribe` (`0x55`) / `SvAdminMobAITuneState` (`0xF1`). ~10 Hz slider drag with `finalApply=1` mouse-up fence; 5 Hz read-only diagnostics snapshot. Runtime-only, no DB writes |
+| 🤝 | **Server-Authoritative Trade State (protocol v25)** — `SvTradeState` (`0xF0`) pushes the full owner / partner offer state on every mutation so trade UX renders from server truth instead of optimistic client paint |
+| 🛠️ | **In-Game Admin Tools Panel + Typed Grant Pipeline (protocol v22)** — HUD `ADMIN` button opens the operator workbench. Three new typed packets (`CmdAdminGrantItem` / `CmdAdminSetLevel` / `CmdAdminAddSkillPoints`) replace chat-mediated `/additem`. Shared `performAdmin*` helper closes 5 long-standing legacy bugs |
+| 🛰️ | **Boss-Script Telegraph Foundation (protocol v21)** — `SvAOETelegraphStartBatch` (`0xEE`) + `SvAOETelegraphCancelBatch` (`0xEF`) coalesce telegraphed AOE windups into critical-lane batches. 4th boss-script queue drains at a quiescent tick-tail point |
 | 🐉 | **Boss-Script Foundation** — DB-driven (`mob_definitions.script_id`) script bindings with deferred-everything execution: every hook drains at a quiescent tick-tail point, never inline during ECS iteration. Lethal-ordering bulletproof; parallel AI worker paths gate scripts out cleanly |
 | 🛡️ | **Guard Patrol Layer** — Stationary / PatrolRoute / PatrolArea modes with cardinal-only movement, BFS connectivity validation, hard-leash auto-extend, edit-time validator, and a frustum-culled scene-view overlay capped at 256 mobs/frame |
 | 🔐 | **Noise_NK cryptography** — two X25519 DH ops + XChaCha20-Poly1305 AEAD, forward secrecy, symmetric epoch-gated rekeying, **encrypted AuthProof** so auth tokens never leave the client in the clear |
-| 🛡️ | **Hardened v22 protocol** — 64-bit CSPRNG session tokens, timing-safe auth comparisons, anti-replay nonces, 64-bit ACK window, `CmdAckExtended` recovery, DB-backed `auth_sessions` with cross-process `LISTEN/NOTIFY` kick |
+| 🛡️ | **Hardened v26 protocol** — 64-bit CSPRNG session tokens, timing-safe auth comparisons, anti-replay nonces, 64-bit ACK window, `CmdAckExtended` recovery, DB-backed `auth_sessions` with cross-process `LISTEN/NOTIFY` kick |
 | ⚡ | **Drain Arc — clean shutdown 70s → 2s** — Per-character async-save in-flight gate, JSONB-batched inventory UPSERT (12s → 0.5s), batched scene mob-death persistence (17–37s → 0.57s for 181 mobs), tri-state `QuiesceResult` honesty pass, and a `dispatchVoidNonCritical` lane so telemetry never poisons a clean drain |
 | 👁️ | **AOI Re-Enablement Campaign** — Phase 2 telemetry (`/aoi_stats` + `AOIStats` counters), Phase 3 distance gate (640 / 1280 px hysteresis, `MIN_VISIBLE_TICKS=10`), Stage D.1 sticky-band sub-tier (every-3rd-tick) on `SvEntityUpdateBatch`. Audit-driven; truth for byte savings stays NetStats `0xBA` |
 | 🔤 | **Real multi-channel SDF text** — Offline `msdf-atlas-gen` MTSDF bake with single-pass shader-side outline + shadow compositing. Replaces 9-pass fake-outline pixel stamping. 4 registered fonts via `FontRegistry`, world-space and screen-space APIs |
@@ -82,13 +84,13 @@
 | ✨ | **Bespoke Widget Chrome — Checkpoint 8** — `MenuTabBar` / `SettingsPanel` / `DPad` / `SkillArc` joined the chrome system through 49 new styled fields. Legacy paths preserved verbatim under `else` for instant rollback |
 | ▶️ | **Play / Observe / Scene-dropdown** — full editor-runtime loop in the open-source demo, with snapshot/restore on Play and configurable Observer hooks |
 | 🌳 | **Branching dialogue-tree quests** — state-aware NPC trees, **interact-site framework** (cairns / altars / shrines / gravestones), DB-bound rewards on every turn-in |
-| 🗄️ | **DB-driven content engine** — **125 numbered SQL migrations**, hand-tuned item catalog, **17 PostgreSQL repository files** + **12 startup caches** with fiber-based async dispatch (zero game-thread blocking) |
+| 🗄️ | **DB-driven content engine** — **126 numbered SQL migrations**, hand-tuned item catalog, **17 PostgreSQL repository files** + **12 startup caches** with fiber-based async dispatch (zero game-thread blocking) |
 | 🖥️ | **Full Unity-style editor** with live inspector, undo/redo, Aseprite animation editor, atomic-write JSON saves, asset browser, dialogue-node editor, and 29 device profiles |
 | 📱 | **5-platform support** from a single codebase — Windows, **macOS (native Metal, ProMotion 120fps)**, iOS, Android, Linux |
-| 🧪 | **2,298 automated tests** across 242 test files keeping every subsystem honest |
+| 🧪 | **2,505 automated tests** across **259 test files** keeping every subsystem honest |
 | 🎨 | **65+ custom UI widgets** with 42 theme styles + chrome-default-on, JSON-driven screens, viewport scaling, layout-class variants for tablet/compact/base, and zero-ImGui shipping builds |
 | 🐾 | **Active pet system** — equip one pet, share XP, gain stat bonuses, auto-loot within radius. Pet roster includes Turtle, Wolf, Hawk, Panther, and Fox across four rarity tiers |
-| 📡 | **Protocol v22 custom UDP** — critical-lane bypass for 11 load-bearing opcodes, batched enter / leave / skill-result / telegraph coalesce, 32-bit delta compression, fiber-based async DB dispatch, polymorphic loadout assignment, typed admin grant pipeline |
+| 📡 | **Protocol v26 custom UDP** — critical-lane bypass for 11 load-bearing opcodes, batched enter / leave / skill-result / telegraph coalesce, 32-bit delta compression, fiber-based async DB dispatch, polymorphic loadout assignment, typed admin grant pipeline, server-authoritative trade snapshot, MobAI live tuning |
 | 👁️ | **Admin observer/spectate mode** — log in without a character and roam any live scene with full replication |
 | 💰 | **Premium currency economy + AdMob rewarded video** with ECDSA-signed server-side verification |
 | 📦 | **Pluggable VFS** — `IAssetSource` abstracts every read; ship loose files in dev, bundled `.pak` archives in production via PhysicsFS overlay |
@@ -111,13 +113,13 @@ cmake --build build
 build\Debug\FateDemo.exe  # Windows
 ```
 
-The demo opens the full editor UI with a procedural tile grid. Use the **▶️ Play** button in the Scene viewport to enter a snapshot-protected play session, **👁️ Observe** to live-preview a scene with chrome hidden, or pick a scene from the dropdown to load it.
+The demo opens straight into a **playable arena** wired up by the new public **`engine/gameplay2d/`** layer — WASD to move (collision aware), F to talk to the villager, Space to attack, walk into the portal, hunt the auto-respawning slime. From there, hit **▶️ Play** in the Scene viewport for a snapshot-protected play session, **👁️ Observe** to live-preview a scene with chrome hidden, or pick a scene from the dropdown to load it.
 
-> 📘 **Building your own game on the engine?** Start with the [**Demo Manuals**](Documents/Demo/README.md). Recommended path: [Quick Start](Documents/Demo/quick-start.md) → [Editor User Guide](Documents/Demo/editor-user-guide.md) → tutorials [My First MMORPG Map](Documents/Demo/tutorials/first-map.md) and [Local Client + Server](Documents/Demo/tutorials/local-client-server.md). Deeper dives: [Architecture](Documents/Demo/architecture-manual.md), [Asset Pipeline](Documents/Demo/asset-pipeline.md), [Networking Protocol](Documents/Demo/networking-protocol.md), [API Reference](Documents/Demo/api-reference.md), [Troubleshooting](Documents/Demo/troubleshooting.md), [Publishing Guide](Documents/Demo/publishing-guide.md).
+> 📘 **Building your own game on the engine?** Start with the [**Demo Manuals**](Documents/Demo/README.md). Recommended path: [**Quick Start**](Documents/Demo/quick-start.md) → [**Editor User Guide**](Documents/Demo/editor-user-guide.md) → tutorials [**My First MMORPG Map**](Documents/Demo/tutorials/first-map.md) and [**Local Client + Server**](Documents/Demo/tutorials/local-client-server.md). Deeper dives: [Architecture](Documents/Demo/architecture-manual.md), [Asset Pipeline](Documents/Demo/asset-pipeline.md), [Networking Protocol](Documents/Demo/networking-protocol.md), [API Reference](Documents/Demo/api-reference.md), [Troubleshooting](Documents/Demo/troubleshooting.md), [Publishing Guide](Documents/Demo/publishing-guide.md).
 
-> 💡 **Prefer a pre-built binary?** Grab [**FateMMO_Demo_v2.zip**](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMOv2) from the releases page — no build required.
+> 💡 **Prefer a pre-built binary?** Grab [**FateMMO_Demo_v2.zip**](https://github.com/wFate/FateMMO_GameEngine/releases/tag/FateMMOv2) from the releases page — no build required. (v3 ships when the gameplay2d arena clears its live smoke pass.)
 
-> **Full game build:** The proprietary game client, server, and tests build automatically when their source directories are present. The open-source release includes the complete engine library and editor.
+> **Full game build:** The proprietary game client, server, and tests build automatically when their source directories are present. The open-source release includes the complete engine library, editor, and public gameplay2d layer.
 
 ---
 
@@ -131,8 +133,8 @@ The demo opens the full editor UI with a procedural tile grid. Use the **▶️ 
 | **Render Pipeline** | 11-pass RenderGraph: GroundTiles → Entities → Particles → SkillVFX → SDFText → DebugOverlays → Lighting → BloomExtract → BloomBlur → PostProcess → Blit |
 | **Hot-Reload Module** | **`FateGameRuntime.dll`** — pure C ABI (`engine/module/fate_module_abi.h`), `FateBehaviorVTable` dispatch, struct-size + version validation, shadow-copy LoadLibrary swap, `BeginReload` veto preserves state, replicated-entity skip, optional env-gated source-watcher (`FATE_HOTRELOAD_SOURCE_DIR` + `FATE_HOTRELOAD_BUILD_CMD`). **Forced OFF in shipping** so production carries zero reload paths |
 | **Editor** | Dear ImGui (docking) + ImGuizmo + ImPlot + imnodes. Custom dark theme (Inter font family, FreeType LightHinting). **Scene viewport toolbar** (Play/Pause/Resume/Stop, Observe, Scene dropdown). Property inspectors, visual node editors, **Aseprite-first animation editor** with layered paper-doll preview, sprite slicing, tile painting, play-in-editor, undo/redo (200 actions). **Hot-Reload panel** (Window menu) with module name, build id, reload count, last error, Reload-Now button, live build-tail log. Every editor-authored JSON write goes through `writeFileAtomic` (`.tmp` + rename + cross-volume fallback) |
-| **Networking** | Custom reliable UDP (`0xFA7E`, **PROTOCOL_VERSION 22**), **Noise_NK handshake** (two X25519 DH ops) + **XChaCha20-Poly1305 AEAD** encryption (key-derived 48-bit nonce prefix, symmetric rekeying every 65K packets / 15 min, epoch-gated). **Auth hardening**: 64-bit CSPRNG session tokens (libsodium), encrypted `CmdAuthProof` (0xD8) so the token never rides plaintext, timing-safe comparisons, per-account login lockout with exponential backoff. **DB-backed sessions** (`auth_sessions` table) with `LISTEN/NOTIFY session_kicked` cross-process kick. IPv6 dual-stack, 3 channel types, **26-byte header with 64-bit ACK bitfield** (v9+), RTT-based retransmission, 1 MB kernel socket buffers, 2048-slot pending queue with **critical-lane bypass for 11 load-bearing opcodes**, **SvEntityEnterBatch / SvSkillResultBatch / SvEntityLeaveBatch / SvAOETelegraphStartBatch / CancelBatch coalesce**, **CmdAckExtended** out-of-window recovery, **typed admin grant pipeline** (`CmdAdminGrantItem` / `SetLevel` / `AddSkillPoints`) |
-| **Database** | PostgreSQL (libpqxx), **17 repository files**, **12 startup caches**, **fiber-based `DbDispatcher`** with **bounded backlog + per-tick pump** (async player load, disconnect saves, metrics, maintenance — zero game-thread blocking, hard cap 8192 with FIFO-preserving cancel-on-drop), connection pool (5–50) + **read-replica fallthrough** (`FATE_READ_DATABASE_URL`) + circuit breaker, priority-based 4-tier dirty-flag flushing, 30s staggered auto-save. **JSONB-batched inventory UPSERT** cuts per-player save 12s → 0.5s. `PlayerLockMap` for concurrent mutation serialization. **125 numbered SQL migrations** under `Docs/migrations/`. Inventory saves: orphan-DELETE → NULL positions → UPSERT-by-`instance_id` four-step pattern with stable instance UUIDs |
+| **Networking** | Custom reliable UDP (`0xFA7E`, **PROTOCOL_VERSION 26**), **Noise_NK handshake** (two X25519 DH ops) + **XChaCha20-Poly1305 AEAD** encryption (key-derived 48-bit nonce prefix, symmetric rekeying every 65K packets / 15 min, epoch-gated). **Auth hardening**: 64-bit CSPRNG session tokens (libsodium), encrypted `CmdAuthProof` (0xD8) so the token never rides plaintext, timing-safe comparisons, per-account login lockout with exponential backoff. **DB-backed sessions** (`auth_sessions` table) with `LISTEN/NOTIFY session_kicked` cross-process kick. IPv6 dual-stack, 3 channel types, **26-byte header with 64-bit ACK bitfield** (v9+), RTT-based retransmission, 1 MB kernel socket buffers, 2048-slot pending queue with **critical-lane bypass for 11 load-bearing opcodes**, **batched enter / leave / skill-result / telegraph coalesce**, **CmdAckExtended** out-of-window recovery, **typed admin grant pipeline** + **MobAI live-tuning inspector** (v26) + **server-authoritative trade snapshot** (v25) + **equipment-style replication on enter** (v23/v24) |
+| **Database** | PostgreSQL (libpqxx), **17 repository files**, **12 startup caches**, **fiber-based `DbDispatcher`** with **bounded backlog + per-tick pump** (async player load, disconnect saves, metrics, maintenance — zero game-thread blocking, hard cap 8192 with FIFO-preserving cancel-on-drop), connection pool (5–50) + **read-replica fallthrough** (`FATE_READ_DATABASE_URL`) + circuit breaker, priority-based 4-tier dirty-flag flushing, 30s staggered auto-save. **JSONB-batched inventory UPSERT** cuts per-player save 12s → 0.5s. `PlayerLockMap` for concurrent mutation serialization. **126 numbered SQL migrations** under `Docs/migrations/`. Inventory saves: orphan-DELETE → NULL positions → UPSERT-by-`instance_id` four-step pattern with stable instance UUIDs |
 | **ECS** | Data-oriented archetype ECS, contiguous SoA memory, **56+ registered components**, generational handles, prefab variants (JSON Patch), compile-time `CompId`, Hot/Warm/Cold tier classification, `FATE_REFLECT` macro with field-level metadata, `ComponentFlags` trait policies, RAII iteration depth guard, 4096-archetype reserve capacity. `World::processDestroyQueue(scope)` tags every flush with caller intent + per-type entity breakdown for diagnosability |
 | **Memory** | Zone arenas (256 MB, O(1) reset), double-buffered frame arenas (64 MB), thread-local scratch arenas (Fleury conflict-avoidance), lock-free pool allocators, debug occupancy bitmaps, ImPlot visualization panels |
 | **Audio** | SoLoud (SDL2 backend, 32 virtual voices, OGG streaming, 2D spatial audio, 3 buses, 10 game events wired). All loads route through `IAssetSource::readBytes` → `Wav::loadMem(copy=true)` so packaged `.pak` archives work transparently |
@@ -274,14 +276,14 @@ Custom data-driven UI engine with **viewport-proportional scaling** (`screenHeig
 
 ## 🔒 Server & Networking
 
-**Headless 20 Hz server** (`FateServer`) with max **2,000 concurrent connections**. **49+ handler files**, **17 DB repository files**, **12 startup caches**, **15-min idle timeout**, graceful shutdown with player save flush — wall time **70s → 2s** post-Drain-Arc. Every game action is server-validated — zero trust client. **PROTOCOL_VERSION 22** — v9 reliability rebuild + v10 interact-site framework + v11 site-string-id swap + v12 `CharacterFlags` client mirror + v13 `SvConsumableCooldown` + v14 explicit-stone enchant + v15 `CmdCraftProtectStone` + v16 polymorphic skill-bar bindings + v17 `CmdShopSellFromBag` (0x50) + v18 `SvSkillResultBatch` (0xEC) AOE coalesce + v19 `SvEntityLeaveBatch` (0xED) AOI deactivation coalesce + v20 `CmdAckExtended` envelope-compatibility (system-packet whitelist tightened) + **v21 `SvAOETelegraphStartBatch` (0xEE) + `SvAOETelegraphCancelBatch` (0xEF)** telegraph foundation + **v22 typed admin grant pipeline** (`CmdAdminGrantItem` 0x51 / `CmdAdminSetLevel` 0x52 / `CmdAdminAddSkillPoints` 0x53, results on existing `SvAdminResult` 0xC3).
+**Headless 20 Hz server** (`FateServer`) with max **2,000 concurrent connections**. **58 handler files**, **17 DB repository files**, **12 startup caches**, **15-min idle timeout**, graceful shutdown with player save flush — wall time **70s → 2s** post-Drain-Arc. Every game action is server-validated — zero trust client. **PROTOCOL_VERSION 26** — v9 reliability rebuild → v10 interact-sites → v11 site-string-id swap → v12 `CharacterFlags` client mirror → v13 `SvConsumableCooldown` → v14 explicit-stone enchant → v15 `CmdCraftProtectStone` → v16 polymorphic skill-bar bindings → v17 `CmdShopSellFromBag` (0x50) → v18 `SvSkillResultBatch` (0xEC) AOE coalesce → v19 `SvEntityLeaveBatch` (0xED) AOI deactivation coalesce → v20 `CmdAckExtended` envelope-compatibility → **v21** `SvAOETelegraphStartBatch` (0xEE) + `SvAOETelegraphCancelBatch` (0xEF) telegraph foundation → **v22** typed admin grant pipeline (`CmdAdminGrantItem` 0x51 / `CmdAdminSetLevel` 0x52 / `CmdAdminAddSkillPoints` 0x53) → **v23** equipment styles in `SvEntityEnterMsg` → **v24** `characterId` for player enter (social handler routing) → **v25** `SvTradeState` (0xF0) server-authoritative trade snapshot → **v26** `CmdAdminMobAITuneApply` (0x54) / `CmdAdminMobAITuneSubscribe` (0x55) / `SvAdminMobAITuneState` (0xF1) live MobAI tuning.
 
 <details>
 <summary><b>🔐 Transport & Encryption</b></summary>
 
 | Property | Value |
 |----------|-------|
-| Protocol | Custom reliable UDP (`0xFA7E`, **v22**), Win32 + POSIX |
+| Protocol | Custom reliable UDP (`0xFA7E`, **v26**), Win32 + POSIX |
 | Encryption | **Noise_NK handshake** — two X25519 DH ops (`es` + `ee`, BLAKE2b-512 derivation, protocol-name domain separator) + **XChaCha20-Poly1305 AEAD** (key-derived 48-bit session nonce prefix OR'd with 16-bit packet sequence, 16-byte tag, separate tx/rx keys). Symmetric rekey every 65K packets / 15 min, **epoch-gated** (4-byte LE epoch payload, gated by `tryAdvanceRekeyEpoch` so retransmits dedupe instead of desyncing keys). Anonymous-DH fallback removed — every session is authenticated against the server's static identity key |
 | Server Identity | Long-term X25519 static key (`config/server_identity.key`); public key distributed with client for MITM prevention. Key file is `chmod 0600` on POSIX, locked-DACL on Windows |
 | Auth Hardening | **64-bit session tokens** generated via libsodium CSPRNG (`PacketCrypto::randomBytes`). **`CmdAuthProof` (0xD8)**: auth token is encrypted under the Noise session key *after* handshake — never traverses the wire in plaintext. Timing-safe comparisons via `sodium_memcmp`. Per-account login rate-limit with exponential backoff, auth-token TTL. **`AuthPhase` state machine** (HandshakePending → ProofReceived → Authenticated) gates non-system packet handlers — game commands are dropped until proof verifies |
@@ -391,7 +393,7 @@ Custom polished dark theme — Inter font family (14px body, 16px SemiBold headi
 - **Tile Palette** — Recursive subdirectory scan, scrollable grid, brush size (1-5), 4-layer dropdown (Ground / Detail / Fringe / Collision), layer visibility toggles.
 - **Dialogue Node Editor** — Visual node-based dialogue trees via imnodes. Speaker/text nodes, choice pins, JSON save/load (atomic), node position persistence.
 - **UI Editor** — Full WYSIWYG for all 65+ widget types: colored type-badge hierarchy, property inspector for every widget, selection outline, viewport drag, undo/redo with full screen JSON snapshots. Ctrl+S dual-save + hot-reload safe pointer revalidation.
-- **Network Panel** — Editor dock surfacing client-side metrics: protocol banner (`v22`), encryption status, RTT (color-coded), reliable queue depth (color-coded against 2048 cap), dropped-non-critical count, AOI entity count, host:port, Connect/Disconnect button.
+- **Network Panel** — Editor dock surfacing client-side metrics: protocol banner (`v26`), encryption status, RTT (color-coded), reliable queue depth (color-coded against 2048 cap), dropped-non-critical count, AOI entity count, host:port, Connect/Disconnect button.
 - **Paper Doll Panel** — Live composite preview with Browse-to-assign workflow for body/hair/equipment sprites.
 - **+ 7 more** — Log Viewer, Memory Panel (arena/pool/frame visualization via ImPlot), Command Console, Post-Process Panel, Project Browser, Scene Management, Debug Chrome Panel.
 
@@ -433,9 +435,13 @@ Concrete performance, security, and reliability gains shipped in the latest wave
 
 | Win | Impact |
 |---|---|
-| 🆕 ⚡ **Live C++ Hot-Reload — `FateGameRuntime.dll` (Stable C ABI)** | The biggest iteration win in months. Pure C ABI between `FateEngine.exe` (host) and a separately-compiled `FateGameRuntime.dll` (reloadable game module). Behaviors auto-register via `FATE_AUTO_BEHAVIOR(NAME, vtable)` — drop a new `.cpp` under `game/runtime/behaviors/`, save, and the source-watcher kicks `cmake --build … --target FateGameRuntime` for you. The next-frame swap preserves state; failed reloads roll back; replicated entities skipped. ABI v3 schema (`describeFields`) supports float / int / bool with min/max/default/tooltip. Editor surface: Window menu → Hot Reload panel. Forced OFF in shipping. **20+ ABI + lifecycle + automation tests green** |
+| 🆕 🎮 **Public Gameplay2D Layer — `engine/gameplay2d/` (20 components + 11 systems)** | The demo's biggest UX win since v2 shipped the editor-runtime loop. A fresh clone of the open-source repo now boots into a playable arena instead of an empty grid. 20 demo-safe components (`Collider2D`, `CharacterController2D`, `SpriteAnimator2D`, `CameraFollow2D`, `Health` / `Damageable` / `Attack`, `Targetable`, `Nameplate`, `Interactable` / `NPC2D`, `Zone2D` / `Portal2D`, `SpawnZone2D`, `Mob2D`, plus `NetworkIdentity` / `ReplicatedTransform2D` / `InterestSource` for replication-shaped data) + 11 systems wire the whole loop. Distinct type names mean both the public layer and the proprietary `game/` layer coexist when `FATE_HAS_GAME=1`. **23 new dedicated tests** (collider shape-aware overlap, mob aggro revalidation, trigger overlap, spawn-zone respawn, sprite animator JSON round-trip, target picker priority/distance tiebreaker, SDF-text readiness gate). Demo entry point rewritten end-to-end |
+| 🆕 🛰️ **MobAI Live-Tuning Inspector (protocol v26)** | Three new admin/dev-only opcodes — `CmdAdminMobAITuneApply` (`0x54`), `CmdAdminMobAITuneSubscribe` (`0x55`), `SvAdminMobAITuneState` (`0xF1`) — let an authorized client live-tune the selected mob's `MobAIComponent` from the editor inspector. Slider drag streams at up to ~10 Hz with a `finalApply=1` mouse-up fence; subscribe pulls a 5 Hz read-only diagnostics snapshot. Runtime-only (no DB writes); failures route through `SvAdminResult` (`0xC3`). Bump rejects mismatched clients at handshake |
+| 🆕 🤝 **Server-Authoritative Trade State (protocol v25)** | `SvTradeState` (`0xF0`) pushes the full owner / partner offer state on every mutation — session-start, AddItem, RemoveItem, SetGold, Lock, Unlock — so both clients render slot contents from server truth instead of painting optimistically off the legacy `SvTradeUpdate` ack (which carried no slot payload) |
+| 🆕 👤 **Equipment-Style Replication on Enter (protocol v23 → v24)** | `SvEntityEnterMsg` carries `armorStyle` / `hatStyle` / `weaponStyle` for `entityType==0` (player) and a real `characterId` for social handler routing. Closes a window where remote players rendered without equipment until they re-equipped, and fixes silent-no-op trade/party/social/guild commands targeting other players |
+| 🆕 ⚡ **Live C++ Hot-Reload — `FateGameRuntime.dll` (Stable C ABI)** | Pure C ABI between `FateEngine.exe` (host) and a separately-compiled `FateGameRuntime.dll` (reloadable game module). Behaviors auto-register via `FATE_AUTO_BEHAVIOR(NAME, vtable)` — drop a new `.cpp` under `game/runtime/behaviors/`, save, and the source-watcher kicks `cmake --build … --target FateGameRuntime` for you. The next-frame swap preserves state; failed reloads roll back; replicated entities skipped. ABI v3 schema (`describeFields`) supports float / int / bool with min/max/default/tooltip. Editor surface: Window menu → Hot Reload panel. Forced OFF in shipping. **20+ ABI + lifecycle + automation tests green** |
 | 🆕 🛰️ **Boss-Script Telegraph Foundation (protocol v21)** | Two new critical-lane opcodes — `SvAOETelegraphStartBatch` (`0xEE`) and `SvAOETelegraphCancelBatch` (`0xEF`) — coalesce telegraphed AOE windups so a full boss phase ships in a handful of packets instead of one-per-shape. New 4th boss-script queue (telegraphs) drains between summons and the start-flush at a quiescent tick-tail point. `ctx.enqueueTelegraphedAOE` auto-stamps caster + scene metadata. Cancel-on-caster-death and idempotent start emission |
-| 🆕 🛠️ **In-Game Admin Tools Panel + Typed Grant Pipeline (protocol v22)** | F11 / HUD `ADMIN` button opens the operator workbench. Three new typed wire packets — `CmdAdminGrantItem` (`0x51`), `CmdAdminSetLevel` (`0x52`), `CmdAdminAddSkillPoints` (`0x53`) — replace the chat-mediated `/additem` flow; results ride the existing `SvAdminResult` (`0xC3`). Shared `performAdmin*` helper closes 5 long-standing legacy bugs (bag capacity init, dirty flag, IMMEDIATE persist, weak instanceId, isBag detection). Initial-load wiring fixed: button + F11 hotkey now bind on first login, not just on JSON reload |
+| 🆕 🛠️ **In-Game Admin Tools Panel + Typed Grant Pipeline (protocol v22)** | HUD `ADMIN` button opens the operator workbench. Three new typed wire packets — `CmdAdminGrantItem` (`0x51`), `CmdAdminSetLevel` (`0x52`), `CmdAdminAddSkillPoints` (`0x53`) — replace the chat-mediated `/additem` flow; results ride the existing `SvAdminResult` (`0xC3`). Shared `performAdmin*` helper closes 5 long-standing legacy bugs (bag capacity init, dirty flag, IMMEDIATE persist, weak instanceId, isBag detection). Initial-load wiring fixed: button now binds on first login, not just on JSON reload |
 | 🆕 👁️ **AOI Re-Enablement Campaign — Distance Gate + Sticky Band + Stats** | Long-standing AOI flicker is being unwound in shipped, audited stages. Phase 2 added a `/aoi_stats` GM command + `AOIStats` counters (PRE-DIRTY cadence wording so operators don't misread numbers as byte savings). Phase 3 wired the 640 / 1280 px hysteresis gate with `MIN_VISIBLE_TICKS=10` (0.5s @ 20Hz). Stage D.1 added a sticky-band 640/1280 every-3rd-tick cadence sub-tier on top of `SvEntityUpdateBatch`. Truth for byte savings stays NetStats `0xBA` |
 | 🆕 🐉 **Boss-Script Foundation — Deferred-Everything Discipline** | `BossScriptComponent` + 8-variant `TargetSelector` + `BossScriptVTable` (7 hooks). Every script body runs from a queue drained at a quiescent tick-tail point — never inline during ECS iteration or damage resolution. Lethal-ordering bulletproof (`onDeath` supersedes any threshold the killing hit happened to cross). Parallel AI worker paths gate scripts out cleanly. Threshold-walking moved to enqueue-time so two same-tick hits each get correct attribution. **+26 dedicated tests** |
 | 🆕 🛡️ **Patrol Layer for Stationary & Routed Guards (mig 118)** | `GuardComponent` runtime patrol block + `GuardSystem` with proper FSM gating. Cardinal-only stepping, dt-based step budget, step clamped to remaining axis distance — physically cannot overshoot. BFS connectivity validation collapses unreachable cells to Stationary. Edit-time validator (`validatePatrolEditTime`) renders inline orange warnings for diagonal segments, broken loop closures, disconnected components, hard-leash-too-small. Scene-view overlay (numbered anchor dots + polylines + active-segment line) with frustum culling and 256-mob-per-frame budget. **42 new validator + system tests** |
@@ -453,7 +459,7 @@ Concrete performance, security, and reliability gains shipped in the latest wave
 | 🆕 🪡 **Polymorphic 20-slot skill loadout** | Drag potions/recall scrolls/food onto any of the 20 loadout slots from inventory or open bag. New `SkillLoadout` model owns canonical state; `SkillArc` HUD refactored to thin renderer; new `SkillLoadoutStrip` widget embedded in `InventoryPanel`. **14 stale-binding sweep sites** keep bindings coherent. Two migrations (`item_definitions.cooldown_ms` + `character_skill_bar` polymorphic columns). 56 new tests across `test_skill_loadout` + `test_skill_loadout_strip` + `test_skill_bar_polymorphic` |
 | **Mass-disconnect game-thread protection** | Pre-arc, a 100-client timeout cluster blocked the game thread for 20–40 seconds (sync session DELETE × 300 ms RTT × 100 clients). Fix: `scheduleSessionRemoval` + `scheduleTradeCancel` route through `dbDispatcher_`; per-tick disconnect budget (`MAX_DISCONNECTS_PER_TICK=16`) spreads work across ticks; **DbDispatcher backlog** (8192 hard cap, FIFO-preserving, threshold-instrumented, drains in events phase); JobSystem bumped 2→4 workers default with `tryPushFireAndForget` non-blocking variant |
 | **Demo v2 — Play / Observe / Scene-dropdown / File menu / Ctrl+S** | Open-source `FateDemo` reaches feature parity with the proprietary editor's runtime control loop. Configurable `AppConfig::onObserveStart` hook lets downstream apps swap in network spectate or other observer flows |
-| **PROTOCOL v9 → v22 evolution** | v9: 64-bit ACK window, `SvEntityEnterBatch` coalesce, `CmdAckExtended`, epoch-gated rekey. v10: interact-site packets. v11: site-string-id swap. v12: `CharacterFlags` client mirror. v13: `SvConsumableCooldown`. v14: explicit-stone enchant on the wire. v15: `CmdCraftProtectStone` + `SvCraftProtectStoneResult`. v16: polymorphic `CmdAssignSlot` (skill OR item bindings) + `LoadoutSlotWire` + `CmdUseConsumable.source`. v17: `CmdShopSellFromBag` for bag-source NPC sells. v18: `SvSkillResultBatch` AOE coalesce. v19: `SvEntityLeaveBatch` AOI deactivation coalesce. v20: `CmdAckExtended` envelope-compatibility bump. **v21: `SvAOETelegraphStartBatch` (0xEE) + `SvAOETelegraphCancelBatch` (0xEF) telegraph foundation. v22: typed admin grant pipeline (`CmdAdminGrantItem` 0x51 / `CmdAdminSetLevel` 0x52 / `CmdAdminAddSkillPoints` 0x53)** |
+| **PROTOCOL v9 → v26 evolution** | v9: 64-bit ACK window, `SvEntityEnterBatch` coalesce, `CmdAckExtended`, epoch-gated rekey. v10: interact-site packets. v11: site-string-id swap. v12: `CharacterFlags` client mirror. v13: `SvConsumableCooldown`. v14: explicit-stone enchant on the wire. v15: `CmdCraftProtectStone` + `SvCraftProtectStoneResult`. v16: polymorphic `CmdAssignSlot` + `LoadoutSlotWire` + `CmdUseConsumable.source`. v17: `CmdShopSellFromBag` for bag-source NPC sells. v18: `SvSkillResultBatch` AOE coalesce. v19: `SvEntityLeaveBatch` AOI deactivation coalesce. v20: `CmdAckExtended` envelope-compatibility bump. v21: `SvAOETelegraphStartBatch` (0xEE) + `SvAOETelegraphCancelBatch` (0xEF) telegraph foundation. v22: typed admin grant pipeline. **v23: armor/hat/weapon style fields in `SvEntityEnterMsg`. v24: `characterId` for player enter (social routing). v25: `SvTradeState` (0xF0) server-authoritative trade snapshot. v26: `CmdAdminMobAITuneApply` (0x54) / `CmdAdminMobAITuneSubscribe` (0x55) / `SvAdminMobAITuneState` (0xF1) live MobAI tuning** |
 | **DB-backed `auth_sessions` + cross-process LISTEN/NOTIFY kick** | Sessions survive process crashes. Multi-process deployment ready: login on node B kicks the existing session on node A within ~1s via Postgres NOTIFY |
 | **Atomic write helper for every editor JSON save** | Scene saves, UI screens, dialogue nodes, animation templates / framesets / packed meta / `.meta.json` siblings — all route through `writeFileAtomic` (`.tmp` + rename + cross-volume copy fallback). Failed Save-As no longer corrupts destination |
 | **`IAssetSource` + PhysicsFS VFS** | Unified read path for textures, JSON, shaders, scenes, audio, dialogue, server scene scans, shutdown config. Two implementations (DirectFs + Vfs), behind `option(FATE_USE_VFS …)` |
@@ -478,7 +484,7 @@ These are tracked issues in the open-source engine build. Contributions addressi
 - `warn_unused_result` on `nlohmann::json::parse` in `loaders.cpp` — the call validates JSON syntax; return value is intentionally discarded
 
 **Architectural:**
-- **AOI (Area of Interest) is disabled** — two bugs remain: boundary flickering when entities cross cell edges, and empty `aoi.current` set on first tick. Replication currently sends all entities. Fix requires wider hysteresis band and minimum visibility duration.
+- **AOI (Area of Interest) re-enablement is in progress** — Phase 2 telemetry (`/aoi_stats` + `AOIStats` counters) and Phase 3 distance gate (640 / 1280 px hysteresis, `MIN_VISIBLE_TICKS=10`) have shipped. Stage D.1 added a sticky-band 640/1280 every-3rd-tick cadence sub-tier on `SvEntityUpdateBatch`. Audit-driven; truth for byte savings stays NetStats `0xBA`. Replication still sends all entities until the live cutover smoke clears.
 - **Fiber backend on non-Windows** uses minicoro, which is less battle-tested than the Win32 fiber path. Monitor for stack overflow on deep call chains.
 - **Hot-reload is Windows-only this slice.** `performSwap` returns "Hot reload only implemented on Windows in this slice" elsewhere. Linux/Mac needs `dlopen`/`dlsym`/`dlclose` + a non-Windows watcher backend.
 - **Hot-reload is single-config Ninja-only.** `$<TARGET_FILE_DIR:FateEngine>` resolves cleanly; multi-config (Visual Studio generator) needs an adjustment.
@@ -491,10 +497,10 @@ These are tracked issues in the open-source engine build. Contributions addressi
 
 ## 🌱 From Engine Demo to Full Game
 
-The open-source repo builds and runs as an editor/engine demo. To develop a full game on top of this engine, you would create the following directories (which the CMake system auto-detects):
+The open-source repo builds and runs as an editor/engine demo. The new public **`engine/gameplay2d/`** layer (20 components + 11 systems) covers the foundation surface area for most 2D MMORPG / action-RPG starts — collision, controllers, animators, attacks, faction-filtered damage, NPCs, portals, spawn zones, mob brains, click targeting, nameplates, replication-shaped data. Build your game on top of it by creating the following directories (which the CMake system auto-detects):
 
 **Game Logic (`game/`):**
-- `game/components/` — Game-specific ECS components (transform, sprite, animator, colliders, combat stats, inventory, equipment, pets, factions, **interact sites**, **CharacterFlags**, etc.)
+- `game/components/` — Game-specific ECS components that go *beyond* the public gameplay2d shapes (custom equipment, factions, pets, **interact sites**, **CharacterFlags**, etc.)
 - `game/systems/` — Game systems that operate on components (combat, AI/mob behavior, skill execution, spawning, loot, party, nameplates, **interact-site triggers**, **GuardSystem**, etc.)
 - `game/shared/` — Data structures shared between client and server (item definitions, faction data, skill tables, mob stats, **dialogue trees**, **quest definitions**, **enchant ladder**, **skill loadout**, **boss-script types**, **patrol authoring**)
 - `game/data/` — Static game data catalogs (paper doll definitions, skill trees, enchant tables, premium-currency shop catalog)
@@ -560,12 +566,12 @@ pwsh scripts/check_shipping.ps1 -Target FateServer     # server-only rebuild
 
 | Target | Description | Availability |
 |--------|-------------|--------------|
-| **fate_engine** | Core engine static library | Always (open-source) |
-| **FateDemo** | Minimal demo with editor UI + Play/Observe/Scene-dropdown + Hot-Reload panel | Open-source build |
+| **fate_engine** | Core engine static library (incl. public `gameplay2d/` layer) | Always (open-source) |
+| **FateDemo** | Playable arena demo — editor UI + Play/Observe/Scene-dropdown + Hot-Reload panel + gameplay2d wired | Open-source build |
 | **FateGameRuntime** | Reloadable behavior DLL (pure C ABI to host) | Open-source build (when `game/runtime/` present) |
 | **FateEngine** | Full game client | When `game/` sources present |
 | **FateServer** | Headless authoritative server | When `server/` + PostgreSQL present |
-| **fate_tests** | 2,298 unit tests (doctest) | When `tests/` sources present |
+| **fate_tests** | 2,505 unit tests (doctest) | When `tests/` sources present |
 
 ### Platform Matrix
 
@@ -581,13 +587,15 @@ pwsh scripts/check_shipping.ps1 -Target FateServer     # server-only rebuild
 
 ## 🧪 Testing
 
-The engine maintains exceptional stability through **2,298 passing test cases** across **242 test files**, powered by `doctest`.
+The engine maintains exceptional stability through **2,505 passing test cases** across **259 test files**, powered by `doctest`.
 
 ```bash
 # Run all tests:
 ./build/Debug/fate_tests.exe
 
 # Target specific suites:
+./build/Debug/fate_tests.exe -tc="Gameplay2D*"
+./build/Debug/fate_tests.exe -tc="*Trigger2DSystem*"
 ./build/Debug/fate_tests.exe -tc="HotReload*"
 ./build/Debug/fate_tests.exe -tc="BossScript*"
 ./build/Debug/fate_tests.exe -tc="GuardPatrol*"
@@ -595,33 +603,34 @@ The engine maintains exceptional stability through **2,298 passing test cases** 
 ./build/Debug/fate_tests.exe -tc="Death Lifecycle"
 ./build/Debug/fate_tests.exe -tc="PacketCrypto"
 ./build/Debug/fate_tests.exe -tc="PersistenceQueue*"
-./build/Debug/fate_tests.exe -tc="SkillVFX*"
 ./build/Debug/fate_tests.exe -tc="SkillLoadout*"
 ./build/Debug/fate_tests.exe -tc="SkillBarPolymorphic*"
 ./build/Debug/fate_tests.exe -tc="EnchantSystem*"
 ./build/Debug/fate_tests.exe -tc="CollisionGrid*"
 ./build/Debug/fate_tests.exe -tc="AsepriteImporter*"
-./build/Debug/fate_tests.exe -tc="PetSystem*"
 ./build/Debug/fate_tests.exe -tc="InteractSite*"
 ./build/Debug/fate_tests.exe -tc="SessionRepository*"
-./build/Debug/fate_tests.exe -tc="DialogueTree*"
 ./build/Debug/fate_tests.exe -tc="AtomicWrite*"
 ./build/Debug/fate_tests.exe -tc="LayoutClass*"
 ```
 
-Coverage spans: **hot-reload ABI + lifecycle**, **boss-script foundation (selectors / lifecycle / damage gates / queue contracts / transient sweep)**, **patrol validator + system runtime + dt-based stepping**, combat formulas, encryption/decryption, entity replication, inventory operations, skill systems, **polymorphic skill-bar persistence**, **stale-binding sweep semantics**, **enchant ladder + protected-stone craft**, quest progression (incl. honor formula + milestone collections), economic nonces, arena matchmaking, dungeon lifecycle, VFX pipeline, compressed textures, UI layout (incl. **layout-class variants**), collision grids, async asset loading, Aseprite import pipeline, animation frame durations, costume system, collection system, pet system, pet auto-loot, **interact-site validator + packets + dialogue conditions + retrofits**, **session repository + listener cross-process kick**, **atomic-write durability**, **persistence contract** (live-DB column round-trip), and more.
+Coverage spans: **public gameplay2d layer (collider shape-aware overlap, mob aggro revalidation, trigger overlap, spawn-zone respawn, sprite-animator JSON round-trip, target-picker priority/distance tiebreaker, SDF-text readiness gate)**, **hot-reload ABI + lifecycle**, **boss-script foundation (selectors / lifecycle / damage gates / queue contracts / transient sweep)**, **patrol validator + system runtime + dt-based stepping**, combat formulas, encryption/decryption, entity replication, inventory operations, skill systems, **polymorphic skill-bar persistence**, **stale-binding sweep semantics**, **enchant ladder + protected-stone craft**, quest progression, economic nonces, arena matchmaking, dungeon lifecycle, VFX pipeline, compressed textures, UI layout (incl. **layout-class variants**), collision grids, async asset loading, Aseprite import pipeline, costume system, collection system, pet system, pet auto-loot, **interact-site validator + packets + dialogue conditions**, **session repository + listener cross-process kick**, **atomic-write durability**, **persistence contract** (live-DB column round-trip), and more.
 
 ---
 
 ## 📐 Architecture at a Glance
 
 ```
-engine/                    # 103,000+ LOC — Core engine (396 files)
+engine/                    # 110,000+ LOC — Core engine (438 files)
+ gameplay2d/               # 🎮 NEW PUBLIC LAYER — 20 demo-safe components + 11 systems + register entry point
+                           #   Collider2D, CharacterController2D, SpriteAnimator2D, CameraFollow2D, Health/Damageable/Attack,
+                           #   Targetable, Nameplate, Interactable/NPC2D, Zone2D/Portal2D, SpawnZone2D, Mob2D,
+                           #   NetworkIdentity/ReplicatedTransform2D/InterestSource (replication-shaped data, no protocol)
  render/                   #   Sprite batching, SDF text (4 fonts via FontRegistry), lighting, bloom, paper doll, VFX, Metal RHI
- net/                      #   Custom UDP (v22), Noise_NK crypto, AuthProof, replication, AOI, interpolation
+ net/                      #   Custom UDP (v26), Noise_NK crypto, AuthProof, replication, AOI, interpolation
  ecs/                      #   Archetype ECS (4096 reserve), 56+ components, reflection, serialization
  ui/                       #   65+ widgets (incl. SkillLoadoutStrip w/ drag-bind pipeline, ConfirmDialog chrome, FriendsPanel, BountyPanel), JSON screens, themes, viewport scaling, panel + bespoke widget chrome, layout-class variants
- editor/                   #   ImGui editor, undo/redo, Aseprite animation editor, asset browser, Play/Observe/Scene toolbar, Hot-Reload panel, BossScript + Guard inspectors, 49-field bespoke widget chrome inspectors
+ editor/                   #   ImGui editor, undo/redo, Aseprite animation editor, asset browser, Play/Observe/Scene toolbar, Hot-Reload panel, BossScript + Guard inspectors, MobAI live-tuning inspector
  module/                   #   Hot-reload manager, BehaviorComponent + BehaviorRegistry, FateBehaviorVTable C ABI, shadow-copy LoadLibrary swap
  tilemap/                  #   Chunk VBOs, texture arrays, Blob-47 autotile, 4-layer
  scene/                    #   Async loading, versioning, prefab variants
@@ -631,7 +640,7 @@ engine/                    # 103,000+ LOC — Core engine (396 files)
  job/                      #   Fiber system, MPMC queue, scratch arenas, FATE_JOB_WORKERS env override
  memory/                   #   Zone/frame/scratch arenas, pool allocators
  spatial/                  #   Fixed grid, spatial hash, collision bitgrid
- core/                     #   Structured errors, Result<T>, CircuitBreaker, atomic_write, logger (with stderr fallback default)
+ core/                     #   Structured errors, Result<T>, CircuitBreaker, atomic_write, logger
  particle/                 #   CPU emitters, per-particle lifetime/color lerp
  platform/                 #   Device info, RAM tiers, thermal polling
  profiling/                #   Tracy integration, spdlog, rotating file sink (text + JSONL)
@@ -640,7 +649,9 @@ engine/                    # 103,000+ LOC — Core engine (396 files)
  telemetry/                #   Metric collection, JSON flush, HTTPS stub
  game/                     #   SkillLoadout model (canonical UI-facing facade for the polymorphic 20-slot bar)
 
-game/                      # 48,700+ LOC — Game logic layer (161 files)
+examples/                  # demo_app.cpp — wires the gameplay2d layer into a playable arena (player + walls + NPC + mob + portal + spawn zone)
+
+game/                      # 50,600+ LOC — Game logic layer (162 files)
  runtime/                  #   FateGameRuntime DLL — reloadable behaviors via FATE_AUTO_BEHAVIOR(NAME, vtable)
  shared/                   #   Pure gameplay across many files (zero engine deps)
    combat_system           #   Hit rate, armor, crits, class advantage, PvP balance, scene-cache PvP gate
@@ -664,20 +675,20 @@ game/                      # 48,700+ LOC — Game logic layer (161 files)
  systems/                  #   ECS systems (combat, render, movement, mob AI, pet follow, spawn, interact site, guard, ...)
  data/                     #   Paper doll catalog, NPC definitions, quest data, premium-currency shop catalog
 
-server/                    # 45,000+ LOC — Headless authoritative server (161 files)
- handlers/                 #   49+ packet handler files (incl. shop_handler w/ processShopSellFromBag, loadout_sweep, interact_site, crafting w/ enchant + protect-craft, telegraph + admin grant pipeline)
+server/                    # 46,900+ LOC — Headless authoritative server (163 files)
+ handlers/                 #   58 packet handler files (incl. shop_handler w/ processShopSellFromBag, loadout_sweep, interact_site, crafting w/ enchant + protect-craft, telegraph + admin grant + MobAI live-tune + trade-state pipelines)
  db/                       #   17 repository files, fiber DbDispatcher (8192 backlog cap, JSONB inventory batch), session_repo + listener
  cache/                    #   12 startup caches (item/loot/recipe/pet/costume/collection/guard (w/ default_patrol)/scene/spawn-zone/...)
  auth/                     #   TLS auth server (bcrypt + dummy-hash timing-oracle defense, starter equipment, login rate limiting, CSPRNG tokens)
  bosses/                   #   BossScriptRegistry, lifecycle hooks, spawn seam, per-script registration umbrella
  *.h/.cpp                  #   ServerApp, SpawnCoordinator, DungeonManager, RateLimiter, GM commands, MetricsCollector, ShutdownManager
 
-tests/                     # 49,500+ LOC — 2,298 passing test cases across 242 files
+tests/                     # 55,500+ LOC — 2,505 passing test cases across 259 files
 assets/shaders/            #    ~800 LOC — GLSL + Metal MSL (sprite, post-process, SDF text, lighting)
 
 ads_ssv_server/            # Standalone rewarded-video verifier (ECDSA-signed HTTPS callbacks)
-Docs/migrations/           # 125 numbered SQL migrations (schema + content seeds)
-Documents/Demo/            # 📘 Demo manuals for new contributors (Quick Start, Editor Guide, Asset Pipeline, Architecture, Networking, API Reference, Tutorials, Troubleshooting, Publishing)
+Docs/migrations/           # 126 numbered SQL migrations (schema + content seeds)
+Documents/Demo/            # 📘 Demo manuals — start here when building your own game (Quick Start, Editor Guide, Asset Pipeline, Architecture, Networking, API Reference, Tutorials, Troubleshooting, Publishing)
 Docs/Guides/               # Subsystem deep-dives (animation, UI, audio, skill VFX)
 assets/dialogue/           # 183 dialogue trees: 124 quests + 33 NPCs + 26 sites
 scripts/                   # check_shipping.ps1 (CI), run_server.ps1 (launcher)
@@ -707,10 +718,11 @@ Apache License 2.0 — see [LICENSE](LICENSE) for details.
 
 <br><br>
 
-<img src="https://img.shields.io/badge/C%2B%2B-247%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
-<img src="https://img.shields.io/badge/files-973%2B-2ea44f?style=flat-square" alt="Files" />
-<img src="https://img.shields.io/badge/tests-2%2C298_passing-2ea44f?style=flat-square" alt="Tests" />
-<img src="https://img.shields.io/badge/protocol-v22-blueviolet?style=flat-square" alt="Protocol" />
+<img src="https://img.shields.io/badge/C%2B%2B-263%2C000%2B_lines-00599C?style=flat-square&logo=cplusplus&logoColor=white" alt="C++ LOC" />
+<img src="https://img.shields.io/badge/files-1%2C022%2B-2ea44f?style=flat-square" alt="Files" />
+<img src="https://img.shields.io/badge/tests-2%2C505_passing-2ea44f?style=flat-square" alt="Tests" />
+<img src="https://img.shields.io/badge/protocol-v26-blueviolet?style=flat-square" alt="Protocol" />
+<img src="https://img.shields.io/badge/🎮_gameplay2d-20%2B11-00BCD4?style=flat-square" alt="Gameplay2D" />
 <img src="https://img.shields.io/badge/⚡_hot--reload-FateGameRuntime-FF5722?style=flat-square" alt="Hot Reload" />
 <img src="https://img.shields.io/badge/crypto-Noise__NK%20%2B%20AuthProof%20%2B%20DB__sessions-critical?style=flat-square" alt="Crypto" />
 <img src="https://img.shields.io/badge/platforms-5-orange?style=flat-square" alt="Platforms" />
@@ -718,9 +730,9 @@ Apache License 2.0 — see [LICENSE](LICENSE) for details.
 <img src="https://img.shields.io/badge/UI_widgets-65%2B-ff69b4?style=flat-square" alt="UI Widgets" />
 <img src="https://img.shields.io/badge/chrome_widgets-29-7E57C2?style=flat-square" alt="Chrome Widgets" />
 <img src="https://img.shields.io/badge/admin_commands-44-4CAF50?style=flat-square" alt="GM Commands" />
-<img src="https://img.shields.io/badge/handlers-49%2B-9cf?style=flat-square" alt="Handler Files" />
+<img src="https://img.shields.io/badge/handlers-58-9cf?style=flat-square" alt="Handler Files" />
 <img src="https://img.shields.io/badge/DB_repos-17-informational?style=flat-square" alt="DB Repos" />
-<img src="https://img.shields.io/badge/migrations-125-FF7043?style=flat-square" alt="Migrations" />
+<img src="https://img.shields.io/badge/migrations-126-FF7043?style=flat-square" alt="Migrations" />
 <img src="https://img.shields.io/badge/dialogue_trees-183-9C27B0?style=flat-square" alt="Dialogue Trees" />
 <img src="https://img.shields.io/badge/loadout_slots-20-00BCD4?style=flat-square" alt="Loadout Slots" />
 <img src="https://img.shields.io/badge/enchant_tiers-7-FFC107?style=flat-square" alt="Enchant Tiers" />

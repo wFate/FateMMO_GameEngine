@@ -1073,7 +1073,14 @@ void ContentBrowserPanel::drawLootTab() {
                 ImGui::PopID();
             }
 
-            // Handle deletion — server expects "table_id:item_id" composite format
+            // Handle deletion — server expects "table_id:item_id" composite format.
+            // Do NOT erase the local row optimistically. The server may reject the
+            // delete (referenced row, permission failure) or commit the DB delete
+            // but fail the cache reload, in both of which cases the live cache
+            // still serves the row. onAdminResult flips lootListDirty_ on
+            // success only, which then triggers a fresh requestContentList that
+            // replaces lootList_ with authoritative server-side state. Matches
+            // the mob/item delete sites at lines 671 / 908.
             if (removeIdx >= 0) {
                 auto& entry = lootList_[removeIdx];
                 std::string tableId = entry.value("loot_table_id", "");
@@ -1081,7 +1088,6 @@ void ContentBrowserPanel::drawLootTab() {
                 if (!tableId.empty() && !itemId.empty()) {
                     deleteContent(AdminContentType::LootDrop, tableId + ":" + itemId);
                 }
-                lootList_.erase(lootList_.begin() + removeIdx);
             }
         }
     }

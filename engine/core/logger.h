@@ -1,8 +1,31 @@
+/**************************************************************************/
+/*  logger.h                                                              */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                          FateMMO Game Engine                           */
+/*                       https://www.FateMMO.com                          */
+/**************************************************************************/
+/* Copyright (c) 2026-present FateMMO Game Engine contributors.           */
+/* Copyright (c) 2026-present Caleb Kious.                                */
+/*                                                                        */
+/* Licensed under the Apache License, Version 2.0 (the "License");        */
+/* you may not use this file except in compliance with the License.       */
+/* You may obtain a copy of the License at                                */
+/*                                                                        */
+/*     http://www.apache.org/licenses/LICENSE-2.0                         */
+/*                                                                        */
+/* Unless required by applicable law or agreed to in writing, software    */
+/* distributed under the License is distributed on an "AS IS" BASIS,      */
+/* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or        */
+/* implied. See the License for the specific language governing           */
+/* permissions and limitations under the License.                         */
+/**************************************************************************/
 #pragma once
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/callback_sink.h>
+#include <atomic>
 #include <string>
 #include <memory>
 #include <functional>
@@ -130,6 +153,20 @@ public:
             default: spdLevel = spdlog::level::debug; break;
         }
         spdlog::set_level(spdLevel);
+        // Mirror the active threshold into a relaxed atomic so the LOG_*
+        // macros can early-out before paying for vsnprintf + the per-call
+        // mutex/registry lookup inside log(). Under FATE_LOG_DEBUG=0 this
+        // is the difference between hundreds of disabled LOG_DEBUG calls
+        // costing real microseconds each (visible inside CmdUseSkill / AOE
+        // gather hot paths) vs. costing a single relaxed atomic load.
+        activeLevel_.store(static_cast<int>(level), std::memory_order_relaxed);
+    }
+
+    // Cached active threshold for the LOG_* macros. Default = Debug so any
+    // pre-init log call still reaches log() (which falls back to fprintf
+    // when defaultLogger_ is null). Updated by setMinLevel().
+    int activeLevel() const noexcept {
+        return activeLevel_.load(std::memory_order_relaxed);
     }
 
     void log(LogLevel level, const char* category, const char* fmt, ...) {
@@ -189,12 +226,32 @@ private:
     std::shared_ptr<spdlog::logger> defaultLogger_;
     std::shared_ptr<spdlog::sinks::callback_sink_mt> callbackSink_;
     LogCallback logCallback_;
+    // Default = Debug (allow everything) so any log call before init() still
+    // reaches log() and hits the fprintf fallback. setMinLevel() narrows it.
+    std::atomic<int> activeLevel_{static_cast<int>(LogLevel::Debug)};
 };
 
-#define LOG_DEBUG(cat, ...) fate::Logger::instance().log(fate::LogLevel::Debug, cat, __VA_ARGS__)
-#define LOG_INFO(cat, ...)  fate::Logger::instance().log(fate::LogLevel::Info,  cat, __VA_ARGS__)
-#define LOG_WARN(cat, ...)  fate::Logger::instance().log(fate::LogLevel::Warn,  cat, __VA_ARGS__)
-#define LOG_ERROR(cat, ...) fate::Logger::instance().log(fate::LogLevel::Error, cat, __VA_ARGS__)
-#define LOG_FATAL(cat, ...) fate::Logger::instance().log(fate::LogLevel::Fatal, cat, __VA_ARGS__)
+// LOG_* macros early-out when the caller's level is below the active threshold,
+// avoiding the vsnprintf + global mutex + spdlog::get(category) work inside
+// log() for filtered records. Wrapped in do/while(0) so the form remains a
+// single statement in if/else without braces.
+#define FATE_LOG_LEVEL_ACTIVE(level) \
+    (static_cast<int>(level) >= fate::Logger::instance().activeLevel())
+
+#define LOG_DEBUG(cat, ...) \
+    do { if (FATE_LOG_LEVEL_ACTIVE(fate::LogLevel::Debug)) \
+         fate::Logger::instance().log(fate::LogLevel::Debug, cat, __VA_ARGS__); } while(0)
+#define LOG_INFO(cat, ...) \
+    do { if (FATE_LOG_LEVEL_ACTIVE(fate::LogLevel::Info)) \
+         fate::Logger::instance().log(fate::LogLevel::Info, cat, __VA_ARGS__); } while(0)
+#define LOG_WARN(cat, ...) \
+    do { if (FATE_LOG_LEVEL_ACTIVE(fate::LogLevel::Warn)) \
+         fate::Logger::instance().log(fate::LogLevel::Warn, cat, __VA_ARGS__); } while(0)
+#define LOG_ERROR(cat, ...) \
+    do { if (FATE_LOG_LEVEL_ACTIVE(fate::LogLevel::Error)) \
+         fate::Logger::instance().log(fate::LogLevel::Error, cat, __VA_ARGS__); } while(0)
+#define LOG_FATAL(cat, ...) \
+    do { if (FATE_LOG_LEVEL_ACTIVE(fate::LogLevel::Fatal)) \
+         fate::Logger::instance().log(fate::LogLevel::Fatal, cat, __VA_ARGS__); } while(0)
 
 } // namespace fate

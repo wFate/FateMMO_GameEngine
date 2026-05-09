@@ -30,6 +30,7 @@ namespace fate { class UIManager; }
 #endif
 #include "engine/editor/paper_doll_panel.h"
 #include "engine/editor/content_browser_panel.h"
+#include "engine/editor/mobai_tune_panel.h"
 #include <ImGuizmo.h>
 #include <SDL.h>
 #include <nlohmann/json.hpp>
@@ -39,6 +40,9 @@ namespace fate { class UIManager; }
 #include <memory>
 
 namespace fate {
+
+class NetClient;
+struct SvAdminMobAITuneStateMsg;
 
 enum class AssetType { Sprite, Script, Scene, Shader, Other };
 
@@ -268,7 +272,10 @@ public:
     bool wantsMouse() const { return open_ && wantsMouse_; }
 
     Entity* selectedEntity() const { return selectedEntity_; }
-    void clearSelection() { selectedHandle_ = {}; selectedEntity_ = nullptr; isDraggingEntity_ = false; selectedEntities_.clear(); }
+    // Out-of-line in editor.cpp because it must release any active MobAI
+    // tuning subscription (which talks to netClient_, whose header isn't
+    // visible from editor.h's inline-method context).
+    void clearSelection();
     void cancelPlacement() { isDraggingAsset_ = false; draggedAssetPath_.clear(); pendingBrushStroke_.reset(); }
     void refreshSelection(World* world) {
         if (selectedHandle_.isNull()) { selectedEntity_ = nullptr; return; }
@@ -370,6 +377,14 @@ public:
     UIEditorPanel& uiEditorPanel() { return uiEditorPanel_; }
 #endif
     ContentBrowserPanel& contentBrowserPanel() { return contentBrowserPanel_; }
+
+    // MobAI live-tuning wiring. Editor sends Subscribe/Apply via netClient_;
+    // ghostPidLookup_ resolves a selected ghost EntityHandle to its server
+    // PersistentId; onMobAITuneState routes server snapshots into the panel
+    // state machine. Wired by GameApp; full handler lands in Task 16.
+    void setNetClient(class NetClient* nc);
+    void setGhostPidLookup(std::function<uint64_t(EntityHandle)> fn);
+    void onMobAITuneState(const struct SvAdminMobAITuneStateMsg& msg);
 
     void setAssetRoot(const std::string& root) { assetRoot_ = root; assetBrowser_.init(".", root, sourceDir_); }
     void setSourceDir(const std::string& dir) {
@@ -622,6 +637,31 @@ private:
 
     // Content browser panel (admin content editing)
     ContentBrowserPanel contentBrowserPanel_;
+
+    // MobAI live-tuning panel state. Wired in Task 15; consumed by the
+    // inspector section that lands in Task 16.
+    class NetClient* netClient_ = nullptr;
+    std::function<uint64_t(EntityHandle)> ghostPidLookup_;
+    MobAITuningPanelState mobAITunePanel_;
+
+    // MobAI live-tuning inspector helpers (Task 16 / 17).
+    // sendMobAITuneSubscribe_(pid==0) unsubscribes — used by the inspector
+    // gate when the section hides (deselect, lost connection, lost gate).
+    // sendMobAITuneApply_ fires from postDrawApplyPump returns: kind==1 mid-
+    // drag (~10Hz), kind==2 mouse-up final. drawServerMobAISection_ owns
+    // the entire inspector section body; it is only entered after the
+    // gate in editor_inspector.cpp has confirmed eligibility + valid pid.
+    void sendMobAITuneSubscribe_(uint64_t pid);
+    void sendMobAITuneApply_(const MobAITuningDTO& dto, uint32_t applySeq,
+                             bool finalApply);
+    void drawServerMobAISection_();
+    // Idempotent unsubscribe + state-scrub. Called whenever the inspector
+    // is no longer pointing at a server-mob-AI candidate -- explicit
+    // deselect (clearSelection), entity-destroyed-out-from-under
+    // (refreshSelection collapsing selectedHandle_ to null), or any
+    // direct selectedEntity_ = nullptr site that bypasses clearSelection.
+    // Cheap no-op when subscribedPid==0 so it's safe to call every frame.
+    void releaseMobAITuneSubscription_();
 
     // Combat text editor
     bool showCombatTextEditor_ = false;

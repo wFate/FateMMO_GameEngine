@@ -545,12 +545,17 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
     uint8_t deltaCount = 0;
 
     auto flushBatch = [&]() {
-        if (deltaCount == 0) return;
+        if (deltaCount == 0) {
+            ++stats_.flushBatchZeroDelta; // attribution counter
+            return;
+        }
         // Patch the count byte at position 0
         deltaBuf[0] = deltaCount;
         server.sendTo(client.clientId, Channel::Unreliable,
                       PacketType::SvEntityUpdateBatch,
                       deltaWriter.data(), deltaWriter.size());
+        ++stats_.batchesSentDeltas;
+        stats_.batchedEntitiesTotal += deltaCount;
         // Reset for next batch
         deltaWriter = ByteWriter(deltaBuf, sizeof(deltaBuf));
         deltaWriter.writeU8(0);
@@ -709,7 +714,10 @@ void ReplicationManager::sendDiffs(World& world, NetServer& server, ClientConnec
         if (current.costumeVisuals != last.costumeVisuals)
             dirtyMask |= (1 << 16);
 
-        if (dirtyMask == 0) continue; // Nothing changed
+        if (dirtyMask == 0) {
+            ++stats_.dirtyMaskZeroSkips; // attribution counter
+            continue; // Nothing changed
+        }
 
         // D.1b Phase 1 — POST-DIRTY bucket counter. Increments only after
         // the dirtyMask filter passes; the next site (after tmpWriter is

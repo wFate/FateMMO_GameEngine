@@ -1,5 +1,7 @@
 #include "engine/editor/editor.h"
 #include "engine/editor/combat_text_editor.h"
+#include "engine/net/net_client.h"
+#include "engine/net/mob_ai_tuning_messages.h"
 #ifdef FATE_HAS_GAME
 #include "engine/ui/ui_safe_area.h"
 #include "engine/render/layout_class.h"
@@ -4268,6 +4270,248 @@ void Editor::endLocalObserve() {
     }
     paused_ = true;
     editorChromeHidden_ = false;
+}
+
+// ============================================================================
+// MobAI live-tuning hookup (Task 15 stubs - full inspector wiring in Task 16).
+// setNetClient / setGhostPidLookup install the GameApp-supplied callbacks;
+// onMobAITuneState routes incoming server snapshots into the panel's
+// state-machine consumer (consumeSnapshot owns ignore / diagnostics-only /
+// accept policy and can never desync the local edit copy).
+// ============================================================================
+
+void Editor::setNetClient(NetClient* nc) {
+    netClient_ = nc;
+}
+
+void Editor::setGhostPidLookup(std::function<uint64_t(EntityHandle)> fn) {
+    ghostPidLookup_ = std::move(fn);
+}
+
+void Editor::onMobAITuneState(const SvAdminMobAITuneStateMsg& msg) {
+    consumeSnapshot(mobAITunePanel_, msg);
+}
+
+void Editor::releaseMobAITuneSubscription_() {
+    if (mobAITunePanel_.subscribedPid == 0) return;
+    sendMobAITuneSubscribe_(0);
+    mobAITunePanel_.resetForNewPid(0);
+}
+
+void Editor::clearSelection() {
+    selectedHandle_ = {};
+    selectedEntity_ = nullptr;
+    isDraggingEntity_ = false;
+    selectedEntities_.clear();
+    // Synchronous release covers selection-clear paths that may not redraw
+    // the inspector before the next user action (e.g. play-mode entry,
+    // scene reload). drawInspector also releases on entity==null at the
+    // top of the function to catch direct selectedEntity_ = nullptr sites
+    // scattered through editor.cpp that bypass this method.
+    releaseMobAITuneSubscription_();
+}
+
+// ----------------------------------------------------------------------------
+// Tasks 16 / 17 - MobAI live-tuning inspector wiring.
+//
+// sendMobAITuneSubscribe_  : pid==0 path doubles as unsubscribe (handled by
+//                            the inspector gate when the section hides or
+//                            the user deselects).
+// sendMobAITuneApply_      : called from postDrawApplyPump returns; the
+//                            pump owns rate-limit / final-apply policy.
+// drawServerMobAISection_  : entire panel body; entered only after gate
+//                            in editor_inspector.cpp confirms eligibility
+//                            (replicated mob ghost + EnemyStats + Nameplate
+//                            + no local MobAIComponent + connected NetClient
+//                            + ghostPidLookup_ + non-zero pid + schema OK).
+//                            No captureInspectorUndo / runInspectorMutation
+//                            -- this never promotes a replicated entity to
+//                            authored; it only streams DTOs to the server.
+// ----------------------------------------------------------------------------
+
+void Editor::sendMobAITuneSubscribe_(uint64_t pid) {
+    if (!netClient_) return;
+    netClient_->sendMobAITuneSubscribe(pid);
+}
+
+void Editor::sendMobAITuneApply_(const MobAITuningDTO& dto, uint32_t applySeq,
+                                 bool finalApply) {
+    if (!netClient_) return;
+    netClient_->sendMobAITuneApply(mobAITunePanel_.subscribedPid, applySeq,
+                                   finalApply, dto);
+}
+
+void Editor::drawServerMobAISection_() {
+    auto& panel = mobAITunePanel_;
+
+    // Pre-draw pump: self-heal only (no idle-resync).
+    bool anyActive = ImGui::IsAnyItemActive();
+    preDrawPump(panel, ImGui::GetTime(), anyActive);
+
+    if (fontHeading_) ImGui::PushFont(fontHeading_);
+    bool open = ImGui::CollapsingHeader("Server Mob AI (live, runtime-only)");
+    if (fontHeading_) ImGui::PopFont();
+    ImGui::TextDisabled("runtime-only; resets on respawn or server restart");
+
+    if (!open) return;
+    // Edit-gate: never expose sliders until the first valid snapshot has
+    // seeded panel.local. Without this, resetForNewPid leaves panel.local
+    // at struct defaults that may not match the live mob's per-instance
+    // tunables, and a fast edit during the post-Subscribe -> first-snapshot
+    // window (Channel::Unreliable, up to one 5Hz tick worst-case) could
+    // overwrite the mob's authored state with engine defaults.
+    if (!panel.haveSnapshot) {
+        ImGui::TextDisabled("Awaiting server snapshot...");
+        return;
+    }
+    if (panel.lastSnapshot.found == 0) {
+        ImGui::TextColored(ImVec4(0.85f, 0.5f, 0.5f, 1.0f),
+            "Mob no longer in this world. Re-select a live mob.");
+        return;
+    }
+
+    bool forceFinal = false;
+    auto markEdit = [&](){
+        panel.dirty        = true;
+        panel.lastEditTime = ImGui::GetTime();
+    };
+    // ImGui's mouse-up frame typically reports IsItemDeactivatedAfterEdit()
+    // true on a frame where DragFloat returns false (no value delta this
+    // frame), so the deactivation probe MUST live OUTSIDE the value-changed
+    // branch or finalApply=1 is silently dropped on slider release and the
+    // [AdminMobAITune] copy-back log line never fires.
+    auto checkDeactivate = [&](){
+        if (ImGui::IsItemDeactivatedAfterEdit()) forceFinal = true;
+    };
+
+    if (ImGui::TreeNode("Cardinal axis movement")) {
+        if (ImGui::DragFloat("Dominant Hyst (px)##smai",
+                &panel.local.dominantHysteresisPx, 0.5f, 0.0f, 64.0f, "%.1f"))
+            markEdit();
+        checkDeactivate();
+        if (ImGui::DragFloat("Axis Dwell (s)##smai",
+                &panel.local.axisDwellMaxSeconds, 0.05f, 0.0f, 10.0f, "%.2f"))
+            markEdit();
+        checkDeactivate();
+        if (ImGui::DragFloat("Axis Intercept Window (s)##smai",
+                &panel.local.axisInterceptWindow, 0.05f, 0.0f, 10.0f, "%.2f"))
+            markEdit();
+        checkDeactivate();
+        if (ImGui::DragFloat("Axis Progress Fraction##smai",
+                &panel.local.axisProgressFraction, 0.01f, 0.0f, 1.0f, "%.2f"))
+            markEdit();
+        checkDeactivate();
+        if (ImGui::DragFloat("Intercept Perp Min (px)##smai",
+                &panel.local.interceptPerpMinPx, 1.0f, 0.0f, 4096.0f, "%.0f"))
+            markEdit();
+        checkDeactivate();
+        ImGui::TreePop();
+    }
+    if (ImGui::TreeNode("Detour resolver")) {
+        if (ImGui::DragFloat("Detour Commit (s)##smai",
+                &panel.local.detourCommitSeconds, 0.05f, 0.0f, 5.0f, "%.2f"))
+            markEdit();
+        checkDeactivate();
+        ImGui::TreePop();
+    }
+    if (ImGui::TreeNode("Escape - block windows")) {
+        if (ImGui::DragFloat("Blocked Threshold (s)##smai",
+                &panel.local.escapeBlockedThreshold, 0.01f, 0.0f, 5.0f, "%.2f"))
+            markEdit();
+        checkDeactivate();
+        if (ImGui::DragFloat("Perp Blocked Hold (s)##smai",
+                &panel.local.escapePerpBlockedHoldSeconds, 0.05f, 0.0f, 5.0f, "%.2f"))
+            markEdit();
+        checkDeactivate();
+        if (ImGui::DragFloat("Probe Blocked Hold (s)##smai",
+                &panel.local.escapeProbeBlockedHoldSeconds, 0.05f, 0.0f, 5.0f, "%.2f"))
+            markEdit();
+        checkDeactivate();
+        if (ImGui::DragFloat("Hold Duration (s)##smai",
+                &panel.local.escapeHoldDuration, 0.05f, 0.0f, 5.0f, "%.2f"))
+            markEdit();
+        checkDeactivate();
+        ImGui::TreePop();
+    }
+    if (ImGui::TreeNode("Escape - geometry")) {
+        int repeats = panel.local.escapeProbeRepeats;
+        if (ImGui::DragInt("Probe Repeats##smai", &repeats, 1, 1, 16)) {
+            panel.local.escapeProbeRepeats =
+                static_cast<uint8_t>(std::clamp(repeats, 1, 16));
+            markEdit();
+        }
+        checkDeactivate();
+        if (ImGui::DragFloat("Min Perp Progress For Probe (px)##smai",
+                &panel.local.escapeMinPerpProgressForProbe, 1.0f, 0.0f, 4096.0f, "%.0f"))
+            markEdit();
+        checkDeactivate();
+        if (ImGui::DragFloat("Lane Min (px)##smai",
+                &panel.local.escapeLaneMinPx, 1.0f, 0.0f, 4096.0f, "%.0f"))
+            markEdit();
+        checkDeactivate();
+        if (ImGui::DragFloat("Lane Max (px)##smai",
+                &panel.local.escapeLaneMaxPx, 1.0f, 0.0f, 4096.0f, "%.0f"))
+            markEdit();
+        checkDeactivate();
+        if (panel.local.escapeLaneMaxPx < panel.local.escapeLaneMinPx) {
+            ImGui::TextColored(ImVec4(0.9f, 0.7f, 0.2f, 1.0f),
+                "Lane Max < Lane Min - server will repair to Lane Min.");
+        }
+        if (ImGui::DragFloat("Primary Probe Distance (px)##smai",
+                &panel.local.escapePrimaryProbeDistance, 1.0f, 0.0f, 4096.0f, "%.0f"))
+            markEdit();
+        checkDeactivate();
+        if (ImGui::DragFloat("Backoff Distance (px)##smai",
+                &panel.local.escapeBackoffDistance, 1.0f, 0.0f, 4096.0f, "%.0f"))
+            markEdit();
+        checkDeactivate();
+        ImGui::TreePop();
+    }
+    if (ImGui::TreeNode("Debug")) {
+        bool dbg = panel.local.debugEscape != 0;
+        if (ImGui::Checkbox("Debug Escape (this mob)##smai", &dbg)) {
+            panel.local.debugEscape = dbg ? 1 : 0;
+            markEdit();
+            forceFinal = true;
+        }
+        ImGui::TreePop();
+    }
+
+    // Diagnostics block. Gated on found==1 so a server-side drop
+    // (mob despawned / scene change / unsubscribed) does not flash
+    // stale diagnostics from the last-good snapshot.
+    if (panel.haveSnapshot && panel.lastSnapshot.found == 1) {
+        ImGui::Separator();
+        const auto& s = panel.lastSnapshot;
+        static const char* kModeNames[] = {"Idle","Roam","Chase","ChaseMem","Attack","ReturnHome"};
+        static const char* kPhaseNames[] = {
+            "None","TryPerpA","TryPrimaryAfterPerpA","ReverseInLaneA",
+            "TryPerpB","TryPrimaryAfterPerpB","ReverseInLaneB",
+            "TryReverse","Hold","TryPrimaryOriginal","ReverseInLaneOriginal"
+        };
+        const char* modeName  = (s.mobMode  < 6 ) ? kModeNames[s.mobMode]   : "?";
+        const char* phaseName = (s.escapePhase < 11) ? kPhaseNames[s.escapePhase] : "?";
+        ImGui::Text("Mode: %s   Phase: %s   RepeatIdx: %d",
+                    modeName, phaseName, s.escapeProbeRepeatIndex);
+        ImGui::Text("Pos: (%.1f, %.1f)", s.currentX, s.currentY);
+        ImGui::Text("Episode origin: (%.1f, %.1f)   Attempt start: (%.1f, %.1f)",
+                    s.episodeOriginX, s.episodeOriginY,
+                    s.attemptStartX,  s.attemptStartY);
+        ImGui::Text("PerpA sampled: %.1fpx   PerpB sampled: %.1fpx",
+                    s.escapePerpOffsetA, s.escapePerpOffsetB);
+        ImGui::Text("mob_def_id: %s   pid: 0x%016llX",
+                    s.mobDefId.c_str(),
+                    static_cast<unsigned long long>(s.persistentId));
+        ImGui::TextDisabled(
+            "Tail logs/server.log for [AdminMobAITune] lines on mouse-up; "
+            "values are pre-clamped server-side.");
+    }
+
+    // Post-draw pump: kind==1 mid-drag, kind==2 final apply.
+    int kind = postDrawApplyPump(panel, ImGui::GetTime(), forceFinal);
+    if (kind == 1 || kind == 2) {
+        sendMobAITuneApply_(panel.local, panel.lastSentApplySeq, kind == 2);
+    }
 }
 
 } // namespace fate

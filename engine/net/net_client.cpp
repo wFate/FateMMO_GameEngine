@@ -138,6 +138,13 @@ void NetClient::disconnect() {
 
 void NetClient::poll(float currentTime) {
     lastPollTime_ = currentTime;
+    // Snapshot ONCE per poll (BEFORE the recv-drain) so every packet
+    // processed inside this poll's recv loop sees the same "time of the
+    // last packet from the previous poll" baseline. Per-packet snapshotting
+    // would let a heartbeat or reliable that arrived earlier in this same
+    // drain reset prevLastPacketReceived_ to ~now and bias every later
+    // 0xBA's classifyGap() back toward PacketLossLikely.
+    prevLastPacketReceived_ = lastPacketReceived_;
     // --- Reconnect state machine ---
     if (reconnectPhase_ == ReconnectPhase::Reconnecting) {
         // Track total reconnect time from when reconnect started
@@ -199,16 +206,19 @@ void NetClient::poll(float currentTime) {
         }
     }
 
-    // Drain incoming packets (16K buffer for large payloads like inventory sync;
-    // must match server's LARGE_PACKET_SIZE, raised from 4K after observing
-    // SvInventorySync drops when real inventories hit ~4080 bytes.)
-    constexpr size_t RECV_BUF_SIZE = 16384;
-    uint8_t buf[RECV_BUF_SIZE];
+    // Drain incoming packets. LARGE_PACKET_SIZE (packet.h) is the shared send
+    // /receive ceiling on both client and server — raised from 4K after
+    // observing SvInventorySync drops when real inventories hit ~4080 bytes.
+    uint8_t buf[LARGE_PACKET_SIZE];
     NetAddress from;
     int received;
     while ((received = socket_.recvFrom(buf, sizeof(buf), from)) > 0) {
         // Only accept packets from the server address
         if (from == serverAddress_) {
+            // prevLastPacketReceived_ was snapshotted ONCE at the top of
+            // poll() before this drain began, so classifyGap()/pushGapEvent()
+            // see the same "previous-poll baseline" for every packet
+            // dispatched here regardless of order in the drain.
             lastPacketReceived_ = currentTime;
             noteBytesIn(static_cast<size_t>(received));
             handlePacket(buf, received);
@@ -332,9 +342,9 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         return;
     }
 
-    // Decrypt incoming payload for non-system packets. Must match RECV_BUF_SIZE
-    // / server LARGE_PACKET_SIZE so inventory syncs don't get dropped.
-    uint8_t decryptedBuf[16384];
+    // Decrypt incoming payload for non-system packets. Sized to the shared
+    // LARGE_PACKET_SIZE in packet.h so inventory syncs don't get dropped.
+    uint8_t decryptedBuf[LARGE_PACKET_SIZE];
     const uint8_t* payloadData = data + r.position();
     size_t payloadLen = hdr.payloadSize;
 
@@ -633,6 +643,9 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
         case PacketType::SvTradeState: {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvTradeStateMsg::read(payload);
+            // Drop truncated/malformed snapshots so a corrupt reliable packet
+            // cannot wipe the trade UI to all-empty.
+            if (payload.overflowed()) break;
             if (onTradeState) onTradeState(msg);
             break;
         }
@@ -997,6 +1010,14 @@ void NetClient::handlePacket(const uint8_t* data, int size) {
             ByteReader payload(payloadData, payloadLen);
             auto msg = SvValidationReportMsg::read(payload);
             if (onValidationReport) onValidationReport(msg);
+            break;
+        }
+        case PacketType::SvAdminMobAITuneState: {
+            ByteReader payload(payloadData, payloadLen);
+            bool ok = true;
+            auto msg = SvAdminMobAITuneStateMsg::read(payload, ok);
+            if (!ok) break;
+            if (onAdminMobAITuneState) onAdminMobAITuneState(msg);
             break;
         }
         case PacketType::SvGuildRoster: {
@@ -1437,7 +1458,7 @@ void NetClient::sendPacket(Channel channel, uint8_t packetType,
     // header + AEAD tag, fail closed on encryption failure, and check
     // w.overflowed() before dispatch. Prevents silently undersized reliable
     // commands (trade/market/guild growth, future admin payloads).
-    constexpr size_t LARGE_PACKET_SIZE = 16384;
+    // LARGE_PACKET_SIZE is defined once in packet.h.
     size_t bufSize = (payloadSize + PACKET_HEADER_SIZE + PacketCrypto::TAG_SIZE > MAX_PACKET_SIZE)
                      ? LARGE_PACKET_SIZE : MAX_PACKET_SIZE;
     uint8_t stackBuf[LARGE_PACKET_SIZE];
@@ -2102,6 +2123,33 @@ void NetClient::sendAdminAddSkillPoints(const std::string& targetName, uint16_t 
     sendPacket(Channel::ReliableOrdered, PacketType::CmdAdminAddSkillPoints, w.data(), w.size());
 }
 
+// v26 — MobAI live inspector tuning (admin/dev-only).
+void NetClient::sendMobAITuneSubscribe(uint64_t persistentId) {
+    CmdAdminMobAITuneSubscribeMsg msg;
+    msg.persistentId = persistentId;
+    uint8_t buf[16];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    if (w.overflowed()) return;
+    sendPacket(Channel::ReliableOrdered,
+               PacketType::CmdAdminMobAITuneSubscribe, w.data(), w.size());
+}
+
+void NetClient::sendMobAITuneApply(uint64_t persistentId, uint32_t applySeq,
+                                    bool finalApply, const MobAITuningDTO& tuning) {
+    CmdAdminMobAITuneApplyMsg msg;
+    msg.persistentId = persistentId;
+    msg.applySeq     = applySeq;
+    msg.finalApply   = finalApply ? 1 : 0;
+    msg.tuning       = tuning;
+    uint8_t buf[256];
+    ByteWriter w(buf, sizeof(buf));
+    msg.write(w);
+    if (w.overflowed()) return;
+    sendPacket(Channel::ReliableOrdered,
+               PacketType::CmdAdminMobAITuneApply, w.data(), w.size());
+}
+
 // ============================================================================
 // Phase 104 — Network panel instrumentation (Batches A + B)
 // ============================================================================
@@ -2145,8 +2193,13 @@ NetClient::GapClass NetClient::classifyGap(float gapMs) const {
     //   pure server stall → other packets also silent (recvAnyAge >= ~0.5 * gap)
     //   neither           → likely transport loss (or server sent batches but
     //                        they didn't arrive while heartbeats did)
-    float recvAnyAgeMs = (lastPacketReceived_ > 0.0f && lastPollTime_ > 0.0f)
-        ? (lastPollTime_ - lastPacketReceived_) * 1000.0f
+    // Use prevLastPacketReceived_ — the timestamp of the packet BEFORE the
+    // current one, captured in poll()'s recv loop before the update. Reading
+    // lastPacketReceived_ here would give recvAnyAgeMs ≈ 0 because both it
+    // and lastPollTime_ resolve to the current poll's timestamp, biasing
+    // every classification toward PacketLossLikely.
+    float recvAnyAgeMs = (prevLastPacketReceived_ > 0.0f && lastPollTime_ > 0.0f)
+        ? (lastPollTime_ - prevLastPacketReceived_) * 1000.0f
         : 0.0f;
     if (gapMs < GAP_CLASSIFY_THRESHOLD_MS) return GapClass::Healthy;
     if (frameMaxMs1s_ * 1.5f >= gapMs)     return GapClass::ClientFrameHitchLikely;
@@ -2161,8 +2214,10 @@ void NetClient::pushGapEvent(float gapMs, GapClass kind) {
     ev.tSecondsAgo  = 0.0f; // resolved at read-time by caller
     ev.gapMs        = (gapMs > 65535.0f) ? 65535 : static_cast<uint16_t>(gapMs);
     ev.frameMaxMs   = (frameMaxMs1s_ > 65535.0f) ? 65535 : static_cast<uint16_t>(frameMaxMs1s_);
-    float recvAge   = (lastPacketReceived_ > 0.0f)
-        ? (lastPollTime_ - lastPacketReceived_) * 1000.0f
+    // See classifyGap() for why we read prevLastPacketReceived_ instead of
+    // lastPacketReceived_ — the latter is "now" at this point in the poll.
+    float recvAge   = (prevLastPacketReceived_ > 0.0f)
+        ? (lastPollTime_ - prevLastPacketReceived_) * 1000.0f
         : 0.0f;
     ev.recvAnyAgeMs = (recvAge > 65535.0f) ? 65535 : static_cast<uint16_t>(recvAge);
     ev.kind         = kind;

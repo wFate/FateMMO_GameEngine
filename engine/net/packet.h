@@ -8,10 +8,21 @@ namespace fate {
 // Protocol Constants
 // ============================================================================
 constexpr uint16_t PROTOCOL_ID       = 0xFA7E;
-constexpr uint8_t  PROTOCOL_VERSION  = 25;  // v25: SvTradeState (0xF0) — server-authoritative trade slot snapshot. Server pushes the full owner/partner offer state on session-start / AddItem / RemoveItem / SetGold / Lock / Unlock so both clients see authoritative slot contents. Pre-fix the only post-AddItem signal was SvTradeUpdate type=2 with no payload, so the partner never saw offered items and the sender's UI had to paint optimistically. v24: SvEntityEnterMsg now carries characterId for entityType==0 (player). Required because Cmd{Trade,Party,Social,Guild} handlers resolve targets by character_id (DB id), not display name; previously the client passed the display name as charId and every social action silently failed at the server's name-equality check. Also fixes server-side population of armorStyle/hatStyle/weaponStyle for players (the v23 wire fields were declared but buildEnterMessage never populated them). v23: SvEntityEnterMsg now carries armorStyle/hatStyle/weaponStyle for entityType==0 (player). Required because server initializes lastSentState to current state at enter, so the SvEntityUpdate bit-13 delta gate never fires for newly-entered ghosts and remote players rendered without equipment until they re-equipped. Mirrors mob* fields on the same struct. v22: CmdAdminGrantItem (0x51) + CmdAdminSetLevel (0x52) + CmdAdminAddSkillPoints (0x53) — typed admin grant pipeline replacing chat-mediated /additem flow. Result rides existing SvAdminResult (0xC3). Bump rejects mismatched clients at handshake. v21: SvAOETelegraphStartBatch (0xEE) + SvAOETelegraphCancelBatch (0xEF) — telegraph foundation.
+constexpr uint8_t  PROTOCOL_VERSION  = 26;  // v26: CmdAdminMobAITuneApply (0x54), CmdAdminMobAITuneSubscribe (0x55), SvAdminMobAITuneState (0xF1) — admin/dev-only inspector live tuning of MobAIComponent on selected mob. Apply streams at up to ~10Hz during slider drag with finalApply=1 on mouse-up; subscribe requests a 5Hz read-only diagnostics snapshot. Runtime-only; no DB writes. Failures route through SvAdminResult (0xC3). Bump rejects mismatched clients at handshake. v25: SvTradeState (0xF0) — server-authoritative trade slot snapshot. Server pushes the full owner/partner offer state on session-start / AddItem / RemoveItem / SetGold / Lock / Unlock so both clients render slot contents from server truth instead of painting optimistically off the SvTradeUpdate type=2 ack (which carries no slot payload). v24: SvEntityEnterMsg now carries characterId for entityType==0 (player). Required because Cmd{Trade,Party,Social,Guild} handlers resolve targets by character_id (DB id), not display name; previously the client passed the display name as charId and every social action silently failed at the server's name-equality check. Also fixes server-side population of armorStyle/hatStyle/weaponStyle for players (the v23 wire fields were declared but buildEnterMessage never populated them). v23: SvEntityEnterMsg now carries armorStyle/hatStyle/weaponStyle for entityType==0 (player). Required because server initializes lastSentState to current state at enter, so the SvEntityUpdate bit-13 delta gate never fires for newly-entered ghosts and remote players rendered without equipment until they re-equipped. Mirrors mob* fields on the same struct. v22: CmdAdminGrantItem (0x51) + CmdAdminSetLevel (0x52) + CmdAdminAddSkillPoints (0x53) — typed admin grant pipeline replacing chat-mediated /additem flow. Result rides existing SvAdminResult (0xC3). Bump rejects mismatched clients at handshake. v21: SvAOETelegraphStartBatch (0xEE) + SvAOETelegraphCancelBatch (0xEF) — telegraph foundation.
 constexpr size_t   PACKET_HEADER_SIZE = 26;  // v9: ackBits widened 4→8 bytes (32→64 bit ACK window)
 constexpr size_t   MAX_PACKET_SIZE   = 1200;
 constexpr size_t   MAX_PAYLOAD_SIZE  = MAX_PACKET_SIZE - PACKET_HEADER_SIZE;
+
+// Large-packet ceiling for payloads that exceed the MTU-safe MAX_PACKET_SIZE
+// (inventory sync with rolled stats, admin save content with full mob/item
+// JSON). Both client and server send paths grew to 16K when SvInventorySync
+// was observed truncating at 4K. The receive path was held at MAX_PACKET_SIZE
+// for too long — recvfrom() of an oversized UDP datagram on Windows returns
+// WSAEMSGSIZE and the entire payload is discarded by the OS, so any
+// client→server CmdAdminSaveContent above ~1158 bytes silently disappeared
+// before it ever reached the dispatcher. Single shared constant so the
+// receive ceiling cannot drift below the send ceiling again.
+constexpr size_t   LARGE_PACKET_SIZE = 16384;
 
 // ============================================================================
 // Channel
@@ -139,6 +150,14 @@ namespace PacketType {
     constexpr uint8_t CmdAdminGrantItem         = 0x51;
     constexpr uint8_t CmdAdminSetLevel          = 0x52;
     constexpr uint8_t CmdAdminAddSkillPoints    = 0x53;
+
+    // v26 — MobAI live inspector tuning (admin/dev-only). Apply streams at up
+    // to ~10Hz during slider drag with finalApply=1 on mouse-up; subscribe
+    // requests a 5Hz read-only diagnostics snapshot. Failures route through
+    // SvAdminResult (0xC3). See docs/superpowers/specs/2026-05-08-mobai-live-
+    // inspector-tuning-design.md.
+    constexpr uint8_t CmdAdminMobAITuneApply     = 0x54;
+    constexpr uint8_t CmdAdminMobAITuneSubscribe = 0x55;
 
     // Server -> Client: Item system results
     constexpr uint8_t SvEnchantResult    = 0xA8;
@@ -277,12 +296,17 @@ namespace PacketType {
 
     // v25 — SvTradeState. Authoritative trade-slot snapshot pushed by the
     // server on session-start / AddItem / RemoveItem / SetGold / Lock /
-    // Unlock. Pre-fix the only post-AddItem signal was SvTradeUpdate type=2
-    // (no payload), so the partner never saw offered items and the sender's
-    // UI had to paint optimistically. Per-recipient layout: owner = the
-    // recipient, partner = the other side, so each client just renders the
-    // mySlots/theirSlots arrays as received.
+    // Unlock. SvTradeUpdate type=2 only signals "an offer changed" with no
+    // slot payload, so without this packet each client would have to paint
+    // its own offers optimistically and the partner would see nothing at
+    // all. Per-recipient layout: owner = the recipient, partner = the
+    // other side, so each client just renders the mySlots/theirSlots
+    // arrays as received.
     constexpr uint8_t SvTradeState              = 0xF0;
+
+    // v26 — read-only 5Hz diagnostic state for the subscribed mob. Unreliable;
+    // NOT in the critical-lane bypass set.
+    constexpr uint8_t SvAdminMobAITuneState      = 0xF1;
 
     // Pet panel seed on login (silent). Distinct from SvPetGranted which
     // fires on mid-session hatch and shows a "Hatched: X" chat toast.

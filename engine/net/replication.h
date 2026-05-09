@@ -155,6 +155,30 @@ struct AOIStats {
     // on cadence-throttle even when not emitting.
     std::array<std::array<uint64_t, 5>, 5> bucketTransitions{};
 
+    // 0xBA flush-attribution counters. The wire-side counter
+    // `OpcodeStats::sentPackets[SvEntityUpdateBatch]` only shows actual
+    // sends; without these we cannot tell whether a "low batch count"
+    // window was zero-delta ticks, dirtyMask==0 skips, or genuine UDP
+    // loss. All four are per-server (sum across all clients per window).
+    //   batchesSentDeltas       — count of flushBatch() calls that
+    //                              actually wrote a 0xBA packet
+    //                              (deltaCount > 0 at flush time).
+    //   batchedEntitiesTotal    — sum of deltaCount across those sends
+    //                              (i.e. how many per-entity update
+    //                              records went on the wire).
+    //   flushBatchZeroDelta     — flushBatch() called with deltaCount == 0
+    //                              and short-circuited (no 0xBA send).
+    //                              One per flush invocation per client.
+    //   dirtyMaskZeroSkips      — `if (dirtyMask == 0) continue;` hits
+    //                              after buildCurrentState() ran. Sums
+    //                              with stayedThrottled + stayedFullRate
+    //                              to attribute "no batch this tick" to
+    //                              cadence vs. nothing-changed.
+    uint64_t batchesSentDeltas    = 0;
+    uint64_t batchedEntitiesTotal = 0;
+    uint64_t flushBatchZeroDelta  = 0;
+    uint64_t dirtyMaskZeroSkips   = 0;
+
     void reset() { *this = AOIStats{}; }
 };
 
@@ -186,6 +210,57 @@ public:
     void resetStats() { stats_.reset(); }
     size_t registeredEntityCount() const { return handleToPid_.size(); }
 
+    // Snapshot the 0xBA flush-attribution counters for the 5s server log
+    // (added 2026-05-07 alongside the NetClient classifyGap bias fix).
+    //
+    // Two reset policies in one helper:
+    //   * batches/deltas/zeroDeltaFlushes/dirtyMaskSkips were ADDED for this
+    //     telemetry slice and aren't consumed by /aoi_stats — snapshot AND
+    //     zero (per-window).
+    //   * clientsServed/stayedFullRate/stayedThrottled/stayedCriticalOverride
+    //     are pre-existing cumulative counters that /aoi_stats reads as
+    //     running totals. We compute deltas vs a private prev-snapshot
+    //     instead of zeroing stats_ — so the 5s log shows windowed values
+    //     without breaking the GM command's "since reset" semantics.
+    //     Saturates at 0 if `/aoi_stats reset` ran during the window
+    //     (current < prev → delta clamped to 0).
+    struct FlushAttribution {
+        // Per-window (reset semantics)
+        uint64_t batchesSentDeltas      = 0;
+        uint64_t batchedEntitiesTotal   = 0;
+        uint64_t flushBatchZeroDelta    = 0;
+        uint64_t dirtyMaskZeroSkips     = 0;
+        // Per-window deltas vs prev snapshot; stats_ totals untouched
+        uint64_t clientsServedDelta          = 0;
+        uint64_t stayedFullRateDelta         = 0;
+        uint64_t stayedThrottledDelta        = 0;
+        uint64_t stayedCriticalOverrideDelta = 0;
+    };
+    FlushAttribution flushAttributionCounters() {
+        auto saturatingDelta = [](uint64_t cur, uint64_t prev) -> uint64_t {
+            return (cur >= prev) ? (cur - prev) : 0;
+        };
+        FlushAttribution out{
+            stats_.batchesSentDeltas,
+            stats_.batchedEntitiesTotal,
+            stats_.flushBatchZeroDelta,
+            stats_.dirtyMaskZeroSkips,
+            saturatingDelta(stats_.clientsServed,          flushAttrPrev_.clientsServed),
+            saturatingDelta(stats_.stayedFullRate,         flushAttrPrev_.stayedFullRate),
+            saturatingDelta(stats_.stayedThrottled,        flushAttrPrev_.stayedThrottled),
+            saturatingDelta(stats_.stayedCriticalOverride, flushAttrPrev_.stayedCriticalOverride)
+        };
+        stats_.batchesSentDeltas    = 0;
+        stats_.batchedEntitiesTotal = 0;
+        stats_.flushBatchZeroDelta  = 0;
+        stats_.dirtyMaskZeroSkips   = 0;
+        flushAttrPrev_.clientsServed          = stats_.clientsServed;
+        flushAttrPrev_.stayedFullRate         = stats_.stayedFullRate;
+        flushAttrPrev_.stayedThrottled        = stats_.stayedThrottled;
+        flushAttrPrev_.stayedCriticalOverride = stats_.stayedCriticalOverride;
+        return out;
+    }
+
     // AOI tuning. Production server runs with the defaults baked into
     // AOIConfig (640 / 1280 / 10). Tests use this to widen the gate when
     // exercising sendDiffs paths (e.g. tier-cadence-skip) that under default
@@ -197,6 +272,17 @@ public:
 private:
     AOIConfig aoiConfig_;
     AOIStats  stats_;
+    // Per-window prev snapshot for `flushAttributionCounters()` deltas.
+    // Holds the running totals of the four AOI counters at the moment of
+    // the LAST flush; subtracted from current totals to produce window
+    // deltas without disturbing stats_ (which /aoi_stats consumes).
+    struct FlushAttrPrev {
+        uint64_t clientsServed          = 0;
+        uint64_t stayedFullRate         = 0;
+        uint64_t stayedThrottled        = 0;
+        uint64_t stayedCriticalOverride = 0;
+    };
+    FlushAttrPrev flushAttrPrev_;
 
     // Bidirectional mapping: EntityHandle <-> PersistentId
     std::unordered_map<uint32_t, PersistentId> handleToPid_; // key = EntityHandle packed value

@@ -1,0 +1,4654 @@
+{
+  "root": {
+    "anchor": {
+      "offset": [
+        0.0,
+        0.0
+      ],
+      "preset": "StretchAll",
+      "size": [
+        0.0,
+        0.0
+      ]
+    },
+    "backgroundColor": [
+      0,
+      0,
+      0,
+      3
+    ],
+    "borderColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "children": [
+      {
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            90.0
+          ],
+          "minSize": [
+            1800.0,
+            0.0
+          ],
+          "offset": [
+            -570.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            600.0,
+            800.0
+          ]
+        },
+        "backgroundColor": [
+          8,
+          7,
+          7,
+          4444
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          444
+        ],
+        "borderWidth": 0.0,
+        "charDisplayBgColor": [
+          15,
+          1,
+          34,
+          230
+        ],
+        "charDisplayBorderColor": [
+          255,
+          52,
+          0,
+          50
+        ],
+        "charDisplayOffset": [
+          10.0,
+          200.0
+        ],
+        "charSpriteOffset": [
+          0.0,
+          0.0
+        ],
+        "characterScale": 5.0,
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "closeBtnBgColor": [
+          27,
+          26,
+          25,
+          255
+        ],
+        "closeBtnBorderColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "closeBtnBorderW": 0.0,
+        "closeBtnFontSize": 40.0,
+        "closeBtnOffset": [
+          20.0,
+          30.0
+        ],
+        "closeBtnRadius": 40.0,
+        "closeBtnTextColor": [
+          255,
+          242,
+          224,
+          255
+        ],
+        "diamondBorderColor": [
+          47,
+          44,
+          39,
+          255
+        ],
+        "diamondBorderWidth": 0.0,
+        "diamondFillColor": [
+          255,
+          255,
+          255,
+          0
+        ],
+        "diamondOffset": [
+          0.0,
+          0.0
+        ],
+        "diamondSegments": 0,
+        "diamondSize": 0.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "factionBannerBgColor": [
+          36,
+          35,
+          34,
+          230
+        ],
+        "factionBannerBorderColor": [
+          255,
+          255,
+          255,
+          30
+        ],
+        "factionBannerBorderSegments": 3,
+        "factionBannerBorderW": -5.0,
+        "factionBannerGap": 30.0,
+        "factionBannerHeight": 0.0,
+        "factionBannerPadding": -450.0,
+        "factionColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "factionFontSize": 140.0,
+        "factionOffset": [
+          0.0,
+          -620.0
+        ],
+        "fontSize": 30.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "status_panel",
+        "levelColor": [
+          153,
+          141,
+          130,
+          255
+        ],
+        "levelFontSize": 50.0,
+        "levelOffset": [
+          0.0,
+          0.0
+        ],
+        "nameColor": [
+          251,
+          255,
+          212,
+          255
+        ],
+        "nameFontSize": 80.0,
+        "nameOffset": [
+          0.0,
+          0.0
+        ],
+        "noFactionText": " ",
+        "panelUseChrome": true,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "statGridBgColor": [
+          26,
+          16,
+          37,
+          230
+        ],
+        "statGridBorderColor": [
+          41,
+          41,
+          40,
+          217
+        ],
+        "statGridOffset": [
+          -1.0,
+          -4.0
+        ],
+        "statLabelColor": [
+          234,
+          255,
+          0,
+          255
+        ],
+        "statLabelFontSize": 50.0,
+        "statValueFontSize": 50.0,
+        "title": "",
+        "titleColor": [
+          245,
+          245,
+          245,
+          255
+        ],
+        "titleFontSize": 50.0,
+        "titleOffset": [
+          220.0,
+          40.0
+        ],
+        "type": "status_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "xpBarBgColor": [
+          28,
+          3,
+          40,
+          230
+        ],
+        "xpBarBorderColor": [
+          40,
+          39,
+          39,
+          230
+        ],
+        "xpBarFillColor": [
+          255,
+          255,
+          255,
+          242
+        ],
+        "xpBarHeight": 200.0
+      },
+      {
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            90.0
+          ],
+          "minSize": [
+            1800.0,
+            0.0
+          ],
+          "offset": [
+            -570.0,
+            1.0
+          ],
+          "preset": "Center",
+          "size": [
+            600.0,
+            800.0
+          ]
+        },
+        "backgroundColor": [
+          26,
+          26,
+          38,
+          191
+        ],
+        "bagPanelBgColor": [
+          99,
+          99,
+          99,
+          333
+        ],
+        "bagPanelBorderColor": [
+          255,
+          84,
+          0,
+          333
+        ],
+        "bagPanelBorderWidth": 1.0,
+        "bagPanelOffset": [
+          -150.0,
+          20.0
+        ],
+        "bagPanelPadding": 10.0,
+        "bagTitleHeight": 20.0,
+        "borderColor": [
+          77,
+          77,
+          102,
+          153
+        ],
+        "borderWidth": 1.0,
+        "characterScale": 5.0,
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeRarityCommonColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "chromeRarityEpicColor": [
+          217,
+          115,
+          255,
+          255
+        ],
+        "chromeRarityLegendaryColor": [
+          255,
+          179,
+          51,
+          255
+        ],
+        "chromeRarityRareColor": [
+          102,
+          179,
+          255,
+          255
+        ],
+        "chromeRarityUncommonColor": [
+          102,
+          255,
+          102,
+          255
+        ],
+        "chromeTooltipBgColor": [
+          255,
+          255,
+          255,
+          240
+        ],
+        "chromeTooltipBorderColor": [
+          255,
+          84,
+          0,
+          444
+        ],
+        "chromeTooltipBorderWidth": 1.600000023841858,
+        "chromeTooltipCornerRadius": 17.0,
+        "chromeTooltipGradientBottom": [
+          32,
+          23,
+          31,
+          240
+        ],
+        "chromeTooltipGradientTop": [
+          38,
+          24,
+          6,
+          240
+        ],
+        "chromeTooltipLevelColor": [
+          242,
+          102,
+          102,
+          255
+        ],
+        "chromeTooltipLevelFontSize": 27.0,
+        "chromeTooltipLevelMetColor": [
+          102,
+          242,
+          128,
+          255
+        ],
+        "chromeTooltipLineSpacing": 2.0,
+        "chromeTooltipNameFontSize": 30.0,
+        "chromeTooltipOffset": 6.0,
+        "chromeTooltipPadding": 10.0,
+        "chromeTooltipSepColor": [
+          64,
+          88,
+          157,
+          170
+        ],
+        "chromeTooltipSepHeight": 4.0,
+        "chromeTooltipSepOffset": [
+          0.0,
+          0.0
+        ],
+        "chromeTooltipShadowBlur": 8.0,
+        "chromeTooltipShadowColor": [
+          0,
+          0,
+          0,
+          100
+        ],
+        "chromeTooltipShadowOffset": [
+          22.0,
+          22.0
+        ],
+        "chromeTooltipStatColor": [
+          199,
+          209,
+          235,
+          333
+        ],
+        "chromeTooltipStatFontSize": 27.0,
+        "closeBtnBgColor": [
+          26,
+          25,
+          25,
+          255
+        ],
+        "closeBtnBorderColor": [
+          255,
+          255,
+          255,
+          0
+        ],
+        "closeBtnBorderW": 2.0,
+        "closeBtnFontSize": 40.0,
+        "closeBtnOffset": [
+          20.0,
+          30.0
+        ],
+        "closeBtnRadius": 40.0,
+        "closeBtnTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "contentPadding": 30.0,
+        "ctxMenuBgColor": [
+          41,
+          6,
+          21,
+          235
+        ],
+        "ctxMenuBorderColor": [
+          255,
+          133,
+          8,
+          220
+        ],
+        "ctxMenuBorderW": 3.0,
+        "ctxMenuDisabledColor": [
+          13,
+          13,
+          12,
+          173
+        ],
+        "ctxMenuFontSize": 34.0,
+        "ctxMenuItemHeight": 50.0,
+        "ctxMenuPadding": 5.0,
+        "ctxMenuTextColor": [
+          255,
+          142,
+          0,
+          255
+        ],
+        "ctxMenuTextPadX": 14.0,
+        "ctxMenuWidth": 243.0,
+        "currencyFontSize": 50.0,
+        "currencyHeight": 30.0,
+        "currencyLabelFontSize": 50.0,
+        "currencyOffset": [
+          0.0,
+          0.0
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "dollAreaOffset": [
+          0.0,
+          0.0
+        ],
+        "dollCenterY": 0.550000011920929,
+        "dollInsetBgColor": [
+          49,
+          49,
+          47,
+          255
+        ],
+        "dollInsetBorderColor": [
+          0,
+          0,
+          0,
+          112
+        ],
+        "dollInsetBorderW": 12.0,
+        "dollWidthRatio": 0.44999998807907104,
+        "equipAreaVisible": true,
+        "equipLabelColor": [
+          85,
+          64,
+          34,
+          0
+        ],
+        "equipLabelFontSize": 12.0,
+        "equipLabelGap": 1.0,
+        "equipLayout": [
+          {
+            "offsetX": 0.0,
+            "offsetY": -3.5,
+            "sizeMul": 1.0
+          },
+          {
+            "offsetX": -1.0,
+            "offsetY": -2.0,
+            "sizeMul": 1.0
+          },
+          {
+            "offsetX": -2.0,
+            "offsetY": -1.0,
+            "sizeMul": 1.0
+          },
+          {
+            "offsetX": 2.0,
+            "offsetY": 1.0,
+            "sizeMul": 1.0
+          },
+          {
+            "offsetX": 2.0,
+            "offsetY": 0.0,
+            "sizeMul": 1.0
+          },
+          {
+            "offsetX": 0.0,
+            "offsetY": 3.0,
+            "sizeMul": 1.0
+          },
+          {
+            "offsetX": -2.0,
+            "offsetY": -0.0,
+            "sizeMul": 1.0
+          },
+          {
+            "offsetX": 1.0,
+            "offsetY": -2.0,
+            "sizeMul": 1.0
+          },
+          {
+            "offsetX": -2.0,
+            "offsetY": 1.0,
+            "sizeMul": 1.0
+          },
+          {
+            "offsetX": 2.0,
+            "offsetY": -1.0,
+            "sizeMul": 1.0
+          }
+        ],
+        "equipSlotSize": 70.0,
+        "goldLabelColor": [
+          255,
+          250,
+          128,
+          255
+        ],
+        "goldOffsetX": 0.0,
+        "goldOffsetY": -20.0,
+        "goldValueColor": [
+          255,
+          250,
+          128,
+          255
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gridAreaOffset": [
+          0.0,
+          0.0
+        ],
+        "gridAreaVisible": true,
+        "gridColumns": 4,
+        "gridPadding": 8.0,
+        "gridRows": 4,
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "iconAtlasCols": 8,
+        "iconAtlasRows": 4,
+        "id": "inventory_panel",
+        "itemFontSize": 50.0,
+        "itemTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "opalLabelColor": [
+          140,
+          184,
+          235,
+          255
+        ],
+        "opalOffsetX": 370.0,
+        "opalOffsetY": -20.0,
+        "opalValueColor": [
+          179,
+          217,
+          255,
+          255
+        ],
+        "panelBgColor": [
+          34,
+          2,
+          16,
+          444
+        ],
+        "panelBorderColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "panelBorderWidth": 2.0,
+        "panelUseChrome": true,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "quantityColor": [
+          189,
+          34,
+          105,
+          255
+        ],
+        "quantityFontSize": 32.0,
+        "rarityCommonColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "rarityEpicColor": [
+          163,
+          54,
+          237,
+          255
+        ],
+        "rarityLegendaryColor": [
+          255,
+          103,
+          0,
+          255
+        ],
+        "rarityRareColor": [
+          6,
+          63,
+          255,
+          255
+        ],
+        "rarityUncommonColor": [
+          58,
+          255,
+          0,
+          255
+        ],
+        "skillLoadoutStrip": {
+          "cooldownOverlayAlpha": 0.6499999761581421,
+          "cooldownOverlayColor": [
+            0,
+            0,
+            0,
+            166
+          ],
+          "cornerRadius": 6.0,
+          "dropHighlightColor": [
+            102,
+            255,
+            102,
+            179
+          ],
+          "dropHighlightThickness": 2.5,
+          "emptySlotIconColor": [
+            153,
+            153,
+            166,
+            102
+          ],
+          "origin": [
+            1150.0,
+            -100.0
+          ],
+          "pageDotColor": [
+            144,
+            144,
+            157,
+            333
+          ],
+          "pageDotColorActive": [
+            212,
+            70,
+            0,
+            255
+          ],
+          "pageDotGap": 20.0,
+          "pageDotRadius": 20.0,
+          "pageSelectorAlignment": "right",
+          "pageSelectorOffset": [
+            40.0,
+            1.0
+          ],
+          "slotBgColor": [
+            46,
+            41,
+            56,
+            224
+          ],
+          "slotBgColorActive": [
+            64,
+            56,
+            77,
+            242
+          ],
+          "slotBorderColor": [
+            128,
+            122,
+            148,
+            140
+          ],
+          "slotBorderColorActive": [
+            217,
+            191,
+            115,
+            255
+          ],
+          "slotBorderThickness": 1.5,
+          "slotGap": 8.0,
+          "slotGlyphFontSize": 39.0,
+          "slotIsCircle": true,
+          "slotSize": 120.0,
+          "stackCountColor": [
+            255,
+            255,
+            255,
+            242
+          ],
+          "stackCountFontSize": 30.0,
+          "useChrome": true
+        },
+        "slotBorderWidth": 4.0,
+        "slotEmptyBgColor": [
+          151,
+          148,
+          142,
+          255
+        ],
+        "slotEmptyBorderColor": [
+          255,
+          255,
+          255,
+          217
+        ],
+        "slotFilledBgColor": [
+          148,
+          107,
+          129,
+          255
+        ],
+        "slotSize": 130.0,
+        "stripBgColor": [
+          26,
+          26,
+          33,
+          0
+        ],
+        "stripBorderColor": [
+          102,
+          89,
+          51,
+          0
+        ],
+        "stripHeight": 40.0,
+        "stripPadding": 0.0,
+        "stripVisible": true,
+        "style": "panel_hud",
+        "textColor": [
+          255,
+          255,
+          255,
+          242
+        ],
+        "tooltipAutoWidth": true,
+        "tooltipBgColor": [
+          255,
+          255,
+          255,
+          247
+        ],
+        "tooltipBorderColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "tooltipBorderWidth": 2.0,
+        "tooltipLevelColor": [
+          255,
+          21,
+          0,
+          255
+        ],
+        "tooltipLevelFontSize": 27.0,
+        "tooltipLevelMetColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "tooltipLineSpacing": 15.0,
+        "tooltipMaxWidth": 700.0,
+        "tooltipNameFontSize": 27.0,
+        "tooltipOffset": 10.0,
+        "tooltipPadding": 20.0,
+        "tooltipSepColor": [
+          0,
+          0,
+          0,
+          222
+        ],
+        "tooltipSepHeight": 2.0,
+        "tooltipShadowColor": [
+          38,
+          31,
+          20,
+          115
+        ],
+        "tooltipShadowOffset": 4.0,
+        "tooltipStatColor": [
+          30,
+          8,
+          42,
+          255
+        ],
+        "tooltipStatFontSize": 27.0,
+        "tooltipUseChrome": true,
+        "tooltipWidth": 200.0,
+        "type": "inventory_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "activeSetPage": 0,
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            80.0
+          ],
+          "offset": [
+            30.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            1800.0,
+            800.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderWidth": 0.0,
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 20.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromeTooltipBgColor": [
+          26,
+          31,
+          46,
+          240
+        ],
+        "chromeTooltipBodyFontSize": 20.0,
+        "chromeTooltipBorderColor": [
+          77,
+          89,
+          128,
+          102
+        ],
+        "chromeTooltipBorderWidth": 0.0,
+        "chromeTooltipCornerRadius": 20.0,
+        "chromeTooltipDescColor": [
+          191,
+          204,
+          230,
+          255
+        ],
+        "chromeTooltipDescFontSize": 22.0,
+        "chromeTooltipDescGap": 5.0,
+        "chromeTooltipGradientBottom": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromeTooltipGradientTop": [
+          33,
+          38,
+          56,
+          240
+        ],
+        "chromeTooltipLineSpacing": 7.0,
+        "chromeTooltipPadding": 10.0,
+        "chromeTooltipRankColor": [
+          235,
+          242,
+          255,
+          255
+        ],
+        "chromeTooltipRankFontSize": 20.0,
+        "chromeTooltipReqColor": [
+          242,
+          140,
+          128,
+          255
+        ],
+        "chromeTooltipReqFontSize": 20.0,
+        "chromeTooltipShadowBlur": 2.0,
+        "chromeTooltipShadowColor": [
+          0,
+          0,
+          0,
+          115
+        ],
+        "chromeTooltipShadowOffset": [
+          0.0,
+          3.0
+        ],
+        "chromeTooltipTextColor": [
+          217,
+          224,
+          242,
+          255
+        ],
+        "chromeTooltipTitleColor": [
+          255,
+          217,
+          77,
+          333
+        ],
+        "chromeTooltipTitleFontSize": 20.0,
+        "chromeTooltipW": 300.0,
+        "circleRadiusMul": 0.25,
+        "closeBtnBgColor": [
+          47,
+          47,
+          47,
+          255
+        ],
+        "closeBtnBorderColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "closeBtnBorderW": 2.0,
+        "closeBtnFontSize": 50.0,
+        "closeBtnOffset": [
+          6.0,
+          6.0
+        ],
+        "closeBtnRadius": 40.0,
+        "closeBtnTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "confirmAcceptBg": [
+          29,
+          184,
+          29,
+          255
+        ],
+        "confirmBgColor": [
+          88,
+          17,
+          57,
+          242
+        ],
+        "confirmBorderColor": [
+          128,
+          97,
+          56,
+          255
+        ],
+        "confirmBtnFontSz": 25.0,
+        "confirmBtnH": 40.0,
+        "confirmBtnTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "confirmBtnW": 120.0,
+        "confirmDeclineBg": [
+          162,
+          47,
+          47,
+          255
+        ],
+        "confirmDialogH": 120.0,
+        "confirmDialogW": 360.0,
+        "confirmFontSize": 22.0,
+        "confirmTextColor": [
+          255,
+          242,
+          217,
+          255
+        ],
+        "contentPadding": 28.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "dividerColor": [
+          187,
+          110,
+          29,
+          333
+        ],
+        "dividerWidth": 3.0,
+        "dotActivated": [
+          230,
+          133,
+          31,
+          255
+        ],
+        "dotLocked": [
+          225,
+          214,
+          214,
+          179
+        ],
+        "dotOffset": [
+          17.0,
+          -20.0
+        ],
+        "dotSize": 22.0,
+        "dotSpacing": 34.0,
+        "dotUnlocked": [
+          217,
+          191,
+          64,
+          217
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gridColumns": 5,
+        "gridMargin": 70.0,
+        "headerColor": [
+          255,
+          245,
+          0,
+          255
+        ],
+        "headerFontSize": 40.0,
+        "headerHeight": 10.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "skill_panel",
+        "nameFontSize": 23.0,
+        "nameLocked": [
+          255,
+          209,
+          209,
+          222
+        ],
+        "nameOffset": [
+          2.0,
+          5.0
+        ],
+        "nameUnlocked": [
+          170,
+          108,
+          11,
+          300
+        ],
+        "panelBgColor": [
+          34,
+          2,
+          16,
+          444
+        ],
+        "panelBorderColor": [
+          102,
+          77,
+          51,
+          255
+        ],
+        "panelUseChrome": true,
+        "pointsBadge": [
+          255,
+          131,
+          0,
+          255
+        ],
+        "pointsBadgeOffset": [
+          0.0,
+          0.0
+        ],
+        "pointsEmpty": [
+          255,
+          255,
+          255,
+          333
+        ],
+        "pointsFontSize": 200.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "ptsBadgeRadius": 0.0,
+        "ptsBadgeRingColor": [
+          77,
+          56,
+          26,
+          255
+        ],
+        "ptsFontSize": 0.0,
+        "ptsLabelColor": [
+          128,
+          112,
+          89,
+          191
+        ],
+        "ptsLabelText": "pts",
+        "ptsTextColor": [
+          255,
+          148,
+          0,
+          255
+        ],
+        "ringNormal": [
+          255,
+          255,
+          255,
+          3333
+        ],
+        "ringSelected": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "ringWidthNormal": 0.0,
+        "ringWidthSelected": 4.0,
+        "skillBgLocked": [
+          113,
+          98,
+          98,
+          3333
+        ],
+        "skillBgUnlocked": [
+          224,
+          108,
+          0,
+          333
+        ],
+        "skillsHeaderOffset": [
+          470.0,
+          10.0
+        ],
+        "slotNameFontSize": 35.0,
+        "splitRatio": 0.30000001192092896,
+        "tabBgActive": [
+          255,
+          168,
+          0,
+          255
+        ],
+        "tabBgInactive": [
+          88,
+          59,
+          0,
+          280
+        ],
+        "tabFontSize": 30.0,
+        "tabOffset": [
+          5.0,
+          30.0
+        ],
+        "tabRadius": 30.0,
+        "tabRingActive": [
+          140,
+          199,
+          255,
+          255
+        ],
+        "tabRingInactive": [
+          102,
+          82,
+          56,
+          217
+        ],
+        "tabSpacingMul": 3.0,
+        "tabTextActive": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "tabTextInactive": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "titleColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "titleFontSize": 0.0,
+        "titleOffset": [
+          100000.0,
+          0.0
+        ],
+        "tooltipBgColor": [
+          28,
+          17,
+          5,
+          242
+        ],
+        "tooltipBodyFontSize": 22.0,
+        "tooltipBorderColor": [
+          255,
+          168,
+          0,
+          255
+        ],
+        "tooltipBorderW": 3.0,
+        "tooltipDescColor": [
+          251,
+          170,
+          0,
+          255
+        ],
+        "tooltipDescFontSize": 30.0,
+        "tooltipDescGap": 4.0,
+        "tooltipLineSpacing": 18.0,
+        "tooltipOffset": [
+          0.0,
+          0.0
+        ],
+        "tooltipPadding": 40.0,
+        "tooltipRankColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "tooltipRankFontSize": 30.0,
+        "tooltipReqColor": [
+          144,
+          111,
+          78,
+          255
+        ],
+        "tooltipReqFontSize": 30.0,
+        "tooltipTextColor": [
+          196,
+          180,
+          152,
+          255
+        ],
+        "tooltipTitleColor": [
+          255,
+          209,
+          51,
+          255
+        ],
+        "tooltipTitleFontSize": 50.0,
+        "tooltipUseChrome": true,
+        "tooltipW": 450.0,
+        "type": "skill_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "wheelEndDeg": 370.0,
+        "wheelOffset": [
+          0.0,
+          120.0
+        ],
+        "wheelRadiusOverride": 0.0,
+        "wheelSlotSizeMul": 0.6000000238418579,
+        "wheelStartDeg": 170.0
+      },
+      {
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            80.0
+          ],
+          "offset": [
+            30.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            1800.0,
+            800.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bgColor": [
+          34,
+          3,
+          44,
+          444
+        ],
+        "borderColor": [
+          15,
+          3,
+          32,
+          255
+        ],
+        "borderWidth": 5.0,
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "closeBgColor": [
+          41,
+          11,
+          11,
+          255
+        ],
+        "closeBorderColor": [
+          255,
+          255,
+          255,
+          140
+        ],
+        "closeRadius": 45.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "dividerColor": [
+          255,
+          5,
+          5,
+          128
+        ],
+        "emblemOffset": [
+          0.0,
+          0.0
+        ],
+        "emblemSize": 200.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "guildInfoOffset": [
+          600.0,
+          50.0
+        ],
+        "guildLevelOffset": [
+          0.0,
+          0.0
+        ],
+        "guildNameColor": [
+          255,
+          97,
+          0,
+          255
+        ],
+        "guildNameFontSize": 30.0,
+        "guildNameOffset": [
+          0.0,
+          0.0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerHeight": 70.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "guild_panel",
+        "infoColor": [
+          255,
+          150,
+          0,
+          255
+        ],
+        "infoFontSize": 30.0,
+        "memberCountOffset": [
+          0.0,
+          0.0
+        ],
+        "offlineColor": [
+          115,
+          115,
+          115,
+          204
+        ],
+        "onlineColor": [
+          51,
+          217,
+          77,
+          255
+        ],
+        "panelUseChrome": true,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "rosterHeaderBgColor": [
+          61,
+          0,
+          77,
+          204
+        ],
+        "rosterHeaderFontSize": 30.0,
+        "rosterHeaderHeight": 50.0,
+        "rosterHeaderTextColor": [
+          255,
+          253,
+          252,
+          255
+        ],
+        "rosterOffset": [
+          2.0,
+          0.0
+        ],
+        "rosterRowFontSize": 3.0,
+        "rosterRowHeight": 30.0,
+        "rosterRowTextColor": [
+          56,
+          36,
+          15,
+          255
+        ],
+        "titleColor": [
+          255,
+          110,
+          0,
+          255
+        ],
+        "titleFontSize": 30.0,
+        "titleOffset": [
+          0.0,
+          15.0
+        ],
+        "type": "guild_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false
+      },
+      {
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            80.0
+          ],
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "StretchAll",
+          "size": [
+            0.0,
+            0.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "children": [
+          {
+            "anchor": {
+              "margin": [
+                16.0,
+                16.0,
+                16.0,
+                16.0
+              ],
+              "offset": [
+                0.0,
+                0.0
+              ],
+              "preset": "StretchAll",
+              "size": [
+                0.0,
+                0.0
+              ]
+            },
+            "backgroundColor": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "bgColor": [
+              26,
+              26,
+              33,
+              242
+            ],
+            "borderColor": [
+              153,
+              128,
+              64,
+              255
+            ],
+            "chromePanelBgColor": [
+              20,
+              26,
+              41,
+              240
+            ],
+            "chromePanelBorderColor": [
+              89,
+              107,
+              153,
+              140
+            ],
+            "chromePanelBorderWidth": 1.5,
+            "chromePanelCornerRadius": 14.0,
+            "chromePanelGradientBottom": [
+              15,
+              20,
+              36,
+              240
+            ],
+            "chromePanelGradientTop": [
+              33,
+              41,
+              61,
+              240
+            ],
+            "chromePanelShadowBlur": 12.0,
+            "chromePanelShadowColor": [
+              0,
+              0,
+              0,
+              140
+            ],
+            "chromePanelShadowOffset": [
+              0.0,
+              4.0
+            ],
+            "disabledColor": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "gradientBottom": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "gradientTop": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "headerColor": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "headerHeight": 48.0,
+            "hoverColor": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "id": "friends_panel_inner",
+            "offlineColor": [
+              153,
+              153,
+              153,
+              255
+            ],
+            "onlineColor": [
+              115,
+              217,
+              115,
+              255
+            ],
+            "panelUseChrome": true,
+            "pressedColor": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "rowBgEven": [
+              36,
+              36,
+              46,
+              230
+            ],
+            "rowBgOdd": [
+              31,
+              31,
+              38,
+              230
+            ],
+            "rowHeight": 32.0,
+            "tabHeight": 36.0,
+            "textColor": [
+              255,
+              255,
+              255,
+              255
+            ],
+            "type": "friends_panel",
+            "uiShadowColor": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "visible": false
+          }
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "social_panel",
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "title": "Social",
+        "type": "panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false
+      },
+      {
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            80.0
+          ],
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "StretchAll",
+          "size": [
+            0.0,
+            0.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderWidth": 5.0,
+        "buttonCornerRadius": 4.0,
+        "buttonFontSize": 60.0,
+        "checkOnColor": [
+          204,
+          179,
+          77,
+          255
+        ],
+        "checkboxSize": 44.0,
+        "chromeLogoutBgColor": [
+          140,
+          38,
+          38,
+          230
+        ],
+        "chromeLogoutBorderColor": [
+          140,
+          38,
+          38,
+          230
+        ],
+        "chromeLogoutTextColor": [
+          255,
+          242,
+          230,
+          255
+        ],
+        "chromePanelBgColor": [
+          41,
+          13,
+          72,
+          230
+        ],
+        "chromePanelBorderColor": [
+          179,
+          153,
+          102,
+          0
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 0.0,
+        "chromePanelGradientBottom": [
+          73,
+          73,
+          73,
+          0
+        ],
+        "chromePanelGradientTop": [
+          0,
+          0,
+          0,
+          300
+        ],
+        "chromePanelShadowBlur": 0.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          200
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          0.0
+        ],
+        "chromeTitleBarColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "chromeTitleColor": [
+          255,
+          71,
+          0,
+          300
+        ],
+        "chromeToggleOffBgColor": [
+          115,
+          89,
+          64,
+          179
+        ],
+        "chromeToggleOnBgColor": [
+          77,
+          140,
+          77,
+          230
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "displayOffset": [
+          0.0,
+          0.0
+        ],
+        "dividerColor": [
+          179,
+          153,
+          102,
+          102
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "settings_panel",
+        "itemSpacing": 30.0,
+        "labelColor": [
+          137,
+          67,
+          0,
+          255
+        ],
+        "labelFontSize": 30.0,
+        "logoutBtnColor": [
+          255,
+          0,
+          0,
+          230
+        ],
+        "logoutBtnHoverColor": [
+          117,
+          0,
+          0,
+          242
+        ],
+        "logoutButtonHeight": 40.0,
+        "logoutButtonWidth": 320.0,
+        "logoutOffset": [
+          0.0,
+          0.0
+        ],
+        "logoutTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "panelUseChrome": true,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "sectionColor": [
+          224,
+          105,
+          15,
+          255
+        ],
+        "sectionFontSize": 40.0,
+        "sectionSpacing": 0.0,
+        "titleColor": [
+          67,
+          35,
+          5,
+          255
+        ],
+        "titleFontSize": 30.0,
+        "titleOffset": [
+          0.0,
+          0.0
+        ],
+        "toggleBtnHeight": 35.0,
+        "toggleBtnWidth": 60.0,
+        "toggleOffColor": [
+          115,
+          89,
+          64,
+          179
+        ],
+        "toggleOnColor": [
+          77,
+          140,
+          77,
+          230
+        ],
+        "type": "settings_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false
+      },
+      {
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            80.0
+          ],
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "StretchAll",
+          "size": [
+            0.0,
+            0.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bgColor": [
+          40,
+          28,
+          5,
+          247
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "buyBtnBorderColor": [
+          77,
+          128,
+          77,
+          204
+        ],
+        "buyBtnColor": [
+          38,
+          77,
+          38,
+          204
+        ],
+        "buyBtnDisabledBorderColor": [
+          77,
+          77,
+          77,
+          128
+        ],
+        "buyBtnDisabledColor": [
+          51,
+          51,
+          51,
+          128
+        ],
+        "buyBtnDisabledTextColor": [
+          128,
+          128,
+          128,
+          179
+        ],
+        "buyBtnFontSize": 30.0,
+        "buyBtnHeight": 50.0,
+        "buyBtnLabel": "Buy",
+        "buyBtnOffset": [
+          0.0,
+          20.0
+        ],
+        "buyBtnTextColor": [
+          217,
+          242,
+          217,
+          255
+        ],
+        "buyBtnWidth": 100.0,
+        "buyCancelBtnLabel": "Cancel",
+        "buyConfirmBgColor": [
+          26,
+          26,
+          41,
+          247
+        ],
+        "buyConfirmBorderColor": [
+          102,
+          102,
+          140,
+          230
+        ],
+        "buyConfirmBorderW": 1.5,
+        "buyConfirmBtnBottomMargin": 10.0,
+        "buyConfirmBtnFontSize": 24.0,
+        "buyConfirmBtnGap": 20.0,
+        "buyConfirmBtnH": 40.0,
+        "buyConfirmBtnLabel": "Confirm",
+        "buyConfirmBtnTextColor": [
+          230,
+          230,
+          217,
+          255
+        ],
+        "buyConfirmBtnW": 120.0,
+        "buyConfirmCancelBtnColor": [
+          89,
+          38,
+          38,
+          217
+        ],
+        "buyConfirmCancelTextColor": [
+          230,
+          230,
+          217,
+          255
+        ],
+        "buyConfirmConfirmBtnColor": [
+          38,
+          64,
+          115,
+          217
+        ],
+        "buyConfirmCostColor": [
+          255,
+          214,
+          0,
+          255
+        ],
+        "buyConfirmCostFontSize": 24.0,
+        "buyConfirmCostY": 46.0,
+        "buyConfirmDimColor": [
+          0,
+          0,
+          0,
+          102
+        ],
+        "buyConfirmOffset": [
+          0.0,
+          0.0
+        ],
+        "buyConfirmPopupH": 140.0,
+        "buyConfirmPopupW": 340.0,
+        "buyConfirmTitleColor": [
+          230,
+          230,
+          217,
+          255
+        ],
+        "buyConfirmTitleFontSize": 24.0,
+        "buyConfirmTitleY": 10.0,
+        "cancelBtnColor": [
+          89,
+          38,
+          38,
+          217
+        ],
+        "cancelBtnLabel": "Cancel",
+        "categoryRowHeights": {
+          "bags": 120.0,
+          "consumables": 150.0
+        },
+        "categoryTabActiveColor": [
+          77,
+          115,
+          204,
+          242
+        ],
+        "categoryTabActiveTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "categoryTabBarHeight": 50.0,
+        "categoryTabBgColor": [
+          51,
+          46,
+          71,
+          200
+        ],
+        "categoryTabFontSize": 40.0,
+        "categoryTabGap": 0.0,
+        "categoryTabOffset": [
+          360.0,
+          35.0
+        ],
+        "categoryTabPaddingX": 100.0,
+        "categoryTabTextColor": [
+          191,
+          191,
+          204,
+          255
+        ],
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromeHeaderBgColor": [
+          41,
+          51,
+          77,
+          0
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "closeBtnBgColor": [
+          37,
+          21,
+          5,
+          255
+        ],
+        "closeBtnBorderColor": [
+          77,
+          51,
+          26,
+          255
+        ],
+        "closeBtnBorderW": 2.0,
+        "closeBtnFontSize": 40.0,
+        "closeBtnOffset": [
+          5.0,
+          5.0
+        ],
+        "closeBtnRadius": 40.0,
+        "closeBtnTextColor": [
+          255,
+          242,
+          224,
+          255
+        ],
+        "confirmBgColor": [
+          26,
+          26,
+          41,
+          247
+        ],
+        "confirmBorderColor": [
+          102,
+          102,
+          140,
+          230
+        ],
+        "confirmBorderW": 1.5,
+        "confirmBtnColor": [
+          38,
+          64,
+          115,
+          217
+        ],
+        "confirmBtnFontSize": 10.0,
+        "confirmBtnH": 24.0,
+        "confirmBtnLabel": "Confirm",
+        "confirmBtnW": 70.0,
+        "confirmPopupH": 120.0,
+        "confirmPopupW": 220.0,
+        "confirmPriceFontSize": 10.0,
+        "confirmQtyBtnFontSize": 12.0,
+        "confirmQtyBtnSize": 20.0,
+        "confirmQtyFontSize": 14.0,
+        "confirmTitleFontSize": 11.0,
+        "contentPadding": 20.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "dividerColor": [
+          77,
+          77,
+          102,
+          153
+        ],
+        "errorColor": [
+          204,
+          51,
+          51,
+          255
+        ],
+        "goldBarBgColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "goldBarHeight": 40.0,
+        "goldColor": [
+          45,
+          64,
+          141,
+          255
+        ],
+        "goldFontSize": 30.0,
+        "goldLabelPrefix": "Gold: ",
+        "goldOffset": [
+          0.0,
+          0.0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerBgColor": [
+          5,
+          5,
+          53,
+          230
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerFontSize": 11.0,
+        "headerHeight": 56.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "shop_panel",
+        "itemFontSize": 30.0,
+        "itemNameOffset": [
+          0.0,
+          20.0
+        ],
+        "panelBorderWidth": 3.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "priceColor": [
+          52,
+          68,
+          142,
+          255
+        ],
+        "priceFontSize": 30.0,
+        "priceOffset": [
+          0.0,
+          30.0
+        ],
+        "rowAltBgColor": [
+          0,
+          0,
+          0,
+          38
+        ],
+        "rowBgColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "rowHeight": 90.0,
+        "shopListOffset": [
+          0.0,
+          0.0
+        ],
+        "showStock": false,
+        "stockColor": [
+          153,
+          153,
+          179,
+          230
+        ],
+        "stockFontSize": 30.0,
+        "stockOffset": [
+          0.0,
+          0.0
+        ],
+        "subHeaderColor": [
+          230,
+          230,
+          217,
+          255
+        ],
+        "subHeaderFontSize": 30.0,
+        "subHeaderHeight": 0.0,
+        "subHeaderLabel": "",
+        "textColor": [
+          230,
+          230,
+          217,
+          255
+        ],
+        "titleColor": [
+          255,
+          116,
+          0,
+          255
+        ],
+        "titleFontSize": 40.0,
+        "titleOffset": [
+          0.0,
+          10.0
+        ],
+        "type": "shop_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "useChrome": true,
+        "visible": false
+      },
+      {
+        "activeLabelOffset": [
+          0.0,
+          0.0
+        ],
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            80.0
+          ],
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "StretchAll",
+          "size": [
+            0.0,
+            0.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          444
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "buttonColor": [
+          46,
+          56,
+          89,
+          230
+        ],
+        "buttonHeight": 40.0,
+        "buttonTextColor": [
+          230,
+          230,
+          217,
+          255
+        ],
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleBarColor": [
+          41,
+          51,
+          77,
+          217
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "closeBtnColor": [
+          47,
+          47,
+          47,
+          255
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "equippedColor": [
+          77,
+          204,
+          77,
+          255
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "pet_panel",
+        "labelColor": [
+          179,
+          179,
+          166,
+          255
+        ],
+        "listLabelOffset": [
+          0.0,
+          0.0
+        ],
+        "nameFontSize": 30.0,
+        "panelUseChrome": true,
+        "petInfoOffset": [
+          0.0,
+          0.0
+        ],
+        "portraitBgColor": [
+          38,
+          51,
+          64,
+          230
+        ],
+        "portraitSize": 120.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "selectedBgColor": [
+          51,
+          64,
+          102,
+          204
+        ],
+        "statFontSize": 30.0,
+        "titleBarColor": [
+          47,
+          47,
+          47,
+          255
+        ],
+        "titleColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "titleFontSize": 30.0,
+        "titleOffset": [
+          0.0,
+          0.0
+        ],
+        "type": "pet_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "unequipBtnColor": [
+          89,
+          38,
+          38,
+          230
+        ],
+        "visible": false,
+        "xpBarBgColor": [
+          38,
+          38,
+          51,
+          255
+        ],
+        "xpBarFillColor": [
+          51,
+          128,
+          230,
+          255
+        ]
+      },
+      {
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            80.0
+          ],
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "StretchAll",
+          "size": [
+            0.0,
+            0.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          444
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "buttonColor": [
+          46,
+          56,
+          89,
+          230
+        ],
+        "buttonDisabledColor": [
+          38,
+          38,
+          51,
+          153
+        ],
+        "buttonTextColor": [
+          230,
+          230,
+          217,
+          255
+        ],
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleBarColor": [
+          41,
+          51,
+          77,
+          217
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "closeBtnColor": [
+          47,
+          47,
+          47,
+          255
+        ],
+        "detailOffset": [
+          0.0,
+          0.0
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "goldColor": [
+          255,
+          224,
+          77,
+          255
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hasColor": [
+          77,
+          204,
+          77,
+          255
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "crafting_panel",
+        "ingredientColumns": 4,
+        "labelColor": [
+          179,
+          179,
+          166,
+          255
+        ],
+        "missingColor": [
+          204,
+          77,
+          77,
+          255
+        ],
+        "panelUseChrome": true,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "recipeFontSize": 13.0,
+        "recipeListOffset": [
+          0.0,
+          0.0
+        ],
+        "resultSlotSize": 44.0,
+        "rowColor": [
+          26,
+          26,
+          38,
+          153
+        ],
+        "selectedColor": [
+          51,
+          64,
+          102,
+          204
+        ],
+        "slotBgColor": [
+          31,
+          36,
+          51,
+          230
+        ],
+        "slotSize": 36.0,
+        "statusColor": [
+          204,
+          179,
+          51,
+          255
+        ],
+        "statusOffset": [
+          0.0,
+          0.0
+        ],
+        "titleBarColor": [
+          47,
+          47,
+          47,
+          255
+        ],
+        "titleColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "titleFontSize": 18.0,
+        "titleOffset": [
+          0.0,
+          0.0
+        ],
+        "type": "crafting_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false
+      },
+      {
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            80.0
+          ],
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "StretchAll",
+          "size": [
+            0.0,
+            0.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          444
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "borderWidth": 2.0,
+        "categoryTabHeight": 28.0,
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleBarColor": [
+          41,
+          51,
+          77,
+          217
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "closeBtnColor": [
+          47,
+          47,
+          47,
+          255
+        ],
+        "completedColor": [
+          51,
+          204,
+          51,
+          255
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "entryFontSize": 13.0,
+        "entryHeight": 40.0,
+        "entryOffset": [
+          0.0,
+          0.0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerHeight": 28.0,
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "collection_panel",
+        "incompleteColor": [
+          128,
+          128,
+          128,
+          255
+        ],
+        "panelUseChrome": true,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "progressColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "rewardColor": [
+          230,
+          204,
+          77,
+          255
+        ],
+        "rewardFontSize": 11.0,
+        "tabActiveColor": [
+          51,
+          46,
+          26,
+          255
+        ],
+        "tabActiveTextColor": [
+          255,
+          230,
+          128,
+          255
+        ],
+        "tabInactiveColor": [
+          26,
+          26,
+          36,
+          255
+        ],
+        "tabInactiveTextColor": [
+          153,
+          153,
+          140,
+          255
+        ],
+        "tabOffset": [
+          0.0,
+          0.0
+        ],
+        "titleBarColor": [
+          47,
+          47,
+          47,
+          255
+        ],
+        "titleColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "titleFontSize": 18.0,
+        "titleOffset": [
+          0.0,
+          0.0
+        ],
+        "type": "collection_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false
+      },
+      {
+        "anchor": {
+          "margin": [
+            108.0,
+            80.0,
+            20.0,
+            80.0
+          ],
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "StretchAll",
+          "size": [
+            0.0,
+            0.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          444
+        ],
+        "bodyFontSize": 13.0,
+        "borderColor": [
+          0,
+          0,
+          0,
+          255
+        ],
+        "borderWidth": 2.0,
+        "bottomReserveHeight": 60.0,
+        "buttonHeight": 32.0,
+        "buttonSpacing": 8.0,
+        "buttonTextColor": [
+          230,
+          230,
+          217,
+          255
+        ],
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleBarColor": [
+          41,
+          51,
+          77,
+          217
+        ],
+        "chromeTitleColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "closeBtnColor": [
+          47,
+          47,
+          47,
+          255
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "equipBtnColor": [
+          46,
+          56,
+          89,
+          230
+        ],
+        "equippedIndicatorColor": [
+          77,
+          204,
+          77,
+          255
+        ],
+        "filterTabHeight": 24.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gridCols": 4,
+        "gridOffset": [
+          0.0,
+          0.0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerHeight": 28.0,
+        "hintColor": [
+          128,
+          128,
+          115,
+          204
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "costume_panel",
+        "infoFontSize": 11.0,
+        "infoOffset": [
+          0.0,
+          0.0
+        ],
+        "nameColor": [
+          217,
+          217,
+          204,
+          255
+        ],
+        "panelUseChrome": true,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "slotColor": [
+          31,
+          31,
+          46,
+          230
+        ],
+        "slotSelectedColor": [
+          51,
+          61,
+          97,
+          230
+        ],
+        "slotSize": 48.0,
+        "slotSpacing": 6.0,
+        "tabActiveColor": [
+          56,
+          71,
+          115,
+          230
+        ],
+        "tabActiveTextColor": [
+          242,
+          242,
+          230,
+          255
+        ],
+        "tabColor": [
+          36,
+          36,
+          51,
+          230
+        ],
+        "tabTextColor": [
+          179,
+          179,
+          166,
+          255
+        ],
+        "titleBarColor": [
+          47,
+          47,
+          47,
+          255
+        ],
+        "titleColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "titleFontSize": 18.0,
+        "titleOffset": [
+          0.0,
+          0.0
+        ],
+        "toggleOffset": [
+          0.0,
+          0.0
+        ],
+        "type": "costume_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "unequipBtnColor": [
+          89,
+          38,
+          38,
+          230
+        ],
+        "visible": false
+      },
+      {
+        "anchor": {
+          "margin": [
+            193.0,
+            0.0,
+            0.0,
+            160.0
+          ],
+          "offset": [
+            1460.0,
+            80.0
+          ],
+          "preset": "TopLeft",
+          "size": [
+            240.0,
+            620.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bgHeight": 0.0,
+        "bgOffset": [
+          0.0,
+          0.0
+        ],
+        "bgWidth": 0.0,
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "chromeCloseBtnBgColor": [
+          46,
+          56,
+          82,
+          255
+        ],
+        "chromeCloseBtnBorderColor": [
+          115,
+          140,
+          191,
+          204
+        ],
+        "chromeCloseBtnTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "chromePanelBgColor": [
+          20,
+          26,
+          41,
+          240
+        ],
+        "chromePanelBorderColor": [
+          89,
+          107,
+          153,
+          140
+        ],
+        "chromePanelBorderWidth": 1.5,
+        "chromePanelCornerRadius": 14.0,
+        "chromePanelGradientBottom": [
+          15,
+          20,
+          36,
+          240
+        ],
+        "chromePanelGradientTop": [
+          33,
+          41,
+          61,
+          240
+        ],
+        "chromePanelShadowBlur": 12.0,
+        "chromePanelShadowColor": [
+          0,
+          0,
+          0,
+          140
+        ],
+        "chromePanelShadowOffset": [
+          0.0,
+          4.0
+        ],
+        "chromeTitleTextColor": [
+          242,
+          247,
+          255,
+          255
+        ],
+        "closeBtnBgColor": [
+          0.0,
+          0.0,
+          0.0,
+          255.0
+        ],
+        "closeBtnBorderColor": [
+          0.2362869381904602,
+          0.2362869381904602,
+          0.2362869381904602,
+          255.0
+        ],
+        "closeBtnBorderWidth": 0.0,
+        "closeBtnFontSize": 40.0,
+        "closeBtnOffset": 4.0,
+        "closeBtnRadius": 18.0,
+        "closeBtnTextColor": [
+          0.8987341523170471,
+          0.0,
+          0.25028038024902344,
+          255.0
+        ],
+        "contentPadding": 1.0,
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "emptySlotColor": [
+          0.13922271132469177,
+          0.13922278583049774,
+          0.38818567991256714,
+          0.6000000238418579
+        ],
+        "enchantTextColor": [
+          1.0,
+          0.8500000238418579,
+          0.20000000298023224,
+          1.0
+        ],
+        "fontSize": 2.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gridColumns": 2,
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "bag_view_panel",
+        "itemTextColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "panelBgColor": [
+          0.0,
+          0.0,
+          0.0,
+          0.949999988079071
+        ],
+        "panelBorderColor": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "panelBorderWidth": 2.0,
+        "panelUseChrome": true,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "quantityTextColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "slotBgColor": [
+          0.019441327080130577,
+          0.01944136619567871,
+          0.16455698013305664,
+          0.8999999761581421
+        ],
+        "slotBorderColor": [
+          0.1971946656703949,
+          0.1532873958349228,
+          0.3459915518760681,
+          1.0
+        ],
+        "slotBorderWidth": 4.0,
+        "slotFontSize": 20.0,
+        "slotPadding": 30.0,
+        "slotSize": 128.0,
+        "titleFontSize": 28.0,
+        "titleHeight": 100.0,
+        "titlePadTop": 40.0,
+        "titleTextColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "type": "bag_view_panel",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "zOrder": 110
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            300.0,
+            140.0
+          ]
+        },
+        "arrowButtonSize": 40.0,
+        "arrowColor": [
+          102,
+          89,
+          51,
+          255
+        ],
+        "arrowHoverColor": [
+          140,
+          122,
+          71,
+          255
+        ],
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "buttonColor": [
+          140,
+          115,
+          64,
+          255
+        ],
+        "buttonFontSize": 20.0,
+        "buttonHeight": 40.0,
+        "buttonHoverColor": [
+          179,
+          148,
+          77,
+          255
+        ],
+        "buttonSpacing": 18.0,
+        "buttonWidth": 120.0,
+        "buttonsYOffset": 0.0,
+        "cancelText": "Cancel",
+        "confirmText": "Confirm",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "quantity_selector",
+        "maxButtonColor": [
+          102,
+          89,
+          51,
+          255
+        ],
+        "maxButtonFontSize": 13.0,
+        "maxButtonHoverColor": [
+          140,
+          122,
+          71,
+          255
+        ],
+        "maxButtonText": "Max",
+        "maxButtonTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "maxButtonWidth": 44.0,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "quantityFontSize": 20.0,
+        "quantityYOffset": -25.0,
+        "titleFontSize": 20.0,
+        "titleYOffset": 0.0,
+        "type": "quantity_selector",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "zOrder": 115
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            280.0,
+            140.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bgColor": [
+          26,
+          26,
+          33,
+          242
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderWidth": 2.0,
+        "buttonColor": [
+          140,
+          115,
+          64,
+          255
+        ],
+        "buttonFontSize": 24.0,
+        "buttonHeight": 32.0,
+        "buttonHoverColor": [
+          179,
+          148,
+          77,
+          255
+        ],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
+        "buttonSpacing": 16.0,
+        "buttonWidth": 120.0,
+        "cancelText": "Cancel",
+        "confirmText": "Destroy",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "destroy_item_dialog",
+        "message": "Destroy Squirrel Tail?",
+        "messageFontSize": 24.0,
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "confirm_dialog",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "zOrder": 200
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            320.0,
+            160.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bgColor": [
+          26,
+          26,
+          33,
+          242
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderWidth": 2.0,
+        "buttonColor": [
+          140,
+          115,
+          64,
+          255
+        ],
+        "buttonFontSize": 13.0,
+        "buttonHeight": 32.0,
+        "buttonHoverColor": [
+          179,
+          148,
+          77,
+          255
+        ],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
+        "buttonSpacing": 16.0,
+        "buttonWidth": 100.0,
+        "cancelText": "Cancel",
+        "confirmText": "Enchant",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "enchant_confirm_dialog",
+        "message": "Enchant?",
+        "messageFontSize": 13.0,
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "confirm_dialog",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "zOrder": 200
+      },
+      {
+        "anchor": {
+          "offset": [
+            0.0,
+            0.0
+          ],
+          "preset": "Center",
+          "size": [
+            320.0,
+            140.0
+          ]
+        },
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "bgColor": [
+          26,
+          26,
+          33,
+          242
+        ],
+        "borderColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderWidth": 2.0,
+        "buttonColor": [
+          140,
+          115,
+          64,
+          255
+        ],
+        "buttonFontSize": 13.0,
+        "buttonHeight": 32.0,
+        "buttonHoverColor": [
+          179,
+          148,
+          77,
+          255
+        ],
+        "buttonOffset": [
+          0.0,
+          0.0
+        ],
+        "buttonSpacing": 16.0,
+        "buttonWidth": 100.0,
+        "cancelText": "Cancel",
+        "confirmText": "Apply",
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "enchant_protect_confirm_dialog",
+        "message": "Apply protection?",
+        "messageFontSize": 13.0,
+        "messageOffset": [
+          0.0,
+          0.0
+        ],
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "type": "confirm_dialog",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "visible": false,
+        "zOrder": 200
+      },
+      {
+        "anchor": {
+          "preset": "Center",
+          "size": [
+            720.0,
+            900.0
+          ]
+        },
+        "fieldHeight": 48.0,
+        "fontSize": 18.0,
+        "id": "admin_panel",
+        "padding": 10.0,
+        "panelUseChrome": true,
+        "rowHeight": 56.0,
+        "smallFontSize": 14.0,
+        "tabHeight": 48.0,
+        "titleBarHeight": 56.0,
+        "titleFontSize": 24.0,
+        "type": "admin_panel",
+        "visible": false,
+        "zOrder": 50
+      },
+      {
+        "activeTab": 1,
+        "activeTabBg": [
+          34,
+          2,
+          16,
+          444
+        ],
+        "activeTextColor": [
+          255,
+          207,
+          0,
+          255
+        ],
+        "anchor": {
+          "margin": [
+            -20.0,
+            50.0,
+            0.0,
+            110.0
+          ],
+          "offset": [
+            0.0,
+            20.0
+          ],
+          "padding": [
+            3.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "preset": "StretchX",
+          "size": [
+            0.0,
+            100.0
+          ]
+        },
+        "arrowBg": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "arrowFontSize": 77.0,
+        "arrowSize": 100.0,
+        "arrowTextColor": [
+          255,
+          213,
+          0,
+          255
+        ],
+        "backgroundColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "borderColor": [
+          89,
+          66,
+          36,
+          255
+        ],
+        "borderWidth": 0.0,
+        "chromeActiveTabBgColor": [
+          82,
+          128,
+          219,
+          255
+        ],
+        "chromeActiveTabBorderColor": [
+          46,
+          77,
+          148,
+          255
+        ],
+        "chromeArrowBgColor": [
+          26,
+          33,
+          51,
+          217
+        ],
+        "chromeArrowTextColor": [
+          245,
+          247,
+          255,
+          255
+        ],
+        "chromeInactiveTabBgColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "chromeStripBgColor": [
+          41,
+          51,
+          77,
+          245
+        ],
+        "chromeStripBorderColor": [
+          140,
+          153,
+          199,
+          217
+        ],
+        "chromeStripCornerRadius": 8.0,
+        "chromeStripShadowBlur": 6.0,
+        "chromeStripShadowColor": [
+          5,
+          10,
+          26,
+          102
+        ],
+        "chromeStripShadowOffset": [
+          0.0,
+          2.0
+        ],
+        "disabledColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "fontSize": 40.0,
+        "gradientBottom": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "gradientTop": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "headerColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "highlightColor": [
+          255,
+          220,
+          6,
+          333
+        ],
+        "hoverColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "id": "tab_bar",
+        "inactiveTabBg": [
+          34,
+          2,
+          16,
+          444
+        ],
+        "inactiveTextColor": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "opacity": 2222.0,
+        "panelUseChrome": true,
+        "pressedColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "tabFontSize": 40.0,
+        "tabLabels": [
+          "STS",
+          "INV",
+          "SKL",
+          "GLD",
+          "SOC",
+          "SET",
+          "SHP",
+          "PET",
+          "COL",
+          "COS"
+        ],
+        "tabSize": 160.0,
+        "type": "menu_tab_bar",
+        "uiShadowColor": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "zOrder": 10
+      }
+    ],
+    "disabledColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientBottom": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gradientTop": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "headerColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "hoverColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "id": "menu_root",
+    "pressedColor": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "type": "panel",
+    "uiShadowColor": [
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "screen": "fate_menu_panels"
+}

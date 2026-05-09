@@ -942,6 +942,12 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT ANDROID)
     if(EXISTS "${CMAKE_SOURCE_DIR}/server/bosses/boss_script_telegraph_seam.cpp")
         list(APPEND SERVER_TEST_SOURCES server/bosses/boss_script_telegraph_seam.cpp)
     endif()
+    # MobAI live-tuning apply helper - pure clamp/repair, used by
+    # test_mobai_tuning_apply.cpp. Linked into fate_tests directly because
+    # it does not depend on Server App / NetServer / DB.
+    if(EXISTS "${CMAKE_SOURCE_DIR}/server/handlers/mobai_tuning_apply.cpp")
+        list(APPEND SERVER_TEST_SOURCES server/handlers/mobai_tuning_apply.cpp)
+    endif()
     # Boss-script registry + lifecycle (Phase 7.1) — used by
     # test_boss_script_phase71.cpp. No DB / replication deps; pure containers
     # plus the lifecycle hook that walks Entity->getComponent. The hooks

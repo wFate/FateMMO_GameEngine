@@ -24,7 +24,12 @@ void NetServer::stop() {
 
 void NetServer::poll(float currentTime) {
     lastPollTime_ = currentTime;
-    uint8_t buf[MAX_PACKET_SIZE];
+    // LARGE_PACKET_SIZE matches the client send ceiling. Holding this at
+    // MAX_PACKET_SIZE truncated CmdAdminSaveContent payloads above ~1158
+    // bytes at the OS layer (Windows recvfrom returns WSAEMSGSIZE and the
+    // entire datagram is discarded), so admin saves with full mob_def JSON
+    // never reached the handler.
+    uint8_t buf[LARGE_PACKET_SIZE];
     NetAddress from;
     int received;
     while ((received = socket_.recvFrom(buf, sizeof(buf), from)) > 0) {
@@ -121,7 +126,7 @@ void NetServer::handleRawPacket(const NetAddress& from, const uint8_t* data, int
             return;
         }
 
-        uint8_t decryptedBuf[MAX_PACKET_SIZE];
+        uint8_t decryptedBuf[LARGE_PACKET_SIZE];
         if (client->crypto.hasKeys() && !isSystemPacket(hdr.packetType) && payloadLen > 0) {
             if (payloadLen <= PacketCrypto::TAG_SIZE) return; // too short
             size_t decryptedSize = payloadLen - PacketCrypto::TAG_SIZE;
@@ -328,8 +333,8 @@ void NetServer::sendPacket(ClientConnection& client, Channel channel, uint8_t pa
     // (e.g. inventory sync with display names and rolled stats). Raised from
     // 4K to 16K after observing SvInventorySync hit ~4080 bytes and silently
     // drop: encrypted payload + header exceeded 4K, overflow check returned
-    // early, client never received the update.
-    constexpr size_t LARGE_PACKET_SIZE = 16384;
+    // early, client never received the update. LARGE_PACKET_SIZE lives in
+    // packet.h so the recv side cannot drift below it again.
     size_t bufSize = (payloadSize + PACKET_HEADER_SIZE + PacketCrypto::TAG_SIZE > MAX_PACKET_SIZE)
                      ? LARGE_PACKET_SIZE : MAX_PACKET_SIZE;
     uint8_t stackBuf[LARGE_PACKET_SIZE];
@@ -495,6 +500,7 @@ const char* opcodeName(uint8_t op) {
         case PacketType::SvSkillResultBatch:   return "SkillResultBatch";
         case PacketType::SvAOETelegraphStartBatch:  return "AOETelegraphStart";
         case PacketType::SvAOETelegraphCancelBatch: return "AOETelegraphCancel";
+        case PacketType::SvAdminMobAITuneState:     return "AdminMobAITuneState";
         case PacketType::SvLootPickup:         return "LootPickup";
         case PacketType::SvInventorySync:      return "InventorySync";
         case PacketType::SvPlayerState:        return "PlayerState";
@@ -512,6 +518,8 @@ const char* opcodeName(uint8_t op) {
         case PacketType::CmdMove:              return "Move";
         case PacketType::CmdUseSkill:          return "UseSkill";
         case PacketType::CmdAuthProof:         return "AuthProof";
+        case PacketType::CmdAdminMobAITuneApply:     return "AdminMobAITuneApply";
+        case PacketType::CmdAdminMobAITuneSubscribe: return "AdminMobAITuneSubscribe";
         default:                               return nullptr;
     }
 }
